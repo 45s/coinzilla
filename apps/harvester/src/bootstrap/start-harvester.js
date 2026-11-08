@@ -1053,9 +1053,11 @@ export async function startHarvester({
           })
         }
         const task = userDataEventQueue.then(async () => {
+          const recoveryMode = userDataRequiresReconciliation || userDataRecoveryTask !== null
           if (tradingEngine && isOrderUpdate) {
             const processed = await tradingEngine.processUserDataEvent({
               event,
+              recoveryMode,
             })
             if (!processed.ok) {
               userDataReady = false
@@ -1127,6 +1129,7 @@ export async function startHarvester({
           try {
             await onUserDataEvent({
               event,
+              recoveryMode,
               portfolio: getPortfolio(),
               recoveryLedger: event.fill instanceof Fill
                 ? getRecoveryLedger({ marketId: event.fill.market.id })

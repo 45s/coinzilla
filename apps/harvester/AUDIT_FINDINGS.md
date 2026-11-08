@@ -511,3 +511,19 @@ Current source and regression inventory:
 
 **Verification boundary:** source and regression coverage are now present and mapped in `docs/domain/ACCOUNTING_INVARIANTS.md`. The newly added zero-`keepQuantity` full-cycle test and the rest of the Harvester suite have not yet been executed on the current PR head. Exact-head CI is intentionally the next phase; no passing test/CI claim is made here. TESTNET acceptance remains NOT CLAIMED.
 
+
+
+## F-013 — User-data events during reconnect recovery trigger normal cancel/replace effects
+
+- **Severity:** High — trading availability and order-lifecycle safety.
+- **Verdict:** CONFIRMED; implementation fix verified by PR #673 CI on code/test head `aa9196fb8b9121a95d0a566fbc2fc7585408bd3c`; TESTNET acceptance remains pending.
+- **Evidence:** 2026-11-08 Journal events #266, #269–270, #285, #288–289, and #397–399; DEBUG lines 9307, 9351, 9362, 9398–9400, 9470, 9699–9703; TRACE lines 10942–10943, 11005–11006, 11024–11026, 11080–11084, 11186–11187, 11489–11498. Original artifact hashes and full parsed evidence are in [AUDIT_SESSION_2026-11-08.md](./AUDIT_SESSION_2026-11-08.md).
+- **Expected contract:** no order submission, cancellation, replacement, or retry while authoritative user-data recovery is unresolved; queued execution facts may be reconciled, and any required strategy evaluation must be retained until the broker recovery acknowledgement reopens readiness.
+- **Observed:** after transport reported `recovered`, DOGE BUY trade 231208 and ZRO BUY trade 12374 were applied exactly once. Their subsequent duplicate/replayed execution events were processed through the normal engine path. That path requested cancellation of owned recovery SELLs 1323350 (797 DOGE) and 749343 (24.94 ZRO) while the broker still rejected order changes because the user-data stream was unavailable. Both cancellations became UNKNOWN/UNCONFIRMED, both markets paused, and application recovery failed at 03:23:00.631Z.
+- **Root cause 1:** bootstrap did not pass the engine's existing `recoveryMode` option to queued user-data order-event processing.
+- **Root cause 2:** recovery-mode terminal order events could return `reevaluate: true` without adding the affected symbol to `state.deferredEvaluations`; bootstrap correctly suppressed normal evaluation while reconciliation was pending, but the required evaluation could then be lost.
+- **Impact:** trading remained blocked for the rest of the session. CLOSING audit reported `UNRESOLVED_OWNED_ORDERS:2` and `USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE`; shutdown failed closed and retained the process lock.
+- **Fix:** PR #673 passes recovery mode based on the reconciliation gate/active recovery task and exposes that context to the observer callback; recovery-mode terminal events retain a deferred strategy evaluation for the existing post-acknowledgement resume path. Durable reconciliation, exact-once accounting, stale-generation protection, and fail-closed readiness remain unchanged.
+- **Regression tests:** bootstrap recovery-mode classification and engine deferred-evaluation retention. Both were observed RED on test-only PR head `4368c5d65651b55dd5c34bea619ca6b99160264d`: actual `undefined` vs expected `true`, and actual `[]` vs expected `["DOGEUSDT"]`. Exact-head GREEN/CI verification remains pending.
+- **Related issue:** #626. No new duplicate issue created.
+- **Safety boundary:** no TESTNET/production order actions, process restart, account change, or lock cleanup was performed. Original empty-message TypeError cause remains UNKNOWN; close code 1006 is not treated as proof of the lower-level cause.
