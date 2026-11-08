@@ -156,11 +156,11 @@ test("rejects malformed metadata objects and non-object JSON values", () => {
       content: `${JSON.stringify({
         id: "event-array-metadata",
         __coinzillaJournal: [],
-      })}\\n`,
+      })}\n`,
     },
     {
       label: "null record",
-      content: "null\\n",
+      content: "null\n",
     },
   ]
 
@@ -188,7 +188,7 @@ test("recovers legacy raw event lines with the same stable record shape", () => 
   }
 
   const [recovered] = parseJournalSession({
-    content: `${JSON.stringify(legacyPayload)}\\n`,
+    content: `${JSON.stringify(legacyPayload)}\n`,
     fileName: FILE_NAME,
     maxRecordBytes: 1024,
   })
