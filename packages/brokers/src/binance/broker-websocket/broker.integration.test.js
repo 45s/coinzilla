@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 
 const integrationTestPaths = [
   new URL("./broker.integration.js", import.meta.url),
-  new URL("./methods/user-data-session.integration.js", import.meta.url),
+  new URL("./tests/user-data-session.integration.js", import.meta.url),
 ].map(fileURLToPath)
 
 test("Binance TESTNET integration suites stay offline without explicit opt-in", () => {
