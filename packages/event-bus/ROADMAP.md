@@ -1,5 +1,29 @@
 # Event Bus Reliability Roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+> Current assessment: no critical defect was established in the audited Event Bus implementation. Core validation, bounded fan-out, failure isolation, lifecycle diagnostics and package coverage gates are already implemented.
+
+### IMPORTANT — maintain the existing delivery guarantees
+
+1. **Keep publish, delivery and shutdown semantics explicit and regression-tested.**
+   - **Why:** Event Bus is a shared process boundary. Ambiguous behavior when handlers throw, publish is rejected, queues are full or shutdown races with delivery can silently lose work or hang application shutdown.
+   - **Do:** preserve documented admission/backpressure behavior, immutable payload handling, handler error isolation, flush/close semantics and stable diagnostics. Update the contract whenever behavior changes; do not add implicit retries.
+   - **Verify:** retain tests for fan-out atomicity, slow/throwing handlers, re-entrant publish, capacity limits, close while pending and cleanup after failures.
+
+2. **Keep observability bounded and semantically precise.**
+   - **Why:** counters that mix accepted, rejected, scheduled and completed deliveries are misleading and can create accidental public API commitments.
+   - **Do:** define each diagnostic field before adding it; expose immutable scalar snapshots only. Add no high-cardinality event labels or unbounded histories.
+   - **Verify:** assert counter transitions for accepted/rejected publishes, pending/high-water state and completed/failed deliveries without exposing internal Maps/Sets.
+
+### DEFERRED — only when a consumer proves the need
+
+3. **Sequential delivery, AbortSignal cancellation, retries and dead-letter handling.**
+   - **Why:** each feature changes ordering, cancellation and duplicate-delivery guarantees. Adding them speculatively increases complexity and may conflict with current concurrent fan-out.
+   - **Do:** require a concrete consumer requirement and a written compatibility contract before implementing any of these capabilities.
+   - **Verify:** define ordering/idempotency and shutdown behavior first, then add focused tests and benchmarks. Preserve the default delivery contract.
+
+
 > Status: core hardening complete; optional enhancements remain demand-driven
 > Package: `@coinzilla/event-bus`
 > Primary objective: make the package bug-resistant, predictable under failure, fully tested, and easy for humans and AI agents to change safely.
