@@ -452,7 +452,7 @@ Added test-first assertions for the original broker Error to survive as native `
 
 Existing contextual messages, retry behavior, readiness gates, and acknowledgement ordering are asserted unchanged. The shared `@coinzilla/utils` logger already serializes nested Error causes; no utility/logger implementation change is required.
 
-**Production source was unchanged in the test-first commit.** Expected RED was confirmed: 758 Harvester tests, 752 passed, 6 failed exactly on missing native causes / missing structured Error field. The subsequent implementation commit preserved native causes and added the Error object to structured recovery logs without changing messages or recovery behavior. PR #711 exact head `e68da711eb44bc64bfeb5b1e8027f1f0a19f58dc` passed Harvester unit tests (758/758), configured targeted tests (3/3), and all six required offline CI contexts. Workspace coverage passed; Harvester package threshold enforcement is not configured. TESTNET integration was skipped. PR merge is pending.
+**Production source was unchanged in the test-first commit.** Expected RED was confirmed: 758 Harvester tests, 752 passed, 6 failed exactly on missing native causes / missing structured Error field. The subsequent implementation commit preserved native causes and added the Error object to structured recovery logs without changing messages or recovery behavior. PR #711 exact head `e68da711eb44bc64bfeb5b1e8027f1f0a19f58dc` passed Harvester unit tests (758/758), configured targeted tests (3/3), and all six required offline CI contexts. Workspace coverage passed; Harvester package threshold enforcement is not configured. TESTNET integration was skipped. PR #711 merged into `develop` as `2a57a8e291bb54a2474df525a4cd20e8d51747e8`.
 
 
 ## 19. F-016 cause-preservation implementation — 2026-11-08
@@ -470,3 +470,10 @@ The implementation now preserves the first native Error from each broker result 
 The application recovery failure log now includes the Error object in addition to the existing flattened `errorName`, `errorMessage`, and `errorStack` fields. The shared logger's existing serializer preserves the nested cause and stack; no shared utility or logging implementation was changed.
 
 No retry timing, recovery gate, acknowledgement, trading policy, Journal durability, broker protocol, or exchange behavior was changed. Exact-head GREEN verification is pending.
+
+
+## 20. F-016 merge confirmation — 2026-11-08
+
+PR [#711](https://github.com/45s/coinzilla/pull/711) is merged. Exact tested head: `661046e2c7142c879b9a8c5327e46f804f4e048a`. Merge commit and current `develop` checkpoint: `2a57a8e291bb54a2474df525a4cd20e8d51747e8`.
+
+The test-first RED/GREEN evidence is recorded in the roadmap and F-016 finding. All six required offline CI contexts passed on the final head. Harvester coverage execution passed; package threshold enforcement remains unconfigured. TESTNET integration was skipped.
