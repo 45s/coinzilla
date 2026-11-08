@@ -180,7 +180,7 @@ A useful starting context map is:
 - **Entities/shared trading model:** exchange-neutral canonical orders, fills, commissions, balances, trading rules, identity, and exact financial value semantics.
 - **Brokers context:** exchange connectivity, broker capability contracts, external protocol mapping, and normalization.
 - **Journal/EventBus contexts:** operational observation and event delivery. They are not the source of truth for live trading state unless a separate decision explicitly makes them so.
-- **Free-Roll application:** behavioral reference for the Conservative strategy where explicitly identified by the roadmap; it is not a reason to share its runtime implementation with Harvester.
+- **Legacy implementation references:** the former separate application has been removed and is not a supported reference. Any independently useful strategy behavior must be specified and tested inside Harvester; do not retain legacy runtime or migration dependencies.
 
 **Recommended direction**
 
