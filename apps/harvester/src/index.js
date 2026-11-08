@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url"
 import os from "node:os"
 import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
+import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { prepareOptionalJournal, resolveJournalDirectory } from "./infrastructure/journal/prepare-optional-journal.js"
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
@@ -12,6 +13,7 @@ import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
+import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
@@ -126,11 +128,13 @@ export async function main({
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
   closeLogger = async () => {},
+  createTelegramNotifier = (options) => new TelegramNotifier(options),
 } = {}) {
   let eventPublisher
   let eventBus
   let journalService
   let processLock
+  let telegramNotifications
   let runtimeStartAttempted = false
   try {
     eventBus = createEventBus({ logger })
@@ -164,6 +168,20 @@ export async function main({
         errors: [new Error("Harvester Journal durable flush is unavailable")],
       }),
     })
+
+    const telegramToken = env.TELEGRAM_BOT_TOKEN?.trim()
+    const telegramChatId = env.TELEGRAM_CHAT_ID?.trim()
+    if (telegramToken && telegramChatId) {
+      try {
+        const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
+        telegramNotifications = subscribeHarvesterTelegramNotifications({ eventBus, notifier, logger })
+        logSystem(logger, "Telegram notifications enabled.")
+      } catch (error) {
+        logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
+      }
+    } else if (telegramToken || telegramChatId) {
+      logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
+    }
 
     if (env.HARVESTER_ENABLE_TRADING === "true") {
       if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
@@ -242,6 +260,23 @@ export async function main({
               error: shutdownError,
             }),
           })
+          const notificationErrors = []
+          if (typeof eventBus?.flush === "function") {
+            try {
+              const flushResult = await eventBus.flush()
+              if (flushResult?.ok === false) notificationErrors.push(...(flushResult.errors ?? [new Error("EventBus flush failed before Telegram shutdown")]))
+            } catch (error) {
+              notificationErrors.push(error)
+            }
+          }
+          if (telegramNotifications) {
+            try {
+              await telegramNotifications.close()
+            } catch (error) {
+              notificationErrors.push(error)
+              logger.error?.({ message: "Telegram notification shutdown failed.", error })
+            }
+          }
           const cleanupErrors = await closeObservability({
             journalService,
             eventBus,
@@ -249,6 +284,10 @@ export async function main({
             allowProcessLockRelease: runtimeStopped,
             logger,
           })
+          if (notificationErrors.length > 0) {
+            logger.error?.({ message: "Telegram notification shutdown was incomplete.", errors: notificationErrors })
+            process.exitCode = 1
+          }
           if (cleanupErrors.length > 0) process.exitCode = 1
           try {
             await closeLogger()
@@ -275,6 +314,20 @@ export async function main({
       eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
       dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
     })
+    if (typeof eventBus?.flush === "function") {
+      try {
+        await eventBus.flush()
+      } catch (flushError) {
+        logger.error?.({ message: "EventBus flush failed during startup cleanup.", error: flushError })
+      }
+    }
+    if (telegramNotifications) {
+      try {
+        await telegramNotifications.close()
+      } catch (notificationError) {
+        logger.error?.({ message: "Telegram notification cleanup failed during startup failure.", error: notificationError })
+      }
+    }
     const cleanupErrors = await closeObservability({
       journalService,
       eventBus,
