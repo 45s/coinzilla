@@ -60,14 +60,15 @@ describe("Binance user-data reconnect behavior", () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
 
-    const statuses = []
+    const firstStatuses = []
+    const secondStatuses = []
     const first = await broker.subscribeForUserData({
       onEvent() {},
-      onStatus: (status) => statuses.push(status),
+      onStatus: (status) => firstStatuses.push(status),
     })
     const second = await broker.subscribeForUserData({
       onEvent() {},
-      onStatus: (status) => statuses.push(status),
+      onStatus: (status) => secondStatuses.push(status),
     })
 
     clients[0].state = "closed"
@@ -88,11 +89,13 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(second.data.subscriptionId, 110)
     assert.equal(broker.connected, true)
     assert.equal(broker.userDataUnavailable, true)
-    assert.ok(statuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+    assert.ok(firstStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+    assert.ok(secondStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
     assert.equal(scheduler.pendingCount, 1)
 
     await scheduler.runNext()
-    assert.equal(statuses.filter((status) => status.type === "recovered").length, 4)
+    assert.equal(firstStatuses.filter((status) => status.type === "recovered").length, 2)
+    assert.equal(secondStatuses.filter((status) => status.type === "recovered").length, 2)
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(scheduler.pendingCount, 1)
 
@@ -107,9 +110,23 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false)
     assert.equal(clients[1].calls.some((call) => call.method === "openOrders.cancelAll"), false)
 
+    assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
+    assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
+
     assert.equal(second.data.acknowledgeRecovery(), true)
     assert.equal(broker.userDataUnavailable, false)
-    assert.ok(statuses.some((status) => status.type === "reconciled"))
+    assert.equal(scheduler.pendingCount, 0)
+    assert.deepEqual(
+      firstStatuses.filter((status) => status.type === "reconciled"),
+      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+    )
+    assert.deepEqual(
+      secondStatuses.filter((status) => status.type === "reconciled"),
+      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+    )
+    assert.equal(second.data.acknowledgeRecovery(), false)
+    assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 1)
+    assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 1)
     const placed = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), true)
     assert.equal(placed.ok, true)
@@ -121,6 +138,40 @@ describe("Binance user-data reconnect behavior", () => {
 
 
 
+
+  it("notifies only the remaining active subscriber when its removal completes shared recovery", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+
+    const firstStatuses = []
+    const secondStatuses = []
+    const first = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => firstStatuses.push(status),
+    })
+    const second = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => secondStatuses.push(status),
+    })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+
+    assert.equal(first.data.acknowledgeRecovery(), false)
+    await second.data.disconnect()
+
+    assert.equal(broker.userDataUnavailable, false)
+    assert.equal(scheduler.pendingCount, 0)
+    assert.deepEqual(
+      firstStatuses.filter((status) => status.type === "reconciled"),
+      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+    )
+    assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
+
+    await first.data.disconnect()
+    await broker.disconnect()
+  })
 
   it("schedules recovery when an explicit resume subscription attempt fails", async () => {
     const scheduler = createScheduler()
