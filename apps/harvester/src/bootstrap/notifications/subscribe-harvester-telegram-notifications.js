@@ -38,7 +38,7 @@ const EVENT_MAPPINGS = Object.freeze({
  * Bridge Harvester-owned application events to the notifier package's stable
  * notification vocabulary. The package owns formatting, queuing and delivery.
  */
-export function subscribeHarvesterTelegramNotifications({
+export async function subscribeHarvesterTelegramNotifications({
   eventBus,
   notifier,
   logger,
@@ -73,7 +73,11 @@ export function subscribeHarvesterTelegramNotifications({
     }
   } catch (error) {
     for (const subscription of subscriptions) subscription.unsubscribe()
-    void notificationSubscriber.close()
+    try {
+      await notificationSubscriber.close()
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Telegram subscription setup and cleanup failed", { cause: error })
+    }
     throw error
   }
 
