@@ -214,3 +214,117 @@ test("preserves the existing Logger entry shape when no context is configured", 
 
   assert.deepEqual(Object.keys(entries[0]), ["timestamp", "level", "method", "data"], "existing Logger consumers must receive the unchanged entry shape unless context is explicitly configured")
 })
+
+
+test("decodes Buffer output from the injected Git command boundary", () => {
+  const outputs = gitOutputs()
+  const metadata = captureMetadata({
+    application: "harvester",
+    version: "1.0.001",
+    cwd: "C:/coinzilla",
+    env: {},
+    execFileSync: (command, args) => {
+      assert.equal(command, "git", "the injectable Git boundary must receive the Git executable name")
+      return Buffer.from(outputs[args.join(" ")] ?? "", "utf8")
+    },
+  })
+
+  assert.equal(metadata.source.metadataSource, "git", "UTF-8 Buffer output must produce the same valid Git provenance as string output")
+  assert.equal(metadata.source.commit, COMMIT_SHA, "Buffer decoding must preserve the complete commit SHA")
+})
+
+test("returns explicit unavailable metadata when the working directory is not a Git repository", () => {
+  const metadata = captureMetadata({
+    application: "harvester",
+    version: "1.0.001",
+    cwd: "C:/coinzilla",
+    env: {},
+    execFileSync: () => "",
+  })
+
+  assert.equal(metadata.source.metadataSource, "unavailable", "an empty Git repository-root response must not be mistaken for valid provenance")
+  assert.equal(metadata.source.workingTree, "unknown", "a non-repository directory has no trustworthy clean or dirty state")
+})
+
+test("rejects malformed Git commit identifiers and falls back without inventing a revision", () => {
+  const metadata = captureMetadata({
+    application: "harvester",
+    version: "1.0.001",
+    cwd: "C:/coinzilla",
+    env: {},
+    execFileSync: (command, args) => {
+      if (args.join(" ") === "rev-parse --show-toplevel") {
+        return "C:/coinzilla"
+      }
+      if (args.join(" ") === "rev-parse HEAD") {
+        return "not-a-commit-sha"
+      }
+      assert.fail("Git capture must stop after rejecting an invalid HEAD identifier")
+    },
+  })
+
+  assert.equal(metadata.source.commit, null, "an invalid Git HEAD value must never be recorded as a source commit")
+  assert.equal(metadata.source.metadataSource, "unavailable", "malformed Git metadata without environment fallback must remain unavailable")
+})
+
+test("treats unsupported Git output types as unavailable metadata", () => {
+  const metadata = captureMetadata({
+    application: "harvester",
+    version: "1.0.001",
+    cwd: "C:/coinzilla",
+    env: {},
+    execFileSync: () => 42,
+  })
+
+  assert.equal(metadata.source.metadataSource, "unavailable", "unexpected Git command output must be contained and represented as unavailable provenance")
+})
+
+test("ignores malformed fallback commit and working-tree values while retaining valid allowlisted fields", () => {
+  const metadata = captureMetadata({
+    application: "harvester",
+    version: "1.0.001",
+    cwd: "C:/coinzilla",
+    env: {
+      COINZILLA_BUILD_COMMIT: "not-a-sha",
+      COINZILLA_BUILD_BRANCH: "release/1.0.001",
+      COINZILLA_BUILD_WORKING_TREE: "modified",
+    },
+    execFileSync: () => {
+      throw new Error("Git unavailable")
+    },
+  })
+
+  assert.deepEqual(metadata.source, {
+    branch: "release/1.0.001",
+    commit: null,
+    shortCommit: null,
+    commitMessage: null,
+    commitDate: null,
+    workingTree: "unknown",
+    metadataSource: "environment",
+  }, "only valid allowlisted fallback fields may be included in the build identity")
+})
+
+test("rejects invalid environment and Git runner dependencies", () => {
+  assert.throws(
+    () => captureMetadata({
+      application: "harvester",
+      version: "1.0.001",
+      cwd: "C:/coinzilla",
+      env: null,
+    }),
+    /env/,
+    "build provenance capture must reject a null environment dependency",
+  )
+  assert.throws(
+    () => captureMetadata({
+      application: "harvester",
+      version: "1.0.001",
+      cwd: "C:/coinzilla",
+      env: {},
+      execFileSync: true,
+    }),
+    /execFileSync/,
+    "build provenance capture must reject a non-function Git command dependency",
+  )
+})
