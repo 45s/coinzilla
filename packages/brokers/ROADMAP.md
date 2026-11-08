@@ -191,65 +191,77 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 
 ## 3. Verified baseline and compatibility contract
 
-The detailed Phase 0 inventory is maintained in [`docs/brokers-websocket-contract.md`](../../docs/brokers-websocket-contract.md). Re-read it and re-check current source/consumers before implementation; this section summarizes the decisions agents must preserve.
+The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the original SDK-to-native migration baseline. Its historical SDK dependency and export inventory is not the current state; use the current facts below and re-check source/consumers before changing a contract.
 
-### Dependency inventory
+### Current dependency inventory
 
-- `packages/brokers/package.json` currently declares `@binance/spot` as a third-party runtime dependency (audited version range `^34.0.3`; lockfile version `34.0.3`).
-- Internal workspace dependencies `@coinzilla/entities` and `@coinzilla/utils` may remain if still required.
-- Removing an import is not enough. Update the package manifest and lockfile, then inspect the production dependency tree and run the repository dependency audit.
-- Re-run a repository-wide search for `@binance/spot` before final removal.
+- `packages/brokers/package.json` has **no third-party runtime dependencies**. Its only runtime dependencies are workspace packages `@coinzilla/entities` and `@coinzilla/utils`.
+- The native WebSocket implementation uses Node.js built-ins (`WebSocket`, `node:crypto`) and requires Node.js `>=22.23.4`, with a runtime guard for patched bundled Undici.
+- Do not reintroduce the Binance SDK, third-party WebSocket packages, or REST trading fallbacks.
 
-### Public package exports to preserve initially
+### Current public package exports
 
-The current `packages/brokers/src/index.js` exports:
+The current `packages/brokers/src/index.js` exports exactly:
 
-| Export | Current source | Initial compatibility decision |
+| Export | Source | Contract |
 |---|---|---|
-| `BinanceSdkBroker` | `binance/broker-sdk/broker.js` | Preserve the exported name while replacing internals. A rename needs a separate consumer migration decision. |
-| `BinanceSdkConfig` | `binance/broker-sdk/binance-sdk-config.js` | Preserve the exported name initially; remove SDK-derived constants while keeping equivalent validated configuration. |
-| `BinanceBroker` | `binance/broker/broker.js` | Legacy custom REST broker. Deprecate; do not expand; remove only after usage checks. |
-| `BinanceStreamClient` | `binance/websocket-stream/stream-client.js` | Existing custom Streams client is incomplete. Its exported methods require a preserve/deprecate decision. |
-| `wsEventsMap` | `binance/websocket-stream/adapters/index.js` | Preserve unless consumer search proves it unused and removal is explicitly planned. |
-| `CoreBroker` | `broker.core.js` | Preserve shared base-class contract. |
+| `BinanceWebSocketBroker` | `binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
+| `BinanceWebSocketConfig` | `binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
+| `CoreBroker` | `broker.core.js` | Shared base class used by broker implementations, including Market Simulator |
+| `normalizeBinanceId` | `binance/shared/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
 
-### Broker method to Binance operation map
+The module retains an internal `BinanceSdkConfig` alias for compatibility inside its own module, but it is not a separate public root export. The old SDK/REST broker and standalone legacy Streams exports are not current root exports. Do not restore or remove aliases without a consumer-backed compatibility decision.
 
-| Broker method | Binance Spot WebSocket API method | Security class |
+### Verified workspace consumers
+
+A scan of current workspace manifests found two consumers of `@coinzilla/brokers`:
+
+| Consumer | Usage | Compatibility contract |
 |---|---|---|
-| `getAssets()` | `account.status` | USER_DATA, signed |
-| `getOpenOrders({ symbol? })` | `openOrders.status` | USER_DATA, signed |
-| `getOrder({ symbol, orderId })` / `getOrder({ symbol, clientOrderId })` | `order.status` (`orderId` or `origClientOrderId`) | USER_DATA, signed |
-| `getOrderHistory(...)` | `allOrders` | USER_DATA, signed |
-| `getMyTrades(...)` | `myTrades` | USER_DATA, signed |
-| `createOrder(input)` | `order.place` | TRADE, signed |
-| `cancelOrder(...)` | `order.cancel` | TRADE, signed |
-| `cancelAllOpenOrders({ symbol })` | `openOrders.cancelAll` | TRADE, signed |
-| `getPrices({ symbol })` | `ticker.price` | Public |
-| `getSymbolFilters({ symbol })` | `exchangeInfo` with a symbol filter | Public |
-| `getExchangeMarkets()` | unfiltered `exchangeInfo` | Public |
+| `apps/harvester` | `createBinanceBrokerAdapter` wraps `BinanceWebSocketBroker` and implements Harvester's application-owned `BrokerPort`. | Preserve broker methods/results/events, exact decimal strings, recovery acknowledgement, and order safety. Harvester owns trading use cases and its port. |
+| `packages/market-simulator` | `HistoricalMarketBroker` extends `CoreBroker`; `SimulatedExecutionBroker` extends the historical broker. | Preserve `CoreBroker` construction, shared maps/state, and default unsupported-method behavior. Treat it as a live public extension point. |
 
-Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a starting map, not permission to guess undocumented behavior.
+Do not modify either consumer's implementation as part of a Brokers-owned refactor. Read them to verify compatibility and run their relevant tests through repository CI.
 
-### Existing public Streams inventory
+### Current broker operations and Binance mapping
 
-The old exported `BinanceStreamClient` exposes these stream methods, which need an explicit preserve/deprecate decision:
-
-| Method | Stream name |
+| Broker operation | Binance operation / behavior |
 |---|---|
-| `trade({ tickets })` | `<symbol>@trade` |
-| `kline({ tickets, interval })` | `<symbol>@kline_<interval>` |
-| `miniTicker({ symbol? })` | `<symbol>@miniTicker` or `!miniTicker@arr` |
-| `ticker({ symbol? })` | `<symbol>@ticker` or `!ticker@arr` |
-| `rollingWindowTicker({ windowSize, symbol? })` | `<symbol>@ticker_<windowSize>` or `!ticker_<windowSize>@arr` |
-| `bookTicker({ symbol })` | `<symbol>@bookTicker` |
-| `partialBookDepth({ symbol, levels, speed })` | `<symbol>@depth<levels>@<speed>` |
-| `diffBookDepth({ symbol, speed })` | `<symbol>@depth@<speed>` |
-| `aggTrade({ tickets })` | `<symbol>@aggTrade` |
-| `userData()` | Legacy REST listen-key path; do not confuse with the current SDK broker user-data subscription. |
+| `getAssets()` | `account.status` with zero balances omitted; legacy `Coin` values |
+| `getBalances()` | `account.status` including zero balances; canonical `Balance[]` |
+| `getAccountSnapshot()` | `account.status` including balances and validated source `updateTime` |
+| `getServerTime()` | `time` |
+| `getOpenOrders({ symbol? })` | `openOrders.status` |
+| `getOrder({ symbol, orderId })` / `getOrder({ symbol, clientOrderId })` | `order.status` using `orderId` or `origClientOrderId` |
+| `getCanonicalOrder({ symbol, orderId? , clientOrderId? })` | `order.status` plus canonical order adaptation |
+| `getOrderHistory(...)` | `allOrders`, preserving the established normalized legacy result |
+| `getCanonicalOrderHistory(...)` | `allOrders` plus canonical `CanonicalOrder[]` adaptation |
+| `getMyTrades(...)` | `myTrades`, preserving the established trade result |
+| `getFills(...)` | `myTrades` plus canonical `Fill[]` adaptation |
+| `createOrder(input)` / `createCanonicalOrder(input)` | `order.place`; preserve each method's current result contract |
+| `cancelOrder(...)` | `order.cancel` |
+| `cancelAllOpenOrders({ symbol })` | `openOrders.cancelAll` |
+| `getPrices({ symbol })` | `ticker.price` |
+| `getSymbolFilters({ symbol })` | `exchangeInfo` with symbol filter |
+| `getExchangeMarkets()` | Unfiltered `exchangeInfo`, adapted to canonical `Market[]` |
+| `subscribeForPrices({ symbol, onPrice })` | Public `<symbol>@aggTrade` stream |
+| `subscribeForBookTicker({ symbol, onBookTicker })` | Public `<symbol>@bookTicker` stream |
+| `subscribeForUserData({ onEvent, onStatus })` | Signed `userDataStream.subscribe.signature` on the WebSocket API connection |
 
+Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a current mapping, not permission to guess undocumented behavior. `CoreBroker.getPrice()` remains the inherited unsupported default unless a concrete broker overrides it.
 
----
+### Current public stream surface
+
+The active public streaming methods are `subscribeForPrices` (aggregate trades) and `subscribeForBookTicker` (best bid/ask). Public stream protocol details, subscription limits, reconnect behavior, and payload contracts are internal infrastructure; do not reintroduce the old standalone `BinanceStreamClient` API as part of architecture work.
+
+### Compatibility invariants
+
+- Preserve public root exports and existing method signatures/results unless a separately reviewed migration plan exists.
+- Preserve exact decimal strings in canonical order/fill/balance and market-data contracts; do not route financial values through JavaScript `Number` where precision matters.
+- Preserve `onEvent({ event })`, optional status notifications, and explicit recovery acknowledgement semantics.
+- Treat state-changing RPC timeouts/disconnects as unknown outcomes. Never blindly replay order placement or cancellation.
+- Keep all default tests offline; TESTNET integration remains opt-in and TESTNET-only.
+
 
 ## 4. Architecture decisions and non-negotiable protocol rules
 
