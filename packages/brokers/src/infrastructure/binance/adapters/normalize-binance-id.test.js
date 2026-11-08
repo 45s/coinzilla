@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { normalizeBinanceId } from "../../index.js"
+import { normalizeBinanceId } from "../../../index.js"
 
 test("normalizes exact Binance IDs to strings", () => {
   assert.equal(normalizeBinanceId("123456"), "123456")
