@@ -1386,7 +1386,12 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
         ok: true,
         data: {
           disconnect: async () => calls.push("unsubscribe:user-data"),
-          acknowledgeRecoveryResult: () => {
+          acknowledgeRecoveryResult: (recoveryGeneration) => {
+            assert.equal(
+              recoveryGeneration,
+              1,
+              "The recovery integration fixture must acknowledge the broker generation it reconciled.",
+            )
             recoveryAcknowledgementCount += 1
             recoveryAcknowledgementObservation = {
               queuedFillProcessedCount: recoveryQueuedFillProcessedCount,
@@ -1401,6 +1406,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
             handlers.onStatus({
               type: "reconciled",
               subscriptionId: 17,
+              recoveryGeneration: 1,
               recoveryRequired: false,
               reconciliationRequired: false,
             })
@@ -1581,6 +1587,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   userDataHandlers.onStatus({
     type: "recovered",
     subscriptionId: 17,
+    recoveryGeneration: 1,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
