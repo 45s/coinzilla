@@ -541,3 +541,111 @@ test("still closes the journal when unsubscribe and event bus flush throw", asyn
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+
+test("retries a transient disk sync failure and durably persists records written before and after it", async () => {
+  const context = await createTestJournal()
+  const originalSync = context.journal.fileHandle.sync.bind(context.journal.fileHandle)
+  let syncAttempts = 0
+
+  try {
+    context.journal.fileHandle.sync = async () => {
+      syncAttempts += 1
+      if (syncAttempts === 1) {
+        throw new Error("simulated transient disk sync failure")
+      }
+      return originalSync()
+    }
+
+    const first = context.eventBus.publish({
+      name: "account.snapshot_captured",
+      source: "harvester",
+      data: { phase: "RECOVERY", generation: 1, attempt: 1 },
+    })
+    assert.equal(
+      first.ok,
+      true,
+      "The first recovery audit event must be accepted by the event bus before the transient sync failure is injected.",
+    )
+
+    const firstFlush = await context.journal.flush()
+    assert.equal(
+      firstFlush.ok,
+      false,
+      "The first flush must report the injected file-sync failure instead of claiming durability.",
+    )
+    assert.equal(
+      firstFlush.durable,
+      undefined,
+      "A failed file sync must not expose a durable confirmation for the first recovery audit event.",
+    )
+    assert.match(
+      firstFlush.errors[0].message,
+      /simulated transient disk sync failure/,
+      "The failed flush result must retain the original transient sync failure message.",
+    )
+
+    const firstWrittenContent = await readFile(context.filePath, "utf8")
+    const firstWrittenRecord = JSON.parse(firstWrittenContent.trim().split("\n")[0])
+    assert.equal(
+      firstWrittenRecord.__coinzillaJournal.id,
+      first.event.id,
+      "The first JSONL record must have completed its write before the failed sync is retried.",
+    )
+
+    const second = context.eventBus.publish({
+      name: "account.snapshot_captured",
+      source: "harvester",
+      data: { phase: "RECOVERY", generation: 1, attempt: 2 },
+    })
+    assert.equal(
+      second.ok,
+      true,
+      "The retry audit event must be accepted after the transient sync failure without restarting the Journal.",
+    )
+
+    const secondFlush = await context.journal.flush()
+    assert.equal(
+      secondFlush.ok,
+      true,
+      "A later flush on the same Journal instance must recover from the transient sync failure.",
+    )
+    assert.equal(
+      secondFlush.durable,
+      true,
+      "The successful retry flush must confirm durable storage for all completed writes in the session file.",
+    )
+    assert.equal(
+      syncAttempts,
+      2,
+      "The Journal must attempt one failed sync and one successful retry sync before cleanup.",
+    )
+
+    const records = (await readFile(context.filePath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+    assert.equal(
+      records.length,
+      2,
+      "The later successful sync must preserve both the original uncertain audit record and the retry audit record.",
+    )
+    assert.deepEqual(
+      records.map((record) => record.__coinzillaJournal.id),
+      [first.event.id, second.event.id],
+      "The Journal must retain both distinct event IDs in their original append order rather than deduplicating or rewriting evidence.",
+    )
+    assert.deepEqual(
+      records.map((record) => record.data.attempt),
+      [1, 2],
+      "The durable JSONL history must preserve the first and retry audit payloads in publication order.",
+    )
+  } finally {
+    if (context.journal.fileHandle) {
+      delete context.journal.fileHandle.sync
+    }
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
