@@ -6,7 +6,7 @@ import test from "node:test"
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-test("Undici socket errors have no documented WebSocket identity for safe correlation", {
+test("Undici does not emit a socket_error diagnostic for every abnormal 1006 close", {
   timeout: 5_000,
 }, async (t) => {
   const socketErrors = []
@@ -77,8 +77,7 @@ test("Undici socket errors have no documented WebSocket identity for safe correl
   assert.equal(closed.length, 1)
   assert.equal(closed[0].websocket, websocket)
 
-  assert.equal(socketErrors.length, 1)
-  assert.ok(socketErrors[0] instanceof Error)
-  assert.equal("websocket" in socketErrors[0], false)
-  assert.equal("socket" in socketErrors[0], false)
+  // A peer reset can produce close code 1006 without a client-side socket error.
+  // In that case the socket_error diagnostics channel emits nothing to correlate.
+  assert.equal(socketErrors.length, 0)
 })
