@@ -224,7 +224,7 @@ export async function startHarvester({
   // One explicit state object makes user-data readiness and queue ownership visible.
   const userDataState = {
     ready: false,
-    userDataState.initialAccountSnapshotReady: false,
+    initialAccountSnapshotReady: false,
     requiresReconciliation: !tradingEnabled,
     streamUnsafe: false,
     accountingFailed: false,
@@ -232,9 +232,9 @@ export async function startHarvester({
     eventQueue: Promise.resolve(),
     eventSequence: 0,
     recoveryGeneration: 0,
-    userDataState.lastAcknowledgedRecoveryGeneration: -1,
+    lastAcknowledgedRecoveryGeneration: -1,
     recoveryTask: null,
-    userDataState.safetyHaltBuyCancellationTask: null,
+    safetyHaltBuyCancellationTask: null,
     startupComplete: false,
     pendingRecovery: false,
     intakeStopped: false,

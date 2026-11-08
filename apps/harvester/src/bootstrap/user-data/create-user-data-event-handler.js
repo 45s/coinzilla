@@ -15,18 +15,18 @@ export function createUserDataEventHandler({
   return ({ event } = {}) => {
     const tradingEngine = getTradingEngine()
     const tradingEnabled = isTradingEnabled()
-    if (userDataState.intakeStopped) return
+    if (state.intakeStopped) return
     const isExecution = event?.eventType === "executionReport" &&
       event?.executionType === "TRADE"
     const isOrderUpdate = event?.eventType === "executionReport"
     if (!event || typeof event !== "object" || Array.isArray(event)) {
-      userDataState.ready = false
-      userDataState.accountingFailed = true
-      userDataState.status = "INVALID_EVENT"
+      state.ready = false
+      state.accountingFailed = true
+      state.status = "INVALID_EVENT"
       void cancelOwnedBuysAfterAccountingFailure()
       return
     }
-    userDataState.eventSequence += 1
+    state.eventSequence += 1
     let reevaluateSymbol
 
     if (isExecution) {
@@ -36,15 +36,15 @@ export function createUserDataEventHandler({
         side: event.fill?.side ?? event.executedOrder?.side,
       })
     }
-    const task = userDataState.eventQueue.then(async () => {
+    const task = state.eventQueue.then(async () => {
       if (tradingEngine && isOrderUpdate) {
         const processed = await tradingEngine.processUserDataEvent({
           event,
         })
         if (!processed.ok) {
-          userDataState.ready = false
-          userDataState.accountingFailed = true
-          userDataState.status = "EXECUTION_ACCOUNTING_FAILED"
+          state.ready = false
+          state.accountingFailed = true
+          state.status = "EXECUTION_ACCOUNTING_FAILED"
           const rejectedOrder = event.executedOrder
           const registeredOrders = tradingEngine.getOrders()
           const incomingBrokerOrderId = rejectedOrder?.brokerOrderId ?? event.fill?.brokerOrderId
@@ -97,9 +97,9 @@ export function createUserDataEventHandler({
         })
         if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
       } else if (isOrderUpdate && tradingEnabled) {
-        userDataState.accountingFailed = true
-        userDataState.ready = false
-        userDataState.status = "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY"
+        state.accountingFailed = true
+        state.ready = false
+        state.status = "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY"
         logger.error?.({
           message: "received an order report before its order-ownership registry was ready",
           symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
@@ -128,39 +128,39 @@ export function createUserDataEventHandler({
         })
       }
     }).catch((error) => {
-      userDataState.accountingFailed = true
-      userDataState.ready = false
-      userDataState.status = "EVENT_QUEUE_FAILED"
+      state.accountingFailed = true
+      state.ready = false
+      state.status = "EVENT_QUEUE_FAILED"
       logger.error?.({ message: "user-data event queue failed", error })
     }).finally(async () => {
       if (isStopped()) {
-        userDataState.ready = false
-        userDataState.status = "STOPPED"
+        state.ready = false
+        state.status = "STOPPED"
         return
       }
-      if (userDataState.accountingFailed) {
-        userDataState.ready = false
+      if (state.accountingFailed) {
+        state.ready = false
         await cancelOwnedBuysAfterAccountingFailure()
         return
       }
-      if (userDataState.requiresReconciliation) {
-        userDataState.ready = false
-        userDataState.status = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+      if (state.requiresReconciliation) {
+        state.ready = false
+        state.status = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         return
       }
-      if (!userDataState.initialAccountSnapshotReady) {
-        userDataState.ready = false
-        userDataState.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
+      if (!state.initialAccountSnapshotReady) {
+        state.ready = false
+        state.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
         return
       }
-      userDataState.ready = true
-      userDataState.status = "READY"
+      state.ready = true
+      state.status = "READY"
       if (reevaluateSymbol && tradingEngine) {
         const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
         if (!reevaluated.ok) logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors })
       }
       resumeDeferredStrategyEvaluations()
     })
-    userDataState.eventQueue = task
+    state.eventQueue = task
   }
 }
