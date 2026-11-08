@@ -148,3 +148,59 @@ test("accepts CRLF session lines while preserving the original record position",
     "CRLF normalization must preserve the original filename and one-based JSONL line position.",
   )
 })
+
+test("rejects malformed metadata objects and non-object JSON values", () => {
+  const invalidLines = [
+    {
+      label: "array metadata",
+      content: `${JSON.stringify({
+        id: "event-array-metadata",
+        __coinzillaJournal: [],
+      })}\\n`,
+    },
+    {
+      label: "null record",
+      content: "null\\n",
+    },
+  ]
+
+  for (const invalid of invalidLines) {
+    assert.throws(
+      () => parseJournalSession({
+        content: invalid.content,
+        fileName: FILE_NAME,
+        maxRecordBytes: 1024,
+      }),
+      {
+        code: "JOURNAL_MALFORMED_RECORD",
+      },
+      `Journal parsing must reject ${invalid.label} instead of returning an invalid recovered record.`,
+    )
+  }
+})
+
+test("recovers legacy raw event lines with the same stable record shape", () => {
+  const legacyPayload = {
+    id: "legacy-event",
+    name: "order.created",
+    source: "test",
+    data: { orderId: "legacy-42" },
+  }
+
+  const [recovered] = parseJournalSession({
+    content: `${JSON.stringify(legacyPayload)}\\n`,
+    fileName: FILE_NAME,
+    maxRecordBytes: 1024,
+  })
+
+  assert.deepEqual(
+    recovered,
+    {
+      id: legacyPayload.id,
+      schemaVersion: 1,
+      payload: legacyPayload,
+      position: { fileName: FILE_NAME, lineNumber: 1 },
+    },
+    "Legacy raw event lines must recover into the same identity, schema, payload, and position contract as current records.",
+  )
+})

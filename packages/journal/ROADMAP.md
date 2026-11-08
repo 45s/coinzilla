@@ -101,6 +101,7 @@ Scope:
 - Keep serialization and parsing at the format boundary; keep record invariants in the record contract.
 - Keep source event payload fields compatible with the existing top-level JSONL representation and retain the reserved `__coinzillaJournal` metadata format.
 - Make validation results/errors and schema-version handling consistent and explicit.
+- Reject an own enumerable root-level `toJSON` hook on source events so JSON serialization cannot replace Journal's persisted record envelope.
 - Keep the current public `Journal` API and recovered-record shape unless tests demonstrate a necessary compatibility-preserving clarification.
 
 Acceptance criteria:
@@ -119,7 +120,7 @@ Required test matrix:
 - Non-mutation/aliasing behavior for caller input and returned record values, if immutability is adopted as part of the contract.
 
 TDD and documentation:
-- First commit adds focused tests and updates the README contract; run the tests and record the expected RED result.
+- Test-first commit `a1c0807962008ee981e1caff31fe96d2e53c66af` added focused tests and the README contract. On Node 24.22.2, `pnpm --filter @coinzilla/journal test` produced the expected RED: 51 passed, 1 failed because the source event's root `toJSON` hook was not rejected (`src/journal-record.test.js:61`).
 - Implementation commit makes the smallest change that turns those tests GREEN and updates JSDoc/README to the actual behavior.
 - Refactor only after GREEN; keep tests passing and update affected docs in that same commit.
 - Do not bundle filesystem adapter work into this PR.
