@@ -147,6 +147,26 @@ src/
 └── index.js
 ```
 
+### Existing test and coverage baseline
+
+The package already has a deterministic test suite for the partial vertical slice:
+
+- `domain/user-data-recovery-policy.test.js`
+- `ports/user-data-client-port.test.js`
+- `infrastructure/binance/user-data-client-adapter.test.js`
+- `binance/broker-websocket/methods/user-data-session.test.js` covers the application session even though the test still sits under the older Binance-oriented tree.
+
+The package scripts on the audited baseline are:
+
+```sh
+pnpm --filter @coinzilla/brokers test
+pnpm --filter @coinzilla/brokers test:coverage
+```
+
+The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the active broker WebSocket/shared runtime and the newer domain/application/ports/infrastructure paths. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
+
+No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
+
 ### Existing vertical slice: user-data recovery
 
 This is the strongest existing example of the intended architecture:
