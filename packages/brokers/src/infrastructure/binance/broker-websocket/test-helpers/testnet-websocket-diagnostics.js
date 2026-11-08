@@ -17,16 +17,6 @@ function safeText(value) {
     .replace(/https?:\/\/[^\s]+/gi, "[redacted-url]")
 }
 
-function httpStatus(...sources) {
-  for (const source of sources) {
-    for (const key of ["status", "statusCode"]) {
-      const value = source?.[key]
-      if (Number.isInteger(value) && value >= 100 && value <= 599) return value
-    }
-  }
-  return null
-}
-
 function probeHttpReachability(name, websocketUrl) {
   return new Promise((resolve) => {
     const endpoint = new URL(websocketUrl)
@@ -44,6 +34,7 @@ function probeHttpReachability(name, websocketUrl) {
 
     const request = httpsRequest(endpoint, {
       method: "GET",
+      signal: AbortSignal.timeout(5_000),
       headers: {
         Connection: "Upgrade",
         Upgrade: "websocket",
@@ -61,7 +52,7 @@ function probeHttpReachability(name, websocketUrl) {
         size += bounded.length
       })
       response.on("end", () => {
-        const blockedByLink = response.headers.link?.match(/<([^>]+)>\\s*;\\s*rel=["']?blocked-by["']?/i)?.[1]
+        const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
         let blockedByHost = null
         if (blockedByLink) {
           try {
