@@ -108,7 +108,10 @@ test("status observer failures are contained and fail closed", () => {
 })
 
 test("repeated recovered reminders publish and log once while retrying application recovery", () => {
-  const { handler, events, logs, actions } = createHandler()
+  let observerNotifications = 0
+  const { handler, events, logs, actions } = createHandler({
+    onUserDataStatus: () => { observerNotifications += 1 },
+  })
   const recoveredReminder = {
     type: "recovered",
     recoveryRequired: true,
@@ -132,6 +135,11 @@ test("repeated recovered reminders publish and log once while retrying applicati
     actions.recoveries,
     2,
     "Every recovered reminder must still reach the application recovery coordinator so a failed reconciliation can be retried.",
+  )
+  assert.equal(
+    observerNotifications,
+    2,
+    "Every recovered reminder must remain visible to the injected status observer even when duplicate diagnostics are suppressed.",
   )
 })
 
