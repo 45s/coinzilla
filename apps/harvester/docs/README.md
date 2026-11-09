@@ -11,6 +11,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Current architecture and domain contracts
 
+- [Architecture Decision Records](decisions/README.md) — durable Harvester decisions and rationale
+
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
 - [Domain glossary](domain/DOMAIN_GLOSSARY.md)
