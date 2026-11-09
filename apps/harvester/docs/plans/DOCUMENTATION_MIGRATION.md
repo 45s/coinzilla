@@ -127,8 +127,10 @@ No file may be deleted solely because it is old, large, similarly named or appar
 - No claim of CI enforcement or successful verification is made without exact-head evidence.
 - Harvester runtime, tests, configuration and trading behavior remain unchanged by this documentation-only initiative.
 
-## Current limitations and blockers
+## Current status and remaining boundaries
 
-The GitHub repository interface used for this first pass exposed individual files and search results but did not provide a verified complete recursive tree listing. Therefore the complete per-file inventory and final MOVE/MERGE/SPLIT/ARCHIVE decisions are not yet safe to publish. Continue with a complete tree source or repository checkout; do not infer missing file lists from search results.
+A complete recursive Git tree is now available for the baseline commit, and the first-pass Harvester inventory is published. The initial inventory classifies 42 Harvester Markdown files; it does not claim that every factual statement in every file has been source-verified. Five files are explicitly marked REVIEW, and all others are conservatively KEEP pending further reference and content review.
+
+The repository-wide scope still includes 27 Markdown files under other packages/applications that require inventory and owner-specific review. Do not infer final repository-wide completion from the Harvester inventory. No move, merge, split, supersede or archive operation is authorized by the first-pass inventory alone.
 
 No runtime or TESTNET activity is part of this work. Any discovered behavior discrepancy must be recorded and routed to its owning engineering issue, not fixed as part of this documentation migration.
