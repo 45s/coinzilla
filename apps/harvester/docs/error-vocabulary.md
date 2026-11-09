@@ -5,7 +5,7 @@
 - Owner: harvester
 - Scope: stable operator-facing diagnostic identifiers emitted by Harvester
 
-This document maps stable diagnostic identifiers to symptoms, likely causes, and safe recovery procedures. Harvester includes a mapped identifier in structured startup diagnostics and the compact console summary. The identifier is intended for searching logs, source, tests, and this document. It does not replace the underlying machine-readable error code or original error/cause.
+This document maps stable diagnostic identifiers to symptoms, likely causes, and safe recovery procedures. Harvester includes a mapped identifier as `diagnosticId` in structured startup diagnostics and the compact console summary. The identifier is intended for searching logs, source, tests, and this document. It does not replace the underlying machine-readable `errorCode` or original error/cause.
 
 ## Journal errors
 
