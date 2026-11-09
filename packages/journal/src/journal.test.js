@@ -1317,3 +1317,113 @@ test("waits for an active flush before closing the session and rejects flushes a
     await eventBus.close()
   }
 })
+
+
+
+test("serializes concurrent explicit flushes across EventBus drain and session sync", async () => {
+  const eventBus = new EventBus()
+  const storeCalls = []
+  let activeSyncs = 0
+  let maxActiveSyncs = 0
+  let syncCalls = 0
+  let busFlushCalls = 0
+  let releaseFirstSync
+  let signalFirstSyncStarted
+  const firstSyncStarted = new Promise((resolve) => {
+    signalFirstSyncStarted = resolve
+  })
+  const firstSyncGate = new Promise((resolve) => {
+    releaseFirstSync = resolve
+  })
+  const store = {
+    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
+    acquireWriter: async () => storeCalls.push("acquireWriter"),
+    createSession: async () => {
+      storeCalls.push("createSession")
+      return { filePath: "virtual-journal/session.jsonl" }
+    },
+    append: async () => storeCalls.push("append"),
+    sync: async () => {
+      syncCalls += 1
+      activeSyncs += 1
+      maxActiveSyncs = Math.max(maxActiveSyncs, activeSyncs)
+      try {
+        if (syncCalls === 1) {
+          signalFirstSyncStarted()
+          await firstSyncGate
+        }
+        storeCalls.push("sync")
+      } finally {
+        activeSyncs -= 1
+      }
+    },
+    closeSession: async () => storeCalls.push("closeSession"),
+    releaseWriter: async () => storeCalls.push("releaseWriter"),
+  }
+  const journal = new Journal({
+    eventBus,
+    directory: "virtual-journal",
+    [JOURNAL_STORE]: store,
+  })
+  eventBus.flush = async () => {
+    busFlushCalls += 1
+    storeCalls.push("busFlush")
+    return { ok: true, errors: [] }
+  }
+
+  let firstFlush
+  let secondFlush
+  let closePromise
+  try {
+    const started = await journal.start()
+    assert.equal(started.ok, true)
+
+    firstFlush = journal.flush()
+    await firstSyncStarted
+    secondFlush = journal.flush()
+
+    await Promise.resolve()
+    assert.equal(
+      busFlushCalls,
+      1,
+      "A second explicit flush must wait before starting another EventBus drain while the first flush is active.",
+    )
+    assert.equal(
+      syncCalls,
+      1,
+      "A second explicit flush must not enter the session sync boundary while the first sync is held.",
+    )
+    assert.equal(
+      activeSyncs,
+      1,
+      "At most one explicit flush may own a session sync operation.",
+    )
+
+    releaseFirstSync()
+    const [firstResult, secondResult] = await Promise.all([firstFlush, secondFlush])
+    assert.equal(firstResult.ok, true)
+    assert.equal(secondResult.ok, true)
+    assert.equal(busFlushCalls, 2)
+    assert.equal(syncCalls, 2)
+    assert.equal(maxActiveSyncs, 1)
+    assert.deepEqual(
+      storeCalls,
+      [
+        "ensureDirectory",
+        "acquireWriter",
+        "createSession",
+        "busFlush",
+        "sync",
+        "busFlush",
+        "sync",
+      ],
+      "Each explicit flush must finish its full drain-and-sync lifecycle before the next begins.",
+    )
+  } finally {
+    releaseFirstSync()
+    await Promise.allSettled([firstFlush, secondFlush].filter(Boolean))
+    closePromise = journal.close()
+    await closePromise
+    await eventBus.close()
+  }
+})
