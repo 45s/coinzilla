@@ -240,16 +240,28 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each actual commission as an exact decimal amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. This preserves the fee facts needed for a future deterministic recovery projection, but does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
 
-## Restart recovery gate
+## Process-restart recovery status — 2026-11-09
 
-- Before starting a new Journal writer session, Harvester reads and validates all prior JSONL sessions. A missing Journal directory is treated as a first run; malformed, truncated, unsupported, duplicate-ID, or over-limit history fails the Journal readiness gate.
-- A trading-enabled process start is allowed only when the prior Journal snapshot was successfully read and contains no order-submission, cancellation, fill, recovery-cycle, or account-audit events.
-- If prior trading history exists, startup fails closed before broker connection. Read-only startup remains available. This is an interim safety gate: Portfolio, RecoveryLedger, and owned-order replay plus canonical exchange reconciliation are still required before trading can resume after a trading process restart.
+**Process-restart state restoration is not implemented in the current Harvester startup composition.** Do not interpret the PREFLIGHT audit or the Journal's standalone read/replay API as proof that prior trading state has been restored.
 
+Current source behavior:
+
+- `prepareOptionalJournal()` starts the Journal writer and exposes readiness, flush and close. It does not read or replay prior sessions.
+- `src/index.js` passes an event publisher into `startHarvester()`; it does not pass restored Portfolio, RecoveryLedger, OrderRegistry or fill projection state.
+- `start-harvester.js` creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state and explicitly disables Journal replay.
+- PREFLIGHT captures and durably records account balances and account-wide open orders. An unmatched order is classified as unowned and is not adopted. The current startup test explicitly permits runtime startup with an unowned open order; the `BLOCKED` audit classification is not itself a trading-readiness gate.
+- `reconcileOwnedOrders()` reconciles the orders already in the in-memory ownership registry. When that registry is empty, it returns without discovering historical order IDs or querying their fill history.
+- The broker contract supports symbol-wide `getFills({ symbol, fromId })` discovery, but Harvester does not perform a startup-wide scan or restore a per-symbol cursor. Binance documents inclusive cursors, a maximum page size of 1,000 and time windows no longer than 24 hours. No guaranteed history-retention horizon was established; complete offline-fill discovery remains unproven.
+
+The shared Journal package supports bounded read/replay, but replay is at-least-once and requires an idempotent consumer. That capability is not wired into Harvester startup. The previous statement that Harvester reads all prior sessions and blocks trading startup when historical trading events exist was inaccurate for the inspected current source and is removed.
+
+**Operational restriction:** do not enable unattended process restarts until [#654](https://github.com/45s/coinzilla/issues/654) has a separately implemented and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
+
+This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](../AUDIT.md), [AUDIT_FINDINGS.md](../AUDIT_FINDINGS.md) F-011, and [ROADMAP.md](../ROADMAP.md).
 
 ## Single-writer trading process lock
 
-- Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before reading Journal history or creating a Journal writer.
+- Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before creating a Journal writer. No prior-session Journal history read is currently wired into startup.
 - A second local process using that same directory fails before Journal startup and before broker connection.
 - The lock is released only after runtime shutdown and Journal writer closure are confirmed. If runtime stop or Journal close is not confirmed, the lock is retained. If Journal shutdown cannot be confirmed, the lock is retained to prevent another writer from trading concurrently.
 - If runtime startup has been attempted and then fails, the lock is retained because broker resources may have been partially activated even when no runtime handle was returned. Verify the process and broker state before manually removing that stale lock.
