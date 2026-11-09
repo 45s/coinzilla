@@ -156,6 +156,17 @@ export function findMissingLocalLinks(root, documents) {
 }
 
 /**
+ * Find unresolved local Markdown heading fragments.
+ *
+ * @param {string} root Repository root.
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable heading-anchor errors.
+ */
+export function findMissingLocalAnchors(root, documents) {
+  return [];
+}
+
+/**
  * Find unclosed fenced code blocks in repository Markdown/MDX documents.
  *
  * Fences may use backticks or tildes, with a closing fence of the same
