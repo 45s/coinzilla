@@ -4,7 +4,7 @@
 - **Status:** Accepted
 - **Date:** 2026-11-01
 - **Owners:** Coinzilla architecture (cross-cutting)
-- **Related:** [Architecture blueprint](../COINZILLA_ARCHITECTURE.md), [Engineering standards](../../../ENGINEERING_STANDARDS.md)
+- **Related:** [Coinzilla Architecture index](../README.md), [Engineering standards](../../../ENGINEERING_STANDARDS.md)
 
 ## Context
 
@@ -78,7 +78,7 @@ Rejected. Existing queueing, event handling, reconciliation helpers, entities, a
 
 ## Implementation guidance
 
-- Treat the [architecture blueprint](../COINZILLA_ARCHITECTURE.md) as the structural reference.
+- Treat the [Coinzilla Architecture index](../README.md) and applicable application architecture documents as structural references.
 - Treat each application's canonical domain specification as authoritative for its trading behavior and its roadmap as authoritative for implementation sequencing and acceptance criteria.
 - Do not use this ADR to change trading policy, approve unresolved accounting decisions, or declare existing code production-ready.
 - Add a new ADR for a material change to this decision; do not silently overwrite the historical rationale.

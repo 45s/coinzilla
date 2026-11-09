@@ -299,7 +299,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 ### Step 8 — Final documentation and operational verification
 
-**Status:** In progress on branch `docs/harvester/journal-operations-closeout`. PR #473 separately fixed the documented Journal environment settings.
+**Status:** PR #473 merged into `develop` on 2026-11-03 and wired `HARVESTER_JOURNAL_ENABLED` / `HARVESTER_JOURNAL_DIRECTORY` into the default process composition. Step 8 remains open for its remaining documentation and operational verification items below; the merged environment-wiring PR alone did not complete the full closeout.
 
 **Goal:** Close the feature with accurate docs and evidence.
 

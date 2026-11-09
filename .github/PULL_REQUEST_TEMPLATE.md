@@ -17,7 +17,14 @@
 - **Not run / blocked:** <!-- Name every relevant check not executed and why. -->
 - [ ] Reviewed naming, side effects, mutation, duplication, cohesion, and complexity against [ENGINEERING_STANDARDS.md](../ENGINEERING_STANDARDS.md).
 - [ ] No secrets, credentials, unrelated changes, or weakened tests are included.
-- [ ] Documentation and public contracts are updated if needed.
+- [ ] Documentation impact is assessed and recorded below; update affected living docs and indexes in this PR, or explain why no update is warranted.
+- [ ] Historical evidence and provenance are preserved; no superseded/archived document is left without a successor/disposition.
+
+## Documentation impact
+
+- **Updated documentation/indexes:** <!-- List paths, or N/A with reason. -->
+- **Canonical source of truth:** <!-- Identify the authoritative document(s) affected. -->
+- **Historical evidence / migration:** <!-- State how evidence, links and provenance are preserved, or N/A. -->
 
 ## Completion report
 

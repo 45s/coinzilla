@@ -1,74 +1,97 @@
 # Coinzilla — develop engineering roadmap
 
-**Scope:** the active shared development branch `develop`. This roadmap deliberately does not track release-branch synchronization or work on the old `main` snapshot.
+**Scope:** cross-workspace engineering priorities for the active `develop` branch. Application- and package-specific backlogs remain in their owning roadmaps; this file is a concise priority index, not a duplicate task tracker.
 
-**Goal:** make every application and shared package safe, deterministic, observable and maintainable. Prioritize demonstrated correctness and operational risks over refactoring volume or checklist completion.
+**Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-## Priority order across the workspace
+**Last reviewed:** 2026-11-09  
+**Develop checkpoint:** `3eb5efd1966c1619ee98e62853ff624403555bbd`
 
-### CRITICAL — Harvester trading safety and recovery
+## CRITICAL — Harvester readiness and recovery
 
-1. **Conservative trailing-BUY replacement safety** — validate replacement intent before canceling the standing order, and define fail-closed behavior for exchange-filter rejection or unknown outcomes. This addresses the observed `MIN_NOTIONAL` failure path and prevents a rejected replacement from silently removing the strategy's standing order. Add RED/GREEN tests for stale market data, min-notional, cancel/submit failures, partial fills and duplicate ticks.
-   - Owner and implementation plan: [Harvester roadmap](apps/harvester/ROADMAP.md).
+1. **Harvester user-data recovery acceptance (#626) — implementation hardening substantially complete; final acceptance remains PAUSED / UNVERIFIED.**
+   - **Why:** transport reconnection alone does not prove that account, orders and fills are reconciled or that readiness can safely reopen.
+   - **Remaining:** complete the outstanding offline recovery failure-classification follow-up (PR [#794](https://github.com/45s/coinzilla/pull/794) is open and not merged at this checkpoint), then obtain a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
+   - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
+   - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).
 
-2. **User-data recovery acceptance (#626)** — transport reconnect must not reopen trading until the matching recovery generation has authoritative order/fill reconciliation and required durable audit barriers. Keep TESTNET **PAUSED / UNVERIFIED** after the regional HTTP 451 restriction; do not claim acceptance or repeat the same blocked hosted attempt.
-   - Owner and evidence matrix: [Harvester](apps/harvester/ROADMAP.md), [Brokers](packages/brokers/ROADMAP.md).
+2. **Process-restart reconciliation (#654) — forensic phase; runtime implementation not started.**
+   - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.
+   - **Remaining:** establish complete historical market-universe evidence and a crash-consistent persistence/restore design before wiring startup restoration. Reconcile persisted state with balances, open orders and execution history before READY; fail closed on incomplete/conflicting evidence.
+   - **Safety:** unattended restart readiness remains blocked. Do not re-enable the unproven replay path or change runtime source during the documented evidence-only phase.
+   - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-3. **Process-restart reconciliation (#654)** — current trading ownership/accounting state is process-local. Before unattended restarts, persist order/fill identity, reservations, Portfolio/Position and strategy-control state, then reconcile persisted state with exchange balances/open orders/history before READY. Fail closed on incomplete or conflicting history.
-   - Owner: [Harvester](apps/harvester/ROADMAP.md).
+## IMPORTANT — active product and shared-package work
 
-### IMPORTANT — persistence and operational contracts
+3. **Consolidated Harvester trading-session statistics (C).**
+   - **Why:** operators need a trustworthy post-session accounting summary, not a reconstruction from logs and snapshots.
+   - **Remaining:** build a read-only CLI report from confirmed, deduplicated fills and existing Portfolio/RecoveryLedger facts: BUY/SELL totals, commissions by asset, invested quote, recovered net proceeds, outstanding recovery, realized net profit, retained inventory/dust and open/partial orders.
+   - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-4. **Journal persistence boundary** — finish the internal filesystem adapter (J-3), explicit orchestration state ownership (J-4), and conformance/operational docs (J-5). Preserve required Harvester PREFLIGHT/CLOSING and pre-side-effect durability barriers; optional diagnostic evidence must not add trading gates.
-   - J-1 and J-2 are complete in PRs #746 and #747.
-   - Owner: [Journal](packages/journal/ROADMAP.md).
+4. **Harvester Conservative architecture decomposition.**
+   - **Why:** the trading engine and its tests are large orchestration hotspots; this increases review cost and regression risk.
+   - **Remaining:** extract one behavior-protected workflow at a time, preserving domain decisions, accounting, reservations, event order and broker boundaries. Do not perform a broad rewrite.
+   - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-5. **Package-owned test quality** — add scoped coverage and negative self-checks where the audit found gaps in actively used packages. Workspace aggregate coverage alone can hide a weak package. Prioritize meaningful error, cleanup, concurrency, duplicate-event and partial-failure branches; never add tests just to inflate percentages.
-   - Owners: [Entities](packages/entities/ROADMAP.md), [Harvester](apps/harvester/ROADMAP.md).
+5. **Broker protocol and multi-market TESTNET acceptance.**
+   - **Why:** offline fakes cannot prove endpoint compatibility, account reads, recovery acknowledgement, shared-asset reservations or real exchange filter behavior.
+   - **Remaining:** complete the read-only protocol/recovery matrix in an eligible authorized environment; separately authorize any bounded order-mutation test. Keep all mutation flags disabled by default.
+   - **Blocker:** current hosted Spot TESTNET regional eligibility restriction; acceptance is not established.
+   - **Owners:** [Brokers roadmap](packages/brokers/ROADMAP.md) and [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-6. **Broker protocol acceptance** — resolve the native WebSocket read-only TESTNET handshake gap in an authorized environment and record exact runtime/commit/evidence. Preserve recovery generation fencing and keep mutation tests disabled unless separately authorized.
-   - Owner: [Brokers](packages/brokers/ROADMAP.md).
+6. **Repository documentation consolidation (#795).**
+   - **Why:** contributors need one current source of truth per subject, clear ownership and reliable navigation without losing historical evidence.
+   - **Remaining:** complete the recursive Markdown inventory and per-file dispositions, resolve duplicate/stale living guidance, and keep indexes synchronized. Do not claim migration completion from the governance foundation alone.
+   - **Owner:** [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md), [documentation index](docs/README.md), and [issue #795](https://github.com/45s/coinzilla/issues/795).
 
-### IMPORTANT — architecture and package ownership
+7. **Utilities build provenance and shared-helper reuse.**
+   - **Why:** logs and Journal evidence need trustworthy process/build identity, while duplicated generic helpers can drift.
+   - **Remaining:** finish the shared build-provenance/Logger context work and coordinated consumer rollout; complete the helper inventory with an explicit reuse/domain-local/intentional-duplication disposition. Avoid speculative utility APIs.
+   - **Owner:** [Utils roadmap](packages/utils/ROADMAP.md).
 
-7. **Decompose oversized Harvester/Brokers modules only after behavior is protected by tests.** Extract cohesive workflows, preserve public contracts, and add executable dependency-boundary tests. Avoid broad speculative rewrites.
-8. **Keep shared Entities and Utils contracts pure and stable.** Use exact decimal strings, explicit unknown/incomplete states, narrow imports and architecture tests. Do not move business rules into generic utilities.
-9. **Use DB only for a real domain-owned persistence requirement.** Define repository ports in the owning context, keep SQL in adapters, and test transactions, locking, migration and backup/restore before deployment.
-10. **Keep Event Bus and Notifiers bounded and optional by contract.** Preserve explicit delivery, failure and shutdown semantics. Do not add retries, dead-letter queues, new transports or durable notification outboxes without a concrete consumer requirement.
+8. **Entities package-owned quality and dependency boundaries.**
+   - **Why:** workspace-wide coverage can hide weak package contracts, especially for exact financial values and unknown/incomplete states.
+   - **Remaining:** close the scoped coverage and negative architecture/contract gaps recorded by the package owner.
+   - **Owner:** [Entities roadmap](packages/entities/ROADMAP.md).
 
-## Application and package execution map
+9. **First real database consumer and operational procedure.**
+   - **Why:** SQLite lifecycle support is implemented, but no application-owned persistence workflow currently proves the end-to-end contract.
+   - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
+   - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
-- [Harvester](apps/harvester/ROADMAP.md) — trading safety, recovery, restart reconciliation, evidence and session statistics.
-- [Brokers](packages/brokers/ROADMAP.md) — native WebSocket protocol, user-data lifecycle, recovery and integration acceptance.
-- [Database](packages/db/ROADMAP.md) — first domain-owned persistence consumer and operational procedures.
-- [Entities](packages/entities/ROADMAP.md) — exact financial contracts, dependency boundaries and package coverage.
-- [Event Bus](packages/event-bus/ROADMAP.md) — bounded delivery, failure semantics and lifecycle guarantees.
-- [Journal](packages/journal/ROADMAP.md) — record contract, filesystem adapter, orchestration and durability documentation.
-- [Market Simulator](packages/market-simulator/ROADMAP.md) — currently unused; low-priority maintenance only, deferred until a real consumer exists.
-- [Notifiers](packages/notifiers/ROADMAP.md) — safe optional delivery and operator-controlled live smoke test.
-- [Utils](packages/utils/ROADMAP.md) — shared exact arithmetic, logger API and generic helper reuse.
+## DEFERRED — evidence or consumer required
 
-### LOW PRIORITY — unused package maintenance
+- **Market Simulator correctness and determinism:** intentionally lowest priority until a real application/workflow consumes it. Keep existing behavior/tests intact; do not schedule simulator work ahead of active Harvester or shared-package risks. [Owner roadmap](packages/market-simulator/ROADMAP.md).
+- **Event Bus advanced delivery features:** sequential delivery, retries, dead-letter handling and cooperative cancellation remain demand-driven; preserve the existing bounded delivery and shutdown contract. [Owner roadmap](packages/event-bus/ROADMAP.md).
+- **Additional notification transports/retries/outbox:** require a concrete consumer and explicit duplicate-delivery/storage ownership. The live Telegram smoke test remains operator-controlled. [Owner roadmap](packages/notifiers/ROADMAP.md).
+- **Additional database providers:** reassess only when measured deployment, concurrency, scale or query requirements exceed SQLite.
 
-11. **Market Simulator correctness and determinism** — defer all simulator correctness, deterministic-time, cleanup and coverage work until an application or workflow actually consumes this package. There is currently no demonstrated production use, so it must not compete with active trading, recovery or persistence work. Keep the existing package and its tests intact; do not expand it proactively.
-   - Owner and deferred notes: [Market Simulator](packages/market-simulator/ROADMAP.md).
+## Recently completed — do not reopen without new evidence
 
-## Delivery and verification rules
+- **Conservative trailing-BUY replacement safety:** PRs [#751](https://github.com/45s/coinzilla/pull/751) and [#753](https://github.com/45s/coinzilla/pull/753) merged. Candidate validation and refreshed exchange filters now precede cancellation; uncertain outcomes pause for reconciliation. See the [Harvester roadmap](apps/harvester/ROADMAP.md).
+- **Journal persistence and lifecycle boundary (J-1 through J-5):** record contract, filesystem adapter, lifecycle ownership, durability/recovery documentation and cleanup/order hardening are complete. PR [#805](https://github.com/45s/coinzilla/pull/805) merged at `3eb5efd1966c1619ee98e62853ff624403555bbd`. Journal follow-up cleanup tests and docs are complete; do not list J-3/J-4/J-5 as open work. See the [Journal roadmap](packages/journal/ROADMAP.md).
+- **Harvester process provenance:** PR #770 merged; the process-start Journal event and Logger correlation are implemented. The shared Utils build-provenance capability remains separately tracked by the Utils roadmap.
 
-1. Work one meaningful behavior at a time. For bug fixes, add a focused regression test first and demonstrate RED before implementation.
-2. Read the owning package's `AGENTS.md`, roadmap, implementation, tests and consumer contracts before editing.
-3. Keep domain rules in their owning bounded context; use shared packages only for demonstrated generic contracts.
-4. Preserve exact decimal financial values, idempotent fill accounting, fail-closed order/recovery gates and explicit unknown outcomes.
-5. Run focused tests, package tests/coverage, then relevant workspace CI. Report exact head SHA and results; never infer success from a previous commit.
-6. Treat network/exchange/Telegram checks as separate integration acceptance. A skipped test is not a pass.
-7. Update the owning roadmap in the same PR as verified implementation. Mark an item complete only after merge to `develop` and required checks pass.
-8. Keep PRs small, based on current `develop`, and delete task branches after merge when repository settings permit.
-9. Never weaken tests, coverage thresholds, safety gates or CI to make a PR green.
+## Roadmap ownership map
 
-## Current verification checkpoint
+- [Harvester](apps/harvester/ROADMAP.md) — trading safety, recovery, restart reconciliation and session statistics.
+- [Brokers](packages/brokers/ROADMAP.md) — native WebSocket protocol, user-data lifecycle and exchange acceptance.
+- [Entities](packages/entities/ROADMAP.md) — exact financial contracts and package-owned quality.
+- [Journal](packages/journal/ROADMAP.md) — record contract, persistence lifecycle and durability.
+- [Database](packages/db/ROADMAP.md) — embedded persistence infrastructure and first real consumer.
+- [Event Bus](packages/event-bus/ROADMAP.md) — bounded delivery and lifecycle guarantees.
+- [Notifiers](packages/notifiers/ROADMAP.md) — optional operational notifications.
+- [Utils](packages/utils/ROADMAP.md) — shared exact arithmetic, Logger and generic helpers.
+- [Market Simulator](packages/market-simulator/ROADMAP.md) — intentionally deferred unused package.
 
-- Audited branch: `develop`.
-- Baseline before this roadmap update: `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae`.
-- PRs #746 and #747 are merged; Journal record vocabulary and the lightweight record contract are implemented.
-- Offline required CI passed on the exact PR #747 head. Binance TESTNET integration was skipped; exchange acceptance remains unverified.
-- Existing open Harvester tracker correction PR #738 is accounted for in this roadmap update; do not duplicate its completed status corrections.
+## Delivery and documentation synchronization rules
+
+1. Work one meaningful behavior at a time; for behavior changes use RED → GREEN → REFACTOR.
+2. Read repository and owning-domain instructions, roadmaps, contracts, implementation, consumers and tests before editing.
+3. Keep implementation in its owning bounded context and preserve financial/recovery safety invariants.
+4. Update every affected living document in the same PR. When an owner-roadmap status, priority or blocker changes, check this root roadmap and synchronize its cross-workspace summary if that item is represented here.
+5. Keep the root roadmap concise: link to domain roadmaps rather than copying their detailed plans. Do not mark work complete before merge and required verification.
+6. Preserve historical reports and provenance. Correct stale historical conclusions with a dated addendum or link to the current living source; never silently rewrite evidence.
+7. Run focused checks, repository agent-policy/link checks and applicable CI on the exact PR head. A skipped integration check is not a pass.
+8. Keep task branches short-lived and delete them after merge when repository permissions allow. Never bypass branch protection or release approval.
+

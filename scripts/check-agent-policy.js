@@ -5,6 +5,76 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const domainAreas = ['apps', 'packages'];
 
+const ignoredMarkdownDirectories = new Set([
+  '.git', 'node_modules', '.pnpm-store', '.cache', '.turbo', '.next',
+  'coverage', 'dist', 'build', 'vendor', 'tmp',
+]);
+
+/**
+ * Discover all repository Markdown/MDX files, excluding generated/vendor trees.
+ *
+ * @param {string} root Repository root.
+ * @returns {{ path: string, content: string }[]} Sorted Markdown documents.
+ */
+export function findMarkdownDocuments(root) {
+  const documents = [];
+
+  function visit(directory, relativeDirectory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (ignoredMarkdownDirectories.has(entry.name)) continue;
+        visit(
+          join(directory, entry.name),
+          relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name,
+        );
+        continue;
+      }
+
+      if (!entry.isFile() || !/\.mdx?$/i.test(entry.name)) continue;
+      const path = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      documents.push({ path, content: readFileSync(join(directory, entry.name), 'utf8') });
+    }
+  }
+
+  visit(root, '');
+  return documents.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+/**
+ * Ensure canonical documentation entry points remain present.
+ *
+ * @param {string} root Repository root.
+ * @param {string[]} requiredPaths Required relative paths.
+ * @returns {string[]} Missing-document errors.
+ */
+export function findMissingRequiredDocuments(root, requiredPaths) {
+  return requiredPaths
+    .filter((path) => !existsSync(join(root, path)))
+    .map((path) => `Required documentation file is missing: ${path}`);
+}
+
+function removeCodeExamples(content) {
+  const output = [];
+  let activeFence = null;
+
+  for (const line of content.split(/\r?\n/)) {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (activeFence) {
+      if (fence && fence[1][0] === activeFence.character && fence[1].length >= activeFence.length &&
+          /^ {0,3}(?:`{3,}|~{3,})\s*$/.test(line)) {
+        activeFence = null;
+      }
+      continue;
+    }
+    if (fence) {
+      activeFence = { character: fence[1][0], length: fence[1].length };
+      continue;
+    }
+    output.push(line);
+  }
+
+  return output.join('\n').replace(/(`+)[\s\S]*?\1/g, '');
+}
 export function findInstructionDirectories(root) {
   const directories = [];
 
@@ -54,7 +124,7 @@ export function findOwnershipGaps(directories, ownershipDocument) {
 
 
 /**
- * Find broken relative Markdown links in the repository's central policy documents.
+ * Find broken relative Markdown links in all discovered repository Markdown/MDX documents.
  * External URLs, mail links, and same-document anchors are intentionally ignored.
  *
  * @param {string} root Repository root.
@@ -65,7 +135,8 @@ export function findMissingLocalLinks(root, documents) {
   const gaps = [];
 
   for (const document of documents) {
-    const links = document.content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
+    const content = removeCodeExamples(document.content);
+    const links = content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
 
     for (const match of links) {
       const target = match[1];
@@ -100,22 +171,22 @@ export function findMissingRoadmaps(root, ownershipDocument) {
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
-  const policyPaths = [
+  const requiredDocumentationPaths = [
     'AGENTS.md',
     'AI_AGENT_WORKFLOW.md',
     'ENGINEERING_STANDARDS.md',
-    'docs/engineering/TASK_WORKFLOWS.md',
-    'docs/engineering/DOMAIN_OWNERSHIP.md',
-    '.github/PULL_REQUEST_TEMPLATE.md',
+    'docs/DOCUMENTATION_GOVERNANCE.md',
+    'docs/README.md',
+    'apps/harvester/AGENTS.md',
+    'apps/harvester/README.md',
+    'apps/harvester/docs/README.md',
   ];
-  const policyDocuments = policyPaths.map((path) => ({
-    path,
-    content: readFileSync(join(repositoryRoot, path), 'utf8'),
-  }));
+  const markdownDocuments = findMarkdownDocuments(repositoryRoot);
   const gaps = [
     ...findOwnershipGaps(directories, ownershipDocument),
     ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
-    ...findMissingLocalLinks(repositoryRoot, policyDocuments),
+    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
+    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
   ];
 
   if (gaps.length > 0) {
@@ -125,7 +196,7 @@ function main() {
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ownership maps, domain roadmaps, and central policy links are valid).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points and local links are valid).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

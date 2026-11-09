@@ -539,16 +539,12 @@ The Conservative engine serializes its public market-price, user-data, and expli
 
 ## In-memory REST/stream order reconciliation
 
-When the broker reports `recovered`, the remote user-data subscription
-has returned; application reconciliation is still required. Bootstrap keeps
-the trading gate closed and starts REST reads without blocking normal
-stream-event processing. Before the REST snapshot is applied, bootstrap drains
-user-data events received during the reads; the engine then validates and
-applies the snapshot in its serialized transition queue. Harvester acknowledges
-the exact broker generation only after owned-order/fill reconciliation, queued
-event draining, fresh account and account-wide open-order snapshots, and both
-durable RECOVERY audit barriers succeed. Readiness returns only after the
-matching broker-wide `reconciled` notification.
+After the broker reports that its recovered user-data stream has completed
+stream-level reconciliation, bootstrap keeps the trading gate closed and
+starts REST reads without blocking normal stream-event processing. Before the
+REST snapshot is applied, bootstrap drains user-data events received during
+the reads; the engine then validates and applies the snapshot in its serialized
+transition queue. The trading gate is reopened only after both steps succeed.
 
 During application recovery, the account-balance and account-wide open-orders audits are separate durability barriers. After the account snapshot is durably published, bootstrap revalidates the recovery generation and accounting state, drains queued user-data events, and compares the event sequence before it starts the open-orders audit. If the generation was superseded or an event changed the snapshot boundary, the open-orders audit is skipped and the snapshot window is retried. After the open-orders audit flush, bootstrap revalidates the generation and accounting state before draining more queued events; a superseded task does not drain under an obsolete generation. The final drain and stable event-sequence check must then succeed before broker acknowledgement.
 
@@ -582,6 +578,52 @@ or accounting after a process restart, replay startup history, reconcile
 balances or external inventory, or adopt manual orders. It also does not claim
 durable exactly-once delivery. If REST state is incomplete or inconsistent,
 trading remains paused rather than guessing.
+## Cancellation preconditions
+
+Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
+
+Market-price subscription setup now awaits an already-received WebSocket tick before deciding whether a REST seed is needed; it does not issue the REST request when the WebSocket price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
+
+
+## Bootstrap composition and safety-halt workflow
+
+`bootstrap/start-harvester.js` is the process composition root. It resolves
+configuration, constructs domain/application state, connects adapters, wires
+user-data and market-data handlers, establishes startup gates, and exposes the
+runtime stop operation. It delegates account snapshots, market metadata,
+subscription setup, user-data event/status/recovery handling, and shutdown
+sequencing to focused bootstrap modules.
+
+The account-integrity safety halt is an application workflow in
+`src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
+execution or accounting failure is observed, it reconciles broker-owned order
+identities using `reconcileOwnedOrders({ recoveryMode: true })` before asking
+the trading engine to cancel only strategy-owned BUYs. Recovery mode applies
+canonical order and fill facts while suppressing strategy-driven recovery SELL
+cancellation/replacement; it does not skip ownership or fill reconciliation.
+The explicit `cancelOwnedBuyOrdersForSafetyHalt()` stage remains the only
+exchange-mutation stage in this workflow. Concurrent triggers share one
+in-flight task. Bootstrap supplies the live engine lookup, stopped-process
+predicate, and logger; the use case does not depend on broker SDK or
+process-global state.
+
+The source-verified shutdown sequence, cancellation/fill-race handling,
+CLOSING account audit, resource cleanup, and process-lock retention are defined
+in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
+
+
+## Runtime API and process boundary
+
+`startHarvester()` returns a frozen application runtime handle with the validated trading configuration, strategy mode, selected event publisher and application capabilities such as market-price processing, Portfolio/account access, readiness/status, subscriptions and `stop()`. It does **not** expose the raw broker port or a standalone `placeOrder()` function. Order placement must flow through the Conservative Trading Engine so strategy decisions, market rules, balance/commitment checks, order ownership and fill lifecycle cannot be bypassed by runtime callers.
+
+The process entry point in `src/index.js` composes process identity/logging, EventBus, the optional notifier, the Journal service, the broker-wide and Journal-directory process locks, runtime startup, signal handling and coordinated shutdown. Broker-connected startup requires the durable PREFLIGHT account audit before market subscriptions proceed. Detailed event payloads, Journal durability, lock acquisition/release, failure handling and shutdown ordering are maintained in [Journal Operations](./JOURNAL_OPERATIONS.md); do not duplicate those operational procedures here.
+
+## Client order identity
+
+The Conservative order executor creates one random process-local namespace at engine construction using a UUID-derived 22-hex-character value (88 bits), then increments a local sequence for each submitted order. Client IDs use the `h-<namespace>-<sequence>` shape; preflight validation uses a separate `preflight` marker within the same namespace. This avoids predictable counter-only identifiers being reused when a new process starts.
+
+A unique client ID is an identity/correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original identity; never create a replacement order merely because an acknowledgement was lost. Durable cross-process retry idempotency and process-restart state restoration are not implemented.
+
 ## Recovery failure classification and retry contract
 
 Engine event-processing failures carry an explicit `failure` object with
@@ -624,35 +666,3 @@ flowchart TD
     N --> O[Readiness may return]
 ```
 
-## Cancellation preconditions
-
-Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
-
-Market-price subscription setup now awaits an already-received WebSocket tick before deciding whether a REST seed is needed; it does not issue the REST request when the WebSocket price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
-
-
-## Bootstrap composition and safety-halt workflow
-
-`bootstrap/start-harvester.js` is the process composition root. It resolves
-configuration, constructs domain/application state, connects adapters, wires
-user-data and market-data handlers, establishes startup gates, and exposes the
-runtime stop operation. It delegates account snapshots, market metadata,
-subscription setup, user-data event/status/recovery handling, and shutdown
-sequencing to focused bootstrap modules.
-
-The account-integrity safety halt is an application workflow in
-`src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
-execution or accounting failure is observed, it reconciles broker-owned order
-identities using `reconcileOwnedOrders({ recoveryMode: true })` before asking
-the trading engine to cancel only strategy-owned BUYs. Recovery mode applies
-canonical order and fill facts while suppressing strategy-driven recovery SELL
-cancellation/replacement; it does not skip ownership or fill reconciliation.
-The explicit `cancelOwnedBuyOrdersForSafetyHalt()` stage remains the only
-exchange-mutation stage in this workflow. Concurrent triggers share one
-in-flight task. Bootstrap supplies the live engine lookup, stopped-process
-predicate, and logger; the use case does not depend on broker SDK or
-process-global state.
-
-The source-verified shutdown sequence, cancellation/fill-race handling,
-CLOSING account audit, resource cleanup, and process-lock retention are defined
-in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
