@@ -588,7 +588,24 @@ test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY",
   process.exitCode = 0
   try {
     const eventBus = new EventBus()
+    const processIdentity = {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "journal-integration-test",
+      processId: process.pid,
+      startedAt: "2026-11-09T12:34:56.789Z",
+      source: {
+        branch: null,
+        commit: null,
+        shortCommit: null,
+        commitMessage: null,
+        commitDate: null,
+        workingTree: "unknown",
+        metadataSource: "unavailable",
+      },
+    }
     const result = await main({
+      processIdentity,
       createEventBus: () => eventBus,
       start: async () => ({
         connected: false,
@@ -610,7 +627,7 @@ test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY",
 
     const files = await readdir(directory)
     assert.equal(files.length, 1)
-    assert.match(files[0], /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{3})?\.jsonl$/)
+    assert.equal(files[0], "2026-11-09_12-34-56-journal-integration-test.jsonl")
     const content = await readFile(path.join(directory, files[0]), "utf8")
     const records = content.trim().split("\n").map((line) => JSON.parse(line))
     assert.ok(records.some((record) => record.name === "harvester.stopped"))
