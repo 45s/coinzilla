@@ -12,7 +12,7 @@
 1. **Harvester user-data recovery acceptance (#626) — implementation hardening substantially complete; final acceptance remains PAUSED / UNVERIFIED.**
    - **Why:** transport reconnection alone does not prove that account, orders and fills are reconciled or that readiness can safely reopen.
    - **Completed offline follow-up:** recovery failure classification #769 was implemented test-first and merged in [PR #794](https://github.com/45s/coinzilla/pull/794) on 2026-11-09; exact-head offline CI passed. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [closeout PR #807](https://github.com/45s/coinzilla/pull/807).
-   - **Remaining:** keep #626 open for final acceptance traceability and a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
+   - **Remaining:** keep #626 open for the offline recovery fix in [PR #824](https://github.com/45s/coinzilla/pull/824), final acceptance traceability, and a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
    - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
    - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).
 
