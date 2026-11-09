@@ -304,7 +304,6 @@ export async function main({
               // Logging failure must not prevent the shutdown event attempt.
             }
           }
-          await processStartedPublication
           publishLifecycleEvent({
             eventPublisher,
             eventName: HARVESTER_EVENT_NAMES.STOPPED,
@@ -363,7 +362,6 @@ export async function main({
     }
     return { runtime, journalService }
   } catch (error) {
-    await processStartedPublication
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,

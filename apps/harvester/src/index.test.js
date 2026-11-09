@@ -1333,3 +1333,69 @@ test("keeps configuration-only startup available when optional Journal readiness
   assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "the Journal process event must be skipped when its subscriber never becomes ready")
   assert.equal(warnings.some((warning) => warning.message.includes("process-start Journal event skipped")), true, "the skipped best-effort event must be visible in diagnostic logs")
 })
+
+
+test("does not block shutdown while optional Journal readiness remains pending", { timeout: 1000 }, async () => {
+  const events = []
+  const handlers = {}
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const journalService = {
+    ready: new Promise(() => {}),
+    close: async () => ({ ok: true, closed: true }),
+  }
+
+  await main({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+      stop: async () => ({ ok: true }),
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, error() {}, debug() {}, warn() {} },
+    env: {},
+  })
+
+  await handlers.SIGTERM()
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), true, "shutdown evidence must not wait for optional Journal readiness")
+})
+
+test("does not block failed startup cleanup while optional Journal readiness remains pending", { timeout: 1000 }, async () => {
+  const events = []
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const journalService = {
+    ready: new Promise(() => {}),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => { throw new Error("optional startup failure") },
+      logger: { info() {}, error() {}, debug() {}, warn() {} },
+      env: {},
+    })
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STARTUP_FAILED), true, "startup-failed evidence must be published without waiting for optional Journal readiness")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})

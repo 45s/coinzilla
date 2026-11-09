@@ -509,6 +509,27 @@ not change the general TESTNET acceptance gate, authorize exchange writes, or
 modify trading/Journal behavior.
 
 
+## Process identity and build provenance
+
+Each Harvester OS process captures one immutable identity at module entry:
+the application/package version, Git branch and commit (when available),
+commit subject/date, working-tree state, process ID, UTC process-entry time,
+and a unique runtime-session ID. Git metadata is inspected once; if Git is
+unavailable, explicit `COINZILLA_BUILD_*` metadata is used, otherwise source
+fields are recorded as unavailable. This diagnostic capture never blocks
+startup.
+
+The shared Logger receives the sanitized allowlisted identity before startup
+diagnostics. The Journal records it as `harvester.process_started`, distinct
+from `harvester.started` (which means runtime startup succeeded). The event
+is published after Journal subscriber readiness. Configuration-only startup,
+startup-failure cleanup, and shutdown do not wait for optional Journal
+readiness. Broker-connected startup admits the event before the existing
+PREFLIGHT durability barrier; no additional flush or trading gate is added.
+When optional Journal readiness is delayed, the event's Journal append order
+may follow `harvester.started`, but its `startedAt` always represents the
+original process-entry time.
+
 ## Conservative Strategy authority
 
 All Conservative profitability, position quantity/spent accounting, actual commission valuation, SELL planning, fee reserves, exact keepQuantity, residual sell-through, dust, order lifecycle, and recovery completion rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This README is a navigation and implementation-status document, not a second source of truth.
