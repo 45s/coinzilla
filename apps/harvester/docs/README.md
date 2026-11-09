@@ -33,6 +33,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Historical records and evidence
 
 - [Harvester audit index](audits/README.md)
+- [Harvester roadmap history](audits/ROADMAP_HISTORY.md) — historical progress/evidence; current priorities remain in `../ROADMAP.md`.
 - [Historical DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md)
 - [Incident records](incidents/README.md)
 - [Historical task briefs](tasks/README.md)
