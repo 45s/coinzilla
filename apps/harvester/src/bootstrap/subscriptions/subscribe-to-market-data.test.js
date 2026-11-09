@@ -57,7 +57,7 @@ test("establishes all enabled book/price streams before WebSocket API ticker.pri
 
   assert.deepEqual(
     fixture.calls,
-    ["subscribe-book:BTCUSDT", "subscribe-price:BTCUSDT", "rest-price:BTCUSDT", "process-price:BTCUSDT"],
+    ["subscribe-book:BTCUSDT", "subscribe-price:BTCUSDT", "ticker-price-request:BTCUSDT", "process-price:BTCUSDT"],
     "Every enabled stream must be active before the initial WebSocket API ticker.price response is processed.",
   )
   assert.equal(result.subscriptions.length, 1, "The market-price subscription must be returned for shutdown ownership.")
@@ -75,7 +75,7 @@ test("skips WebSocket API ticker.price seeding when a fresh stream price arrives
   })
   await fixture.result
 
-  assert.equal(fixture.calls.includes("rest-price:BTCUSDT"), false, "A fresh first WebSocket Streams price must avoid a redundant ticker.price request.")
+  assert.equal(fixture.calls.includes("ticker-price-request:BTCUSDT"), false, "A fresh first WebSocket Streams price must avoid a redundant ticker.price request.")
   assert.equal(fixture.calls.includes("process-price:BTCUSDT"), true, "The fresh WebSocket price must be processed.")
 })
 
