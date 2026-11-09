@@ -65,6 +65,9 @@ child = spawn(
     stdio: ["inherit", "pipe", "pipe"],
     env: {
       ...process.env,
+      // The development launcher must not inherit a production NODE_ENV from
+      // the invoking shell; this profile is explicitly Binance TESTNET.
+      NODE_ENV: "development",
       COINZILLA_LOG_COLOR: process.env.NO_COLOR === undefined && process.stdout.isTTY
         ? "1"
         : "0",
