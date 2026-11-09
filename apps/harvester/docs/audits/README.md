@@ -6,6 +6,10 @@ This index is for Harvester-specific historical evidence. The [Harvester documen
 
 - [Historical Harvester roadmap](ROADMAP_HISTORY.md) — dated implementation, incident and audit chronology extracted from the living roadmap; original section anchors remain in `apps/harvester/ROADMAP.md` for compatibility.
 
+## Archived README material
+
+- [Historical README notes](README_HISTORY.md) — preserved 2026-11-04 incident notes and superseded operational detail removed from the application entry point.
+
 ## Main audit records
 
 - [Conservative Strategy audit](../../AUDIT.md) — primary historical audit report; interpret against its recorded baseline and evidence date.
