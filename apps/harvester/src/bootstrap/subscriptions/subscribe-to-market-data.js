@@ -53,9 +53,9 @@ const reportPriceError = (details) => {
   }
 }
 
-  // Establish every enabled market stream before doing any REST ticker
-  // seeding or waiting for an initial strategy evaluation. A slow first
-  // market must never prevent later enabled markets from receiving prices.
+  // Establish every enabled market stream before requesting any missing
+  // initial ticker snapshot through Binance WebSocket API `ticker.price`.
+  // A slow first request must never prevent later markets receiving prices.
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
     if (!pairConfig.enabled) continue
 
@@ -188,8 +188,8 @@ const reportPriceError = (details) => {
     subscribedSymbols,
   })
 
-  // Only after all enabled symbols have active stream subscriptions may
-  // startup perform REST price seeding and wait for outstanding first ticks.
+  // Only after all enabled symbols have active WebSocket Streams may startup
+  // request missing ticker snapshots through WebSocket API `ticker.price`.
   if (tradingEnabled) {
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
