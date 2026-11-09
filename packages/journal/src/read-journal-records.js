@@ -78,11 +78,22 @@ export async function readJournalRecords({
 
       const leftSuffix = left.name.slice(19, -6)
       const rightSuffix = right.name.slice(19, -6)
-      const leftIndex = BigInt(leftSuffix.slice(1) || "0")
-      const rightIndex = BigInt(rightSuffix.slice(1) || "0")
-
-      if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1
       if (leftSuffix === rightSuffix) return 0
+      if (leftSuffix === "") return -1
+      if (rightSuffix === "") return 1
+
+      const leftNumericSuffix = /^-(\d+)$/.exec(leftSuffix)
+      const rightNumericSuffix = /^-(\d+)$/.exec(rightSuffix)
+      if (leftNumericSuffix && rightNumericSuffix) {
+        const leftIndex = BigInt(leftNumericSuffix[1])
+        const rightIndex = BigInt(rightNumericSuffix[1])
+        if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1
+      } else if (leftNumericSuffix) {
+        return -1
+      } else if (rightNumericSuffix) {
+        return 1
+      }
+
       return leftSuffix < rightSuffix ? -1 : 1
     })
 
