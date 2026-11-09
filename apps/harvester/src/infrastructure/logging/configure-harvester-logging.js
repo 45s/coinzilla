@@ -13,6 +13,7 @@ const TRACE_TRANSPORT_NAME = "harvester-trace-file"
 const CONSOLE_DETAIL_KEYS = Object.freeze([
   "errorName",
   "errorMessage",
+  "errorCode",
   "orderCount",
   "readiness",
   "symbol",
