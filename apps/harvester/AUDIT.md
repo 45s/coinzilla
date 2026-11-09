@@ -857,7 +857,7 @@ Unexpected process termination cannot run those handlers or guarantee the CLOSIN
 
 ### Confidence and boundaries
 
-**Confirmed:** current startup does not restore prior-process Portfolio/RecoveryLedger state, fill deduplication identities or order ownership. **Strongly indicated:** fills during downtime can be absent from the new accounting projection; an empty registry prevents the existing per-owned-order reconciliation from discovering them. **Not reproduced:** a complete process-death/restart scenario causing a duplicate order, missed accounting delta, double application or incorrect reservation decision.
+**Confirmed:** current startup does not restore prior-process Portfolio/RecoveryLedger state, fill deduplication identities or order ownership. **Strongly indicated:** fills during downtime can be absent from the new accounting projection; an empty registry prevents per-owned-order reconciliation from discovering them; and a new same-symbol order may be submitted while a prior-process order remains open if the strategy emits an action and sufficient free balance remains. **Not reproduced:** a complete process-death/restart scenario causing a duplicate order, missed accounting delta, double application or incorrect reservation decision.
 
 The November 8 DOGE/ZRO fills after shutdown remain expected downtime behavior. The earlier CLOSING snapshots are historically correct and must not be rewritten.
 
@@ -931,6 +931,21 @@ Focused tests exist in `project-harvester-journal-recovery.test.js`, `fetch-acco
 
 **Historical PR #606 integration limitation:** its caller passed `marketUniverseComplete: false` to `fetchAccountTradeHistory()`, while `auditRecoveredTradeHistory()` rejects unless that flag is true. Thus the prior trading-enabled integration deliberately failed closed when historical trading state required a complete account-wide history audit. The current Binance symbol catalog cannot prove the universe of historical symbols, including delisted markets. The current runtime later removed the recovery read/replay gate rather than solving this completeness problem; it now starts fresh and can proceed with unowned open orders. That bypass is not a safe equivalent to the previous fail-closed behavior.
 
+
+
+**Order-state behavior in the retained PR #606 helper pipeline:**
+
+| State at process exit / durable Journal facts | Offline restoration behavior | Canonical startup reconciliation requirement |
+|---|---|---|
+| `OPEN` / `PARTIALLY_FILLED` | `restoreHarvesterJournalState()` restores the order with its client ID, any known broker ID, cumulative executed quantity and fill identities, but conservatively sets status to `UNKNOWN`. | Resolve a missing broker ID through canonical `clientOrderId` lookup; compare canonical order history, current open orders and complete fill history; fail closed on mismatch or incomplete quantity/history. |
+| Submission outcome `UNKNOWN` | Durable submission intent preserves `clientOrderId`; broker ID may be absent if acknowledgement was lost. | `reconcileOwnedOrders()` queries `broker.getCanonicalOrder({ symbol, clientOrderId })`; unresolved or mismatched lookup remains UNKNOWN and blocks readiness. |
+| Cancellation `REQUESTED` / `UNKNOWN` (including `CANCEL_PENDING`) | Restored as UNKNOWN plus the durable cancellation identity, recovery-managed pause, and replacement/trailing-reprice intent when applicable. | Canonical order/history/fill reconciliation must establish whether the order remains open, was canceled, or partially filled. Unresolved intents keep the market paused and startup fails closed. |
+| `CANCELED` with partial execution | Restored as CANCELED only with a broker ID; the helper re-adds a durable market pause for the partial-fill case. | Verify complete canonical fill history and retain the pause until recovery state is resolved. |
+| `FILLED` / `EXPIRED` or other non-rejected terminal hint | Conservatively restored as UNKNOWN unless the Journal facts establish a specifically supported terminal state. | Canonical order history and fill history establish the authoritative terminal state; missing history or quantity mismatch fails closed. |
+| `REJECTED` | Restored as REJECTED only when submission outcome or exchange hint establishes rejection; a rejected order with nonzero cumulative fill is rejected as invalid recovery data. | Reconcile the terminal fact and account snapshot before allowing readiness. |
+
+The current runtime does not execute this restoration/reconciliation matrix because it supplies an empty registry and never invokes the helper pipeline. The historical PR #606 path also retained the account-wide `marketUniverseComplete: false` blocker described above.
+
 **Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` is captured by acknowledgement/cancellation/fill events or recovered by `reconcileOwnedOrders()` through `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries without a broker ID. The engine validates the returned symbol/client ID and attaches the canonical broker ID. Tests cover lost acknowledgements, unresolved lookups, mismatched IDs and immutable-intent conflicts. If lookup fails, the order remains UNKNOWN and the account audit fails closed. The current runtime cannot use this capability after restart because it does not restore the registry entry containing the client ID.
 
 
@@ -940,6 +955,9 @@ Focused tests exist in `project-harvester-journal-recovery.test.js`, `fetch-acco
 `subscribeToUserData()` publishes the account-wide open-order audit, drains queued user-data events, and then sets `state.ready = true` when user-data/accounting flags are otherwise safe. It does not reject startup based on `account.open_orders_captured.readiness === "BLOCKED"`. The existing test “journals pre-existing account-wide orders and allows trading startup without adopting or changing them” verifies market subscriptions proceed and the runtime starts with the external order unowned.
 
 The test's fake broker emits no market-price tick, so its `placeCalls === 0` assertion proves only that observing an external order does not itself submit an order. It does **not** prove that later market data cannot trigger a new strategy order while the prior order remains unowned. A live execution event for an unowned order can still trip accounting safety; an order that filled entirely while Harvester was offline produces no new user-data event on the restarted stream and is absent from the current open-order snapshot.
+
+**Strategy duplicate-order guard — strongly indicated risk:** `processMarketPriceTransition()` obtains `activeOrdersBefore` only from `state.registry.getActiveOrders()`. `evaluateLatestTransition()` passes only this registry list to `conservativeStrategyPolicy.evaluate()`, and calculates `allActiveOrders`, `committedQuote` and `committedBase` from the same registry. The policy's `hasActiveBuy`/`hasActiveSell` checks only its `activeOrders` input; with an empty registry and Portfolio, its initial BUY path can emit `INITIAL_BUY`. The account snapshot supplies exchange free balances (so locked funds are excluded), but if sufficient free quote remains the action can still be allocated. The submission `canSubmit` guard checks pause/readiness, market-price freshness and post-only crossing, not account-wide unowned open orders. Therefore, if a prior-process same-symbol order remains open but is unowned, a new same-symbol order may be submitted when the strategy emits an action and funds permit. This is strongly indicated by source, not reproduced: the existing startup test does not emit a market-price tick. The strategy unit tests prove that active orders suppress duplicate intents only when present in the supplied registry list.
+
 
 This is an explicit current startup policy for external orders, not a reproduced duplicate-order incident. In a restart scenario, a formerly Harvester-owned order is indistinguishable from an external order because the registry is empty. Treat this as a high-priority #654 reconciliation requirement.
 
