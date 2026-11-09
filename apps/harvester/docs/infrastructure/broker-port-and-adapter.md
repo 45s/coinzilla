@@ -141,7 +141,7 @@ export const createHarvesterServices = ({ config, logger }) => {
 }
 ```
 
-Bootstrap now selects the adapter only when `HARVESTER_BROKER=binance` is explicitly set, requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`, connects once, and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile. Order placement remains disabled because no strategy engine or recovery reconciliation is implemented.
+Bootstrap selects the broker from the validated `runtime.profiles` entry in `trading-config.json`, requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`, connects once, and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The development profile selects TESTNET; the production profile selects LIVE endpoints but is read-only. Environment files contain credentials and standard process settings only, not broker or trading-policy flags. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile.
 
 ## Reliability rules
 
