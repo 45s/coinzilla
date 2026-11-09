@@ -20,7 +20,6 @@ test('reports successful Binance TESTNET startup without claiming a workflow ran
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
     system() {},
-    system() {},
   };
 
   await runMain({ createJournalService: disabledJournalService, start: async () => ({ connected: true, brokerName: 'binance', tradingEnabled: true, strategyMode: 'conservative', subscriptions: [] }), logger });
@@ -38,6 +37,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   const logger = {
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
+    system() {},
   };
 
   t.after(() => {

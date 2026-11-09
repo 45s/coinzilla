@@ -235,17 +235,15 @@ export async function main({
       logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
     }
 
-    if (runtimeConfig.tradingEnabled) {
-      if (!journalService || typeof journalService.flush !== "function" || !journalService.ready) {
-        throw new Error("Harvester trading requires a ready Journal with durable flush() support")
-      }
-      const journalReady = await journalService.ready
-      if (journalReady?.ok !== true) {
-        const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Harvester trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
-      }
-      await processStartedPublication
+    if (!journalService || typeof journalService.flush !== "function" || !journalService.ready) {
+      throw new Error("Harvester trading requires a ready Journal with durable flush() support")
     }
+    const journalReady = await journalService.ready
+    if (journalReady?.ok !== true) {
+      const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error("Harvester trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
+    }
+    await processStartedPublication
 
     runtimeStartAttempted = true
     const runtime = await start({ eventPublisher, tradingConfig, env })
@@ -259,7 +257,7 @@ export async function main({
       eventName: HARVESTER_EVENT_NAMES.STARTED,
       dataResult: mapHarvesterStartedData({
         broker: runtime.connected ? (runtime.brokerName ?? runtimeConfig.brokerName ?? "binance") : "none",
-        strategyMode: runtime.strategyMode ?? "read-only",
+        strategyMode: runtime.strategyMode ?? "conservative",
         enabledMarkets,
         tradingEnabled: runtime.tradingEnabled === true,
       }),

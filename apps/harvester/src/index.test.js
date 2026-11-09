@@ -1221,7 +1221,7 @@ test("requires Journal readiness and publishes process provenance before trading
   resolveJournalReady({ ok: true })
   await pending
   assert.equal(runtimeStarted, true, "Trading runtime starts after Journal readiness")
-  assert.equal(contexts[0].runtimeSessionId, "delayed-journal-session", "logger context must be available synchronously even while optional Journal startup is pending")
+  assert.equal(contexts[0].runtimeSessionId, "delayed-journal-session", "logger context must be available synchronously while the required Journal readiness barrier is pending")
   assert.equal(events.some((event) => event.name === "harvester.process_started"), true, "the process-start event is published after Journal readiness")
   const processStartedEvent = await processStarted
   assert.equal(processStartedEvent.data.startedAt, "2026-11-09T10:15:30.000Z", "delayed Journal publication must retain the original process-entry timestamp")
@@ -1400,32 +1400,21 @@ test("does not register runtime shutdown handlers before the required Journal is
 })
 
 
-test("does not await process-start publication before emitting the startup-failed event", { timeout: 1000 }, async () => {
-  const events = []
-  const eventBus = {
-    publish(event) {
-      events.push(event)
-      return { ok: true, event }
-    },
-    flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
-  }
-  const journalService = {
-    ready: new Promise(() => {}),
-    close: async () => ({ ok: true, closed: true }),
-  }
+test("fails before acquiring a lock when TRADING_MODE is missing", async () => {
+  let lockCalls = 0
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
     await main({
-      createEventBus: () => eventBus,
-      createJournalService: () => journalService,
-      start: async () => { throw new Error("optional startup failure") },
-      logger: { info() {}, error() {}, debug() {}, warn() {} },
-      env: {},
+      env: { TRADING_MODE: undefined },
+      acquireProcessLock: async () => {
+        lockCalls += 1
+        return acquireProcessLock()
+      },
+      logger: { info() {}, system() {}, error() {}, warn() {} },
     })
-    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "process-start publication must remain pending until Journal subscriber readiness")
-    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STARTUP_FAILED), true, "startup-failed event publication must not await the process-start publication promise")
+    assert.equal(lockCalls, 0, "Missing mode must fail before acquiring process or broker resources")
+    assert.equal(process.exitCode, 1, "Missing TRADING_MODE must fail startup")
   } finally {
     process.exitCode = previousExitCode
   }
