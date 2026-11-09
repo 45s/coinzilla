@@ -304,7 +304,7 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 **Audit classification:** downgrade/remove “post-CLOSING Portfolio/RecoveryLedger application not evidenced” as a same-session defect or operator acceptance blocker. Keep a distinct restart-reconciliation verification item: on next startup Harvester must fetch and idempotently apply all owned fills since its last durable checkpoint, reconcile current balances/open orders/commissions, and keep trading disabled until complete. Classify this behavior UNVERIFIED until source/tests or a controlled restart scenario establish it; do not claim failure based solely on missing post-shutdown runtime logs.
 
 
-## F-011 — durable restart reconciliation (updated 2026-11-09)
+## F-030 — durable process-restart reconciliation (updated 2026-11-09)
 
 **Status: CONFIRMED STARTUP INTEGRATION GAP; runtime consequence STRONGLY INDICATED; no end-to-end process-death/restart reproduction.** The current authoritative roadmap makes #654 a critical release-readiness requirement before unattended restarts. This is an investigation-only phase; no implementation is authorized here.
 
