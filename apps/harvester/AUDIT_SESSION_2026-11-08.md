@@ -678,3 +678,12 @@ message, stack, original cause name/message, and cause stack. An empty wrapper
 stack. The REST snapshot error wrapper preserves a non-Error thrown value as
 the original `cause`. Deterministic tests cover both event-processing and
 application-recovery diagnostics.
+
+
+## 34. PR #788 exact-head verification — 2026-11-09
+
+The failure-classification implementation, cause-preservation changes, offline
+regressions, recovery contract, architecture diagram, and operational
+documentation are committed on the PR branch. Full GitHub Actions validation
+is pending on the resulting branch head. TESTNET acceptance remains paused;
+no live or TESTNET order operation was performed.
