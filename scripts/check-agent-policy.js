@@ -156,78 +156,7 @@ export function findMissingLocalLinks(root, documents) {
 }
 
 /**
- * Decode the common named and numeric HTML entities used in Markdown headings.
- *
- * @param {string} value Heading text.
- * @returns {string} Decoded heading text.
- */
-function decodeHeadingEntities(value) {
-  const namedEntities = {
-    amp: '&',
-    apos: "'",
-    copy: '©',
-    gt: '>',
-    ldquo: '"',
-    lsquo: "'",
-    lt: '<',
-    mdash: '—',
-    nbsp: ' ',
-    ndash: '–',
-    quot: '"',
-    rdquo: '"',
-    reg: '®',
-    rsquo: "'",
-  };
-
-  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, entity) => {
-    const normalizedEntity = entity.toLowerCase();
-
-    if (normalizedEntity.startsWith('#x')) {
-      const codePoint = Number.parseInt(normalizedEntity.slice(2), 16);
-      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
-        ? String.fromCodePoint(codePoint)
-        : match;
-    }
-
-    if (normalizedEntity.startsWith('#')) {
-      const codePoint = Number.parseInt(normalizedEntity.slice(1), 10);
-      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
-        ? String.fromCodePoint(codePoint)
-        : match;
-    }
-
-    return namedEntities[normalizedEntity] ?? match;
-  });
-}
-
-/**
- * Convert Markdown heading content into its rendered text before GitHub slugging.
- *
- * @param {string} value Raw Markdown heading content.
- * @returns {string} Plain heading text.
- */
-function stripHeadingMarkup(value) {
-  const backtick = String.fromCharCode(96);
-  const inlineCodePattern = new RegExp(backtick + '+([^' + backtick + ']*?)' + backtick + '+', 'g');
-
-  return decodeHeadingEntities(
-    value
-      .replace(/<!--.*?-->/g, '')
-      .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-      .replace(inlineCodePattern, '$1')
-      .replace(/<[^>]*>/g, '')
-      .replace(/\\([#.+!?()[\]{}])/g, '$1')
-      .replace(/[*~]/g, '')
-      .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
-      .trim(),
-  );
-}
-
-/**
- * Collect GitHub-compatible heading slugs and explicit HTML anchor IDs.
+ * Collect GitHub-style heading slugs and explicit HTML anchor IDs.
  *
  * @param {string} content Markdown/MDX source.
  * @returns {Set<string>} Anchor identifiers present in the document.
@@ -235,8 +164,8 @@ function stripHeadingMarkup(value) {
 function collectMarkdownHeadingAnchors(content) {
   const anchors = new Set();
   const lines = content.split(/\r?\n/);
-  const backtick = String.fromCharCode(96);
-  const fencePattern = new RegExp('^ {0,3}(' + backtick + '{3,}|~{3,})(.*)
+  const codeCharacter = String.fromCharCode(96);
+  const fencePattern = new RegExp('^ {0,3}(' + codeCharacter + '{3,}|~{3,})(.*)
  *
  * Fences may use backticks or tildes, with a closing fence of the same
  * character and at least the opening fence length.
@@ -335,6 +264,7 @@ function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
 );
+  const inlineCodePattern = new RegExp(codeCharacter + '+([^' + codeCharacter + ']*?)' + codeCharacter + '+', 'g');
   const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
   let activeFence = null;
   let inHtmlComment = false;
@@ -343,13 +273,29 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
   function addHeading(rawHeading) {
     if (/[{}]/.test(rawHeading)) return;
 
-    const plainText = stripHeadingMarkup(rawHeading);
+    const plainText = rawHeading
+      .replace(/<!--.*?-->/g, '')
+      .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+      .replace(inlineCodePattern, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\\([#.+!?()[\]{}])/g, '$1')
+      .replace(/[\*~]/g, '')
+      .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&nbsp;/gi, ' ');
+
     const baseSlug = plainText
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
       .trim()
       .replace(/\s+/g, '-');
-
     if (!baseSlug) return;
 
     let slug = baseSlug;
@@ -388,16 +334,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
         fenceMatch[1][0] === activeFence.character &&
         fenceMatch[1].length >= activeFence.length &&
         /^[ \t]*$/.test(fenceMatch[2]);
-
       if (isClosingFence) activeFence = null;
       continue;
     }
 
     if (fenceMatch) {
-      activeFence = {
-        character: fenceMatch[1][0],
-        length: fenceMatch[1].length,
-      };
+      activeFence = { character: fenceMatch[1][0], length: fenceMatch[1].length };
       continue;
     }
 
@@ -426,10 +368,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
 /**
  * Find unresolved local Markdown heading fragments.
  *
- * Local Markdown paths are resolved against the source document. External URLs,
- * non-Markdown assets, missing target paths (reported by findMissingLocalLinks),
- * code examples and text fragments are excluded. Historical documents remain
- * included so the report-only baseline does not hide preserved evidence.
+ * External URLs, non-Markdown assets, missing target paths (reported by
+ * findMissingLocalLinks), code examples and text fragments are excluded.
+ * Historical documents remain included in this report-only baseline.
  *
  * @param {string} root Repository root.
  * @param {{ path: string, content: string }[]} documents Documents to inspect.
@@ -452,14 +393,12 @@ export function findMissingLocalAnchors(root, documents) {
 
       const hashIndex = target.indexOf('#');
       if (hashIndex < 0) continue;
-
       const rawFragment = target.slice(hashIndex + 1);
       if (!rawFragment || rawFragment.startsWith(':~:text=')) continue;
 
       const pathAndQuery = target.slice(0, hashIndex);
       const rawPath = pathAndQuery.split('?', 1)[0];
       let absoluteTarget;
-
       try {
         absoluteTarget = rawPath
           ? resolve(root, dirname(document.path), decodeURIComponent(rawPath))
@@ -469,7 +408,6 @@ export function findMissingLocalAnchors(root, documents) {
       }
 
       if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) continue;
-
       const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
       if (!targetDocument) continue;
 
@@ -477,23 +415,15 @@ export function findMissingLocalAnchors(root, documents) {
       try {
         fragment = decodeURIComponent(rawFragment);
       } catch {
-        gaps.push(
-          document.path + ' has malformed URL-encoded heading fragment "#' + rawFragment + '"',
-        );
+        gaps.push(document.path + ' has malformed URL-encoded heading fragment "#' + rawFragment + '"');
         continue;
       }
 
       if (!anchorCache.has(absoluteTarget)) {
-        anchorCache.set(
-          absoluteTarget,
-          collectMarkdownHeadingAnchors(targetDocument.content),
-        );
+        anchorCache.set(absoluteTarget, collectMarkdownHeadingAnchors(targetDocument.content));
       }
-
       if (!anchorCache.get(absoluteTarget).has(fragment)) {
-        gaps.push(
-          document.path + ' links to missing heading anchor "#' + fragment + '" in ' + targetDocument.path,
-        );
+        gaps.push(document.path + ' links to missing heading anchor "#' + fragment + '" in ' + targetDocument.path);
       }
     }
   }
