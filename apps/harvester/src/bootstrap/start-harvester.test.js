@@ -2168,8 +2168,7 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
   }
   const broker = createBinanceBrokerAdapter({
-    tradingMode: "testnet",
-    config: { apiKey: "test-key", apiSecret: "test-secret" },
+    config: { apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" },
     brokerFactory: () => client,
   })
   const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })

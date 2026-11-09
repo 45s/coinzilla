@@ -330,6 +330,7 @@ export async function startHarvester({
     get userDataStatus() { return userDataState.status },
     processMarketPrice,
     updatePortfolio,
+    updateTradingAccounting,
     get portfolio() { return getPortfolio() },
     get recoveredState() { return recoveredState },
     getRecoveryLedger,

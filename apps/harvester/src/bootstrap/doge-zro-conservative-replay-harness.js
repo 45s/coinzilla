@@ -354,7 +354,6 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
     },
     brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
       createBinanceBrokerAdapter({
-        tradingMode: "testnet",
         config: brokerConfig,
         logger,
         brokerFactory,

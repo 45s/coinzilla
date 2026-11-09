@@ -32,9 +32,9 @@ const createFixture = ({ connect, disconnect } = {}) => {
     subscribeForUserData: async () => ({ ok: true, data: { disconnect: async () => {} } }),
   }
   const eventPublisher = { publish: (event) => { events.push(event); return { ok: true } } }
-  const brokerAdapterFactory = ({ config, tradingMode }) => {
+  const brokerAdapterFactory = ({ config }) => {
     calls.push("factory")
-    assert.equal(tradingMode, "testnet", "The validated exchange mode must reach the broker adapter factory.")
+    assert.equal(config.tradingMode, "testnet", "The validated exchange mode must reach the broker adapter factory.")
     assert.equal(config.apiKey, "test-key", "The configured API key must reach the broker adapter factory.")
     assert.equal(config.apiSecret, "test-secret", "The configured API secret must reach the broker adapter factory.")
     return broker

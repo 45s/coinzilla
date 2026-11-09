@@ -28,10 +28,10 @@ export async function connectBroker({
 } = {}) {
   const broker = assertBrokerPort({
     broker: brokerAdapterFactory({
-      tradingMode,
       config: {
         apiKey: env.BINANCE_API_KEY,
         apiSecret: env.BINANCE_API_SECRET_KEY,
+        tradingMode,
       },
     }),
   })
