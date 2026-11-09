@@ -48,7 +48,7 @@ const runtimeProfiles = {
     },
     production: {
       broker: "binance",
-      trading: { enabled: false, mode: "live" },
+      trading: { enabled: true, mode: "live" },
     },
   },
 }
@@ -63,14 +63,14 @@ test("selects the explicit development profile for Binance TESTNET trading", () 
   assert.equal(runtime.tradingEnabled, true, "Development profile must enable Conservative execution only on TESTNET.")
 })
 
-test("selects the production profile for Binance LIVE read-only connectivity", () => {
+test("selects the production profile for Binance LIVE order execution", () => {
   const config = validateTradingConfig(createTradingConfig(runtimeProfiles))
   const runtime = resolveHarvesterRuntimeConfig({ config, environment: "production" })
 
   assert.equal(runtime.brokerName, "binance", "Production must connect to Binance LIVE market and account endpoints.")
   assert.equal(runtime.tradingMode, "live", "Production profile must select LIVE exchange connectivity.")
-  assert.equal(runtime.tradingRequested, false, "Production profile must not opt into order execution.")
-  assert.equal(runtime.tradingEnabled, false, "Production must remain read-only until live order execution is separately implemented and authorized.")
+  assert.equal(runtime.tradingRequested, true, "Production profile must explicitly opt into LIVE order execution.")
+  assert.equal(runtime.tradingEnabled, true, "Production profile must enable LIVE execution.")
 })
 
 test("uses a safe read-only profile for tests and unspecified environments", () => {
@@ -99,7 +99,7 @@ test("rejects unsupported broker names in every declared runtime profile", () =>
   )
 })
 
-test("rejects live order execution in any runtime profile", () => {
+test("rejects LIVE execution in the development profile", () => {
   const config = createTradingConfig({
     profiles: {
       default: { broker: null, trading: { enabled: false, mode: "testnet" } },
@@ -109,12 +109,12 @@ test("rejects live order execution in any runtime profile", () => {
 
   assert.throws(
     () => validateTradingConfig(config),
-    /live order execution is not supported/,
+    /live" for development execution/,
     "Selecting LIVE exchange connectivity must not enable real-money order execution.",
   )
 })
 
-test("rejects production order execution even when a profile requests TESTNET", () => {
+test("rejects production execution when profile selects TESTNET", () => {
   const config = createTradingConfig({
     profiles: {
       default: { broker: null, trading: { enabled: false, mode: "testnet" } },
@@ -124,7 +124,7 @@ test("rejects production order execution even when a profile requests TESTNET", 
 
   assert.throws(
     () => validateTradingConfig(config),
-    /production runtime must remain read-only/,
+    /live" for production execution/,
     "Production must remain read-only even if a profile accidentally requests TESTNET trading.",
   )
 })
