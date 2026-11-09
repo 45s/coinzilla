@@ -15,6 +15,9 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Domain specifications](domain/) — domain-owned specifications and invariants
 - [Infrastructure documentation](infrastructure/) — adapters and integration contracts
 
+- [Harvester audit index](audits/README.md)
+- [Documentation migration plan](plans/DOCUMENTATION_MIGRATION.md) — phased, evidence-preserving consolidation.
+
 ## Operations and reliability
 
 - [Journal operations](JOURNAL_OPERATIONS.md) — operational Journal lifecycle and procedures
