@@ -34,7 +34,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `AGENTS.md` | 10703 | Repository governance | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `AI_AGENT_WORKFLOW.md` | 22580 | Repository governance | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `ENGINEERING_STANDARDS.md` | 29505 | Repository governance | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
-| `README.md` | 4326 | Repository entry point | **KEEP** | Scope entry point and setup/public contract guide. |
+| `README.md` | 4326 | Repository entry point | **KEEP** | Source-checked against the Brokers package manifest and README; removes obsolete Binance SDK/`test:sdk` instructions and documents the current native-WebSocket integration scripts and safety gates. |
 | `ROADMAP.md` | 8232 | Repository roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `docs/DOCUMENTATION_GOVERNANCE.md` | 16440 | Operational/reference guide | **KEEP** | Canonical repository-wide documentation policy; source review corrected a freshness-sweep cross-reference that incorrectly pointed to Section 9 (roadmap discipline) instead of the explicit requirement below in Section 11. |
 | `docs/README.md` | 2223 | Operational/reference guide | **KEEP** | Repository-wide documentation entry point. |
