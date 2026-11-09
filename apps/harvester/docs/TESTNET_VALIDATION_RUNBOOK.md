@@ -22,7 +22,7 @@ Previous plan values (historical only; not current configuration or approved run
 | Aggressive | disabled |
 | Pair investment cap | 100 USDT |
 | BUY order quantity | 5 ZRO |
-| Configured keepQuantity | 0.01 ZRO in the current expected ZRO config; re-verify the exact branch config before the session |
+| Configured keepQuantity | 0.01 ZRO (previous plan) |
 | Minimum net profit | 0.01 USDT |
 | Price step | 0.05% |
 | Maker fee assumption | 0.1% |
