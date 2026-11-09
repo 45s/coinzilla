@@ -175,6 +175,8 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     stream: "market-price",
     market: "BTCUSDT",
   })
+  assert.equal(runtime.tradingMode, "testnet")
+  assert.equal(runtime.tradingEnabled, true)
 
   broker.emitStatus({ type: "ready", recoveryRequired: false })
   broker.emitStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
