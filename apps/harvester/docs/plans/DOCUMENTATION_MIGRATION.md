@@ -2,6 +2,7 @@
 
 - Status: In progress
 - Type: Documentation migration plan
+- Tracking issue: [#795](https://github.com/45s/coinzilla/issues/795)
 - Owner: Harvester
 - Created: 2026-11-09
 - Governance: [Repository documentation governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
