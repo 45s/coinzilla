@@ -69,10 +69,83 @@ const mapData = (input, operation, mapper) => {
   }
 }
 
+const BUILD_METADATA_SOURCES = Object.freeze(["git", "environment", "unavailable"])
+const WORKING_TREE_STATES = Object.freeze(["clean", "dirty", "unknown"])
+
+const requireNullableBuildText = ({ value, field, maxLength }) => {
+  if (value === null) return null
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(field + " must be a non-empty string or null")
+  }
+  return value.trim()
+    .replace(/[\r\n]+/g, " ")
+    .replace(SECRET_ASSIGNMENT, "$1$2[REDACTED]")
+    .replace(BEARER_TOKEN, "Bearer [REDACTED]")
+    .replace(URL_CREDENTIALS, "$1[REDACTED]@")
+    .slice(0, maxLength)
+}
+
+const requireBuildSource = ({ value }) => {
+  assertObjectInput({ input: value, operation: "Harvester process-start source mapping" })
+  const branch = requireNullableBuildText({ value: value.branch, field: "source.branch", maxLength: 160 })
+  const commit = requireNullableBuildText({ value: value.commit, field: "source.commit", maxLength: 64 })
+  if (commit !== null && !/^[a-f0-9]{40,64}$/i.test(commit)) {
+    throw new TypeError("source.commit must be a 40–64 character hexadecimal SHA or null")
+  }
+  const commitMessage = requireNullableBuildText({ value: value.commitMessage, field: "source.commitMessage", maxLength: 240 })
+  const commitDate = requireNullableBuildText({ value: value.commitDate, field: "source.commitDate", maxLength: 64 })
+  if (commitDate !== null && Number.isNaN(Date.parse(commitDate))) {
+    throw new TypeError("source.commitDate must be a valid timestamp or null")
+  }
+  if (!WORKING_TREE_STATES.includes(value.workingTree)) {
+    throw new TypeError("source.workingTree must be clean, dirty, or unknown")
+  }
+  if (!BUILD_METADATA_SOURCES.includes(value.metadataSource)) {
+    throw new TypeError("source.metadataSource must be git, environment, or unavailable")
+  }
+  return {
+    branch,
+    commit: commit?.toLowerCase() ?? null,
+    shortCommit: commit?.slice(0, 8).toLowerCase() ?? null,
+    commitMessage,
+    commitDate: commitDate === null ? null : new Date(commitDate).toISOString(),
+    workingTree: value.workingTree,
+    metadataSource: value.metadataSource,
+  }
+}
+
 /**
- * Map process-start facts to a small allowlisted DTO.
+ * Map process-start facts to a small sanitized allowlisted DTO.
  * Extra input properties (including credentials and account data) are ignored.
  */
+export const mapHarvesterProcessStartedData = (input = {}) =>
+  mapData(input, "Harvester process-start event mapping", ({
+    application,
+    version,
+    runtimeSessionId,
+    processId,
+    startedAt,
+    source,
+  }) => {
+    const normalizedStartedAt = requireString({ value: startedAt, field: "startedAt" })
+    const startedAtDate = new Date(normalizedStartedAt)
+    if (Number.isNaN(startedAtDate.getTime()) || startedAtDate.toISOString() !== normalizedStartedAt) {
+      throw new TypeError("startedAt must be a canonical UTC ISO timestamp")
+    }
+    if (!Number.isSafeInteger(processId) || processId <= 0) {
+      throw new TypeError("processId must be a positive safe integer")
+    }
+    return {
+      application: requireString({ value: application, field: "application" }).slice(0, 80),
+      version: requireString({ value: version, field: "version" }).slice(0, 80),
+      runtimeSessionId: requireString({ value: runtimeSessionId, field: "runtimeSessionId" }).slice(0, 128),
+      processId,
+      startedAt: new Date(normalizedStartedAt).toISOString(),
+      source: requireBuildSource({ value: source }),
+    }
+  })
+
+/** Map successful runtime startup facts to a small allowlisted DTO. */
 export const mapHarvesterStartedData = (input = {}) =>
   mapData(input, "Harvester started event mapping", ({
     broker,

@@ -6,7 +6,7 @@
 > **Latest TESTNET session audit — 2026-11-08:** Source review traced the DOGE follow-up gap to an unowned ZRO execution closing global accounting readiness while an already-resting Harvester BUY remained live. The BUY-cancellation safety fix is in [PR #669](https://github.com/45s/coinzilla/pull/669). The configured-asset snapshot allowlist correction is implemented in [PR #670](https://github.com/45s/coinzilla/pull/670) and tracked in [#667](https://github.com/45s/coinzilla/issues/667). The audit readiness label BLOCKED describes unowned-order reconciliation, not startup readiness. See the [session audit in AUDIT.md](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). This is retrospective evidence, not TESTNET acceptance or authorization to trade.
 
 
-> **AI WORK PRIORITY — HARD RULE:** Until the bulletproof real Binance Spot TESTNET acceptance gate passes, Harvester work is trading workflow only. No Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactoring, optimization, or side quests. Only a narrowly targeted fix for a demonstrated immediate trading-safety blocker is allowed. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
+> **AI WORK PRIORITY — HARD RULE:** The Conservative trading workflow and its safety gates remain the product priority; secondary work must not delay or change them. Explicitly selected, narrowly scoped engineering and evidence tasks may proceed independently when they remain non-blocking. This process-provenance work is explicitly selected and must not add a trading-readiness or Journal durability gate. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
 
 
 Harvester is an independent Node.js process for cryptocurrency trading, built inside the Coinzilla pnpm monorepo.
@@ -502,6 +502,31 @@ This is a narrowly scoped, explicitly authorized observability task. It does
 not change the general TESTNET acceptance gate, authorize exchange writes, or
 modify trading/Journal behavior.
 
+
+## Process identity and build provenance
+
+Each Harvester OS process captures one immutable identity at module entry:
+the application/package version, Git branch and commit (when available),
+commit subject/date, working-tree state, process ID, UTC process-entry time,
+and a unique runtime-session ID. Git metadata is inspected once through bounded synchronous
+commands; if Git is unavailable or inspection fails, explicit
+`COINZILLA_BUILD_*` metadata is used, otherwise source fields are recorded as
+unavailable. This one-time inspection can add bounded startup latency, but a
+Git metadata failure does not abort startup.
+
+The shared Logger receives the sanitized allowlisted identity before startup
+diagnostics. The Journal records it as `harvester.process_started`, distinct
+from `harvester.started` (which means runtime startup succeeded). The event
+is published after Journal subscriber readiness. Configuration-only/no-broker
+startup does not wait for optional Journal readiness. Broker-connected startup
+admits the event before the existing PREFLIGHT durability barrier; no
+additional flush or trading gate is added. Startup-failure and shutdown paths
+do not separately await the process-start publication promise; the existing
+Journal close lifecycle remains unchanged and may wait for Journal readiness.
+If the process exits before Journal becomes ready, the Journal event is not
+guaranteed, but the Logger context remains in DEBUG/TRACE logs. When readiness
+is delayed, Journal append order may follow `harvester.started`, while
+`startedAt` always represents the original process-entry time.
 
 ## Conservative Strategy authority
 

@@ -167,14 +167,20 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
   assert.equal(typeof startupInput.eventPublisher.publish, "function")
   const event = { name: "harvester.test", source: "test", data: {} }
   assert.equal(startupInput.eventPublisher.publish(event).ok, true)
-  assert.deepEqual(publishedEvents, [
+  assert.equal(publishedEvents[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED, "the process-attempt event must be published before runtime startup")
+  assert.equal(publishedEvents[0].data.application, "harvester", "the process event must identify its application")
+  assert.equal(publishedEvents[0].data.version, "1.0.001", "the process event must use the Harvester package version")
+  assert.equal(publishedEvents[0].data.processId, process.pid, "the process event must retain the operating-system process ID")
+  assert.equal(typeof publishedEvents[0].data.runtimeSessionId, "string", "the process event must include a runtime-session correlation ID")
+  assert.match(publishedEvents[0].data.startedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "the process event must contain the original UTC process-entry timestamp")
+  assert.deepEqual(publishedEvents.slice(1), [
     {
       name: "harvester.started",
       source: "harvester",
       data: { broker: "none", strategyMode: "read-only", enabledMarkets: [], tradingEnabled: false },
     },
     event,
-  ])
+  ], "the existing runtime-start event and caller-published events must retain their order after process provenance is added")
 })
 
 test("does not wait for optional Journal initialization before starting Harvester", async () => {
@@ -228,9 +234,10 @@ test("publishes process started and stopped events for read-only startup without
 
   assert.ok(result)
   await eventBus.flush()
-  assert.equal(events.length, 1)
-  assert.equal(events[0].name, HARVESTER_EVENT_NAMES.STARTED)
-  assert.deepEqual(events[0].data, {
+  assert.equal(events.length, 2, "read-only startup must publish process-attempt and successful-runtime-start events")
+  assert.equal(events[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED, "the process-attempt event must be first when Journal readiness is immediate")
+  assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STARTED, "the successful-runtime-start event must remain distinct")
+  assert.deepEqual(events[1].data, {
     broker: "none",
     strategyMode: "read-only",
     enabledMarkets: ["BTCUSDT"],
@@ -239,9 +246,9 @@ test("publishes process started and stopped events for read-only startup without
 
   await handlers.SIGTERM()
   await eventBus.flush()
-  assert.equal(events.length, 2)
-  assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STOPPED)
-  assert.deepEqual(events[1].data, { reason: "SIGTERM", outcome: "success" })
+  assert.equal(events.length, 3, "shutdown must retain both startup events and append one stopped event")
+  assert.equal(events[2].name, HARVESTER_EVENT_NAMES.STOPPED, "the stopped event must follow the process and runtime start events")
+  assert.deepEqual(events[2].data, { reason: "SIGTERM", outcome: "success" })
 
   subscription.subscription.unsubscribe()
   await eventBus.close()
@@ -305,10 +312,11 @@ test("publishes a sanitized process startup-failed event", async () => {
     await eventBus.flush()
 
     assert.equal(process.exitCode, 1)
-    assert.equal(events.length, 1)
-    assert.equal(events[0].name, HARVESTER_EVENT_NAMES.STARTUP_FAILED)
-    assert.equal(events[0].data.stage, "process-startup")
-    assert.equal(events[0].data.error.message, "startup failed apiKey=[REDACTED]")
+    assert.equal(events.length, 2, "failed startup must retain both the process attempt and startup-failed events")
+    assert.equal(events[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED, "the process attempt must precede the failed runtime-start event")
+    assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STARTUP_FAILED, "the startup-failed event must remain distinct")
+    assert.equal(events[1].data.stage, "process-startup")
+    assert.equal(events[1].data.error.message, "startup failed apiKey=[REDACTED]")
   } finally {
     process.exitCode = previousExitCode
     subscription.subscription.unsubscribe()
@@ -353,6 +361,7 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
 
   await handlers.SIGTERM()
   assert.deepEqual(operations, [
+    "publish:harvester.process_started",
     "publish:harvester.started",
     "runtime.stop",
     "publish:harvester.stopped",
@@ -497,6 +506,7 @@ test("closes observability after publishing startup failure", async () => {
       logger: { info() {}, debug() {}, error() {} },
     })
     assert.deepEqual(operations, [
+      "publish:harvester.process_started",
       "publish:harvester.startup_failed",
       "journal.close",
       "eventBus.close",
@@ -993,4 +1003,402 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
     "eventbus.close",
     "logger.close",
   ])
+})
+
+
+test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
+  const operations = []
+  const events = []
+  const contexts = []
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "runtime-session-123",
+    processId: 12345,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: "develop",
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      shortCommit: "aaaaaaaa",
+      commitMessage: 'release apiKey="private-value"',
+      commitDate: "2026-11-09T09:00:00.000Z",
+      workingTree: "clean",
+      metadataSource: "git",
+      privateCredential: "must-not-be-copied",
+    },
+    apiSecret: "must-not-be-copied",
+  }
+  let journalFlushCalls = 0
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      operations.push("publish:" + event.name)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const logger = {
+    setContext(context) {
+      contexts.push(context)
+      operations.push("logger.context")
+    },
+    info() {},
+    system() {},
+    error() {},
+  }
+
+  await main({
+    processIdentity,
+    logger,
+    createEventBus: () => {
+      operations.push("eventBus.create")
+      return eventBus
+    },
+    acquireProcessLock: async () => {
+      operations.push("processLock.acquire")
+      return { ok: true, release: async () => ({ ok: true, released: true }) }
+    },
+    createJournalService: () => {
+      operations.push("journal.create")
+      return {
+        ready: Promise.resolve({ ok: true }),
+        flush: async () => {
+          journalFlushCalls += 1
+          return { ok: true, durable: true }
+        },
+        close: async () => ({ ok: true, closed: true, durable: true }),
+      }
+    },
+    start: async ({ eventPublisher }) => {
+      operations.push("runtime.start")
+      await eventPublisher.flush()
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }
+    },
+    registerSignalHandler: () => {},
+    env: {
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      HARVESTER_BROKER: "binance",
+    },
+  })
+
+  assert.deepEqual(
+    operations.slice(0, 3),
+    ["logger.context", "eventBus.create", "processLock.acquire"],
+    "process identity and shared logger context must be established before any startup dependency can emit diagnostics",
+  )
+  assert.deepEqual(
+    events.map(({ name }) => name),
+    ["harvester.process_started", HARVESTER_EVENT_NAMES.STARTED],
+    "the process-attempt event must precede the successful runtime-start event",
+  )
+  assert.deepEqual(events[0].data, {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "runtime-session-123",
+    processId: 12345,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: "develop",
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      shortCommit: "aaaaaaaa",
+      commitMessage: "release apiKey=[REDACTED]",
+      commitDate: "2026-11-09T09:00:00.000Z",
+      workingTree: "clean",
+      metadataSource: "git",
+    },
+  }, "the Journal event must contain only the sanitized, allowlisted build and runtime identity")
+  assert.deepEqual(contexts[0], events[0].data, "every shared log entry must receive the same sanitized process identity as logger context")
+  assert.equal(JSON.stringify(events[0]).includes("private-value"), false, "process-start evidence must not retain sensitive values embedded in build metadata")
+  assert.equal(journalFlushCalls, 1, "process provenance must be included by the existing bootstrap flush without introducing an additional Journal flush")
+  assert.ok(operations.indexOf("publish:harvester.process_started") < operations.indexOf("runtime.start"), "trading bootstrap must start only after the process event has been admitted to the existing Journal/EventBus pipeline")
+})
+
+test("keeps optional read-only Journal startup non-blocking and publishes process provenance after Journal readiness", async () => {
+  let resolveJournalReady
+  let resolveProcessStarted
+  let runtimeStarted = false
+  const contexts = []
+  const events = []
+  const processStarted = new Promise((resolve) => { resolveProcessStarted = resolve })
+  const journalService = {
+    ready: new Promise((resolve) => { resolveJournalReady = resolve }),
+    status: { state: "starting", enabled: true },
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      if (event.name === "harvester.process_started") {
+        resolveProcessStarted(event)
+      }
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+
+  await main({
+    processIdentity: {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "delayed-journal-session",
+      processId: 54321,
+      startedAt: "2026-11-09T10:15:30.000Z",
+      source: {
+        branch: null,
+        commit: null,
+        shortCommit: null,
+        commitMessage: null,
+        commitDate: null,
+        workingTree: "unknown",
+        metadataSource: "unavailable",
+      },
+    },
+    logger: {
+      setContext: (context) => contexts.push(context),
+      info() {},
+      system() {},
+      error() {},
+    },
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => {
+      runtimeStarted = true
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }
+    },
+    registerSignalHandler: () => {},
+    env: {},
+  })
+
+  assert.equal(runtimeStarted, true, "read-only runtime startup must not wait for optional Journal initialization")
+  assert.equal(contexts[0].runtimeSessionId, "delayed-journal-session", "logger context must be available synchronously even while optional Journal startup is pending")
+  assert.equal(events.some((event) => event.name === "harvester.process_started"), false, "the process-start event must not be published before the Journal subscriber is ready")
+  resolveJournalReady({ ok: true })
+  const processStartedEvent = await processStarted
+  assert.equal(processStartedEvent.data.startedAt, "2026-11-09T10:15:30.000Z", "delayed Journal publication must retain the original process-entry timestamp")
+  assert.equal(processStartedEvent.data.source.metadataSource, "unavailable", "unavailable Git provenance must remain explicit rather than guessed")
+})
+
+test("retains immediate logger provenance when the optional Journal is disabled", async () => {
+  const contexts = []
+  const events = []
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+  }
+
+  await main({
+    processIdentity: {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "journal-disabled-session",
+      processId: 678,
+      startedAt: "2026-11-09T10:15:30.000Z",
+      source: {
+        branch: null,
+        commit: null,
+        shortCommit: null,
+        commitMessage: null,
+        commitDate: null,
+        workingTree: "unknown",
+        metadataSource: "unavailable",
+      },
+    },
+    logger: { setContext: (context) => contexts.push(context), info() {}, system() {}, error() {}, warn() {} },
+    createEventBus: () => eventBus,
+    createJournalService: disabledJournalService,
+    start: async () => ({ connected: false }),
+    env: {},
+  })
+
+  assert.equal(contexts[0].runtimeSessionId, "journal-disabled-session", "logger context must retain process identity even when optional Journal persistence is disabled")
+  assert.equal(events.some((event) => event.name === "harvester.process_started"), true, "the best-effort process event may still be observed by non-Journal EventBus subscribers")
+})
+
+test("records the process-start attempt before a failed runtime-start event", async () => {
+  const events = []
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      processIdentity: {
+        application: "harvester",
+        version: "1.0.001",
+        runtimeSessionId: "failed-start-session",
+        processId: 321,
+        startedAt: "2026-11-09T10:15:30.000Z",
+        source: {
+          branch: null,
+          commit: null,
+          shortCommit: null,
+          commitMessage: null,
+          commitDate: null,
+          workingTree: "unknown",
+          metadataSource: "unavailable",
+        },
+      },
+      createEventBus: () => eventBus,
+      createJournalService: disabledJournalService,
+      start: async () => { throw new Error("runtime startup failed") },
+      logger: { setContext() {}, info() {}, error() {}, warn() {} },
+      registerSignalHandler() {},
+      env: {},
+    })
+
+    assert.deepEqual(
+      events.map(({ name }) => name),
+      ["harvester.process_started", HARVESTER_EVENT_NAMES.STARTUP_FAILED],
+      "the process attempt must remain visible when runtime startup fails after Journal readiness",
+    )
+    assert.equal(process.exitCode, 1, "a process-start evidence record must not convert a failed runtime startup into success")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("keeps configuration-only startup available when optional Journal readiness fails", async () => {
+  const contexts = []
+  const warnings = []
+  const events = []
+  let runtimeStarted = false
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+  }
+
+  await main({
+    processIdentity: {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "journal-unavailable-session",
+      processId: 679,
+      startedAt: "2026-11-09T10:15:30.000Z",
+      source: {
+        branch: null,
+        commit: null,
+        shortCommit: null,
+        commitMessage: null,
+        commitDate: null,
+        workingTree: "unknown",
+        metadataSource: "unavailable",
+      },
+    },
+    logger: {
+      setContext: (context) => contexts.push(context),
+      warn: (data) => warnings.push(data),
+      info() {},
+      system() {},
+      error() {},
+    },
+    createEventBus: () => eventBus,
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: false, errors: [new Error("optional Journal unavailable")] }),
+      close: async () => ({ ok: true, closed: true }),
+    }),
+    start: async () => {
+      runtimeStarted = true
+      return { connected: false }
+    },
+    env: {},
+  })
+
+  assert.equal(runtimeStarted, true, "configuration-only startup must not fail when optional Journal initialization fails")
+  assert.equal(contexts[0].runtimeSessionId, "journal-unavailable-session", "logger context must remain available when Journal initialization fails")
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "the Journal process event must be skipped when its subscriber never becomes ready")
+  assert.equal(warnings.some((warning) => warning.message.includes("process-start Journal event skipped")), true, "the skipped best-effort event must be visible in diagnostic logs")
+})
+
+
+test("does not await process-start publication before emitting the stopped event", { timeout: 1000 }, async () => {
+  const events = []
+  const handlers = {}
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const journalService = {
+    ready: new Promise(() => {}),
+    // Resolve close independently to isolate the process-start publication wait; production Journal close semantics are unchanged.
+    close: async () => ({ ok: true, closed: true }),
+  }
+
+  await main({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+      stop: async () => ({ ok: true }),
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, error() {}, debug() {}, warn() {} },
+    env: {},
+  })
+
+  await handlers.SIGTERM()
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "process-start publication must remain pending until Journal subscriber readiness")
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), true, "stopped-event publication must not await the process-start publication promise")
+})
+
+test("does not await process-start publication before emitting the startup-failed event", { timeout: 1000 }, async () => {
+  const events = []
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const journalService = {
+    ready: new Promise(() => {}),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => { throw new Error("optional startup failure") },
+      logger: { info() {}, error() {}, debug() {}, warn() {} },
+      env: {},
+    })
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "process-start publication must remain pending until Journal subscriber readiness")
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STARTUP_FAILED), true, "startup-failed event publication must not await the process-start publication promise")
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })

@@ -9,7 +9,7 @@ This contract covers the current selected evidence work in [issue #650](https://
 ## Safety and delivery
 
 - Preserve the mandatory durability boundary defined once in [TRADING_FIRST.md — Journal contract boundary](./TRADING_FIRST.md#journal-contract-boundary); do not weaken or extend it as part of optional evidence work.
-- All additional evidence is best-effort. Do not await Journal I/O from strategy evaluation, market processing, broker-event callbacks, or fill accounting.
+- All additional evidence is best-effort. Do not await Journal I/O from strategy evaluation, market processing, broker-event callbacks, or fill accounting. Process-start provenance adds no new durability barrier; the existing trading-startup PREFLIGHT flush may persist the event after it has been admitted.
 - Keep evidence DTOs plain, bounded, allowlisted, versioned, and serializable. Never serialize arbitrary SDK/request/response objects.
 - Never persist API keys, secrets, signatures, listen keys, authorization headers, or credentials.
 - EventBus event ID/timestamp and Journal session metadata provide record identity and receipt time. Broker event/transaction times remain separate payload facts.
@@ -20,6 +20,7 @@ This contract covers the current selected evidence work in [issue #650](https://
 
 | Evidence | Producer | Journal representation | Correlation |
 |---|---|---|---|
+| Process build/runtime identity | Process entry | `harvester.process_started`: application/package version, full/short commit, branch, commit subject/date, working-tree and metadata-source status, PID, runtime-session ID, original UTC start timestamp | runtime-session ID, Journal session, event ID/time |
 | Actionable strategy decisions | Conservative trading engine | `strategy.decision`: strategy, symbol, reference price, decision reason, compact decision inputs, and executable actions | symbol, event ID/time |
 | Order submission request | Conservative trading engine before broker placement | `order.submission_requested`: client ID, symbol, side, type, price, quantity, pending status | client order ID |
 | Broker order acknowledgement | Conservative trading engine after canonical acknowledgement | `order.submitted`: client/exchange order IDs and canonical status/order facts | client + broker order IDs |
