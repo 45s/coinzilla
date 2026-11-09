@@ -142,7 +142,11 @@ See [Trading strategies](./docs/trading-strategies.md) for an overview; the [Con
 
 ## Logging
 
-See [Logging](./docs/LOGGING.md) for levels, transports and structured diagnostics.
+The development runner writes raw stdout/stderr to the cumulative
+`apps/harvester/logs/terminal.log` and one timestamped terminal session file.
+Structured DEBUG/TRACE logs use matching process-session identities. Standalone
+`start` creates structured session files but does not create terminal-capture
+files. See [Logging](./docs/LOGGING.md) for destinations, lifecycle and retention.
 
 ## Implementation style
 
