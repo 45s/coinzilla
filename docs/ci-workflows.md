@@ -6,7 +6,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Purpose | Main check |
 | --- | --- | --- |
-| `quality-gate.yml` | Combined quality gate for pull requests and pushes to `main` | `pnpm run quality` (tests, then JavaScript syntax checks) |
+| `quality-gate.yml` | **JavaScript Syntax** workflow: lint GitHub Actions, check JavaScript syntax, and enforce agent-policy/domain-ownership checks on pull requests and pushes to `main`/`develop` | `actionlint`; `node scripts/check-syntax.js`; `node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js` |
 | `unit-tests.yml` | Run workspace package tests on pushes and pull requests | `pnpm test` |
 | `utils-unit-tests.yml` | Focused checks for the utility package | `pnpm --filter @coinzilla/utils test` |
 | `test-coverage.yml` | Run workspace tests with Node.js coverage reporting | `pnpm run test:coverage` |
@@ -14,11 +14,11 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 ## Triggers
 
-- **Quality Gate** runs for pull requests, pushes to `main`, and manual dispatch.
+- **JavaScript Syntax** runs for pull requests, pushes to `main` and `develop`, and manual dispatch.
 - **Unit Tests**, **Utils Unit Tests**, and **Test Coverage** run for pushes, pull requests, and manual dispatch.
 - **Dependency Audit** runs for pushes, pull requests, manual dispatch, and a weekly scheduled run (Monday at 07:23 UTC).
 
-A workflow trigger starting a run does not, by itself, make that check a merge requirement. Configure the repository's branch protection or ruleset to require the appropriate checks.
+A workflow trigger starting a run does not, by itself, make that check a merge requirement. The active `develop-core` ruleset requires the `Check JavaScript syntax` context; its workflow includes actionlint, JavaScript syntax, and agent-policy/domain-ownership validation. Re-read the live ruleset before changing workflow names or required contexts; see [Documentation Governance](./DOCUMENTATION_GOVERNANCE.md).
 
 ## Manual broker TESTNET validation
 
@@ -32,7 +32,7 @@ Run these commands from the repository root with the Node.js and pnpm versions s
 # Workspace tests
 pnpm test
 
-# Tests plus JavaScript syntax checks (the Quality Gate command)
+# Local aggregate: workspace tests, syntax checks, and agent-policy checks
 pnpm run quality
 
 # Utility package tests
