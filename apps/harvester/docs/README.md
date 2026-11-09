@@ -28,7 +28,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)
 - [Journal integration roadmap](JOURNAL_INTEGRATION_ROADMAP.md)
 - [Logging](LOGGING.md)
-- [TESTNET order tools](testnet-order-tools.md) — includes a legacy ZROUSDT MARKET SELL and account-wide cancel command; neither is authorized by the CLOSED / PAUSED validation runbook. The interactive menu is only a wrapper over these same scripts.
+- [TESTNET order tools](testnet-order-tools.md) — includes a legacy ZROUSDT MARKET SELL and account-wide cancel command; neither is authorized by the CLOSED / PAUSED validation runbook. The cancel command has no interactive confirmation; the menu adds no confirmation layer.
 - [Incident audit playbook](INCIDENT_AUDIT_PLAYBOOK.md)
 - [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
 
