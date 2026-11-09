@@ -3,7 +3,7 @@
 **Package:** `@coinzilla/market-simulator`  
 **Path:** `packages/market-simulator`
 
-A deterministic, offline market simulator for testing Coinzilla strategies against historical candles. It implements the existing `CoreBroker` contract and can simulate a documented subset of spot order execution. It never connects to an exchange.
+An offline market simulator for testing Coinzilla strategies against historical candles, with deterministic candle-matching rules and exact decimal accounting. The complete simulation report is not fully reproducible because some lifecycle timestamps use wall-clock time. It implements the existing `CoreBroker` contract and can simulate a documented subset of spot order execution. It never connects to an exchange.
 
 > **Usage status:** no current application or production workflow consumes this package. It is retained as an optional development tool, not an active project priority. Further simulator enhancements are deferred until a concrete consumer and validation use case exist. Its output must not be treated as evidence of live-market profitability or exchange behavior.
 
@@ -172,7 +172,7 @@ Important details:
 
 - `runStrategySimulation()` connects the broker if it is not already connected, subscribes to prices, waits for the stream and all queued asynchronous `onPrice` callbacks, then calls `onStop`.
 - `maxCandles` is optional; when omitted, the runner processes the complete history.
-- The runner disconnects the broker only if it connected it. It always unsubscribes its own price subscription.
+- The runner disconnects the broker only if it connected it. It attempts to unsubscribe its own price subscription during cleanup; if that unsubscribe rejects, the current cleanup path skips `broker.disconnect()`. This is a known deferred cleanup limitation, so callers must not assume the broker was disconnected after an unsubscribe failure.
 - The runner does **not** cancel outstanding orders automatically. Open orders remain visible in the returned order history with status `NEW`.
 - A strategy callback should check `result.ok` for broker operations and throw or handle `result.errors` explicitly.
 
@@ -339,7 +339,15 @@ Domain and application modules do not import `CoreBroker`, Binance SDKs, filesys
 
 ## Limitations and interpretation
 
-This is a deterministic test model, not an exchange emulator or a profitability estimator. It does **not** model:
+This is a constrained offline test model, not an exchange emulator or a profitability estimator. Candle matching and decimal accounting follow deterministic rules, but the complete report is not byte-for-byte reproducible across runs:
+
+- Order creation, cancellation, and immediate MARKET fill timestamps use wall-clock time; resting LIMIT fills use the source candle's event time.
+- The runner currently does not inspect the `ok` state of its final balance, order-history, and fill reads. A failed read can therefore appear as an empty report section without preserving the error.
+- If price-subscription cleanup rejects, the runner's current `finally` path can skip disconnecting a broker it connected. Handle cleanup failures explicitly.
+
+These are known deferred correctness items in the [package roadmap](./ROADMAP.md); they are documented here so consumers do not mistake the report or cleanup path for an authoritative, fully deterministic result.
+
+The model does **not** simulate:
 
 - Partial fills, order-book queue priority, or price improvement.
 - Bid/ask spread, slippage, market impact, or exchange latency.
