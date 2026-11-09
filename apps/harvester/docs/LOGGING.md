@@ -24,8 +24,10 @@ the same entries as their cumulative counterparts; the terminal session file
 receives the same raw child output as `terminal.log`. Session files use
 exclusive creation and are never overwritten.
 
-The Journal is a separate durable event store; it is not an additional logging
-file. The console is also not a file: it displays a compact INFO-and-higher
+The Journal is a separate durable event store; its JSONL session filename uses
+the same process UTC start timestamp and runtime session ID as the DEBUG, TRACE
+and terminal session filenames. Its records are application events, not copies
+of diagnostic log lines. The console is also not a file: it displays a compact INFO-and-higher
 summary and remains independently configurable.
 
 Complete console lines (timestamp, level, message, and displayed details) are
@@ -196,11 +198,11 @@ accounting, event publication, or Journal persistence semantics.
 ## Session history and retention
 
 The cumulative files are convenience histories spanning multiple runs. The
-per-session files make one run independently inspectable and correlate with
-the Journal process-start event through the shared UTC start timestamp and
-runtime-session ID. The Journal has its own timestamped JSONL session file;
-its records are structured application events, not copies of diagnostic log
-lines. Journal replay does not restore trading state.
+per-session files make one run independently inspectable. DEBUG, TRACE,
+terminal and Journal filenames share the same UTC process-start timestamp and
+runtime-session ID; the Journal process-start event carries that same identity
+in its record. Journal records are structured application events, not copies
+of diagnostic log lines. Journal replay does not restore trading state.
 
 The TRACE transport has a TRACE threshold, so `harvester-trace.log` receives
 TRACE entries and every higher severity; it is not a TRACE-only file.

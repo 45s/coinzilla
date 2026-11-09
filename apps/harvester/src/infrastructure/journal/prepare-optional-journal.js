@@ -37,6 +37,7 @@ export function prepareOptionalJournal({
   enabled = true,
   logger = defaultLogger,
   journalFactory = (options) => new Journal(options),
+  processIdentity,
 } = {}) {
   let state = enabled ? "starting" : "disabled"
   let journal
@@ -71,6 +72,12 @@ export function prepareOptionalJournal({
       eventBus,
       directory: resolveJournalDirectory({ directory }),
       logger,
+      sessionIdentity: processIdentity
+        ? {
+          startedAt: processIdentity.startedAt,
+          runtimeSessionId: processIdentity.runtimeSessionId,
+        }
+        : undefined,
     })
     if (!journal || typeof journal.start !== "function" || typeof journal.close !== "function") {
       throw new TypeError("Journal implementation must provide start() and close()")

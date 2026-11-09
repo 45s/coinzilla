@@ -221,6 +221,35 @@ test("creates a timestamped JSONL session file", async () => {
   }
 })
 
+test("uses the supplied process identity in its exclusive session filename", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-identity-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({
+    eventBus,
+    directory,
+    sessionIdentity: {
+      startedAt: "2026-11-09T12:34:56.789Z",
+      runtimeSessionId: "runtime/session:123",
+    },
+  })
+
+  try {
+    const started = await journal.start()
+    assert.equal(started.ok, true)
+    assert.equal(
+      path.basename(started.filePath),
+      "2026-11-09_12-34-56-runtime-session-123.jsonl",
+      "Journal session filename must share the process UTC timestamp and sanitized runtime ID",
+    )
+    assert.ok((await readdir(directory)).includes(path.basename(started.filePath)))
+    assert.equal((await journal.close()).ok, true)
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("writes published events as JSONL records", async () => {
   const context = await createTestJournal()
 

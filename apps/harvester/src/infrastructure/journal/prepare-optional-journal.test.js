@@ -11,17 +11,27 @@ const logger = { info() {}, error() {}, debug() {} }
 const createTempDirectory = () =>
   mkdtemp(path.join(os.tmpdir(), "harvester-journal-"))
 
-test("starts a real Journal asynchronously and closes it successfully", async () => {
+test("starts a real Journal with the shared process identity and closes it successfully", async () => {
   const directory = await createTempDirectory()
+  const processIdentity = {
+    startedAt: "2026-11-09T12:34:56.789Z",
+    runtimeSessionId: "shared-runtime-session",
+  }
   const service = prepareOptionalJournal({
     eventBus: new EventBus(),
     directory,
     logger,
+    processIdentity,
   })
 
   try {
     const started = await service.ready
     assert.equal(started.ok, true)
+    assert.equal(
+      path.basename(started.filePath),
+      "2026-11-09_12-34-56-shared-runtime-session.jsonl",
+      "Journal filename must use the same UTC process timestamp and runtime session ID as diagnostic logs",
+    )
     assert.equal(service.status.state, "ready")
     assert.equal(service.status.started, true)
     assert.equal("recovery" in service, false)

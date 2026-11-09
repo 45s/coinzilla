@@ -27,8 +27,8 @@ function logSystem(logger, message) {
   logger?.info?.(message)
 }
 
-function createDefaultJournalService({ eventBus, logger, enabled, directory }) {
-  return prepareOptionalJournal({ eventBus, logger, enabled, directory })
+function createDefaultJournalService({ eventBus, logger, enabled, directory, processIdentity }) {
+  return prepareOptionalJournal({ eventBus, logger, enabled, directory, processIdentity })
 }
 
 async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger }) {
@@ -176,6 +176,7 @@ export async function main({
       logger,
       enabled: env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() !== "false",
       directory: env.HARVESTER_JOURNAL_DIRECTORY,
+      processIdentity,
     })
     eventPublisher = makeEventPublisher({
       eventBus,
