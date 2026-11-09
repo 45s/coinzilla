@@ -326,6 +326,16 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 - The process then closes Journal/EventBus and releases process locks only after shutdown is confirmed.
 - SIGKILL, process crash and power loss cannot run these handlers or the graceful CLOSING path. Stale locks are not automatically reclaimed; an operator must verify the owner before manual cleanup.
 
+
+
+**Broker history discovery — capability versus current integration**
+
+- The current `@coinzilla/brokers` contract exposes canonical `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })`. Symbol-wide queries are possible without an `orderId`, so an empty Harvester registry does not make exchange-side fill discovery technically impossible.
+- Binance's official Spot WebSocket API `myTrades` documentation specifies an inclusive `fromId` cursor, a maximum `limit` of 1,000, and time filters whose interval cannot exceed 24 hours. `fromId` cannot be combined with `startTime`/`endTime`; `orderId` cannot be combined with time filters but can be combined with `fromId`. With no condition, only the most recent trades up to the limit are returned. See [Binance Account Trade History — Spot WebSocket API](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account).
+- The broker package contract validates trade/fill cursor IDs and rejects values outside JavaScript's safe-integer range rather than rounding int64 identifiers. This is a hard pagination boundary until the transport supports exact int64 representation.
+- Current Harvester `reconcileOwnedOrders()` does not perform a symbol-wide scan: it queries fills only after it has a registered owned order ID, and it returns immediately for an empty registry.
+- **Unresolved:** the official endpoint documentation inspected here does not state a guaranteed historical-retention horizon. Therefore a symbol-wide cursor scan is a possible recovery building block, not proof that every offline execution is always retrievable. A durable per-symbol cursor, page-exhaustion proof, retention policy, market-universe coverage, and fallback/operator procedure are still required.
+
 **Operational consequence and confidence**
 
 - **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
