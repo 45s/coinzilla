@@ -323,7 +323,7 @@ test("appends cumulative logs while keeping separate timestamped session histori
 
     const cumulativeEntries = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
     assert.deepEqual(cumulativeEntries, [firstEntry, secondEntry], "cumulative logs must retain entries from previous and current sessions")
-    const firstEntries = (await readFile(path.join(directory, "harvester-2026-11-05_12-00-00-first-session.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+    const firstEntries = (await readFile(path.join(directory, "sessions", "2026-11-05_12-00-00-first-session", "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
     const secondEntries = (await readFile(path.join(directory, "sessions", "2026-11-05_13-00-00-second-session", "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
     assert.deepEqual(firstEntries, [firstEntry], "the first session file must contain only first-run diagnostics")
     assert.deepEqual(secondEntries, [secondEntry], "the second session file must contain only second-run diagnostics")
@@ -389,6 +389,7 @@ test("rejects an existing session file before registering transports or leaking 
   const logger = createLogger();
   const sessionFile = path.join(directory, "sessions", "2026-11-09_12-00-00-session-collision", "harvester.log");
   try {
+    await mkdir(path.dirname(sessionFile), { recursive: true });
     await writeFile(sessionFile, "preserve existing session\n");
     await assert.rejects(
       configureHarvesterLogging({
@@ -487,6 +488,7 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
   const sessionPaths = createHarvesterLogSessionPaths({ directory, ...processIdentity });
   const traceSessionFile = sessionPaths.trace;
   try {
+    await mkdir(sessionPaths.sessionDirectory, { recursive: true });
     await writeFile(traceSessionFile, "preserve trace history\n");
     await assert.rejects(
       configureHarvesterLogging({ logger, directory, processIdentity }),

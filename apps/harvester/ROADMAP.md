@@ -11,6 +11,13 @@
 - [~] Preserve legacy flat log and Journal files in place; do not migrate, truncate or delete existing history. The Harvester balance-reconciliation CLI reads both legacy root-level Journal files and new session directories.
 - [~] No Journal record schema, durability barrier, replay behavior or trading behavior changes.
 
+### In progress — per-session log directory layout (PR #874)
+
+- [~] Group each process's DEBUG, TRACE, development terminal capture and Journal JSONL file under one UTC/session-ID directory.
+- [~] Keep append-only cumulative DEBUG, TRACE and terminal histories under `logs/cumulative/`; keep process ownership locks under `~/.coinzilla/harvester/process-locks/`.
+- [~] Preserve legacy flat log and Journal files in place; do not migrate, truncate or delete existing history. The Harvester balance-reconciliation CLI reads both legacy root-level Journal files and new session directories.
+- [~] No Journal record schema, durability barrier, replay behavior or trading behavior changes.
+
 This section is the authoritative implementation order for current work. It supersedes older "current direction", P0/P1 and future-work notes below wherever their status or ordering conflicts. Historical incident records remain evidence, not active tasks. Harvester is the only application currently in this workspace.
 
 ### Completed — explicit Binance trading-mode propagation (PR #841)
