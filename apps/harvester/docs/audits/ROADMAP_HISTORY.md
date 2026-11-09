@@ -1,5 +1,11 @@
 # Harvester Roadmap History Archive
 
+- Status: archived
+- Type: historical roadmap and implementation record
+- Owner: Harvester
+- Archived: 2026-11-09
+- Source commit: `618ae186426f104a68a606f788a9371fdf6129e6`
+
 > Historical record extracted from `apps/harvester/ROADMAP.md` at baseline commit `618ae186426f104a68a606f788a9371fdf6129e6` on 2026-11-09. The original historical sections are preserved in order; relative links are rebased from this archive location. The active roadmap retains the original section headings as compatibility anchors.
 
 These sections record implementation snapshots, audits, incidents, evidence corrections and delivery history. They are not current task status or current behavior authority. For current work, use [Harvester Roadmap](../../ROADMAP.md), [Conservative Domain Specification](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md), and linked GitHub Issues/PRs.
