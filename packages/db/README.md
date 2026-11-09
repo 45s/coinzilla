@@ -132,4 +132,4 @@ PostgreSQL or MongoDB should be added only when a real consumer's consistency, q
 ```sh
 pnpm --filter @coinzilla/db test
 pnpm --filter @coinzilla/db test:coverage
-``
+```
