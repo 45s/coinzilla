@@ -15,14 +15,16 @@ import { replayJournalRecords } from "./replay-journal-records.js"
  * @param {object} options
  * @param {object} options.eventBus - EventBus exposing subscribeAll({ handler }) and flush().
  * @param {string} options.directory - Directory used for session files and the exclusive writer lock.
+ * @param {{ startedAt: string, runtimeSessionId: string }} [options.sessionIdentity] - Optional process identity used in the session filename.
  * @param {object} [options.logger] - Optional logger; defaults to the workspace logger.
  */
 export class Journal {
   constructor(options = {}) {
-    const { eventBus, directory, logger = defaultLogger } = options
+    const { eventBus, directory, logger = defaultLogger, sessionIdentity } = options
     this.eventBus = eventBus
     this.directory = directory
     this.logger = logger
+    this.sessionIdentity = sessionIdentity ?? null
     this.store = options[JOURNAL_STORE] ?? new FileSystemJournalStore({ directory })
 
     this.filePath = null
@@ -109,7 +111,7 @@ export class Journal {
         this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
-      const { filePath } = await this.store.createSession()
+      const { filePath } = await this.store.createSession(this.sessionIdentity)
       this.filePath = filePath
       if (this.closing || this.closed) {
         const errors = [new Error("Journal was closed during startup")]

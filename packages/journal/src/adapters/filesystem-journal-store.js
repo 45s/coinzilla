@@ -73,10 +73,30 @@ export class FileSystemJournalStore {
   }
 
   /**
-   * Create a timestamped, exclusively-created JSONL session file.
+   * Create an exclusively-created JSONL session file.
+   * @param {{ startedAt: string, runtimeSessionId: string }} [sessionIdentity] - Optional process identity for a correlated filename.
    * @returns {Promise<{ filePath: string }>} Created session path.
    */
-  async createSession() {
+  async createSession(sessionIdentity) {
+    if (sessionIdentity !== undefined && sessionIdentity !== null) {
+      const { startedAt, runtimeSessionId } = sessionIdentity
+      if (typeof startedAt !== "string" || Number.isNaN(Date.parse(startedAt))) {
+        throw new TypeError("Journal session start time must be a valid timestamp")
+      }
+      if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
+        throw new TypeError("Journal runtime session ID must be a non-empty string")
+      }
+      const timestamp = new Date(startedAt).toISOString()
+        .slice(0, 19)
+        .replace("T", "_")
+        .replaceAll(":", "-")
+      const sessionId = runtimeSessionId.replace(/[^a-zA-Z0-9_-]/g, "-")
+      const filePath = path.join(this.directory, `${timestamp}-${sessionId}.jsonl`)
+      const sessionHandle = await open(filePath, "wx")
+      this.ownedSessionHandle = sessionHandle
+      return { filePath }
+    }
+
     const timestamp = new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "-")
     for (let index = 0; ; index += 1) {
       const suffix = index === 0 ? "" : `-${String(index).padStart(3, "0")}`

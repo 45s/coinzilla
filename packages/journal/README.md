@@ -19,7 +19,14 @@ Legacy JSONL lines written before the metadata field existed remain readable as 
 
 Replay passes each recovered record to the consumer as `{ record }`, in session/line order, only after the complete snapshot has been validated. The consumer owns interpretation, application restoration, and idempotent handling. Replay is at-least-once; it is not a command dispatcher or an exactly-once side-effect mechanism.
 
-Construct `Journal` with an EventBus, a directory path, and an optional logger. Journal uses only the EventBus operations `subscribeAll({ handler })` and `flush()`; the returned subscription must expose `unsubscribe()`. EventBus owns message delivery. Journal owns its persisted representation and storage lifecycle.
+Construct `Journal` with an EventBus, a directory path, an optional logger,
+and an optional `sessionIdentity: { startedAt, runtimeSessionId }`. When
+provided, the identity determines the session filename using the UTC start
+timestamp and sanitized runtime ID; exclusive creation rejects collisions
+without overwriting history. Callers that omit it retain the timestamp-only
+filename with numeric collision suffixes. Harvester supplies its process
+identity so Journal, DEBUG, TRACE and terminal session files can be correlated.
+Journal uses only the EventBus operations `subscribeAll({ handler })` and `flush()`; the returned subscription must expose `unsubscribe()`. EventBus owns message delivery. Journal owns its persisted representation and storage lifecycle.
 
 | Method | Observable contract |
 | --- | --- |
