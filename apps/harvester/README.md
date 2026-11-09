@@ -60,7 +60,7 @@ To capture the current account baseline without restarting Harvester or enabling
 
 ### Trading process ownership
 
-When trading is enabled, Harvester acquires two exclusive local locks before reading Journal recovery history or connecting to the broker:
+When trading is enabled, Harvester acquires two exclusive local locks before starting the Journal writer or connecting to the broker. No prior-session Journal read/replay is currently wired into startup:
 
 - A broker-wide host lock under `~/.coinzilla/harvester/process-locks/`, independent of the configured Journal directory. This prevents another Harvester process under the same OS user from trading through a different Journal directory with the same broker.
 - A Journal-directory lock in `HARVESTER_JOURNAL_DIRECTORY`, preventing concurrent writers to the same recovery history.
