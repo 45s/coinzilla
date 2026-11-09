@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -50,22 +50,21 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
     await logger.transports.get("harvester-debug-file").write(entry)
     await logger.transports.get("harvester-trace-file").write({ ...entry, level: "trace" })
 
-    const debugLines = (await readFile(path.join(directory, "harvester.log"), "utf8")).trim().split("\n")
-    const traceLines = (await readFile(path.join(directory, "harvester-trace.log"), "utf8")).trim().split("\n")
-    const sessionDebugPath = path.join(directory, "harvester-2026-11-05_12-00-00-session-one.log")
-    const sessionTracePath = path.join(directory, "harvester-trace-2026-11-05_12-00-00-session-one.log")
+    const debugLines = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8")).trim().split("\n")
+    const traceLines = (await readFile(path.join(directory, "cumulative", "trace.log"), "utf8")).trim().split("\n")
+    const sessionDebugPath = path.join(directory, "sessions", "2026-11-05_12-00-00-session-one", "harvester.log")
+    const sessionTracePath = path.join(directory, "sessions", "2026-11-05_12-00-00-session-one", "trace.log")
     assert.deepEqual(JSON.parse(debugLines[0]), entry)
     assert.equal(JSON.parse(traceLines[0]).level, "trace")
     assert.deepEqual(JSON.parse((await readFile(sessionDebugPath, "utf8")).trim()), entry, "each run must receive a timestamped DEBUG session file")
     assert.equal(JSON.parse((await readFile(sessionTracePath, "utf8")).trim()).level, "trace", "each run must receive a matching timestamped TRACE session file")
 
     await logging.close()
-    assert.deepEqual((await readdir(directory)).sort(), [
-      "harvester-2026-11-05_12-00-00-session-one.log",
-      "harvester-trace-2026-11-05_12-00-00-session-one.log",
-      "harvester-trace.log",
-      "harvester.log",
-    ])
+    assert.deepEqual(
+      (await readdir(directory)).sort(),
+      ["cumulative", "sessions"],
+      "The logs root must contain only the cumulative and per-process grouping directories",
+    )
     assert.deepEqual([...logger.transports.keys()], ["console"])
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -322,10 +321,10 @@ test("appends cumulative logs while keeping separate timestamped session histori
     await secondLogger.transports.get("harvester-debug-file").write(secondEntry)
     await secondSession.close()
 
-    const cumulativeEntries = (await readFile(path.join(directory, "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+    const cumulativeEntries = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
     assert.deepEqual(cumulativeEntries, [firstEntry, secondEntry], "cumulative logs must retain entries from previous and current sessions")
     const firstEntries = (await readFile(path.join(directory, "harvester-2026-11-05_12-00-00-first-session.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
-    const secondEntries = (await readFile(path.join(directory, "harvester-2026-11-05_13-00-00-second-session.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+    const secondEntries = (await readFile(path.join(directory, "sessions", "2026-11-05_13-00-00-second-session", "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
     assert.deepEqual(firstEntries, [firstEntry], "the first session file must contain only first-run diagnostics")
     assert.deepEqual(secondEntries, [secondEntry], "the second session file must contain only second-run diagnostics")
   } finally {
@@ -355,6 +354,7 @@ test("preserves pre-existing transports after partial logging setup failure", as
   })
   try {
     logger.addTransport(existingDebugTransport)
+    await mkdir(sessionPaths.sessionDirectory, { recursive: true })
     await writeFile(sessionPaths.trace, "preserve trace session\\n")
 
     await assert.rejects(
@@ -387,7 +387,7 @@ test("preserves pre-existing transports after partial logging setup failure", as
 test("rejects an existing session file before registering transports or leaking streams", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-collision-"));
   const logger = createLogger();
-  const sessionFile = path.join(directory, "harvester-2026-11-09_12-00-00-session-collision.log");
+  const sessionFile = path.join(directory, "sessions", "2026-11-09_12-00-00-session-collision", "harvester.log");
   try {
     await writeFile(sessionFile, "preserve existing session\n");
     await assert.rejects(
@@ -410,8 +410,8 @@ test("rejects an existing session file before registering transports or leaking 
     );
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["harvester-2026-11-09_12-00-00-session-collision.log", "harvester.log"],
-      "failed setup must close its cumulative stream while preserving the pre-existing session file",
+      ["cumulative", "sessions"],
+      "failed setup must close its cumulative stream while preserving the pre-existing session file inside the session grouping directory",
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -445,9 +445,9 @@ test("appends cumulative files while isolating and flushing consecutive process 
       );
     }
 
-    const cumulativeDebugEntries = (await readFile(path.join(directory, "harvester.log"), "utf8"))
+    const cumulativeDebugEntries = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8"))
       .trim().split("\n").map((line) => JSON.parse(line));
-    const cumulativeTraceEntries = (await readFile(path.join(directory, "harvester-trace.log"), "utf8"))
+    const cumulativeTraceEntries = (await readFile(path.join(directory, "cumulative", "trace.log"), "utf8"))
       .trim().split("\n").map((line) => JSON.parse(line));
     assert.deepEqual(
       cumulativeDebugEntries.map(({ data }) => data.message),
@@ -484,7 +484,8 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
     startedAt: "2026-11-09T12:05:00.000Z",
     runtimeSessionId: "trace-collision",
   };
-  const traceSessionFile = path.join(directory, "harvester-trace-2026-11-09_12-05-00-trace-collision.log");
+  const sessionPaths = createHarvesterLogSessionPaths({ directory, ...processIdentity });
+  const traceSessionFile = sessionPaths.trace;
   try {
     await writeFile(traceSessionFile, "preserve trace history\n");
     await assert.rejects(
@@ -499,18 +500,13 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
       "failed TRACE setup must never overwrite the existing session file",
     );
     assert.equal(
-      await readFile(path.join(directory, "harvester-2026-11-09_12-05-00-trace-collision.log"), "utf8"),
+      await readFile(sessionPaths.debug, "utf8"),
       "",
       "the partial DEBUG session file must be closed and remain available as an empty failed-start record",
     );
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      [
-        "harvester-2026-11-09_12-05-00-trace-collision.log",
-        "harvester-trace-2026-11-09_12-05-00-trace-collision.log",
-        "harvester-trace.log",
-        "harvester.log",
-      ],
+      ["cumulative", "sessions"],
       "failed partial setup must close every stream without deleting any created or pre-existing log file",
     );
   } finally {

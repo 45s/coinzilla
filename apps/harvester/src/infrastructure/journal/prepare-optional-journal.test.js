@@ -57,6 +57,11 @@ test("starts a real Journal with the shared process identity and closes it succe
       "2026-11-09_12-34-56-shared-runtime-session.jsonl",
       "Journal filename must use the same UTC process timestamp and runtime session ID as diagnostic logs",
     )
+    assert.equal(
+      path.dirname(started.filePath),
+      path.join(directory, "sessions", "2026-11-09_12-34-56-shared-runtime-session"),
+      "The Journal JSONL session must be colocated with this process's structured log files",
+    )
     assert.equal(service.status.state, "ready")
     assert.equal(service.status.started, true)
     assert.equal("recovery" in service, false)
