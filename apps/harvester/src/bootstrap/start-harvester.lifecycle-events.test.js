@@ -59,6 +59,7 @@ function createBroker({
   priceResult,
   userDataError,
   priceError,
+  onRecoveryAcknowledged,
 } = {}) {
   let handlers
   let priceHandler
@@ -94,7 +95,20 @@ function createBroker({
       if (userDataError) throw userDataError
       return userDataResult ?? {
         ok: true,
-        data: { disconnect: async () => {} },
+        data: {
+          disconnect: async () => {},
+          acknowledgeRecoveryResult: (recoveryGeneration) => {
+            handlers.onStatus({
+              type: "reconciled",
+              subscriptionId: 17,
+              recoveryGeneration,
+              recoveryRequired: false,
+              reconciliationRequired: false,
+            })
+            onRecoveryAcknowledged?.()
+            return { accepted: true, completed: true }
+          },
+        },
       }
     },
     subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
@@ -124,7 +138,9 @@ function createPublisher() {
 
 test("publishes validated config, broker/subscription lifecycle and meaningful reconnect transitions", async () => {
   const eventPublisher = createPublisher()
-  const broker = createBroker()
+  let resolveRecoveryAcknowledged
+  const recoveryAcknowledged = new Promise((resolve) => { resolveRecoveryAcknowledged = resolve })
+  const broker = createBroker({ onRecoveryAcknowledged: resolveRecoveryAcknowledged })
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env,
@@ -162,14 +178,24 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
 
   broker.emitStatus({ type: "ready", recoveryRequired: false })
   broker.emitStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
-  broker.emitStatus({ type: "recovered", recoveryRequired: true, reconciliationRequired: true, attempt: 1 })
+  broker.emitStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryGeneration: 1,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+    attempt: 1,
+  })
   assert.deepEqual(eventPublisher.events.slice(7)
     .filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED)
-    .map((event) => event.data.status), [
+    .map((event) => event.data.status)
+    .slice(0, 2), [
     "connectionClosed",
     "recovered",
   ])
   assert.equal(eventPublisher.events[8].data.recoveryRequired, true)
+  await recoveryAcknowledged
+  assert.equal(runtime.userDataReady, true)
 
   const beforePrice = eventPublisher.events.length
   await broker.emitPrice({ eventType: "aggTrade", symbol: "BTCUSDT", price: "65000", timestamp: 1 })
