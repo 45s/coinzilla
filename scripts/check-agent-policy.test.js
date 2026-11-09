@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findInstructionDirectories, findMissingLocalLinks, findMissingRoadmaps, findOwnershipGaps } from './check-agent-policy.js';
+import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps } from './check-agent-policy.js';
 
 const ownershipRow = (path) => `| Domain | \`${path}/\` | Responsibility |\n`;
 
@@ -58,7 +58,7 @@ test('detects missing local Markdown links and ignores external links and anchor
     writeFileSync(join(root, 'docs', 'existing.md'), '# Existing');
     const gaps = findMissingLocalLinks(root, [{
       path: 'docs/policy.md',
-      content: '[valid](existing.md) [broken](missing.md) [external](https://example.com) [anchor](#section)',
+      content: '[valid](existing.md) [broken](missing.md) [external](https://example.com) [anchor](#section)\n\n```md\n[code example](missing-in-code.md)\n```\n\n`[inline example](missing-inline.md)`',
     }]);
     assert.deepEqual(gaps, ['docs/policy.md links to missing path missing.md']);
   } finally {
@@ -76,6 +76,39 @@ test('requires a roadmap for each domain in the ownership map', () => {
     assert.deepEqual(findMissingRoadmaps(root, ownership), [
       'packages/entities is missing ROADMAP.md',
     ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('discovers Markdown and MDX recursively while ignoring generated directories', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-markdown-files-'));
+  try {
+    mkdirSync(join(root, 'docs', 'nested'), { recursive: true });
+    mkdirSync(join(root, 'node_modules', 'dependency'), { recursive: true });
+    mkdirSync(join(root, 'dist'), { recursive: true });
+    writeFileSync(join(root, 'README.md'), '# root');
+    writeFileSync(join(root, 'docs', 'nested', 'index.mdx'), '# nested');
+    writeFileSync(join(root, 'node_modules', 'dependency', 'README.md'), '# ignored');
+    writeFileSync(join(root, 'dist', 'generated.md'), '# ignored');
+    assert.deepEqual(
+      findMarkdownDocuments(root).map(({ path }) => path),
+      ['docs/nested/index.mdx', 'README.md'],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('reports missing required documentation entry points', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-required-docs-'));
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'README.md'), '# index');
+    assert.deepEqual(
+      findMissingRequiredDocuments(root, ['docs/README.md', 'docs/DOCUMENTATION_GOVERNANCE.md']),
+      ['Required documentation file is missing: docs/DOCUMENTATION_GOVERNANCE.md'],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
