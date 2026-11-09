@@ -169,6 +169,33 @@ test("contains an asynchronous Journal initialization rejection", async () => {
   assert.equal(service.status.state, "failed")
 })
 
+test("closes a Journal whose startup failed after its startup rollback completed", async () => {
+  const startupError = new Error("journal directory is already locked")
+  let closeCalls = 0
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: false, errors: [startupError] }),
+      close: async () => {
+        closeCalls += 1
+        return { ok: true, closed: true, durable: true }
+      },
+    }),
+  })
+
+  const ready = await service.ready
+  assert.equal(ready.ok, false, "The original Journal startup failure must remain visible to readiness consumers.")
+  assert.equal(ready.errors[0], startupError, "Readiness must preserve the original startup error identity.")
+
+  const closed = await service.close()
+  assert.equal(closeCalls, 1, "Shutdown must invoke Journal.close() so its lifecycle can confirm startup rollback.")
+  assert.equal(closed.ok, true, "A completed cleanup after failed startup must not be reported as a second shutdown failure.")
+  assert.equal(closed.closed, true, "The wrapper must expose that the failed-start Journal lifecycle was closed.")
+  assert.equal(service.status.state, "closed", "The wrapper health state must reflect completed cleanup rather than remain failed.")
+})
+
 test("contains a Journal construction exception even when logger.error throws", async () => {
   const error = new Error("construction failed")
   const service = prepareOptionalJournal({
