@@ -29,11 +29,12 @@ Keep the lockfile and package manifests in sync when changing dependencies. Pref
 
 ## Broker integration tests
 
-Broker integration tests are separate from the default unit-test run because they may require network access and exchange test credentials.
+Broker integration tests are separate from the default unit-test run because they may require network access and exchange test credentials. The package exposes `test:integration` (all integration suites), `test:websocket` (broker order-lifecycle integration), and `test:user-data-integration` (user-data session integration); there is no `test:sdk` script.
 
 ```sh
 pnpm --filter @coinzilla/brokers test:integration
-pnpm --filter @coinzilla/brokers test:sdk
+pnpm --filter @coinzilla/brokers test:websocket
+pnpm --filter @coinzilla/brokers test:user-data-integration
 ```
 
 For tests that need environment configuration, copy `packages/brokers/.env.example` to `packages/brokers/.env.development` and provide only appropriate test-environment credentials. Never commit real credentials or use production credentials for integration tests. Do not paste credentials into logs, pull requests, or issue reports.
