@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { once } from "node:events"
 import { createWriteStream, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { spawn } from "node:child_process"
@@ -22,6 +23,26 @@ const logStreams = [
   createWriteStream(sessionPaths.terminal, { flags: "wx" }),
 ]
 const [, sessionLogStream] = logStreams
+
+const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((resolve, reject) => {
+  if (stream.fd !== null) {
+    resolve()
+    return
+  }
+  stream.once("open", resolve)
+  stream.once("error", reject)
+})))
+const streamOpenErrors = streamOpenResults
+  .filter((result) => result.status === "rejected")
+  .map((result) => result.reason)
+if (streamOpenErrors.length > 0) {
+  await Promise.allSettled(logStreams.map(async (stream) => {
+    if (!stream.destroyed) stream.destroy()
+    if (!stream.closed) await once(stream, "close")
+  }))
+  throw streamOpenErrors[0]
+}
+
 const child = spawn(
   process.execPath,
   ["--env-file=.env.development", "src/index.js"],
