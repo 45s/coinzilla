@@ -22,6 +22,7 @@ test("reports objective Markdown style metrics without enforcing or rewriting do
   assert.deepEqual(report.findings.missingFinalNewline.map(({ path }) => path), [
     "docs/no-heading.md",
   ])
+  assert.equal(report.findings.missingFinalNewline[0].count, 1)
   assert.deepEqual(report.findings.crlfLineEndings.map(({ path }) => path), [
     "docs/no-heading.md",
   ])
@@ -31,6 +32,7 @@ test("reports objective Markdown style metrics without enforcing or rewriting do
   assert.deepEqual(report.findings.missingH1.map(({ path }) => path), [
     "docs/no-heading.md",
   ])
+  assert.equal(report.findings.missingH1[0].count, 1)
   assert.deepEqual(report.findings.multipleH1.map(({ path }) => path), [
     "docs/bad.md",
   ])
