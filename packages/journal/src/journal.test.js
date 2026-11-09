@@ -244,8 +244,9 @@ test("uses the supplied process identity in its exclusive session filename", asy
     assert.ok((await readdir(directory)).includes(path.basename(started.filePath)))
     assert.equal((await journal.close()).ok, true)
 
+    const duplicateEventBus = new EventBus()
     const duplicateJournal = new Journal({
-      eventBus: new EventBus(),
+      eventBus: duplicateEventBus,
       directory,
       sessionIdentity: {
         startedAt: "2026-11-09T12:34:56.789Z",
@@ -259,6 +260,7 @@ test("uses the supplied process identity in its exclusive session filename", asy
       assert.ok((await readdir(directory)).includes(path.basename(started.filePath)))
     } finally {
       await duplicateJournal.close()
+      await duplicateEventBus.close()
     }
   } finally {
     await journal.close()
