@@ -1978,7 +1978,7 @@ Current `start-harvester.js` creates fresh Portfolio/RecoveryLedger/OrderRegistr
 
 The broker contract supports symbol-wide `getFills({ symbol, fromId })` queries, with inclusive cursors and a 1,000-row maximum. Time filters are limited to 24-hour intervals and cannot be combined with `fromId`; the broker rejects cursor IDs outside JavaScript's safe-integer range. No guaranteed historical-retention horizon was established in the official documentation. Symbol-wide scanning is a possible recovery building block, not proof of complete offline-fill retrieval.
 
-See F-011 in `AUDIT_FINDINGS.md`, the 2026-11-09 section in `AUDIT.md`, and [#654](https://github.com/45s/coinzilla/issues/654). No runtime implementation or tests are authorized in this phase.
+See F-030 in `AUDIT_FINDINGS.md`, the 2026-11-09 section in `AUDIT.md`, and [#654](https://github.com/45s/coinzilla/issues/654). No runtime implementation or tests are authorized in this phase.
 
 
 ### F-028 — applied-fill Journal durability boundary
