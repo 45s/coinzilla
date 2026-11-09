@@ -49,7 +49,7 @@ The broker evidence record is stored separately from normalized `order.updated` 
 
 ## Startup failure and cleanup
 
-A Journal readiness failure remains visible to callers and does not become a successful start. During shutdown, the Harvester wrapper still invokes the Journal's own `close()` lifecycle after a failed start: the Journal is responsible for confirming that resources acquired during startup were rolled back. Completed rollback is a successful cleanup outcome, while any retained-resource cleanup error remains a shutdown failure. This keeps an optional evidence startup failure from being misreported as a second observability-cleanup failure.
+A Journal readiness failure remains visible to callers and does not become a successful start. During shutdown, the Harvester wrapper still invokes the Journal's own `close()` lifecycle after a failed start: the Journal is responsible for confirming that resources acquired during startup were rolled back. Completed rollback is a successful cleanup outcome, while any retained-resource cleanup error remains a shutdown failure. This keeps an optional evidence startup failure from being misreported as a second observability-cleanup failure. The Harvester wrapper also logs the original startup errors as one structured logger entry, preserving filesystem error codes and details so the cause is actionable.
 
 ## Known boundaries
 
