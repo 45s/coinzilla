@@ -61,7 +61,9 @@ export function analyzeMarkdownStyleDocuments(documents) {
     ({ path }) => !matchesAny(path, HISTORICAL_PATHS),
   )
   const baseline = collectMarkdownStyleBaseline(maintainedDocuments)
-  const violations = {}
+  const violations = Object.fromEntries(
+    Object.keys(baseline.findings).map((name) => [name, []]),
+  )
 
   for (const [name, entries] of Object.entries(baseline.findings)) {
     const applicableEntries = HEADING_FINDINGS.has(name)
