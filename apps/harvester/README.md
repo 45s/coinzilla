@@ -193,7 +193,7 @@ Current priorities and blockers live in [ROADMAP.md](./ROADMAP.md). Historical a
 
 ## Standalone Binance TESTNET order tools
 
-All standalone TESTNET account/order tools are documented in [TESTNET order tools](./docs/testnet-order-tools.md).
+Standalone TESTNET order, balance, and history commands are documented in [TESTNET order tools](./docs/testnet-order-tools.md). The interactive `pnpm --filter @coinzilla/harvester testnet` menu wraps those scripts and also exposes the exchange-read-only account audit and local Journal balance audit, documented in the [TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./docs/JOURNAL_OPERATIONS.md). The menu includes destructive actions and adds no confirmation layer; the account-wide cancel proceeds after a warning without an interactive prompt.
 
 ## Standalone Binance TESTNET balance inspection
 
@@ -201,7 +201,7 @@ See [TESTNET order tools — balances](./docs/testnet-order-tools.md#list-non-ze
 
 ## Standalone Binance TESTNET ZRO market sell
 
-See [TESTNET order tools — ZRO market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This command is destructive and requires explicit operator authorization.
+See [TESTNET order tools — legacy ZROUSDT market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This is a hardcoded ZROUSDT TESTNET MARKET SELL, not the current ZROFDUSD configured pair; it is outside the paused validation runbook and requires separate explicit authorization.
 
 ## Standalone Binance TESTNET order history
 

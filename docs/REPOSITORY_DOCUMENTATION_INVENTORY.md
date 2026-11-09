@@ -30,7 +30,7 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. |
-| `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures; surfaces the current ZROFDUSD-only config versus historical runbook scope mismatch and CLOSED / PAUSED status. |
+| `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures; surfaces the current ZROFDUSD-only config versus historical runbook scope mismatch, CLOSED / PAUSED status, and legacy ZROUSDT market-sell/account-wide-cancel write boundaries and the interactive menu wrapper, its audit links, and the no-confirmation account-wide cancel boundary. |
 | `apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md` | Detailed file-by-file Harvester documentation inventory. |
 | `apps/harvester/docs/plans/README.md` | Local index for Harvester plans and migration tracking. |
 | `apps/harvester/docs/tasks/README.md` | Local index for Harvester task records. |
