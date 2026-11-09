@@ -34,7 +34,7 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  evaluateStrategy = evaluateReadOnlyConservativeStrategy,
+  evaluateStrategy = conservativeStrategyPolicy.evaluate,
   logger = defaultLogger,
   eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
