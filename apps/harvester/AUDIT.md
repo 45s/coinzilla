@@ -969,7 +969,7 @@ A safety pause or accounting-failure latch is set during process lifetime. The e
 
 ### Safeguards and limitations
 
-- The safety-halt path reconciles known owned orders and cancels owned BUYs while preserving recovery SELLs. Those actions do not persist the pause latch itself.
+- The safety-halt path reconciles known owned orders and cancels owned BUYs while preserving recovery SELLs. Those actions do not persist the pause latch itself. The offline `restoreHarvesterJournalState()` helper can rebuild pause sets from Journal projection, but current startup does not invoke it.
 - `STRATEGY_PAUSED` publication has the F-028 durability limitation: it is admitted asynchronously and not immediately flushed.
 - A graceful Journal close may persist the pause event, but startup does not replay it. An abrupt termination may also interrupt subscriber/write/sync processing.
 - PREFLIGHT balances and open orders may reveal some consequences, but they do not reconstruct the reason/scope of the old pause or detect every terminal fill completed while offline.
@@ -981,21 +981,4 @@ Persist safety-halt scope, reason, generation and required operator/reconciliati
 
 Test graceful restart and abrupt termination after each pause cause, including accounting failure, unknown order outcome, user-data liveness failure and reconciliation conflict. Assert that no market-price event can cause a new order before the prior halt is restored and resolved.
 
-**Related:** F-031 / #654, F-028, F-029, F-023, F-024 / #773, #769 and #774.
-
-
-### Existing offline recovery implementation — retained, not wired into current startup
-
-The repository still contains a substantial, tested recovery pipeline introduced by PR #606:
-
-- `projectHarvesterJournalRecovery({ records })` validates Journal sessions, ordered lifecycle transitions, order intents/acknowledgements/cancellation outcomes, exact fills and duplicate identities, recovery cycles, pause state, PREFLIGHT/CLOSING account snapshots and open-order snapshots.
-- `restoreHarvesterJournalState({ projection, marketMetadata })` rehydrates Portfolio, RecoveryLedger, OrderRegistry, paused/durablePaused/recovery-managed pause sets, replacement and trailing-reprice intents, cancellation identities, completed-cycle state and Journal fill identities. It deliberately restores unresolved orders as UNKNOWN/CANCELED and requires canonical exchange reconciliation before trading.
-- `fetchAccountTradeHistory()` paginates `myTrades` by supplied Market list, beginning at the durable baseline and advancing with `fromId`. It cannot discover symbols that were not supplied; `marketUniverseComplete` is an explicit caller assertion.
-- `auditRecoveredTradeHistory()` verifies exact Journal/exchange fill and commission parity, duplicate IDs and trade IDs, owned-order attribution, complete pages, and requires `marketUniverseComplete === true`.
-- `auditRecoveredAccountState()` verifies the durable PREFLIGHT baseline, current balances, active open-order ownership/status/quantities and exact locked-asset reservations.
-
-Focused offline tests exist in `project-harvester-journal-recovery.test.js`, `fetch-account-trade-history.test.js`, `audit-recovered-trade-history.test.js` and `audit-recovered-account-state.test.js`. These helpers are not called by the current `index.js`, `prepareOptionalJournal()` or `startHarvester()` composition.
-
-**Historical PR #606 integration limitation:** the PR #606 caller passed `marketUniverseComplete: false` to `fetchAccountTradeHistory()`, while `auditRecoveredTradeHistory()` rejects unless that flag is true. Thus the prior trading-enabled integration deliberately failed closed when historical trading state required a complete account-wide history audit. The current Binance symbol catalog cannot prove the universe of historical symbols, including delisted markets. The current runtime later removed the recovery read/replay gate rather than solving this completeness problem; it now starts fresh and can proceed with unowned open orders. That bypass is not a safe equivalent to the previous fail-closed behavior.
-
-**Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` is captured by the acknowledgement event or can be recovered from durable cancellation/fill facts. The engine's `reconcileOwnedOrders()` also queries `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries lacking a broker ID, validates the returned symbol/client ID, and attaches the canonical broker ID. Tests cover accepted orders after a lost acknowledgement, unresolved lookup, mismatched client IDs, and immutable-intent conflicts. If lookup cannot resolve the order, it remains UNKNOWN and the account audit fails closed; no new order should be submitted.
+**Related:** F-031 / #654, F-028, F-023, F-024 / #773, #769 and #774.
