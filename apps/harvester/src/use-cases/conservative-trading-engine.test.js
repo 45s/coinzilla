@@ -5437,6 +5437,84 @@ function assertMalformedRestEnvelopeFailsClosed({
   )
 }
 
+const createUnknownSubmissionHarness = async () => {
+  const harness = await createHarness()
+  harness.broker.placeOrder = async () => ({
+    ok: false,
+    errors: [new Error("broker submission outcome is unknown")],
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const pendingOrder = harness.engine.getOrders().find((order) => !order.brokerOrderId)
+  assert.ok(pendingOrder, "The failed submission must remain registered for clientOrderId reconciliation.")
+  return { harness, pendingOrder }
+}
+
+test("keeps explicit pending-order REST lookup failures retryable", async () => {
+  const { harness } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: false,
+    errors: [new Error("temporary clientOrderId lookup failure")],
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "REST_RECONCILIATION",
+    stage: "PENDING_ORDER_LOOKUP",
+    retryable: true,
+  })
+})
+
+test("treats a pending-order lookup response without an explicit success flag as terminal", async () => {
+  const { harness } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({ data: null })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_RESPONSE",
+    retryable: false,
+  })
+})
+
+test("classifies a pending-order clientOrderId mismatch as terminal ownership failure", async () => {
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: true,
+    data: new CanonicalOrder({
+      clientOrderId: "foreign-client-order",
+      brokerOrderId: "foreign-broker-order",
+      market: pendingOrder.market,
+      side: pendingOrder.side,
+      type: pendingOrder.type,
+      limitPrice: pendingOrder.limitPrice,
+      originalQuantity: pendingOrder.originalQuantity,
+      executedQuantity: new Quantity({ amount: "0", asset: pendingOrder.originalQuantity.asset }),
+      status: "NEW",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    }),
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "OWNERSHIP_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_IDENTITY",
+    retryable: false,
+  })
+})
+
+test("treats an unclassified thrown pending-order lookup exception as terminal", async () => {
+  const { harness } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => { throw new Error("unexpected clientOrderId lookup adapter exception") }
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_EXCEPTION",
+    retryable: false,
+  })
+})
+
 test("treats unclassified thrown owned-order REST adapter errors as terminal", async () => {
   const openOrdersFixture = await createMalformedRestEnvelopeFixture()
   openOrdersFixture.harness.broker.getOpenOrders = async () => { throw new Error("unexpected open-orders adapter exception") }

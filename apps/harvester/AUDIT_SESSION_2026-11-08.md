@@ -753,3 +753,8 @@ Only an explicit broker result with ok:false is classified as a retryable REST r
 ## 43. F-023 terminal fill adapter exception tests — 2026-11-09
 
 The terminal-fill timeout regression now models an explicitly classified retryable REST failure. A separate regression proves an unclassified thrown terminal-fill adapter exception is terminal. This aligns the fixture with the broker port's result contract instead of treating arbitrary thrown exceptions as transient network failures.
+
+
+## 44. F-023 pending clientOrderId lookup RED coverage — 2026-11-09
+
+Added RED regressions for the pre-existing UNKNOWN-submission reconciliation branch. Explicit broker ok:false lookup results may retry; missing response metadata, thrown adapter exceptions, and a canonical response for another clientOrderId must fail closed with terminal classifications. This closes the remaining path that previously converted every pending-order lookup exception into retryable REST reconciliation.
