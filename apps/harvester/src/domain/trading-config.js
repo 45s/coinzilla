@@ -87,6 +87,18 @@ export function resolveHarvesterRuntimeConfig({ config, environment } = {}) {
   const brokerName = profile?.broker ?? undefined
   const tradingMode = profile?.trading?.mode ?? "testnet"
   const tradingRequested = profile?.trading?.enabled === true
+  if (brokerName !== undefined && brokerName !== "binance") {
+    throw new Error("Unsupported broker in runtime profile: " + brokerName)
+  }
+  if (tradingRequested && brokerName !== "binance") {
+    throw new Error("TESTNET trading requires runtime profile broker=binance")
+  }
+  if (tradingRequested && tradingMode !== "testnet") {
+    throw new Error("Order execution requires runtime profile trading.mode=testnet; live order execution is not supported")
+  }
+  if (tradingRequested && profileName === "production") {
+    throw new Error("Production runtime must remain read-only")
+  }
   const tradingEnabled = tradingRequested &&
     brokerName === "binance" &&
     tradingMode === "testnet" &&
