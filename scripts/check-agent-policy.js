@@ -282,7 +282,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
       .replace(inlineCodePattern, '$1')
       .replace(/<[^>]*>/g, '')
       .replace(/\\([#.+!?()[\]{}])/g, '$1')
-      .replace(/[\*~]/g, '')
+      .replace(/[*~]/g, '')
       .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
       .replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<')
