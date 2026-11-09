@@ -87,6 +87,17 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
       error?.code ?? status.code ?? "",
       error?.name ?? "",
       error?.message ?? "",
+      typeof error?.stack === "string" ? error.stack.slice(0, 1024) : "",
+      cause?.code ?? "",
+      cause?.name ?? "",
+      typeof cause?.message === "string"
+        ? cause.message
+        : cause === undefined ? "" : String(cause),
+      typeof cause?.stack === "string" ? cause.stack.slice(0, 1024) : "",
+      status.recoveryRequired === true,
+      status.recoveryRequired === false,
+      status.reconciliationRequired === true,
+      status.reconciliationRequired === false,
       status.symbol ?? "",
       status.brokerOrderId ?? "",
       status.executionId ?? "",
@@ -175,14 +186,23 @@ export function createUserDataStatusHandler({
       })
     }
     logUserDataStreamTransition({ state, logger, status })
-    state.status = status.type ?? "UNKNOWN"
-    if (status.type === "executionNormalizationFailed") {
+    const isDiagnosticOnlyRpcError = status.type === "rpcError" &&
+      status.recoveryRequired === false &&
+      (status.reconciliationRequired === undefined || status.reconciliationRequired === false)
+
+    // A broker rpcError explicitly marked as not requiring recovery is
+    // diagnostic-only. Preserve the existing readiness and generation state;
+    // an actual connectionClosed status owns transport recovery invalidation.
+    if (!isDiagnosticOnlyRpcError) {
+      state.status = status.type ?? "UNKNOWN"
+    }
+    if (!isDiagnosticOnlyRpcError && status.type === "executionNormalizationFailed") {
       state.accountingFailed = true
       state.ready = false
       state.status = "EXECUTION_NORMALIZATION_FAILED"
       void cancelOwnedBuysAfterAccountingFailure()
     }
-    const connectionUnsafe = [
+    const connectionUnsafe = !isDiagnosticOnlyRpcError && [
       "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
       "executionNormalizationFailed",
     ].includes(status.type)
@@ -210,7 +230,7 @@ export function createUserDataStatusHandler({
         state.requiresReconciliation = false
       }
     }
-    const recoveryInvalidated = [
+    const recoveryInvalidated = !isDiagnosticOnlyRpcError && [
       "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
       "executionNormalizationFailed",
     ].includes(status.type)
@@ -219,13 +239,14 @@ export function createUserDataStatusHandler({
       state.recoverySubscriptionId = null
       state.recoveryBrokerGeneration = null
     }
-    if (status.type === "recovered") {
+    if (!isDiagnosticOnlyRpcError && status.type === "recovered") {
       state.recoverySubscriptionId = status.subscriptionId ?? null
       state.recoveryBrokerGeneration = Number.isSafeInteger(status.recoveryGeneration)
         ? status.recoveryGeneration
         : null
     }
-    if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
+    if (!isDiagnosticOnlyRpcError &&
+        (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe)) {
       state.streamUnsafe = true
       state.requiresReconciliation = true
       state.ready = false
@@ -234,25 +255,25 @@ export function createUserDataStatusHandler({
         : state.accountingFailed
           ? "EXECUTION_ACCOUNTING_FAILED"
           : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    } else if (state.requiresReconciliation) {
+    } else if (!isDiagnosticOnlyRpcError && state.requiresReconciliation) {
       // A stream-level status cannot clear the application gate unless the
       // application has completed reconciliation and acknowledged recovery.
       state.ready = false
       state.status = state.accountingFailed
         ? "EXECUTION_ACCOUNTING_FAILED"
         : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    } else if (state.accountingFailed) {
+    } else if (!isDiagnosticOnlyRpcError && state.accountingFailed) {
       state.ready = false
       state.status = "EXECUTION_ACCOUNTING_FAILED"
-    } else if (state.initialAccountSnapshotReady && tradingEnabled) {
+    } else if (!isDiagnosticOnlyRpcError && state.initialAccountSnapshotReady && tradingEnabled) {
       state.ready = true
       state.status = "READY"
       resumeDeferredStrategyEvaluations()
-    } else if (!state.initialAccountSnapshotReady) {
+    } else if (!isDiagnosticOnlyRpcError && !state.initialAccountSnapshotReady) {
       state.ready = false
       state.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
     }
-    if (status.type === "recovered" && status.recoveryRequired === true) {
+    if (!isDiagnosticOnlyRpcError && status.type === "recovered" && status.recoveryRequired === true) {
       if (state.startupComplete) startUserDataRecovery()
       else state.pendingRecovery = true
     }
