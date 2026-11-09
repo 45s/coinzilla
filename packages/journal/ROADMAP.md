@@ -109,7 +109,7 @@ Each numbered slice below is a separate task PR targeting `develop`, with one pr
 
 ### J-1 — Define the record vocabulary and contract
 
-**Status:** [ ] planned  
+**Status:** [x] complete — README public contracts and maintainer test guidance now include backup/restore and validation procedures.  
 **Intent:** make the existing contract explicit before changing its structure.
 
 Scope:
@@ -206,7 +206,7 @@ TDD and documentation:
 
 ### J-4 — Make orchestration state ownership explicit
 
-**Status:** [~] in progress  
+**Status:** [x] complete — lifecycle matrix is covered, including the deterministic publish-before-close drain regression added with the final Journal acceptance PR.  
 **Depends on:** J-3 (merged in PR #748)  
 **Intent:** ensure the Journal service owns lifecycle policy while the adapter owns resource mechanics.
 
@@ -239,7 +239,7 @@ TDD and documentation:
 - [J-4 startup cancellation / PR #755](https://github.com/45s/coinzilla/pull/755), merged as `7103d9d14919620eae371f23f342c51d916d1d0b`: close waits for in-flight startup rollback and only releases resources acquired by that attempt.
 - [J-4 active close serialization / PR #758](https://github.com/45s/coinzilla/pull/758), merged as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`: a separate close-operation guard rejects overlapping close calls before a second EventBus flush, while the record-admission cutoff remains after the first EventBus drain.
 
-**Characterization coverage in PR #772:** a deterministic adapter failure writes a non-empty prefix to the session file and then rejects. The test verifies the original error is preserved, the writer is poisoned without retry, flush does not sync or claim durability, close attempts cleanup and releases the owned session handle and lock, and the exact partial bytes remain untouched (no truncation or repair). Runtime behavior is unchanged.
+- Final close/publish characterization: a deterministic deferred-append barrier proves that a publish accepted immediately before close remains admitted, close waits for its append and durable sync, and the exact event identity/payload remains in the session after resource release. This closes the last explicitly listed concurrent close/publish test gap; no production lifecycle behavior or public API changed.\n\n**Characterization coverage in PR #772:** a deterministic adapter failure writes a non-empty prefix to the session file and then rejects. The test verifies the original error is preserved, the writer is poisoned without retry, flush does not sync or claim durability, close attempts cleanup and releases the owned session handle and lock, and the exact partial bytes remain untouched (no truncation or repair). Runtime behavior is unchanged.
 
 ### J-5 — Contract conformance and operational documentation
 
@@ -255,9 +255,9 @@ Scope:
 
 Acceptance criteria:
 - README and JSDoc agree with actual runtime behavior and tests.
-- Every public method's success/failure and durability/replay guarantee is described accurately.
-- Examples do not imply exactly-once replay, business-level deduplication, automatic stale-lock cleanup, or directory-entry fsync.
-- No root-level or other-package documentation is needed; all changes remain under `packages/journal/**`.
+- [x] Every public method's success/failure and durability/replay guarantee is described accurately.
+- [x] Examples do not imply exactly-once replay, business-level deduplication, automatic stale-lock cleanup, or directory-entry fsync.
+- [x] No root-level or other-package documentation is needed; all changes remain under `packages/journal/**`.
 
 Tests and verification:
 - Verify README examples and all documented defaults/error codes against executable tests.
@@ -308,7 +308,7 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [~] J-4 overlapping-close regression: test-first commit `630196154c1dbfb3ed5fad93f7bd4976764639bb` added a deferred EventBus flush test. On the exact RED head, Journal tests reported 59 passed / 1 failed; the expected failure observed two EventBus flush invocations for overlapping close calls (actual 2, expected 1).
 - [~] J-4 flush/close overlap regression: test-first commit `9f5e7c20cf67827fbe0cc68f958d983dcea9eb5f` added a deferred session-sync barrier. On the exact RED head, Journal tests reported 60 passed / 1 failed; the failure showed a flush started after close claimed shutdown reaching the store and returning the sync-overlap error instead of the stopped/closing guard result.
 - [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/flush-close-serialization`).
-- [ ] J-5 — Contract conformance and operational documentation.
+- [x] J-5 — Contract conformance and operational documentation. README now includes byte-preserving backup, checksum, restore validation, replay/idempotency, and broker-reconciliation procedures; package API, limits, locking, durability, and test/coverage commands are documented.
 
 ## Current contract
 
