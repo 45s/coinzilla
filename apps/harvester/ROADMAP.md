@@ -85,6 +85,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** Merged PR #836 disabled DOGEUSDT and ZROUSDT and enabled only ZROFDUSD, but the controlled TESTNET runbook still described the earlier two-pair plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter configuration or use the runbook for execution until the pair scope and all quote-currency/fee/order limits are explicitly reconciled. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -239,7 +240,9 @@ Live trading must remain explicitly disabled by default. TESTNET verification is
 This hardening does not change strategy decisions or claim a successful real
 TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
-## Current branch implementation status
+## Historical implementation snapshot — initial TESTNET pair selection
+
+> The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. Merged PR #836 later disabled both and enabled only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
 
 The current task branch has progressed beyond the initial `develop` audit described
 below. The following first-cycle components are now implemented and composed
