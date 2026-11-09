@@ -15,7 +15,7 @@ test("reports objective Markdown style metrics without enforcing or rewriting do
     },
     {
       path: "docs/code-sample.md",
-      content: "# Example\\n\\n```js\\nconst value = 1  \\n\\n\\n```\\n",
+      content: "# Example\n\n```js\nconst value = 1  \n\n\n```\n",
     },
   ])
 
