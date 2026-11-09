@@ -1335,7 +1335,7 @@ test("keeps configuration-only startup available when optional Journal readiness
 })
 
 
-test("does not block shutdown while optional Journal readiness remains pending", { timeout: 1000 }, async () => {
+test("does not await process-start publication before emitting the stopped event", { timeout: 1000 }, async () => {
   const events = []
   const handlers = {}
   const eventBus = {
@@ -1348,6 +1348,7 @@ test("does not block shutdown while optional Journal readiness remains pending",
   }
   const journalService = {
     ready: new Promise(() => {}),
+    // Resolve close independently to isolate the process-start publication wait; production Journal close semantics are unchanged.
     close: async () => ({ ok: true, closed: true }),
   }
 
@@ -1367,10 +1368,11 @@ test("does not block shutdown while optional Journal readiness remains pending",
   })
 
   await handlers.SIGTERM()
-  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), true, "shutdown evidence must not wait for optional Journal readiness")
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "process-start publication must remain pending until Journal subscriber readiness")
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), true, "stopped-event publication must not await the process-start publication promise")
 })
 
-test("does not block failed startup cleanup while optional Journal readiness remains pending", { timeout: 1000 }, async () => {
+test("does not await process-start publication before emitting the startup-failed event", { timeout: 1000 }, async () => {
   const events = []
   const eventBus = {
     publish(event) {
@@ -1394,7 +1396,8 @@ test("does not block failed startup cleanup while optional Journal readiness rem
       logger: { info() {}, error() {}, debug() {}, warn() {} },
       env: {},
     })
-    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STARTUP_FAILED), true, "startup-failed evidence must be published without waiting for optional Journal readiness")
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "process-start publication must remain pending until Journal subscriber readiness")
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STARTUP_FAILED), true, "startup-failed event publication must not await the process-start publication promise")
   } finally {
     process.exitCode = previousExitCode
   }

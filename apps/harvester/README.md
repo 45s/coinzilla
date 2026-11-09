@@ -159,12 +159,6 @@ The configuration loader and validation live in `src/infrastructure/config/load-
 
 The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils`. Keep logging at application boundaries, inject a logger where tests or alternate composition need control, and do not call global `console` directly from Harvester modules. The shared logger accepts one data argument per method; pass structured objects when a log needs metadata.
 
-### Process provenance and log correlation
-
-At process entry, Harvester captures its package version, Git branch/commit/subject/date/working-tree state, metadata source, PID, UTC start timestamp, and a unique runtime-session ID once. The immutable identity is attached to the shared logger with `Logger.setContext()` before startup diagnostics. Structured DEBUG and TRACE JSONL entries therefore carry a top-level `context` alongside the original `data`; the compact console formatter remains concise and may omit that context.
-
-When the Journal subscriber is ready, Harvester publishes `harvester.process_started` with the same allowlisted build/runtime identity. Its `startedAt` is the actual process-entry timestamp, not the later EventBus publication time. This attempt event is distinct from `harvester.started`, which is emitted only after runtime startup succeeds. The event is best-effort: broker-connected startup admits it before the existing PREFLIGHT durability barrier, which can include it without adding another flush or gate. Configuration-only/no-broker startup does not wait for the optional Journal; logger context is available immediately even if Journal setup is delayed, disabled, or unavailable. If readiness is delayed until after `harvester.started` is emitted, the process event may appear later in Journal order, but its `startedAt` still identifies the original process entry. Missing Git metadata is explicit and never guessed. This identity is diagnostic only and does not enable Journal replay or process-restart trading recovery.
-
 - `logger.debug({ message, ...context })` remains deliberately detailed during development. Strategy traces include the symbol, current price, last BUY reference, active-order context, pair settings, decision/action/reason, and the market's active/free quantities and quote cash flow. Accounting traces include execution/trade/order IDs, side, price, base/quote quantities, actual commission amount/asset/status, applied/duplicate outcome, and exact before/after accounting deltas. Recovery traces include eligibility inputs, recovery cost/proceeds, outstanding recovery, realized profit, and inventory allocation.
 - Portfolio and RecoveryLedger debug context is emitted as bounded summaries for the market being processed. Applied-fill identity fingerprints and raw fingerprint values are never logged; only the aggregate applied-fill count is included. This avoids large repeated state dumps without reducing useful trading diagnostics.
 - `logger.info({ message, ...context })` marks key lifecycle actions such as configuration validation, broker connection, user-data subscription, account snapshot phase, trading readiness, active market subscriptions, and shutdown.
@@ -514,21 +508,25 @@ modify trading/Journal behavior.
 Each Harvester OS process captures one immutable identity at module entry:
 the application/package version, Git branch and commit (when available),
 commit subject/date, working-tree state, process ID, UTC process-entry time,
-and a unique runtime-session ID. Git metadata is inspected once; if Git is
-unavailable, explicit `COINZILLA_BUILD_*` metadata is used, otherwise source
-fields are recorded as unavailable. This diagnostic capture never blocks
-startup.
+and a unique runtime-session ID. Git metadata is inspected once through bounded synchronous
+commands; if Git is unavailable or inspection fails, explicit
+`COINZILLA_BUILD_*` metadata is used, otherwise source fields are recorded as
+unavailable. This one-time inspection can add bounded startup latency, but a
+Git metadata failure does not abort startup.
 
 The shared Logger receives the sanitized allowlisted identity before startup
 diagnostics. The Journal records it as `harvester.process_started`, distinct
 from `harvester.started` (which means runtime startup succeeded). The event
-is published after Journal subscriber readiness. Configuration-only startup,
-startup-failure cleanup, and shutdown do not wait for optional Journal
-readiness. Broker-connected startup admits the event before the existing
-PREFLIGHT durability barrier; no additional flush or trading gate is added.
-When optional Journal readiness is delayed, the event's Journal append order
-may follow `harvester.started`, but its `startedAt` always represents the
-original process-entry time.
+is published after Journal subscriber readiness. Configuration-only/no-broker
+startup does not wait for optional Journal readiness. Broker-connected startup
+admits the event before the existing PREFLIGHT durability barrier; no
+additional flush or trading gate is added. Startup-failure and shutdown paths
+do not separately await the process-start publication promise; the existing
+Journal close lifecycle remains unchanged and may wait for Journal readiness.
+If the process exits before Journal becomes ready, the Journal event is not
+guaranteed, but the Logger context remains in DEBUG/TRACE logs. When readiness
+is delayed, Journal append order may follow `harvester.started`, while
+`startedAt` always represents the original process-entry time.
 
 ## Conservative Strategy authority
 
