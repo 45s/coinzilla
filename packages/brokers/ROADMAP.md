@@ -24,7 +24,7 @@ This section is authoritative for next work and orders the broker package by ris
 
 ### Accepted cross-domain contract work — Harvester issue #774
 
-- [~] **Cancellation request outcome classification — PR [#786](https://github.com/45s/coinzilla/pull/786).** Expose `NOT_SENT` when the local user-data readiness guard rejects `cancelOrder()` before the Binance RPC, and `OUTCOME_UNKNOWN` when the broker invokes the state-changing RPC but cannot return an authoritative canonical order result. Preserve the public success/result envelope and existing fail-closed readiness gate. The Harvester consumer preserves known canonical order state for `NOT_SENT`, keeps its safety pause, and continues marking ambiguity UNKNOWN. Deterministic offline broker and consumer regressions are required. Keep this item in progress until exact-head CI passes and the coordinated PR is merged.
+- [x] **Cancellation request outcome classification — Harvester issue [#774](https://github.com/45s/coinzilla/issues/774), implemented in merged PR [#786](https://github.com/45s/coinzilla/pull/786).** The broker exposes `NOT_SENT` only for a local preflight refusal before the Binance RPC and `OUTCOME_UNKNOWN` for a dispatched request without an authoritative canonical order result. Harvester accepts `NOT_SENT` only on `ok: false`, preserves known canonical order state, and retains fail-closed behavior for ambiguity. Exact-head broker/Harvester regressions, workspace tests, coverage, syntax/actionlint, Utils tests, and dependency audit passed. No TESTNET or exchange operations were performed.
 
 ### IMPORTANT — lifecycle quality and maintainability
 
