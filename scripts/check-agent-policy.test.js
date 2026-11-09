@@ -71,7 +71,7 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
   try {
     mkdirSync(join(root, 'docs'), { recursive: true });
     writeFileSync(join(root, 'docs', 'source.md'), '# Source');
-    writeFileSync(join(root, 'docs', 'target.md'), '## Repeated\n\n## Repeated\n\nUnderlined Heading\n------------------\n\n<a id="custom-anchor"></a>\n\n## Café &amp; tea!');
+    writeFileSync(join(root, 'docs', 'target.md'), '## Repeated\n\n## Repeated\n\nUnderlined Heading\n------------------\n\n<a id="custom-anchor"></a>\n\n## Café &amp; tea!\n\n## First — second\n\n## 2026-11-07/08 session audit — issue #667');
     writeFileSync(join(root, 'docs', 'asset.png'), '');
 
     const documents = [
@@ -83,6 +83,7 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
           '[valid same-file](#source) [missing same-file](#missing)',
           '[duplicate](target.md#repeated-1) [setext](target.md#underlined-heading)',
           '[custom](target.md#custom-anchor) [unicode](target.md#café-tea)',
+          '[dash punctuation](target.md#first--second) [dated slash](target.md#2026-11-0708-session-audit--issue-667)',
           '[missing target](target.md#absent)',
           '[external](https://example.com#external) [asset](asset.png#not-a-heading)',
           '',
