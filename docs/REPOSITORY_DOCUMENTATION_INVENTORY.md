@@ -18,6 +18,28 @@ A complete recursive Git tree was retrieved for the baseline commit (`truncated:
 
 The table records path, byte size, category and a conservative first-pass disposition. It is not a claim that every statement in every file has been revalidated against source code. All KEEP files remain at their current paths; REVIEW files must not be moved or rewritten until content and inbound references are checked.
 
+## Post-baseline additions (current tree)
+
+The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`, not a live file count. A complete recursive tree comparison against `develop` at `ae5c61abbee8e48162989c470f690221bd9ec712` found **13 added Markdown/MDX files and no removed paths**. The current tree therefore contains **110 tracked Markdown/MDX files** at that checkpoint. The original 97-file baseline table remains unchanged; the additions are recorded separately:
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/architecture/README.md` | Local index for Harvester architecture documentation. |
+| `apps/harvester/docs/audits/README_HISTORY.md` | Preserved historical README material and its navigation. |
+| `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved Harvester roadmap history and evidence. |
+| `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. |
+| `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. |
+| `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. |
+| `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures. |
+| `apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md` | Detailed file-by-file Harvester documentation inventory. |
+| `apps/harvester/docs/plans/README.md` | Local index for Harvester plans and migration tracking. |
+| `apps/harvester/docs/tasks/README.md` | Local index for Harvester task records. |
+| `docs/REPOSITORY_DOCUMENTATION_INVENTORY.md` | This repository-wide baseline and post-baseline inventory. |
+| `docs/ai-agent/README.md` | Entry point for AI-agent policy and workflow references. |
+| `packages/entities/README.md` | Entities package public-contract and development entry point. |
+
+These files were added deliberately as indexes, historical evidence, inventories or package guidance. Their addition does not alter the original baseline dispositions above.
+
 ## Disposition vocabulary
 
 - **KEEP** — preserve at the current path; maintain authority boundaries and index links.
