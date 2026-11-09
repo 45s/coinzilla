@@ -6,14 +6,14 @@ type: roadmap
 owner: journal
 ---
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Priority execution plan — current develop direction (2026-11-10)
 
-### In progress — accept writer-generated session identity filenames (#877 / PR #880)
+### Completed — accept writer-generated session identity filenames (#877 / PR #880)
 
-- [~] Fix the reader to accept the timestamp plus sanitized runtime-session-ID suffix already emitted by `createSession(sessionIdentity)`.
-- [~] Preserve timestamp ordering, exact numeric collision-suffix ordering, and deterministic lexical ordering for identity suffixes.
-- [~] Keep JSONL record bytes, writer filename generation, public API, recovery limits, lock semantics, and durability guarantees unchanged.
-- [~] Add RED-first real-writer/read-back and mixed-suffix ordering regressions; update the README after implementation.
+- [x] Fix the reader to accept the timestamp plus sanitized runtime-session-ID suffix already emitted by `createSession(sessionIdentity)`.
+- [x] Preserve timestamp ordering, exact numeric collision-suffix ordering, and deterministic lexical ordering for identity suffixes.
+- [x] Keep JSONL record bytes, writer filename generation, public API, recovery limits, lock semantics, and durability guarantees unchanged.
+- [x] Add RED-first real-writer/read-back and mixed-suffix ordering regressions; update the README to document the filename and ordering contract.
 
 This section supersedes stale checkboxes below where they conflict with merged work. Journal is an evidence store, not the authority for trading state. Preserve the existing mandatory Harvester durability barriers; additional diagnostics remain best-effort.
 
