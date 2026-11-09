@@ -40,7 +40,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `docs/README.md` | 2223 | Operational/reference guide | **KEEP** | Repository-wide documentation entry point. |
 | `docs/ai-agent/repository-engineering-audit.md` | 15755 | Historical task brief | **KEEP** | Historical audit task brief; separate from the actual audit report in docs/audits/ and not current agent policy. |
 | `docs/architecture/README.md` | 1595 | Architecture/ADR | **KEEP** | Scope entry point and setup/public contract guide. |
-| `docs/architecture/decisions/ADR-0001-clean-hexagonal-architecture.md` | 5629 | Architecture/ADR | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
+| `docs/architecture/decisions/ADR-0001-clean-hexagonal-architecture.md` | 5629 | Architecture/ADR | **KEEP** | Cross-reference audit found a reference to nonexistent ADR-0002; the application-specific architecture reference now points to the existing Harvester architecture guide. |
 | `docs/architecture/decisions/ADR_TEMPLATE.md` | 631 | Architecture/ADR | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/audits/README.md` | 649 | Historical audit | **KEEP** | Scope entry point and setup/public contract guide. |
 | `docs/audits/repository-engineering-audit.md` | 16323 | Historical audit | **KEEP** | Historical repository assessment; preserve baseline, date and limitations. |
@@ -95,6 +95,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 7. `docs/ci-workflows.md` had drifted from `.github/workflows/quality-gate.yml`: it incorrectly described the workflow as running `pnpm run quality` and omitted the `develop` push trigger. PR #816 aligns the guide with the actual actionlint, JavaScript syntax, and agent-policy steps.
 8. `docs/contributing.md` advertised a nonexistent `@coinzilla/brokers` `test:sdk` script. The package currently defines `test:integration`, `test:websocket`, and `test:user-data-integration`; the contributor guide now lists the actual commands.
 9. `docs/DOCUMENTATION_GOVERNANCE.md` pointed agents to Section 9 for the living-document freshness sweep, but Section 9 is roadmap discipline. This cross-reference now points to the explicit freshness-sweep requirement below in Section 11.
+10. `ADR-0001-clean-hexagonal-architecture.md` referred to ADR-0002 for the application architecture transition, but a recursive tree and code search found no ADR-0002 in the repository. The text now links to the existing Harvester architecture guide and states that application-specific architecture is owned by each application.
 
 ## Remaining work
 
