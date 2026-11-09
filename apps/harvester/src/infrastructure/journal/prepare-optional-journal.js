@@ -24,7 +24,19 @@ export function resolveJournalDirectory({ directory }) {
   if (typeof directory !== "string" || directory.trim() === "") {
     throw new TypeError("Harvester Journal directory must be a non-empty string")
   }
-  return path.resolve(APPLICATION_DIRECTORY, directory)
+
+  const configuredDirectory = directory.trim()
+  // A leading slash was historically used in local configuration as a
+  // root-relative spelling ("/logs"), not as a request to write to the
+  // machine's filesystem root. Keep that spelling application-local while
+  // preserving genuinely absolute paths such as "/var/lib/coinzilla/journal".
+  if (/^[\\/]+logs[\\/]*$/i.test(configuredDirectory)) {
+    return path.resolve(APPLICATION_DIRECTORY, "logs")
+  }
+
+  return path.isAbsolute(configuredDirectory)
+    ? path.normalize(configuredDirectory)
+    : path.resolve(APPLICATION_DIRECTORY, configuredDirectory)
 }
 
 /**
