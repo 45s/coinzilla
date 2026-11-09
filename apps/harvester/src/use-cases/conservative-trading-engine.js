@@ -1981,14 +1981,24 @@ export function makeConservativeTradingEngine({
         if (openOrder && (
           openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
           openOrder.side !== ownedOrder.side ||
-          openOrder.type !== ownedOrder.type ||
+          openOrder.type !== ownedOrder.type
+        )) {
+          throw recoveryFailureError(
+            new Error("Open-order identity conflicts with canonical history for " + ownedOrder.brokerOrderId),
+            "OWNERSHIP_INTEGRITY", "OWNED_OPEN_ORDER_IDENTITY", false,
+          )
+        }
+        if (openOrder && (
           !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
           (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) !== 0) ||
           (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) === 0) ||
           compareDecimal({ left: openOrder.originalQuantity, right: ownedOrder.originalQuantity.amount }) !== 0 ||
           compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
         )) {
-          throw recoveryFailureError(new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId), "ACCOUNTING_INTEGRITY", "OWNED_OPEN_ORDER_HISTORY_PARITY", false)
+          throw recoveryFailureError(
+            new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId),
+            "ACCOUNTING_INTEGRITY", "OWNED_OPEN_ORDER_HISTORY_PARITY", false,
+          )
         }
         if (["OPEN", "PARTIALLY_FILLED"].includes(historyOrder.status) && !openOrder) {
           throw recoveryFailureError(new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId), "REST_RECONCILIATION", "OWNED_OPEN_ORDER_SNAPSHOT_PARITY", true)
@@ -2107,7 +2117,7 @@ export function makeConservativeTradingEngine({
       const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
       for (const currentOrder of state.registry.orders) {
         if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
-          throw new Error("Order registry changed while REST reconciliation was in progress")
+          throw recoveryFailureError(new Error("Order registry changed while REST reconciliation was in progress"), "ORDER_TRANSITION", "REST_STREAM_REGISTRY_RACE", true)
         }
       }
       for (const { ownedOrder, historyOrder, fillIds } of snapshots) {
@@ -2116,18 +2126,18 @@ export function makeConservativeTradingEngine({
           (order) => order.brokerOrderId === ownedOrder.brokerOrderId,
         )
         if (!currentOrder) {
-          throw new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId)
+          throw recoveryFailureError(new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId), "OWNERSHIP_INTEGRITY", "REST_STREAM_ORDER_OWNERSHIP", false)
         }
         if (compareDecimal({
           left: historyOrder.executedQuantity.amount,
           right: currentOrder.executedQuantity.amount,
         }) < 0) {
-          throw new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId)
+          throw recoveryFailureError(new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId), "REST_RECONCILIATION", "REST_STREAM_EXECUTION_LAG", true)
         }
         const previouslyProcessedFillIds = state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
         for (const fillId of previouslyProcessedFillIds) {
           if (!fillIds.has(fillId)) {
-            throw new Error("REST fill history is missing previously processed execution ID " + fillId)
+            throw recoveryFailureError(new Error("REST fill history is missing previously processed execution ID " + fillId), "ACCOUNTING_INTEGRITY", "REST_STREAM_JOURNAL_FILL_PARITY", false)
           }
         }
       }
@@ -2136,7 +2146,7 @@ export function makeConservativeTradingEngine({
         affectedSymbol = ownedOrder.market.symbol
         const currentOrder = state.registry.getOrder({ clientOrderId: ownedOrder.clientOrderId })
         if (!currentOrder) {
-          throw new Error("Owned order disappeared before REST fill accounting: " + ownedOrder.brokerOrderId)
+          throw recoveryFailureError(new Error("Owned order disappeared before REST fill accounting: " + ownedOrder.brokerOrderId), "OWNERSHIP_INTEGRITY", "REST_FILL_ORDER_OWNERSHIP", false)
         }
 
         // Account every exchange fill idempotently without replaying historical
@@ -2182,9 +2192,9 @@ export function makeConservativeTradingEngine({
       await pause({ symbol: affectedSymbol, reason: "REST_STREAM_RECONCILIATION_FAILED", error })
       return failureResult({
         error,
-        category: "ACCOUNTING_INTEGRITY",
-        stage: "REST_STREAM_PARITY",
-        retryable: false,
+        category: error?.recoveryFailure?.category ?? "ACCOUNTING_INTEGRITY",
+        stage: error?.recoveryFailure?.stage ?? "UNCLASSIFIED_REST_STREAM_PARITY",
+        retryable: error?.recoveryFailure?.retryable ?? false,
       })
     }
   }

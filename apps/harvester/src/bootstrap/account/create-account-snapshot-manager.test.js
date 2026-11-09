@@ -97,8 +97,16 @@ test("rejects an account snapshot that omits a configured market asset", async (
 
   await assert.rejects(
     fixture.manager.refreshAccountSnapshot(),
-    /missing required market asset balances: USDT/,
-    "A startup snapshot missing the configured quote asset must fail closed.",
+    (error) => {
+      assert.match(error.message, /missing required market asset balances: USDT/)
+      assert.deepEqual(error.recoveryFailure, {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "ACCOUNT_SNAPSHOT_VALIDATION",
+        retryable: false,
+      })
+      return true
+    },
+    "A startup snapshot missing the configured quote asset must fail closed as terminal integrity failure.",
   )
   assert.equal(fixture.manager.getAccountSnapshot(), undefined, "An incomplete account snapshot must not become the accepted account view.")
 })
@@ -159,6 +167,11 @@ test("retries an account snapshot after a REST timeout without publishing a prem
   await assert.rejects(
     fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
     (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "REST_RECONCILIATION",
+        stage: "ACCOUNT_SNAPSHOT_READ",
+        retryable: true,
+      }, "A broker-declared account snapshot timeout must be explicitly retryable.")
       assert.equal(
         error.message,
         "Unable to load canonical exchange account balances: account.status request timed out",
@@ -237,6 +250,11 @@ test("preserves the original broker error as cause when the account-wide open-or
   await assert.rejects(
     fixture.manager.publishOpenOrdersSnapshot(),
     (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "REST_RECONCILIATION",
+        stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ",
+        retryable: true,
+      }, "A broker-declared account-wide open-orders timeout must be explicitly retryable.")
       assert.equal(
         error.message,
         "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out",
@@ -286,7 +304,15 @@ test("retains the first recovery account audit publication after a transient flu
 
   await assert.rejects(
     fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
-    /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/,
+    (error) => {
+      assert.match(error.message, /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/)
+      assert.deepEqual(error.recoveryFailure, {
+        category: "DURABILITY",
+        stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+        retryable: true,
+      }, "A transient Journal flush failure must be explicitly retryable only after a fresh recovery attempt.")
+      return true
+    },
     "A failed first Journal sync must reject the account audit even though its event publication already completed.",
   )
 

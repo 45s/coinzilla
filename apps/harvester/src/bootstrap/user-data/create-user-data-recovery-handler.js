@@ -19,7 +19,7 @@ function resolveRecoveryFailure(failure) {
 
 function createRecoveryFailureError(error, failure) {
   const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
-  normalized.recoveryFailure = resolveRecoveryFailure(failure)
+  normalized.recoveryFailure = resolveRecoveryFailure(normalized.recoveryFailure ?? failure)
   return normalized
 }
 
@@ -132,7 +132,10 @@ export function createUserDataRecoveryHandler({
       }
       while (true) {
         await drainUserDataEvents()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         assertNoRetryableRecoveryFailure()
 
@@ -140,10 +143,13 @@ export function createUserDataRecoveryHandler({
         // user-data events observed during the REST reads and durable flushes.
         const eventSequence = state.eventSequence
         const snapshot = await runRecoveryStage({
-          category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true,
+          category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_SNAPSHOT_VALIDATION", retryable: false,
           task: refreshAccountSnapshot,
         })
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         const openOrdersResult = await runRecoveryStage({
           category: "REST_RECONCILIATION", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ", retryable: true,
           task: () => broker.getOpenOrders({}),
@@ -163,26 +169,35 @@ export function createUserDataRecoveryHandler({
           )
         }
         await drainUserDataEvents()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         assertNoRetryableRecoveryFailure()
         if (eventSequence !== state.eventSequence) continue
 
         await runRecoveryStage({
-          category: "DURABILITY", stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH", retryable: true,
+          category: "ACCOUNTING_INTEGRITY", stage: "RECOVERY_ACCOUNT_AUDIT_VALIDATION", retryable: false,
           task: () => publishAccountSnapshot({ phase: "RECOVERY", snapshot }),
         })
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         assertNoRetryableRecoveryFailure()
         await drainUserDataEvents()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         assertNoRetryableRecoveryFailure()
         if (eventSequence !== state.eventSequence) continue
 
         await runRecoveryStage({
-          category: "DURABILITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH", retryable: true,
+          category: "ACCOUNTING_INTEGRITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_VALIDATION", retryable: false,
           task: () => publishOpenOrdersSnapshot({
             phase: "RECOVERY",
             blockOnExistingOrders: tradingEnabled,
@@ -190,11 +205,17 @@ export function createUserDataRecoveryHandler({
             orders: openOrdersResult.data,
           }),
         })
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         assertNoRetryableRecoveryFailure()
         await drainUserDataEvents()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (!isCurrentGeneration()) throw createRecoveryFailureError(
+          new Error("User-data recovery generation was superseded"),
+          { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
+        )
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         assertNoRetryableRecoveryFailure()
         if (eventSequence === state.eventSequence) break

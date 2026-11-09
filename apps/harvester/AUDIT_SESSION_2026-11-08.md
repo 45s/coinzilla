@@ -723,3 +723,8 @@ Additional RED regressions distinguish a malformed successful REST payload from 
 ## 37. F-023 test fixture policy correction — 2026-11-09
 
 The legacy retry-path recovery tests now provide explicit REST_RECONCILIATION category, stage, and retryable metadata. Missing metadata is reserved for the new terminal fail-closed regression. Engine snapshot assertions execute after the reconciliation result is created and assert the exact stage emitted by the production classifier.
+
+
+## 38. F-023 source-stage classification refinement — 2026-11-09
+
+The account snapshot manager now attaches failure metadata at the point of failure: broker-declared snapshot/open-order reads are retryable REST reconciliation; malformed snapshots and validation/ownership contradictions are terminal integrity failures; event publication and Journal flush failures are explicitly retryable durability stages. Recovery wrappers preserve that source metadata rather than relabeling every thrown error. Snapshot application also distinguishes registry races and stale REST views from ownership and Journal parity failures.

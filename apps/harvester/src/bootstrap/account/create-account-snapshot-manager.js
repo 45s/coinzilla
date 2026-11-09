@@ -8,6 +8,12 @@ import {
   mapAccountOpenOrdersCapturedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+function withRecoveryFailure(error, category, stage, retryable) {
+  const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
+  normalized.recoveryFailure = { category, stage, retryable }
+  return normalized
+}
+
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
     logger.system(data)
@@ -41,13 +47,28 @@ export function createAccountSnapshotManager({
   let accountSnapshot
 
   const refreshAccountSnapshot = async () => {
-    const result = await broker.getAccountSnapshot()
-    if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
+    let result
+    try {
+      result = await broker.getAccountSnapshot()
+    } catch (error) {
+      throw withRecoveryFailure(error, "REST_RECONCILIATION", "ACCOUNT_SNAPSHOT_READ", true)
+    }
+    if (!result?.ok) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       const cause = result?.errors?.find?.((error) => error instanceof Error)
-      throw new Error(
-        "Unable to load canonical exchange account balances" + (details ? ": " + details : ""),
-        { cause },
+      throw withRecoveryFailure(
+        new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), { cause }),
+        "REST_RECONCILIATION",
+        "ACCOUNT_SNAPSHOT_READ",
+        true,
+      )
+    }
+    if (!result.data || !Array.isArray(result.data.balances)) {
+      throw withRecoveryFailure(
+        new Error("Canonical exchange account snapshot is malformed: balances must be an array"),
+        "ACCOUNTING_INTEGRITY",
+        "ACCOUNT_SNAPSHOT_SHAPE",
+        false,
       )
     }
     const quoteCashFlowBaselineByAssetId = new Map()
@@ -68,20 +89,22 @@ export function createAccountSnapshotManager({
     ]))
     const configuredBalances = result.data.balances.filter((balance) =>
       configuredAssetCodes.has(balance?.asset?.code))
-    const nextSnapshot = new AccountSnapshot({
-      balances: configuredBalances,
-      sourceTime: result.data.sourceTime,
-      quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
-        assetId,
-        amount,
-      })),
-    })
-    assertAccountSnapshotCoversMarkets({
-      accountSnapshot: nextSnapshot,
-      markets: accountAuditMarkets,
-    })
-    if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
-      throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
+    let nextSnapshot
+    try {
+      nextSnapshot = new AccountSnapshot({
+        balances: configuredBalances,
+        sourceTime: result.data.sourceTime,
+        quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
+          assetId,
+          amount,
+        })),
+      })
+      assertAccountSnapshotCoversMarkets({ accountSnapshot: nextSnapshot, markets: accountAuditMarkets })
+      if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
+        throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
+      }
+    } catch (error) {
+      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
     }
     accountSnapshot = nextSnapshot
     logSystem(logger, {
@@ -100,18 +123,28 @@ export function createAccountSnapshotManager({
   } = {}) => {
     let orders = suppliedOrders
     if (orders === undefined) {
-      const result = await broker.getOpenOrders({})
-      if (!result?.ok || !Array.isArray(result.data)) {
+      let result
+      try { result = await broker.getOpenOrders({}) } catch (error) {
+        throw withRecoveryFailure(error, "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true)
+      }
+      if (!result?.ok) {
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         const cause = result?.errors?.find?.((error) => error instanceof Error)
-        throw new Error(
-          "Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""),
-          { cause },
+        throw withRecoveryFailure(
+          new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), { cause }),
+          "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true,
         )
+      }
+      if (!Array.isArray(result.data)) {
+        throw withRecoveryFailure(new TypeError("Account-wide open-orders response must be an array"),
+          "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT", false)
       }
       orders = result.data
     }
-    if (!Array.isArray(orders)) throw new TypeError("publishOpenOrdersSnapshot orders must be an array")
+    if (!Array.isArray(orders)) {
+      throw withRecoveryFailure(new TypeError("publishOpenOrdersSnapshot orders must be an array"),
+        "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT", false)
+    }
     const restoredOrders = getTradingEngine()?.getOrders?.() ?? getRecoveredState()?.orderRegistry?.orders ?? []
     const matchedOwnedClientIds = new Set()
     const unownedOrders = orders.filter((order) => {
@@ -154,29 +187,40 @@ export function createAccountSnapshotManager({
       : orders.length > 0
         ? "RECONCILED"
         : "READY"
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-      dataResult: mapAccountOpenOrdersCapturedData({
-        phase,
-        observedAt: now(),
-        orders,
-        readiness,
-        blockReasons,
-      }),
-    })
+    let published
+    try {
+      published = publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+        dataResult: mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons }),
+      })
+    } catch (error) {
+      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
+    }
     if (!published?.ok) {
       const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : ""))
+      throw withRecoveryFailure(
+        new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : "")),
+        "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION", true,
+      )
     }
     if (typeof eventPublisher?.flush === "function") {
-      const flushed = await eventPublisher.flush()
+      let flushed
+      try { flushed = await eventPublisher.flush() } catch (error) {
+        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH", true)
+      }
       if (flushed?.ok !== true || flushed?.durable !== true) {
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : ""))
+        throw withRecoveryFailure(
+          new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : "")),
+          "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH", true,
+        )
       }
     } else {
-      throw new Error("Harvester startup requires a durable open-orders audit before market subscriptions")
+      throw withRecoveryFailure(
+        new Error("Harvester startup requires a durable open-orders audit before market subscriptions"),
+        "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY", false,
+      )
     }
     logger.info?.({
       message: readiness === "READY"
@@ -202,26 +246,39 @@ export function createAccountSnapshotManager({
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
     const configuredAssetCodes = [...new Set([...marketMetadata.values()]
       .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-      dataResult: mapAccountSnapshotCapturedData({
-        phase,
-        snapshot,
-        allowedAssetCodes: configuredAssetCodes,
-        auditStatus,
-        auditReasons,
-      }),
-    })
-    if (!published?.ok) throw new Error("Unable to publish " + phase + " account snapshot audit event")
+    let published
+    try {
+      published = publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+        dataResult: mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes: configuredAssetCodes, auditStatus, auditReasons }),
+      })
+    } catch (error) {
+      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
+    }
+    if (!published?.ok) {
+      throw withRecoveryFailure(
+        new Error("Unable to publish " + phase + " account snapshot audit event"),
+        "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION", true,
+      )
+    }
     if (typeof eventPublisher?.flush === "function") {
-      const flushed = await eventPublisher.flush()
+      let flushed
+      try { flushed = await eventPublisher.flush() } catch (error) {
+        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH", true)
+      }
       if (flushed?.ok !== true || flushed?.durable !== true) {
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""))
+        throw withRecoveryFailure(
+          new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : "")),
+          "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH", true,
+        )
       }
     } else {
-      throw new Error("Harvester startup requires a durable Journal flush before market subscriptions")
+      throw withRecoveryFailure(
+        new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
+        "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY", false,
+      )
     }
     logSystem(logger, {
       message: "Account snapshot captured and durably journaled",

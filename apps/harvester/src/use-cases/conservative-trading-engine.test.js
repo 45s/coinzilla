@@ -5448,6 +5448,34 @@ test("fails closed when owned-order canonical REST history contains no order", a
   })
 })
 
+test("classifies canonical REST order identity conflicts as terminal ownership failures", async () => {
+  const foreignHistoryOrder = new CanonicalOrder({
+    clientOrderId: "different-client-order",
+    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "CANCELED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const fixture = await createMalformedRestEnvelopeFixture({
+    canonicalOrderHistoryResult: { ok: true, data: [foreignHistoryOrder] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, false, "A canonical history row for another client order must be rejected.")
+  assert.deepEqual(result.failure, {
+    category: "OWNERSHIP_INTEGRITY",
+    stage: "OWNED_ORDER_HISTORY_IDENTITY",
+    retryable: false,
+  }, "An order-identity mismatch must be terminal and must not be retried as a REST outage.")
+})
+
 test("fails closed when owned-order canonical REST history contains multiple orders", async () => {
   const makeHistoryOrder = () => new CanonicalOrder({
     clientOrderId: "malformed-rest-envelope-owned-order",
