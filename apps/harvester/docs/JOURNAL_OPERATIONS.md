@@ -245,7 +245,7 @@ A process kill, machine crash, power loss, or failed filesystem sync can still l
 ## Diagnosing a missing or incomplete session
 
 1. Confirm the application is using its default `apps/harvester/logs/` directory and that the operating-system user can create and write files there.
-2. Check startup logs for `Journal started` or the structured `Optional Harvester Journal startup failed` entry. Inspect its `errors` array for the original filesystem error code, message, and path.
+2. Check startup logs for `Journal started` or the structured `Optional Harvester Journal startup failed` entry. Inspect its `errors` array for the original filesystem error code, message, and path. For a known operator-facing identifier and recovery procedure, use the [Harvester Error Vocabulary](./error-vocabulary.md).
 3. Check the latest UTC-named `.jsonl` file and verify that each line parses as JSON and includes `__coinzillaJournal.schemaVersion = 1`.
 4. Check the process logs for `Failed to write journal event`, `Journal closed with errors`, or `observability shutdown incomplete`.
 5. If a programmatic caller is available, inspect `journalService.status`: `state`, `enabled`, `started`, `writeFailed`, `writeErrorCount`, and `closed`.

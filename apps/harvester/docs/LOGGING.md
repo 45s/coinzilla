@@ -39,8 +39,9 @@ ERROR red. `SUCCESS` and `SYSTEM` retain their semantic methods in structured
 log entries even though both use INFO severity for transport filtering.
 Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
-small allowlist of actionable fields, omits stacks/fingerprints/audit
-internals, and caps each line at 200 characters. Consecutive identical
+small allowlist of actionable fields (including the stable `diagnosticId`
+for catalogued startup failures), omits stacks/fingerprints/audit internals,
+and caps each line at 200 characters. Consecutive identical
 summaries are suppressed and reported as a repeat count. Full structured
 entries—including stack traces and all other normalized fields—remain in the
 DEBUG/TRACE JSONL files. Each entry retains its timestamp, normalized
