@@ -595,10 +595,15 @@ sequencing to focused bootstrap modules.
 The account-integrity safety halt is an application workflow in
 `src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
 execution or accounting failure is observed, it reconciles broker-owned order
-identities before asking the trading engine to cancel only strategy-owned BUYs.
-Concurrent triggers share one in-flight task. Bootstrap supplies the live
-engine lookup, stopped-process predicate, and logger; the use case does not
-depend on broker SDK or process-global state.
+identities using `reconcileOwnedOrders({ recoveryMode: true })` before asking
+the trading engine to cancel only strategy-owned BUYs. Recovery mode applies
+canonical order and fill facts while suppressing strategy-driven recovery SELL
+cancellation/replacement; it does not skip ownership or fill reconciliation.
+The explicit `cancelOwnedBuyOrdersForSafetyHalt()` stage remains the only
+exchange-mutation stage in this workflow. Concurrent triggers share one
+in-flight task. Bootstrap supplies the live engine lookup, stopped-process
+predicate, and logger; the use case does not depend on broker SDK or
+process-global state.
 
 The source-verified shutdown sequence, cancellation/fill-race handling,
 CLOSING account audit, resource cleanup, and process-lock retention are defined
