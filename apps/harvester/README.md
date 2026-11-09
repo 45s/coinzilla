@@ -70,7 +70,7 @@ All settings and pairs belong to their strategy. Future strategies can be siblin
 
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup performs REST ticker seeding or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
 
-Example:
+Example (illustrative only; it does not identify the currently enabled default pair):
 
 ```json
 {
@@ -100,7 +100,7 @@ Example:
 }
 ```
 
-`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The current USDT pair configuration reflects the reported 0.1% maker/taker setting; FDUSD pairs retain `makerPercent: 0` and use `takerPercent: 0.1`. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed config enables only `ZROFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. The current USDT pair configuration reflects the reported 0.1% maker/taker setting; FDUSD pairs retain `makerPercent: 0` and use `takerPercent: 0.1`. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
 The strategy configuration remains in `trading-config.json`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The current runtime resolver still uses the older profile-based implementation until the agreed environment-variable change is implemented.
 
@@ -196,7 +196,7 @@ Current priorities and blockers live in [ROADMAP.md](./ROADMAP.md). Historical a
 
 ## Standalone Binance TESTNET order tools
 
-All standalone TESTNET account/order tools are documented in [TESTNET order tools](./docs/testnet-order-tools.md).
+Standalone TESTNET order, balance, and history commands are documented in [TESTNET order tools](./docs/testnet-order-tools.md). The interactive `pnpm --filter @coinzilla/harvester testnet` menu also exposes the exchange-read-only account audit and local Journal balance audit, documented in the [TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./docs/JOURNAL_OPERATIONS.md). The menu includes destructive actions and adds no confirmation layer; the account-wide cancel proceeds after a warning without an interactive prompt.
 
 ## Standalone Binance TESTNET balance inspection
 
@@ -204,7 +204,7 @@ See [TESTNET order tools — balances](./docs/testnet-order-tools.md#list-non-ze
 
 ## Standalone Binance TESTNET ZRO market sell
 
-See [TESTNET order tools — ZRO market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This command is destructive and requires explicit operator authorization.
+See [TESTNET order tools — legacy ZROUSDT market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This is a hardcoded ZROUSDT TESTNET MARKET SELL, not the current ZROFDUSD configured pair; it is outside the paused validation runbook and requires separate explicit authorization.
 
 ## Standalone Binance TESTNET order history
 

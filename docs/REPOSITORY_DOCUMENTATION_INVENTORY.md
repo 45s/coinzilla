@@ -30,7 +30,7 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. |
-| `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures. |
+| `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures; surfaces the current ZROFDUSD-only config versus historical runbook scope mismatch, CLOSED / PAUSED status, and legacy ZROUSDT market-sell/account-wide-cancel write boundaries and the interactive menu wrapper, its audit links, and the no-confirmation account-wide cancel boundary. |
 | `apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md` | Detailed file-by-file Harvester documentation inventory. |
 | `apps/harvester/docs/plans/README.md` | Local index for Harvester plans and migration tracking. |
 | `apps/harvester/docs/tasks/README.md` | Local index for Harvester task records. |
@@ -83,7 +83,7 @@ These files were added deliberately as indexes, historical evidence, inventories
 | `docs/workspace-package-map.md` | 4790 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `packages/brokers/AGENTS.md` | 8605 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/brokers/ARCHITECTURE.md` | 35221 | Package architecture | **KEEP** | Explicitly labels itself as target architecture/migration contract, distinguishes its dated implementation snapshot from current source, and documents verified consumer boundaries and enforced dependency direction. Linked by the package README and roadmap; no move/split is warranted. |
-| `packages/brokers/README.md` | 19671 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
+| `packages/brokers/README.md` | 19671 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide; records the standalone Node floor separately from the exact patched Undici major-version floors enforced by `runtime.js`. |
 | `packages/brokers/ROADMAP.md` | 109813 | Package roadmap | **KEEP** | Active priority execution plan and Section 2 current status are authoritative; later phases and dated investigation notes are explicitly historical evidence. The 2026-11-08 #702 note records the pre-approval state, while the current section records the accepted contract and merged PRs #732/#735/#740. The package AGENTS/README designate this detailed roadmap as the primary work entry point; keep its current/history boundary and do not rewrite dated notes. |
 | `packages/db/AGENTS.md` | 2897 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/db/README.md` | 5933 | Package entry point | **KEEP** | Source-checked against package exports and runtime constraints; PR corrects the unmatched closing Markdown fence in the Development section. |
@@ -97,14 +97,14 @@ These files were added deliberately as indexes, historical evidence, inventories
 | `packages/journal/README.md` | 19624 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
 | `packages/journal/ROADMAP.md` | 39476 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/market-simulator/AGENTS.md` | 1953 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
-| `packages/market-simulator/README.md` | 13568 | Package entry point | **KEEP** | Clarifies Node 22.23.4 package floor versus Node 24+ workspace/CI; now also records source-verified limits: wall-clock lifecycle timestamps, unchecked final snapshot results, and unsubscribe failure potentially skipping disconnect. |
+| `packages/market-simulator/README.md` | 13568 | Package entry point | **KEEP** | Clarifies Node 22.23.4 package floor versus Node 24+ workspace/CI; now also records source-verified limits: wall-clock lifecycle timestamps, unchecked final snapshot results, and unsubscribe failure potentially skipping disconnect; qualifies the offline deterministic wording so it does not imply full report reproducibility. |
 | `packages/market-simulator/ROADMAP.md` | 8682 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/notifiers/AGENTS.md` | 4694 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/notifiers/README.md` | 12254 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
 | `packages/notifiers/ROADMAP.md` | 15672 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/utils/AGENTS.md` | 2271 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/utils/README.md` | 19711 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
-| `packages/utils/ROADMAP.md` | 11241 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
+| `packages/utils/ROADMAP.md` | 11241 | Package roadmap | **KEEP** | Current work/status authority; PRs #767/#770 and closed issue #763 establish build-provenance/Logger rollout as complete, while the repository-wide helper inventory, direct console/stderr audit, and guard remain open. Historical PR #383 closeout wording is explicitly labeled as a dated snapshot. |
 
 ## Initial findings
 

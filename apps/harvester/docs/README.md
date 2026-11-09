@@ -23,12 +23,12 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 
-- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — requires all documented safety gates and explicit authorization
+- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the ZROFDUSD-only default config (PR #836). Reconcile scope before any future session.
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)
 - [Journal integration roadmap](JOURNAL_INTEGRATION_ROADMAP.md)
 - [Logging](LOGGING.md)
-- [TESTNET order tools](testnet-order-tools.md) — includes destructive examples; verify authorization and current command behavior before use
+- [TESTNET order tools](testnet-order-tools.md) — includes a legacy ZROUSDT MARKET SELL and account-wide cancel command; neither is authorized by the CLOSED / PAUSED validation runbook. The cancel command has no interactive confirmation; the menu adds no confirmation layer. Its account and Journal audit actions are documented in the TESTNET runbook and Journal Operations.
 - [Incident audit playbook](INCIDENT_AUDIT_PLAYBOOK.md)
 - [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
 

@@ -85,6 +85,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed config enables only ZROFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -239,11 +240,14 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 This hardening does not change strategy decisions or claim a successful real
 TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
-## Current branch implementation status
+## Historical implementation snapshot — initial TESTNET pair selection
 
-The current task branch has progressed beyond the initial `develop` audit described
-below. The following first-cycle components are now implemented and composed
-when `TRADING_MODE=testnet` is selected:
+> The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. The committed config now enables only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
+
+
+At the time of this snapshot, the task branch had progressed beyond the initial `develop` audit described
+below. The following first-cycle components were implemented and composed
+when `TRADING_MODE=testnet` was selected:
 
 - Conservative pure policy: initial/standing BUY and recovery SELL intents,
   exact tick/step rounding, duplicate suppression, partial-fill wait behavior,
@@ -257,7 +261,7 @@ when `TRADING_MODE=testnet` is selected:
 - Recovery completion: a fully filled SELL must satisfy the actual cumulative
   net-profit condition and leave at least `keepQuantity`; the retained amount
   moves to free inventory and the cycle ledger resets.
-- Startup: explicit `TRADING_MODE=testnet` selection, one or more enabled pairs, and a fresh initial canonical account snapshot covering every enabled market's assets. Trading is enabled in either exchange mode; no separate trading-enable flag is used. External open orders and pre-existing inventory are not adopted; order checks use in-process cash flow, owned position quantity, and outstanding commitments. The default config enables `ZROUSDT` and `DOGEUSDT`; FDUSD pairs remain disabled.
+- Startup: explicit `TRADING_MODE=testnet` selection, one or more enabled pairs, and a fresh initial canonical account snapshot covering every enabled market's assets. Trading is enabled in either exchange mode; no separate trading-enable flag is used. External open orders and pre-existing inventory are not adopted; order checks use in-process cash flow, owned position quantity, and outstanding commitments. The then-current config enabled `ZROUSDT` and `DOGEUSDT`; FDUSD pairs were disabled.
 
 Offline bootstrap coverage simulates the complete first recovery cycle:
 initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full

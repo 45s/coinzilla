@@ -6,9 +6,21 @@ type: operational-runbook
 owner: harvester
 ---
 
-These standalone package scripts let an operator inspect or clear open orders in a Binance Spot TESTNET account without adding diagnostics or cancellation behavior to Harvester's trading runtime. The command procedures below are current operator guidance; dated incident snapshots are preserved in [Harvester Roadmap History](./audits/ROADMAP_HISTORY.md) and are not current behavior instructions.
+These standalone package scripts let an operator inspect account balances, open orders, order history, and actual trades; preview/submit a fixed ZROUSDT market sell; or cancel all open orders in a Binance Spot TESTNET account. They are outside Harvester's trading runtime. The command procedures below are current tool behavior; dated incident snapshots are preserved in [Harvester Roadmap History](./audits/ROADMAP_HISTORY.md) and are not current behavior instructions.
+
+> **Current pair-scope warning:** `trading-config.json` currently enables only `ZROFDUSD` (PR #836). The `testnet:sell-zro` helper below is hardcoded to `ZROUSDT` and submits a MARKET SELL after exact confirmation; it is a legacy one-off TESTNET write, not a generic cleanup tool and not part of the CLOSED / PAUSED controlled validation runbook. Do not run it while that hold remains or infer authorization from its preview. The `testnet:history` default (`ZROUSDT`) and `testnet:trades` default (`DOGEUSDT`) are read-only diagnostic defaults, not derived from current config; pass an explicit symbol when querying another market. The `testnet:cancel-orders` action cancels every open order across all symbols and proceeds automatically after a warning; it has no interactive confirmation. The interactive `pnpm --filter @coinzilla/harvester testnet` menu invokes these same scripts and exposes both read-only and destructive actions; selecting an action is not authorization.
 
 They use Node.js built-in `fetch` and `node:crypto`; no dependency is added. The API host is hard-coded to `https://testnet.binance.vision`. The scripts cannot be pointed at Binance production through environment configuration.
+
+## Interactive menu
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet
+```
+
+The menu requires an interactive TTY and launches the standalone scripts documented below. It includes order/balance/history inspection, the exchange-read-only account audit (`testnet:audit`, which persists PREFLIGHT evidence to a local Journal session; see [the runbook](./TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./JOURNAL_OPERATIONS.md)), and local Journal balance reconciliation (`journal:balance-audit`; see [Journal Operations](./JOURNAL_OPERATIONS.md)), as well as the legacy ZROUSDT MARKET SELL and account-wide cancel actions. The menu is only a convenience wrapper and adds no confirmation layer. The ZROUSDT sell script requires its exact phrase; the account-wide cancel script proceeds automatically after logging a warning and has no interactive confirmation. Selecting either action is an exchange-write decision and is not authorized by the paused validation runbook.
 
 ## Prerequisites
 
@@ -47,7 +59,7 @@ The command:
 3. Automatically calls `DELETE /api/v3/openOrders` once for each distinct symbol in the initial snapshot; there is no interactive confirmation.
 4. Fetches open orders again and reports whether any remain.
 
-**This is an account-wide destructive operation.** Every open order on every symbol found in the initial snapshot is targeted, including orders placed manually or by another application. **Stop Harvester and every other trading process first.** Review the account with the read-only `testnet:orders` command before invoking cancellation. Do not run this command if any order must be preserved. Invoking `testnet:cancel-orders` is the operator's authorization to cancel all orders in that TESTNET account. Orders created after the initial snapshot are not part of the cancellation requests, so the final verification is essential. A failed cancellation or any remaining order produces a non-zero exit code.
+**This is an account-wide destructive operation.** Every open order on every symbol found in the initial snapshot is targeted, including orders placed manually or by another application. **Stop Harvester and every other trading process first.** Review the account with the read-only `testnet:orders` command before invoking cancellation. Do not run this command if any order must be preserved. The command has no interactive confirmation; invoking it immediately starts cancellation. Run it only after a separate explicit operator decision to cancel every open order in that TESTNET account. Orders created after the initial snapshot are not part of the cancellation requests, so the final verification is essential. A failed cancellation or any remaining order produces a non-zero exit code.
 
 The command does not sell, transfer, or otherwise change asset balances. Canceling an order may release its locked balance, but existing free base-asset inventory remains and can still prevent Harvester's clean-account startup check from passing.
 
@@ -91,6 +103,8 @@ reuses the shared TESTNET request helper and remains fixed to the TESTNET host.
 
 
 ## Sell all free ZRO at market (destructive)
+
+> **Legacy ZROUSDT exchange write:** this helper sends `POST /api/v3/order` with `side=SELL` and `type=MARKET` for `ZROUSDT` after the exact confirmation phrase. It is not part of the current ZROFDUSD-only config or the paused validation runbook. Do not run it while the runbook is CLOSED / PAUSED; a preview is not authorization.
 
 Run from the repository root:
 
@@ -138,6 +152,8 @@ does not add authentication parameters.
 
 
 ## List recent order history (read-only)
+
+> The default `ZROUSDT` symbol is a legacy diagnostic default, not the currently enabled pair. Pass the symbol explicitly; the command is read-only.
 
 Run from the repository root:
 
@@ -213,6 +229,8 @@ The user-data handler records the correlation fields listed above and logs accep
 This is an offline/source-verified implementation boundary, not proof of real TESTNET acceptance. The real BUY fill → recovery SELL → next BUY acceptance sequence remains **PAUSED / UNVERIFIED**; see the [controlled TESTNET validation runbook](./TESTNET_VALIDATION_RUNBOOK.md).
 
 ## List actual trade history (read-only)
+
+> The default `DOGEUSDT` symbol is a legacy diagnostic default, not the currently enabled pair. Pass the symbol explicitly; the command is read-only.
 
 Run from the repository root:
 
