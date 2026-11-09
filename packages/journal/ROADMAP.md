@@ -109,7 +109,7 @@ Each numbered slice below is a separate task PR targeting `develop`, with one pr
 
 ### J-1 — Define the record vocabulary and contract
 
-**Status:** [x] complete — README public contracts and maintainer test guidance now include backup/restore and validation procedures.  
+**Status:** [x] complete — source-event, persisted-record, and recovered-record vocabulary and public contracts are documented and tested in PR #746.  
 **Intent:** make the existing contract explicit before changing its structure.
 
 Scope:
@@ -132,7 +132,7 @@ Tests and verification:
 
 ### J-2 — Establish a lightweight JournalRecord domain contract
 
-**Status:** [ ] planned  
+**Status:** [x] complete — the lightweight schema-v1 record contract, identity validation, serialization boundary, and compatibility tests were delivered in PR #747.  
 **Depends on:** J-1  
 **Intent:** give record identity and schema rules one explicit owner without introducing a heavyweight domain model.
 
@@ -167,7 +167,7 @@ TDD and documentation:
 
 ### J-3 — Isolate filesystem persistence behind an internal adapter
 
-**Status:** [ ] planned  
+**Status:** [x] complete — the package-private filesystem adapter and resource-ownership tests were delivered in PR #748.  
 **Depends on:** J-2  
 **Intent:** separate Journal lifecycle/orchestration from Node filesystem mechanics and provide deterministic control of I/O in service tests.
 
