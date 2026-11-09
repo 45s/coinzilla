@@ -235,6 +235,12 @@ TDD and documentation:
 - Implement one state transition or duplicated ownership concern per PR/commit; avoid broad lifecycle rewrites.
 - Update lifecycle/state documentation and JSDoc in each implementation commit.
 
+**Merged J-4 slices:**
+- [J-4 startup cancellation / PR #755](https://github.com/45s/coinzilla/pull/755), merged as `7103d9d14919620eae371f23f342c51d916d1d0b`: close waits for in-flight startup rollback and only releases resources acquired by that attempt.
+- [J-4 active close serialization / PR #758](https://github.com/45s/coinzilla/pull/758), merged as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`: a separate close-operation guard rejects overlapping close calls before a second EventBus flush, while the record-admission cutoff remains after the first EventBus drain.
+
+**Characterization coverage in PR #772:** a deterministic adapter failure writes a non-empty prefix to the session file and then rejects. The test verifies the original error is preserved, the writer is poisoned without retry, flush does not sync or claim durability, close attempts cleanup and releases the owned session handle and lock, and the exact partial bytes remain untouched (no truncation or repair). Runtime behavior is unchanged.
+
 ### J-5 — Contract conformance and operational documentation
 
 **Status:** [ ] planned  
