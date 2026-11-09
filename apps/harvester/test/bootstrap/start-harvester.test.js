@@ -145,6 +145,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     }),
   ];
   const tradingConfig = {
+    runtime: runtimeProfiles,
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
@@ -360,6 +361,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     }),
   ]
   const tradingConfig = {
+    runtime: runtimeProfiles,
     strategies: {
       CG_coinGrabber: {
         enabled: true,
