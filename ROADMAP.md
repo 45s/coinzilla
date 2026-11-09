@@ -61,6 +61,13 @@
    - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
+### Cross-workspace Binance environment contract — PR #841 in progress
+
+- **Decision:** Binance endpoint selection uses only explicit `TRADING_MODE=testnet|live`; `NODE_ENV` must never influence exchange routing. Missing/invalid mode fails closed. See [ADR-0002](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md).
+- **Why:** Harvester and the shared Brokers package must never disagree about which exchange environment receives requests.
+- **Remaining:** finish PR #841, verify all broker consumers and offline harnesses pass the explicit mode, and require green exact-head CI before merge. This does not close Harvester restart-reconciliation issue #654.
+- **Owners:** [Brokers](packages/brokers/ROADMAP.md) and [Harvester](apps/harvester/ROADMAP.md).
+
 ## DEFERRED — evidence or consumer required
 
 - **Market Simulator correctness and determinism:** intentionally lowest priority until a real application/workflow consumes it. Keep existing behavior/tests intact; do not schedule simulator work ahead of active Harvester or shared-package risks. [Owner roadmap](packages/market-simulator/ROADMAP.md).
