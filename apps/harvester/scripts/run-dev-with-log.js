@@ -23,6 +23,17 @@ const logStreams = [
   createWriteStream(sessionPaths.terminal, { flags: "wx" }),
 ]
 const [, sessionLogStream] = logStreams
+let child
+let childClosed = false
+let logStreamFailed = false
+const onLogStreamError = (error) => {
+  if (logStreamFailed) return
+  logStreamFailed = true
+  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\\n`)
+  process.exitCode = 1
+  if (child && !childClosed && !child.killed) child.kill("SIGTERM")
+}
+logStreams.forEach((stream) => stream.on("error", onLogStreamError))
 
 const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((resolve, reject) => {
   if (stream.fd !== null) {
@@ -43,7 +54,7 @@ if (streamOpenErrors.length > 0) {
   throw streamOpenErrors[0]
 }
 
-const child = spawn(
+child = spawn(
   process.execPath,
   ["--env-file=.env.development", "src/index.js"],
   {
@@ -62,9 +73,6 @@ const child = spawn(
     },
   },
 )
-
-let childClosed = false
-let logStreamFailed = false
 
 const closeLogStreams = () => Promise.all(logStreams.map((stream) => new Promise((resolveClose) => {
   if (stream.destroyed || stream.closed) { resolveClose(); return }
@@ -106,16 +114,6 @@ const outputForwarding = [
   forwardOutput(child.stdout, process.stdout),
   forwardOutput(child.stderr, process.stderr),
 ]
-
-logStreams.forEach((stream) => stream.on("error", (error) => {
-  if (logStreamFailed) {
-    return
-  }
-  logStreamFailed = true
-  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
-  process.exitCode = 1
-  if (!childClosed && !child.killed) child.kill("SIGTERM")
-}))
 
 child.on("error", (error) => {
   process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
