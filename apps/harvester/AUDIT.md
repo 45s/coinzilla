@@ -870,11 +870,11 @@ Tracking: [#654](https://github.com/45s/coinzilla/issues/654), under [#626](http
 
 ### Broker history capability and remaining completeness limits
 
-The current broker contract exposes symbol-wide canonical fill queries through `getFills({ symbol, fromId?, startTime?, endTime?, limit? })`, in addition to per-order queries. Therefore offline trade discovery is technically possible without a pre-existing local order ID, if Harvester scans each configured symbol from a durable cursor.
+The current broker contract exposes symbol-wide canonical fill queries through `getFills({ symbol, fromId?, startTime?, endTime?, limit? })`. The offline `fetchAccountTradeHistory()` helper uses this capability for the Market list supplied by its caller; current startup does not invoke that helper. Therefore symbol-wide discovery is possible for a known market list, but not proof of complete account-wide history.
 
 Binance's official Spot WebSocket API `myTrades` documentation specifies inclusive `fromId` pagination, a maximum page size of 1,000, and time windows no longer than 24 hours. `fromId` cannot be combined with time filters; no filter returns only the most recent records. The broker package rejects cursor IDs outside JavaScript's safe-integer range rather than rounding int64 identifiers. The official documentation reviewed does not state a guaranteed historical-retention horizon.
 
-Current Harvester does not use this capability for startup discovery: its existing reconciliation is per registered order and no-ops for an empty registry. A durable per-symbol cursor, complete pagination, safe identifier representation, symbol-universe coverage and retention policy remain unresolved requirements. See [Binance Account Trade History](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) and [#654](https://github.com/45s/coinzilla/issues/654).
+Current runtime Harvester does not use this capability for startup discovery: its existing reconciliation is per registered order and no-ops for an empty registry. The retained offline helper paginates supplied markets but cannot prove that the supplied market universe is complete. A durable per-symbol cursor, complete pagination, safe identifier representation, symbol-universe coverage and retention policy remain unresolved requirements. See [Binance Account Trade History](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) and [#654](https://github.com/45s/coinzilla/issues/654).
 
 
 ## F-028 — Applied-fill Journal events lack an immediate durability barrier
@@ -919,15 +919,20 @@ Define a durable execution-fact boundary that explicitly orders canonical fill a
 **Related:** F-031 / #654 process-restart reconciliation; #626 recovery reliability; `event-publisher.js`, EventBus, Journal and Conservative trading engine.
 
 
-**Existing serialization and injection primitives — inspected 2026-11-09**
+**Existing offline recovery helper pipeline — retained, tested, not wired into current startup**
 
-- `Portfolio.value` includes Position values, applied fill IDs and fill fingerprints. `Position.value` includes canonical Market identity, base/free quantities, quote cash flow and spent amount.
-- `RecoveryLedger.value` includes Market identity, buy cost, net sell proceeds, and applied fill IDs/fingerprints. `OrderRegistry.value` includes canonical order values.
-- These domain constructors require typed objects (`Market`, `Quantity`, `Money`, `CanonicalOrder`). The repository also contains the use-case hydration mapper `restoreHarvesterJournalState()`, which reconstructs these objects from a validated Journal projection.
-- `createPortfolioWorkflow()` accepts `initialPortfolio` and `initialRecoveryLedgers`. `makeConservativeTradingEngine()` accepts an `initialState` containing an `OrderRegistry`, Journal fill identities and strategy/order-control sets.
-- `startHarvester()` exposes no `journalRecoveryRecords` input and does not call `projectHarvesterJournalRecovery()` or `restoreHarvesterJournalState()`. It always constructs fresh Portfolio/RecoveryLedger/OrderRegistry values and passes those empty values into the engine. The tested hydration mapper exists; current composition-root wiring is absent.
+- `projectHarvesterJournalRecovery({ records })` validates Journal session boundaries, lifecycle transitions, order intents/acknowledgements/cancellation outcomes, fill identity/deduplication, recovery cycles, pause state, PREFLIGHT/CLOSING account snapshots and open-order snapshots.
+- `restoreHarvesterJournalState({ projection, marketMetadata })` reconstructs Portfolio, RecoveryLedger, OrderRegistry, pause/recovery-managed state, replacement/trailing-reprice intents, cancellation identities, completed-cycle identities and Journal fill identities. Unresolved orders are restored conservatively and require canonical exchange reconciliation before trading.
+- `fetchAccountTradeHistory()` paginates exchange `myTrades` for a supplied Market list, beginning at the durable baseline and advancing with `fromId`. It cannot discover symbols outside that list; `marketUniverseComplete` is a caller-supplied assertion.
+- `auditRecoveredTradeHistory()` verifies exact Journal/exchange fill and commission parity, duplicate IDs/trade IDs, ownership attribution and complete pages; it rejects unless `marketUniverseComplete === true`.
+- `auditRecoveredAccountState()` verifies the durable PREFLIGHT baseline against current balances, active open-order ownership/status/quantities and exact locked-asset reservations.
 
-This narrows the gap: it is not accurate to say that the domain has no serializable state shape. The missing pieces are validated hydration/mapping, complete durable projection semantics, and composition-root integration before engine activation.
+Focused tests exist in `project-harvester-journal-recovery.test.js`, `fetch-account-trade-history.test.js`, `audit-recovered-trade-history.test.js` and `audit-recovered-account-state.test.js`. These helpers are not called by the current `index.js`, `prepareOptionalJournal()` or `startHarvester()` composition.
+
+**Historical PR #606 integration limitation:** its caller passed `marketUniverseComplete: false` to `fetchAccountTradeHistory()`, while `auditRecoveredTradeHistory()` rejects unless that flag is true. Thus the prior trading-enabled integration deliberately failed closed when historical trading state required a complete account-wide history audit. The current Binance symbol catalog cannot prove the universe of historical symbols, including delisted markets. The current runtime later removed the recovery read/replay gate rather than solving this completeness problem; it now starts fresh and can proceed with unowned open orders. That bypass is not a safe equivalent to the previous fail-closed behavior.
+
+**Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` is captured by acknowledgement/cancellation/fill events or recovered by `reconcileOwnedOrders()` through `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries without a broker ID. The engine validates the returned symbol/client ID and attaches the canonical broker ID. Tests cover lost acknowledgements, unresolved lookups, mismatched IDs and immutable-intent conflicts. If lookup fails, the order remains UNKNOWN and the account audit fails closed. The current runtime cannot use this capability after restart because it does not restore the registry entry containing the client ID.
+
 
 
 **PREFLIGHT BLOCKED versus trading readiness — important test boundary**
