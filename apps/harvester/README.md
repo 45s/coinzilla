@@ -33,16 +33,16 @@ cp apps/harvester/.env.example apps/harvester/.env.development
 pnpm --filter @coinzilla/harvester dev
 ```
 
-The development launcher starts Node with `--env-file=.env.development` and sets `NODE_ENV=development` in the child environment before application and broker modules load. This selects the Binance Spot TESTNET profile and enables the Conservative TESTNET strategy. Put TESTNET API credentials in `.env.development`; do not add broker, trading-mode, trading-enable, or Journal flags.
+The `dev` script loads `.env.development` before starting the logging runner; the child Harvester process inherits those values. Set `NODE_ENV=development` in that file. This selects the Binance Spot TESTNET profile and enables the Conservative TESTNET strategy. Put TESTNET API credentials in `.env.development`; do not add broker, trading-mode, trading-enable, or Journal flags.
 
 For production, prepare a separate secrets file and start command:
 
 ```sh
-cp apps/harvester/.env.production.example apps/harvester/.env.production
+cp apps/harvester/.env.production.example apps/harvester/.env
 pnpm --filter @coinzilla/harvester start
 ```
 
-The production launcher loads `.env.production` when that file exists and preloads an initializer that sets `NODE_ENV=production` before application and broker modules load. This selects Binance Spot LIVE endpoints and enables Conservative LIVE order execution. Provide LIVE API credentials through `.env.production` or the deployment secret manager. Use a dedicated API key with Spot trading permission and withdrawals disabled. Never copy TESTNET credentials into production. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
+The `start` script loads `.env` before application and broker modules load. Set `NODE_ENV=production` in `.env`. This selects Binance Spot LIVE endpoints and enables Conservative LIVE order execution. Provide LIVE API credentials through `.env` or the deployment secret manager. Use a dedicated API key with Spot trading permission and withdrawals disabled. Never copy TESTNET credentials into production. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
 
 Tests:
 
