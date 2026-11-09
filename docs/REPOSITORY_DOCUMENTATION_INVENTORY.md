@@ -18,7 +18,7 @@ A complete recursive Git tree was retrieved for the baseline commit (`truncated:
 
 The table records path, byte size, category and a conservative first-pass disposition. It is not a claim that every statement in every file has been revalidated against source code. All KEEP files remain at their current paths; REVIEW files must not be moved or rewritten until content and inbound references are checked.
 
-## Post-baseline additions (current tree)
+## Post-baseline additions — 110-file checkpoint
 
 The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`, not a live file count. A complete recursive tree comparison against `develop` at `ae5c61abbee8e48162989c470f690221bd9ec712` found **13 added Markdown/MDX files and no removed paths**. The current tree therefore contains **110 tracked Markdown/MDX files** at that checkpoint. The original 97-file baseline table remains unchanged; the additions are recorded separately:
 
@@ -28,7 +28,6 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 | `apps/harvester/docs/audits/README_HISTORY.md` | Preserved historical README material and its navigation. |
 | `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved Harvester roadmap history and evidence. |
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. |
-| `apps/harvester/docs/error-vocabulary.md` | Harvester operator-facing diagnostic identifier reference, added in merged PR #866; maps stable diagnostic IDs to causes and safe recovery procedures. |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. |
 | `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures; surfaces the current ZROFDUSD-only config versus historical runbook scope mismatch, CLOSED / PAUSED status, and legacy ZROUSDT market-sell/account-wide-cancel write boundaries and the interactive menu wrapper, its audit links, and the no-confirmation account-wide cancel boundary. |
@@ -52,7 +51,7 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | `2bc9f6f2593e12626ff8c01358a2ea792b63b631` | `apps/harvester/docs/error-vocabulary.md` (added in [PR #866](https://github.com/45s/coinzilla/pull/866)); current develop checkpoint | 113 |
 | `96065e86851aac1c99314d0aa7fb0b2f2a5ca19c` | Current develop checkpoint after [PR #879](https://github.com/45s/coinzilla/pull/879); 113 tracked Markdown/MDX files | 113 |
 
-The current checkpoint is therefore **113 tracked Markdown/MDX files**: 97 frozen baseline files plus 16 additions, zero removals. PR #866 added the Harvester Error Vocabulary (`apps/harvester/docs/error-vocabulary.md`) after the 112-file checkpoint; the original 97-file table remains frozen and the new file is recorded in the additions table below. These dated/path-specific checkpoints are additive; do not reinterpret the earlier 110- or 112-file counts as errors.
+The current checkpoint is therefore **113 tracked Markdown/MDX files**: 97 frozen baseline files plus 16 additions, zero removals. PR #866 added the Harvester Error Vocabulary (`apps/harvester/docs/error-vocabulary.md`) after the 112-file checkpoint; the original 97-file table remains frozen and the new file is recorded in the subsequent recursive tree checkpoint table above. These dated/path-specific checkpoints are additive; do not reinterpret the earlier 110- or 112-file counts as errors.
 
 ## Source-verified content reviews (post-baseline)
 
