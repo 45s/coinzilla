@@ -31,7 +31,7 @@ Run the unit tests:
 pnpm test
 ```
 
-Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command. The Brokers package uses native WebSocket API and Streams clients; it does not use the Binance SDK or a REST broker implementation.
+Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command. The Brokers package uses native WebSocket API and Streams clients; it does not use the Binance REST API or a third-party Binance SDK.
 
 To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`. Integration suites remain skipped unless the explicit opt-in and non-placeholder Binance TESTNET credentials are configured; no credentials are needed for the default unit tests.
 
