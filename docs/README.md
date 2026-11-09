@@ -10,6 +10,7 @@ This index is the entry point for maintained Coinzilla documentation. The reposi
 - [Engineering standards](../ENGINEERING_STANDARDS.md) — design, TDD, verification and documentation impact
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — recursive inventory of all 97 tracked Markdown files at the baseline
 
 ## Repository-wide engineering
 
