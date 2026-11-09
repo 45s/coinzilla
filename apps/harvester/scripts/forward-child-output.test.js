@@ -139,3 +139,37 @@ test("resolves durable destinations for each chunk", async () => {
   assert.deepEqual(first, ["first"], "the first durable destination must receive only the chunk written while it was active")
   assert.deepEqual(second, ["second"], "the replacement durable destination must receive subsequent chunks")
 })
+
+test("duplicates raw child output into cumulative and timestamped terminal destinations", async () => {
+  const source = new PassThrough();
+  const cumulativeOutput = [];
+  const sessionOutput = [];
+  const createDestination = (received) => new Writable({
+    write(chunk, encoding, callback) {
+      received.push(chunk.toString());
+      callback();
+    },
+  });
+  const cumulativeTerminal = createDestination(cumulativeOutput);
+  const sessionTerminal = createDestination(sessionOutput);
+
+  const forwarding = forwardChildOutput({
+    source,
+    destinations: () => [cumulativeTerminal, sessionTerminal],
+  });
+  source.end("stdout line\\nstderr line\\n");
+  await forwarding;
+
+  assert.deepEqual(
+    cumulativeOutput,
+    ["stdout line\\nstderr line\\n"],
+    "the cumulative terminal log must receive the complete raw child output",
+  );
+  assert.deepEqual(
+    sessionOutput,
+    cumulativeOutput,
+    "the timestamped terminal session must receive exactly the same raw child output",
+  );
+  cumulativeTerminal.end();
+  sessionTerminal.end();
+});
