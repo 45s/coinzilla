@@ -11,7 +11,7 @@ Start with the procedure matching the task. Do not treat a runbook as standing a
 
 ## Important safety boundaries
 
-- Set `TRADING_MODE=testnet` for Binance Spot TESTNET or `TRADING_MODE=live` for Binance Spot LIVE. Binance is the only broker; trading is enabled in either mode and there is no separate trading-enable switch or runtime-profile selector. Missing or invalid mode must fail startup. LIVE uses real funds and requires dedicated LIVE API credentials with withdrawals disabled. `NODE_ENV` does not select the exchange. Startup currently does not restore prior trading state after process restart; see #654.
+- Set `TRADING_MODE=testnet` for Binance Spot TESTNET or `TRADING_MODE=live` for Binance Spot LIVE. Binance is the only broker; trading is enabled in either mode and there is no separate trading-enable switch or runtime-profile selector. Missing or invalid mode fails startup. LIVE uses real funds and requires dedicated LIVE API credentials with withdrawals disabled. `NODE_ENV` does not select the exchange. Startup currently does not restore prior trading state after process restart; see #654.
 - The committed default config currently enables only ZROFDUSD; the runbook's earlier DOGEUSDT/ZROUSDT plan is historical and not an approved session scope. The regional HTTP 451 pause remains in force.
 - Broker-connected startup requires the Journal PREFLIGHT audit and durable flush.
 - Current startup does not restore prior Portfolio/RecoveryLedger/OrderRegistry state from Journal history; process-restart reconciliation remains tracked by [#654](https://github.com/45s/coinzilla/issues/654).

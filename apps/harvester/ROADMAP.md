@@ -228,8 +228,7 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 - [x] Remove public `runtime.placeOrder` and `runtime.broker` escape hatches.
       The broker port remains private to bootstrap and the Conservative engine;
       runtime consumers cannot submit orders outside the engine workflow.
-- [x] Report the actual startup mode: Conservative TESTNET trading enabled,
-      broker-connected read-only, or configuration-only/no broker.
+- [x] Report the actual startup mode: Conservative TESTNET or LIVE trading enabled. Harvester requires an explicit `TRADING_MODE` and always connects to Binance; there is no read-only/no-broker runtime profile.
 - [x] Add regression coverage for startup messages and the absence of public
       broker/order-submission methods.
 - [x] Update the README and agent delivery rules in the same implementation
