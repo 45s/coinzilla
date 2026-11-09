@@ -830,3 +830,44 @@ Current source initializes `accountingFailed=false` only once in `start-harveste
 ## 2026-11-09 forensic continuation — public market-stream error handling
 
 Current public Streams source separates error and close: an error is reported to the logger/observer, while only close marks the client closed and schedules reconnect. There is no per-stream receipt-age watchdog. A post-open error without close can therefore leave an open-looking client without data, but this is not proven to have caused the Nov 8 ZRO gap (no afternoon error was logged). Tracked as F-026 under #760; future work must classify fatal transport errors and add bounded per-stream liveness diagnostics rather than blindly reconnecting on every error.
+
+
+## 2026-11-09 process-restart forensic investigation — #654
+
+This section supersedes earlier statements that #654 was deferred outside the active audit. The current roadmap treats process-restart reconciliation as a critical release-readiness requirement before unattended restarts. This phase remains evidence/documentation only; implementation belongs in a separate DDD/TDD PR.
+
+### Confirmed startup integration gap
+
+- `start-harvester.js` initializes a new Portfolio, empty RecoveryLedger map, empty OrderRegistry and empty journal-fill collection. Its source comment explicitly says durable Journal replay is disabled.
+- `create-portfolio-workflow.js` owns Portfolio and RecoveryLedger in memory. Applied fill IDs/fingerprints are held in those projections.
+- `reconcileOwnedOrders()` works from the current owned-order registry and returns immediately when it is empty; it does not discover prior-process order IDs or perform an account-wide historical fill scan.
+- PREFLIGHT captures balances and account-wide open orders, but unmatched orders are recorded as unowned and not adopted. The existing startup test explicitly allows runtime startup with such an order.
+- The startup test “starts from fresh in-memory state without replaying historical Journal records” passes a deliberately malformed `journalRecoveryRecords` value, verifies that no historical broker reads occur, and asserts `userDataReady === true`. This characterizes current no-replay behavior; it is not restart recovery coverage.
+- Journal itself supports bounded, sequential, at-least-once read/replay. The Harvester composition calls Journal start/flush/close but does not call read/replay or inject a restored projection into `startHarvester`.
+
+### Graceful and unexpected process termination
+
+SIGINT and SIGTERM are registered in `src/index.js` and call the same runtime stop handler. Graceful shutdown reconciles currently owned orders before and after the owned-BUY cancellation pass, keeps user-data intake through final reconciliation, preserves open SELLs, writes a durable CLOSING balance snapshot, disconnects, closes Journal and releases process locks only after confirmed cleanup.
+
+Unexpected process termination cannot run those handlers or guarantee the CLOSING audit. Stale locks are intentionally not reclaimed automatically and require operator verification. This lock behavior is a separate process-safety concern, not a substitute for state restoration.
+
+### Confidence and boundaries
+
+**Confirmed:** current startup does not restore prior-process Portfolio/RecoveryLedger state, fill deduplication identities or order ownership. **Strongly indicated:** fills during downtime can be absent from the new accounting projection; an empty registry prevents the existing per-owned-order reconciliation from discovering them. **Not reproduced:** a complete process-death/restart scenario causing a duplicate order, missed accounting delta, double application or incorrect reservation decision.
+
+The November 8 DOGE/ZRO fills after shutdown remain expected downtime behavior. The earlier CLOSING snapshots are historically correct and must not be rewritten.
+
+### Documentation correction required
+
+`docs/JOURNAL_OPERATIONS.md` describes a prior-session Journal-read gate that blocks trading when historical trading events exist. Current source composition does not implement that gate. The operational document is being corrected to state that prior Journal replay and process-restart restoration are not wired into Harvester startup.
+
+Tracking: [#654](https://github.com/45s/coinzilla/issues/654), under [#626](https://github.com/45s/coinzilla/issues/626).
+
+
+### Broker history capability and remaining completeness limits
+
+The current broker contract exposes symbol-wide canonical fill queries through `getFills({ symbol, fromId?, startTime?, endTime?, limit? })`, in addition to per-order queries. Therefore offline trade discovery is technically possible without a pre-existing local order ID, if Harvester scans each configured symbol from a durable cursor.
+
+Binance's official Spot WebSocket API `myTrades` documentation specifies inclusive `fromId` pagination, a maximum page size of 1,000, and time windows no longer than 24 hours. `fromId` cannot be combined with time filters; no filter returns only the most recent records. The broker package rejects cursor IDs outside JavaScript's safe-integer range rather than rounding int64 identifiers. The official documentation reviewed does not state a guaranteed historical-retention horizon.
+
+Current Harvester does not use this capability for startup discovery: its existing reconciliation is per registered order and no-ops for an empty registry. A durable per-symbol cursor, complete pagination, safe identifier representation, symbol-universe coverage and retention policy remain unresolved requirements. See [Binance Account Trade History](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) and [#654](https://github.com/45s/coinzilla/issues/654).
