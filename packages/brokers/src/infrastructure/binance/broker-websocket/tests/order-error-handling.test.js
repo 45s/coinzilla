@@ -18,7 +18,6 @@ describe("BinanceSdkBroker order error results", () => {
     const broker = createBroker({ "order.status": async () => { throw new Error("request timed out") } })
     const result = await broker.getOrder({ symbol: "BTCUSDT", orderId: 123 })
     assert.equal(result.ok, false)
-    assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "A rejected order.cancel RPC must remain explicitly ambiguous because Binance may have received it")
     assert.equal(result.errors[0].message, "request timed out")
   })
 
@@ -33,6 +32,7 @@ describe("BinanceSdkBroker order error results", () => {
     const broker = createBroker({ "order.cancel": async () => { throw new Error("unknown order") } })
     const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 123 })
     assert.equal(result.ok, false)
+    assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "A rejected order.cancel RPC must remain explicitly ambiguous because Binance may have received it")
     assert.equal(result.errors[0].message, "unknown order")
   })
 
