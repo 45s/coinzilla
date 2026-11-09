@@ -836,8 +836,8 @@ This is an explicit current startup policy for external orders, not a reproduced
 
 - **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
 - **Confirmed:** current open orders are observed as unowned; the existing startup test allows runtime startup without adopting or cancelling them.
-- **Strongly indicated:** a fill occurring while Harvester is stopped can be absent from the new in-memory accounting projection. A now-terminal order will not appear in the PREFLIGHT open-order list; an empty registry gives `reconcileOwnedOrders()` no order IDs from which to request its fill history.
-- **Not yet proven:** a deterministic end-to-end restart scenario producing a duplicate new order, missed accounting delta, double application, or incorrect reservation/balance decision. Do not report these consequences as reproduced incidents.
+- **Strongly indicated:** a fill occurring while Harvester is stopped can be absent from the new in-memory accounting projection. A now-terminal order will not appear in the PREFLIGHT open-order list; an empty registry gives `reconcileOwnedOrders()` no order IDs from which to request its fill history. Separately, the strategy active-order/commitment guard reads only the registry; with no restored order, an initial BUY can be submitted while an old same-symbol order remains open if free quote remains.
+- **Not yet proven:** a deterministic end-to-end restart scenario producing an actual duplicate new order, missed accounting delta, double application, or incorrect reservation/balance decision. Do not report these consequences as reproduced incidents.
 - The November 8 DOGE/ZRO post-shutdown fills remain expected downtime behavior. Their absence from the earlier CLOSING snapshot is not a defect.
 
 **Documentation inconsistency**
