@@ -1,11 +1,12 @@
-# Documentation governance
+---
+title: Documentation governance
+status: accepted
+type: repository-policy
+owner: repository-engineering
+effective: 2026-11-09
+---
 
-- Status: Accepted
-- Type: Repository policy
-- Owner: Repository engineering
-- Effective: 2026-11-09
-- Canonical policy: This document
-- Enforcement: Root and domain agent instructions, pull-request review, and CI checks described below
+# Documentation governance
 
 ## 1. Vision and outcomes
 
