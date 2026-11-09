@@ -36,7 +36,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 | `apps/harvester/AUDIT_SESSION_2026-11-09_11-33-00.md` | 25236 | Historical evidence | **KEEP** | Recovery forensic session; filename uses local clock while title records UTC; assess naming only after inbound-link review. |
 | `apps/harvester/AUDIT_ZRO_TRADES_2026-11-06.md` | 9500 | Historical evidence | **KEEP** | Exchange trade export snapshot; preserve raw rows and source references. |
 | `apps/harvester/README.md` | 56063 | Entry point | **KEEP** | Application setup and operational overview; 56 KB warrants a later focused review for duplicated deep detail. |
-| `apps/harvester/ROADMAP.md` | 274026 | Roadmap | **REVIEW** | Very large (274 KB) and contains long historical sections; separate concise active status from historical detail only after issue/PR/reference review. |
+| `apps/harvester/ROADMAP.md` | 274026 | Roadmap | **SPLIT** | Historical sections moved to `apps/harvester/docs/audits/ROADMAP_HISTORY.md`; 157 original headings remain as compatibility anchors. Active roadmap reduced from 273,540 to 101,170 characters. Further concision review remains. |
 | `apps/harvester/docs/AUDIT_WORKING_RULES.md` | 653 | Agent/audit guidance | **KEEP** | Short pointer to repository-wide workflow; do not duplicate global policy. |
 | `apps/harvester/docs/CONSERVATIVE_SESSION_AUDIT.md` | 5197 | Audit procedure | **KEEP** | Date-independent session audit checklist; strategy authority remains the canonical domain specification. |
 | `apps/harvester/docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md` | 46513 | Historical architecture audit | **KEEP** | Historical architecture assessment, not current architecture authority. |

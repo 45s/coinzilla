@@ -85,8 +85,8 @@ No file may be deleted solely because it is old, large, similarly named or appar
 - [ ] Identify one canonical current document for each architecture/domain/operations/configuration/testing subject.
 - [ ] Move only when ownership/navigation materially improves; preserve Git history where practical.
 - [ ] Replace repeated rules with links to the canonical document.
-- [ ] Separate current status from historical audit narrative.
-- [ ] Keep the roadmap concise and link each active work item to its GitHub issue/PR.
+- [x] Separate the Harvester roadmap's historical audit/implementation narrative into `docs/audits/ROADMAP_HISTORY.md`; retain original headings as compatibility anchors.
+- [ ] Further reduce the active roadmap to concise priorities and links without breaking preserved section anchors or losing current acceptance criteria.
 - [ ] Add ADRs only for decisions with durable rationale that is not already captured.
 - [ ] Update all indexes, README references, AGENTS instructions and roadmap links.
 

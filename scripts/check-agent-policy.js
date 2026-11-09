@@ -111,6 +111,7 @@ function main() {
     'docs/architecture/README.md',
     'docs/audits/README.md',
     'apps/harvester/docs/audits/README.md',
+    'apps/harvester/docs/audits/ROADMAP_HISTORY.md',
     'docs/ai-agent/README.md',
     'apps/harvester/docs/architecture/README.md',
     'apps/harvester/docs/domain/README.md',
