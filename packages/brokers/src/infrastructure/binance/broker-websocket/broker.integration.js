@@ -32,6 +32,7 @@ describe(
       const config = new BinanceWebSocketConfig({
         apiKey: process.env.BINANCE_API_KEY,
         apiSecret: process.env.BINANCE_API_SECRET_KEY,
+        tradingMode: "testnet",
       })
 
       assert.match(
