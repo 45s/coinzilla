@@ -14,6 +14,7 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "errorName",
   "errorMessage",
   "errorCode",
+  "diagnosticId",
   "orderCount",
   "readiness",
   "symbol",

@@ -1,11 +1,11 @@
 # Harvester error vocabulary
 
-- Status: draft
+- Status: active
 - Type: Operational reference
 - Owner: harvester
 - Scope: stable operator-facing diagnostic identifiers emitted by Harvester
 
-This document maps stable diagnostic identifiers to symptoms, likely causes, and safe recovery procedures. The identifier is intended for searching logs, source, tests, and this document. It does not replace the underlying machine-readable error code or original error/cause.
+This document maps stable diagnostic identifiers to symptoms, likely causes, and safe recovery procedures. Harvester includes a mapped identifier in structured startup diagnostics and the compact console summary. The identifier is intended for searching logs, source, tests, and this document. It does not replace the underlying machine-readable error code or original error/cause.
 
 ## Journal errors
 
@@ -26,10 +26,10 @@ This document maps stable diagnostic identifiers to symptoms, likely causes, and
    cat apps/harvester/logs/.coinzilla-journal.lock
    ```
 
-3. Check whether that PID currently exists. Replace `15764` below with the `pid` value from the lock file:
+3. Check whether the recorded PID currently exists. This command reads the PID from the lock file automatically:
 
    ```bash
-   powershell.exe -NoProfile -Command "Get-Process -Id 15764 -ErrorAction SilentlyContinue | Select-Object Id,ProcessName"
+   powershell.exe -NoProfile -Command '$lock = Get-Content "apps/harvester/logs/.coinzilla-journal.lock" -Raw | ConvertFrom-Json; Get-Process -Id $lock.pid -ErrorAction SilentlyContinue | Select-Object Id,ProcessName'
    ```
 
 4. If the process exists, do not remove the lock. Identify whether it owns this Journal directory and allow it to shut down normally. If process inspection is inconclusive, stop and investigate rather than deleting the lock.
