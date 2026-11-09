@@ -88,7 +88,7 @@ test("checks new files fully while preserving historical and GitHub template exc
       },
       {
         path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
-        content: "# Superseded plan  \\n\\n\\nEvidence",
+        content: "# Superseded plan  \n\n\nEvidence",
       },
       {
         path: ".github/PULL_REQUEST_TEMPLATE.md",
