@@ -53,7 +53,13 @@ export function createAccountSnapshotManager({
     } catch (error) {
       throw withRecoveryFailure(error, "REST_RECONCILIATION", "ACCOUNT_SNAPSHOT_READ", true)
     }
-    if (!result?.ok) {
+    if (result?.ok !== false && result?.ok !== true) {
+      throw withRecoveryFailure(
+        new Error("Canonical exchange account snapshot response is missing an explicit success flag"),
+        "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_RESPONSE", false,
+      )
+    }
+    if (result.ok === false) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       const cause = result?.errors?.find?.((error) => error instanceof Error)
       throw withRecoveryFailure(
@@ -127,7 +133,13 @@ export function createAccountSnapshotManager({
       try { result = await broker.getOpenOrders({}) } catch (error) {
         throw withRecoveryFailure(error, "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true)
       }
-      if (!result?.ok) {
+      if (result?.ok !== false && result?.ok !== true) {
+        throw withRecoveryFailure(
+          new Error("Account-wide open-orders response is missing an explicit success flag"),
+          "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_RESPONSE", false,
+        )
+      }
+      if (result.ok === false) {
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         const cause = result?.errors?.find?.((error) => error instanceof Error)
         throw withRecoveryFailure(

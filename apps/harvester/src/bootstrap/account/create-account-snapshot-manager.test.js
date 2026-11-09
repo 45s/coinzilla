@@ -111,6 +111,18 @@ test("rejects an account snapshot that omits a configured market asset", async (
   assert.equal(fixture.manager.getAccountSnapshot(), undefined, "An incomplete account snapshot must not become the accepted account view.")
 })
 
+test("treats account snapshot responses without an explicit success flag as terminal integrity failures", async () => {
+  const fixture = createFixture({ accountSnapshots: [{ data: { balances: [] } }] })
+  await assert.rejects(fixture.manager.refreshAccountSnapshot(), (error) => {
+    assert.deepEqual(error.recoveryFailure, {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "ACCOUNT_SNAPSHOT_RESPONSE",
+      retryable: false,
+    })
+    return true
+  })
+})
+
 test("does not replace a newer accepted account snapshot with stale broker data", async () => {
   const fixture = createFixture({
     accountSnapshots: [

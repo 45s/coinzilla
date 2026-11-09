@@ -1461,7 +1461,12 @@ export function makeConservativeTradingEngine({
         retryable: true,
       })
     }
-    if (!fillsResult?.ok) {
+    if (fillsResult?.ok !== false && fillsResult?.ok !== true) {
+      const error = new Error("Terminal order fill-history response is missing an explicit success flag")
+      await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_INVALID", error })
+      return failureResult({ error, category: "ACCOUNTING_INTEGRITY", stage: "TERMINAL_FILL_HISTORY_RESPONSE", retryable: false })
+    }
+    if (fillsResult.ok === false) {
       const error = fillsResult?.errors?.[0] ?? new Error("Unable to retrieve terminal order fill history")
       await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
       return failureResult({ error, category: "REST_RECONCILIATION", stage: "TERMINAL_FILL_HISTORY", retryable: true })
@@ -1900,7 +1905,10 @@ export function makeConservativeTradingEngine({
         try { result = await broker.getOpenOrders({ symbol }) } catch (error) {
           throw recoveryFailureError(error, "REST_RECONCILIATION", "OWNED_OPEN_ORDERS_READ", true)
         }
-        if (!result?.ok) {
+        if (result?.ok !== false && result?.ok !== true) {
+          throw recoveryFailureError(new Error("Open-order response is missing an explicit success flag for " + symbol), "ACCOUNTING_INTEGRITY", "OWNED_OPEN_ORDERS_RESPONSE", false)
+        }
+        if (result.ok === false) {
           const cause = result?.errors?.find?.((error) => error instanceof Error)
           throw recoveryFailureError(
             new Error("Open-order snapshot is incomplete or contains invalid Order records for " + symbol, { cause }),
@@ -1926,7 +1934,13 @@ export function makeConservativeTradingEngine({
         let historyResult
         try { historyResult = await broker.getCanonicalOrderHistory({ symbol, orderId: ownedOrder.brokerOrderId }) }
         catch (error) { throw recoveryFailureError(error, "REST_RECONCILIATION", "OWNED_ORDER_HISTORY_READ", true) }
-        if (!historyResult?.ok) {
+        if (historyResult?.ok !== false && historyResult?.ok !== true) {
+          throw recoveryFailureError(
+            new Error("Canonical order history response is missing an explicit success flag for " + ownedOrder.brokerOrderId),
+            "ACCOUNTING_INTEGRITY", "OWNED_ORDER_HISTORY_RESPONSE", false,
+          )
+        }
+        if (historyResult.ok === false) {
           const cause = historyResult?.errors?.find?.((error) => error instanceof Error)
           throw recoveryFailureError(
             new Error("Canonical order history is incomplete for owned order " + ownedOrder.brokerOrderId, { cause }),
@@ -2013,7 +2027,13 @@ export function makeConservativeTradingEngine({
           let fillsResult
           try { fillsResult = await broker.getFills({ symbol, orderId: ownedOrder.brokerOrderId, ...(fromId === undefined ? {} : { fromId }), limit: fillPageLimit }) }
           catch (error) { throw recoveryFailureError(error, "REST_RECONCILIATION", "OWNED_ORDER_FILL_HISTORY_READ", true) }
-          if (!fillsResult?.ok) {
+          if (fillsResult?.ok !== false && fillsResult?.ok !== true) {
+            throw recoveryFailureError(
+              new Error("REST fill-history response is missing an explicit success flag for owned order " + ownedOrder.brokerOrderId),
+              "ACCOUNTING_INTEGRITY", "OWNED_ORDER_FILL_HISTORY_RESPONSE", false,
+            )
+          }
+          if (fillsResult.ok === false) {
             const cause = fillsResult?.errors?.find?.((error) => error instanceof Error)
             throw recoveryFailureError(new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId, { cause }), "REST_RECONCILIATION", "OWNED_ORDER_FILL_HISTORY_READ", true)
           }

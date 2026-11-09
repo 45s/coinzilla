@@ -154,7 +154,13 @@ export function createUserDataRecoveryHandler({
           category: "REST_RECONCILIATION", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ", retryable: true,
           task: () => broker.getOpenOrders({}),
         })
-        if (!openOrdersResult?.ok) {
+        if (openOrdersResult?.ok !== false && openOrdersResult?.ok !== true) {
+          throw createRecoveryFailureError(
+            new Error("Account-wide open-orders response is missing an explicit success flag"),
+            { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_WIDE_OPEN_ORDERS_RESPONSE", retryable: false },
+          )
+        }
+        if (openOrdersResult.ok === false) {
           const details = openOrdersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
           const cause = openOrdersResult?.errors?.find?.((error) => error instanceof Error)
           throw createRecoveryFailureError(

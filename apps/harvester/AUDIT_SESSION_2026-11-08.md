@@ -733,3 +733,8 @@ The account snapshot manager now attaches failure metadata at the point of failu
 ## 39. F-023 retry fixture provenance — 2026-11-09
 
 Recovery coordinator tests that inject account snapshot and audit publisher failures now attach the same explicit category/stage/retryable metadata produced by the real account snapshot manager. This keeps transient REST and Journal retry scenarios distinct from the new missing-metadata terminal regression.
+
+
+## 40. F-023 REST response-envelope validation — 2026-11-09
+
+A broker response without an explicit boolean ok field is now treated as an unclassified protocol/integrity failure. Only an explicit ok:false REST result is eligible for a retryable REST classification. This applies to account snapshots, account-wide open orders, owned-order open orders, canonical order history, and fill history, including terminal-order fill reconciliation.

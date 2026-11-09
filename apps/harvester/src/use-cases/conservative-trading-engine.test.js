@@ -5402,6 +5402,20 @@ function assertMalformedRestEnvelopeFailsClosed({
   )
 }
 
+test("treats REST response envelopes without explicit success flags as terminal integrity failures", async () => {
+  const openOrdersFixture = await createMalformedRestEnvelopeFixture({ openOrdersResult: { data: [] } })
+  const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(openOrdersResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDERS_RESPONSE", retryable: false })
+
+  const historyFixture = await createMalformedRestEnvelopeFixture({ canonicalOrderHistoryResult: { data: [] } })
+  const historyResult = await historyFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(historyResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_HISTORY_RESPONSE", retryable: false })
+
+  const fillsFixture = await createMalformedRestEnvelopeFixture({ fillsResult: { data: [] } })
+  const fillsResult = await fillsFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(fillsResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_RESPONSE", retryable: false })
+})
+
 test("fails closed when owned-order open-orders REST data is not an array", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
     openOrdersResult: { ok: true, data: { orders: [] } },

@@ -586,6 +586,16 @@ test("keeps recovery blocked when owned-order reconciliation returns a failed re
   )
 })
 
+test("treats account-wide open-orders responses without an explicit success flag as terminal", async () => {
+  const fixture = createRecovery({ getOpenOrders: async () => ({ data: [] }) })
+  fixture.start()
+  await fixture.state.recoveryTask
+  assert.equal(fixture.state.accountingFailed, true, "A malformed REST response envelope must fail closed.")
+  assert.equal(fixture.state.status, "EXECUTION_ACCOUNTING_FAILED")
+  assert.equal(fixture.calls.orderAudits.length, 0, "Malformed account-wide open orders must never be durably audited as authoritative.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker generation must not be acknowledged after an unclassified REST response.")
+})
+
 test("keeps recovery blocked when the account-wide open-orders REST request fails", async () => {
   const fixture = createRecovery({
     getOpenOrders: async () => ({
