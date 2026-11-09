@@ -631,3 +631,150 @@ Key distinctions:
 - ZRO had a 54m 2.118s maximum inter-event gap with no corresponding afternoon market-stream error. This remains unresolved rather than a confirmed outage and is tracked separately in [#760](https://github.com/45s/coinzilla/issues/760).
 - The 48 unique fills reconcile exactly to the closing asset balances. Repeated duplicate-fill observations did not change accounting.
 - The CLOSING balance audit is complete, but no CLOSING open-orders payload was recorded; exact final order states remain unverified.
+
+
+## 31. F-023 failure-classification TDD — 2026-11-09
+
+Test-only regressions now distinguish matched order-transition failure from
+ownership/accounting-integrity failure. They also cover terminal fill-history
+REST timeout classification, a retryable queued-event failure that must block
+broker acknowledgement until a later authoritative retry, a permanent
+accounting-integrity mismatch that remains terminal, and the exact
+`recovered → executionPending` status interleaving with both broker recovery
+flags false before a queued owned BUY event.
+
+The expected RED behavior is that the current event handler sets the sticky
+`accountingFailed` latch for every failed engine result and the recovery
+coordinator does not inspect failure categories or queued retryable failure
+markers. No production source or exchange behavior changes are included in
+this test-first commit.
+
+
+## 32. F-023 failure classification and retry implementation — 2026-11-09
+
+PR #788 carries the test-first regressions into the implementation. Engine
+results now expose explicit failure categories and stages. Ownership and
+accounting-integrity failures remain terminal; downstream order-transition,
+REST reconciliation, and Journal durability failures remain retryable only
+through a new single-flight attempt that repeats authoritative reconciliation.
+
+A generation-scoped retryable failure marker prevents a recovery attempt from
+acknowledging the broker after a queued event failed. A later reminder clears
+that marker only when a new attempt begins. The application still requires
+canonical order/fill reconciliation, queued-event draining, fresh account and
+open-order snapshots, both durable RECOVERY audit flushes, and generation
+revalidation before acknowledgement. Unknown failure metadata defaults to
+terminal fail-closed behavior.
+
+The exact-head CI run is pending at this documentation checkpoint. No live or
+TESTNET order operation was performed; TESTNET acceptance remains paused.
+
+
+## 33. Empty TypeError cause preservation — 2026-11-09
+
+The recovery and event-handler diagnostics now retain wrapper error name,
+message, stack, original cause name/message, and cause stack. An empty wrapper
+`TypeError` falls back to the useful cause message without discarding either
+stack. The REST snapshot error wrapper preserves a non-Error thrown value as
+the original `cause`. Deterministic tests cover both event-processing and
+application-recovery diagnostics.
+
+
+## 34. PR #788 exact-head verification — 2026-11-09
+
+The failure-classification implementation, cause-preservation changes, offline
+regressions, recovery contract, architecture diagram, and operational
+documentation are committed on the PR branch. Full GitHub Actions validation
+is pending on the resulting branch head. TESTNET acceptance remains paused;
+no live or TESTNET order operation was performed.
+
+
+## 35. Diagnostic compatibility correction — 2026-11-09
+
+The first full CI pass found one existing startup integration assertion tied
+to the stable log message for an unowned order. The typed failure categories
+and new cause/stack diagnostics were correct; the category-specific message
+was restored to the existing stable wording without weakening or removing the
+regression. All other tests in the initial unit/coverage/targeted runs passed.
+
+
+## 31. F-023 failure-classification TDD — 2026-11-09
+
+Test-only regressions now distinguish matched order-transition failure from
+ownership/accounting-integrity failure. They also cover terminal fill-history
+REST timeout classification, a retryable queued-event failure that must block
+broker acknowledgement until a later authoritative retry, a permanent
+accounting-integrity mismatch that remains terminal, and the exact
+`recovered → executionPending` status interleaving with both broker recovery
+flags false before a queued owned BUY event.
+
+The expected RED behavior is that the current event handler sets the sticky
+`accountingFailed` latch for every failed engine result and the recovery
+coordinator does not inspect failure categories or queued retryable failure
+markers. No production source or exchange behavior changes are included in
+this test-first commit.
+
+
+## 36. Additional F-023 classification boundaries — 2026-11-09
+
+Additional RED regressions distinguish a malformed successful REST payload from a broker-declared transient REST read failure. They also prove that missing failure metadata and retryable metadata with an empty stage cannot authorize automatic recovery retries. These tests are test-only; production behavior remains unchanged at this checkpoint.
+
+
+## 37. F-023 test fixture policy correction — 2026-11-09
+
+The legacy retry-path recovery tests now provide explicit REST_RECONCILIATION category, stage, and retryable metadata. Missing metadata is reserved for the new terminal fail-closed regression. Engine snapshot assertions execute after the reconciliation result is created and assert the exact stage emitted by the production classifier.
+
+
+## 38. F-023 source-stage classification refinement — 2026-11-09
+
+The account snapshot manager now attaches failure metadata at the point of failure: broker-declared snapshot/open-order reads are retryable REST reconciliation; malformed snapshots and validation/ownership contradictions are terminal integrity failures; event publication and Journal flush failures are explicitly retryable durability stages. Recovery wrappers preserve that source metadata rather than relabeling every thrown error. Snapshot application also distinguishes registry races and stale REST views from ownership and Journal parity failures.
+
+
+## 39. F-023 retry fixture provenance — 2026-11-09
+
+Recovery coordinator tests that inject account snapshot and audit publisher failures now attach the same explicit category/stage/retryable metadata produced by the real account snapshot manager. This keeps transient REST and Journal retry scenarios distinct from the new missing-metadata terminal regression.
+
+
+## 40. F-023 REST response-envelope validation — 2026-11-09
+
+A broker response without an explicit boolean ok field is now treated as an unclassified protocol/integrity failure. Only an explicit ok:false REST result is eligible for a retryable REST classification. This applies to account snapshots, account-wide open orders, owned-order open orders, canonical order history, and fill history, including terminal-order fill reconciliation.
+
+
+## 41. F-023 audit DTO versus Journal publication boundary — 2026-11-09
+
+Account/open-order audit DTO mapping failures are now terminal ACCOUNTING_INTEGRITY failures. Only a successfully mapped DTO that then fails EventBus publication or Journal durability receives a retryable DURABILITY classification. This prevents malformed audit content from being retried as though the Journal were temporarily unavailable.
+
+
+## 42. F-023 result-contract exception policy — 2026-11-09
+
+Only an explicit broker result with ok:false is classified as a retryable REST reconciliation failure. An adapter method that throws outside the result contract is unclassified and terminal unless the thrown Error already carries valid failure metadata. This rule is tested for account snapshot, account-wide open orders, owned-order open orders, canonical order history, and fill history.
+
+
+## 43. F-023 terminal fill adapter exception tests — 2026-11-09
+
+The terminal-fill timeout regression now models an explicitly classified retryable REST failure. A separate regression proves an unclassified thrown terminal-fill adapter exception is terminal. This aligns the fixture with the broker port's result contract instead of treating arbitrary thrown exceptions as transient network failures.
+
+
+## 44. F-023 pending clientOrderId lookup RED coverage — 2026-11-09
+
+Added RED regressions for the pre-existing UNKNOWN-submission reconciliation branch. Explicit broker ok:false lookup results may retry; missing response metadata, thrown adapter exceptions, and a canonical response for another clientOrderId must fail closed with terminal classifications. This closes the remaining path that previously converted every pending-order lookup exception into retryable REST reconciliation.
+
+
+## 45. F-023 pending clientOrderId lookup implementation — 2026-11-09
+
+Pending UNKNOWN submissions now use the same explicit classification policy as owned-order snapshot reconciliation. Only a broker-declared ok:false lookup result is retryable REST reconciliation. Missing/malformed response envelopes, unexpected thrown adapter exceptions, invalid CanonicalOrder shapes, client/market/side/type identity mismatches, immutable quantity/price parity failures, and brokerOrderId attachment conflicts are terminal with explicit stage metadata.
+
+
+## 46. F-023 canonical pending-order fixture correction — 2026-11-09
+
+The pending-order identity mismatch test now constructs a broker-acknowledged CanonicalOrder with the domain's supported OPEN status. This keeps the regression focused on clientOrderId ownership mismatch rather than an invalid test entity.
+
+
+## 47. F-023 identity fixture uses canonical shared Market/Asset values — 2026-11-09
+
+The pending-order identity mismatch regression now constructs its broker response from the suite's canonical Market and Asset fixtures. This ensures the fixture itself is a valid acknowledged CanonicalOrder and the only intended conflict is its foreign clientOrderId.
+
+
+## 48. F-023 pending lookup shape/parity and attachment ownership — 2026-11-09
+
+Added coverage for a canonical pending-order lookup response that omits brokerOrderId and for immutable quantity/price conflicts. BrokerOrderId attachment failures are classified as terminal ownership failures because they represent a broken binding between the pending Harvester order and the exchange order identity.

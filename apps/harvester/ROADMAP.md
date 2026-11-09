@@ -1087,3 +1087,28 @@ The detailed historical audit snapshots, implementation progress reports, incide
 ## 2026-11-09 forensic restart-recovery status
 
 > Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+
+## 2026-11-09 — F-023 failure-classification TDD
+
+- Added RED regressions for a matched owned order whose downstream recovery-SELL cancellation fails, permanent ownership/accounting-integrity failures, terminal fill-history REST timeout classification, and the exact `recovered → executionPending (both broker flags false) → owned BUY event` interleaving.
+- Added recovery-coordinator regressions proving a queued retryable transition failure blocks acknowledgement until a later authoritative retry, while a permanent accounting-integrity mismatch remains terminal.
+- These test-first changes belong to [#769](https://github.com/45s/coinzilla/issues/769) under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626). Production behavior is unchanged in this commit.
+
+
+
+## 2026-11-09 — F-023 failure-classification implementation
+
+- Ported the test-first recovery classification work onto a branch based on current `develop`, including the newer Journal publish/close changes; the stale PR #788 branch remains untouched.
+- Bootstrap retries only recognized retryable categories with a non-empty stage and matching retry policy. Missing or malformed metadata becomes terminal `ACCOUNTING_INTEGRITY`.
+- Engine snapshot collection distinguishes explicit broker REST read failures from malformed successful payloads and ownership/accounting contradictions. Unknown snapshot errors default terminal, not retryable.
+- Account snapshot and account-wide open-order reads, both RECOVERY durability barriers, and broker-generation acknowledgement have explicit failure stages.
+- No TESTNET or live exchange operations. Exact-head CI and review remain required.
+
+## 2026-11-09 — F-023 failure-classification implementation
+
+- Ported the test-first recovery classification work onto a branch based on current `develop`, including the newer Journal publish/close changes; the stale PR #788 branch remains untouched.
+- Bootstrap retries only recognized retryable categories with a non-empty stage and matching retry policy. Missing or malformed metadata becomes terminal `ACCOUNTING_INTEGRITY`.
+- Engine snapshot collection distinguishes explicit broker REST read failures from malformed successful payloads and ownership/accounting contradictions. Unknown snapshot errors default terminal, not retryable.
+- Account snapshot and account-wide open-order reads, both RECOVERY durability barriers, and broker-generation acknowledgement have explicit failure stages.
+- No TESTNET or live exchange operations. Exact-head CI and review remain required.
+

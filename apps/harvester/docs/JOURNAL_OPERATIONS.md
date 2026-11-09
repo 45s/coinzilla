@@ -293,3 +293,37 @@ The host lock is acquired first, then the Journal lock. If Journal-lock acquisit
 Each lock records PID, hostname, start time and a random ownership token. A stale lock is automatically reclaimed only when its recorded hostname matches the current host, its PID is confirmed absent, and an immediate reread confirms the PID, hostname and ownership token are unchanged. A different-host lock, live or ambiguous PID, unreadable metadata, permission-denied process inspection or changed ownership token fails closed. The process check treats permission-denied inspection as potentially alive; it does not guess that the owner is dead. Verify the recorded owner before any manual removal.
 
 The host lock is local to one OS user's home directory and one broker identifier. It does not coordinate different machines or different OS users. The Journal lock is directory-scoped; different Journal directories do not share that lock, but the broker-wide host lock still prevents a second same-user process for the same broker.
+
+## Same-process recovery failure classification
+
+A broker `recovered` status confirms transport/subscription restoration only.
+Harvester remains blocked while application reconciliation is required. The
+application recovery sequence is owned-order canonical history and complete
+fills, queued-event drain, fresh account balances, account-wide open orders,
+durable flush of both RECOVERY audit records, generation/event-sequence
+revalidation, exact broker-generation acknowledgement, and the matching
+global `reconciled` notification.
+
+Failures are classified by the engine and carried to bootstrap with a
+`failure.category`, `failure.stage`, and `failure.retryable`:
+
+- `OWNERSHIP_INTEGRITY` and `ACCOUNTING_INTEGRITY` are terminal for the
+  process. They set the sticky accounting-failure gate and prevent recovery
+  acknowledgement.
+- `ORDER_TRANSITION`, `REST_RECONCILIATION`, and `DURABILITY` are retryable
+  only after a new single-flight attempt repeats the authoritative checks.
+  They keep readiness closed and carry a generation-scoped failure marker.
+- An unclassified error defaults to terminal accounting-integrity failure.
+  Missing metadata is never treated as evidence that trading is safe.
+
+If a retryable failure occurs while queued user-data events are being drained,
+the active recovery attempt stops before either RECOVERY audit can authorize
+broker acknowledgement. A later `recovered` reminder may clear that marker
+only when a new attempt begins; it must then repeat all canonical REST reads,
+queued-event draining, both durable Journal barriers, and generation
+revalidation. Reclassification alone never clears readiness or acknowledges a
+broker generation.
+
+This is same-process recovery only. It does not enable Journal replay or
+process-restart recovery. TESTNET acceptance remains PAUSED / UNVERIFIED.
+

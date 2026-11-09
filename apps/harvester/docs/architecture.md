@@ -623,3 +623,46 @@ The process entry point in `src/index.js` composes process identity/logging, Eve
 The Conservative order executor creates one random process-local namespace at engine construction using a UUID-derived 22-hex-character value (88 bits), then increments a local sequence for each submitted order. Client IDs use the `h-<namespace>-<sequence>` shape; preflight validation uses a separate `preflight` marker within the same namespace. This avoids predictable counter-only identifiers being reused when a new process starts.
 
 A unique client ID is an identity/correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original identity; never create a replacement order merely because an acknowledgement was lost. Durable cross-process retry idempotency and process-restart state restoration are not implemented.
+
+## Recovery failure classification and retry contract
+
+Engine event-processing failures carry an explicit `failure` object with
+`category`, `stage`, and `retryable`. The outer event handler does not infer
+accounting corruption from a generic non-success result.
+
+| Category | Meaning | Retry policy |
+|---|---|---|
+| `OWNERSHIP_INTEGRITY` | Unknown/mismatched order or Fill identity, or invalid ownership transition | Terminal process-lifetime accounting gate; never acknowledge recovery |
+| `ACCOUNTING_INTEGRITY` | Fill/accounting projection failure, conflicting duplicate, or order/fill quantity parity failure | Terminal process-lifetime accounting gate; never acknowledge recovery |
+| `ORDER_TRANSITION` | Cancellation/replacement transition failed after the owned order was matched | Keep readiness closed; require a fresh authoritative order/fill reconciliation |
+| `REST_RECONCILIATION` | Canonical order/fill history or owned-order REST read failed/incomplete | Keep readiness closed; retry only through a new single-flight recovery attempt |
+| `DURABILITY` | Required order-intent Journal durability barrier failed | Keep readiness closed; retry only after a new attempt revalidates canonical state and durability |
+
+An unclassified engine failure defaults to terminal
+`ACCOUNTING_INTEGRITY`; missing metadata never becomes permission to retry.
+Retryable failures set a generation-scoped marker. A recovery attempt that
+observes a marker while draining queued events must stop before audit
+acknowledgement. A later broker reminder may clear that marker only at the
+start of a new single-flight attempt, which must repeat the complete canonical
+order/fill reconciliation, queued-event drain, account/open-order snapshots,
+and both durable audit flushes. The process-lifetime accounting latch is never
+cleared by a transport reconnect or by reclassifying an error.
+
+```mermaid
+flowchart TD
+    A[Owned user-data event] --> B[Conservative engine transition]
+    B --> C{Typed failure}
+    C -->|Ownership or accounting integrity| D[accountingFailed = true]
+    C -->|Order, REST, or durability retryable| E[requiresReconciliation = true]
+    D --> F[Readiness closed; no broker acknowledgement]
+    E --> G[Generation-scoped retryable failure marker]
+    G --> H[Abort current recovery before acknowledgement]
+    H --> I[Next recovered reminder starts a new single-flight attempt]
+    I --> J[Canonical orders and fills; drain queued events]
+    J --> K[Fresh account and open orders; durable RECOVERY audits]
+    K --> L[Revalidate generation and event sequence]
+    L --> M[Exact broker generation acknowledgement]
+    M --> N[Matching global reconciled status]
+    N --> O[Readiness may return]
+```
+

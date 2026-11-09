@@ -8,6 +8,7 @@ const createState = (overrides = {}) => ({
   ready: false,
   requiresReconciliation: true,
   accountingFailed: false,
+  retryableRecoveryFailure: null,
   status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
   eventSequence: 0,
   recoveryGeneration: 1,
@@ -436,11 +437,103 @@ test("does not leave recovery pending when startup is complete but recovery is b
   }
 })
 
+
+test("does not acknowledge after a queued retryable event failure and retries on a later recovery reminder", async () => {
+  let failFirstDrain = true
+  const fixture = createRecovery({
+    drainUserDataEvents: async (calls, state) => {
+      if (failFirstDrain) {
+        failFirstDrain = false
+        state.retryableRecoveryFailure = {
+          generation: state.recoveryGeneration,
+          category: "ORDER_TRANSITION",
+          stage: "RECOVERY_SELL_CANCELLATION",
+          retryable: true,
+        }
+      }
+    },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.requiresReconciliation, true, "A failed queued transition must keep application recovery required.")
+  assert.equal(fixture.state.ready, false, "A failed queued transition must not reopen readiness.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after a queued event failed.")
+  assert.deepEqual(fixture.state.retryableRecoveryFailure, {
+    generation: 1,
+    category: "ORDER_TRANSITION",
+    stage: "RECOVERY_SELL_CANCELLATION",
+    retryable: true,
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.retryableRecoveryFailure, null, "A new single-flight recovery attempt may clear the prior retryable marker only before re-running authoritative reconciliation.")
+  assert.equal(fixture.state.requiresReconciliation, false, "Only the successful retry and matching broker acknowledgement may clear the application gate.")
+  assert.equal(fixture.calls.acknowledgements, 1)
+})
+
+test("keeps a permanent accounting-integrity failure terminal across recovery reminders", async () => {
+  let reconciliationCalls = 0
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      return {
+        ok: false,
+        errors: [new Error("REST fill quantity conflicts with canonical order quantity")],
+        failure: {
+          category: "ACCOUNTING_INTEGRITY",
+          stage: "REST_FILL_PARITY",
+          retryable: false,
+        },
+      }
+    },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.accountingFailed, true, "A proven accounting-integrity mismatch must retain the process-lifetime terminal latch.")
+  assert.equal(fixture.state.requiresReconciliation, true)
+  assert.equal(fixture.state.ready, false)
+  assert.equal(fixture.calls.acknowledgements, 0)
+
+  fixture.start()
+  assert.equal(reconciliationCalls, 1, "A terminal accounting-integrity failure must not be retried or cleared by another broker reminder.")
+})
+
+test("treats a failed reconciliation without explicit failure metadata as terminal", async () => {
+  let reconciliationCalls = 0
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      return {
+        ok: false,
+        errors: [new Error("unclassified owned-order reconciliation failure")],
+      }
+    },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.accountingFailed, true, "A reconciliation failure without an explicit category must fail closed as terminal.")
+  assert.equal(fixture.state.retryableRecoveryFailure, null, "Missing metadata must never be interpreted as a retryable REST failure.")
+  assert.equal(fixture.state.ready, false, "An unclassified recovery failure must keep trading readiness closed.")
+  assert.equal(fixture.calls.acknowledgements, 0, "An unclassified recovery failure must never acknowledge the broker generation.")
+
+  fixture.start()
+  assert.equal(reconciliationCalls, 1, "A broker reminder must not retry an unclassified terminal failure.")
+})
+
 test("keeps recovery blocked when owned-order reconciliation returns a failed result", async () => {
   const fixture = createRecovery({
     reconcileOwnedOrders: async () => ({
       ok: false,
       errors: [new Error("canonical owned-order history unavailable")],
+      failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
     }),
   })
   fixture.start()
@@ -491,6 +584,25 @@ test("keeps recovery blocked when owned-order reconciliation returns a failed re
     "canonical owned-order history unavailable",
     "The canonical owned-order reconciliation failure must remain visible in the recovery diagnostic.",
   )
+})
+
+test("treats an unclassified thrown account-wide open-orders read as terminal", async () => {
+  const fixture = createRecovery({ getOpenOrders: async () => { throw new Error("unexpected broker adapter exception") } })
+  fixture.start()
+  await fixture.state.recoveryTask
+  assert.equal(fixture.state.accountingFailed, true)
+  assert.equal(fixture.state.status, "EXECUTION_ACCOUNTING_FAILED")
+  assert.equal(fixture.calls.acknowledgements, 0)
+})
+
+test("treats account-wide open-orders responses without an explicit success flag as terminal", async () => {
+  const fixture = createRecovery({ getOpenOrders: async () => ({ data: [] }) })
+  fixture.start()
+  await fixture.state.recoveryTask
+  assert.equal(fixture.state.accountingFailed, true, "A malformed REST response envelope must fail closed.")
+  assert.equal(fixture.state.status, "EXECUTION_ACCOUNTING_FAILED")
+  assert.equal(fixture.calls.orderAudits.length, 0, "Malformed account-wide open orders must never be durably audited as authoritative.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker generation must not be acknowledged after an unclassified REST response.")
 })
 
 test("keeps recovery blocked when the account-wide open-orders REST request fails", async () => {
@@ -554,7 +666,9 @@ test("keeps recovery blocked when the canonical account balance snapshot cannot 
   let openOrderReads = 0
   const fixture = createRecovery({
     refreshAccountSnapshot: async () => {
-      throw new Error("canonical account balance snapshot unavailable")
+      throw Object.assign(new Error("canonical account balance snapshot unavailable"), {
+        recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+      })
     },
     getOpenOrders: async () => {
       openOrderReads += 1
@@ -614,7 +728,9 @@ test("keeps recovery blocked when the canonical account balance snapshot cannot 
 test("keeps recovery blocked when the durable account open-orders audit fails", async () => {
   const fixture = createRecovery({
     publishOpenOrdersSnapshot: async () => {
-      throw new Error("durable account open-orders audit flush failed")
+      throw Object.assign(new Error("durable account open-orders audit flush failed"), {
+        recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH", retryable: true },
+      })
     },
   })
   fixture.start()
@@ -813,6 +929,7 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
         return {
           ok: false,
           errors: [new Error("temporary owned-order history failure")],
+          failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
         }
       }
       if (reconciliationCalls === 2) return secondReconciliation
@@ -918,7 +1035,11 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
 test("retries application recovery after an account snapshot REST timeout releases the task slot", async () => {
   const timeout = Object.assign(
     new Error("canonical account snapshot REST request timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+    {
+      name: "RpcTimeoutError",
+      code: "RPC_TIMEOUT",
+      recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+    },
   )
   let accountSnapshotReads = 0
   let openOrderReads = 0
@@ -1143,7 +1264,10 @@ test("keeps recovery blocked and retries the same generation after a transient a
     publishAccountSnapshot: async () => {
       accountFlushAttempts += 1
       if (accountFlushAttempts === 1) {
-        throw new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure")
+        throw Object.assign(
+          new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure"),
+          { recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH", retryable: true } },
+        )
       }
     },
   })

@@ -904,6 +904,7 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
   })
 
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "FILL_ORDER_IDENTITY", retryable: false })
   assert.equal(harness.accountedFills.length, 0)
   assert.ok(harness.pauses.includes("EXECUTION_FILL_ORDER_IDENTITY_MISMATCH"))
 })
@@ -1273,6 +1274,7 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
     },
   })
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
   const failed = events.find((event) =>
     event.name === "order.cancel_failed" && event.data.side === "SELL")
   assert.ok(failed)
@@ -1512,6 +1514,7 @@ test("publishes unowned order updates with safe canonical identifiers", async ()
   })
   const result = await engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
   const unowned = events.find(({ name }) => name === "execution.unowned_order")
   assert.ok(unowned)
   assert.equal(unowned.data.clientOrderId, "external-client-order")
@@ -1535,6 +1538,7 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
     },
   })
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "FILL_ACCOUNTING", retryable: false })
   const failed = events.find(({ name }) => name === "execution.accounting_failed")
   assert.ok(failed)
   assert.equal(failed.data.error.message, "unsupported commission asset")
@@ -2725,6 +2729,74 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     assert.equal(accountedFills.length, 1)
     assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
   }
+})
+
+
+test("classifies terminal fill-history REST timeouts as retryable reconciliation failures", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getTerminalFills: () => {
+      throw Object.assign(new Error("terminal fill history timed out"), {
+        recoveryFailure: { category: "REST_RECONCILIATION", stage: "TERMINAL_FILL_HISTORY", retryable: true },
+      })
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: sellOrder,
+        status: "CANCELED",
+        executedQuantity: "0",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, {
+    category: "REST_RECONCILIATION",
+    stage: "TERMINAL_FILL_HISTORY",
+    retryable: true,
+  })
+  assert.ok(harness.pauses.includes("TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE"))
+})
+
+test("treats unclassified thrown terminal fill-history adapter errors as terminal", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getTerminalFills: () => { throw new Error("unclassified terminal fill-history adapter exception") },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: sellOrder,
+        status: "CANCELED",
+        executedQuantity: "0",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "TERMINAL_FILL_HISTORY_READ_EXCEPTION",
+    retryable: false,
+  })
 })
 
 test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {
@@ -5365,11 +5437,173 @@ function assertMalformedRestEnvelopeFailsClosed({
   )
 }
 
+const createUnknownSubmissionHarness = async () => {
+  const harness = await createHarness()
+  harness.broker.placeOrder = async () => ({
+    ok: false,
+    errors: [new Error("broker submission outcome is unknown")],
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const pendingOrder = harness.engine.getOrders().find((order) => !order.brokerOrderId)
+  assert.ok(pendingOrder, "The failed submission must remain registered for clientOrderId reconciliation.")
+  return { harness, pendingOrder }
+}
+
+test("keeps explicit pending-order REST lookup failures retryable", async () => {
+  const { harness } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: false,
+    errors: [new Error("temporary clientOrderId lookup failure")],
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "REST_RECONCILIATION",
+    stage: "PENDING_ORDER_LOOKUP",
+    retryable: true,
+  })
+})
+
+test("treats a pending-order lookup response without an explicit success flag as terminal", async () => {
+  const { harness } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({ data: null })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_RESPONSE",
+    retryable: false,
+  })
+})
+
+test("treats a pending-order lookup CanonicalOrder without brokerOrderId as terminal shape failure", async () => {
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: true,
+    data: new CanonicalOrder({
+      clientOrderId: pendingOrder.clientOrderId,
+      market,
+      side: pendingOrder.side,
+      type: pendingOrder.type,
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      status: "UNKNOWN",
+    }),
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_SHAPE",
+    retryable: false,
+  })
+})
+
+test("treats pending-order lookup quantity and price conflicts as terminal accounting failures", async () => {
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
+  const wrongQuantity = pendingOrder.originalQuantity.amount === "999999" ? "888888" : "999999"
+  const wrongPrice = pendingOrder.limitPrice.amount === "999999" ? "888888" : "999999"
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: true,
+    data: new CanonicalOrder({
+      clientOrderId: pendingOrder.clientOrderId,
+      brokerOrderId: "broker-pending-order-parity-conflict",
+      market,
+      side: pendingOrder.side,
+      type: pendingOrder.type,
+      limitPrice: new Money({ amount: wrongPrice, asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: wrongQuantity, asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    }),
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_PARITY",
+    retryable: false,
+  })
+})
+
+test("classifies a pending-order clientOrderId mismatch as terminal ownership failure", async () => {
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: true,
+    data: new CanonicalOrder({
+      clientOrderId: "foreign-client-order",
+      brokerOrderId: "foreign-broker-order",
+      market,
+      side: pendingOrder.side,
+      type: pendingOrder.type,
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    }),
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "OWNERSHIP_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_IDENTITY",
+    retryable: false,
+  })
+})
+
+test("treats an unclassified thrown pending-order lookup exception as terminal", async () => {
+  const { harness } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => { throw new Error("unexpected clientOrderId lookup adapter exception") }
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_EXCEPTION",
+    retryable: false,
+  })
+})
+
+test("treats unclassified thrown owned-order REST adapter errors as terminal", async () => {
+  const openOrdersFixture = await createMalformedRestEnvelopeFixture()
+  openOrdersFixture.harness.broker.getOpenOrders = async () => { throw new Error("unexpected open-orders adapter exception") }
+  const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(openOrdersResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDERS_READ_EXCEPTION", retryable: false })
+
+  const historyFixture = await createMalformedRestEnvelopeFixture()
+  historyFixture.harness.broker.getCanonicalOrderHistory = async () => { throw new Error("unexpected history adapter exception") }
+  const historyResult = await historyFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(historyResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_HISTORY_READ_EXCEPTION", retryable: false })
+
+  const fillsFixture = await createMalformedRestEnvelopeFixture()
+  fillsFixture.harness.broker.getFills = async () => { throw new Error("unexpected fills adapter exception") }
+  const fillsResult = await fillsFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(fillsResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_READ_EXCEPTION", retryable: false })
+})
+
+test("treats REST response envelopes without explicit success flags as terminal integrity failures", async () => {
+  const openOrdersFixture = await createMalformedRestEnvelopeFixture({ openOrdersResult: { data: [] } })
+  const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(openOrdersResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDERS_RESPONSE", retryable: false })
+
+  const historyFixture = await createMalformedRestEnvelopeFixture({ canonicalOrderHistoryResult: { data: [] } })
+  const historyResult = await historyFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(historyResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_HISTORY_RESPONSE", retryable: false })
+
+  const fillsFixture = await createMalformedRestEnvelopeFixture({ fillsResult: { data: [] } })
+  const fillsResult = await fillsFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(fillsResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_RESPONSE", retryable: false })
+})
+
 test("fails closed when owned-order open-orders REST data is not an array", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
     openOrdersResult: { ok: true, data: { orders: [] } },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDER_SNAPSHOT", retryable: false }, "A successful but malformed open-order payload must be terminal integrity failure, not a retryable REST outage.")
   assertMalformedRestEnvelopeFailsClosed({
     fixture,
     result,
@@ -5408,6 +5642,34 @@ test("fails closed when owned-order canonical REST history contains no order", a
     expectedCanonicalOrderHistoryReads: 1,
     expectedFillHistoryReads: 0,
   })
+})
+
+test("classifies canonical REST order identity conflicts as terminal ownership failures", async () => {
+  const foreignHistoryOrder = new CanonicalOrder({
+    clientOrderId: "different-client-order",
+    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "CANCELED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const fixture = await createMalformedRestEnvelopeFixture({
+    canonicalOrderHistoryResult: { ok: true, data: [foreignHistoryOrder] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, false, "A canonical history row for another client order must be rejected.")
+  assert.deepEqual(result.failure, {
+    category: "OWNERSHIP_INTEGRITY",
+    stage: "OWNED_ORDER_HISTORY_IDENTITY",
+    retryable: false,
+  }, "An order-identity mismatch must be terminal and must not be retried as a REST outage.")
 })
 
 test("fails closed when owned-order canonical REST history contains multiple orders", async () => {
@@ -5459,6 +5721,7 @@ test("fails closed when owned-order REST fill history is not an array", async ()
     fillsResult: { ok: true, data: { fills: [] } },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_SHAPE", retryable: false }, "A successful but malformed fill-history payload must fail closed as accounting integrity, not retry indefinitely.")
   assertMalformedRestEnvelopeFailsClosed({
     fixture,
     result,
@@ -5539,6 +5802,7 @@ test("preserves the original broker error as cause when owned-order open-orders 
 
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
+  assert.deepEqual(result.failure, { category: "REST_RECONCILIATION", stage: "OWNED_OPEN_ORDERS_READ", retryable: true }, "A broker-declared open-orders read failure may retry only after a new authoritative recovery attempt.")
   assertBrokerRestFailurePreservesOriginalCause({
     result,
     timeout,

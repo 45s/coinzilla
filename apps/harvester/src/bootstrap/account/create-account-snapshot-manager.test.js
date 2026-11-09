@@ -6,7 +6,7 @@ import { createAccountSnapshotManager } from "./create-account-snapshot-manager.
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], openOrders = [], openOrdersResult, flushResults = [] } = {}) => {
+const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [] } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -15,8 +15,14 @@ const createFixture = ({ accountSnapshots = [], openOrders = [], openOrdersResul
   let flushCount = 0
   const manager = createAccountSnapshotManager({
     broker: {
-      getAccountSnapshot: async () => accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)],
-      getOpenOrders: async () => openOrdersResult ?? ({ ok: true, data: openOrders }),
+      getAccountSnapshot: async () => {
+        if (accountSnapshotError) throw accountSnapshotError
+        return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
+      },
+      getOpenOrders: async () => {
+        if (openOrdersError) throw openOrdersError
+        return openOrdersResult ?? ({ ok: true, data: openOrders })
+      },
     },
     eventPublisher: {
       publish: (event) => {
@@ -97,10 +103,43 @@ test("rejects an account snapshot that omits a configured market asset", async (
 
   await assert.rejects(
     fixture.manager.refreshAccountSnapshot(),
-    /missing required market asset balances: USDT/,
-    "A startup snapshot missing the configured quote asset must fail closed.",
+    (error) => {
+      assert.match(error.message, /missing required market asset balances: USDT/)
+      assert.deepEqual(error.recoveryFailure, {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "ACCOUNT_SNAPSHOT_VALIDATION",
+        retryable: false,
+      })
+      return true
+    },
+    "A startup snapshot missing the configured quote asset must fail closed as terminal integrity failure.",
   )
   assert.equal(fixture.manager.getAccountSnapshot(), undefined, "An incomplete account snapshot must not become the accepted account view.")
+})
+
+test("treats unclassified thrown account snapshot and open-orders adapter errors as terminal", async () => {
+  const accountFixture = createFixture({ accountSnapshotError: new Error("unexpected account adapter exception") })
+  await assert.rejects(accountFixture.manager.refreshAccountSnapshot(), (error) => {
+    assert.deepEqual(error.recoveryFailure, { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_SNAPSHOT_READ_EXCEPTION", retryable: false })
+    return true
+  })
+  const ordersFixture = createFixture({ openOrdersError: new Error("unexpected open-orders adapter exception") })
+  await assert.rejects(ordersFixture.manager.publishOpenOrdersSnapshot(), (error) => {
+    assert.deepEqual(error.recoveryFailure, { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", retryable: false })
+    return true
+  })
+})
+
+test("treats account snapshot responses without an explicit success flag as terminal integrity failures", async () => {
+  const fixture = createFixture({ accountSnapshots: [{ data: { balances: [] } }] })
+  await assert.rejects(fixture.manager.refreshAccountSnapshot(), (error) => {
+    assert.deepEqual(error.recoveryFailure, {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "ACCOUNT_SNAPSHOT_RESPONSE",
+      retryable: false,
+    })
+    return true
+  })
 })
 
 test("does not replace a newer accepted account snapshot with stale broker data", async () => {
@@ -118,6 +157,25 @@ test("does not replace a newer accepted account snapshot with stale broker data"
     "A stale broker snapshot must be rejected rather than replacing newer account state.",
   )
   assert.equal(fixture.manager.getAccountSnapshot().sourceTime, 100, "A stale response must leave the latest accepted account snapshot unchanged.")
+})
+
+test("treats an invalid open-orders audit DTO as terminal integrity failure", async () => {
+  const fixture = createFixture()
+
+  await assert.rejects(
+    fixture.manager.publishOpenOrdersSnapshot({ orders: [{}] }),
+    (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
+        retryable: false,
+      }, "A failed DTO mapping must not be mislabeled as a retryable Journal publication failure.")
+      return true
+    },
+  )
+
+  assert.equal(fixture.publishedEvents.length, 0, "An invalid audit DTO must not be published.")
+  assert.equal(fixture.getFlushCount(), 0, "An invalid audit DTO must not trigger a durability flush.")
 })
 
 test("records unowned open orders as blocked without adopting them", async () => {
@@ -159,6 +217,11 @@ test("retries an account snapshot after a REST timeout without publishing a prem
   await assert.rejects(
     fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
     (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "REST_RECONCILIATION",
+        stage: "ACCOUNT_SNAPSHOT_READ",
+        retryable: true,
+      }, "A broker-declared account snapshot timeout must be explicitly retryable.")
       assert.equal(
         error.message,
         "Unable to load canonical exchange account balances: account.status request timed out",
@@ -237,6 +300,11 @@ test("preserves the original broker error as cause when the account-wide open-or
   await assert.rejects(
     fixture.manager.publishOpenOrdersSnapshot(),
     (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "REST_RECONCILIATION",
+        stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ",
+        retryable: true,
+      }, "A broker-declared account-wide open-orders timeout must be explicitly retryable.")
       assert.equal(
         error.message,
         "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out",
@@ -286,7 +354,15 @@ test("retains the first recovery account audit publication after a transient flu
 
   await assert.rejects(
     fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
-    /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/,
+    (error) => {
+      assert.match(error.message, /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/)
+      assert.deepEqual(error.recoveryFailure, {
+        category: "DURABILITY",
+        stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+        retryable: true,
+      }, "A transient Journal flush failure must be explicitly retryable only after a fresh recovery attempt.")
+      return true
+    },
     "A failed first Journal sync must reject the account audit even though its event publication already completed.",
   )
 

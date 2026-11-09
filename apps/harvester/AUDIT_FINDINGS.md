@@ -661,6 +661,8 @@ Current source and regression inventory:
 
 ## F-023 — Recovery event-processing failures are mislabeled and overclassified as accounting failures
 
+**TDD RED (2026-11-09):** regressions now cover retryable matched order-transition failure, terminal ownership/accounting-integrity failure, terminal fill-history REST timeout, queued-event failure preventing acknowledgement until a later authoritative retry, permanent integrity failure remaining terminal, and the exact `recovered → executionPending` interleaving. Production behavior is unchanged in this commit.
+
 **Classification:** CONFIRMED DIAGNOSTIC MISCLASSIFICATION; historical recovery-side-effect failure also observed  
 **Severity:** Medium — incident triage can point operators at the wrong failure class  
 **Tracking:** [#769](https://github.com/45s/coinzilla/issues/769), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626)
@@ -688,6 +690,8 @@ This map is derived from `processExecutionFillTransition()`, `reconcileTerminalO
 
 **Required follow-up:** distinguish identity/ownership rejection, accounting-integrity failure, and downstream order-transition/reconciliation failure; include the actual processing stage/reason and preserve matched identity evidence. Define retryability explicitly: a reclassified failure must never reopen trading by itself, but transient downstream failures should not be mislabeled as irrecoverable accounting corruption or silently make all future recovery reminders no-ops. Add deterministic handler/recovery tests for (1) unknown/mismatched order identity, (2) matched owned order with downstream cancellation failure after an already-applied fill, (3) terminal fill-history timeout, (4) retry after transient failure, and (5) permanent accounting mismatch. Keep recovery-mode fill processing read-only with respect to exchange order mutations until application/broker recovery is fully acknowledged. No runtime changes are part of this audit.
 
+
+**Implementation checkpoint (PR #794, 2026-11-09):** test-first regressions distinguish matched order-transition failures from ownership/accounting-integrity failures, verify the `recovered → executionPending` interleaving, and prove queued retryable failures block acknowledgement until a new authoritative attempt. Bootstrap validates failure category, retry policy, and a non-empty stage; unknown or malformed metadata is terminal. Owned-order REST transport failures are explicitly retryable, while malformed successful payloads, ownership conflicts, Journal/fill parity conflicts, and unclassified snapshot failures fail closed. Account/open-order reads, both durable audit flushes, and broker acknowledgement carry explicit stages. Exact-head CI and review remain required; TESTNET acceptance remains PAUSED / UNVERIFIED.
 
 ## F-024 — Account-integrity safety-halt reconciliation used normal trading mode — fixed
 
