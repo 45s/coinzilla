@@ -933,3 +933,43 @@ This narrows the gap: it is not accurate to say that the domain has no serializa
 The test's fake broker emits no market-price tick, so its `placeCalls === 0` assertion proves only that observing an external order does not itself submit an order. It does **not** prove that later market data cannot trigger a new strategy order while the prior order remains unowned. A live execution event for an unowned order can still trip accounting safety; an order that filled entirely while Harvester was offline produces no new user-data event on the restarted stream and is absent from the current open-order snapshot.
 
 This is an explicit current startup policy for external orders, not a reproduced duplicate-order incident. In a restart scenario, a formerly Harvester-owned order is indistinguishable from an external order because the registry is empty. Treat this as a high-priority #654 reconciliation requirement.
+
+
+## F-029 — Process restart clears safety-pause and accounting-failure latches
+
+**Severity:** High  
+**Confidence:** High  
+**Status:** Confirmed process-local state reset; unsafe post-restart resumption is strongly indicated, not reproduced as a live duplicate-order incident.
+
+### Evidence
+
+- `apps/harvester/src/bootstrap/start-harvester.js` initializes `userDataState` with `accountingFailed: false`, `requiresReconciliation: !tradingEnabled`, `ready: false`, `pendingRecovery: false`, and no prior recovery task/generation. For trading-enabled startup, `requiresReconciliation` starts false.
+- The same composition creates a fresh `recoveredState` whose `pausedMarkets`, `durablePausedMarkets`, `recoveryManagedPausedMarkets`, cancellation IDs, replacement intents, terminal-order IDs and Journal fills are empty. These empty values are passed to `makeConservativeTradingEngine({ initialState })`.
+- `apps/harvester/src/use-cases/conservative-trading-engine.js` stores `paused` and `durablePausedMarkets` as in-memory Sets. Its `pause()` function adds the symbol to both sets and publishes `STRATEGY_PAUSED`, but does not invoke `eventPublisher.flush()`.
+- `apps/harvester/src/bootstrap/user-data/create-user-data-event-handler.js` sets `accountingFailed = true` and `ready = false` when order/accounting processing fails. These flags belong to the fresh `userDataState` object and are not restored.
+- `subscribeToUserData()` can set `state.ready = true` after PREFLIGHT and queued-event checks. The open-order audit's `BLOCKED` classification is not a readiness gate. The engine's `canTrade` callback reads this new `userDataState.ready`.
+- `makeConservativeTradingEngine()` supports initial pause sets and order-control state through `initialState`, but the startup composition supplies empty sets. Tests that seed `durablePausedMarkets` exercise same-process reconciliation behavior, not process-restart persistence.
+
+### Sequence and consequence
+
+A safety pause or accounting-failure latch is set during process lifetime. The engine publishes a pause event, and account-integrity safety halt may reconcile/cancel owned BUYs. On process exit, the in-memory sets/flags disappear. On the next trading-enabled startup, fresh state begins with no pause, no accounting-failure latch and no reconciliation requirement. If PREFLIGHT and queued live events do not independently rediscover the old condition, user-data readiness can become true and market events can be evaluated without the previous safety halt.
+
+**Confirmed:** the pause/accounting state is process-local and is reset by the current startup composition.  
+**Strongly indicated:** a previous safety halt can be forgotten across restart and trading can resume without resolving the original condition.  
+**Not reproduced:** a live scenario in which a specific previous halt is cleared and a subsequent market tick places a new order despite an unresolved prior condition.
+
+### Safeguards and limitations
+
+- The safety-halt path reconciles known owned orders and cancels owned BUYs while preserving recovery SELLs. Those actions do not persist the pause latch itself.
+- `STRATEGY_PAUSED` publication has the F-028 durability limitation: it is admitted asynchronously and not immediately flushed.
+- A graceful Journal close may persist the pause event, but startup does not replay it. An abrupt termination may also interrupt subscriber/write/sync processing.
+- PREFLIGHT balances and open orders may reveal some consequences, but they do not reconstruct the reason/scope of the old pause or detect every terminal fill completed while offline.
+- This is distinct from F-023's same-process accounting-failure classification/latch and F-024/#773's safety-halt reconciliation side effects. F-029 concerns loss of safety state across process restart.
+
+### Recommended future DDD/TDD direction
+
+Persist safety-halt scope, reason, generation and required operator/reconciliation action as part of the durable restart projection. Restore the halt before engine activation and keep `canTrade` false until the original cause has been authoritatively reconciled or explicitly acknowledged. Define which transient pauses may be cleared automatically and which accounting/ownership/unknown-outcome pauses must survive restart. Make pause persistence crash-consistent with F-028.
+
+Test graceful restart and abrupt termination after each pause cause, including accounting failure, unknown order outcome, user-data liveness failure and reconciliation conflict. Assert that no market-price event can cause a new order before the prior halt is restored and resolved.
+
+**Related:** F-011 / #654, F-028, F-023, F-024 / #773, #769 and #774.
