@@ -825,3 +825,8 @@ The November 8 DOGE recovery SELL `1323350` was rejected by Binance's local user
 ## 2026-11-09 forensic continuation — accounting-failure latch is process-lifetime terminal
 
 Current source initializes `accountingFailed=false` only once in `start-harvester.js`. Event/status handlers set it true; no reset-to-false path exists in the inspected bootstrap. The status handler also refuses to clear `requiresReconciliation` after broker acknowledgement when this latch is true, and the recovery coordinator refuses to start/retry while it is true. A downstream cancellation/transition error can therefore permanently block recovery for the lifetime of the process, even when the underlying fill accounting was already applied. Preserve this fail-closed behavior for genuine accounting-integrity failures, but define explicit typed failure categories and evidence-based recovery/reset policy for other failures. Tracked under F-023/#769.
+
+
+## 2026-11-09 forensic continuation — public market-stream error handling
+
+Current public Streams source separates error and close: an error is reported to the logger/observer, while only close marks the client closed and schedules reconnect. There is no per-stream receipt-age watchdog. A post-open error without close can therefore leave an open-looking client without data, but this is not proven to have caused the Nov 8 ZRO gap (no afternoon error was logged). Tracked as F-026 under #760; future work must classify fatal transport errors and add bounded per-stream liveness diagnostics rather than blindly reconnecting on every error.
