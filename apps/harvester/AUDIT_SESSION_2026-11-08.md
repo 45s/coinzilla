@@ -650,6 +650,71 @@ markers. No production source or exchange behavior changes are included in
 this test-first commit.
 
 
+## 32. F-023 failure classification and retry implementation — 2026-11-09
+
+PR #788 carries the test-first regressions into the implementation. Engine
+results now expose explicit failure categories and stages. Ownership and
+accounting-integrity failures remain terminal; downstream order-transition,
+REST reconciliation, and Journal durability failures remain retryable only
+through a new single-flight attempt that repeats authoritative reconciliation.
+
+A generation-scoped retryable failure marker prevents a recovery attempt from
+acknowledging the broker after a queued event failed. A later reminder clears
+that marker only when a new attempt begins. The application still requires
+canonical order/fill reconciliation, queued-event draining, fresh account and
+open-order snapshots, both durable RECOVERY audit flushes, and generation
+revalidation before acknowledgement. Unknown failure metadata defaults to
+terminal fail-closed behavior.
+
+The exact-head CI run is pending at this documentation checkpoint. No live or
+TESTNET order operation was performed; TESTNET acceptance remains paused.
+
+
+## 33. Empty TypeError cause preservation — 2026-11-09
+
+The recovery and event-handler diagnostics now retain wrapper error name,
+message, stack, original cause name/message, and cause stack. An empty wrapper
+`TypeError` falls back to the useful cause message without discarding either
+stack. The REST snapshot error wrapper preserves a non-Error thrown value as
+the original `cause`. Deterministic tests cover both event-processing and
+application-recovery diagnostics.
+
+
+## 34. PR #788 exact-head verification — 2026-11-09
+
+The failure-classification implementation, cause-preservation changes, offline
+regressions, recovery contract, architecture diagram, and operational
+documentation are committed on the PR branch. Full GitHub Actions validation
+is pending on the resulting branch head. TESTNET acceptance remains paused;
+no live or TESTNET order operation was performed.
+
+
+## 35. Diagnostic compatibility correction — 2026-11-09
+
+The first full CI pass found one existing startup integration assertion tied
+to the stable log message for an unowned order. The typed failure categories
+and new cause/stack diagnostics were correct; the category-specific message
+was restored to the existing stable wording without weakening or removing the
+regression. All other tests in the initial unit/coverage/targeted runs passed.
+
+
+## 31. F-023 failure-classification TDD — 2026-11-09
+
+Test-only regressions now distinguish matched order-transition failure from
+ownership/accounting-integrity failure. They also cover terminal fill-history
+REST timeout classification, a retryable queued-event failure that must block
+broker acknowledgement until a later authoritative retry, a permanent
+accounting-integrity mismatch that remains terminal, and the exact
+`recovered → executionPending` status interleaving with both broker recovery
+flags false before a queued owned BUY event.
+
+The expected RED behavior is that the current event handler sets the sticky
+`accountingFailed` latch for every failed engine result and the recovery
+coordinator does not inspect failure categories or queued retryable failure
+markers. No production source or exchange behavior changes are included in
+this test-first commit.
+
+
 ## 36. Additional F-023 classification boundaries — 2026-11-09
 
 Additional RED regressions distinguish a malformed successful REST payload from a broker-declared transient REST read failure. They also prove that missing failure metadata and retryable metadata with an empty stage cannot authorize automatic recovery retries. These tests are test-only; production behavior remains unchanged at this checkpoint.

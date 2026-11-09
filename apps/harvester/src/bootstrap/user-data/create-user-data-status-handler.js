@@ -201,7 +201,9 @@ export function createUserDataStatusHandler({
         status.recoveryGeneration === state.recoveryBrokerGeneration &&
         Number.isSafeInteger(state.recoveryBrokerGeneration) &&
         state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
-        !state.accountingFailed
+        !state.accountingFailed &&
+        (!state.retryableRecoveryFailure ||
+          state.retryableRecoveryFailure.generation !== state.recoveryGeneration)
       ) {
         // Only the global completion for this acknowledged subscription may
         // clear the application reconciliation gate.
