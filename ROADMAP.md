@@ -61,11 +61,12 @@
    - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
-### Cross-workspace Binance environment contract — PR #841 in progress
+### Cross-workspace Binance environment contract — PR #841 implementation complete; awaiting merge
 
 - **Decision:** Binance endpoint selection uses only explicit `TRADING_MODE=testnet|live`; `NODE_ENV` must never influence exchange routing. Missing/invalid mode fails closed. See [ADR-0002](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md).
 - **Why:** Harvester and the shared Brokers package must never disagree about which exchange environment receives requests.
-- **Remaining:** finish PR #841, verify all broker consumers and offline harnesses pass the explicit mode, and require green exact-head CI before merge. This does not close Harvester restart-reconciliation issue #654.
+- **Completed:** all broker consumers, Harvester adapter/startup, offline replay harnesses, and test fixtures pass the explicit mode. Exact-head offline CI is green on PR #841 head `10587c19fb0475a109bff331608b5c35ddb039d5`: workspace unit tests, workspace coverage, Harvester targeted tests, process-lock tests on Ubuntu/Windows, JavaScript syntax/agent policy, actionlint, Utils tests, and production dependency audit.
+- **Remaining:** PR #841 awaits owner merge decision. The read-only Binance TESTNET integration was skipped; no exchange acceptance is claimed. This does not close Harvester restart-reconciliation issue #654.
 - **Owners:** [Brokers](packages/brokers/ROADMAP.md) and [Harvester](apps/harvester/ROADMAP.md).
 
 ## DEFERRED — evidence or consumer required
