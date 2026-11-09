@@ -1458,6 +1458,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
   }
   const config = {
+    runtime: tradingConfig.runtime,
     strategies: {
       CG_coinGrabber: {
         enabled: true,
