@@ -47,7 +47,7 @@ Historical reports are snapshots, not current implementation authority. Use thei
 - [Documentation plans index](plans/README.md)
 - [Documentation migration plan](plans/DOCUMENTATION_MIGRATION.md)
 - [Harvester documentation inventory](plans/HARVESTER_DOCUMENTATION_INVENTORY.md)
-- [Domain-first delivery plan](DOMAIN_FIRST_DELIVERY_PLAN.md) — review current relevance before reusing
+- [Domain-first delivery plan](DOMAIN_FIRST_DELIVERY_PLAN.md) — superseded historical plan; current priorities are in the Harvester roadmap
 
 ## Maintenance
 
