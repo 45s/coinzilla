@@ -1,5 +1,7 @@
 # Harvester Trading Strategies
 
+> **Authority and status:** Conservative behavior is defined only by the [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The Aggressive material in this document is exploratory product/design discussion, not an accepted executable contract; Aggressive remains deferred and disabled. Do not implement its proposed rules until the product decisions are explicitly finalized and a dedicated specification is accepted.
+
 Harvester is one independent trading process with a shared Trading Engine and a strategy policy selected through `trading-config.json`. **Conservative is the only enabled and executable strategy for the first release. Configure it under `strategies.conservative.enabled`; keep `strategies.aggressive.enabled` set to `false` until Conservative is proven end to end on TESTNET.** There is no strategy handover or simultaneous strategy control in the current release. Strategy availability belongs in the trading config; environment variables remain for deployment-specific settings and the separate TESTNET execution safety gate.
 
 ## Implementation priority
