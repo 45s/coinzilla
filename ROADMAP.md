@@ -36,6 +36,10 @@
 9. **Use DB only for a real domain-owned persistence requirement.** Define repository ports in the owning context, keep SQL in adapters, and test transactions, locking, migration and backup/restore before deployment.
 10. **Keep Event Bus and Notifiers bounded and optional by contract.** Preserve explicit delivery, failure and shutdown semantics. Do not add retries, dead-letter queues, new transports or durable notification outboxes without a concrete consumer requirement.
 
+## IMPORTANT — documentation governance and maintainability
+
+12. **Documentation governance and repository-wide consolidation (#795)** — establish one source of truth per subject, clear repository/application ownership, discoverable indexes, preserved historical evidence, ADR practice, concise roadmaps, and mandatory AI-agent documentation maintenance. Governance foundation and initial indexes are tracked in [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md); phased inventory and migration are tracked in [#795](https://github.com/45s/coinzilla/issues/795). Do not claim the full migration is complete until the recursive inventory and per-file dispositions are verified.
+
 ## Application and package execution map
 
 - [Harvester](apps/harvester/ROADMAP.md) — trading safety, recovery, restart reconciliation, evidence and session statistics.
