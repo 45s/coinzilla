@@ -42,7 +42,7 @@ cp apps/harvester/.env.production.example apps/harvester/.env.production
 pnpm --filter @coinzilla/harvester start
 ```
 
-The production launcher loads `.env.production` when that file exists and preloads an initializer that sets `NODE_ENV=production` before application and broker modules load. This selects Binance Spot LIVE market/account endpoints in read-only mode. Provide LIVE API credentials through `.env.production` or the deployment secret manager. Use an API key with account-read permissions; keep trading and withdrawals disabled. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
+The production launcher loads `.env.production` when that file exists and preloads an initializer that sets `NODE_ENV=production` before application and broker modules load. This selects Binance Spot LIVE endpoints and enables Conservative LIVE order execution. Provide LIVE API credentials through `.env.production` or the deployment secret manager. Use a dedicated API key with Spot trading permission and withdrawals disabled. Never copy TESTNET credentials into production. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
 
 Tests:
 
@@ -63,7 +63,7 @@ Harvester uses one `trading-config.json` with strategy-scoped configuration. The
 
 All settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Strategy availability is not configured through environment variables.
 
-Runtime connectivity and execution policy also belong in the same JSON file, under `runtime.profiles`. The `development` profile selects Binance TESTNET and explicitly opts into Conservative TESTNET execution; the `production` profile selects Binance LIVE connectivity but keeps order execution disabled. `NODE_ENV` selects the profile. The `test` profile permits broker fakes but keeps execution disabled; an unspecified environment uses the safe no-broker/read-only default. Environment files contain only standard process settings and secrets (Binance API credentials and optional Telegram credentials), never broker, trading-mode, Journal, or application feature flags.
+Runtime connectivity and execution policy also belong in the same JSON file, under `runtime.profiles`. The `development` profile selects Binance TESTNET and explicitly opts into Conservative TESTNET execution; the `production` profile selects Binance LIVE connectivity and explicitly enables LIVE order execution. `NODE_ENV` selects the profile. The `test` profile permits broker fakes but keeps execution disabled; an unspecified environment uses the safe no-broker/read-only default. Environment files contain only standard process settings and secrets (Binance API credentials and optional Telegram credentials), never broker, trading-mode, Journal, or application feature flags.
 
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup performs REST ticker seeding or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
 
@@ -99,14 +99,14 @@ Example:
 
 `makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The current USDT pair configuration reflects the reported 0.1% maker/taker setting; FDUSD pairs retain `makerPercent: 0` and use `takerPercent: 0.1`. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
-The configuration loader and validation live in `src/infrastructure/config/load-trading-config.js` and `src/domain/trading-config.js`. Conservative is the first executable mode. The development profile explicitly enables TESTNET execution; test and unspecified profiles remain read-only/no-broker; production selects LIVE connectivity but remains read-only.
+The configuration loader and validation live in `src/infrastructure/config/load-trading-config.js` and `src/domain/trading-config.js`. Conservative is the first executable mode. The development profile explicitly enables TESTNET execution; test and unspecified profiles remain read-only/no-broker; production selects LIVE connectivity and enables Conservative LIVE execution.
 
 ## Runtime and safety
 
-- Journal is enabled by default and writes to the application-local `logs/` directory. Every broker-connected startup, including production read-only mode, requires a ready Journal and a durable PREFLIGHT account audit before market subscriptions. TESTNET trading additionally fails closed unless the Journal exposes durable `flush()` support before the trading engine activates.
+- Journal is enabled by default and writes to the application-local `logs/` directory. Every broker-connected startup, including production LIVE trading mode, requires a ready Journal and a durable PREFLIGHT account audit before market subscriptions. TESTNET trading additionally fails closed unless the Journal exposes durable `flush()` support before the trading engine activates.
 - Current startup creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state; it does not replay prior Journal sessions. Do not treat a process restart after trading as reconciled or safe. Follow [#654](https://github.com/45s/coinzilla/issues/654).
 - Pre-existing external/unowned orders are reported but are not adopted or canceled automatically.
-- Order execution is TESTNET-only. Production connects to Binance LIVE in read-only mode; live order execution is not implemented and is rejected by configuration validation. Use the documented TESTNET runbook and explicit authorization for any operator action.
+- Development executes on Binance TESTNET; production executes on Binance LIVE when the production runtime profile is selected. The production profile is an explicit real-order opt-in. The current startup path does not restore previous Portfolio, RecoveryLedger, or OrderRegistry state after a process restart (tracked in #654); do not assume restart-safe unattended operation until that work is implemented and verified.
 - The process-ownership locks are described in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
 
 ## Documentation
