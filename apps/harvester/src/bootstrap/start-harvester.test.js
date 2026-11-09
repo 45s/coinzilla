@@ -2236,9 +2236,19 @@ test("reconciles the in-memory order registry before reopening trading after str
 
 test("fails closed when trading is explicitly enabled without selecting a broker", async () => {
   let brokerFactoryCalled = false
+  const configWithoutBroker = {
+    ...tradingConfig,
+    runtime: {
+      ...tradingConfig.runtime,
+      profiles: {
+        ...tradingConfig.runtime.profiles,
+        development: { broker: null, trading: { enabled: true, mode: "testnet" } },
+      },
+    },
+  }
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => tradingConfig,
+      loadConfig: async () => configWithoutBroker,
       env: {
         NODE_ENV: "development",
       },
