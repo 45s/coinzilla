@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
 import { createWriteStream, mkdirSync } from "node:fs"
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
 import { forwardChildOutput } from "./forward-child-output.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 
-const logDirectory = resolve(process.cwd(), "logs")
+const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
+const logDirectory = resolve(packageDirectory, "logs")
 const logPath = resolve(logDirectory, "terminal.log")
 const sessionStartedAt = new Date().toISOString()
 const runtimeSessionId = randomUUID()
@@ -55,6 +57,7 @@ child = spawn(
   process.execPath,
   ["--env-file=.env.development", "src/index.js"],
   {
+    cwd: packageDirectory,
     // On POSIX, isolate the child in its own process group so Ctrl+C is
     // handled once by this runner and can be forwarded deliberately.
     // Windows console control events are delivered to both processes.
