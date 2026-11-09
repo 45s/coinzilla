@@ -55,7 +55,7 @@ if (streamOpenErrors.length > 0) {
 
 child = spawn(
   process.execPath,
-  ["--env-file=.env.development", "src/index.js"],
+  ["src/index.js"],
   {
     cwd: packageDirectory,
     // On POSIX, isolate the child in its own process group so Ctrl+C is
@@ -65,9 +65,6 @@ child = spawn(
     stdio: ["inherit", "pipe", "pipe"],
     env: {
       ...process.env,
-      // The development launcher must not inherit a production NODE_ENV from
-      // the invoking shell; this profile is explicitly Binance TESTNET.
-      NODE_ENV: "development",
       COINZILLA_LOG_COLOR: process.env.NO_COLOR === undefined && process.stdout.isTTY
         ? "1"
         : "0",
