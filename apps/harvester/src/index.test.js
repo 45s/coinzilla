@@ -1412,3 +1412,44 @@ test("does not await process-start publication before emitting the startup-faile
     process.exitCode = previousExitCode
   }
 })
+
+
+test("loads the production profile once and starts Binance LIVE without acquiring a trading lock", async () => {
+  const tradingConfig = {
+    runtime: {
+      profiles: {
+        production: { broker: "binance", trading: { enabled: false, mode: "live" } },
+      },
+    },
+  }
+  let lockCalls = 0
+  let startInput
+  await main({
+    env: { NODE_ENV: "production" },
+    loadConfig: async () => tradingConfig,
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true, durable: true }),
+      status: { state: "ready" },
+    }),
+    acquireProcessLock: async () => {
+      lockCalls += 1
+      return acquireProcessLock()
+    },
+    start: async (input) => {
+      startInput = input
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+      }
+    },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+
+  assert.equal(lockCalls, 0, "Production read-only connectivity must not acquire the TESTNET order-execution process lock.")
+  assert.strictEqual(startInput.tradingConfig, tradingConfig, "The same validated profile must be passed into Harvester startup.")
+  assert.equal(startInput.env.NODE_ENV, "production", "The production profile must be passed unchanged to the runtime.")
+})
