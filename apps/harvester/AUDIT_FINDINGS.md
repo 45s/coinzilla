@@ -338,6 +338,18 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 
 **Additional persistence boundary discovered — F-028:** the applied-fill path publishes `FILL_APPLIED` after accounting but does not call `eventPublisher.flush()`. Event publisher documentation defines publication as synchronous admission only; EventBus subscriber handlers are asynchronous; Journal `record()` acknowledges `durable: false`, while `flush()` waits for subscribers/write queue and performs fsync. Graceful close drains and syncs, but abrupt termination has no equivalent guarantee. See F-028 in `AUDIT.md`. This confirms a missing durability guarantee, not a reproduced historical lost-fill incident.
 
+
+
+**Existing serialization and injection primitives — inspected 2026-11-09**
+
+- `Portfolio.value` includes Position values, applied fill IDs and fill fingerprints. `Position.value` includes canonical Market identity, base/free quantities, quote cash flow and spent amount.
+- `RecoveryLedger.value` includes Market identity, buy cost, net sell proceeds, and applied fill IDs/fingerprints. `OrderRegistry.value` includes canonical order values.
+- These domain constructors require typed objects (`Market`, `Quantity`, `Money`, `CanonicalOrder`); the inspected classes expose value projections but no static JSON hydration factory.
+- `createPortfolioWorkflow()` accepts `initialPortfolio` and `initialRecoveryLedgers`. `makeConservativeTradingEngine()` accepts an `initialState` containing an `OrderRegistry`, Journal fill identities and strategy/order-control sets.
+- `startHarvester()` exposes no restored-state input. It always constructs fresh Portfolio/RecoveryLedger/OrderRegistry values and passes those empty values into the engine. Thus reusable serialization and injection seams exist, but no JSON-to-domain restoration mapper or startup wiring was found in the traced composition path.
+
+This narrows the gap: it is not accurate to say that the domain has no serializable state shape. The missing pieces are validated hydration/mapping, complete durable projection semantics, and composition-root integration before engine activation.
+
 **Operational consequence and confidence**
 
 - **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
