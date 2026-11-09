@@ -2,7 +2,21 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
-## Priority execution plan — current develop direction (2026-11-10)
+## Priority execution plan — current develop direction (2026-11-09)
+
+### In progress — per-session log directory layout (PR #874)
+
+- [~] Group each process's DEBUG, TRACE, development terminal capture and Journal JSONL file under one UTC/session-ID directory.
+- [~] Keep append-only cumulative DEBUG, TRACE and terminal histories under `logs/cumulative/`; keep process ownership locks under `~/.coinzilla/harvester/process-locks/`.
+- [~] Preserve legacy flat log and Journal files in place; do not migrate, truncate or delete existing history. The Harvester balance-reconciliation CLI reads both legacy root-level Journal files and new session directories.
+- [~] No Journal record schema, durability barrier, replay behavior or trading behavior changes.
+
+### In progress — per-session log directory layout (PR #874)
+
+- [~] Group each process's DEBUG, TRACE, development terminal capture and Journal JSONL file under one UTC/session-ID directory.
+- [~] Keep append-only cumulative DEBUG, TRACE and terminal histories under `logs/cumulative/`; keep process ownership locks under `~/.coinzilla/harvester/process-locks/`.
+- [~] Preserve legacy flat log and Journal files in place; do not migrate, truncate or delete existing history. The Harvester balance-reconciliation CLI reads both legacy root-level Journal files and new session directories.
+- [~] No Journal record schema, durability barrier, replay behavior or trading behavior changes.
 
 This section is the authoritative implementation order for current work. It supersedes older "current direction", P0/P1 and future-work notes below wherever their status or ordering conflicts. Historical incident records remain evidence, not active tasks. Harvester is the only application currently in this workspace.
 
@@ -42,7 +56,7 @@ This section is the authoritative implementation order for current work. It supe
 
 ### IMPORTANT — improve correctness and operational confidence
 
-- [x] **PR #866 — Journal startup diagnostics and operator error vocabulary (merged 2026-11-09).** Preserve the Journal package's fail-closed exclusive lock behavior while exposing the stable Harvester diagnostic identifier (`ErrorJournal001`) for `JOURNAL_DIRECTORY_LOCKED`. The [Error Vocabulary](./docs/error-vocabulary.md) documents the exact stale-lock verification/removal procedure and is linked from the operations indexes; the original machine-readable error code and cause remain intact. Exact PR head `3bba286588c930c65e4f6cedff0e707371b79821` passed all six required workflows, including 858/858 Harvester tests. The read-only TESTNET integration was skipped; no exchange operation or acceptance is claimed. Automatic stale-lock takeover remains unsupported.
+- [~] **PR #866 — Journal startup diagnostics and operator error vocabulary.** Preserve the Journal package's fail-closed exclusive lock behavior while exposing a stable Harvester diagnostic identifier (`ErrorJournal001`) for `JOURNAL_DIRECTORY_LOCKED`. Publish the exact stale-lock verification/removal procedure in the [Error Vocabulary](./docs/error-vocabulary.md), link it from the operations indexes, and retain the original machine-readable error code and cause. No automatic stale-lock takeover or journal-lock implementation change.
 
 4. **Keep Journal evidence complete without expanding trading-blocking behavior.**
    - **Why:** investigation requires decision, request, broker acknowledgement, execution, fee and account evidence to be correlated. Missing fields make incident analysis guesswork, but optional diagnostics must not become new trading gates.

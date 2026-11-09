@@ -6,29 +6,34 @@ to the terminal.
 
 ## Destinations and thresholds
 
-Harvester keeps three logging files, plus the separate Journal persistence:
+Harvester groups process-specific files under one directory and keeps
+append-only cumulative histories separately:
 
-| File | Contents |
-| --- | --- |
-| `logs/harvester.log` | Cumulative structured DEBUG-and-higher diagnostics (JSONL) |
-| `logs/harvester-trace.log` | Cumulative structured TRACE-and-higher diagnostics (JSONL) |
-| `logs/terminal.log` | Cumulative raw stdout and stderr captured by the development runner |
+```text
+logs/
+├── cumulative/
+│   ├── harvester.log
+│   ├── trace.log
+│   └── terminal.log
+└── sessions/
+    └── <UTC timestamp>-<runtime session ID>/
+        ├── harvester.log
+        ├── trace.log
+        ├── terminal.log       # development runner only
+        └── <UTC timestamp>-<runtime session ID>.jsonl
+```
 
-Each Harvester process creates two timestamped structured session files beside
-the cumulative files: `harvester-<UTC timestamp>-<runtime session ID>.log` and
-`harvester-trace-<UTC timestamp>-<runtime session ID>.log`. The development
-runner additionally creates `terminal-<UTC timestamp>-<runtime session ID>.log`.
-The timestamp and runtime session ID are shared with process provenance and the
-Journal `harvester.process_started` event. The structured session files receive
-the same entries as their cumulative counterparts; the terminal session file
-receives the same raw child output as `terminal.log`. Session files use
-exclusive creation and are never overwritten.
+The DEBUG, TRACE and terminal files use short, stable names inside the same
+process directory. The Journal JSONL file is created by the Journal package
+using the same UTC timestamp and runtime session ID in its filename. Its
+records are application events, not copies of diagnostic log lines. The
+directory name, structured log files, terminal capture and
+`harvester.process_started` event all share one immutable process identity.
+Session files are created exclusively and are never overwritten.
 
-The Journal is a separate durable event store; its JSONL session filename uses
-the same process UTC start timestamp and runtime session ID as the DEBUG, TRACE
-and terminal session filenames. Its records are application events, not copies
-of diagnostic log lines. The console is also not a file: it displays a compact
-INFO-and-higher summary and remains independently configurable.
+The cumulative DEBUG, TRACE and terminal files append across process runs.
+The console is not a file: it displays a compact INFO-and-higher summary and
+remains independently configurable.
 
 Complete console lines (timestamp, level, message, and displayed details) are
 colored when stdout is an interactive terminal and `NO_COLOR` is not set.
@@ -56,7 +61,7 @@ that working directory, so its terminal files always live in the canonical
 `apps/harvester/logs/` directory.
 
 The development runner appends raw child stdout and stderr to
-`apps/harvester/logs/terminal.log` and its timestamped session counterpart.
+`apps/harvester/logs/cumulative/terminal.log` and its timestamped session counterpart.
 Both files receive identical raw output. The runner opens both destinations
 before starting the child; a session-name collision or stream-open failure
 stops startup without overwriting an existing session. Durable file capture
@@ -186,8 +191,10 @@ normally in that case.
 
 The file transports are attached to the shared logger once during CLI startup.
 Each structured transport writes to both its cumulative file and its unique
-per-session file. Cumulative files always append; session files use exclusive
-creation. No existing log file is truncated or removed at startup or shutdown.
+per-session file. Cumulative files under `logs/cumulative/` always append; each process gets a
+new `logs/sessions/<timestamp>-<session-id>/` directory whose files use
+exclusive creation. No existing log file or prior session directory is
+truncated or removed at startup or shutdown.
 They are removed and their streams are closed after runtime, Journal, and
 EventBus shutdown. They are also closed after a startup failure. Transport
 write failures are surfaced by the shared logger's transport error handling;
@@ -198,15 +205,16 @@ accounting, event publication, or Journal persistence semantics.
 
 ## Session history and retention
 
-The cumulative files are convenience histories spanning multiple runs. The
-per-session files make one run independently inspectable. DEBUG, TRACE,
+The files under `cumulative/` are convenience histories spanning multiple
+runs. Each directory under `sessions/` makes one run independently inspectable. DEBUG, TRACE,
 terminal and Journal filenames share the same UTC process-start timestamp and
 runtime-session ID; the Journal process-start event carries that same identity
 in its record. Journal records are structured application events, not copies
 of diagnostic log lines. Journal replay does not restore trading state.
 
-The TRACE transport has a TRACE threshold, so `harvester-trace.log` receives
-TRACE entries and every higher severity; it is not a TRACE-only file.
+The TRACE transport has a TRACE threshold, so `trace.log` in both the current
+session directory and `cumulative/` receives TRACE entries and every higher
+severity; it is not a TRACE-only file.
 
 No log rotation, size limit, automatic retention, compression, or deletion is
 implemented. Cumulative and per-session files therefore grow until an

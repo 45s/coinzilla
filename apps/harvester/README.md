@@ -106,7 +106,7 @@ The strategy configuration remains in `trading-config.json`; exchange selection 
 
 ## Runtime and safety
 
-- Journal is enabled by default and writes to the application-local `logs/` directory. Every broker-connected startup, including production LIVE trading mode, requires a ready Journal and a durable PREFLIGHT account audit before market subscriptions. TESTNET trading additionally fails closed unless the Journal exposes durable `flush()` support before the trading engine activates.
+- Journal is enabled by default and writes its JSONL session into the current process directory under `logs/sessions/`. Cumulative diagnostics live under `logs/cumulative/`. Every broker-connected startup, including production LIVE trading mode, requires a ready Journal and a durable PREFLIGHT account audit before market subscriptions. TESTNET trading additionally fails closed unless the Journal exposes durable `flush()` support before the trading engine activates.
 - Current startup creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state; it does not replay prior Journal sessions. Do not treat a process restart after trading as reconciled or safe. Follow [#654](https://github.com/45s/coinzilla/issues/654).
 - Pre-existing external/unowned orders are reported but are not adopted or canceled automatically.
 - `TRADING_MODE=testnet` executes on Binance Spot TESTNET; `TRADING_MODE=live` executes on Binance Spot LIVE and can submit real orders. Selecting `live` is the explicit environment choice; no separate trading-enable flag is used. The current startup path does not restore previous Portfolio, RecoveryLedger, or OrderRegistry state after a process restart (tracked in #654); do not assume restart-safe unattended operation until that work is implemented and verified.
@@ -132,7 +132,7 @@ See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the required durable 
 
 ### Trading process ownership
 
-The actual broker-wide host lock and Journal-directory lock, acquisition/release order and stale-owner rules are defined in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
+The broker-wide and Harvester process locks live under `~/.coinzilla/harvester/process-locks/`; Journal's own hidden writer lock stays with its active session directory. Acquisition/release order and stale-owner rules are defined in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
 
 ### Optional Telegram notifications
 
@@ -156,11 +156,12 @@ See [Trading strategies](./docs/trading-strategies.md) for an overview; the [Con
 
 ## Logging
 
-The development runner writes raw stdout/stderr to the cumulative
-`apps/harvester/logs/terminal.log` and one timestamped terminal session file.
-Structured DEBUG/TRACE logs use matching process-session identities. Standalone
-`start` creates structured session files but does not create terminal-capture
-files. See [Logging](./docs/LOGGING.md) for destinations, lifecycle and retention.
+The development runner writes raw stdout/stderr to
+`apps/harvester/logs/cumulative/terminal.log` and the `terminal.log` inside
+the current `logs/sessions/<timestamp>-<session-id>/` directory. Structured
+DEBUG/TRACE logs and the Journal JSONL file live in that same session directory.
+Standalone `start` creates structured session files but does not create
+terminal-capture files. See [Logging](./docs/LOGGING.md) for destinations, lifecycle and retention.
 
 ## Implementation style
 
