@@ -504,6 +504,30 @@ test("keeps a permanent accounting-integrity failure terminal across recovery re
   assert.equal(reconciliationCalls, 1, "A terminal accounting-integrity failure must not be retried or cleared by another broker reminder.")
 })
 
+test("treats a failed reconciliation without explicit failure metadata as terminal", async () => {
+  let reconciliationCalls = 0
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      return {
+        ok: false,
+        errors: [new Error("unclassified owned-order reconciliation failure")],
+      }
+    },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.accountingFailed, true, "A reconciliation failure without an explicit category must fail closed as terminal.")
+  assert.equal(fixture.state.retryableRecoveryFailure, null, "Missing metadata must never be interpreted as a retryable REST failure.")
+  assert.equal(fixture.state.ready, false, "An unclassified recovery failure must keep trading readiness closed.")
+  assert.equal(fixture.calls.acknowledgements, 0, "An unclassified recovery failure must never acknowledge the broker generation.")
+
+  fixture.start()
+  assert.equal(reconciliationCalls, 1, "A broker reminder must not retry an unclassified terminal failure.")
+})
+
 test("keeps recovery blocked when owned-order reconciliation returns a failed result", async () => {
   const fixture = createRecovery({
     reconcileOwnedOrders: async () => ({

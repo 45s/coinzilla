@@ -648,3 +648,8 @@ The expected RED behavior is that the current event handler sets the sticky
 coordinator does not inspect failure categories or queued retryable failure
 markers. No production source or exchange behavior changes are included in
 this test-first commit.
+
+
+## 36. Additional F-023 classification boundaries — 2026-11-09
+
+Additional RED regressions distinguish a malformed successful REST payload from a broker-declared transient REST read failure. They also prove that missing failure metadata and retryable metadata with an empty stage cannot authorize automatic recovery retries. These tests are test-only; production behavior remains unchanged at this checkpoint.

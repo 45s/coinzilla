@@ -150,6 +150,42 @@ test("classifies a matched order-transition failure as retryable without poisoni
   assert.equal(logs[0]?.failureStage, "RECOVERY_SELL_CANCELLATION")
 })
 
+test("treats malformed retryable engine failure metadata as terminal", async () => {
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      errors: [new Error("malformed failure stage")],
+      failure: {
+        category: "REST_RECONCILIATION",
+        stage: "",
+        retryable: true,
+      },
+    }),
+    getOrders: () => [],
+  }
+  const { handler, state } = createHandler({
+    state: createState({ recoveryGeneration: 8 }),
+    engine,
+  })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executedOrder: {
+        market: { symbol: "DOGEUSDT" },
+        brokerOrderId: "owned-order",
+        clientOrderId: "owned-client",
+        side: "BUY",
+        status: "FILLED",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, true, "Retryable metadata with an empty stage must be treated as unclassified terminal failure.")
+  assert.equal(state.retryableRecoveryFailure, null, "Malformed metadata must never authorize an automatic recovery retry.")
+  assert.equal(state.status, "EXECUTION_ACCOUNTING_FAILED", "Malformed engine failure metadata must retain the terminal safety status.")
+})
+
 test("contains observer failures without rolling back a valid event", async () => {
   const { handler, state, actions } = createHandler({
     onUserDataEvent: async () => { throw new Error("observer unavailable") },
