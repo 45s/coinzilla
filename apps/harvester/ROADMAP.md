@@ -1,6 +1,6 @@
 # Harvester Roadmap
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Priority execution plan — current develop direction (2026-11-09)
 
 This section is the authoritative implementation order for current work. It supersedes older "current direction", P0/P1 and future-work notes below wherever their status or ordering conflicts. Historical incident records remain evidence, not active tasks. Harvester is the only application currently in this workspace.
 
@@ -20,9 +20,10 @@ This section is the authoritative implementation order for current work. It supe
    - **Do:** preserve generation/subscription fencing, queued user-data event handling, single-flight reconciliation, canonical order/fill history checks, and durable RECOVERY audit barriers. Investigate any remaining reproducible failure in the recovery state machine. Keep the gate closed on incomplete history, failed audit flush, stale acknowledgement, or conflicting state.
    - **Verify:** cover first and second disconnects, stale and current generations, repeated reminders, queued BUY/SELL fills, multiple subscribers, history/API errors, Journal write failures and acknowledgement ordering. TESTNET acceptance remains **PAUSED / UNVERIFIED** after the regional HTTP 451 restriction; do not retry the same hosted path or claim exchange acceptance.
 
-3. **Implement #654 process-restart reconciliation before enabling unattended restarts.**
+3. **#654 process-restart reconciliation — active forensic phase; implementation remains separate.**
    - **Why:** current Portfolio, RecoveryLedger and OrderRegistry state is process-local. A restart after an order/fill can lose ownership and reservations while Binance still has open orders or later executions. Same-process reconnect recovery does not solve process death.
-   - **Do:** define the minimum durable state (client/broker order IDs, order intent and terminal state, fill/trade identity, deduplication, reservations, Portfolio/Position, recovery-cycle state, strategy ownership and config/schema version). Persist execution facts before acknowledging them; on startup reconcile persisted state with balances, open orders and available order/trade history before READY. Define explicit operator intervention for retention gaps or irreconcilable conflicts.
+   - **Current phase:** evidence/documentation only. The tested PR #606 helper stack remains in the repository but is not wired into current startup. The old integration failed closed because `marketUniverseComplete` was false; current runtime bypasses that gate and starts fresh. Do not modify application source/tests or re-enable replay in this phase.
+   - **Future DDD/TDD implementation:** resolve historical market-universe completeness, crash-consistent fill/pause persistence, and startup restoration using the existing projection/restore/account/trade-history helpers. Restore ownership and pause state, resolve UNKNOWN orders by canonical clientOrderId lookup, reconcile balances/open orders/fills, and keep READY closed on any incomplete or conflicting evidence.
    - **Verify:** crash/restart at every order-submit, cancel, partial-fill, full-fill and recovery boundary; prove idempotent accounting and no duplicate order placement. Do not claim exactly-once transport delivery.
 
 ### Selected process provenance work — issue #763
@@ -69,7 +70,7 @@ This section is the authoritative implementation order for current work. It supe
 - Remove obsolete references to the deleted legacy application; no extraction or migration work remains for it.
 
 
-## Current blockers and work selection — 2026-11-08
+## Current blockers and work selection — 2026-11-09
 
 This section is the current operational status and supersedes older statements below that describe TESTNET acceptance as the immediate next action.
 
@@ -111,7 +112,7 @@ This section is the current operational status and supersedes older statements b
 
 - [x] **#650 — Journal evidence completeness:** completed in PR #652; required evidence matrix and allowlisted evidence coverage merged and verified. Preserve mandatory durability barriers; additional diagnostics remain best-effort.
 - [x] **#646 / #656 — Conservative conformance and dust:** completed in PR #653; exact-head offline CI passed. Issues #646 and #656 are closed.
-- [ ] **#654 — process-restart reconciliation:** deferred implementation, but a blocker for unattended restarts/operation; see the Critical priority plan above.
+- [ ] **#654 — process-restart reconciliation:** active forensic investigation; runtime implementation remains a separate DDD/TDD workstream and a blocker for unattended restarts. See F-031 and the current session report.
 - **Legacy application removal:** complete. No extraction, migration or maintenance work remains; keep its former implementation and terminology out of current Harvester documentation.
 
 > **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
@@ -121,11 +122,11 @@ This section is the current operational status and supersedes older statements b
 >
 > **Historical runtime decision — 2026-11-05:** durable Journal replay and process-restart recovery were intentionally disabled for the first Conservative TESTNET workflow. The user now explicitly requests forensic investigation, not implementation or replay enablement. Current `index.js` and `prepareOptionalJournal()` do not read prior sessions; `startHarvester()` creates fresh state. The separate PREFLIGHT/CLOSING account audit and pre-side-effect order/cancel intent flushes remain enabled. Any runtime integration must be a separate DDD/TDD phase after this investigation.
 >
-> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for same-process reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
+ > **Historical 2026-11-06 implementation snapshot — superseded by the 2026-11-09 forensic direction below:** PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for same-process reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
 > The startup audit is a required evidence gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Existing open orders are recorded as external/unowned but do not make the audit a trading-startup rejection. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
 >
-> **The remaining critical milestone is joint Binance Spot TESTNET validation.** Offline CI is not exchange acceptance. Follow [TESTNET_VALIDATION_RUNBOOK.md](./docs/TESTNET_VALIDATION_RUNBOOK.md); keep Harvester stopped during preparation. No order submission/cancellation or account-setting change is authorized until the operator and assistant explicitly begin the joint session.
+ > At that time, the remaining critical milestone was joint Binance Spot TESTNET validation. Offline CI is not exchange acceptance. TESTNET remains paused/unverified under the regional eligibility restriction; this historical milestone does not supersede the current #654 forensic workstream.
 >
 > The historical twelve-BUY incident is established: twelve distinct 400 DOGE BUYs at 0.07598 USDT (4,800 DOGE / 364.704 USDT gross), client IDs `h-DOGEUSDT-32` through `h-DOGEUSDT-43`, all TAKER. The confirmed race was FILLED acknowledgements preceding canonical fill application. The merged engine awaits full execution reconciliation before releasing the serialized transition; offline regression coverage includes twelve sequential immediate fills and weighted execution-price references. TAKER execution alone does not explain the repeated BUYs.
 >
