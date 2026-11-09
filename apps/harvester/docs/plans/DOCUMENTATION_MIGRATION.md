@@ -67,7 +67,7 @@ No file may be deleted solely because it is old, large, similarly named or appar
 - [x] Add Harvester documentation index.
 - [x] Make documentation policy part of mandatory AI-agent instructions.
 - [x] Extend existing CI policy/link validation to cover canonical indexes.
-- [ ] Verify policy checks and links on the exact PR head.
+- [x] Verify policy checks and repository-wide internal links on exact PR heads: PR #801 head `e4e5977fc8bff546221677be39262d26590463bb` passed all six workflows, including JavaScript Syntax / `check:agent-policy`.
 
 ### Phase 1 — Complete inventory and evidence map
 
@@ -109,7 +109,7 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 ### Phase 5 — Enforcement and maintenance
 
-- [ ] Verify existing CI checks and branch rulesets actually require the policy/link check.
+- [x] Verify the active `develop-core` ruleset requires the `Check JavaScript syntax` context, which runs `check:agent-policy` and repository-wide Markdown relative-link validation. This is enforced inside that required context, not as a standalone documentation status. The ruleset API evidence is recorded in [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md).
 - [ ] Establish Markdown linting only after selecting a tool, defining a baseline and validating compatibility.
 - [ ] Evaluate external-link checking separately from deterministic internal-link validation.
 - [ ] Add metadata/index validation where it can be deterministic and low-maintenance.
@@ -133,7 +133,7 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 A source-based documentation consistency review also found and corrected a material process-lock discrepancy: the README incorrectly said stale locks are never reclaimed, while the source and tests permit narrowly guarded same-host dead-PID reclamation; Journal Operations described only the directory lock and omitted the broker-wide host lock. Both documents are now aligned with `acquire-harvester-process-lock.js`, `acquire-harvester-process-locks.js` and their deterministic tests. The Journal integration roadmap's Step 8 branch status was also refreshed against merged PR #473; Step 8 remains open rather than being falsely marked complete.
 
-A complete recursive Git tree is available for the baseline commit. The repository inventory covers all 97 Markdown files: 42 Harvester files and 55 other repository/root/package files. The Harvester inventory contains five REVIEW candidates; the repository-wide inventory contains two Brokers REVIEW candidates. All other files are conservatively KEEP at their current paths. This is an initial disposition, not proof that every factual statement is current or every reference has been traced.
+A complete recursive Git tree is available for the baseline commit. The repository inventory covers all 97 Markdown files: 42 Harvester files and 55 other repository/root/package files. The Harvester inventory began with four REVIEW candidates. Content review has resolved three: the domain-first plan is marked SUPERSEDED, the Journal integration roadmap is KEEP with stale milestone status corrected, and the strategy overview is KEEP with its canonical authority and current implementation status clarified. One Harvester candidate (`testnet-order-tools.md`) remains REVIEW because historical diagnostic notes are mixed with live operator instructions and their complete provenance/reference mapping is not yet established. The repository-wide inventory still has two Brokers REVIEW candidates (`packages/brokers/ARCHITECTURE.md` and `packages/brokers/ROADMAP.md`). All other files retain their conservative baseline dispositions. This is not proof that every factual statement in every file is current or every reference has been traced.
 
 The inventory phase has established a complete path/size/category baseline. The remaining work is content-level authority review, inbound/outbound link and GitHub issue/PR reference mapping, source verification, and final disposition of REVIEW candidates. No move, merge, split, supersede or archive operation is authorized by the initial inventories alone.
 
