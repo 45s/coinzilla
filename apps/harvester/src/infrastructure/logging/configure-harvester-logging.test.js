@@ -344,3 +344,62 @@ test("rejects an existing session file before registering transports or leaking 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("appends cumulative files while isolating and flushing consecutive process sessions", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"));
+  const sessionIdentities = [
+    { startedAt: "2026-11-09T12:00:00.000Z", runtimeSessionId: "first-run" },
+    { startedAt: "2026-11-09T12:01:00.000Z", runtimeSessionId: "second-run" },
+  ];
+  try {
+    for (const [index, processIdentity] of sessionIdentities.entries()) {
+      const logger = createLogger();
+      const logging = await configureHarvesterLogging({ logger, directory, processIdentity });
+      const debugEntry = {
+        timestamp: processIdentity.startedAt,
+        level: "debug",
+        method: "debug",
+        data: { message: "session diagnostic " + (index + 1) },
+      };
+      const traceEntry = { ...debugEntry, level: "trace", method: "trace" };
+      await logger.transports.get("harvester-debug-file").write(debugEntry);
+      await logger.transports.get("harvester-trace-file").write(traceEntry);
+      await logging.close();
+      assert.equal(
+        logger.transports.size,
+        0,
+        "graceful logging shutdown must unregister both structured file transports",
+      );
+    }
+
+    const cumulativeDebugEntries = (await readFile(path.join(directory, "harvester.log"), "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    const cumulativeTraceEntries = (await readFile(path.join(directory, "harvester-trace.log"), "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(
+      cumulativeDebugEntries.map(({ data }) => data.message),
+      ["session diagnostic 1", "session diagnostic 2"],
+      "cumulative DEBUG history must append in order across process restarts",
+    );
+    assert.deepEqual(
+      cumulativeTraceEntries.map(({ data }) => data.message),
+      ["session diagnostic 1", "session diagnostic 2"],
+      "cumulative TRACE history must append in order across process restarts",
+    );
+
+    for (const processIdentity of sessionIdentities) {
+      const paths = createHarvesterLogSessionPaths({
+        directory,
+        startedAt: processIdentity.startedAt,
+        runtimeSessionId: processIdentity.runtimeSessionId,
+      });
+      const debugEntries = (await readFile(paths.debug, "utf8")).trim().split("\n");
+      const traceEntries = (await readFile(paths.trace, "utf8")).trim().split("\n");
+      assert.equal(debugEntries.length, 1, "each DEBUG session file must contain only its own process entries");
+      assert.equal(traceEntries.length, 1, "each TRACE session file must contain only its own process entries");
+      assert.match(debugEntries[0], new RegExp(processIdentity.runtimeSessionId), "DEBUG session context must retain its runtime session identity");
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
