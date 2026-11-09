@@ -237,3 +237,12 @@ The guard is part of the normal package `node --test` run:
 Existing normalized contract coverage remains in the focused broker operation suites (including `get-prices-response.test.js`, `get-prices-error-result.test.js`, order create/cancel and history suites), the canonical order/fill adapter tests, and `user-data-client-adapter.test.js` plus user-data session/event tests. The Harvester adapter remains the compatibility consumer; the repository's Harvester targeted-test workflow is required on the final PR head.
 
 The first RED-stage architecture test commit intentionally lacked its scanner module; its Brokers test and coverage jobs failed, establishing the RED baseline. Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed Brokers unit tests (411/411), package coverage (98.73% lines / 93.62% branches / 94.94% functions), workspace unit tests and coverage, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The documentation-only follow-up `43caec1a636b289e97e7ac1ee1b93b019af744fa` was included in final PR head `f611175838f99cf1861ab7a0a9b0e9fee849723c`; all required checks passed on that exact head and PR #704 was merged into `develop`. The TESTNET job was skipped and no exchange integration was run.
+
+## Cancellation outcome contract
+
+An unsuccessful `cancelOrder()` result carries an explicit `cancellationOutcome`:
+
+- `NOT_SENT`: the local user-data-availability guard rejected cancellation before invoking the state-changing `order.cancel` RPC. No exchange cancellation request was sent.
+- `OUTCOME_UNKNOWN`: the broker invoked `order.cancel` but could not return an authoritative canonical order result. The request may have reached Binance; callers must retain fail-closed reconciliation behavior.
+
+A successful result carries the broker order response in `data`; consumers that require a canonical cancellation must still verify canonical order history and actual fills. Missing classification is never proof that the request was not sent. The Harvester consumer accepts `NOT_SENT` only on an unsuccessful result (`ok: false`); contradictory success-shaped metadata remains unconfirmed. These classifications do not bypass the user-data readiness gate or authorize automatic retries.

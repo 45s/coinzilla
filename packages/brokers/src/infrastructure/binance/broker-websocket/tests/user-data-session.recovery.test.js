@@ -351,4 +351,25 @@ describe("Binance user-data reconnect behavior", () => {
     await second.data.disconnect()
     await broker.disconnect()
   })
+  it("returns NOT_SENT and makes no cancel RPC while user-data recovery is required", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+    try {
+      const subscription = await broker.subscribeForUserData({ onEvent() {} })
+      assert.equal(subscription.ok, true, "The broker must establish a user-data subscription before the recovery scenario")
+
+      clients[0].state = "closed"
+      clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+      await scheduler.runNext()
+
+      assert.equal(broker.userDataUnavailable, true, "The broker must keep state-changing requests blocked until recovery is acknowledged")
+      const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+      assert.equal(result.ok, false, "A cancellation must be refused while user-data recovery is required")
+      assert.equal(result.cancellationOutcome, "NOT_SENT", "The local readiness guard must prove the cancellation RPC was not invoked")
+      assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false, "The broker must make zero order.cancel RPC calls for a NOT_SENT result")
+    } finally {
+      await broker.disconnect()
+    }
+  })
+
 })

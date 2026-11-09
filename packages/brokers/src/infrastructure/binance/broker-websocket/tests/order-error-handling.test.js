@@ -31,8 +31,9 @@ describe("BinanceSdkBroker order error results", () => {
   it("returns errors from cancelOrder when order.cancel rejects", async () => {
     const broker = createBroker({ "order.cancel": async () => { throw new Error("unknown order") } })
     const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 123 })
-    assert.equal(result.ok, false)
-    assert.equal(result.errors[0].message, "unknown order")
+    assert.equal(result.ok, false, "A failed order.cancel RPC must return a failed broker result")
+    assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "A failed state-changing RPC must remain conservatively classified as outcome unknown")
+    assert.equal(result.errors[0].message, "unknown order", "The broker must preserve the original cancellation error")
   })
 
   it("returns errors from cancelAllOpenOrders when openOrders.cancelAll rejects", async () => {

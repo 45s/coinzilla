@@ -481,6 +481,27 @@ export function makeConservativeTradingEngine({
     return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
   }
 
+  const markCancellationNotSent = async ({ symbol, order, reason, error } = {}) => {
+    publishOrderCancelFailed({ order, outcome: "NOT_SENT", error })
+    const notSentReason = reason.replace(/_UNCONFIRMED$/, "_NOT_SENT")
+    await pause({ symbol, reason: notSentReason, error })
+    return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
+  }
+
+  const markCancellationFailure = async ({
+    symbol,
+    order,
+    reason,
+    error,
+    cancellationResultOk,
+    cancellationOutcome,
+  } = {}) => {
+    if (cancellationResultOk === false && cancellationOutcome === "NOT_SENT") {
+      return markCancellationNotSent({ symbol, order, reason, error })
+    }
+    return markCancellationUnknown({ symbol, order, reason, error })
+  }
+
   const ensureCancellationEligible = async ({ symbol, order, reason }) => {
     const result = validateCancellationEligibility({ order })
     if (result.ok) return result
@@ -653,11 +674,13 @@ export function makeConservativeTradingEngine({
       if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
         const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
         return withFailure(
-          await markCancellationUnknown({
+          await markCancellationFailure({
             symbol,
             order,
             reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
             error: errors[0],
+            cancellationResultOk: cancelResult?.ok,
+            cancellationOutcome: cancelResult?.cancellationOutcome,
           }),
           {
             category: "ORDER_TRANSITION",
@@ -784,11 +807,13 @@ export function makeConservativeTradingEngine({
     }
     if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
       const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical BUY cancellation")]
-      return markCancellationUnknown({
+      return markCancellationFailure({
         symbol,
         order,
         reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
         error: errors[0],
+        cancellationResultOk: cancelResult?.ok,
+            cancellationOutcome: cancelResult?.cancellationOutcome,
       })
     }
     const canceledOrder = cancelResult.data
@@ -2272,11 +2297,13 @@ export function makeConservativeTradingEngine({
 
         if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
           const error = cancelResult?.errors?.[0] ?? new Error("Broker did not confirm a canonical BUY cancellation during " + reasonPrefix)
-          const failed = await markCancellationUnknown({
+          const failed = await markCancellationFailure({
             symbol,
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
+            cancellationResultOk: cancelResult?.ok,
+            cancellationOutcome: cancelResult?.cancellationOutcome,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
