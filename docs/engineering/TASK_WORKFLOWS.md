@@ -9,6 +9,9 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 - Update the nearest documentation index when adding, moving, renaming, superseding or archiving a document.
 - Follow the canonical [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact).
 - Preserve technical meaning; verify every command, path, and policy statement against the repository.
+- Run a living-document freshness sweep: search all discovered Markdown files for claims affected by the change; update affected living docs and indexes in the same PR; preserve historical records with dated addenda instead of rewriting them.
+- If a domain roadmap status/priority/blocker changes, inspect and synchronize the root `ROADMAP.md` when it tracks that item; verify the owner roadmap agrees with any changed root priority.
+- Do not equate passing link validation with factual freshness; compare affected docs against current source, tests, configuration and merged PR status.
 - Run pnpm run check:agent-policy when ownership or agent instructions change.
 - Run actionlint/syntax checks when workflow or executable configuration files change.
 - Do not run broad application test suites for prose-only edits unless the change affects executable examples or contracts.
