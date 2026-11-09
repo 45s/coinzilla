@@ -5,11 +5,11 @@
 - Owner: harvester
 - Scope: stable operator-facing diagnostic identifiers emitted by Harvester
 
-This document maps stable diagnostic identifiers to symptoms, likely causes, and safe recovery procedures. Harvester includes a mapped identifier as `diagnosticId` in structured startup diagnostics and the compact console summary. The identifier is intended for searching logs, source, tests, and this document. It does not replace the underlying machine-readable `errorCode` or original error/cause.
+This document maps machine-readable error codes to symptoms, likely causes, and safe recovery procedures. The error code does not replace the original error or cause.
 
 ## Journal errors
 
-### ErrorJournal001 — Journal directory is locked
+### Journal directory is locked
 
 **Underlying error code:** `JOURNAL_DIRECTORY_LOCKED`
 
