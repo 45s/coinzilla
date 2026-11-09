@@ -93,7 +93,7 @@ test('discovers Markdown and MDX recursively while ignoring generated directorie
     writeFileSync(join(root, 'dist', 'generated.md'), '# ignored');
     assert.deepEqual(
       findMarkdownDocuments(root).map(({ path }) => path),
-      ['README.md', 'docs/nested/index.mdx'],
+      ['docs/nested/index.mdx', 'README.md'],
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
