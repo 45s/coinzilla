@@ -58,7 +58,7 @@ jobs:
       - name: Enforce Markdown style on changed maintained documents
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: \u0024{{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           node --test scripts/check-markdown-style.test.js
