@@ -13,7 +13,7 @@ This index is the entry point for maintained Coinzilla documentation. The reposi
 
 ## Repository-wide engineering
 
-- [Engineering standards and policies](engineering/README.md)
+- [Engineering documentation index](engineering/README.md)
 - [Architecture and decisions](architecture/README.md)
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
@@ -21,12 +21,20 @@ This index is the entry point for maintained Coinzilla documentation. The reposi
 - [Contributing](contributing.md)
 - [Workspace package map](workspace-package-map.md)
 
+## Operational and reference guides
+
+- [Broker WebSocket contract](brokers-websocket-contract.md)
+- [CI workflows](ci-workflows.md)
+- [Dependency audit playbook](dependency-audit-playbook.md)
+- [Release and rollback](release-and-rollback.md)
+
 ## Audits and historical records
 
 - [Audit records index](audits/README.md)
 - [Repository engineering audit](audits/repository-engineering-audit.md)
+- [AI-agent task-brief records](ai-agent/README.md)
 
-Audit reports are historical snapshots. Their conclusions must be interpreted against their recorded branch/commit and date; they do not automatically describe current implementation.
+The AI-agent task brief and repository engineering audit are different historical artifacts; their similar filenames do not make them duplicates. Audit reports must be interpreted against their recorded branch/commit and date.
 
 ## Application and package documentation
 
