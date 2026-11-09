@@ -5,7 +5,7 @@ import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
-import { prepareOptionalJournal, resolveJournalDirectory } from "./infrastructure/journal/prepare-optional-journal.js"
+import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
@@ -161,9 +161,10 @@ export async function main({
     eventBus = createEventBus({ logger })
     const tradingConfig = await loadConfig(configSource)
     const runtimeConfig = resolveHarvesterRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
+    const processLockDirectory = resolveHostProcessLockDirectory()
     const lockResult = await acquireProcessLock({
-      journalDirectory: resolveJournalDirectory({}),
-      globalDirectory: resolveHostProcessLockDirectory(),
+      journalDirectory: processLockDirectory,
+      globalDirectory: processLockDirectory,
       broker: runtimeConfig.brokerName,
       logger,
     })

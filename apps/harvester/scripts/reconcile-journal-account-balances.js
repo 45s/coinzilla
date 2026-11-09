@@ -1,15 +1,8 @@
-import path from "node:path"
-import { EventBus } from "@coinzilla/event-bus"
-import { Journal } from "@coinzilla/journal"
 import { reconcileJournalAccountSnapshotRecords } from "./account-snapshot-journal-utils.js"
+import { readHarvesterJournalHistory } from "../src/infrastructure/journal/read-harvester-journal-history.js"
 
 const directory = process.argv[2] ?? process.env.HARVESTER_JOURNAL_DIRECTORY ?? "logs"
-const journal = new Journal({
-  eventBus: new EventBus(),
-  directory: path.resolve(directory),
-  logger: { info() {}, error() {} },
-})
-const readResult = await journal.read()
+const readResult = await readHarvesterJournalHistory({ directory })
 if (!readResult.ok) {
   process.stderr.write((readResult.errors ?? []).map((error) => error.message).join("\n") + "\n")
   process.exitCode = 1

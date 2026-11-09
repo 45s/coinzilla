@@ -81,7 +81,7 @@ function summarizeConsoleData({ data } = {}) {
  * The compact console destination remains independently configurable.
  *
  * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
- * @returns {Promise<{ directory: string, sessionPaths: object, close: () => Promise<void> }>}
+ * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
  */
 export async function configureHarvesterLogging({
   logger = defaultLogger,
@@ -99,16 +99,20 @@ export async function configureHarvesterLogging({
     )
   }
 
-  await mkdir(directory, { recursive: true })
   const sessionPaths = createHarvesterLogSessionPaths({
     directory,
     startedAt: processIdentity.startedAt,
     runtimeSessionId: processIdentity.runtimeSessionId,
   })
+  const cumulativeDirectory = path.join(directory, "cumulative")
+  await Promise.all([
+    mkdir(cumulativeDirectory, { recursive: true }),
+    mkdir(sessionPaths.sessionDirectory, { recursive: true }),
+  ])
 
   const createFileTransport = async ({ name, level, filename, sessionFilename }) => {
     const streams = [
-      createWriteStream(path.join(directory, filename), { flags: "a", encoding: "utf8" }),
+      createWriteStream(path.join(cumulativeDirectory, filename), { flags: "a", encoding: "utf8" }),
       createWriteStream(sessionFilename, { flags: "wx", encoding: "utf8" }),
     ]
     const streamErrors = new Map()
@@ -188,7 +192,7 @@ export async function configureHarvesterLogging({
     traceTransport = await createFileTransport({
       name: TRACE_TRANSPORT_NAME,
       level: "trace",
-      filename: "harvester-trace.log",
+      filename: "trace.log",
       sessionFilename: sessionPaths.trace,
     })
 
@@ -220,6 +224,7 @@ export async function configureHarvesterLogging({
   let closed = false
   return Object.freeze({
     directory,
+    cumulativeDirectory,
     sessionPaths,
     async close() {
       if (closed) return

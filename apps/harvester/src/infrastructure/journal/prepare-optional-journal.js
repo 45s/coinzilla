@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url"
 import path from "node:path"
 import { Journal } from "@coinzilla/journal"
 import { defaultLogger, toResult } from "@coinzilla/utils"
+import { createHarvesterLogSessionPaths } from "../logging/create-harvester-log-session-paths.js"
 
 const APPLICATION_DIRECTORY = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -107,9 +108,17 @@ export function prepareOptionalJournal({
     if (typeof journalFactory !== "function") {
       throw new TypeError("journalFactory must be a function")
     }
+    const journalBaseDirectory = resolveJournalDirectory({ directory })
+    const journalDirectory = processIdentity
+      ? createHarvesterLogSessionPaths({
+        directory: journalBaseDirectory,
+        startedAt: processIdentity.startedAt,
+        runtimeSessionId: processIdentity.runtimeSessionId,
+      }).sessionDirectory
+      : journalBaseDirectory
     journal = journalFactory({
       eventBus,
-      directory: resolveJournalDirectory({ directory }),
+      directory: journalDirectory,
       logger,
       sessionIdentity: processIdentity
         ? {
