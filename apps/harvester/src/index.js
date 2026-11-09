@@ -161,9 +161,10 @@ export async function main({
     eventBus = createEventBus({ logger })
     const tradingConfig = await loadConfig(configSource)
     const runtimeConfig = resolveHarvesterRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
+    const processLockDirectory = resolveHostProcessLockDirectory()
     const lockResult = await acquireProcessLock({
-      journalDirectory: resolveJournalDirectory({}),
-      globalDirectory: resolveHostProcessLockDirectory(),
+      journalDirectory: processLockDirectory,
+      globalDirectory: processLockDirectory,
       broker: runtimeConfig.brokerName,
       logger,
     })
