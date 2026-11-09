@@ -6,6 +6,11 @@
 
 This section is the authoritative implementation order for current work. It supersedes older "current direction", P0/P1 and future-work notes below wherever their status or ordering conflicts. Historical incident records remain evidence, not active tasks. Harvester is the only application currently in this workspace.
 
+### Completed — explicit Binance trading-mode propagation (PR #841)
+
+- [x] Harvester reads and validates only `TRADING_MODE=testnet|live`, passes the resolved value explicitly through its Binance broker adapter, and supplies TESTNET explicitly in offline replay/test harnesses. `NODE_ENV` remains application runtime metadata and cannot select exchange endpoints. LIVE selection requires no second confirmation or enable flag.
+- **Boundary:** this is endpoint-selection/configuration completion, not exchange acceptance or restart safety. Hosted read-only TESTNET acceptance remains externally blocked/unverified; process-restart reconciliation remains a separate critical issue tracked by [#654](https://github.com/45s/coinzilla/issues/654).
+
 ### CRITICAL — complete before unattended operation
 
 1. **[x] Make Conservative trailing-BUY replacement failure-safe — PRs #751 and #753 merged.**
