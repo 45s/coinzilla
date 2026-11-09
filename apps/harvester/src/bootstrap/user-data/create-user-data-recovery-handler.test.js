@@ -647,7 +647,9 @@ test("keeps recovery blocked when the canonical account balance snapshot cannot 
   let openOrderReads = 0
   const fixture = createRecovery({
     refreshAccountSnapshot: async () => {
-      throw new Error("canonical account balance snapshot unavailable")
+      throw Object.assign(new Error("canonical account balance snapshot unavailable"), {
+        recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+      })
     },
     getOpenOrders: async () => {
       openOrderReads += 1
@@ -707,7 +709,9 @@ test("keeps recovery blocked when the canonical account balance snapshot cannot 
 test("keeps recovery blocked when the durable account open-orders audit fails", async () => {
   const fixture = createRecovery({
     publishOpenOrdersSnapshot: async () => {
-      throw new Error("durable account open-orders audit flush failed")
+      throw Object.assign(new Error("durable account open-orders audit flush failed"), {
+        recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH", retryable: true },
+      })
     },
   })
   fixture.start()
@@ -1012,7 +1016,11 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
 test("retries application recovery after an account snapshot REST timeout releases the task slot", async () => {
   const timeout = Object.assign(
     new Error("canonical account snapshot REST request timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+    {
+      name: "RpcTimeoutError",
+      code: "RPC_TIMEOUT",
+      recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+    },
   )
   let accountSnapshotReads = 0
   let openOrderReads = 0
@@ -1237,7 +1245,10 @@ test("keeps recovery blocked and retries the same generation after a transient a
     publishAccountSnapshot: async () => {
       accountFlushAttempts += 1
       if (accountFlushAttempts === 1) {
-        throw new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure")
+        throw Object.assign(
+          new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure"),
+          { recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH", retryable: true } },
+        )
       }
     },
   })

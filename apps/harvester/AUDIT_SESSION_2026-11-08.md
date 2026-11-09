@@ -728,3 +728,8 @@ The legacy retry-path recovery tests now provide explicit REST_RECONCILIATION ca
 ## 38. F-023 source-stage classification refinement — 2026-11-09
 
 The account snapshot manager now attaches failure metadata at the point of failure: broker-declared snapshot/open-order reads are retryable REST reconciliation; malformed snapshots and validation/ownership contradictions are terminal integrity failures; event publication and Journal flush failures are explicitly retryable durability stages. Recovery wrappers preserve that source metadata rather than relabeling every thrown error. Snapshot application also distinguishes registry races and stale REST views from ownership and Journal parity failures.
+
+
+## 39. F-023 retry fixture provenance — 2026-11-09
+
+Recovery coordinator tests that inject account snapshot and audit publisher failures now attach the same explicit category/stage/retryable metadata produced by the real account snapshot manager. This keeps transient REST and Journal retry scenarios distinct from the new missing-metadata terminal regression.
