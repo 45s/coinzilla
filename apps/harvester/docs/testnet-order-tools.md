@@ -8,9 +8,19 @@ owner: harvester
 
 These standalone package scripts let an operator inspect account balances, open orders, order history, and actual trades; preview/submit a fixed ZROUSDT market sell; or cancel all open orders in a Binance Spot TESTNET account. They are outside Harvester's trading runtime. The command procedures below are current tool behavior; dated incident snapshots are preserved in [Harvester Roadmap History](./audits/ROADMAP_HISTORY.md) and are not current behavior instructions.
 
-> **Current pair-scope warning:** `trading-config.json` currently enables only `ZROFDUSD` (PR #836). The `testnet:sell-zro` helper below is hardcoded to `ZROUSDT` and submits a MARKET SELL after exact confirmation; it is a legacy one-off TESTNET write, not a generic cleanup tool and not part of the CLOSED / PAUSED controlled validation runbook. Do not run it while that hold remains or infer authorization from its preview. The `testnet:history` default (`ZROUSDT`) and `testnet:trades` default (`DOGEUSDT`) are read-only diagnostic defaults, not derived from current config; pass an explicit symbol when querying another market.
+> **Current pair-scope warning:** `trading-config.json` currently enables only `ZROFDUSD` (PR #836). The `testnet:sell-zro` helper below is hardcoded to `ZROUSDT` and submits a MARKET SELL after exact confirmation; it is a legacy one-off TESTNET write, not a generic cleanup tool and not part of the CLOSED / PAUSED controlled validation runbook. Do not run it while that hold remains or infer authorization from its preview. The `testnet:history` default (`ZROUSDT`) and `testnet:trades` default (`DOGEUSDT`) are read-only diagnostic defaults, not derived from current config; pass an explicit symbol when querying another market. The interactive `pnpm --filter @coinzilla/harvester testnet` menu invokes these same scripts and exposes both read-only and destructive actions; selecting an action is not authorization.
 
 They use Node.js built-in `fetch` and `node:crypto`; no dependency is added. The API host is hard-coded to `https://testnet.binance.vision`. The scripts cannot be pointed at Binance production through environment configuration.
+
+## Interactive menu
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet
+```
+
+The menu requires an interactive TTY and launches the standalone scripts documented below. It includes read-only inspection actions as well as the legacy ZROUSDT MARKET SELL and account-wide cancel actions. The menu is only a convenience wrapper: it does not bypass the scripts' confirmation checks or authorize exchange writes. The paused validation runbook does not authorize either write action.
 
 ## Prerequisites
 
