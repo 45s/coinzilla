@@ -163,7 +163,7 @@ test("keeps INFO output concise and excludes stack traces and audit internals", 
 })
 
 
-test("includes stable diagnostic identifiers in compact console output", () => {
+test("retains the machine-readable Journal error code in compact console output", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
@@ -174,13 +174,12 @@ test("includes stable diagnostic identifiers in compact console output", () => {
     level: "error",
     data: {
       message: "Optional Harvester Journal startup failed",
-      diagnosticId: "ErrorJournal001",
       errorCode: "JOURNAL_DIRECTORY_LOCKED",
     },
   })
 
-  assert.match(written, /"diagnosticId":"ErrorJournal001"/, "The concise console output must expose the stable operator diagnostic identifier.")
-  assert.match(written, /"errorCode":"JOURNAL_DIRECTORY_LOCKED"/, "The concise console output must retain the original Journal error code.")
+  assert.match(written, /"errorCode":"JOURNAL_DIRECTORY_LOCKED"/)
+  assert.doesNotMatch(written, /diagnosticId/)
   output.destroy()
 })
 
