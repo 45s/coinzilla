@@ -493,9 +493,10 @@ export function makeConservativeTradingEngine({
     order,
     reason,
     error,
+    cancellationResultOk,
     cancellationOutcome,
   } = {}) => {
-    if (cancellationOutcome === "NOT_SENT") {
+    if (cancellationResultOk === false && cancellationOutcome === "NOT_SENT") {
       return markCancellationNotSent({ symbol, order, reason, error })
     }
     return markCancellationUnknown({ symbol, order, reason, error })
@@ -678,6 +679,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
             error: errors[0],
+            cancellationResultOk: cancelResult?.ok,
             cancellationOutcome: cancelResult?.cancellationOutcome,
           }),
           {
@@ -810,7 +812,8 @@ export function makeConservativeTradingEngine({
         order,
         reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
         error: errors[0],
-        cancellationOutcome: cancelResult?.cancellationOutcome,
+        cancellationResultOk: cancelResult?.ok,
+            cancellationOutcome: cancelResult?.cancellationOutcome,
       })
     }
     const canceledOrder = cancelResult.data
@@ -2299,6 +2302,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
+            cancellationResultOk: cancelResult?.ok,
             cancellationOutcome: cancelResult?.cancellationOutcome,
           })
           errors.push(...(failed.errors ?? [error]))

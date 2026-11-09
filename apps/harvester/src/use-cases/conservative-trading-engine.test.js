@@ -61,7 +61,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -128,6 +128,7 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
       if (cancelOrderGate) await cancelOrderGate.promise
       if (cancelThrow) throw new Error("cancel socket closed")
       if (cancelNotSent) return { ok: false, cancellationOutcome: "NOT_SENT", errors: [new Error("user-data stream unavailable")] }
+      if (cancelNotSentOnSuccess) return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       canceledOrders.set(order.brokerOrderId, order)
       return {
@@ -6267,4 +6268,32 @@ test("preserves an OPEN owned BUY after a locally blocked NOT_SENT shutdown canc
   assert.ok(events.some((event) =>
     event.name === "strategy.paused" && event.data.reason === "SHUTDOWN_BUY_CANCELLATION_NOT_SENT"),
   "A locally blocked shutdown cancellation must retain the safety pause and incomplete-shutdown state")
+})
+
+
+test("does not trust NOT_SENT metadata on a successful noncanonical cancellation result", async () => {
+  const events = []
+  const { engine, orders } = await createHarness({
+    cancelNotSentOnSuccess: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false, "A malformed success-shaped cancellation result must not authorize replacement")
+  assert.equal(orders.length, 1, "A malformed cancellation result must not submit a replacement BUY")
+  const failed = events.find((event) => event.name === "order.cancel_failed")
+  assert.ok(failed, "The engine must publish cancellation failure evidence for a malformed broker result")
+  assert.equal(failed.data.outcome, "UNCONFIRMED", "NOT_SENT is trusted only on an unsuccessful broker result")
+  assert.equal(failed.data.status, "UNKNOWN", "A contradictory success-shaped result must retain fail-closed UNKNOWN order state")
+  assert.equal(engine.getOrders()[0].status, "UNKNOWN", "The known OPEN order must not be preserved from contradictory NOT_SENT metadata")
+  assert.ok(events.some((event) =>
+    event.name === "strategy.paused" && event.data.reason === "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
+  ), "A malformed cancellation result must keep the pair safety-paused")
 })
