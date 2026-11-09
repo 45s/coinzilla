@@ -178,7 +178,8 @@ export async function configureHarvesterLogging({
   let debugTransport
   let traceTransport
 
-  try {\n    debugTransport = await createFileTransport({
+  try {
+    debugTransport = await createFileTransport({
       name: DEBUG_TRANSPORT_NAME,
       level: "debug",
       filename: "harvester.log",
