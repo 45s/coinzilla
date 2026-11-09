@@ -6,6 +6,10 @@ This directory records cross-cutting architecture principles and decisions for t
 
 - [ADR-0001: Clean and Hexagonal Architecture](./decisions/ADR-0001-clean-hexagonal-architecture.md) — the accepted architectural style and dependency boundaries.
 
+## Templates
+
+- [ADR template](./decisions/ADR_TEMPLATE.md) — use for durable architectural decisions.
+
 ## Authority and change policy
 
 - [Harvester Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authority for Conservative trading behavior.
