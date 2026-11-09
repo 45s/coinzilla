@@ -105,7 +105,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 - [x] Add lifecycle-based strategy runner with onStart/onPrice/onStop hooks.
 - [x] Serialize asynchronous strategy callbacks.
 - [x] Support deterministic max-candle termination.
-- [x] Return reproducible balances/orders/fills report.
+- [x] Return final balances/orders/fills report; lifecycle timestamps remain wall-clock-dependent until the deferred simulation-time task is implemented.
 - [x] Test runner without real time or exchange access.
 
 ### MS-005 — Simulated spot execution
