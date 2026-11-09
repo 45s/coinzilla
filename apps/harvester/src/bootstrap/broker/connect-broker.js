@@ -22,11 +22,13 @@ export async function connectBroker({
   brokerAdapterFactory,
   env,
   brokerName,
+  tradingMode,
   eventPublisher,
   logger,
 } = {}) {
   const broker = assertBrokerPort({
     broker: brokerAdapterFactory({
+      tradingMode,
       config: {
         apiKey: env.BINANCE_API_KEY,
         apiSecret: env.BINANCE_API_SECRET_KEY,

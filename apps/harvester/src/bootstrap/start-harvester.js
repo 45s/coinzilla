@@ -91,7 +91,7 @@ export async function startHarvester({
   let tradingEngine
   let hasCanonicalOwnershipReconciliation = false
 
-  const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, eventPublisher, logger })
+  const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, tradingMode, eventPublisher, logger })
 
   const subscriptions = []
   const marketPriceIntake = new Map()
