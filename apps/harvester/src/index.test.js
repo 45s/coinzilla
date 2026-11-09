@@ -994,3 +994,193 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
     "logger.close",
   ])
 })
+
+
+test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
+  const operations = []
+  const events = []
+  const contexts = []
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "runtime-session-123",
+    processId: 12345,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: "develop",
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      shortCommit: "aaaaaaaa",
+      commitMessage: 'release apiKey="private-value"',
+      commitDate: "2026-11-09T09:00:00.000Z",
+      workingTree: "clean",
+      metadataSource: "git",
+      privateCredential: "must-not-be-copied",
+    },
+    apiSecret: "must-not-be-copied",
+  }
+  let journalFlushCalls = 0
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      operations.push("publish:" + event.name)
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const logger = {
+    setContext(context) {
+      contexts.push(context)
+      operations.push("logger.context")
+    },
+    info() {},
+    system() {},
+    error() {},
+  }
+
+  await main({
+    createProcessIdentity: () => {
+      operations.push("identity.capture")
+      return processIdentity
+    },
+    logger,
+    createEventBus: () => {
+      operations.push("eventBus.create")
+      return eventBus
+    },
+    acquireProcessLock: async () => {
+      operations.push("processLock.acquire")
+      return { ok: true, release: async () => ({ ok: true, released: true }) }
+    },
+    createJournalService: () => {
+      operations.push("journal.create")
+      return {
+        ready: Promise.resolve({ ok: true }),
+        flush: async () => {
+          journalFlushCalls += 1
+          return { ok: true, durable: true }
+        },
+        close: async () => ({ ok: true, closed: true, durable: true }),
+      }
+    },
+    start: async () => {
+      operations.push("runtime.start")
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }
+    },
+    registerSignalHandler: () => {},
+    env: {
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      HARVESTER_BROKER: "binance",
+    },
+  })
+
+  assert.deepEqual(
+    operations.slice(0, 3),
+    ["identity.capture", "logger.context", "eventBus.create"],
+    "process identity and shared logger context must be established before any startup dependency can emit diagnostics",
+  )
+  assert.deepEqual(
+    events.map(({ name }) => name),
+    ["harvester.process_started", HARVESTER_EVENT_NAMES.STARTED],
+    "the process-attempt event must precede the successful runtime-start event",
+  )
+  assert.deepEqual(events[0].data, {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "runtime-session-123",
+    processId: 12345,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: "develop",
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      shortCommit: "aaaaaaaa",
+      commitMessage: "release apiKey=[REDACTED]",
+      commitDate: "2026-11-09T09:00:00.000Z",
+      workingTree: "clean",
+      metadataSource: "git",
+    },
+  }, "the Journal event must contain only the sanitized, allowlisted build and runtime identity")
+  assert.deepEqual(contexts[0], events[0].data, "every shared log entry must receive the same sanitized process identity as logger context")
+  assert.equal(JSON.stringify(events[0]).includes("private-value"), false, "process-start evidence must not retain sensitive values embedded in build metadata")
+  assert.equal(journalFlushCalls, 0, "process provenance must not introduce an additional mandatory Journal flush before the existing PREFLIGHT barrier")
+  assert.ok(operations.indexOf("publish:harvester.process_started") < operations.indexOf("runtime.start"), "trading bootstrap must start only after the process event has been admitted to the existing Journal/EventBus pipeline")
+})
+
+test("keeps optional read-only Journal startup non-blocking and publishes process provenance after Journal readiness", async () => {
+  let resolveJournalReady
+  let resolveProcessStarted
+  let runtimeStarted = false
+  const contexts = []
+  const events = []
+  const processStarted = new Promise((resolve) => { resolveProcessStarted = resolve })
+  const journalService = {
+    ready: new Promise((resolve) => { resolveJournalReady = resolve }),
+    status: { state: "starting", enabled: true },
+    close: async () => ({ ok: true, closed: true }),
+  }
+  const eventBus = {
+    publish(event) {
+      events.push(event)
+      if (event.name === "harvester.process_started") {
+        resolveProcessStarted(event)
+      }
+      return { ok: true, event }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({ ok: true, closed: true }),
+  }
+
+  await main({
+    createProcessIdentity: () => ({
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "delayed-journal-session",
+      processId: 54321,
+      startedAt: "2026-11-09T10:15:30.000Z",
+      source: {
+        branch: null,
+        commit: null,
+        shortCommit: null,
+        commitMessage: null,
+        commitDate: null,
+        workingTree: "unknown",
+        metadataSource: "unavailable",
+      },
+    }),
+    logger: {
+      setContext: (context) => contexts.push(context),
+      info() {},
+      system() {},
+      error() {},
+    },
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => {
+      runtimeStarted = true
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }
+    },
+    registerSignalHandler: () => {},
+    env: {},
+  })
+
+  assert.equal(runtimeStarted, true, "read-only runtime startup must not wait for optional Journal initialization")
+  assert.equal(contexts[0].runtimeSessionId, "delayed-journal-session", "logger context must be available synchronously even while optional Journal startup is pending")
+  assert.equal(events.length, 0, "the process-start event must not be published before the Journal subscriber is ready")
+  resolveJournalReady({ ok: true })
+  const processStartedEvent = await processStarted
+  assert.equal(processStartedEvent.data.startedAt, "2026-11-09T10:15:30.000Z", "delayed Journal publication must retain the original process-entry timestamp")
+  assert.equal(processStartedEvent.data.source.metadataSource, "unavailable", "unavailable Git provenance must remain explicit rather than guessed")
+})

@@ -25,6 +25,10 @@ This section is the authoritative implementation order for current work. It supe
    - **Do:** define the minimum durable state (client/broker order IDs, order intent and terminal state, fill/trade identity, deduplication, reservations, Portfolio/Position, recovery-cycle state, strategy ownership and config/schema version). Persist execution facts before acknowledging them; on startup reconcile persisted state with balances, open orders and available order/trade history before READY. Define explicit operator intervention for retention gaps or irreconcilable conflicts.
    - **Verify:** crash/restart at every order-submit, cancel, partial-fill, full-fill and recovery boundary; prove idempotent accounting and no duplicate order placement. Do not claim exactly-once transport delivery.
 
+### Selected process provenance work — issue #763
+
+- [~] **Harvester process identity and Journal correlation.** The shared `@coinzilla/utils` build-provenance capture and Logger context capability is available on `develop` (merge commit `feat(utils): capture build provenance and logger context`). The Harvester consumer adds a one-time process identity, attaches it to Logger context before startup diagnostics, and records a separate `harvester.process_started` event. The event preserves the process-entry timestamp even if optional Journal initialization delays publication. It is best-effort and does not extend mandatory Journal durability barriers; the existing trading PREFLIGHT flush can include it. Tests and exact-head CI are pending.
+
 ### IMPORTANT — improve correctness and operational confidence
 
 4. **Keep Journal evidence complete without expanding trading-blocking behavior.**

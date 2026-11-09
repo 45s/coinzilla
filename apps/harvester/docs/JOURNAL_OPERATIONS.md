@@ -35,6 +35,7 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 
 | Event | Allowlisted payload facts |
 |---|---|
+| `harvester.process_started` | `application`, `version`, `runtimeSessionId`, `processId`, original `startedAt`, and allowlisted Git `source` metadata (branch, full/short commit, subject/date, working-tree state, metadata source) |
 | `harvester.started` | `broker`, `strategyMode`, `enabledMarkets`, `tradingEnabled` |
 | `harvester.startup_failed` | `stage`, sanitized `error` name/message |
 | `harvester.stopped` | `reason`, `outcome`, optional sanitized `error` |
@@ -61,6 +62,8 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
 | `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING phase, audit status, exchange source timestamp, every returned asset with exact free/locked/total quantities, audit reasons |
 | `account.open_orders_captured` | PREFLIGHT/OPENING phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
+
+The `harvester.process_started` event records the process attempt, including its original UTC entry timestamp, even when optional Journal initialization delays publication. It is distinct from `harvester.started`, which records successful runtime startup. The process event is allowlisted and best-effort: when Journal is mandatory, it is admitted before bootstrap and can be persisted by the existing PREFLIGHT flush; it does not add a separate durability barrier. Optional read-only Journal startup is not awaited, and logger context remains the immediate fallback when Journal is delayed or unavailable. Missing build metadata is recorded as null/unknown rather than inferred.
 
 A `strategy.decision` event is emitted only when the strategy produces at least one actionable order. NO_ACTION evaluations are not journaled. No event is emitted for every market-price update.
 
