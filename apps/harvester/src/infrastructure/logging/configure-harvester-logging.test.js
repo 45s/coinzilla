@@ -163,6 +163,28 @@ test("keeps INFO output concise and excludes stack traces and audit internals", 
 })
 
 
+test("includes stable diagnostic identifiers in compact console output", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output })
+
+  transport.write({
+    timestamp: "2026-11-09T12:00:00.000Z",
+    level: "error",
+    data: {
+      message: "Optional Harvester Journal startup failed",
+      diagnosticId: "ErrorJournal001",
+      errorCode: "JOURNAL_DIRECTORY_LOCKED",
+    },
+  })
+
+  assert.match(written, /"diagnosticId":"ErrorJournal001"/, "The concise console output must expose the stable operator diagnostic identifier.")
+  assert.match(written, /"errorCode":"JOURNAL_DIRECTORY_LOCKED"/, "The concise console output must retain the original Journal error code.")
+  output.destroy()
+})
+
+
 test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () => {
   const output = new PassThrough()
   let written = ""
