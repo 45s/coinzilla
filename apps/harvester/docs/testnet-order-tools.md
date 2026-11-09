@@ -6,7 +6,9 @@ type: operational-runbook
 owner: harvester
 ---
 
-These standalone package scripts let an operator inspect or clear open orders in a Binance Spot TESTNET account without adding diagnostics or cancellation behavior to Harvester's trading runtime. The command procedures below are current operator guidance; dated incident snapshots are preserved in [Harvester Roadmap History](./audits/ROADMAP_HISTORY.md) and are not current behavior instructions.
+These standalone package scripts let an operator inspect account balances, open orders, order history, and actual trades; preview/submit a fixed ZROUSDT market sell; or cancel all open orders in a Binance Spot TESTNET account. They are outside Harvester's trading runtime. The command procedures below are current tool behavior; dated incident snapshots are preserved in [Harvester Roadmap History](./audits/ROADMAP_HISTORY.md) and are not current behavior instructions.
+
+> **Current pair-scope warning:** `trading-config.json` currently enables only `ZROFDUSD` (PR #836). The `testnet:sell-zro` helper below is hardcoded to `ZROUSDT` and submits a MARKET SELL after exact confirmation; it is a legacy one-off TESTNET write, not a generic cleanup tool and not part of the CLOSED / PAUSED controlled validation runbook. Do not run it while that hold remains or infer authorization from its preview. The `testnet:history` default (`ZROUSDT`) and `testnet:trades` default (`DOGEUSDT`) are read-only diagnostic defaults, not derived from current config; pass an explicit symbol when querying another market.
 
 They use Node.js built-in `fetch` and `node:crypto`; no dependency is added. The API host is hard-coded to `https://testnet.binance.vision`. The scripts cannot be pointed at Binance production through environment configuration.
 
@@ -92,6 +94,8 @@ reuses the shared TESTNET request helper and remains fixed to the TESTNET host.
 
 ## Sell all free ZRO at market (destructive)
 
+> **Legacy ZROUSDT exchange write:** this helper sends `POST /api/v3/order` with `side=SELL` and `type=MARKET` for `ZROUSDT` after the exact confirmation phrase. It is not part of the current ZROFDUSD-only config or the paused validation runbook. Do not run it while the runbook is CLOSED / PAUSED; a preview is not authorization.
+
 Run from the repository root:
 
 ```sh
@@ -138,6 +142,8 @@ does not add authentication parameters.
 
 
 ## List recent order history (read-only)
+
+> The default `ZROUSDT` symbol is a legacy diagnostic default, not the currently enabled pair. Pass the symbol explicitly; the command is read-only.
 
 Run from the repository root:
 
@@ -213,6 +219,8 @@ The user-data handler records the correlation fields listed above and logs accep
 This is an offline/source-verified implementation boundary, not proof of real TESTNET acceptance. The real BUY fill → recovery SELL → next BUY acceptance sequence remains **PAUSED / UNVERIFIED**; see the [controlled TESTNET validation runbook](./TESTNET_VALIDATION_RUNBOOK.md).
 
 ## List actual trade history (read-only)
+
+> The default `DOGEUSDT` symbol is a legacy diagnostic default, not the currently enabled pair. Pass the symbol explicitly; the command is read-only.
 
 Run from the repository root:
 
