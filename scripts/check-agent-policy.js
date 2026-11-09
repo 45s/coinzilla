@@ -124,7 +124,12 @@ function main() {
     'docs/engineering/TASK_WORKFLOWS.md',
     'docs/engineering/DOMAIN_OWNERSHIP.md',
     'apps/harvester/AGENTS.md',
+    'apps/harvester/README.md',
+    'apps/harvester/ROADMAP.md',
     'apps/harvester/docs/README.md',
+    'apps/harvester/docs/JOURNAL_OPERATIONS.md',
+    'apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP.md',
+    'apps/harvester/docs/trading-strategies.md',
     'apps/harvester/docs/plans/DOCUMENTATION_MIGRATION.md',
     '.github/PULL_REQUEST_TEMPLATE.md',
   ];
