@@ -88,7 +88,7 @@ function createBroker({
     }),
     getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
     getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
-    getPrices: async () => ({ ok: true }),
+    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
     subscribeForUserData: async (input) => {
       handlers = input
       if (userDataError) throw userDataError
