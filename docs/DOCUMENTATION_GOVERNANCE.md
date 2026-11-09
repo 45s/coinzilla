@@ -233,7 +233,7 @@ The root `AGENTS.md` and owning domain `AGENTS.md` are mandatory agent entry poi
 
 Enforce objective, low-cost rules first:
 
-1. Existing `pnpm run check:agent-policy` validates ownership maps, required roadmaps, required documentation entry points, and relative Markdown links across every discovered repository `.md`/`.mdx` file. It excludes generated/vendor directories and ignores external URLs, same-document anchors, fenced code blocks and inline code. It validates local target paths, not anchor existence or external URL availability; retain tests for discovery and parsing behavior.
+1. Existing `pnpm run check:agent-policy` validates ownership maps, required roadmaps, required documentation entry points, balanced fenced-code delimiters, and relative Markdown links across every discovered repository `.md`/`.mdx` file. It excludes generated/vendor directories. The link parser ignores external URLs, same-document anchors, fenced code blocks and inline code; it validates local target paths, not anchor existence or external URL availability. The fence check is a targeted structural guard, not a full Markdown style linter; retain tests for discovery and parsing behavior.
 2. GitHub Actions must run the repository policy checks on pull requests to `develop` and `main`; required branch rulesets must require the intended status checks.
 3. Markdown linting and broader link checking may be introduced after tool configuration, baseline and scope are reviewed. Do not claim these are enforced until CI runs them.
 4. Prefer internal-link checks on every PR. External-link checks may run separately because external sites are flaky and can rate-limit.
