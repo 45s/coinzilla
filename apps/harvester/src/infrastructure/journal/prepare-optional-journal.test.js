@@ -239,7 +239,11 @@ test("logs the original Journal startup error with structured diagnostics", asyn
   assert.equal(ready.ok, false, "A failed Journal start must remain a failed readiness result.")
   assert.equal(loggedErrors.length, 1, "Harvester must emit one structured diagnostic for the failed Journal start.")
   assert.equal(loggedErrors[0].message, "Optional Harvester Journal startup failed", "The diagnostic must identify the failed Journal startup operation.")
+  assert.equal(loggedErrors[0].errorName, "Error", "The console-safe diagnostic must include the original error type.")
+  assert.equal(loggedErrors[0].errorMessage, "Journal directory is already locked", "The console-safe diagnostic must include the original failure message.")
+  assert.equal(loggedErrors[0].errorCode, "JOURNAL_DIRECTORY_LOCKED", "The console-safe diagnostic must include the stable filesystem error code.")
   assert.equal(loggedErrors[0].errors[0], startupError, "The diagnostic must preserve the original filesystem error and its code.")
+
   assert.equal(loggedErrors[0].errors[0].code, "JOURNAL_DIRECTORY_LOCKED", "The diagnostic must retain the stable Journal lock error code.")
   await service.close()
 })
