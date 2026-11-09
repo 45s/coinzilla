@@ -193,7 +193,7 @@ Current priorities and blockers live in [ROADMAP.md](./ROADMAP.md). Historical a
 
 ## Standalone Binance TESTNET order tools
 
-All standalone TESTNET account/order tools are documented in [TESTNET order tools](./docs/testnet-order-tools.md). The interactive `pnpm --filter @coinzilla/harvester testnet` menu wraps the same scripts; it includes read-only exchange diagnostics, a Journal audit, and destructive actions, and adds no confirmation layer. The account-wide cancel action proceeds after a warning without an interactive prompt. See the runbook and Journal Operations for the audit commands.
+Standalone TESTNET order, balance, and history commands are documented in [TESTNET order tools](./docs/testnet-order-tools.md). The interactive `pnpm --filter @coinzilla/harvester testnet` menu wraps those scripts and also exposes the exchange-read-only account audit and local Journal balance audit, documented in the [TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./docs/JOURNAL_OPERATIONS.md). The menu includes destructive actions and adds no confirmation layer; the account-wide cancel proceeds after a warning without an interactive prompt.
 
 ## Standalone Binance TESTNET balance inspection
 
