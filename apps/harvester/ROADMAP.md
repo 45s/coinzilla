@@ -2008,3 +2008,11 @@ The current runtime does not execute this restoration/reconciliation matrix beca
 **F-028:** applied-fill and strategy-pause events are published asynchronously without an immediate durable flush; Journal append is not fsync acknowledgement. **F-029:** per-market pause/recovery-intent sets can be reconstructed by the offline restore helper, but current runtime does not invoke it. **F-031:** startup wiring and completeness remain the primary integration gap.
 
 See [AUDIT.md](./AUDIT.md), [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md), [JOURNAL_OPERATIONS.md](./docs/JOURNAL_OPERATIONS.md), and [#654](https://github.com/45s/coinzilla/issues/654). No implementation or test changes are authorized in this phase.
+
+## 2026-11-09 forensic restart-recovery status
+
+- [x] **PR #789 — retained offline recovery helpers and current-startup integration gap.** Merged into `develop` (merge commit `f3aa201614a491b7e893a86b234174fdc20c8d46`).
+- [x] **PR #790 — registry-only same-symbol duplicate-order guard trace.** Documentation-only; all six reported CI workflows passed on exact head `c7a65e18f8ef02e15f97db2309d576ad3135beed`; merged as `e4a66d032fc59999d4f9ce98d357b3b636754666`.
+- [x] **#654 crash-boundary persistence trace and failure matrix documented.** Submission/cancellation intent barriers, asynchronous acknowledgement/fill/pause events, Journal append-vs-fsync semantics, and graceful-vs-abrupt shutdown boundaries are recorded in `AUDIT_SESSION_2026-11-09_11-33-00.md`.
+- [ ] **#654 implementation remains blocked on design evidence:** prove historical market-universe and history-retention completeness; define crash-consistent fill/accounting/checkpoint ordering; define external/unowned-order policy; implement versioned restore before engine activation with DDD/TDD integration tests.
+- **Safety disposition:** do not enable unattended restarts. No process restart, private account query, exchange operation, order mutation, or TESTNET validation was performed in this forensic phase.
