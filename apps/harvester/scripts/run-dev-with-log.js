@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { once } from "node:events"
+import { finished } from "node:stream/promises"
 import { createWriteStream, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { spawn } from "node:child_process"
@@ -75,10 +76,21 @@ child = spawn(
 )
 if (logStreamFailed) child.kill("SIGTERM")
 
-const closeLogStreams = () => Promise.all(logStreams.map((stream) => new Promise((resolveClose) => {
-  if (stream.destroyed || stream.closed) { resolveClose(); return }
-  stream.end(resolveClose)
-})))
+const closeLogStreams = async () => {
+  const results = await Promise.allSettled(logStreams.map(async (stream) => {
+    if (stream.closed) return
+    if (stream.destroyed) {
+      await once(stream, "close")
+      return
+    }
+    const completion = finished(stream)
+    stream.end()
+    await completion
+  }))
+  if (results.some((result) => result.status === "rejected")) {
+    process.exitCode = 1
+  }
+}
 
 const handleSignal = (signal) => {
   // The child has its own process group on POSIX, so it needs an explicit
