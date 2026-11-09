@@ -13,9 +13,13 @@ test("reports objective Markdown style metrics without enforcing or rewriting do
       path: "docs/no-heading.md",
       content: "Plain text\r\n## Section\r\n~~~\ncode\n~~~",
     },
+    {
+      path: "docs/code-sample.md",
+      content: "# Example\\n\\n```js\\nconst value = 1  \\n\\n\\n```\\n",
+    },
   ])
 
-  assert.equal(report.fileCount, 2)
+  assert.equal(report.fileCount, 3)
   assert.deepEqual(report.findings.trailingWhitespace.map(({ path }) => path), [
     "docs/bad.md",
   ])
