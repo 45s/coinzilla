@@ -1,5 +1,11 @@
 # Journal roadmap
 
+---
+status: active
+type: roadmap
+owner: journal
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 This section supersedes stale checkboxes below where they conflict with merged work. Journal is an evidence store, not the authority for trading state. Preserve the existing mandatory Harvester durability barriers; additional diagnostics remain best-effort.
@@ -33,14 +39,14 @@ This section supersedes stale checkboxes below where they conflict with merged w
 
 ### Journal maintenance follow-ups (2026-11-09)
 
-**Status:** [x] complete in this maintenance PR.
+**Status:** [x] complete in [PR #805](https://github.com/45s/coinzilla/pull/805), merged 2026-11-09.
 
 - [x] **Correct logger failure coverage.** Startup and shutdown isolation tests throw from logger.system, the method the lifecycle invokes, and assert that the logger was called. The prior logger.info setup did not exercise this contract.
 - [x] **Retain failed session handles.** A handle whose close() rejects remains owned by the filesystem adapter; successfully closed handles are released independently. A subsequent adapter cleanup attempt retries only handles still owned.
 - [x] **Make session suffix ordering exact and deterministic.** BigInt comparison preserves numeric ordering for arbitrarily large accepted suffixes; a lexical tie-break makes zero-padded aliases deterministic. Historical session files are not renamed or rewritten.
 - [x] **Complete filesystem cleanup failure coverage.** Tests cover session-handle close failure, compatibility-handle close failure, lock-handle close failure, lock unlink failure, and rollback after partial lock acquisition, including ownership and lock-file preservation/removal assertions.
 
-**TDD evidence:** test-first commit `808b15900b12422eec1eeae50282e3f9fa529983` is based on the latest develop checkpoint; the implementation commit follows it. CI results are recorded on the PR after the final head completes verification. No public API, persisted JSONL format, recovery limits, lock semantics, or durability contract changed.
+**TDD and verification evidence:** test-first commit `808b15900b12422eec1eeae50282e3f9fa529983` produced the expected RED (67 passed, 3 failed) on Node 24.22.2. The implementation merged in PR #805 at `3eb5efd1966c1619ee98e62853ff624403555bbd`; all required CI checks passed on exact tested head `0f3cc3fe8804f8a5b072710e024947476f520f3c`. Journal tests passed 70/70 and package coverage passed at 90.07% lines / 82.61% branches / 100% functions. No public API, persisted JSONL format, recovery limits, lock semantics, or durability contract changed.
 
 ### CRITICAL consumer constraint
 
@@ -346,4 +352,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`.
+**Current `develop` checkpoint at this review:** `1b5dd010fe4791eb27ebfe14d5903f691ba53f48` (2026-11-09).
