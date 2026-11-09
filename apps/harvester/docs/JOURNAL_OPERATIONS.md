@@ -281,11 +281,15 @@ The shared Journal package supports bounded read/replay, but replay is at-least-
 
 This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](../AUDIT.md), [AUDIT_FINDINGS.md](../AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
 
-## Single-writer trading process lock
+## Trading process ownership locks
 
-- Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before creating a Journal writer. No prior-session Journal history read is currently wired into startup.
-- A second local process using that same directory fails before Journal startup and before broker connection.
-- The lock is released only after runtime shutdown and Journal writer closure are confirmed. If runtime stop or Journal close is not confirmed, the lock is retained. If Journal shutdown cannot be confirmed, the lock is retained to prevent another writer from trading concurrently.
-- If runtime startup has been attempted and then fails, the lock is retained because broker resources may have been partially activated even when no runtime handle was returned. Verify the process and broker state before manually removing that stale lock.
-- A lock is reclaimed automatically only when its recorded owner is on the same host, its PID is demonstrably absent, and an immediate re-read confirms the PID/hostname/token have not changed. Remote-host, unreadable, permission-denied, or possibly-live owners fail closed and require operator verification; never manually remove a lock until its owner is confirmed inactive.
-- Different Journal directories do not share a lock. All local Harvester processes trading the same account must use the same directory.
+Trading-enabled startup acquires two exclusive locks before the Journal writer starts or the broker connects:
+
+1. **Broker-wide host lock:** a file named `.<broker>-harvester-trading.lock` (for Binance, `.binance-harvester-trading.lock`) under `~/.coinzilla/harvester/process-locks/`. It is independent of `HARVESTER_JOURNAL_DIRECTORY` and prevents another Harvester process running under the same OS user from trading through the same broker with a different Journal directory.
+2. **Journal-directory lock:** `.harvester-trading.lock` inside the configured Journal directory. It prevents concurrent writers to the same recovery-history directory.
+
+The host lock is acquired first, then the Journal lock. If Journal-lock acquisition fails, startup attempts to release the host lock; an uncertain host-lock release is surfaced rather than ignored. During shutdown, the Journal lock is released first and the host lock only after Journal-lock release is confirmed. If Journal-lock release is uncertain, the host lock is deliberately retained. Both locks remain held unless runtime shutdown and Journal close are confirmed. If runtime startup was attempted and then failed before a runtime handle was returned, the locks are retained because broker resources may have been partially activated.
+
+Each lock records PID, hostname, start time and a random ownership token. A stale lock is automatically reclaimed only when its recorded hostname matches the current host, its PID is confirmed absent, and an immediate reread confirms the PID, hostname and ownership token are unchanged. A different-host lock, live or ambiguous PID, unreadable metadata, permission-denied process inspection or changed ownership token fails closed. The process check treats permission-denied inspection as potentially alive; it does not guess that the owner is dead. Verify the recorded owner before any manual removal.
+
+The host lock is local to one OS user's home directory and one broker identifier. It does not coordinate different machines or different OS users. The Journal lock is directory-scoped; different Journal directories do not share that lock, but the broker-wide host lock still prevents a second same-user process for the same broker.
