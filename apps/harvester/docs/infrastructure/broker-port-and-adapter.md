@@ -163,6 +163,10 @@ readiness closed and may retry only through a new full authoritative
 reconciliation; they never bypass the broker-generation acknowledgement or
 durable RECOVERY audit barriers.
 
+The `REST_RECONCILIATION` identifier is retained for compatibility; current
+canonical order/fill reads use Binance WebSocket API request/response RPC, not
+HTTP REST.
+
 ## Testing
 
 - Test domain decisions without broker mocks.
@@ -173,7 +177,7 @@ durable RECOVERY audit barriers.
 
 ## Implementation status
 
-Implemented: application broker port and Binance adapter, Conservative Trading Engine, in-memory owned-order registry, canonical fill accounting, serialized user-data processing, and reconnect-time REST reconciliation for tracked orders/fills. The reconciliation is process-local and fail-closed; it does not restore state after restart, reconcile account balances, or adopt external orders. Do not treat a connected broker or stream-level recovery acknowledgement alone as application trading readiness.
+Implemented: application broker port and Binance adapter, Conservative Trading Engine, in-memory owned-order registry, canonical fill accounting, serialized user-data processing, and reconnect-time WebSocket API request/response reconciliation for tracked orders/fills. The reconciliation is process-local and fail-closed; it does not restore state after restart, reconcile account balances, or adopt external orders. Do not treat a connected broker or stream-level recovery acknowledgement alone as application trading readiness.
 
 ### Book ticker broker-port contract
 
