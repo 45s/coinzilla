@@ -14,6 +14,11 @@ const runMain = (options = {}) => {
   return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), ...rest, env: { TRADING_MODE: "testnet", ...env } })
 }
 
+const runMain = (options = {}) => {
+  const { env = {}, ...rest } = options
+  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), ...rest, env: { TRADING_MODE: "testnet", ...env } })
+}
+
 test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notifications", async () => {
   const sentMessages = []
   const signalHandlers = new Map()

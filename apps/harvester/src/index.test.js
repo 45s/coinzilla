@@ -99,6 +99,7 @@ test("logs startup failures as one structured logger argument", async () => {
   const error = new Error("configuration failed")
   const logger = {
     info: (data) => calls.push({ level: "info", data }),
+    system() {},
     error: (data) => calls.push({ level: "error", data }),
   }
 
@@ -947,7 +948,7 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
       }),
       start: async () => { throw new Error("runtime startup failed") },
       registerSignalHandler() {},
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {}, system() {}, error() {}, debug() {} },
     })
     assert.equal(releaseCalls, 0)
     assert.equal(process.exitCode, 1)
@@ -963,8 +964,8 @@ test("rejects TESTNET trading when Journal cannot provide durable flush", async 
   try {
     await main({
       env: { NODE_ENV: "development" },
-      createJournalService: disabledJournalService,
-      start: async () => { started = true; return { connected: false } },
+      createJournalService: () => ({ ready: Promise.resolve({ ok: true }), flush: undefined, close: async () => ({ ok: true, closed: true }) }),
+      start: async () => { started = true; return { connected: true, tradingEnabled: true } },
       logger: { info() {}, error() {}, debug() {} },
     })
     assert.equal(started, false)
@@ -1221,8 +1222,7 @@ test("requires Journal readiness and publishes process provenance before trading
   await pending
   assert.equal(runtimeStarted, true, "Trading runtime starts after Journal readiness")
   assert.equal(contexts[0].runtimeSessionId, "delayed-journal-session", "logger context must be available synchronously even while optional Journal startup is pending")
-  assert.equal(events.some((event) => event.name === "harvester.process_started"), false, "the process-start event must not be published before the Journal subscriber is ready")
-  resolveJournalReady({ ok: true })
+  assert.equal(events.some((event) => event.name === "harvester.process_started"), true, "the process-start event is published after Journal readiness")
   const processStartedEvent = await processStarted
   assert.equal(processStartedEvent.data.startedAt, "2026-11-09T10:15:30.000Z", "delayed Journal publication must retain the original process-entry timestamp")
   assert.equal(processStartedEvent.data.source.metadataSource, "unavailable", "unavailable Git provenance must remain explicit rather than guessed")
@@ -1372,42 +1372,33 @@ test("fails closed when required Journal readiness fails", async () => {
 })
 
 
-test("does not await process-start publication before emitting the stopped event", { timeout: 1000 }, async () => {
-  const events = []
-  const handlers = {}
-  const eventBus = {
-    publish(event) {
-      events.push(event)
-      return { ok: true, event }
-    },
-    flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
-  }
-  const journalService = {
-    ready: new Promise(() => {}),
-    // Resolve close independently to isolate the process-start publication wait; production Journal close semantics are unchanged.
-    close: async () => ({ ok: true, closed: true }),
-  }
-
-  await main({
-    createEventBus: () => eventBus,
-    createJournalService: () => journalService,
-    start: async () => ({
-      connected: false,
-      tradingEnabled: false,
-      strategyMode: "read-only",
-      subscriptions: [],
-      stop: async () => ({ ok: true }),
+test("does not register runtime shutdown handlers before the required Journal is ready", async () => {
+  let resolveReady
+  const registered = []
+  let started = false
+  const pending = main({
+    createJournalService: () => ({
+      ready: new Promise((resolve) => { resolveReady = resolve }),
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true }),
     }),
-    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-    logger: { info() {}, error() {}, debug() {}, warn() {} },
+    start: async () => {
+      started = true
+      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [], stop: async () => ({ ok: true }) }
+    },
+    registerSignalHandler: (signal) => registered.push(signal),
+    logger: { info() {}, system() {}, error() {}, warn() {} },
     env: {},
   })
-
-  await handlers.SIGTERM()
-  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "process-start publication must remain pending until Journal subscriber readiness")
-  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), true, "stopped-event publication must not await the process-start publication promise")
+  await Promise.resolve()
+  assert.equal(started, false)
+  assert.deepEqual(registered, [])
+  resolveReady({ ok: true })
+  await pending
+  assert.equal(started, true)
+  assert.deepEqual(registered, ["SIGINT", "SIGTERM"])
 })
+
 
 test("does not await process-start publication before emitting the startup-failed event", { timeout: 1000 }, async () => {
   const events = []

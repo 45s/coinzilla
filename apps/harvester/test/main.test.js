@@ -20,6 +20,7 @@ test('reports successful Binance TESTNET startup without claiming a workflow ran
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
     system() {},
+    system() {},
   };
 
   await runMain({ createJournalService: disabledJournalService, start: async () => ({ connected: true, brokerName: 'binance', tradingEnabled: true, strategyMode: 'conservative', subscriptions: [] }), logger });
