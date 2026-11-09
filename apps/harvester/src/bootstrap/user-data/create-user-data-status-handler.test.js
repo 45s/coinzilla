@@ -376,3 +376,160 @@ test("logs user-data transport errors once with their original error context", (
   assert.equal(logs.error[0].error, transportError, "The stream error log must preserve the original broker Error object for diagnosis.")
   assert.equal(logs.error[0].attempt, 2, "The stream error log must retain the broker reconnect attempt when supplied.")
 })
+
+
+test("a diagnostic-only RPC error preserves readiness, generation, and the original empty-message error context", () => {
+  const transportCause = new Error("underlying socket diagnostic")
+  const transportError = new TypeError("", { cause: transportCause })
+  const state = createState({
+    ready: true,
+    requiresReconciliation: false,
+    streamUnsafe: false,
+    status: "READY",
+    recoveryGeneration: 7,
+    recoveryBrokerGeneration: 88,
+    recoverySubscriptionId: 42,
+    lastAcknowledgedRecoveryGeneration: 7,
+  })
+  const { handler, logs } = createHandler({ state })
+
+  handler({
+    type: "rpcError",
+    error: transportError,
+    recoveryRequired: false,
+  })
+
+  assert.equal(state.ready, true, "A diagnostic-only RPC error must preserve an otherwise valid trading-readiness gate.")
+  assert.equal(state.status, "READY", "A diagnostic-only RPC error must not replace the existing operational status.")
+  assert.equal(state.requiresReconciliation, false, "A diagnostic-only RPC error must not create a new application reconciliation requirement.")
+  assert.equal(state.streamUnsafe, false, "A broker status explicitly marked recovery-not-required must not mark the stream unsafe.")
+  assert.equal(state.recoveryGeneration, 7, "A diagnostic-only RPC error must not invalidate the active application recovery generation.")
+  assert.equal(state.recoveryBrokerGeneration, 88, "A diagnostic-only RPC error must preserve the active broker generation token.")
+  assert.equal(state.recoverySubscriptionId, 42, "A diagnostic-only RPC error must preserve the active subscription identity.")
+  assert.equal(logs.error[0]?.error, transportError, "The diagnostic must retain the exact original empty-message TypeError object.")
+  assert.equal(logs.error[0]?.errorStack, transportError.stack, "The diagnostic must preserve the original TypeError stack when its message is empty.")
+  assert.equal(logs.error[0]?.error?.cause, transportCause, "The original TypeError must retain its underlying transport cause object.")
+  assert.equal(logs.error[0]?.causeStack, transportCause.stack, "The diagnostic must preserve the underlying transport cause stack.")
+})
+
+test("distinct causes on empty-message RPC errors are not collapsed into one diagnostic", () => {
+  const firstCause = new Error("first transport failure")
+  const secondCause = new Error("second transport failure")
+  const { handler, logs } = createHandler()
+
+  handler({
+    type: "rpcError",
+    error: new TypeError("", { cause: firstCause }),
+    recoveryRequired: false,
+  })
+  handler({
+    type: "rpcError",
+    error: new TypeError("", { cause: secondCause }),
+    recoveryRequired: false,
+  })
+
+  assert.equal(logs.error.length, 2, "Distinct underlying causes must remain separately diagnosable even when both outer TypeErrors have empty messages.")
+  assert.equal(logs.error[0]?.causeMessage, "first transport failure", "The first diagnostic must retain its own underlying cause message.")
+  assert.equal(logs.error[1]?.causeMessage, "second transport failure", "The second diagnostic must retain its distinct underlying cause message.")
+})
+
+test("an RPC error with missing recovery metadata remains fail-closed", () => {
+  const state = createState({
+    ready: true,
+    requiresReconciliation: false,
+    streamUnsafe: false,
+    status: "READY",
+    recoveryGeneration: 7,
+  })
+  const { handler } = createHandler({ state })
+
+  handler({
+    type: "rpcError",
+    error: new Error("transport recovery state is unknown"),
+  })
+
+  assert.equal(state.ready, false, "Missing recovery metadata must not leave trading readiness open when the transport error's recovery requirement is unknown.")
+  assert.equal(state.requiresReconciliation, true, "Unknown recovery metadata must fail closed by requiring authoritative reconciliation.")
+  assert.equal(state.recoveryGeneration, 8, "Unknown recovery metadata must invalidate the current application recovery generation.")
+})
+
+test("an actual connection close after a diagnostic RPC error invalidates recovery exactly once", () => {
+  const state = createState({
+    ready: true,
+    requiresReconciliation: false,
+    streamUnsafe: false,
+    status: "READY",
+    recoveryGeneration: 7,
+    recoveryBrokerGeneration: 88,
+    recoverySubscriptionId: 42,
+    lastAcknowledgedRecoveryGeneration: 7,
+  })
+  const { handler } = createHandler({ state })
+
+  handler({
+    type: "rpcError",
+    error: new TypeError(""),
+    recoveryRequired: false,
+  })
+  handler({
+    type: "connectionClosed",
+    code: 1006,
+    reason: "",
+    recoveryRequired: true,
+  })
+
+  assert.equal(state.recoveryGeneration, 8, "Only the actual transport close must invalidate the application recovery generation after a diagnostic-only RPC error.")
+  assert.equal(state.recoveryBrokerGeneration, null, "The actual transport close must discard the previous broker generation token.")
+  assert.equal(state.recoverySubscriptionId, null, "The actual transport close must discard the previous subscription identity.")
+  assert.equal(state.requiresReconciliation, true, "An abnormal transport close must require authoritative application reconciliation.")
+  assert.equal(state.ready, false, "An abnormal transport close must close trading readiness after a prior diagnostic-only RPC error.")
+})
+
+
+test("a diagnostic-only RPC error cannot clear an existing application reconciliation gate", () => {
+  const state = createState({
+    ready: false,
+    requiresReconciliation: true,
+    streamUnsafe: true,
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    recoveryGeneration: 9,
+    recoveryBrokerGeneration: 88,
+    recoverySubscriptionId: 42,
+  })
+  const { handler } = createHandler({ state })
+
+  handler({
+    type: "rpcError",
+    error: new TypeError(""),
+    recoveryRequired: false,
+  })
+
+  assert.equal(state.ready, false, "A diagnostic-only error must not reopen trading while authoritative reconciliation is already pending.")
+  assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "A diagnostic-only error must preserve the existing recovery-blocked status.")
+  assert.equal(state.requiresReconciliation, true, "A diagnostic-only error must not clear the existing reconciliation requirement.")
+  assert.equal(state.streamUnsafe, true, "A diagnostic-only error must not clear an existing unsafe-stream state.")
+  assert.equal(state.recoveryGeneration, 9, "A diagnostic-only error must not alter the generation of an unresolved recovery.")
+})
+
+test("contradictory RPC recovery metadata remains fail-closed", () => {
+  const state = createState({
+    ready: true,
+    requiresReconciliation: false,
+    streamUnsafe: false,
+    status: "READY",
+    recoveryGeneration: 7,
+  })
+  const { handler } = createHandler({ state })
+
+  handler({
+    type: "rpcError",
+    error: new Error("conflicting recovery metadata"),
+    recoveryRequired: false,
+    reconciliationRequired: true,
+  })
+
+  assert.equal(state.ready, false, "Contradictory recovery flags must close trading readiness.")
+  assert.equal(state.requiresReconciliation, true, "Contradictory recovery flags must require authoritative reconciliation.")
+  assert.equal(state.streamUnsafe, true, "Contradictory recovery flags must mark the stream unsafe.")
+  assert.equal(state.recoveryGeneration, 8, "Contradictory recovery flags must invalidate the current application generation.")
+})
