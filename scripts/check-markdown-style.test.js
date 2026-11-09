@@ -87,6 +87,10 @@ test("checks new files fully while preserving historical and GitHub template exc
         content: "# Historical task brief  \n\n\nEvidence",
       },
       {
+        path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
+        content: "# Superseded plan  \\n\\n\\nEvidence",
+      },
+      {
         path: ".github/PULL_REQUEST_TEMPLATE.md",
         content: "## Summary\n\nDescription  \n",
       },
@@ -99,13 +103,14 @@ test("checks new files fully while preserving historical and GitHub template exc
       ["docs/new.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
       ["apps/harvester/AUDIT_2026-11-09.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
       ["docs/ai-agent/repository-engineering-audit.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
+      ["apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
       [".github/PULL_REQUEST_TEMPLATE.md", { lines: new Set([1, 2, 3]), isNewFile: true }],
       [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]), isNewFile: true }],
     ]),
   )
 
-  assert.equal(result.scannedFiles, 3)
-  assert.equal(result.skippedHistorical, 2)
+  assert.equal(result.scannedFiles, 3, 'only maintained documents and GitHub templates should be scanned')
+  assert.equal(result.skippedHistorical, 3, 'historical and superseded documents should be excluded from changed-line enforcement')
   assert.deepEqual(result.violations.trailingWhitespace.map(({ path }) => path), [
     "docs/new.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
