@@ -8,6 +8,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | --- | --- |
 | Engineering design, testing, security, reliability, documentation impact | [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) |
 | Branches, PRs, synchronization, merge/release lifecycle, agent communication | [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md) |
+| Binance exchange environment selection | [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md) |
 | Task checklists | [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md) |
 | Domain/path ownership | [docs/engineering/DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md) |
 | Cross-domain requests | [docs/engineering/CROSS_DOMAIN_REQUESTS.md](docs/engineering/CROSS_DOMAIN_REQUESTS.md) |
