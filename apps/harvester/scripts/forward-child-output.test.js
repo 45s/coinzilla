@@ -157,12 +157,12 @@ test("duplicates raw child output into cumulative and timestamped terminal desti
     source,
     destinations: () => [cumulativeTerminal, sessionTerminal],
   });
-  source.end("stdout line\\nstderr line\\n");
+  source.end("stdout line\nstderr line\n");
   await forwarding;
 
   assert.deepEqual(
     cumulativeOutput,
-    ["stdout line\\nstderr line\\n"],
+    ["stdout line\nstderr line\n"],
     "the cumulative terminal log must receive the complete raw child output",
   );
   assert.deepEqual(
