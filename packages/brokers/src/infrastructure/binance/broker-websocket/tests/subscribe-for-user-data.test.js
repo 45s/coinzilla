@@ -13,7 +13,7 @@ function createBroker(handler, exchangeInfoHandler = () => ({ symbols: [] })) {
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret",
+    apiSecret: "test-secret", tradingMode: "testnet",
     logger: { error() {}, info() {}, debug() {}, warn() {} },
   }, { apiClientFactory: () => rpc })
   return { broker, rpc }
@@ -28,7 +28,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     })
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
-      apiSecret: "test-secret",
+      apiSecret: "test-secret", tradingMode: "testnet",
       logger: { error() {}, info() {}, warn() {} },
     }, { apiClientFactory: () => rpc })
     broker.connected = true
@@ -475,7 +475,7 @@ it("removes local observers when remote unsubscribe fails and does not replay it
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret",
+    apiSecret: "test-secret", tradingMode: "testnet",
   }, { apiClientFactory: () => rpc })
   broker.connected = true
 
