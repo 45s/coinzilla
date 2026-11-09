@@ -227,3 +227,23 @@ test("fetches current exchange filters for every metadata request instead of reu
     ["getSymbolFilters", { symbol: "BTCUSDT" }],
   ], "Every metadata request must reach the broker so runtime replacement can validate current exchange rules")
 })
+
+
+test("preserves the broker NOT_SENT cancellation outcome for Harvester", async () => {
+  const { calls, client } = createClient()
+  const brokerNotSentResult = {
+    ok: false,
+    cancellationOutcome: "NOT_SENT",
+    errors: [new Error("user-data stream unavailable")],
+  }
+  client.cancelOrder = async (input) => {
+    calls.push(["cancelOrder", input])
+    return brokerNotSentResult
+  }
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+
+  const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+
+  assert.equal(result, brokerNotSentResult, "Harvester's adapter must preserve the broker's explicit proof that cancellation was not sent")
+  assert.deepEqual(calls, [["cancelOrder", { symbol: "BTCUSDT", orderId: "77" }]], "The adapter must forward the exact normalized broker cancellation request")
+})

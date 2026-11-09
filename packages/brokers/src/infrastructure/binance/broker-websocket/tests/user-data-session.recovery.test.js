@@ -106,6 +106,7 @@ describe("Binance user-data reconnect behavior", () => {
     const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
     const blockedCancelAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
     assert.equal(blockedCancel.ok, false)
+    assert.equal(blockedCancel.cancellationOutcome, "NOT_SENT", "The user-data guard must identify a cancellation rejected before the order.cancel RPC")
     assert.equal(blockedCancelAll.ok, false)
     assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false)
     assert.equal(clients[1].calls.some((call) => call.method === "openOrders.cancelAll"), false)
