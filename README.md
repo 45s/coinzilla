@@ -31,21 +31,22 @@ Run the unit tests:
 pnpm test
 ```
 
-Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command.
+Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command. The Brokers package uses native WebSocket API and Streams clients; it does not use the Binance SDK or a REST broker implementation.
 
-To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`. The Binance SDK integration tests are skipped automatically unless actual Binance TESTNET credentials are configured; no credentials are needed for the default unit tests.
+To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`. Integration suites remain skipped unless the explicit opt-in and non-placeholder Binance TESTNET credentials are configured; no credentials are needed for the default unit tests.
 
 ```sh
 pnpm --filter @coinzilla/brokers test:integration
 ```
 
-To run only the Binance SDK integration tests:
+To run the focused broker integration suites:
 
 ```sh
-pnpm --filter @coinzilla/brokers test:sdk
+pnpm --filter @coinzilla/brokers test:websocket
+pnpm --filter @coinzilla/brokers test:user-data-integration
 ```
 
-Integration tests need network access. Tests that place orders use TESTNET only and are intentionally not part of the default test/CI unit-test run. Never use production credentials for these tests or commit real credentials.
+Integration tests need network access and use TESTNET only. The WebSocket order-lifecycle suite can create and cancel a TESTNET order only when its separate mutation opt-in is enabled; the user-data session suite is read-only. These suites are intentionally not part of the default test/CI unit-test run. Never use production credentials for these tests or commit real credentials. See the [Brokers README](packages/brokers/README.md#testnet-integration-tests) for the complete safety gates and permissions.
 
 To run the utility package tests directly:
 
