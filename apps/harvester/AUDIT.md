@@ -814,7 +814,7 @@ All follow-up remains investigation/documentation and future DDD/TDD work only. 
 
 ## 2026-11-09 forensic continuation — safety-halt reconciliation side-effect risk
 
-Current `createAccountIntegritySafetyHalt()` calls `reconcileOwnedOrders()` with default `recoveryMode=false` before explicit BUY-only cancellation. A FILLED BUY encountered during snapshot application can therefore trigger recovery SELL cancellation during the safety-halt reconciliation stage. The November 8 ZRO cancellation stack through `applyOwnedOrderSnapshotsTransition()` followed by the safety-halt reconciliation-failed log strongly correlates with this path, though it does not prove caller attribution. Tracked as F-024/#773. Future DDD/TDD work should ensure the reconciliation stage is side-effect-free and only the explicit owned-BUY cancellation stage mutates orders.
+Historical F-024/#773 described the safety-halt reconciliation path before its fix. Current `createAccountIntegritySafetyHalt()` calls `reconcileOwnedOrders({ recoveryMode: true })` before explicit BUY-only cancellation. Recovery mode applies canonical broker order/fill facts while deferring strategy-driven recovery SELL cancellation/replacement. The use-case regression asserts the recovery-mode option and coalesced ordering; the engine-level regression proves the BUY fill is accounted, only the active owned BUY is cancelled, and the recovery SELL remains OPEN. #773 is closed as completed. The November 8 ZRO cancellation stack remains historical correlation and does not prove a later exchange-side SELL cancellation.
 
 
 ## 2026-11-09 forensic continuation — cancellation outcome classification
