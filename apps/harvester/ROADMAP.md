@@ -65,7 +65,7 @@ This section is the authoritative implementation order for current work. It supe
 
 - #702 per-subscriber recovery acknowledgement and generation-fencing work is implemented in merged Brokers/Harvester PRs #732, #735 and #740; do not list it as open work.
 - #650 evidence work is complete in PR #652; additional evidence changes require a newly demonstrated gap.
-- #654 remains deferred but is a release-readiness blocker for unattended process restarts.
+- #654 is an active forensic/release-readiness investigation; runtime implementation remains a separate DDD/TDD workstream and a blocker for unattended process restarts.
 - Remove obsolete references to the deleted legacy application; no extraction or migration work remains for it.
 
 
@@ -117,9 +117,9 @@ This section is the current operational status and supersedes older statements b
 > **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
 
 
-> **CURRENT DIRECTION — 2026-11-06: CONSERVATIVE STRATEGY/POLICY AUDIT.** The active task is to find and fix Conservative decision, inventory, profit, fee, exchange-filter, and order-lifecycle defects, with regression tests. Process-restart recovery is deferred to the final roadmap section and is not a blocker for this audit.
+ > **CURRENT DIRECTION — 2026-11-09: FORENSIC RESTART-RECOVERY PHASE.** The active task is to establish source/test evidence for #654, validate the retained PR #606 recovery helpers, document why current runtime wiring is absent, and resolve market-universe completeness and crash-consistency requirements. No application implementation or test changes are allowed in this phase.
 >
-> **2026-11-05 runtime decision:** durable Journal replay and process-restart recovery are intentionally disabled. Startup does not read historical Journal sessions, reconstruct Portfolio/RecoveryLedger/order state, or reconcile old trades. Harvester starts with fresh in-memory trading state for the current process. The separate durable account PREFLIGHT/CLOSING audit and pre-side-effect order/cancel intent flushes remain enabled. Do not reintroduce Journal replay or make it a startup prerequisite unless the user explicitly requests it.
+> **Historical runtime decision — 2026-11-05:** durable Journal replay and process-restart recovery were intentionally disabled for the first Conservative TESTNET workflow. The user now explicitly requests forensic investigation, not implementation or replay enablement. Current `index.js` and `prepareOptionalJournal()` do not read prior sessions; `startHarvester()` creates fresh state. The separate PREFLIGHT/CLOSING account audit and pre-side-effect order/cancel intent flushes remain enabled. Any runtime integration must be a separate DDD/TDD phase after this investigation.
 >
 > PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for same-process reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
@@ -355,10 +355,10 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Replace the current price-only callback flow with the actual decision-to-order execution pipeline. A tested application use case now converts pure Conservative intents into registered, exchange-rule-validated broker submissions; bootstrap composition and event-driven lifecycle integration remain.
 - [x] Do not expose `runtime.placeOrder` or `runtime.broker`; all order submission remains private to the composed Conservative engine and its broker port.
 
-### Separate deferred workstream #654 — Persistence, restart, and comprehensive recovery (outside this audit)
+### Active forensic workstream #654 — Persistence, restart, and comprehensive recovery (implementation separate)
 
 - [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
-- [ ] Integrate the already available shared Journal read/replay capability into Harvester's domain-specific durable state. This is deferred until after the first successful TESTNET trading cycle; do not implement it as a prerequisite.
+- [ ] Reconnect and complete the existing PR #606 recovery helper pipeline in a separate DDD/TDD implementation phase after this forensic investigation; this is not implementation authorization for the current phase.
 - [ ] Persist execution facts before acknowledging successful processing/recovery.
 - [ ] On startup/reconnect, reconcile persisted state against exchange balances, open orders, and available order/trade history before READY.
 - [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.
@@ -1339,13 +1339,13 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Confirmed no overlapping Harvester changes while synchronizing with the latest broker roadmap update.
 
 
-## Journal restart recovery — intentionally disabled, 2026-11-05
+## Journal restart recovery — runtime integration disabled 2026-11-05; forensic investigation resumed 2026-11-09
 
 PR #606 previously introduced Journal replay, domain-state restoration, and historical exchange reconciliation. That implementation is not part of the current runtime: `startHarvester` no longer projects or restores Journal records, `index.js` does not require a recovery snapshot, and the Journal service does not read previous sessions during startup.
 
 The supported runtime starts with fresh in-memory Portfolio, RecoveryLedger, and order ownership state. It does not resume prior positions or orders. Existing exchange open orders remain unowned and are recorded in the PREFLIGHT audit, but their presence alone does not block startup. Harvester never adopts or cancels them. An execution event for an unowned order remains an ownership violation and pauses the affected pair. The current-session PREFLIGHT/CLOSING account audit and durable order/cancel intent barriers remain active.
 
-Do not repair, expand, or re-enable restart recovery as part of the first Conservative TESTNET workflow. It is deferred unless the user explicitly requests it.
+The 2026-11-05 decision deferred runtime integration for the first Conservative TESTNET workflow. The 2026-11-09 user request authorizes forensic investigation only; do not re-enable replay or modify runtime in this phase.
 
 
 ## Durable exchange-write intent barriers — retained P0 safety
@@ -1362,12 +1362,16 @@ These barriers deliberately await filesystem durability only immediately before 
 - [x] PR #568 acquires an exclusive process lock in the configured Journal directory before opening a Journal writer.
 - [x] PR #568 refuses a second local trading process using the same Journal directory.
 - [x] PR #568 releases the lock only after runtime stop and Journal shutdown are confirmed; retains it when either is uncertain.
-- [x] PR #568 never auto-reclaims stale locks; operator verification is required.
+- [x] Historical PR #568 originally required manual stale-lock verification. Current code reclaims only a same-host lock whose PID is demonstrably dead and whose PID/hostname/token still match on re-read; foreign-host, unreadable, permission-denied, or possibly-live locks remain fail-closed.
 - [x] PR #607 adds a broker-wide host lock independent of Journal directory configuration, preventing concurrent same-user/same-broker trading processes across different Journal directories. All six required workflows passed on the exact final head before merge.
 - [ ] Coordinate locks across different OS users or machines if multi-user or distributed same-account deployments become supported.
 
 
-## P0 — Durable restart recovery (separate deferred scope #654; not this audit)
+## P0 — Durable restart recovery (#654; historical PR #606 helper stack, current runtime wiring disabled)
+
+**Status clarification — 2026-11-09:** The checked items below describe helper implementation/tests retained from PR #606; they do not mean current startup invokes them. Current `index.js` does not await `journalService.recovery`, current `prepareOptionalJournal()` does not read prior sessions or expose a recovery snapshot, and current `startHarvester()` does not accept `journalRecoveryRecords` or call the projection/restoration/audit helpers.
+
+The historical PR #606 startup integration explicitly called `fetchAccountTradeHistory(..., marketUniverseComplete: false)`, while `auditRecoveredTradeHistory()` rejects unless `marketUniverseComplete === true`. Therefore trading-enabled startup after prior trading activity was intentionally fail-closed. The current runtime bypasses this gate and starts fresh; it does not provide equivalent recovery safety.
 
 - [x] PR #568 — local Journal-directory single-writer ownership; acquired before Journal writer startup and broker connection, retained after uncertain runtime/Journal shutdown.
 - [x] PR #607 — broker-wide same-host/same-OS-user/same-broker lock across different Journal directories; host lock is retained if Journal-lock release is uncertain.
@@ -1381,14 +1385,14 @@ These barriers deliberately await filesystem durability only immediately before 
 - [x] PR #606 — preserve unresolved recovery replacement intents; only clear them after canonical exchange history proves the prior order was canceled or filled.
 - [x] PR #606 — add rate-paced account trade-history pagination and exact exchange/Journal execution parity checks; reject unknown, missing, duplicate, or contradictory fills.
 - [x] PR #606 — require complete account-wide trade-history evidence before recovered trading readiness; current Binance exchangeInfo omits delisted symbols, so the completeness gate intentionally remains closed.
-- [ ] Add explicit pagination regression coverage for more than 1,000 fills and complete bootstrap restart fixtures for every supported lifecycle state.
+- [ ] Add account-wide history pagination regression coverage beyond 1,000 rows and complete bootstrap restart fixtures for every supported lifecycle state. Existing per-order pagination coverage beyond 1,000 rows does not prove the account-wide helper path.
 - [ ] Query and reconcile account-wide external/manual trade history since the durable baseline to detect executions not attributable to recovered Harvester orders.
 - [ ] Prove repeated full recovery attempts are idempotent across process crashes during reconciliation and recovery-cycle completion.
 - [ ] Expand crash-boundary tests across submission intent, broker acknowledgement, partial/full fill, cancellation request/result, replacement intent, reservation commit/release, Journal closure, and process-lock release.
 - [ ] Add persisted Journal truncation/missing-page fixtures and validate monotonic audit timestamps, post-close activity rejection, and contradictory cancellation/fill transitions.
 - [ ] Keep TESTNET acceptance NOT ACCEPTED until the separate joint validation session.
 
-**Current safety boundary:** PR #606 and PR #607 are merged into `develop`. Durable reconstruction and canonical exchange reconciliation are implemented for known Harvester-owned state. Trading-enabled restart after prior trading remains fail-closed because the current Binance exchangeInfo catalog cannot prove the historical symbol universe, including delisted markets. The complete account-wide external/manual execution audit and full crash-boundary matrix remain open. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
+**Historical PR #606 safety boundary (not current runtime behavior):** the PR's helper pipeline implemented Journal projection, domain restoration and canonical reconciliation for known Harvester-owned state. Its caller set `marketUniverseComplete: false`, and the required trade-history audit rejected incomplete market universes, so trading-enabled restart after prior activity remained fail-closed. Current runtime wiring has since been removed; it does not read prior sessions or fail closed on prior trading history. It starts fresh and can proceed with unowned open orders. The unresolved market-universe problem, account-wide external/manual execution audit and crash-boundary matrix remain open. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this forensic phase.
 
 ## Standalone TESTNET order-cancellation operator tool — 2026-11-05
 
@@ -1970,3 +1974,18 @@ The separate 2026-11-08 16:33:33–22:42:05 UTC session has been fully parsed an
 - [ ] **[#764](https://github.com/45s/coinzilla/issues/764) — decide whether to capture a complete account-wide open-order snapshot in the CLOSING audit.** Source confirms the current shutdown handler writes CLOSING balances only; exact final order IDs/statuses are not preserved. Keep this separate from deferred process-restart reconciliation #654.
 
 No runtime or exchange changes were made during this audit. No TESTNET acceptance is claimed. The earlier same-day user-data recovery failure remains tracked under #626 and must not be conflated with this later successful process session.
+
+
+### 2026-11-09 current forensic findings — #654
+
+**F-030 — current runtime recovery integration is absent, while tested offline helpers remain.** The current `index.js` does not await a Journal recovery snapshot; current `prepareOptionalJournal()` does not read prior sessions; current `startHarvester()` does not accept `journalRecoveryRecords` or invoke the projection/restoration/audit helpers. It creates fresh Portfolio, RecoveryLedger, OrderRegistry, pause and recovery-intent state. Existing tests confirm no replay and allow runtime startup with unmatched open orders.
+
+**Retained helper pipeline:** `projectHarvesterJournalRecovery`, `restoreHarvesterJournalState`, `fetchAccountTradeHistory`, `auditRecoveredTradeHistory`, and `auditRecoveredAccountState` remain in the repository with focused offline tests. PR #606's old integration wired them but hardcoded `marketUniverseComplete: false` while the trade-history audit requires true, so prior-trading startup failed closed. The current runtime bypasses that gate instead of resolving completeness. Reuse these helpers; do not rebuild them.
+
+**Broker history limitation:** the account-wide helper paginates only the supplied Market list and relies on a caller-supplied completeness assertion. The current Binance exchangeInfo catalog cannot prove every historical symbol, including delisted markets; external/manual executions outside the known symbol set cannot be excluded. The official API documentation reviewed does not establish a guaranteed trade-history retention horizon.
+
+**Order identity limitation:** the Journal intent preserves clientOrderId. A brokerOrderId can be recovered from a durable acknowledgement, cancellation intent/failure, or applied-fill event. If the acknowledgement is lost and no later durable fill/cancel event supplies the broker ID, the recovered order remains unresolved; the account audit rejects active orders without brokerOrderId. It does not bind an unresolved intent to an open order solely by clientOrderId. This is fail-closed in the old helper path.
+
+**F-028:** applied-fill and strategy-pause events are published asynchronously without an immediate durable flush; Journal append is not fsync acknowledgement. **F-029:** per-market pause/recovery-intent sets can be reconstructed by the offline restore helper, but current runtime does not invoke it. **F-030:** startup wiring and completeness remain the primary integration gap.
+
+See [AUDIT.md](./AUDIT.md), [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md), [JOURNAL_OPERATIONS.md](./docs/JOURNAL_OPERATIONS.md), and [#654](https://github.com/45s/coinzilla/issues/654). No implementation or test changes are authorized in this phase.
