@@ -9,7 +9,11 @@ const logDirectory = resolve(process.cwd(), "logs")
 const logPath = resolve(logDirectory, "terminal.log")
 const sessionStartedAt = new Date().toISOString()
 const runtimeSessionId = randomUUID()
-const sessionPaths = createHarvesterLogSessionPaths({ directory: logDirectory, startedAt: sessionStartedAt, runtimeSessionId })
+const sessionPaths = createHarvesterLogSessionPaths({
+  directory: logDirectory,
+  startedAt: sessionStartedAt,
+  runtimeSessionId,
+})
 
 mkdirSync(logDirectory, { recursive: true })
 
@@ -83,7 +87,9 @@ const outputForwarding = [
 ]
 
 logStreams.forEach((stream) => stream.on("error", (error) => {
-  if (logStreamFailed) return
+  if (logStreamFailed) {
+    return
+  }
   logStreamFailed = true
   process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1

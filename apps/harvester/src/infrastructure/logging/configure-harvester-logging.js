@@ -96,7 +96,11 @@ export async function configureHarvesterLogging({
   }
 
   await mkdir(directory, { recursive: true })
-  const sessionPaths = createHarvesterLogSessionPaths({ directory, startedAt: processIdentity.startedAt, runtimeSessionId: processIdentity.runtimeSessionId })
+  const sessionPaths = createHarvesterLogSessionPaths({
+    directory,
+    startedAt: processIdentity.startedAt,
+    runtimeSessionId: processIdentity.runtimeSessionId,
+  })
 
   const createFileTransport = ({ name, level, filename, sessionFilename }) => {
     const streams = [
@@ -110,9 +114,15 @@ export async function configureHarvesterLogging({
       level,
       write(entry) {
         const streamError = [...streamErrors.values()][0]
-        if (streamError) return Promise.reject(streamError)
+        if (streamError) {
+          return Promise.reject(streamError)
+        }
         let serialized
-        try { serialized = JSON.stringify(entry) } catch (error) { return Promise.reject(error) }
+        try {
+          serialized = JSON.stringify(entry)
+        } catch (error) {
+          return Promise.reject(error)
+        }
         return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
           stream.write(serialized + "\n", (error) => {
             const currentError = error ?? streamErrors.get(index)
@@ -184,7 +194,9 @@ export async function configureHarvesterLogging({
       }
     },
   })
-}export function createHarvesterConsoleTransport({
+}
+
+export function createHarvesterConsoleTransport({
   output = process.stdout,
   color = process.env.NO_COLOR === undefined && (
     process.env.HARVESTER_LOG_COLOR === "1" || Boolean(output.isTTY)

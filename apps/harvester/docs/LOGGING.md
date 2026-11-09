@@ -167,8 +167,9 @@ In an interactive development terminal:
 - `/log status` — print the current transport configuration.
 
 These commands only change the console transport. Cumulative and timestamped
-DEBUG/TRACE files keep recording independently. Commands are disabled when stdin is redirected or
-non-interactive; the process continues to use stdin normally in that case.
+DEBUG/TRACE files keep recording independently. Commands are disabled when
+stdin is redirected or non-interactive; the process continues to use stdin
+normally in that case.
 
 ## Lifecycle
 
