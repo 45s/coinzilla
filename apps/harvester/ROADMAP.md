@@ -42,7 +42,7 @@ This section is the authoritative implementation order for current work. It supe
 
 ### IMPORTANT — improve correctness and operational confidence
 
-- [~] **PR #866 — Journal startup diagnostics and operator error vocabulary.** Preserve the Journal package's fail-closed exclusive lock behavior while exposing a stable Harvester diagnostic identifier (`ErrorJournal001`) for `JOURNAL_DIRECTORY_LOCKED`. Publish the exact stale-lock verification/removal procedure in the [Error Vocabulary](./docs/error-vocabulary.md), link it from the operations indexes, and retain the original machine-readable error code and cause. No automatic stale-lock takeover or journal-lock implementation change.
+- [x] **PR #866 — Journal startup diagnostics and operator error vocabulary (merged 2026-11-10).** Harvester exposes the stable diagnostic identifier (`ErrorJournal001`) for `JOURNAL_DIRECTORY_LOCKED` while preserving the Journal package's fail-closed exclusive lock behavior, original machine-readable error code, and cause. The [Error Vocabulary](./docs/error-vocabulary.md) documents stale-lock verification and safe manual recovery. No automatic stale-lock takeover or journal-lock implementation change.
 
 4. **Keep Journal evidence complete without expanding trading-blocking behavior.**
    - **Why:** investigation requires decision, request, broker acknowledgement, execution, fee and account evidence to be correlated. Missing fields make incident analysis guesswork, but optional diagnostics must not become new trading gates.
