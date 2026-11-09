@@ -6268,38 +6268,3 @@ test("preserves an OPEN owned BUY after a locally blocked NOT_SENT shutdown canc
     event.name === "strategy.paused" && event.data.reason === "SHUTDOWN_BUY_CANCELLATION_NOT_SENT"),
   "A locally blocked shutdown cancellation must retain the safety pause and incomplete-shutdown state")
 })
-
-
-function makePartialFill({ order }) {
-  return new Fill({
-    tradeId: "partial-trade-1",
-    brokerOrderId: order.brokerOrderId,
-    clientOrderId: order.clientOrderId,
-    market,
-    side: order.side,
-    price: order.limitPrice,
-    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
-    liquidityRole: "MAKER",
-    executedAt: 2,
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
-}
-
-function makePartiallyFilledOrder({ order, updatedAt = 2, executedQuantity = "0.5" }) {
-  return new CanonicalOrder({
-    clientOrderId: order.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
-    market,
-    side: order.side,
-    type: order.type,
-    limitPrice: order.limitPrice,
-    originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
-    status: "PARTIALLY_FILLED",
-    createdAt: order.createdAt,
-    acknowledgedAt: order.acknowledgedAt,
-    updatedAt,
-  })
-}
