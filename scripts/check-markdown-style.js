@@ -93,7 +93,7 @@ export function parseChangedMarkdownDiff(diffText) {
 
     if (!inHunk || line.startsWith("\\")) continue
 
-    if (line.startsWith("+") && !line.startsWith("+++")) {
+    if (line.startsWith("+")) {
       currentChange.lines.add(newLineNumber)
       newLineNumber += 1
       continue
@@ -105,7 +105,7 @@ export function parseChangedMarkdownDiff(diffText) {
       continue
     }
 
-    if (line.startsWith("-") && !line.startsWith("---")) {
+    if (line.startsWith("-")) {
       const removedLine = line.slice(1)
       if (/^ {0,3}#{1,6}(?:[ \t]+|$)/.test(removedLine)) {
         currentChange.removedHeading = true
