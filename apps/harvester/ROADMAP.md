@@ -1970,3 +1970,10 @@ The separate 2026-11-08 16:33:33–22:42:05 UTC session has been fully parsed an
 - [ ] **[#764](https://github.com/45s/coinzilla/issues/764) — decide whether to capture a complete account-wide open-order snapshot in the CLOSING audit.** Source confirms the current shutdown handler writes CLOSING balances only; exact final order IDs/statuses are not preserved. Keep this separate from deferred process-restart reconciliation #654.
 
 No runtime or exchange changes were made during this audit. No TESTNET acceptance is claimed. The earlier same-day user-data recovery failure remains tracked under #626 and must not be conflated with this later successful process session.
+
+
+## 2026-11-09 — F-024 safety-halt reconciliation TDD
+
+- Added an integration regression that runs the account-integrity safety-halt workflow against the real Conservative engine with a recovered FILLED BUY, an active recovery SELL, and a separate standing BUY.
+- The regression requires canonical REST order/fill reconciliation to preserve the recovery SELL and permits only the explicit owned-BUY safety stage to cancel the standing BUY.
+- This is the RED test-first commit for [#773](https://github.com/45s/coinzilla/issues/773), within recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626). Production behavior is intentionally unchanged in this commit.

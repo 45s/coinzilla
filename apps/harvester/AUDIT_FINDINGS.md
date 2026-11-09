@@ -708,6 +708,8 @@ Thus the reconciliation stage of the safety halt is not guaranteed to be read-on
 
 **Required follow-up:** define safety-halt reconciliation as authoritative fact collection/application only; evaluate using `recoveryMode: true` or a more explicit side-effect-free reconciliation policy; add a RED test with an active recovery SELL and a FILLED BUY encountered during safety-halt reconciliation; assert no SELL cancellation/replacement occurs and only the explicit owned-BUY cancellation stage may mutate orders. Preserve complete identity/fill reconciliation, fail-closed behavior, and ownership-before-cancellation ordering. No runtime changes are part of this audit.
 
+**TDD RED (2026-11-09):** a new integration regression composes the safety-halt workflow with the real Conservative engine and asserts that reconciliation cannot cancel the recovery SELL; only the explicit owned-BUY stage may cancel the standing BUY. The test is committed before the production fix.
+
 
 ## F-025 — Known preflight cancellation rejection is recorded as UNKNOWN outcome
 
