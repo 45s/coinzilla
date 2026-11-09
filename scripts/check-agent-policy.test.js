@@ -100,9 +100,9 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
     ];
 
     assert.deepEqual(findMissingLocalAnchors(root, documents), [
-      'docs/source.md links to missing heading anchor "#missing" in docs/source.md',
       'docs/source.md links to missing heading anchor "#absent" in docs/target.md',
-    ], 'only unresolved local Markdown fragments should be reported');
+      'docs/source.md links to missing heading anchor "#missing" in docs/source.md',
+    ], 'only unresolved local Markdown fragments should be reported in stable sorted order');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
