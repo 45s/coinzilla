@@ -718,3 +718,8 @@ this test-first commit.
 ## 36. Additional F-023 classification boundaries — 2026-11-09
 
 Additional RED regressions distinguish a malformed successful REST payload from a broker-declared transient REST read failure. They also prove that missing failure metadata and retryable metadata with an empty stage cannot authorize automatic recovery retries. These tests are test-only; production behavior remains unchanged at this checkpoint.
+
+
+## 37. F-023 test fixture policy correction — 2026-11-09
+
+The legacy retry-path recovery tests now provide explicit REST_RECONCILIATION category, stage, and retryable metadata. Missing metadata is reserved for the new terminal fail-closed regression. Engine snapshot assertions execute after the reconciliation result is created and assert the exact stage emitted by the production classifier.

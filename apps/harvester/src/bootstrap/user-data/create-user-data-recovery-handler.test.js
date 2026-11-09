@@ -533,6 +533,7 @@ test("keeps recovery blocked when owned-order reconciliation returns a failed re
     reconcileOwnedOrders: async () => ({
       ok: false,
       errors: [new Error("canonical owned-order history unavailable")],
+      failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
     }),
   })
   fixture.start()
@@ -905,6 +906,7 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
         return {
           ok: false,
           errors: [new Error("temporary owned-order history failure")],
+          failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
         }
       }
       if (reconciliationCalls === 2) return secondReconciliation

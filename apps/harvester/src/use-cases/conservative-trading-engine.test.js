@@ -5406,8 +5406,8 @@ test("fails closed when owned-order open-orders REST data is not an array", asyn
   const fixture = await createMalformedRestEnvelopeFixture({
     openOrdersResult: { ok: true, data: { orders: [] } },
   })
-  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDER_SNAPSHOT", retryable: false }, "A successful but malformed open-order payload must be terminal integrity failure, not a retryable REST outage.")
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDER_SNAPSHOT", retryable: false }, "A successful but malformed open-order payload must be terminal integrity failure, not a retryable REST outage.")
   assertMalformedRestEnvelopeFailsClosed({
     fixture,
     result,
@@ -5496,8 +5496,8 @@ test("fails closed when owned-order REST fill history is not an array", async ()
   const fixture = await createMalformedRestEnvelopeFixture({
     fillsResult: { ok: true, data: { fills: [] } },
   })
-  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY", retryable: false }, "A successful but malformed fill-history payload must fail closed as accounting integrity, not retry indefinitely.")
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_SHAPE", retryable: false }, "A successful but malformed fill-history payload must fail closed as accounting integrity, not retry indefinitely.")
   assertMalformedRestEnvelopeFailsClosed({
     fixture,
     result,
