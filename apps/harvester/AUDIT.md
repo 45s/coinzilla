@@ -939,7 +939,7 @@ The test's fake broker emits no market-price tick, so its `placeCalls === 0` ass
 This is an explicit current startup policy for external orders, not a reproduced duplicate-order incident. In a restart scenario, a formerly Harvester-owned order is indistinguishable from an external order because the registry is empty. Treat this as a high-priority #654 reconciliation requirement.
 
 
-## F-029 — Process restart clears safety-pause and accounting-failure latches
+## F-029 — Per-market strategy safety-pause and recovery-intent state is not restored on restart
 
 **Severity:** High  
 **Confidence:** High  
@@ -958,7 +958,7 @@ This is an explicit current startup policy for external orders, not a reproduced
 
 A safety pause or accounting-failure latch is set during process lifetime. The engine publishes a pause event, and account-integrity safety halt may reconcile/cancel owned BUYs. On process exit, the in-memory sets/flags disappear. On the next trading-enabled startup, fresh state begins with no pause, no accounting-failure latch and no reconciliation requirement. If PREFLIGHT and queued live events do not independently rediscover the old condition, user-data readiness can become true and market events can be evaluated without the previous safety halt.
 
-**Confirmed:** the pause/accounting state is process-local and is reset by the current startup composition.  
+**Confirmed:** per-market `paused`, `durablePausedMarkets`, recovery-managed pause/cancellation, replacement and trailing-reprice state is process-local and reset by the current startup composition. The separate `accountingFailed` process-lifetime latch reset is already covered by F-023/#769; F-029 adds the engine's independent pause/recovery-intent state.  
 **Strongly indicated:** a previous safety halt can be forgotten across restart and trading can resume without resolving the original condition.  
 **Not reproduced:** a live scenario in which a specific previous halt is cleared and a subsequent market tick places a new order despite an unresolved prior condition.
 
