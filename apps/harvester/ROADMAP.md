@@ -1362,7 +1362,7 @@ These barriers deliberately await filesystem durability only immediately before 
 - [x] PR #568 acquires an exclusive process lock in the configured Journal directory before opening a Journal writer.
 - [x] PR #568 refuses a second local trading process using the same Journal directory.
 - [x] PR #568 releases the lock only after runtime stop and Journal shutdown are confirmed; retains it when either is uncertain.
-- [x] PR #568 never auto-reclaims stale locks; operator verification is required.
+- [x] Historical PR #568 originally required manual stale-lock verification. The current implementation has since been tightened: it reclaims only a same-host lock whose recorded PID is demonstrably dead and whose PID/hostname/token still match on re-read; foreign-host, unreadable, permission-denied, or possibly-live locks remain fail-closed.
 - [x] PR #607 adds a broker-wide host lock independent of Journal directory configuration, preventing concurrent same-user/same-broker trading processes across different Journal directories. All six required workflows passed on the exact final head before merge.
 - [ ] Coordinate locks across different OS users or machines if multi-user or distributed same-account deployments become supported.
 
