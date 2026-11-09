@@ -17,7 +17,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
-- [Trading strategies overview](trading-strategies.md) — overview only; current Conservative rules remain in the canonical specification
+- [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 
 ## Operations and safety
 
