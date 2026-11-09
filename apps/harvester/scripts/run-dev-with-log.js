@@ -111,7 +111,7 @@ child.on("close", async (code, signal) => {
     && !process.stderr.writableNeedDrain
   ) {
     process.stderr.write(
-      `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath}\n`,
+      `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath} and ${sessionLogStream.path}\n`,
     )
   }
 

@@ -20,7 +20,9 @@ const UNAVAILABLE_SOURCE = Object.freeze({
  *
  * The process-entry timestamp and runtime-session ID are captured before the
  * synchronous, one-time Git inspection. Git inspection failure is diagnostic
- * only and produces explicit unavailable provenance.
+ * only and produces explicit unavailable provenance. The development runner
+ * may supply the original timestamp and session ID through its internal child
+ * environment so terminal and structured files share one session identity.
  *
  * @param {object} [options]
  * @param {NodeJS.ProcessEnv} [options.env]

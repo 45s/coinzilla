@@ -14,15 +14,15 @@ Harvester keeps three logging files, plus the separate Journal persistence:
 | `logs/harvester-trace.log` | Cumulative structured TRACE-and-higher diagnostics (JSONL) |
 | `logs/terminal.log` | Cumulative raw stdout and stderr captured by the development runner |
 
-Each run also creates three timestamped session files beside the cumulative files:
-`harvester-<UTC timestamp>-<runtime session ID>.log`,
-`harvester-trace-<UTC timestamp>-<runtime session ID>.log`, and
-`terminal-<UTC timestamp>-<runtime session ID>.log`. The timestamp and runtime
-session ID are shared with Harvester process provenance and the Journal
-`harvester.process_started` event. The structured session files receive the same
-entries as their cumulative counterparts; the terminal session file receives
-the same raw child output as `terminal.log`. Session files use exclusive
-creation and are never overwritten.
+Each Harvester process creates two timestamped structured session files beside
+the cumulative files: `harvester-<UTC timestamp>-<runtime session ID>.log` and
+`harvester-trace-<UTC timestamp>-<runtime session ID>.log`. The development
+runner additionally creates `terminal-<UTC timestamp>-<runtime session ID>.log`.
+The timestamp and runtime session ID are shared with process provenance and the
+Journal `harvester.process_started` event. The structured session files receive
+the same entries as their cumulative counterparts; the terminal session file
+receives the same raw child output as `terminal.log`. Session files use
+exclusive creation and are never overwritten.
 
 The Journal is a separate durable event store; it is not an additional logging
 file. The console is also not a file: it displays a compact INFO-and-higher
