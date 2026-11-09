@@ -47,8 +47,10 @@ threshold change does not change either file threshold.
 
 The log directory is relative to the Harvester working directory. Run
 `pnpm --filter @coinzilla/harvester dev` from the repository root, or run
-the package command from `apps/harvester`. The canonical development log
-directory is `apps/harvester/logs/`.
+the package command from `apps/harvester`. The development runner resolves
+the package directory from its own script location and starts the child with
+that working directory, so its terminal files always live in the canonical
+`apps/harvester/logs/` directory.
 
 The development runner appends raw child stdout and stderr to
 `apps/harvester/logs/terminal.log` and its timestamped session counterpart.
