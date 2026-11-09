@@ -8,12 +8,6 @@ const APPLICATION_DIRECTORY = path.resolve(
   "../../../",
 )
 
-function getJournalDiagnosticId(error) {
-  const originalError = error instanceof AggregateError ? error.errors[0] : error
-  if (originalError?.code === "JOURNAL_DIRECTORY_LOCKED") return "ErrorJournal001"
-  return undefined
-}
-
 function describeJournalError(error) {
   if (error instanceof AggregateError) {
     const firstError = error.errors[0]
@@ -21,14 +15,12 @@ function describeJournalError(error) {
       errorName: error.name,
       errorMessage: error.message,
       errorCode: firstError?.code,
-      diagnosticId: getJournalDiagnosticId(error),
     }
   }
   return {
     errorName: error?.name ?? "Error",
     errorMessage: error?.message ?? String(error),
     errorCode: error?.code,
-    diagnosticId: getJournalDiagnosticId(error),
   }
 }
 
