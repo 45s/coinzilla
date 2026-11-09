@@ -1988,6 +1988,21 @@ No runtime or exchange changes were made during this audit. No TESTNET acceptanc
 
 **Broker history limitation:** the account-wide helper paginates only the supplied Market list and relies on a caller-supplied completeness assertion. The current Binance exchangeInfo catalog cannot prove every historical symbol, including delisted markets; external/manual executions outside the known symbol set cannot be excluded. The official API documentation reviewed does not establish a guaranteed trade-history retention horizon.
 
+
+
+**Order-state behavior in the retained PR #606 helper pipeline:**
+
+| State at process exit / durable Journal facts | Offline restoration behavior | Canonical startup reconciliation requirement |
+|---|---|---|
+| `OPEN` / `PARTIALLY_FILLED` | `restoreHarvesterJournalState()` restores the order with its client ID, any known broker ID, cumulative executed quantity and fill identities, but conservatively sets status to `UNKNOWN`. | Resolve a missing broker ID through canonical `clientOrderId` lookup; compare canonical order history, current open orders and complete fill history; fail closed on mismatch or incomplete quantity/history. |
+| Submission outcome `UNKNOWN` | Durable submission intent preserves `clientOrderId`; broker ID may be absent if acknowledgement was lost. | `reconcileOwnedOrders()` queries `broker.getCanonicalOrder({ symbol, clientOrderId })`; unresolved or mismatched lookup remains UNKNOWN and blocks readiness. |
+| Cancellation `REQUESTED` / `UNKNOWN` (including `CANCEL_PENDING`) | Restored as UNKNOWN plus the durable cancellation identity, recovery-managed pause, and replacement/trailing-reprice intent when applicable. | Canonical order/history/fill reconciliation must establish whether the order remains open, was canceled, or partially filled. Unresolved intents keep the market paused and startup fails closed. |
+| `CANCELED` with partial execution | Restored as CANCELED only with a broker ID; the helper re-adds a durable market pause for the partial-fill case. | Verify complete canonical fill history and retain the pause until recovery state is resolved. |
+| `FILLED` / `EXPIRED` or other non-rejected terminal hint | Conservatively restored as UNKNOWN unless the Journal facts establish a specifically supported terminal state. | Canonical order history and fill history establish the authoritative terminal state; missing history or quantity mismatch fails closed. |
+| `REJECTED` | Restored as REJECTED only when submission outcome or exchange hint establishes rejection; a rejected order with nonzero cumulative fill is rejected as invalid recovery data. | Reconcile the terminal fact and account snapshot before allowing readiness. |
+
+The current runtime does not execute this restoration/reconciliation matrix because it supplies an empty registry and never invokes the helper pipeline. The historical PR #606 path also retained the account-wide `marketUniverseComplete: false` blocker described above.
+
 **Order identity recovery:** the Journal submission intent preserves `clientOrderId`; acknowledgement/cancellation/fill events can preserve `brokerOrderId`. The engine's `reconcileOwnedOrders()` also queries `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries missing a broker ID, validates the returned symbol/client ID, and attaches the canonical broker ID. Tests cover lost acknowledgement, unresolved lookup, mismatched client IDs and immutable-intent conflicts. If lookup fails, the order remains UNKNOWN and the account audit fails closed. The current runtime cannot use this capability after restart because it does not restore the registry entry containing the client ID.
 
 **F-028:** applied-fill and strategy-pause events are published asynchronously without an immediate durable flush; Journal append is not fsync acknowledgement. **F-029:** per-market pause/recovery-intent sets can be reconstructed by the offline restore helper, but current runtime does not invoke it. **F-031:** startup wiring and completeness remain the primary integration gap.
