@@ -904,6 +904,7 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
   })
 
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "FILL_ORDER_IDENTITY", retryable: false })
   assert.equal(harness.accountedFills.length, 0)
   assert.ok(harness.pauses.includes("EXECUTION_FILL_ORDER_IDENTITY_MISMATCH"))
 })
@@ -1273,6 +1274,7 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
     },
   })
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
   const failed = events.find((event) =>
     event.name === "order.cancel_failed" && event.data.side === "SELL")
   assert.ok(failed)
@@ -1512,6 +1514,7 @@ test("publishes unowned order updates with safe canonical identifiers", async ()
   })
   const result = await engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
   const unowned = events.find(({ name }) => name === "execution.unowned_order")
   assert.ok(unowned)
   assert.equal(unowned.data.clientOrderId, "external-client-order")
@@ -1535,6 +1538,7 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
     },
   })
   assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "FILL_ACCOUNTING", retryable: false })
   const failed = events.find(({ name }) => name === "execution.accounting_failed")
   assert.ok(failed)
   assert.equal(failed.data.error.message, "unsupported commission asset")
@@ -2725,6 +2729,39 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     assert.equal(accountedFills.length, 1)
     assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
   }
+})
+
+
+test("classifies terminal fill-history REST timeouts as retryable reconciliation failures", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getTerminalFills: () => { throw new Error("terminal fill history timed out") },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: sellOrder,
+        status: "CANCELED",
+        executedQuantity: "0",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, {
+    category: "REST_RECONCILIATION",
+    stage: "TERMINAL_FILL_HISTORY",
+    retryable: true,
+  })
+  assert.ok(harness.pauses.includes("TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE"))
 })
 
 test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {

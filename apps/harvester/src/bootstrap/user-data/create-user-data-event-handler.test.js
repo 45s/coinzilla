@@ -1,6 +1,7 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createUserDataEventHandler } from "./create-user-data-event-handler.js"
+import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
 
 const test = (name, ...args) => nodeTest("[create-user-data-event-handler.test.js] " + name, ...args)
 
@@ -9,6 +10,8 @@ const createState = (overrides = {}) => ({
   initialAccountSnapshotReady: true,
   requiresReconciliation: false,
   accountingFailed: false,
+  retryableRecoveryFailure: null,
+  recoveryGeneration: 0,
   status: "INITIAL_ACCOUNT_SNAPSHOT_PENDING",
   eventQueue: Promise.resolve(),
   eventSequence: 0,
@@ -91,6 +94,62 @@ test("fails closed when the trading engine rejects an order event", async () => 
   assert.equal(actions.cancellations, 1, "The handler must request a safety halt after the queued event fails.")
 })
 
+
+test("classifies a matched order-transition failure as retryable without poisoning accounting", async () => {
+  const logs = []
+  const failure = {
+    category: "ORDER_TRANSITION",
+    stage: "RECOVERY_SELL_CANCELLATION",
+    retryable: true,
+  }
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      errors: [new Error("broker rejected cancellation before send")],
+      failure,
+    }),
+    getOrders: () => [{
+      clientOrderId: "owned-buy-client",
+      brokerOrderId: "owned-buy-broker",
+      status: "FILLED",
+    }],
+  }
+  const { handler, state, actions } = createHandler({
+    state: createState({ recoveryGeneration: 7 }),
+    engine,
+    logger: { error: (entry) => logs.push(entry) },
+  })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        market: { symbol: "DOGEUSDT" },
+        brokerOrderId: "owned-buy-broker",
+        clientOrderId: "owned-buy-client",
+        side: "BUY",
+        status: "FILLED",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, false, "A downstream order-transition failure after a matched fill must not become terminal accounting corruption.")
+  assert.equal(state.requiresReconciliation, true, "A failed order transition must require authoritative reconciliation.")
+  assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.deepEqual(state.retryableRecoveryFailure, {
+    generation: 7,
+    category: "ORDER_TRANSITION",
+    stage: "RECOVERY_SELL_CANCELLATION",
+    retryable: true,
+  })
+  assert.equal(actions.cancellations, 1, "A retryable transition failure must still request the owned-BUY safety halt.")
+  assert.equal(logs[0]?.message, "user-data order transition failed", "A matched order failure must not be mislabeled as unowned.")
+  assert.equal(logs[0]?.registryMatchedByClientOrderId, true)
+  assert.equal(logs[0]?.failureCategory, "ORDER_TRANSITION")
+  assert.equal(logs[0]?.failureStage, "RECOVERY_SELL_CANCELLATION")
+})
+
 test("contains observer failures without rolling back a valid event", async () => {
   const { handler, state, actions } = createHandler({
     onUserDataEvent: async () => { throw new Error("observer unavailable") },
@@ -106,6 +165,75 @@ test("contains observer failures without rolling back a valid event", async () =
 })
 
  
+
+test("keeps a queued owned BUY fill in recovery mode across executionPending with false broker flags", async () => {
+  const state = createState({
+    recoveryGeneration: 0,
+    recoveryBrokerGeneration: null,
+    recoverySubscriptionId: null,
+    lastAcknowledgedRecoveryGeneration: -1,
+    lastReportedRecoveredGeneration: -1,
+    startupComplete: true,
+  })
+  const statusHandler = createUserDataStatusHandler({
+    state,
+    isStopped: () => false,
+    eventPublisher: { publish: () => ({ ok: true }) },
+    brokerName: "binance",
+    logger: {},
+    tradingEnabled: true,
+    startUserDataRecovery: () => {},
+    cancelOwnedBuysAfterAccountingFailure: async () => {},
+    resumeDeferredStrategyEvaluations: () => {},
+  })
+  statusHandler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  statusHandler({
+    type: "executionPending",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    executionPending: true,
+  })
+
+  let receivedRecoveryMode
+  let exchangeMutationCount = 0
+  const engine = {
+    processUserDataEvent: async ({ recoveryMode }) => {
+      receivedRecoveryMode = recoveryMode
+      if (!recoveryMode) exchangeMutationCount += 1
+      return { ok: true, data: { reevaluate: false } }
+    },
+    getOrders: () => [],
+  }
+  const { handler } = createHandler({ state, engine })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        market: { symbol: "DOGEUSDT" },
+        brokerOrderId: "recovery-owned-buy",
+        clientOrderId: "recovery-owned-buy-client",
+        side: "BUY",
+        status: "FILLED",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(receivedRecoveryMode, true, "The application gate, not the latest broker status flags, must classify queued order events.")
+  assert.equal(exchangeMutationCount, 0, "The executionPending status must not enable exchange order mutations during application recovery.")
+  assert.equal(state.requiresReconciliation, true)
+  assert.equal(state.ready, false)
+})
+
 test("passes recovery mode to both the trading engine and observer while application recovery is pending", async () => {
   const state = createState({ requiresReconciliation: true })
   let engineRecoveryMode

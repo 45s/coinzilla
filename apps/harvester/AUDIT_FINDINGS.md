@@ -659,6 +659,8 @@ Current source and regression inventory:
 
 ## F-023 — Recovery event-processing failures are mislabeled and overclassified as accounting failures
 
+**TDD RED (2026-11-09):** regressions now cover retryable matched order-transition failure, terminal ownership/accounting-integrity failure, terminal fill-history REST timeout, queued-event failure preventing acknowledgement until a later authoritative retry, permanent integrity failure remaining terminal, and the exact `recovered → executionPending` interleaving. Production behavior is unchanged in this commit.
+
 **Classification:** CONFIRMED DIAGNOSTIC MISCLASSIFICATION; historical recovery-side-effect failure also observed  
 **Severity:** Medium — incident triage can point operators at the wrong failure class  
 **Tracking:** [#769](https://github.com/45s/coinzilla/issues/769), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626)

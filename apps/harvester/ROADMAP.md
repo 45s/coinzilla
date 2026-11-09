@@ -1970,3 +1970,10 @@ The separate 2026-11-08 16:33:33–22:42:05 UTC session has been fully parsed an
 - [ ] **[#764](https://github.com/45s/coinzilla/issues/764) — decide whether to capture a complete account-wide open-order snapshot in the CLOSING audit.** Source confirms the current shutdown handler writes CLOSING balances only; exact final order IDs/statuses are not preserved. Keep this separate from deferred process-restart reconciliation #654.
 
 No runtime or exchange changes were made during this audit. No TESTNET acceptance is claimed. The earlier same-day user-data recovery failure remains tracked under #626 and must not be conflated with this later successful process session.
+
+
+## 2026-11-09 — F-023 failure-classification TDD
+
+- Added RED regressions for a matched owned order whose downstream recovery-SELL cancellation fails, permanent ownership/accounting-integrity failures, terminal fill-history REST timeout classification, and the exact `recovered → executionPending (both broker flags false) → owned BUY event` interleaving.
+- Added recovery-coordinator regressions proving a queued retryable transition failure blocks acknowledgement until a later authoritative retry, while a permanent accounting-integrity mismatch remains terminal.
+- These test-first changes belong to [#769](https://github.com/45s/coinzilla/issues/769) under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626). Production behavior is unchanged in this commit.
