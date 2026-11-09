@@ -1112,3 +1112,11 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - Account snapshot and account-wide open-order reads, both RECOVERY durability barriers, and broker-generation acknowledgement have explicit failure stages.
 - No TESTNET or live exchange operations. Exact-head CI and review remain required.
 
+
+
+## 2026-11-09 recovery failure-classification closeout — PR #794 merged
+
+- [x] **[#769](https://github.com/45s/coinzilla/issues/769) — distinguish accounting-integrity failures from order-transition/reconciliation failures.** Implemented test-first and merged in [PR #794](https://github.com/45s/coinzilla/pull/794), merge commit `ff061dd6b73b4d1ba9a314c1e75ddf447814f4bc`.
+- [x] Exact synchronized PR head `fcfa8c4c282b414ccd616b69a54b6e3a8ada5681): all six required offline CI workflows passed. TESTNET integration was skipped intentionally; TESTNET acceptance remains PAUSED / UNVERIFIED.
+- [x] Unknown/malformed failure metadata defaults terminal; only explicitly classified retryable REST, order-transition, and durability failures may retry after a complete fresh authoritative recovery. Queued-event failures block broker-generation acknowledgement.
+- **Safety:** no TESTNET/live exchange operations were performed. Recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626) remains open for independent work.
