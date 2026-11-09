@@ -40,6 +40,17 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 
 These files were added deliberately as indexes, historical evidence, inventories or package guidance. Their addition does not alter the original baseline dispositions above.
 
+## Subsequent recursive tree checkpoints
+
+The original 110-file checkpoint above remains a historical snapshot. Complete recursive tree comparisons found these later additions, with no removals:
+
+| Develop checkpoint | Added Markdown/MDX path | Total files |
+| --- | --- | ---: |
+| `ec13d3b30b901b809cb20839b02da2f25b161c97` | `docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md` | 111 |
+| `dd18f2280fdc885211e678bf8218f59c3362a2ea` | `docs/MARKDOWN_STYLE.md` (merged in [PR #853](https://github.com/45s/coinzilla/pull/853)) | 112 |
+
+The current checkpoint is therefore **112 tracked Markdown/MDX files**: 97 frozen baseline files plus 15 additions, zero removals. These dated/path-specific checkpoints are additive; do not reinterpret the earlier 110-file count as an error.
+
 ## Disposition vocabulary
 
 - **KEEP** — preserve at the current path; maintain authority boundaries and index links.
