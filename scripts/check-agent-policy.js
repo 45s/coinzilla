@@ -179,7 +179,7 @@ function decodeHeadingEntities(value) {
     rsquo: "'",
   };
 
-  return value.replace(/&(#x[\\da-f]+|#\\d+|[a-z]+);/gi, (match, entity) => {
+  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, entity) => {
     const normalizedEntity = entity.toLowerCase();
 
     if (normalizedEntity.startsWith('#x')) {
@@ -207,20 +207,21 @@ function decodeHeadingEntities(value) {
  * @returns {string} Plain heading text.
  */
 function stripHeadingMarkup(value) {
-  const inlineCodePattern = new RegExp('\\\\x60+([^\\\\x60]*?)\\\\x60+', 'g');
+  const backtick = String.fromCharCode(96);
+  const inlineCodePattern = new RegExp(backtick + '+([^' + backtick + ']*?)' + backtick + '+', 'g');
 
   return decodeHeadingEntities(
     value
       .replace(/<!--.*?-->/g, '')
-      .replace(/<((?:https?:\\/\\/|mailto:)[^>]+)>/gi, '$1')
-      .replace(/!\\[([^\\]]*)\\]\\([^)]*\\)/g, '$1')
-      .replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, '$1')
-      .replace(/\\[([^\\]]+)\\]\\[[^\\]]*\\]/g, '$1')
+      .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
       .replace(inlineCodePattern, '$1')
       .replace(/<[^>]*>/g, '')
-      .replace(/\\\\([#.+!?()[\\]{}])/g, '$1')
-      .replace(/[\\*~]/g, '')
-      .replace(/(^|\\s)_([^_]+)_($|\\s)/g, '$1$2$3')
+      .replace(/\\([#.+!?()[\]{}])/g, '$1')
+      .replace(/[*~]/g, '')
+      .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
       .trim(),
   );
 }
@@ -233,11 +234,9 @@ function stripHeadingMarkup(value) {
  */
 function collectMarkdownHeadingAnchors(content) {
   const anchors = new Set();
-  const lines = content.split(/\\r?\\n/);
-  const fencePattern = new RegExp('^ {0,3}(\\\\x60{3,}|~{3,})(.*)
-
-/**
- * Find unclosed fenced code blocks in repository Markdown/MDX documents.
+  const lines = content.split(/\r?\n/);
+  const backtick = String.fromCharCode(96);
+  const fencePattern = new RegExp('^ {0,3}(' + backtick + '{3,}|~{3,})(.*)
  *
  * Fences may use backticks or tildes, with a closing fence of the same
  * character and at least the opening fence length.
@@ -336,7 +335,7 @@ function main() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
 );
-  const explicitIdPattern = /\\b(?:id|name)\\s*=\\s*(?:"([^"]+)"|'([^']+)'|([^\\s>]+))/gi;
+  const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
   let activeFence = null;
   let inHtmlComment = false;
   let inFrontMatter = lines[0]?.trim() === '---';
@@ -347,9 +346,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
     const plainText = stripHeadingMarkup(rawHeading);
     const baseSlug = plainText
       .toLowerCase()
-      .replace(/[^\\p{L}\\p{N}\\p{M}\\-_ ]/gu, '')
+      .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
       .trim()
-      .replace(/\\s+/g, '-');
+      .replace(/\s+/g, '-');
 
     if (!baseSlug) return;
 
@@ -388,7 +387,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
       const isClosingFence = fenceMatch &&
         fenceMatch[1][0] === activeFence.character &&
         fenceMatch[1].length >= activeFence.length &&
-        /^[ \\t]*$/.test(fenceMatch[2]);
+        /^[ \t]*$/.test(fenceMatch[2]);
 
       if (isClosingFence) activeFence = null;
       continue;
@@ -407,13 +406,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
       if (identifier) anchors.add(identifier);
     }
 
-    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \\t]+|$)(.*)$/);
+    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/);
     if (atxHeading) {
-      addHeading(atxHeading[1].replace(/[ \\t]+#+[ \\t]*$/, ''));
+      addHeading(atxHeading[1].replace(/[ \t]+#+[ \t]*$/, ''));
       continue;
     }
 
-    if (/^ {0,3}(=+|-+)[ \\t]*$/.test(line) && index > 0) {
+    if (/^ {0,3}(=+|-+)[ \t]*$/.test(line) && index > 0) {
       const setextHeading = lines[index - 1].trim();
       if (setextHeading && !setextHeading.startsWith('>') && !setextHeading.startsWith('|')) {
         addHeading(setextHeading);
@@ -445,11 +444,11 @@ export function findMissingLocalAnchors(root, documents) {
 
   for (const document of documents) {
     const content = removeCodeExamples(document.content);
-    const links = content.matchAll(/\\[[^\\]]*\\]\\(([^)\\s]+)(?:\\s+[^)]*)?\\)/g);
+    const links = content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
 
     for (const match of links) {
       const target = match[1];
-      if (/^(?:[a-z][a-z\\d+.-]*:|\\/\\/)/i.test(target)) continue;
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) continue;
 
       const hashIndex = target.indexOf('#');
       if (hashIndex < 0) continue;
@@ -469,7 +468,7 @@ export function findMissingLocalAnchors(root, documents) {
         continue;
       }
 
-      if (!existsSync(absoluteTarget) || !/\\.mdx?$/i.test(absoluteTarget)) continue;
+      if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) continue;
 
       const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
       if (!targetDocument) continue;
