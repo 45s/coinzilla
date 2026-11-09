@@ -6,7 +6,7 @@ type: roadmap
 owner: utils
 ---
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Priority execution plan — current develop direction (2026-11-09)
 
 ### COMPLETED — build and runtime provenance (issue #763)
 
@@ -48,7 +48,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
 
-> Status: core audit hardening complete; optional cleanup remains demand-driven
+> Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete; the repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`  
 **Purpose:** provide small, domain-neutral helpers used across the workspace.
@@ -99,7 +99,7 @@ The exact final PR head passed:
 - JavaScript syntax ([run](https://github.com/45s/coinzilla/actions/runs/41289828493)).
 - Production dependency audit and actionlint ([run](https://github.com/45s/coinzilla/actions/runs/41289828470)).
 
-No runtime dependencies were added and no consumer package source files were changed. Remaining work is deliberately limited to reviewing duplicate generic helpers when a concrete use case justifies consolidation; no speculative API changes are planned.
+**Historical PR #383 closeout note (not the current remaining-work summary):** no runtime dependencies were added and no consumer package source files were changed in that PR. At that time, remaining work was described as reviewing duplicate generic helpers when a concrete use case justified consolidation. That snapshot predates the build-provenance/Logger rollout (PRs #767/#770) and the current repository-wide reuse audit; use the priority plan and Repository-wide reuse audit below for current remaining work. No speculative API changes are planned.
 
 ## Repository-wide reuse audit
 
