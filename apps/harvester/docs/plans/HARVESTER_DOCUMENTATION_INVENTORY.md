@@ -86,7 +86,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 ## Remaining review work
 
 - [x] Trace inbound links for `testnet-order-tools.md`: Harvester README sections for standalone order/balance/history/trade tools and the Harvester documentation index both point to the canonical runbook; both links remain valid.
-- [x] Resolve all initial Harvester and Brokers REVIEW candidates with evidence-based KEEP/SUPERSEDE dispositions.
+- [x] Resolve all initial Harvester REVIEW candidates with evidence-based KEEP/SUPERSEDE dispositions.
 - [ ] Verify current status and source references for each large living document against `develop`.
 - [ ] Determine whether any active guidance is duplicated or conflicts with canonical specifications.
 - [ ] Create dated successor/addendum records where historical findings need correction; do not rewrite originals.
