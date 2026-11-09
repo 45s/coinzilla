@@ -35,14 +35,15 @@ pnpm --filter @coinzilla/harvester dev
 
 The `dev` script loads `.env.development` before starting the logging runner; the child Harvester process inherits those values. Set `NODE_ENV=development` in that file. This selects the Binance Spot TESTNET profile and enables the Conservative TESTNET strategy. Put TESTNET API credentials in `.env.development`; do not add broker, trading-mode, trading-enable, or Journal flags.
 
-For production, prepare a separate secrets file and start command:
+For production, use the same template and set the production profile:
 
 ```sh
-cp apps/harvester/.env.production.example apps/harvester/.env
+cp apps/harvester/.env.example apps/harvester/.env
+# Set NODE_ENV=production and provide Binance Spot LIVE credentials in .env
 pnpm --filter @coinzilla/harvester start
 ```
 
-The `start` script loads `.env` before application and broker modules load. Set `NODE_ENV=production` in `.env`. This selects Binance Spot LIVE endpoints and enables Conservative LIVE order execution. Provide LIVE API credentials through `.env` or the deployment secret manager. Use a dedicated API key with Spot trading permission and withdrawals disabled. Never copy TESTNET credentials into production. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
+The `start` script loads `.env` before application and broker modules load. Set `NODE_ENV=production` in `.env`. This selects Binance Spot LIVE endpoints and enables Conservative LIVE order execution. Use a dedicated API key with Spot trading permission and withdrawals disabled. Never copy TESTNET credentials into production. Externally injected credentials remain supported.
 
 Tests:
 
