@@ -251,7 +251,7 @@ export class Journal {
 
   /**
    * Flush EventBus delivery and queued writes, then sync the active session file.
-   * Rejects new flushes once close owns shutdown; close waits for flushes already in progress.
+   * Concurrent flushes are serialized; close rejects new flushes and waits for accepted flushes.
    *
    * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
    */
