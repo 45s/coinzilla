@@ -201,7 +201,7 @@ A Journal backup is a byte-preserving copy of the complete set of session `.json
 1. Stop the application component that owns the Journal writer and await a successful durable `journal.close()`.
 2. Confirm that no other process is writing to the directory. Journal's exclusive lock prevents cooperating writers, but it is not a backup snapshot mechanism.
 3. Copy every session `.jsonl` file, preserving filenames and bytes, to a backup location outside the live Journal directory. Do not include `.coinzilla-journal.lock`; it represents live process ownership, not journal history.
-4. Record the backup timestamp and a cryptographic checksum for each copied file. Keep the backup immutable and access-controlled.
+4. Record the backup timestamp and a cryptographic checksum for the archive (and, where required by local policy, each copied file). Keep the backup immutable and access-controlled.
 
 For example, with the writer already stopped:
 
