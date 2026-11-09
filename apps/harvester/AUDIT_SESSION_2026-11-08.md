@@ -778,3 +778,8 @@ The pending-order identity mismatch regression now constructs its broker respons
 ## 48. F-023 pending lookup shape/parity and attachment ownership — 2026-11-09
 
 Added coverage for a canonical pending-order lookup response that omits brokerOrderId and for immutable quantity/price conflicts. BrokerOrderId attachment failures are classified as terminal ownership failures because they represent a broken binding between the pending Harvester order and the exchange order identity.
+
+
+## 49. F-023 merged closeout — 2026-11-09
+
+PR #794 merged into develop as `ff061dd6b73b4d1ba9a314c1e75ddf447814f4bc`. The synchronized exact head `fcfa8c4c282b414ccd616b69a54b6e3a8ada5681` passed all six required offline CI workflows: Unit Tests, Test Coverage, Harvester Targeted Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit. TESTNET integration was skipped intentionally. No exchange operation, account mutation, process restart, or TESTNET acceptance was performed. Issue #769 is ready for closure; umbrella #626 remains open.
