@@ -34,7 +34,7 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-"))
   const logger = createLogger()
   try {
-    const logging = await configureHarvesterLogging({ logger, directory })
+    const logging = await configureHarvesterLogging({ logger, directory, processIdentity: { startedAt: "2026-11-05T12:00:00.000Z", runtimeSessionId: "session-one" } })
     assert.deepEqual(logger.levels, [{ transport: "console", level: "info" }])
     assert.equal(logger.transports.get("console").level, "info")
     assert.equal(logger.transports.get("harvester-debug-file").level, "debug")
@@ -51,11 +51,20 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
 
     const debugLines = (await readFile(path.join(directory, "harvester.log"), "utf8")).trim().split("\n")
     const traceLines = (await readFile(path.join(directory, "harvester-trace.log"), "utf8")).trim().split("\n")
+    const sessionDebugPath = path.join(directory, "harvester-2026-11-05_12-00-00-session-one.log")
+    const sessionTracePath = path.join(directory, "harvester-trace-2026-11-05_12-00-00-session-one.log")
     assert.deepEqual(JSON.parse(debugLines[0]), entry)
     assert.equal(JSON.parse(traceLines[0]).level, "trace")
+    assert.deepEqual(JSON.parse((await readFile(sessionDebugPath, "utf8")).trim()), entry, "each run must receive a timestamped DEBUG session file")
+    assert.equal(JSON.parse((await readFile(sessionTracePath, "utf8")).trim()).level, "trace", "each run must receive a matching timestamped TRACE session file")
 
     await logging.close()
-    assert.deepEqual((await readdir(directory)).sort(), ["harvester-trace.log", "harvester.log"])
+    assert.deepEqual((await readdir(directory)).sort(), [
+      "harvester-2026-11-05_12-00-00-session-one.log",
+      "harvester-trace-2026-11-05_12-00-00-session-one.log",
+      "harvester-trace.log",
+      "harvester.log",
+    ])
     assert.deepEqual([...logger.transports.keys()], ["console"])
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -273,4 +282,30 @@ test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   assert.match(written, /WARN Warning event/)
   assert.match(written, /ERROR Failure event/)
   output.destroy()
+})
+
+test("appends cumulative logs while keeping separate timestamped session histories", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-sessions-"))
+  try {
+    const firstLogger = createLogger()
+    const firstSession = await configureHarvesterLogging({ logger: firstLogger, directory, processIdentity: { startedAt: "2026-11-05T12:00:00.000Z", runtimeSessionId: "first-session" } })
+    const firstEntry = { timestamp: "2026-11-05T12:00:01.000Z", level: "debug", data: { message: "first run" } }
+    await firstLogger.transports.get("harvester-debug-file").write(firstEntry)
+    await firstSession.close()
+
+    const secondLogger = createLogger()
+    const secondSession = await configureHarvesterLogging({ logger: secondLogger, directory, processIdentity: { startedAt: "2026-11-05T13:00:00.000Z", runtimeSessionId: "second-session" } })
+    const secondEntry = { timestamp: "2026-11-05T13:00:01.000Z", level: "debug", data: { message: "second run" } }
+    await secondLogger.transports.get("harvester-debug-file").write(secondEntry)
+    await secondSession.close()
+
+    const cumulativeEntries = (await readFile(path.join(directory, "harvester.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+    assert.deepEqual(cumulativeEntries, [firstEntry, secondEntry], "cumulative logs must retain entries from previous and current sessions")
+    const firstEntries = (await readFile(path.join(directory, "harvester-2026-11-05_12-00-00-first-session.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+    const secondEntries = (await readFile(path.join(directory, "harvester-2026-11-05_13-00-00-second-session.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+    assert.deepEqual(firstEntries, [firstEntry], "the first session file must contain only first-run diagnostics")
+    assert.deepEqual(secondEntries, [secondEntry], "the second session file must contain only second-run diagnostics")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })

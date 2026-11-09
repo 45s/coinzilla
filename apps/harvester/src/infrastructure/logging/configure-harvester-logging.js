@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
+import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
@@ -74,13 +76,14 @@ function summarizeConsoleData({ data } = {}) {
  * Attach independent DEBUG and TRACE JSONL destinations to the shared logger.
  * The compact console destination remains independently configurable.
  *
- * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream }} input
- * @returns {Promise<{ directory: string, close: () => Promise<void> }>}
+ * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
+ * @returns {Promise<{ directory: string, sessionPaths: object, close: () => Promise<void> }>}
  */
 export async function configureHarvesterLogging({
   logger = defaultLogger,
   directory = path.resolve(process.cwd(), "logs"),
   output = process.stdout,
+  processIdentity = { startedAt: new Date().toISOString(), runtimeSessionId: randomUUID() },
 } = {}) {
   if (
     typeof logger?.addTransport !== "function"
@@ -93,54 +96,39 @@ export async function configureHarvesterLogging({
   }
 
   await mkdir(directory, { recursive: true })
+  const sessionPaths = createHarvesterLogSessionPaths({ directory, startedAt: processIdentity.startedAt, runtimeSessionId: processIdentity.runtimeSessionId })
 
-  const createFileTransport = ({ name, level, filename }) => {
-    const stream = createWriteStream(path.join(directory, filename), {
-      flags: "a",
-      encoding: "utf8",
-    })
-    let streamError
-
-    // Keep the stream's error event handled even when no write is in flight.
-    stream.on("error", (error) => {
-      streamError = error
-    })
-
+  const createFileTransport = ({ name, level, filename, sessionFilename }) => {
+    const streams = [
+      createWriteStream(path.join(directory, filename), { flags: "a", encoding: "utf8" }),
+      createWriteStream(sessionFilename, { flags: "wx", encoding: "utf8" }),
+    ]
+    const streamErrors = new Map()
+    streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
     return {
       name,
       level,
       write(entry) {
+        const streamError = [...streamErrors.values()][0]
         if (streamError) return Promise.reject(streamError)
         let serialized
-        try {
-          serialized = JSON.stringify(entry)
-        } catch (error) {
-          return Promise.reject(error)
-        }
-        return new Promise((resolve, reject) => {
+        try { serialized = JSON.stringify(entry) } catch (error) { return Promise.reject(error) }
+        return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
           stream.write(serialized + "\n", (error) => {
-            if (error) {
-              reject(error)
-              return
-            }
-            if (streamError) {
-              reject(streamError)
-              return
-            }
+            const currentError = error ?? streamErrors.get(index)
+            if (currentError) { reject(currentError); return }
             resolve()
           })
-        })
+        })))
       },
       close() {
-        return new Promise((resolve, reject) => {
+        return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
           stream.end((error) => {
-            if (error || streamError) {
-              reject(error ?? streamError)
-              return
-            }
+            const currentError = error ?? streamErrors.get(index)
+            if (currentError) { reject(currentError); return }
             resolve()
           })
-        })
+        })))
       },
     }
   }
@@ -150,11 +138,13 @@ export async function configureHarvesterLogging({
     name: DEBUG_TRANSPORT_NAME,
     level: "debug",
     filename: "harvester.log",
+    sessionFilename: sessionPaths.debug,
   })
   const traceTransport = createFileTransport({
     name: TRACE_TRANSPORT_NAME,
     level: "trace",
     filename: "harvester-trace.log",
+    sessionFilename: sessionPaths.trace,
   })
 
   try {
@@ -178,6 +168,7 @@ export async function configureHarvesterLogging({
   let closed = false
   return Object.freeze({
     directory,
+    sessionPaths,
     async close() {
       if (closed) return
       closed = true

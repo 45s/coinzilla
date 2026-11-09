@@ -63,6 +63,7 @@ This section is the authoritative implementation order for current work. It supe
 
 9. **Aggressive strategy:** keep disabled until Conservative restart/recovery and exchange acceptance are proven. Then specify unresolved policy, implement pure intents, reuse the shared engine/accounting/safety gates, and test grid repricing, partial fills, reservations, risk fallback and handover before TESTNET.
 10. **Further reporting/notification channels:** do not add strategy-specific accounting, email/Discord, persistent notification delivery or speculative dashboards until a real consumer and acceptance contract exist.
+11. **Log rotation and retention:** add bounded size-based rotation, archive naming, retention limits and cleanup tests for cumulative and per-session diagnostic files. Current logging deliberately preserves every run and has no automatic deletion; implement retention only after selecting an operator-friendly policy and validating crash-safe rotation across all three file destinations.
 
 ### Status corrections
 

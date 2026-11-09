@@ -10,9 +10,19 @@ Harvester keeps three logging files, plus the separate Journal persistence:
 
 | File | Contents |
 | --- | --- |
-| `logs/harvester.log` | Structured DEBUG-and-higher diagnostics (JSONL) |
-| `logs/harvester-trace.log` | Structured TRACE diagnostics (JSONL) |
-| `logs_harvester/terminal.log` | Raw stdout and stderr captured by the development runner |
+| `logs/harvester.log` | Cumulative structured DEBUG-and-higher diagnostics (JSONL) |
+| `logs/harvester-trace.log` | Cumulative structured TRACE-and-higher diagnostics (JSONL) |
+| `logs/terminal.log` | Cumulative raw stdout and stderr captured by the development runner |
+
+Each run also creates three timestamped session files beside the cumulative files:
+`harvester-<UTC timestamp>-<runtime session ID>.log`,
+`harvester-trace-<UTC timestamp>-<runtime session ID>.log`, and
+`terminal-<UTC timestamp>-<runtime session ID>.log`. The timestamp and runtime
+session ID are shared with Harvester process provenance and the Journal
+`harvester.process_started` event. The structured session files receive the same
+entries as their cumulative counterparts; the terminal session file receives
+the same raw child output as `terminal.log`. Session files use exclusive
+creation and are never overwritten.
 
 The Journal is a separate durable event store; it is not an additional logging
 file. The console is also not a file: it displays a compact INFO-and-higher
@@ -40,8 +50,10 @@ The log directory is relative to the Harvester working directory. Run
 the package command from `apps/harvester`.
 
 The development runner appends raw child stdout and stderr to
-`logs_harvester/terminal.log`. This is the third existing logging file, not
-an additional file introduced by terminal backpressure handling. The file
+`logs/terminal.log` and its timestamped session counterpart. The former
+`logs_harvester/terminal.log` location is no longer written by the runner; any
+existing file there is left untouched for manual archival. The cumulative file
+is retained for compatibility and continues to append. The file
 capture applies backpressure so output is not intentionally discarded during
 normal disk operation. The VS Code/console display is best-effort and bounded:
 if the terminal stops consuming output, display chunks are skipped until it
@@ -154,13 +166,16 @@ In an interactive development terminal:
 - `/log trace` — include TRACE on the console.
 - `/log status` — print the current transport configuration.
 
-These commands only change the console transport. DEBUG and TRACE files keep
-recording independently. Commands are disabled when stdin is redirected or
+These commands only change the console transport. Cumulative and timestamped
+DEBUG/TRACE files keep recording independently. Commands are disabled when stdin is redirected or
 non-interactive; the process continues to use stdin normally in that case.
 
 ## Lifecycle
 
 The file transports are attached to the shared logger once during CLI startup.
+Each structured transport writes to both its cumulative file and its unique
+per-session file. Cumulative files always append; session files use exclusive
+creation. No existing log file is truncated or removed at startup or shutdown.
 They are removed and their streams are closed after runtime, Journal, and
 EventBus shutdown. They are also closed after a startup failure. Transport
 write failures are surfaced by the shared logger's transport error handling;
@@ -168,3 +183,21 @@ they do not change trading decisions or Journal events.
 
 Logging is diagnostic only. It does not alter trading state, order execution,
 accounting, event publication, or Journal persistence semantics.
+
+## Session history and retention
+
+The cumulative files are convenience histories spanning multiple runs. The
+per-session files make one run independently inspectable and correlate with
+the Journal process-start event through the shared UTC start timestamp and
+runtime-session ID. The Journal has its own timestamped JSONL session file;
+its records are structured application events, not copies of diagnostic log
+lines. Journal replay does not restore trading state.
+
+The TRACE transport has a TRACE threshold, so `harvester-trace.log` receives
+TRACE entries and every higher severity; it is not a TRACE-only file.
+
+No log rotation, size limit, automatic retention, compression, or deletion is
+implemented. Cumulative and per-session files therefore grow until an
+operator archives or removes them. Rotation and retention policy are deferred
+in the [Harvester roadmap](../ROADMAP.md). Do not delete session files as part
+of startup or shutdown.
