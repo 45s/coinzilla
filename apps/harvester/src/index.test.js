@@ -6,12 +6,13 @@ import os from "node:os"
 import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
-import { main } from "./index.js"
+import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
   status: { state: "disabled" },
+  flush: async () => ({ ok: true, durable: true }),
   close: async () => ({ ok: true, closed: true, disabled: true }),
 })
 
@@ -20,12 +21,24 @@ const acquireProcessLock = async () => ({
   release: async () => ({ ok: true, released: true }),
 })
 
-const runMain = (options = {}) => main({
-  createJournalService: disabledJournalService,
-  ...options,
-})
+const main = (options = {}) => {
+  const { createJournalService = disabledJournalService, env = {}, ...rest } = options
+  return startMain({
+    acquireProcessLock,
+    ...rest,
+    env: { TRADING_MODE: "testnet", ...env },
+    createJournalService: (...args) => {
+      const service = createJournalService(...args) ?? {}
+      if (!Object.hasOwn(service, "ready")) service.ready = Promise.resolve({ ok: true })
+      if (!Object.hasOwn(service, "flush")) service.flush = async () => ({ ok: true, durable: true })
+      if (!Object.hasOwn(service, "close")) service.close = async () => ({ ok: true, closed: true })
+      return service
+    },
+  })
+}
+const runMain = (options = {}) => main(options)
 
-test("uses the injected logger when startup succeeds without a broker", async () => {
+test("uses the injected logger after Binance TESTNET startup", async () => {
   const calls = []
   const logger = {
     info: (message) => calls.push({ level: "info", message }),
@@ -37,13 +50,13 @@ test("uses the injected logger when startup succeeds without a broker", async ()
   process.exitCode = 0
   try {
     await runMain({
-      start: async () => ({ connected: false }),
+      start: async () => ({ connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: ["BTCUSDT"] }),
       logger,
     })
 
     assert.deepEqual(calls, [{
       level: "system",
-      message: "Configuration validated; broker and market data are disabled.",
+      message: "Connected; subscribed to 1 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
     }])
     assert.equal(process.exitCode, 0)
   } finally {
@@ -127,19 +140,21 @@ test("reports the actual Conservative TESTNET trading mode at startup", async ()
   ])
 })
 
-test("reports broker-connected read-only mode without claiming trading is blocked by unresolved rules", async () => {
+test("reports LIVE trading mode independently of NODE_ENV", async () => {
   const messages = []
   await runMain({
+    env: { NODE_ENV: "development", TRADING_MODE: "live" },
     start: async () => ({
       connected: true,
-      tradingEnabled: false,
-      strategyMode: "read-only",
+      brokerName: "binance",
+      tradingEnabled: true,
+      strategyMode: "conservative",
       subscriptions: ["ZROUSDT"],
     }),
     logger: { info: (message) => messages.push(message), error() {} },
   })
   assert.deepEqual(messages, [
-    "Connected; subscribed to 1 enabled market(s) in read-only mode; order execution is disabled.",
+    "Connected; subscribed to 1 enabled market(s). Conservative LIVE trading is enabled; waiting for validated market prices and user-data readiness.",
   ])
 })
 
@@ -214,7 +229,7 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
   ], "the existing runtime-start event and caller-published events must retain their order after process provenance is added")
 })
 
-test("does not wait for optional Journal initialization before starting Harvester", async () => {
+test("waits for required Journal readiness before starting Harvester", async () => {
   let resolveReady
   let runtimeStarted = false
   const journalService = {
@@ -223,22 +238,25 @@ test("does not wait for optional Journal initialization before starting Harveste
     close: async () => ({ ok: true, closed: true }),
   }
 
-  const result = await runMain({
+  journalService.flush = async () => ({ ok: true, durable: true })
+  const pending = runMain({
     createJournalService: () => journalService,
     start: async () => {
       runtimeStarted = true
-      return { connected: false }
+      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }
     },
     logger: { info() {}, error() {}, debug() {} },
   })
-
+  await Promise.resolve()
+  assert.equal(runtimeStarted, false, "Trading startup must wait for the required Journal readiness barrier.")
+  resolveReady({ ok: true })
+  const result = await pending
   assert.equal(runtimeStarted, true)
   assert.equal(result.journalService, journalService)
   assert.equal(result.journalService.status.state, "starting")
-  resolveReady({ ok: false, errors: [new Error("journal unavailable")] })
 })
 
-test("publishes process started and stopped events for read-only startup without a broker", async () => {
+test("publishes process started and stopped events for Binance trading startup", async () => {
   const eventBus = new EventBus()
   const events = []
   const handlers = {}
@@ -252,9 +270,10 @@ test("publishes process started and stopped events for read-only startup without
     createJournalService: () => ({ status: { state: "disabled" }, close: async () => ({ ok: true, closed: true }) }),
     env: {},
     start: async () => ({
-      connected: false,
-      tradingEnabled: false,
-      strategyMode: "read-only",
+      connected: true,
+      brokerName: "binance",
+      tradingEnabled: true,
+      strategyMode: "conservative",
       subscriptions: [],
       tradingConfig: { pairs: { BTCUSDT: { enabled: true } } },
       stop: async () => {},
@@ -265,14 +284,14 @@ test("publishes process started and stopped events for read-only startup without
 
   assert.ok(result)
   await eventBus.flush()
-  assert.equal(events.length, 2, "read-only startup must publish process-attempt and successful-runtime-start events")
+  assert.equal(events.length, 2, "trading startup must publish process-attempt and successful-runtime-start events")
   assert.equal(events[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED, "the process-attempt event must be first when Journal readiness is immediate")
   assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STARTED, "the successful-runtime-start event must remain distinct")
   assert.deepEqual(events[1].data, {
-    broker: "none",
-    strategyMode: "read-only",
+    broker: "binance",
+    strategyMode: "conservative",
     enabledMarkets: ["BTCUSDT"],
-    tradingEnabled: false,
+    tradingEnabled: true,
   })
 
   await handlers.SIGTERM()
@@ -300,9 +319,10 @@ test("publishes failed process shutdown outcome when runtime.stop rejects", asyn
       createJournalService: () => ({ status: { state: "disabled" } }),
       env: {},
       start: async () => ({
-        connected: false,
-        tradingEnabled: false,
-        strategyMode: "read-only",
+        connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
         subscriptions: [],
         stop: async () => { throw new Error("runtime stop failed") },
       }),
@@ -710,7 +730,7 @@ test("does not pass historical Journal records into bootstrap", async () => {
   }
 })
 
-test("allows read-only startup when prior trading history requires recovery", async () => {
+test("starts the selected trading mode without replaying prior trading history", async () => {
   let started = false
   await main({
     env: { NODE_ENV: "test" },
@@ -936,7 +956,7 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
   }
 })
 
-test("rejects a TESTNET trading profile when Journal cannot provide durable flush", async () => {
+test("rejects TESTNET trading when Journal cannot provide durable flush", async () => {
   let started = false
   const previousExitCode = process.exitCode
   process.exitCode = 0
@@ -1131,7 +1151,7 @@ test("captures process provenance before trading startup and publishes it separa
   assert.ok(operations.indexOf("publish:harvester.process_started") < operations.indexOf("runtime.start"), "trading bootstrap must start only after the process event has been admitted to the existing Journal/EventBus pipeline")
 })
 
-test("keeps optional read-only Journal startup non-blocking and publishes process provenance after Journal readiness", async () => {
+test("requires Journal readiness and publishes process provenance before trading startup", async () => {
   let resolveJournalReady
   let resolveProcessStarted
   let runtimeStarted = false
@@ -1141,6 +1161,7 @@ test("keeps optional read-only Journal startup non-blocking and publishes proces
   const journalService = {
     ready: new Promise((resolve) => { resolveJournalReady = resolve }),
     status: { state: "starting", enabled: true },
+    flush: async () => ({ ok: true, durable: true }),
     close: async () => ({ ok: true, closed: true }),
   }
   const eventBus = {
@@ -1155,7 +1176,7 @@ test("keeps optional read-only Journal startup non-blocking and publishes proces
     close: async () => ({ ok: true, closed: true }),
   }
 
-  await main({
+  const pending = main({
     processIdentity: {
       application: "harvester",
       version: "1.0.001",
@@ -1183,9 +1204,10 @@ test("keeps optional read-only Journal startup non-blocking and publishes proces
     start: async () => {
       runtimeStarted = true
       return {
-        connected: false,
-        tradingEnabled: false,
-        strategyMode: "read-only",
+        connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
         subscriptions: [],
         stop: async () => {},
       }
@@ -1193,8 +1215,11 @@ test("keeps optional read-only Journal startup non-blocking and publishes proces
     registerSignalHandler: () => {},
     env: {},
   })
-
-  assert.equal(runtimeStarted, true, "read-only runtime startup must not wait for optional Journal initialization")
+  await Promise.resolve()
+  assert.equal(runtimeStarted, false, "Trading startup must wait for required Journal readiness")
+  resolveJournalReady({ ok: true })
+  await pending
+  assert.equal(runtimeStarted, true, "Trading runtime starts after Journal readiness")
   assert.equal(contexts[0].runtimeSessionId, "delayed-journal-session", "logger context must be available synchronously even while optional Journal startup is pending")
   assert.equal(events.some((event) => event.name === "harvester.process_started"), false, "the process-start event must not be published before the Journal subscriber is ready")
   resolveJournalReady({ ok: true })
@@ -1290,11 +1315,12 @@ test("records the process-start attempt before a failed runtime-start event", as
   }
 })
 
-test("keeps configuration-only startup available when optional Journal readiness fails", async () => {
+test("fails closed when required Journal readiness fails", async () => {
   const contexts = []
-  const warnings = []
   const events = []
   let runtimeStarted = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
   const eventBus = {
     publish(event) {
       events.push(event)
@@ -1321,27 +1347,28 @@ test("keeps configuration-only startup available when optional Journal readiness
     },
     logger: {
       setContext: (context) => contexts.push(context),
-      warn: (data) => warnings.push(data),
+      warn() {},
       info() {},
       system() {},
       error() {},
     },
     createEventBus: () => eventBus,
     createJournalService: () => ({
-      ready: Promise.resolve({ ok: false, errors: [new Error("optional Journal unavailable")] }),
+      ready: Promise.resolve({ ok: false, errors: [new Error("Journal unavailable")] }),
+      flush: async () => ({ ok: true, durable: true }),
       close: async () => ({ ok: true, closed: true }),
     }),
     start: async () => {
       runtimeStarted = true
-      return { connected: false }
+      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }
     },
     env: {},
   })
-
-  assert.equal(runtimeStarted, true, "configuration-only startup must not fail when optional Journal initialization fails")
+  assert.equal(runtimeStarted, false, "Trading must not start when the required Journal is unavailable")
+  assert.equal(process.exitCode, 1, "A required Journal readiness failure must fail startup")
   assert.equal(contexts[0].runtimeSessionId, "journal-unavailable-session", "logger context must remain available when Journal initialization fails")
-  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "the Journal process event must be skipped when its subscriber never becomes ready")
-  assert.equal(warnings.some((warning) => warning.message.includes("process-start Journal event skipped")), true, "the skipped best-effort event must be visible in diagnostic logs")
+  assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.PROCESS_STARTED), false, "The process-start event must not be published before Journal readiness")
+  process.exitCode = previousExitCode
 })
 
 
@@ -1414,18 +1441,12 @@ test("does not await process-start publication before emitting the startup-faile
 })
 
 
-test("loads the production profile once and starts Binance LIVE without acquiring a trading lock", async () => {
-  const tradingConfig = {
-    runtime: {
-      profiles: {
-        production: { broker: "binance", trading: { enabled: false, mode: "live" } },
-      },
-    },
-  }
+test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer lock", async () => {
+  const tradingConfig = { strategies: { CG_coinGrabber: { enabled: true } } }
   let lockCalls = 0
   let startInput
   await main({
-    env: { NODE_ENV: "production" },
+    env: { NODE_ENV: "development", TRADING_MODE: "live" },
     loadConfig: async () => tradingConfig,
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
@@ -1449,7 +1470,8 @@ test("loads the production profile once and starts Binance LIVE without acquirin
     logger: { info() {}, debug() {}, error() {} },
   })
 
-  assert.equal(lockCalls, 0, "Production read-only connectivity must not acquire the TESTNET order-execution process lock.")
-  assert.strictEqual(startInput.tradingConfig, tradingConfig, "The same validated profile must be passed into Harvester startup.")
-  assert.equal(startInput.env.NODE_ENV, "production", "The production profile must be passed unchanged to the runtime.")
+  assert.equal(lockCalls, 1, "LIVE trading must acquire the same single-writer process lock as TESTNET.")
+  assert.strictEqual(startInput.tradingConfig, tradingConfig, "Strategy and pair configuration must be passed unchanged to Harvester startup.")
+  assert.equal(startInput.env.NODE_ENV, "development", "NODE_ENV must not select the exchange.")
+  assert.equal(startInput.env.TRADING_MODE, "live", "TRADING_MODE must select Binance LIVE independently of NODE_ENV.")
 })

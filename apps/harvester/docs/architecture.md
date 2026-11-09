@@ -313,7 +313,7 @@ Broker adapter construction, port validation, connection, and failure cleanup ar
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
-Startup configuration validation and environment gates are coordinated by `src/bootstrap/config/resolve-harvester-options.js`; the deterministic read-only strategy fallback lives in `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+Startup configuration validation and exchange selection are coordinated by `src/bootstrap/config/resolve-harvester-options.js`. `TRADING_MODE` is mandatory and selects Binance TESTNET or LIVE independently of `NODE_ENV`; there is no runtime-profile, no-broker, or read-only startup fallback.
 
 Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. The market-price workflow injects `evaluateStrategy`. The state-owning `createPortfolioWorkflow` factory in `src/use-cases/create-portfolio-workflow.js` serializes fill accounting and recovery completion while delegating immutable state transitions to Portfolio and RecoveryLedger. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
 

@@ -10,11 +10,16 @@ const testEventPublisher = Object.freeze({
 })
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher
-    ? input.env?.NODE_ENV === "development" && typeof input.eventPublisher.flush !== "function"
-      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
-      : input.eventPublisher
+    ? typeof input.eventPublisher.flush === "function"
+      ? input.eventPublisher
+      : { ...input.eventPublisher, flush: testEventPublisher.flush }
     : testEventPublisher
-  return startHarvester({ ...input, eventPublisher })
+  return startHarvester({
+    ...input,
+    env: { ...binanceEnv, ...input.env },
+    brokerAdapterFactory: input.brokerAdapterFactory ?? (() => createBroker()),
+    eventPublisher,
+  })
 }
 
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
@@ -43,14 +48,6 @@ async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_
 }
 
 const tradingConfig = {
-  runtime: {
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
-      test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "binance", trading: { enabled: false, mode: "live" } },
-    },
-  },
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -234,6 +231,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
 }
 const binanceEnv = {
   NODE_ENV: "test",
+  TRADING_MODE: "testnet",
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
 }
@@ -254,13 +252,14 @@ const createFill = ({ tradeId = "trade-1", quantity = "0.01" } = {}) => {
   })
 }
 
-test("does not connect a broker unless explicitly selected", async () => {
-  const result = await startHarvesterForTest({ loadConfig: async () => tradingConfig, env: {} })
-  assert.equal(result.tradingConfig, tradingConfig)
-  assert.equal(result.broker, undefined)
-  assert.equal(result.connected, false)
-  assert.ok(result.portfolio instanceof Portfolio)
-  await result.stop()
+test("requires an explicit TRADING_MODE before connecting to Binance", async () => {
+  let brokerFactoryCalled = false
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { TRADING_MODE: undefined },
+    brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
+  }), /TRADING_MODE must be set to "testnet" or "live"/)
+  assert.equal(brokerFactoryCalled, false)
 })
 
 test("rejects enabling the deferred Aggressive strategy in trading config", async () => {
@@ -531,21 +530,14 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   ])
 })
 
-test("rejects an unsupported broker selection", async () => {
-  const config = {
-    ...tradingConfig,
-    runtime: {
-      ...tradingConfig.runtime,
-      profiles: {
-        ...tradingConfig.runtime.profiles,
-        development: { broker: "unknown", trading: { enabled: false, mode: "testnet" } },
-      },
-    },
-  }
-  await assert.rejects(
-    startHarvesterForTest({ loadConfig: async () => config, env: { NODE_ENV: "development" } }),
-    /Unsupported broker in runtime profile: unknown/,
-  )
+test("rejects an invalid TRADING_MODE before connecting to Binance", async () => {
+  let brokerFactoryCalled = false
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { TRADING_MODE: "production" },
+    brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
+  }), /TRADING_MODE must be set to "testnet" or "live"/)
+  assert.equal(brokerFactoryCalled, false)
 })
 
 test("disconnects after a failed broker connection", async () => {
@@ -566,7 +558,7 @@ test("disconnects after a failed broker connection", async () => {
   assert.deepEqual(calls, ["connect", "disconnect"])
 })
 
-test("accounts canonical execution events without refreshing the initial account snapshot in read-only mode", async () => {
+test("does not adopt unowned execution events into strategy accounting", async () => {
   const broker = createBroker()
   let handled
   const result = await startHarvesterForTest({
@@ -1054,7 +1046,7 @@ test("does not expose a broker port that could bypass the trading engine", async
   await result.stop()
 })
 
-test("does not adopt malformed external TRADE reports in read-only mode", async () => {
+test("does not adopt malformed external TRADE reports", async () => {
   const broker = createBroker()
   let observed
   const eventObserved = new Promise((resolve) => { observed = resolve })
@@ -1211,7 +1203,7 @@ test("fails startup when the exchange snapshot omits a configured market asset",
 })
 
 
-test("does not clear the read-only ownership gate after stream recovery acknowledgement", async () => {
+test("does not clear the ownership gate after stream recovery acknowledgement", async () => {
   const broker = createBroker()
   let observed
   const eventObserved = new Promise((resolve) => { observed = resolve })
@@ -1458,7 +1450,6 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
   }
   const config = {
-    runtime: tradingConfig.runtime,
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -1998,7 +1989,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   await result.stop()
 })
 
-test("retains an explicitly injected application event publisher in configuration-only runtime", async () => {
+test("retains an explicitly injected application event publisher in TESTNET runtime", async () => {
   const eventPublisher = { publish: () => ({ ok: true }) }
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
@@ -2234,32 +2225,14 @@ test("reconciles the in-memory order registry before reopening trading after str
 })
 
 
-test("fails closed when trading is explicitly enabled without selecting a broker", async () => {
+test("fails closed when TRADING_MODE is missing, before broker construction", async () => {
   let brokerFactoryCalled = false
-  const configWithoutBroker = {
-    ...tradingConfig,
-    runtime: {
-      ...tradingConfig.runtime,
-      profiles: {
-        ...tradingConfig.runtime.profiles,
-        development: { broker: null, trading: { enabled: true, mode: "testnet" } },
-      },
-    },
-  }
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => configWithoutBroker,
-      env: {
-        NODE_ENV: "development",
-      },
-      brokerAdapterFactory: () => {
-        brokerFactoryCalled = true
-        return createBroker()
-      },
-      logger: { info() {}, error() {} },
-    }),
-    /Order execution requires runtime profile broker=binance/,
-  )
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { TRADING_MODE: undefined },
+    brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
+    logger: { info() {}, error() {} },
+  }), /TRADING_MODE must be set to "testnet" or "live"/)
   assert.equal(brokerFactoryCalled, false)
 })
 
@@ -2660,7 +2633,7 @@ test("fails closed before market subscriptions when the account-wide open-order 
 })
 
  
-test("captures and durably journals balances and account-wide open orders on read-only startup", async () => {
+test("captures and durably journals balances and account-wide open orders on trading startup", async () => {
   const calls = []
   const broker = createBroker(calls)
   let accountReads = 0
@@ -2728,7 +2701,7 @@ test("captures and durably journals balances and account-wide open orders on rea
   await runtime.stop()
 })
 
-test("records pre-existing account-wide orders in read-only mode without adopting or changing them", async () => {
+test("records pre-existing account-wide orders without adopting or changing them", async () => {
   const calls = []
   const broker = createBroker(calls)
   let cancelCalls = 0
@@ -2771,7 +2744,7 @@ test("records pre-existing account-wide orders in read-only mode without adoptin
   await runtime.stop()
 })
 
-test("blocks read-only startup when either account audit query fails", async () => {
+test("blocks trading startup when either account audit query fails", async () => {
   for (const failure of ["balances", "open-orders"]) {
     const calls = []
     const broker = createBroker(calls)
@@ -2794,7 +2767,7 @@ test("blocks read-only startup when either account audit query fails", async () 
   }
 })
 
-test("blocks read-only startup when either PREFLIGHT audit event cannot be durably flushed", async () => {
+test("blocks trading startup when either PREFLIGHT audit event cannot be durably flushed", async () => {
   for (const scenario of [{ failedFlush: 1, nonDurable: false }, { failedFlush: 1, nonDurable: true }, { failedFlush: 2, nonDurable: true }]) {
     const { failedFlush, nonDurable } = scenario
     const calls = []
@@ -2829,7 +2802,7 @@ test("blocks read-only startup when either PREFLIGHT audit event cannot be durab
 })
 
 
-test("blocks read-only startup when either PREFLIGHT audit event publication fails", async () => {
+test("blocks trading startup when either PREFLIGHT audit event publication fails", async () => {
   for (const failedEvent of ["account.snapshot_captured", "account.open_orders_captured"]) {
     const calls = []
     const broker = createBroker(calls)

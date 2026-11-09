@@ -16,13 +16,16 @@ directory. The lower-level `prepareOptionalJournal()` helper accepts
 and tests; these are not deployment settings.
 
 The `dev` package script loads `.env.development` before starting the logging
-runner; the child Harvester process inherits those values. The `start` package
-script loads `.env`. Set `NODE_ENV=development` in `.env.development` and
-`NODE_ENV=production` in `.env`; runtime profile selection reads `process.env.NODE_ENV`.
-No launcher or preload script forces the environment value.
+runner; the child Harvester process inherits those values. Set
+`TRADING_MODE=testnet` in `.env.development`. The `start` package script
+loads `.env`; set `TRADING_MODE=live` there for production LIVE execution.
+`TRADING_MODE` must be exactly `testnet` or `live`; missing or invalid values
+fail startup. `NODE_ENV` may describe the Node.js runtime but never selects the
+exchange. No launcher or preload script forces either value.
 Environment files and externally injected environment values may provide
-standard process settings, credentials, and optional notifier secrets; they do
-not provide Journal configuration or broker/trading-policy flags. The default Journal directory is shared with
+`TRADING_MODE`, Binance API credentials, standard process settings, and
+optional notifier secrets; they do not provide a broker selector,
+trading-enable flag, runtime profile, or Journal configuration. The default Journal directory is shared with
 Harvester diagnostic logs at `apps/harvester/logs/`, but their formats and
 lifecycles are independent. See [Logging](./LOGGING.md) for cumulative and
 timestamped diagnostic files. The Harvester `.gitignore` excludes its
@@ -87,7 +90,7 @@ A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no 
 
 A standalone read-only audit can be run while Harvester remains stopped with `pnpm run testnet:audit`. It creates its own Journal session and writes both account events with phase `PREFLIGHT`; it does not start trading or alter exchange state. Exit code 2 means the audit was persisted successfully but open orders were found.
 
-For every broker-connected startup, including read-only mode, bootstrap fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` and `account.open_orders_captured` with `phase: PREFLIGHT`, and durably flushes each event before market subscriptions or trading-engine activation. `main()` starts the optional Journal service and invokes Harvester without awaiting `journalService.ready` before broker connection. The first required PREFLIGHT event flush waits for Journal readiness; if the Journal is unavailable or the flush is not durable, startup fails before market subscriptions proceed. If either account query fails, event mapping/publication fails, or either flush is not durable, startup fails closed. A pre-existing order is recorded as external/unowned and is never adopted or cancelled. The `BLOCKED` value is an audit classification, not a trading-readiness gate: `subscribeToUserData()` sets `state.ready = true` after queued events and other safety flags pass, without gating on open-order audit readiness. The current trading-enabled startup test explicitly allows market subscriptions/runtime startup with an unmatched open order. Its fake broker emits no market-price tick, so it does not prove that later strategy activity cannot overlap that unowned order. A prior-process Harvester order can be treated as external after restart; see #654. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
+For every trading startup, bootstrap fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` and `account.open_orders_captured` with `phase: PREFLIGHT`, and durably flushes each event before market subscriptions or trading-engine activation. `main()` starts the optional Journal service and invokes Harvester without awaiting `journalService.ready` before broker connection. The first required PREFLIGHT event flush waits for Journal readiness; if the Journal is unavailable or the flush is not durable, startup fails before market subscriptions proceed. If either account query fails, event mapping/publication fails, or either flush is not durable, startup fails closed. A pre-existing order is recorded as external/unowned and is never adopted or cancelled. The `BLOCKED` value is an audit classification, not a trading-readiness gate: `subscribeToUserData()` sets `state.ready = true` after queued events and other safety flags pass, without gating on open-order audit readiness. The current trading-enabled startup test explicitly allows market subscriptions/runtime startup with an unmatched open order. Its fake broker emits no market-price tick, so it does not prove that later strategy activity cannot overlap that unowned order. A prior-process Harvester order can be treated as external after restart; see #654. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
 
 ## Write failures and durability
 

@@ -8,6 +8,7 @@ const strategy = (config) => config.strategies.CG_coinGrabber;
 
 test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal(validateTradingConfig(validConfig), validConfig);
+  assert.equal(Object.hasOwn(validConfig, 'runtime'), false, 'exchange selection must not be stored in trading-config.json');
   assert.equal(strategy(validConfig).enabled, true);
   assert.equal(strategy(validConfig).settings.minProfit, 0.01);
   assert.equal(strategy(validConfig).settings.conservative.enabled, true);
