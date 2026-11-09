@@ -33,6 +33,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -94,6 +95,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error() {}, info() {}, warn() {} },
     }, {
       apiClientFactory: () => rpc,
@@ -124,6 +126,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error() {}, info() {}, warn() {} },
     }, {
       apiClientFactory: () => rpc,
@@ -157,6 +160,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error() {}, info() {}, warn() {} },
     }, {
       apiClientFactory: () => rpc,
@@ -186,6 +190,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error() {}, info() {}, warn() {} },
     }, {
       apiClientFactory: () => rpc,
@@ -213,6 +218,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error() {}, info() {}, warn() {} },
     }, {
       apiClientFactory: () => rpc,
@@ -242,6 +248,7 @@ describe("Binance user-data subscription setup", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error: (...args) => logs.push(args), info() {}, warn() {} },
     }, {
       apiClientFactory: () => rpc,
