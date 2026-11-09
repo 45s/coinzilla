@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps } from './check-agent-policy.js';
+import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps, findUnbalancedMarkdownFences } from './check-agent-policy.js';
 
 const ownershipRow = (path) => `| Domain | \`${path}/\` | Responsibility |\n`;
 
@@ -112,4 +112,30 @@ test('reports missing required documentation entry points', () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+
+test('reports an unclosed backtick fence with its source line', () => {
+  assert.deepEqual(findUnbalancedMarkdownFences([{
+    path: 'docs/broken.md',
+    content: '# Heading\n\n```sh\npnpm test\n',
+  }]), [
+    'docs/broken.md has an unclosed ``` fence opened at line 3',
+  ]);
+});
+
+test('accepts tilde fences and closing fences longer than their opener', () => {
+  assert.deepEqual(findUnbalancedMarkdownFences([{
+    path: 'docs/valid.md',
+    content: '~~~md\n```js\n~~~\n\n````text\ncode\n`````\n',
+  }]), []);
+});
+
+test('does not allow a mismatched fence character to close a block', () => {
+  assert.deepEqual(findUnbalancedMarkdownFences([{
+    path: 'docs/mismatch.md',
+    content: '~~~js\n```\n',
+  }]), [
+    'docs/mismatch.md has an unclosed ~~~ fence opened at line 1',
+  ]);
 });
