@@ -3,6 +3,7 @@
 Start with the procedure matching the task. Do not treat a runbook as standing authorization to interact with TESTNET or place/cancel orders.
 
 - [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/CLOSING durability, process locks, shutdown ordering and failure diagnosis.
+- [Error vocabulary](../error-vocabulary.md) — stable diagnostic identifiers, meanings and safe recovery steps.
 - [Logging](../LOGGING.md) — cumulative and timestamped session files, shared process identity, stream lifecycle, logger levels and diagnostics.
 - [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; the earlier DOGEUSDT/ZROUSDT scope no longer matches the ZROFDUSD-only default config. Reconcile before any future session.
 - [TESTNET order tools](../testnet-order-tools.md) — read-only diagnostics plus legacy ZROUSDT market-sell and account-wide cancel writes; neither write is authorized by the paused runbook. The account-wide cancel proceeds after a warning without interactive confirmation; the menu adds no confirmation layer. The menu's read-only exchange account audit and local Journal balance audit are documented in the runbook and Journal Operations.
