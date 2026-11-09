@@ -192,6 +192,39 @@ Read/replay is available while the Journal instance is stopped (before `start()`
 Harvester emits two durable lifecycle records on every connected startup, whether trading is enabled or not: `account.snapshot_captured` with `data.phase = "PREFLIGHT"` contains all balances with exact decimal free, locked, and total quantities plus exchange source time; `account.open_orders_captured` with the same phase contains account-wide open orders and their broker/client identifiers, symbol, side, type, price, original/executed quantities, and status. Open-order readiness is `READY` only for an empty result; otherwise it is `BLOCKED` with explicit reasons. Each event is followed by a successful `Journal.flush()` before Harvester proceeds to market subscriptions or engine activation. Existing orders remain externally owned; these records are observations, not adoption instructions.
 
 
+## Backup and restore
+
+A Journal backup is a byte-preserving copy of the complete set of session `.jsonl` files. Take backups only after the writer has stopped and `close()` has returned `ok: true` and `durable: true`. Do not copy an active session or treat the directory lock as backup data.
+
+### Create a consistent backup
+
+1. Stop the application component that owns the Journal writer and await a successful durable `journal.close()`.
+2. Confirm that no other process is writing to the directory. Journal's exclusive lock prevents cooperating writers, but it is not a backup snapshot mechanism.
+3. Copy every session `.jsonl` file, preserving filenames and bytes, to a backup location outside the live Journal directory. Do not include `.coinzilla-journal.lock`; it represents live process ownership, not journal history.
+4. Record the backup timestamp and a cryptographic checksum for the archive (and, where required by local policy, each copied file). Keep the backup immutable and access-controlled.
+
+For example, with the writer already stopped:
+
+```sh
+mkdir -p /secure/backups/coinzilla-journal
+find ./data/journal -maxdepth 1 -type f -name '*.jsonl' -printf '%f\0' \
+  | sort -z \
+  | tar -czf /secure/backups/coinzilla-journal/sessions.tar.gz -C ./data/journal --null -T -
+sha256sum /secure/backups/coinzilla-journal/sessions.tar.gz
+```
+
+The archive contains the original session files without parsing, truncating, reformatting, or deduplicating records. Store the checksum alongside the archive.
+
+### Restore and validate
+
+1. Stop all writers and choose an empty restore directory. Never extract over an active Journal directory.
+2. Verify the archive checksum, then extract the session files while preserving their original names and bytes. Do not restore a stale `.coinzilla-journal.lock`; the next writer must acquire a fresh lock.
+3. Before starting a writer, construct a stopped Journal pointed at the restore directory and call `read()`. Require `ok: true`; inspect the returned record count and positions. A failed read is a fail-closed validation result, not permission to repair or discard the offending bytes.
+4. If replay is required, use an application-owned handler that is idempotent by stable record ID. Journal replay is sequential and at-least-once; it does not make external effects exactly-once.
+5. Reconcile restored evidence with authoritative external/broker state before any application recovery decision. Journal history is evidence, not trading state or an instruction to resubmit orders.
+
+A restore does not merge histories or resolve duplicate IDs. Keep the original backup unchanged, preserve incomplete or malformed source files for diagnosis, and follow the application's independently reviewed recovery procedure.
+
 ## Development and coverage
 
 Run the deterministic Journal tests and the package-scoped coverage gate from the repository root:

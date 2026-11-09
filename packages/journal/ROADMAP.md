@@ -23,8 +23,8 @@ This section supersedes stale checkboxes below where they conflict with merged w
 3. **J-4 — make orchestration state ownership explicit.**
    - **Why:** session lifecycle, subscription state, pending writes and close state must have one clear owner; otherwise races can accept writes after close or lose an uncertain append.
    - **Do:** keep lifecycle sequencing and admission policy in Journal, while the filesystem adapter owns file handles and lock resources. Define when an event is admitted, written, synced, and acknowledged; keep retry and close durability semantics explicit.
-   - **Merged slices:** PR #755 makes close await startup cancellation and resource rollback; PR #758 serializes overlapping close operations. PR #759 serializes explicit flushes with one another and with close; its deterministic barriers cover flush/flush and flush/close overlap. Continue with the remaining observable lifecycle matrix.
-   - **Verify:** test concurrent close/publish, flush/close overlap, logger failures, append/sync failures, partial startup rollback, and retry after uncertain sync. Do not deduplicate uncertain records by business meaning.
+   - **Merged slices:** PR #755 makes close await startup cancellation and resource rollback; PR #758 serializes overlapping close operations. PR #759 serializes explicit flushes with one another and with close; its deterministic barriers cover flush/flush and flush/close overlap. The final close/publish admission-and-drain race is covered by the deferred-append regression test.
+   - **Verify:** test concurrent close/publish, flush/close overlap, logger failures, append/sync failures, partial startup rollback, and retry after uncertain sync. Do not deduplicate uncertain records by business meaning. The full matrix is covered, including a deferred-append close/publish test that proves an event accepted immediately before close is drained and durably synced before resources are released.
 
 4. **J-5 — contract conformance and operational documentation.**
    - **Why:** consumers need to know which facts are durable, when flush completes, what failure means and how to inspect/restore a session.
@@ -109,7 +109,7 @@ Each numbered slice below is a separate task PR targeting `develop`, with one pr
 
 ### J-1 — Define the record vocabulary and contract
 
-**Status:** [ ] planned  
+**Status:** [x] complete — source-event, persisted-record, and recovered-record vocabulary and public contracts are documented and tested in PR #746.  
 **Intent:** make the existing contract explicit before changing its structure.
 
 Scope:
@@ -132,7 +132,7 @@ Tests and verification:
 
 ### J-2 — Establish a lightweight JournalRecord domain contract
 
-**Status:** [ ] planned  
+**Status:** [x] complete — the lightweight schema-v1 record contract, identity validation, serialization boundary, and compatibility tests were delivered in PR #747.  
 **Depends on:** J-1  
 **Intent:** give record identity and schema rules one explicit owner without introducing a heavyweight domain model.
 
@@ -167,7 +167,7 @@ TDD and documentation:
 
 ### J-3 — Isolate filesystem persistence behind an internal adapter
 
-**Status:** [ ] planned  
+**Status:** [x] complete — the package-private filesystem adapter and resource-ownership tests were delivered in PR #748.  
 **Depends on:** J-2  
 **Intent:** separate Journal lifecycle/orchestration from Node filesystem mechanics and provide deterministic control of I/O in service tests.
 
@@ -206,7 +206,7 @@ TDD and documentation:
 
 ### J-4 — Make orchestration state ownership explicit
 
-**Status:** [~] in progress  
+**Status:** [x] complete — lifecycle matrix is covered, including the deterministic publish-before-close drain regression added with the final Journal acceptance PR.  
 **Depends on:** J-3 (merged in PR #748)  
 **Intent:** ensure the Journal service owns lifecycle policy while the adapter owns resource mechanics.
 
@@ -239,11 +239,11 @@ TDD and documentation:
 - [J-4 startup cancellation / PR #755](https://github.com/45s/coinzilla/pull/755), merged as `7103d9d14919620eae371f23f342c51d916d1d0b`: close waits for in-flight startup rollback and only releases resources acquired by that attempt.
 - [J-4 active close serialization / PR #758](https://github.com/45s/coinzilla/pull/758), merged as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`: a separate close-operation guard rejects overlapping close calls before a second EventBus flush, while the record-admission cutoff remains after the first EventBus drain.
 
-**Characterization coverage in PR #772:** a deterministic adapter failure writes a non-empty prefix to the session file and then rejects. The test verifies the original error is preserved, the writer is poisoned without retry, flush does not sync or claim durability, close attempts cleanup and releases the owned session handle and lock, and the exact partial bytes remain untouched (no truncation or repair). Runtime behavior is unchanged.
+- Final close/publish characterization: a deterministic deferred-append barrier proves that a publish accepted immediately before close remains admitted, close waits for its append and durable sync, and the exact event identity/payload remains in the session after resource release. This closes the last explicitly listed concurrent close/publish test gap; no production lifecycle behavior or public API changed.\n\n**Characterization coverage in PR #772:** a deterministic adapter failure writes a non-empty prefix to the session file and then rejects. The test verifies the original error is preserved, the writer is poisoned without retry, flush does not sync or claim durability, close attempts cleanup and releases the owned session handle and lock, and the exact partial bytes remain untouched (no truncation or repair). Runtime behavior is unchanged.
 
 ### J-5 — Contract conformance and operational documentation
 
-**Status:** [ ] planned  
+**Status:** [x] complete — the README now documents the public contracts, recovery limits, locking, durability boundaries, errors, backup/restore, and maintainer verification commands.  
 **Depends on:** J-2 through J-4  
 **Intent:** make the final architecture easy for package consumers and maintainers to use correctly.
 
@@ -255,9 +255,9 @@ Scope:
 
 Acceptance criteria:
 - README and JSDoc agree with actual runtime behavior and tests.
-- Every public method's success/failure and durability/replay guarantee is described accurately.
-- Examples do not imply exactly-once replay, business-level deduplication, automatic stale-lock cleanup, or directory-entry fsync.
-- No root-level or other-package documentation is needed; all changes remain under `packages/journal/**`.
+- [x] Every public method's success/failure and durability/replay guarantee is described accurately.
+- [x] Examples do not imply exactly-once replay, business-level deduplication, automatic stale-lock cleanup, or directory-entry fsync.
+- [x] No root-level or other-package documentation is needed; all changes remain under `packages/journal/**`.
 
 Tests and verification:
 - Verify README examples and all documented defaults/error codes against executable tests.
@@ -302,13 +302,13 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] [J-1 / PR #746](https://github.com/45s/coinzilla/pull/746) — Defined source-event, persisted-record, and recovered-record vocabulary; documented public contracts and JSDoc. Merged to `develop` as `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae`; all six required checks passed on exact PR head `2631c3b14dd46270ff0a2919851ccc700b95fa6a`.
 - [x] [J-2 / PR #747](https://github.com/45s/coinzilla/pull/747) — Centralized stable record-ID validation, rejected root-level enumerable `toJSON` hooks, and added serialization/recovery contract tests. Merged to `develop` as `5d38c1659d1fca187386ebe7c737b97540279419`; all six required checks passed on exact PR head `89f01ebde410d705e88bc48647557c5b36f6c201`.
 - [x] [J-3 / PR #748](https://github.com/45s/coinzilla/pull/748) — Isolated filesystem persistence and resource ownership behind the package-private `FileSystemJournalStore`; retained the deprecated internal `fileHandle` test seam without leaking the original descriptor. Merged to `develop` as `9ec03aaf7df3f49f7dbc42187baf9a099de7fe79`; all required CI checks passed on exact PR head `e550803eb47100aa23123aa8f6e42f2b0d1eedb6`.
-- [~] J-4 startup/close race: test-first commit `318df35b7d41d76cda25f96565ba5e9e2b9b961b` added a deterministic deferred-session-creation regression. On the exact RED head, Journal unit tests reported 59 passed / 1 failed; the failure was the expected assertion that `close()` must remain pending until startup cleanup releases its lock (actual `closeSettled: true`).
+- [x] J-4 startup/close race: test-first commit `318df35b7d41d76cda25f96565ba5e9e2b9b961b` added a deterministic deferred-session-creation regression; the behavior is implemented and merged in PR #755.
 - [x] [J-4 startup/close cancellation / PR #755](https://github.com/45s/coinzilla/pull/755) — Close now waits for startup cancellation and releases all resources acquired by that attempt. Merged to `develop` as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`; required CI passed on exact PR head `a803b2773ec8b29d271c7e8677ac29c52120de10`.
 - [x] [J-4 overlapping close / PR #758](https://github.com/45s/coinzilla/pull/758) — A single close operation owns shutdown while the record-admission cutoff remains delayed until EventBus draining completes. Merged to `develop` as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`; required CI passed on exact PR head `15907cea31bc467e9602b4186827960c04554ef5`.
-- [~] J-4 overlapping-close regression: test-first commit `630196154c1dbfb3ed5fad93f7bd4976764639bb` added a deferred EventBus flush test. On the exact RED head, Journal tests reported 59 passed / 1 failed; the expected failure observed two EventBus flush invocations for overlapping close calls (actual 2, expected 1).
-- [~] J-4 flush/close overlap regression: test-first commit `9f5e7c20cf67827fbe0cc68f958d983dcea9eb5f` added a deferred session-sync barrier. On the exact RED head, Journal tests reported 60 passed / 1 failed; the failure showed a flush started after close claimed shutdown reaching the store and returning the sync-overlap error instead of the stopped/closing guard result.
-- [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/flush-close-serialization`).
-- [ ] J-5 — Contract conformance and operational documentation.
+- [x] J-4 overlapping-close regression: test-first commit `630196154c1dbfb3ed5fad93f7bd4976764639bb` added a deferred EventBus flush test; the regression is covered by the merged close-serialization work in PR #758.
+- [x] J-4 flush/close overlap regression: test-first commit `9f5e7c20cf67827fbe0cc68f958d983dcea9eb5f` added a deferred session-sync barrier; the behavior is covered by the merged flush/close serialization in PR #759.
+- [x] J-4 — Make orchestration state ownership explicit; all required lifecycle races and failure paths are covered, including the final deferred-append close/publish test.
+- [x] J-5 — Contract conformance and operational documentation. README includes byte-preserving backup, checksum, restore validation, replay/idempotency, and broker-reconciliation procedures; package API, limits, locking, durability, and test/coverage commands are documented.
 
 ## Current contract
 

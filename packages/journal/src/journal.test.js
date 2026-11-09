@@ -1540,3 +1540,109 @@ test("serializes concurrent explicit flushes across EventBus drain and session s
     await eventBus.close()
   }
 })
+
+
+test("close drains a published event before releasing the session and writer lock", async () => {
+  const context = await createTestJournal()
+  let signalAppendStarted
+  let releaseAppend
+  const appendStarted = new Promise((resolve) => {
+    signalAppendStarted = resolve
+  })
+  const appendGate = new Promise((resolve) => {
+    releaseAppend = resolve
+  })
+  const originalAppend = context.journal.store.append.bind(context.journal.store)
+  context.journal.store.append = async (line) => {
+    signalAppendStarted()
+    await appendGate
+    return originalAppend(line)
+  }
+
+  let closePromise
+  try {
+    const published = context.eventBus.publish({
+      name: "journal.close_publish_race",
+      source: "unit-test",
+      data: { admission: "before-close" },
+    })
+    assert.equal(
+      published.ok,
+      true,
+      "The EventBus must accept the source event before close claims shutdown.",
+    )
+
+    let closeSettled = false
+    closePromise = context.journal.close().then((result) => {
+      closeSettled = true
+      return result
+    })
+
+    await appendStarted
+    await Promise.resolve()
+    assert.equal(
+      closeSettled,
+      false,
+      "Close must remain pending while the already-published event is still being appended to the session.",
+    )
+    assert.ok(
+      context.journal.store.sessionHandle,
+      "The session handle must remain owned and open while an admitted publish is still being persisted.",
+    )
+    assert.ok(
+      (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
+      "The exclusive writer lock must remain owned while an admitted publish is still being persisted.",
+    )
+
+    releaseAppend()
+    const closeResult = await closePromise
+    assert.equal(
+      closeResult.ok,
+      true,
+      "Close must finish successfully after the admitted event append, final sync, and resource cleanup complete.",
+    )
+    assert.equal(
+      closeResult.durable,
+      true,
+      "Close may report durable completion only after the admitted event has been synchronized.",
+    )
+    assert.equal(
+      context.journal.store.sessionHandle,
+      null,
+      "The session handle must be released after the admitted event has been drained and synchronized.",
+    )
+    assert.equal(
+      (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
+      false,
+      "The exclusive writer lock must be released only after the admitted event has been drained and durably synchronized.",
+    )
+
+    const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
+    assert.equal(
+      lines.length,
+      1,
+      "The close/publish race must preserve exactly the one event admitted before shutdown.",
+    )
+    const stored = JSON.parse(lines[0])
+    assert.equal(
+      stored.__coinzillaJournal.id,
+      published.event.id,
+      "The durable session record must retain the exact identity assigned to the event accepted before close.",
+    )
+    assert.equal(
+      stored.name,
+      "journal.close_publish_race",
+      "The durable session must preserve the source event that was published immediately before close.",
+    )
+    assert.equal(
+      stored.data.admission,
+      "before-close",
+      "The durable record must preserve the admitted event payload without mutation.",
+    )
+  } finally {
+    releaseAppend()
+    await Promise.allSettled([closePromise].filter(Boolean))
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
