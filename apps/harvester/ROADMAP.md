@@ -297,7 +297,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Select Conservative as the first executable strategy; Aggressive remains deferred.
 - [x] Establish one authoritative strategy contract: [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 - [~] Align domain policy, application order lifecycle, configuration validation, and regression tests with that canonical contract.
-- [ ] Complete repository-wide documentation consolidation; no active competing Conservative rule definitions may remain.
+- [~] Complete documentation consolidation under [the Harvester documentation migration plan](./docs/plans/DOCUMENTATION_MIGRATION.md) and [repository-wide governance](../../docs/DOCUMENTATION_GOVERNANCE.md); preserve historical audit evidence and verify no active competing Conservative rule definitions remain. Tracking: [#795](https://github.com/45s/coinzilla/issues/795).
 - [ ] Pass the focused regression matrix and all required exact-head CI checks before acceptance.
 - [ ] Keep PR #653 open and unmerged until acceptance criteria pass and the owner explicitly authorizes merging.
 
