@@ -29,7 +29,7 @@ let logStreamFailed = false
 const onLogStreamError = (error) => {
   if (logStreamFailed) return
   logStreamFailed = true
-  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\\n`)
+  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1
   if (child && !childClosed && !child.killed) child.kill("SIGTERM")
 }
