@@ -609,6 +609,109 @@ test("can close before startup and then rejects startup", async () => {
 
 
 
+test("poisons the writer after append failure and releases owned resources on close", async () => {
+  const context = await createTestJournal()
+  let appendCalls = 0
+  let syncCalls = 0
+
+  context.journal.store.append = async () => {
+    appendCalls += 1
+    throw new Error("simulated append failure")
+  }
+  context.journal.store.sync = async () => {
+    syncCalls += 1
+  }
+
+  try {
+    const first = await context.journal.record({
+      event: { id: "append-failed", name: "journal.append_failure" },
+    })
+    assert.equal(
+      first.ok,
+      false,
+      "The record whose append fails must report the original storage error.",
+    )
+    assert.match(
+      first.errors[0].message,
+      /simulated append failure/,
+      "The first failed append must preserve the original adapter error.",
+    )
+
+    const second = await context.journal.record({
+      event: { id: "append-after-failure", name: "journal.append_after_failure" },
+    })
+    assert.equal(
+      second.ok,
+      false,
+      "A writer with an uncertain failed append must reject later records.",
+    )
+    assert.match(
+      second.errors[0].message,
+      /session is failed after a previous write error/,
+      "Subsequent records must report the poisoned writer state rather than retrying an uncertain append.",
+    )
+    assert.equal(
+      appendCalls,
+      1,
+      "The adapter must not be called again after the first append failure poisons the writer.",
+    )
+
+    const flushed = await context.journal.flush()
+    assert.equal(
+      flushed.ok,
+      false,
+      "Flush must not claim durability after a failed append.",
+    )
+    assert.match(
+      flushed.errors[0].message,
+      /simulated append failure/,
+      "Flush must retain the original append error.",
+    )
+    assert.equal(
+      syncCalls,
+      0,
+      "Flush must not sync and claim a healthy write queue after an append failure.",
+    )
+
+    const closed = await context.journal.close()
+    assert.equal(
+      closed.ok,
+      false,
+      "Close must preserve the failed append outcome rather than claiming durable closure.",
+    )
+    assert.equal(
+      context.journal.closed,
+      true,
+      "The failed writer must still reach the stopped lifecycle state after cleanup.",
+    )
+    assert.equal(
+      context.journal.store.sessionHandle,
+      null,
+      "Close must release the session handle even when an append failed.",
+    )
+    assert.equal(
+      syncCalls,
+      1,
+      "Close must still attempt its final file-content sync before releasing the session.",
+    )
+    const remainingFiles = await readdir(context.directory)
+    assert.equal(
+      remainingFiles.some((name) => name.endsWith(".lock")),
+      false,
+      "Close must release the directory lock owned by the failed writer.",
+    )
+    assert.equal(
+      await readFile(context.filePath, "utf8"),
+      "",
+      "The failed append must not create a partial line or rewrite the empty session file.",
+    )
+  } finally {
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
 test("reports a failed disk sync instead of claiming the journal was flushed", async () => {
   const context = await createTestJournal()
 
