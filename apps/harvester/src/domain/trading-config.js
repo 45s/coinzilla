@@ -91,7 +91,7 @@ export function resolveHarvesterRuntimeConfig({ config, environment } = {}) {
     throw new Error("Unsupported broker in runtime profile: " + brokerName)
   }
   if (tradingRequested && brokerName !== "binance") {
-    throw new Error("TESTNET trading requires runtime profile broker=binance")
+    throw new Error("Order execution requires runtime profile broker=binance")
   }
   if (tradingRequested && profileName === "development" && tradingMode !== "testnet") {
     throw new Error("Development order execution requires runtime profile trading.mode=testnet")
