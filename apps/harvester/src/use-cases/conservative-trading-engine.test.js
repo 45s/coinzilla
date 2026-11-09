@@ -19,6 +19,7 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
@@ -4892,6 +4893,82 @@ function makeShutdownOrder({ side, clientOrderId, brokerOrderId, status = "OPEN"
     updatedAt: 1,
   })
 }
+
+test("account-integrity safety halt reconciles a filled BUY without cancelling its recovery SELL", async () => {
+  const recoveredFilledBuy = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "safety-halt-filled-buy",
+    brokerOrderId: "broker-safety-halt-filled-buy",
+  })
+  const activeBuy = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "safety-halt-active-buy",
+    brokerOrderId: "broker-safety-halt-active-buy",
+  })
+  const recoverySell = makeShutdownOrder({
+    side: "SELL",
+    clientOrderId: "safety-halt-recovery-sell",
+    brokerOrderId: "broker-safety-halt-recovery-sell",
+  })
+  const filledBuyHistory = makeOrderStatusUpdate({
+    order: recoveredFilledBuy,
+    status: "FILLED",
+    executedQuantity: "1",
+  })
+  const activeBuyHistory = makeOrderStatusUpdate({ order: activeBuy, status: "OPEN" })
+  const recoverySellHistory = makeOrderStatusUpdate({ order: recoverySell, status: "OPEN" })
+  const buyFill = makeBuyFill({
+    order: recoveredFilledBuy,
+    tradeId: "safety-halt-filled-buy-trade",
+    price: "100",
+    quantity: "1",
+    quoteQuantity: "100",
+    executedAt: 2,
+  })
+  const harness = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [recoveredFilledBuy, activeBuy, recoverySell] }),
+      replacementIntents: new Set(["DOGEUSDT"]),
+    },
+    eventPublisher: { publish: () => ({ ok: true }) },
+  })
+  harness.broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [
+      makeOpenOrder({ order: activeBuy }),
+      makeOpenOrder({ order: recoverySell }),
+    ],
+  })
+  harness.setAcknowledgedOrder({ order: filledBuyHistory, fills: [buyFill] })
+  harness.setAcknowledgedOrder({ order: activeBuyHistory })
+  harness.setAcknowledgedOrder({ order: recoverySellHistory })
+  const safetyHalt = createAccountIntegritySafetyHalt({
+    getTradingEngine: () => harness.engine,
+    logger: {},
+  })
+
+  await safetyHalt()
+
+  assert.deepEqual(
+    harness.cancellationIds,
+    [activeBuy.brokerOrderId],
+    "the safety halt may cancel its remaining owned BUY but must not cancel the recovery SELL while reconciling the filled BUY",
+  )
+  assert.equal(harness.accountedFills.length, 1, "the recovered BUY fill must be reconciled before the explicit BUY cancellation stage")
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === recoveredFilledBuy.clientOrderId).status,
+    "FILLED",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === activeBuy.clientOrderId).status,
+    "CANCELED",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === recoverySell.clientOrderId).status,
+    "OPEN",
+    "the active recovery SELL must remain untouched by safety-halt reconciliation",
+  )
+})
 
 test("shutdown cancellation cancels only strategy-owned BUY orders and preserves SELL orders", async () => {
   const buyOrder = makeShutdownOrder({

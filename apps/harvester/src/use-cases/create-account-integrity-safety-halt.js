@@ -20,7 +20,7 @@ export function createAccountIntegritySafetyHalt({
     const task = (async () => {
       let reconciliation
       try {
-        reconciliation = await tradingEngine.reconcileOwnedOrders()
+        reconciliation = await tradingEngine.reconcileOwnedOrders({ recoveryMode: true })
       } catch (error) {
         logger.error?.({
           message: "account-integrity safety halt could not reconcile owned orders before BUY cancellation",
