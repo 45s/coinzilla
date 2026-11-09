@@ -141,6 +141,7 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
+    HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
   assert.deepEqual(eventPublisher.events[0].data, {
     enabledMarkets: ["BTCUSDT"],
@@ -309,5 +310,5 @@ test("surfaces Binance fill-normalization failures as an actionable user-data pa
     entry.errorMessage === "Binance fill is missing trade id"
   ))
 
-  await runtime.stop()
+  await assert.rejects(() => runtime.stop(), /Harvester shutdown was incomplete/)
 })
