@@ -20,7 +20,7 @@ Run from the repository root:
 pnpm --filter @coinzilla/harvester testnet
 ```
 
-The menu requires an interactive TTY and launches the standalone scripts documented below. It includes read-only inspection actions as well as the legacy ZROUSDT MARKET SELL and account-wide cancel actions. The menu is only a convenience wrapper and adds no confirmation layer. The ZROUSDT sell script requires its exact phrase; the account-wide cancel script proceeds automatically after logging a warning and has no interactive confirmation. Selecting either action is an exchange-write decision and is not authorized by the paused validation runbook.
+The menu requires an interactive TTY and launches the standalone scripts documented below. It includes order/balance/history inspection, the exchange-read-only account audit (`testnet:audit`, which persists PREFLIGHT evidence to a local Journal session; see [the runbook](./TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./JOURNAL_OPERATIONS.md)), and local Journal balance reconciliation (`journal:balance-audit`; see [Journal Operations](./JOURNAL_OPERATIONS.md)), as well as the legacy ZROUSDT MARKET SELL and account-wide cancel actions. The menu is only a convenience wrapper and adds no confirmation layer. The ZROUSDT sell script requires its exact phrase; the account-wide cancel script proceeds automatically after logging a warning and has no interactive confirmation. Selecting either action is an exchange-write decision and is not authorized by the paused validation runbook.
 
 ## Prerequisites
 
