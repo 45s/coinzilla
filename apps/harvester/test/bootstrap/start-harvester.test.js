@@ -13,6 +13,16 @@ import {
 } from '@coinzilla/entities';
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
+
+const runtimeProfiles = {
+  profiles: {
+    default: { broker: null, trading: { enabled: false, mode: "testnet" } },
+    development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
+    test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
+    production: { broker: "binance", trading: { enabled: false, mode: "live" } },
+  },
+}
+
 const createOpenOrderSnapshot = ({ order }) => {
   const openOrder = new Order({
     symbol: order.market.symbol,
@@ -36,7 +46,7 @@ const testEventPublisher = Object.freeze({
 })
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher
-    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+    ? input.env?.NODE_ENV === "development" && typeof input.eventPublisher.flush !== "function"
       ? { ...input.eventPublisher, flush: testEventPublisher.flush }
       : input.eventPublisher
     : testEventPublisher
@@ -62,6 +72,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = {
+    runtime: runtimeProfiles,
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
   const configSource = '/etc/harvester/trading-config.json';
@@ -232,10 +243,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     loadConfig: async () => tradingConfig,
     brokerAdapterFactory: () => broker,
     env: {
-      HARVESTER_BROKER: 'binance',
-      HARVESTER_ENABLE_TRADING: 'true',
-      HARVESTER_TRADING_MODE: 'testnet',
-      NODE_ENV: 'test',
+      NODE_ENV: 'development',
       BINANCE_API_KEY: 'test-key',
       BINANCE_API_SECRET_KEY: 'test-secret',
     },
@@ -467,10 +475,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     loadConfig: async () => tradingConfig,
     brokerAdapterFactory: () => broker,
     env: {
-      HARVESTER_BROKER: "binance",
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
-      NODE_ENV: "test",
+      NODE_ENV: "development",
       BINANCE_API_KEY: "test-key",
       BINANCE_API_SECRET_KEY: "test-secret",
     },
