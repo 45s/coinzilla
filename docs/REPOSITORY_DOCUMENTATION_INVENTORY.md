@@ -55,7 +55,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md` | 6385 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/engineering/MODULARITY_STANDARD.md` | 2727 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/engineering/README.md` | 852 | Engineering policy | **KEEP** | Scope entry point and setup/public contract guide. |
-| `docs/engineering/SHARED_UTILITIES_POLICY.md` | 17500 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
+| `docs/engineering/SHARED_UTILITIES_POLICY.md` | 17500 | Engineering policy | **KEEP** | Source review corrected stale helper paths: Brokers now lives under `src/infrastructure/binance`, Market Simulator under `packages/market-simulator`, and the removed Coin Farmer app is explicitly historical rather than a current helper candidate. |
 | `docs/engineering/TASK_WORKFLOWS.md` | 3268 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/release-and-rollback.md` | 2504 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/workspace-package-map.md` | 4790 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
@@ -96,6 +96,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 8. `docs/contributing.md` advertised a nonexistent `@coinzilla/brokers` `test:sdk` script. The package currently defines `test:integration`, `test:websocket`, and `test:user-data-integration`; the contributor guide now lists the actual commands.
 9. `docs/DOCUMENTATION_GOVERNANCE.md` pointed agents to Section 9 for the living-document freshness sweep, but Section 9 is roadmap discipline. This cross-reference now points to the explicit freshness-sweep requirement below in Section 11.
 10. `ADR-0001-clean-hexagonal-architecture.md` referred to ADR-0002 for the application architecture transition, but a recursive tree and code search found no ADR-0002 in the repository. The text now links to the existing Harvester architecture guide and states that application-specific architecture is owned by each application.
+11. `docs/engineering/SHARED_UTILITIES_POLICY.md` retained pre-migration paths for Brokers and Market Simulator and described the removed Coin Farmer application as a current consumer. The ownership inventory now uses current `develop` paths and explicitly labels the removed application's reference as historical.
 
 ## Remaining work
 
