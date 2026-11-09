@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -317,7 +317,7 @@ test("rejects an existing session file before registering transports or leaking 
   const logger = createLogger();
   const sessionFile = path.join(directory, "harvester-2026-11-09_12-00-00-session-collision.log");
   try {
-    await import("node:fs/promises").then(({ writeFile }) => writeFile(sessionFile, "preserve existing session\\n"));
+    await writeFile(sessionFile, "preserve existing session\n");
     await assert.rejects(
       configureHarvesterLogging({
         logger,
@@ -333,7 +333,7 @@ test("rejects an existing session file before registering transports or leaking 
     assert.equal(logger.transports.size, 0, "failed logging setup must not leave partially registered transports");
     assert.equal(
       await readFile(sessionFile, "utf8"),
-      "preserve existing session\\n",
+      "preserve existing session\n",
       "exclusive session creation must never truncate an existing session file",
     );
     assert.deepEqual(
