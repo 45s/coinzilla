@@ -62,6 +62,7 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 | --- | --- | --- |
 | `packages/notifiers/AGENTS.md`; `packages/notifiers/README.md` | Verified the formatter's caller-owned free-form `message`/`reason` boundary, EventBus error-reporter fallback, delivery-queue recovery and smoke-test confirmation output against source and tests. | [PR #873](https://github.com/45s/coinzilla/pull/873) |
 | `packages/utils/README.md` | Verified the exported per-key serialized queue and non-null/non-array object assertion against implementation, tests, public exports and consumers. | [PR #876](https://github.com/45s/coinzilla/pull/876) |
+| `apps/harvester/docs/TRADING_FIRST.md` | Verified current WebSocket API/Streams and CLOSING-audit transport terminology against the broker adapter, source-verified Architecture and Journal Operations; dated November 4 incident terminology remains historical and unchanged. | [PR #883](https://github.com/45s/coinzilla/pull/883) |
 
 ## Disposition vocabulary
 
