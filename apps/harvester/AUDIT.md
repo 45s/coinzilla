@@ -871,3 +871,45 @@ The current broker contract exposes symbol-wide canonical fill queries through `
 Binance's official Spot WebSocket API `myTrades` documentation specifies inclusive `fromId` pagination, a maximum page size of 1,000, and time windows no longer than 24 hours. `fromId` cannot be combined with time filters; no filter returns only the most recent records. The broker package rejects cursor IDs outside JavaScript's safe-integer range rather than rounding int64 identifiers. The official documentation reviewed does not state a guaranteed historical-retention horizon.
 
 Current Harvester does not use this capability for startup discovery: its existing reconciliation is per registered order and no-ops for an empty registry. A durable per-symbol cursor, complete pagination, safe identifier representation, symbol-universe coverage and retention policy remain unresolved requirements. See [Binance Account Trade History](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) and [#654](https://github.com/45s/coinzilla/issues/654).
+
+
+## F-028 — Applied-fill Journal events lack an immediate durability barrier
+
+**Severity:** High  
+**Confidence:** High  
+**Status:** Confirmed source-level durability gap; no actual lost-fill incident reproduced.
+
+### Evidence
+
+- `apps/harvester/src/use-cases/conservative-trading-engine.js`: after `updateTradingAccounting()` reports an applied fill, the engine publishes `FILL_APPLIED` through `publishLifecycleEvent()`. The file's only `eventPublisher.flush()` call is inside the durable order-intent helper used before broker placement/cancellation; the applied-fill path does not invoke it.
+- `apps/harvester/src/application/events/event-publisher.js`: explicitly documents that publication is synchronous admission only; `flush()` waits for subscribers, including Journal, to persist accepted events.
+- `packages/event-bus/src/event-bus.js`: `publish()` invokes listeners, but each subscription listener schedules its handler through `Promise.resolve().then(handler)`, tracks it as pending work, and returns from `publish()` without awaiting the subscriber. `EventBus.flush()` is the operation that waits for pending deliveries.
+- `packages/journal/src/journal.js`: `record()` queues an append and returns `written: true, durable: false`. `flush()` waits for EventBus deliveries and the Journal write queue, then calls the store's `sync()` (fsync) before returning `durable: true`.
+- `apps/harvester/src/index.js`: the event publisher's flush delegates to Journal flush. Graceful close drains the EventBus and closes Journal; this does not provide an equivalent guarantee for abrupt termination.
+- Existing `conservative-trading-engine.test.js` coverage asserts that `FILL_APPLIED` events are published and separately verifies the pre-side-effect order/cancel intent flush. No inspected Harvester test asserts a durable flush immediately after an applied fill. Journal tests prove that explicit flush/close drains pending events.
+
+### Sequence and impact
+
+A canonical TRADE fill updates the in-memory accounting projections, then the engine admits `execution.fill_applied` to the EventBus. The subscriber/Journal write is asynchronous, and the append itself is not an fsync acknowledgement. There is no fill-specific durability barrier before the transition returns. A later order/cancel intent barrier or graceful close may flush the event, but neither is guaranteed to occur before a crash or power loss.
+
+**Expected:** if Journal records are to support future deterministic restoration, the system must define when an applied execution fact becomes durable relative to Portfolio/RecoveryLedger projection advancement and checkpoint state.
+
+**Actual:** publication success is only EventBus admission. A process crash may interrupt subscriber delivery; a machine failure may also occur before filesystem sync. The current design therefore does not guarantee that every applied fill has a durable Journal record at the point its in-memory accounting transition completes.
+
+### Operational consequence and boundaries
+
+- **Confirmed:** `FILL_APPLIED` publication is not followed by a durable flush in the engine's applied-fill path.
+- **Strongly indicated:** a crash in the admission/write/sync window can leave the next process without a durable Journal fill fact, compounding F-011's missing startup restoration.
+- **Not proven:** a specific historical fill was lost from a real Journal file or caused a financial/accounting discrepancy.
+- Graceful shutdown is safer because Journal close drains pending events and syncs. This is not a guarantee for SIGKILL, process crash, or power loss.
+- The exchange remains the authoritative source for executions. Journal is currently operational evidence, not a complete crash-consistent trading-state ledger.
+
+### Safeguards and test limitations
+
+The pre-side-effect `order.submission_requested` and `order.cancel_requested` barriers are preserved and must not be weakened. They protect the intent-before-exchange-write boundary, not the post-fill accounting/persistence boundary. Existing tests cover the former but do not inject a crash between fill publication, Journal subscriber execution, append and fsync.
+
+### Recommended future DDD/TDD direction
+
+Define a durable execution-fact boundary that explicitly orders canonical fill admission, durable Journal persistence, Portfolio/RecoveryLedger projection advancement, and checkpoint advancement. If persistence fails or cannot be confirmed, keep trading readiness closed and reconcile from authoritative broker history; do not equate event publication with durability. Test process interruption at each boundary, including subscriber not yet invoked, append pending, append complete but not synced, fill projection applied, and checkpoint not advanced. Preserve idempotent fill identity and do not claim exactly-once transport delivery.
+
+**Related:** F-011 / #654 process-restart reconciliation; #626 recovery reliability; `event-publisher.js`, EventBus, Journal and Conservative trading engine.
