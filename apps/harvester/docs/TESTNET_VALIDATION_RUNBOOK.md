@@ -6,38 +6,40 @@
 > **Execution gate: CLOSED / PAUSED.** This document is preparation only. Harvester must remain stopped until the operator and assistant explicitly begin an authorized joint TESTNET session. Offline CI is not exchange readiness. No order submission, cancellation, account-setting change, or other exchange write is authorized by this document.
 >
 > **Regional eligibility pause (2026-11-08):** The prior hosted Binance Spot TESTNET attempt returned HTTP 451 due to regional eligibility restrictions. This is an external environment limitation, not evidence of a Harvester code defect. The operator cannot change location; do not ask them to do so or repeatedly retry the same blocked path. TESTNET exchange acceptance remains UNVERIFIED and PAUSED until an eligible, authorized environment is available. Offline engineering, deterministic tests, and CI may continue independently. This note does not authorize live trading or any exchange write.
+>
+> **Pair-scope mismatch — hard hold (2026-11-09):** The last documented validation plan expected DOGEUSDT and ZROUSDT. Merged PR #836 changed the committed default configuration to disable both and enable only ZROFDUSD. PR #836 describes this as a configuration-only adjustment and does not record a replacement TESTNET session plan. The old pair-specific limits and steps below are retained as historical context, not current instructions. Do not change the config, enable/disable pairs, or perform any exchange write until the pair scope is explicitly agreed, the config and runbook are reconciled, and a separate TESTNET session is authorized. This mismatch is independent of the regional eligibility pause.
 
 ## 1. Scope and hard limits
 
-The first controlled validation covers the two configured Conservative pairs, DOGEUSDT and ZROUSDT, with one bounded recovery cycle per pair. Do not enable additional pairs, Aggressive mode, production credentials, or unattended/repeating operation.
+The last documented controlled validation plan targeted two Conservative pairs, DOGEUSDT and ZROUSDT, with one bounded recovery cycle per pair. That plan is superseded by the current committed configuration and is not an active or approved session scope.
 
-Current committed configuration to verify before the session:
+Previous plan values (historical only; not current configuration or approved run limits):
 
-| Setting | Expected value |
+| Setting | Previous plan value (historical) |
 |---|---:|
 | Enabled pairs | DOGEUSDT and ZROUSDT |
 | Conservative | enabled |
 | Aggressive | disabled |
 | Pair investment cap | 100 USDT |
 | BUY order quantity | 5 ZRO |
-| Configured keepQuantity | 0.01 ZRO in the current expected ZRO config; re-verify the exact branch config before the session |
+| Configured keepQuantity | 0.01 ZRO (previous plan) |
 | Minimum net profit | 0.01 USDT |
 | Price step | 0.05% |
 | Maker fee assumption | 0.1% |
 | Taker fee assumption | 0.1% |
 | Other pairs (SOLFDUSD, ZROFDUSD) | disabled |
 
-These are repository configuration expectations, not proof of the live TESTNET account setting or exchange filters. Re-read the exact branch configuration and current exchange market rules at session start. If any value differs, stop and agree a revised limit before enabling trading.
+These values preserve the previous plan for provenance; they are not current repository configuration or approved run limits. The current committed `trading-config.json` enables only `ZROFDUSD`: `investment: 100` FDUSD, `orderQuantity: 5` ZRO, `keepQuantity: 0.01` ZRO, `priceStepPercent: 0.5`, `makerPercent: 0`, and `takerPercent: 0.1`. The strategy `minProfit` is `0.01` in the pair's quote asset (FDUSD). These config values do not approve a TESTNET session. No replacement pair scope is recorded; keep the execution gate closed.
 
-Hard operational limits for the first session:
+Hard operational limits for any future session (none is currently approved):
 
-- Exactly two enabled symbols: DOGEUSDT and ZROUSDT.
+- Pair selection is unresolved. The previous plan targeted DOGEUSDT and ZROUSDT; the current config enables only ZROFDUSD. Do not enable or disable pairs to make these documents agree without an explicit scope decision.
 - Exactly one Harvester process and one operator-controlled session.
 - At most one active Harvester-owned BUY and one active recovery SELL per pair. A replacement SELL is allowed only after the previous SELL's terminal exchange state and all actual fills/commissions are reconciled.
 - No manual orders during the run. Record and classify every pre-existing/external open order before starting.
-- Never exceed the configured 100 USDT investment cap per pair, 200 USDT combined configured cap, or available free quote balance; the smallest applicable limit wins.
-- Do not increase order quantity, investment, keep quantity, or fee assumptions during the session.
-- One complete BUY → recovery SELL → cycle-completion sequence per enabled pair is the target. Do not continue either pair into an additional cycle unless separately agreed after reviewing both.
+- The previous plan's 100 USDT per-pair / 200 USDT combined caps are historical only; no current TESTNET quote/base or combined limits are approved for ZROFDUSD.
+- Do not infer or modify order quantity, investment, keep quantity, or fee assumptions. Any future session requires an explicitly agreed scope and limits.
+- The previous one-cycle-per-pair target is not an active target until the pair scope is reconciled.
 - No broad cancel-all command. A cancellation must identify a specific Harvester-owned order by symbol, exchange order ID, and client order ID, and be explicitly authorized during the joint session.
 - No restart after an unknown submission outcome, disconnect, pause, incomplete reconciliation, or failed audit. Stop and investigate first.
 
@@ -46,14 +48,16 @@ Hard operational limits for the first session:
 1. Confirm PRs #513, #515, #545, #546, #552, #553, #554, and #559 are merged into `develop`; record the latest merge commit and verify required CI is green on the exact synchronized `develop` head. A historical green run on an earlier PR head is not sufficient.
 2. Confirm the Harvester process is stopped. Check for any other process that could submit or manage orders using the same TESTNET account/API keys.
 3. Confirm credentials target Binance Spot TESTNET only. Never load production credentials. Keep secrets out of logs, screenshots, commits, and chat.
-4. Verify the account's maker/taker commission setting is 0.1% / 0.1%; record the observation timestamp and evidence. This UI setting is only an expectation: actual per-trade commission amount and asset returned by Binance remain authoritative.
-5. Verify the latest `trading-config.json` matches the table above. Verify DOGEUSDT and ZROUSDT are enabled, SOLFDUSD and ZROFDUSD are disabled, and Conservative is the only enabled strategy.
-6. Verify current exchange symbol filters independently for DOGEUSDT and ZROUSDT: tick size, step size, minimum quantity, minimum notional, supported order types, and current best bid/ask. Compare them with Harvester's runtime market-readiness validation. Any mismatch or unsupported rule blocks that pair and therefore blocks the joint run.
+4. For any future approved scope, verify the actual account maker/taker commission settings and each pair's configured fee assumptions against current exchange facts; the previous USDT plan assumed 0.1% / 0.1%, while the current ZROFDUSD config assumes maker 0% / taker 0.1%. Record the observation timestamp and evidence. The UI setting is only an expectation: actual per-trade commission amount and asset returned by Binance remain authoritative.
+5. **Current hard blocker:** the latest `trading-config.json` enables only ZROFDUSD, while the last documented plan expects DOGEUSDT and ZROUSDT. Do not edit the config or start a session until an explicit pair scope and per-pair limits are agreed and recorded in a superseding runbook section.
+6. After scope reconciliation only, verify current exchange symbol filters for every pair in the newly agreed scope: tick size, step size, minimum quantity, minimum notional, supported order types, and current best bid/ask. Compare them with Harvester's runtime market-readiness validation. Any mismatch or unsupported rule blocks that pair and the joint run.
 7. Verify the Journal is enabled, writable, ready, and durably flushable. Confirm the configured session directory is known, writable, and has adequate space. Every broker-connected startup, including read-only mode, must fail closed if either PREFLIGHT account event cannot be durably flushed.
 8. Verify the read-only `journal:balance-audit` and `testnet:trades` diagnostics are available. Do not execute any write-capable script as a precondition.
-9. Agree the session's start time, operator, assistant, both symbols, per-pair quote/base limits, combined quote limit, order-count limits, and stop conditions. If any limit is not explicit, do not start.
+9. Agree the session's start time, operator, assistant, every symbol in the explicitly approved scope, per-pair quote/base limits, combined quote limit, order-count limits, and stop conditions. If the pair scope or any limit is not explicit, do not start.
 
 ## 3. Read-only command reference
+
+> The ZROUSDT-specific history/trade commands below are read-only references for the previous incident; ZROUSDT is currently disabled. They do not establish the next session's pair scope.
 
 Run these commands from `apps/harvester` after confirming `.env.development` contains TESTNET-only credentials. These commands read account state; they do not submit or cancel orders.
 
@@ -91,7 +95,7 @@ Before starting Harvester, its trading-enabled startup audit now collects and jo
 
 - `account.snapshot_captured`: every returned asset, exact free/locked/total quantities, exchange source timestamp.
 - `account.open_orders_captured`: all account-wide open orders, including symbol, broker/client order IDs, side, type, price, original/executed quantity, status, and observation time.
-- Relevant recent account trades for ZROUSDT, including trade ID, order ID, side, price, base quantity, quote quantity, commission amount, commission asset, and timestamp.
+- Historical incident evidence: relevant account trades for ZROUSDT, including trade ID, order ID, side, price, base quantity, quote quantity, commission amount, commission asset, and timestamp. ZROUSDT is not currently enabled.
 - Any deposits, withdrawals, transfers, conversions, or manual trades relevant to the session window.
 - Account commission setting and timestamp of verification.
 
@@ -109,9 +113,9 @@ The account baseline is captured automatically on every broker-connected Harvest
 4. Verify both durable PREFLIGHT records (balances and account-wide open orders) are recorded and flushed before market subscriptions or trading-engine activation.
 5. Confirm the balance snapshot includes every base/quote asset referenced by every configured pair (enabled or disabled), with exact free, locked, and total quantities; unrelated wallet assets are excluded. Record the Journal session ID and exchange source timestamp separately from local capture time.
 6. Inspect every entry in `account.open_orders_captured`, record its ownership, and confirm no external order is adopted or modified. `readiness: BLOCKED` caused solely by pre-existing external/unowned orders is an ownership-audit classification, not a global trading-startup rejection under the current policy. Trading still requires complete durable PREFLIGHT records, valid enabled-market metadata, and sufficient authoritative free balances; any failed or contradictory audit data remains fail-closed.
-7. Confirm DOGEUSDT and ZROUSDT market rules, fee configuration, balances, and readiness are accepted. Confirm all other pairs remain disabled.
+7. After the pair scope is explicitly reconciled, confirm the market rules, fee configuration, balances, and readiness for every approved pair.
 
-**Abort before any order** if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if the PREFLIGHT account audit is incomplete, malformed, non-durable, or contradictory; if the enabled pair set differs from DOGEUSDT and ZROUSDT; or if the process logs an unresolved error.
+**Abort before any order** while the pair-scope/config mismatch remains. After a replacement scope is documented, also abort if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if the PREFLIGHT account audit is incomplete, malformed, non-durable, or contradictory; if the enabled pair set differs from the newly recorded approved scope; or if the process logs an unresolved error.
 
 ## 6. Controlled order and execution sequence
 
@@ -125,10 +129,10 @@ The operator and assistant explicitly authorize each phase together. Do not trea
 5. Verify the next standing BUY and recovery SELL against the canonical specification, reconciled position quantity/spent, cumulative net SELL proceeds, actual commissions, applicable fee reserve, exchange filters, available balances, and the one-BUY/one-SELL limit.
 6. If a BUY fills while a recovery SELL is open, apply the BUY fill once, cancel only that identified owned SELL, reconcile its terminal state and every actual fill/commission (including fill-during-cancel), update accounting, and only then plan a replacement. If the SELL becomes FILLED during cancellation, process it as FILLED. Incomplete reconciliation fails closed.
 7. Verify any partial fills and multiple fills are accumulated by unique trade ID and exact decimal arithmetic. A partial SELL without a new BUY must remain the same exchange order at the same price. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete REST history require a safe pause. Do not manufacture a cancel/fill race or exceed the one-cycle order limit to force a rare event. If partial-fill/cancel/late-event paths are not exercised naturally in this bounded session, record those live paths as NOT OBSERVED; the merged offline regression matrix remains evidence for implementation behavior, but it is not live exchange proof and cannot be reported as TESTNET acceptance.
-8. After the recovery SELL is terminal, verify actual net proceeds, commissions, full accumulated cost recovery, minimum $0.01 net profit, sell-through of all sellable inventory above exact configured keepQuantity, and exact retained allocation. If exchange-constrained dust remains, verify its exact quantity and limiting filter and that its original basis is preserved; do not treat it as extra retained inventory or reset the cycle while position quantity is above keepQuantity.
+8. After the recovery SELL is terminal, verify actual net proceeds, commissions, full accumulated cost recovery, the configured minimum net profit in the pair's quote asset, sell-through of all sellable inventory above exact configured keepQuantity, and exact retained allocation. If exchange-constrained dust remains, verify its exact quantity and limiting filter and that its original basis is preserved; do not treat it as extra retained inventory or reset the cycle while position quantity is above keepQuantity.
 9. Stop after the first completed recovery cycle. Do not allow another cycle without a separate explicit decision.
 
-Expected result: one complete controlled BUY/fill → recovery SELL/fill → recovery completion for DOGEUSDT and one for ZROUSDT, with no more than one active BUY and one active recovery SELL per pair. A next BUY may remain open only if the agreed scenario requires it and the operator explicitly elects to leave it open. Otherwise, the session must finish with a deliberate, reconciled shutdown plan. No unexplained orders, fills, commissions, or accounting deltas are acceptable.
+Expected result: the symbol set, per-pair cycle count, and limits must be written into an approved scope section after the mismatch is resolved. Do not use the historical DOGEUSDT/ZROUSDT expected result. For each approved pair, retain the one-active-BUY/one-active-recovery-SELL invariant and finish with a deliberate, reconciled shutdown plan. No unexplained orders, fills, commissions, or accounting deltas are acceptable.
 
 ## 7. Reconciliation during and after execution
 
