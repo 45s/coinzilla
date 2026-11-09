@@ -71,9 +71,10 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 ### Phase 1 — Complete inventory and evidence map
 
-- [ ] Enumerate every tracked documentation file under repository root, `docs/`, `apps/harvester/` and relevant package directories.
-- [ ] Record path, file size, title, category, status, owner, source-of-truth subject, inbound links, outbound links and last relevant commit.
-- [ ] Read every Harvester document in full before assigning a final disposition.
+- [x] Enumerate all 97 tracked Markdown files recursively at the baseline commit (42 Harvester files and 55 repository/root/package files); see the [repository inventory](../../../../docs/REPOSITORY_DOCUMENTATION_INVENTORY.md).
+- [x] Record file paths, byte sizes, categories and conservative initial dispositions for all Harvester and non-Harvester Markdown files.
+- [ ] Complete content-level review, ownership/source-of-truth mapping, inbound/outbound reference mapping and last-relevant-commit analysis for each migration candidate.
+- [ ] Read and verify all relevant Harvester documents in full before any final MOVE/MERGE/SPLIT/SUPERSEDE/ARCHIVE decision.
 - [ ] Identify duplicated or conflicting claims by subject, not just filename.
 - [ ] Identify oversized mixed-purpose documents and propose safe splits.
 - [ ] Record all issue/PR links and external evidence provenance.
@@ -127,8 +128,10 @@ No file may be deleted solely because it is old, large, similarly named or appar
 - No claim of CI enforcement or successful verification is made without exact-head evidence.
 - Harvester runtime, tests, configuration and trading behavior remain unchanged by this documentation-only initiative.
 
-## Current limitations and blockers
+## Current status and remaining boundaries
 
-The GitHub repository interface used for this first pass exposed individual files and search results but did not provide a verified complete recursive tree listing. Therefore the complete per-file inventory and final MOVE/MERGE/SPLIT/ARCHIVE decisions are not yet safe to publish. Continue with a complete tree source or repository checkout; do not infer missing file lists from search results.
+A complete recursive Git tree is available for the baseline commit. The repository inventory covers all 97 Markdown files: 42 Harvester files and 55 other repository/root/package files. The Harvester inventory contains five REVIEW candidates; the repository-wide inventory contains two Brokers REVIEW candidates. All other files are conservatively KEEP at their current paths. This is an initial disposition, not proof that every factual statement is current or every reference has been traced.
+
+The inventory phase has established a complete path/size/category baseline. The remaining work is content-level authority review, inbound/outbound link and GitHub issue/PR reference mapping, source verification, and final disposition of REVIEW candidates. No move, merge, split, supersede or archive operation is authorized by the initial inventories alone.
 
 No runtime or TESTNET activity is part of this work. Any discovered behavior discrepancy must be recorded and routed to its owning engineering issue, not fixed as part of this documentation migration.

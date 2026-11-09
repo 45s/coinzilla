@@ -1,15 +1,24 @@
 # Harvester audit and investigation records
 
-This index is for Harvester-specific historical evidence. The [Harvester documentation index](../README.md) links to the current application guides and the migration plan.
+This index is for Harvester-specific historical evidence. The [Harvester documentation index](../README.md) links to current application guides and migration plans. Repository-wide evidence rules are defined in [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md).
 
-## Existing application-level records
+## Main audit records
 
-- [Conservative Strategy audit](../../AUDIT.md) — historical audit report; interpret only against its recorded baseline and evidence date.
-- [Audit findings register](../../AUDIT_FINDINGS.md) — findings and evidence disposition.
-- [Audit execution history](../../AUDIT_EXECUTION_HISTORY.md) — historical session/order/fill chronology.
+- [Conservative Strategy audit](../../AUDIT.md) — primary historical audit report; interpret against its recorded baseline and evidence date.
+- [Audit findings register](../../AUDIT_FINDINGS.md) — finding-by-finding evidence and disposition.
+- [Audit execution history](../../AUDIT_EXECUTION_HISTORY.md) — detailed order/fill/session chronology.
+- [DDD and Clean Architecture audit](../DDD_CLEAN_ARCHITECTURE_AUDIT.md) — historical architecture assessment, not current architecture authority.
 
-## New investigation template
+## Session and supporting evidence
 
+- [2026-11-08 reconnect incident audit](../../AUDIT_SESSION_2026-11-08.md)
+- [2026-11-08 afternoon session audit](../../AUDIT_SESSION_2026-11-08_16-33-33.md) — distinct session evidence, not a duplicate of the reconnect audit.
+- [2026-11-09 recovery forensic session](../../AUDIT_SESSION_2026-11-09_11-33-00.md)
+- [2026-11-06 DOGE trade export](../../AUDIT_DOGE_TRADES_2026-11-06.md)
+- [2026-11-06 ZRO trade export](../../AUDIT_ZRO_TRADES_2026-11-06.md)
+- [2026-11-06 application-log evidence](../../AUDIT_LOG_EVIDENCE_2026-11-06.md)
+- [Conservative session audit checklist](../CONSERVATIVE_SESSION_AUDIT.md) — reusable procedure, not an evidence snapshot.
+- [Incident audit playbook](../INCIDENT_AUDIT_PLAYBOOK.md) — reusable evidence workflow.
 - [Investigation template](INVESTIGATION_TEMPLATE.md) — provenance, baseline, scope, findings, unknowns and verification boundary.
 
-Do not move or merge existing records until the full inventory, content comparison and inbound-reference review in the [documentation migration plan](../plans/DOCUMENTATION_MIGRATION.md) are complete. Historical evidence must remain intact.
+Do not assume similarly named records are duplicates. Preserve raw evidence, source commit SHAs, timestamps, confidence and limitations. A correction must be a dated addendum or successor assessment, not a silent rewrite.

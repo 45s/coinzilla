@@ -9,32 +9,45 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
-## Architecture and domain
+## Current architecture and domain contracts
 
-- [Architecture](architecture.md) — application architecture and implementation patterns
-- [Domain specifications](domain/) — domain-owned specifications and invariants
-- [Infrastructure documentation](infrastructure/) — adapters and integration contracts
+- [Application architecture](architecture.md) and [architecture index](architecture/README.md)
+- [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
+- [Domain glossary](domain/DOMAIN_GLOSSARY.md)
+- [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
+- [Portfolio domain](domain/portfolio.md)
+- [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
+- [Trading strategies overview](trading-strategies.md) — overview only; current Conservative rules remain in the canonical specification
+
+## Operations and safety
+
+- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — requires all documented safety gates and explicit authorization
+- [Journal operations](JOURNAL_OPERATIONS.md)
+- [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)
+- [Journal integration roadmap](JOURNAL_INTEGRATION_ROADMAP.md)
+- [Logging](LOGGING.md)
+- [TESTNET order tools](testnet-order-tools.md) — includes destructive examples; verify authorization and current command behavior before use
+- [Incident audit playbook](INCIDENT_AUDIT_PLAYBOOK.md)
+- [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
+
+## Historical records and evidence
 
 - [Harvester audit index](audits/README.md)
-- [Documentation migration plan](plans/DOCUMENTATION_MIGRATION.md) — phased, evidence-preserving consolidation.
+- [Historical DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md)
+- [Incident records](incidents/README.md)
+- [Historical task briefs](tasks/README.md)
 
-## Operations and reliability
+Historical reports are snapshots, not current implementation authority. Use their own observation date, baseline commit, evidence sources and limitations. Do not silently rewrite or delete them.
 
-- [Journal operations](JOURNAL_OPERATIONS.md) — operational Journal lifecycle and procedures
-- [Journal integration roadmap](JOURNAL_INTEGRATION_ROADMAP.md) — staged Journal work
+## Plans and inventories
 
-## Audits and historical evidence
+- [Documentation plans index](plans/README.md)
+- [Documentation migration plan](plans/DOCUMENTATION_MIGRATION.md)
+- [Harvester documentation inventory](plans/HARVESTER_DOCUMENTATION_INVENTORY.md)
+- [Domain-first delivery plan](DOMAIN_FIRST_DELIVERY_PLAN.md) — review current relevance before reusing
 
-Harvester contains historical audits and investigation records at the application root and in its documentation tree. Until the inventory/migration phase is complete, treat each report's own date, baseline commit, scope and evidence status as authoritative for that snapshot. Do not assume similarly named reports are duplicates or delete/overwrite them.
+## Maintenance
 
-- [Application audit](../AUDIT.md)
-- [Audit findings register](../AUDIT_FINDINGS.md)
-- [Audit execution history](../AUDIT_EXECUTION_HISTORY.md)
-
-## Maintenance rules
-
-- Current behavior belongs in the closest authoritative architecture, domain, configuration or runbook document.
-- Historical observations belong in dated audit/investigation records and are not silently rewritten.
-- Current task status belongs in the Harvester roadmap and linked GitHub Issues/PRs.
-- Add new documents to this index; update it when documents move, are superseded or archived.
-- Preserve evidence, timestamps, source commit SHAs and uncertainty during any migration.
+- Every new or moved document must be added to the appropriate local index.
+- Current behavior belongs in the canonical specification, architecture or runbook; task status belongs in the roadmap and GitHub Issues/PRs.
+- Preserve historical evidence, timestamps, source commit SHAs and uncertainty during migrations.
