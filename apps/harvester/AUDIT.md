@@ -815,3 +815,8 @@ All follow-up remains investigation/documentation and future DDD/TDD work only. 
 ## 2026-11-09 forensic continuation — safety-halt reconciliation side-effect risk
 
 Current `createAccountIntegritySafetyHalt()` calls `reconcileOwnedOrders()` with default `recoveryMode=false` before explicit BUY-only cancellation. A FILLED BUY encountered during snapshot application can therefore trigger recovery SELL cancellation during the safety-halt reconciliation stage. The November 8 ZRO cancellation stack through `applyOwnedOrderSnapshotsTransition()` followed by the safety-halt reconciliation-failed log strongly correlates with this path, though it does not prove caller attribution. Tracked as F-024/#773. Future DDD/TDD work should ensure the reconciliation stage is side-effect-free and only the explicit owned-BUY cancellation stage mutates orders.
+
+
+## 2026-11-09 forensic continuation — cancellation outcome classification
+
+The November 8 DOGE recovery SELL `1323350` was rejected by Binance's local user-data-unavailable guard before the state-changing RPC, but the next Harvester record shows the local order marked `UNKNOWN`. Current engine code treats all non-ok cancel results as unconfirmed, without distinguishing known not-sent preflight refusal from post-send ambiguity. This can manufacture unresolved owned-order state. Tracked as F-025/#774. Preserve fail-closed handling for genuine ambiguity while keeping the prior canonical state for known not-sent outcomes.
