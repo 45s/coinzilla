@@ -7,6 +7,7 @@ import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main } from "./index.js"
+import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -548,43 +549,10 @@ test("closes observability after publishing startup failure", async () => {
 })
 
 
-test("disables the optional Journal from HARVESTER_JOURNAL_ENABLED", async () => {
-  const previousEnabled = process.env.HARVESTER_JOURNAL_ENABLED
-  const previousDirectory = process.env.HARVESTER_JOURNAL_DIRECTORY
-  const previousExitCode = process.exitCode
-  const parent = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-disabled-"))
-  const directory = path.join(parent, "disabled")
-  const handlers = {}
-  process.env.HARVESTER_JOURNAL_ENABLED = "false"
-  process.env.HARVESTER_JOURNAL_DIRECTORY = directory
-  process.exitCode = 0
-  try {
-    const result = await main({
-      start: async () => ({ connected: false, stop: async () => {} }),
-      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-      logger: { info() {}, debug() {}, error() {} },
-    })
-    assert.equal(result.journalService.status.enabled, false)
-    await handlers.SIGTERM()
-    await assert.rejects(readdir(directory), { code: "ENOENT" })
-  } finally {
-    if (previousEnabled === undefined) delete process.env.HARVESTER_JOURNAL_ENABLED
-    else process.env.HARVESTER_JOURNAL_ENABLED = previousEnabled
-    if (previousDirectory === undefined) delete process.env.HARVESTER_JOURNAL_DIRECTORY
-    else process.env.HARVESTER_JOURNAL_DIRECTORY = previousDirectory
-    process.exitCode = previousExitCode
-    await rm(parent, { recursive: true, force: true })
-  }
-})
-
-test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY", async () => {
-  const previousEnabled = process.env.HARVESTER_JOURNAL_ENABLED
-  const previousDirectory = process.env.HARVESTER_JOURNAL_DIRECTORY
+test("writes and durably closes a JSONL session in the injected Journal directory", async () => {
   const previousExitCode = process.exitCode
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-session-"))
   const handlers = {}
-  process.env.HARVESTER_JOURNAL_ENABLED = "true"
-  process.env.HARVESTER_JOURNAL_DIRECTORY = directory
   process.exitCode = 0
   try {
     const eventBus = new EventBus()
@@ -607,6 +575,7 @@ test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY",
     const result = await main({
       processIdentity,
       createEventBus: () => eventBus,
+      createJournalService: (input) => prepareOptionalJournal({ ...input, directory }),
       start: async () => ({
         connected: false,
         tradingEnabled: false,
@@ -634,10 +603,6 @@ test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY",
     assert.ok(records.every((record) => record.__coinzillaJournal?.schemaVersion === 1))
     assert.doesNotMatch(content, /apiKey|apiSecret|accessToken|password/)
   } finally {
-    if (previousEnabled === undefined) delete process.env.HARVESTER_JOURNAL_ENABLED
-    else process.env.HARVESTER_JOURNAL_ENABLED = previousEnabled
-    if (previousDirectory === undefined) delete process.env.HARVESTER_JOURNAL_DIRECTORY
-    else process.env.HARVESTER_JOURNAL_DIRECTORY = previousDirectory
     process.exitCode = previousExitCode
     await rm(directory, { recursive: true, force: true })
   }
@@ -649,7 +614,7 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
@@ -672,7 +637,7 @@ test("allows a trading-enabled first start only with a validated empty Journal h
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -696,7 +661,7 @@ test("does not require historical Journal reads for trading startup", async () =
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -720,7 +685,7 @@ test("does not pass historical Journal records into bootstrap", async () => {
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -748,7 +713,7 @@ test("does not pass historical Journal records into bootstrap", async () => {
 test("allows read-only startup when prior trading history requires recovery", async () => {
   let started = false
   await main({
-    env: { HARVESTER_ENABLE_TRADING: "false", HARVESTER_JOURNAL_ENABLED: "true" },
+    env: { NODE_ENV: "test" },
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
       recovery: Promise.resolve({
@@ -771,7 +736,7 @@ test("ignores historical Journal read failures when starting the current trading
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -796,7 +761,7 @@ test("blocks a second trading process before Journal startup when the process lo
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: false,
         errors: [Object.assign(new Error("another trading process owns the lock"), { code: "HARVESTER_PROCESS_LOCK_EXISTS" })],
@@ -821,7 +786,7 @@ test("releases the trading process lock only after runtime and Journal shutdown"
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
         release: async () => { sequence.push("lock-release"); return { ok: true, released: true } },
@@ -859,7 +824,7 @@ test("acquires the process lock before starting Journal and releases it after cl
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock: async ({ journalDirectory, globalDirectory, broker }) => {
         sequence.push("lock")
         assert.equal(typeof journalDirectory, "string")
@@ -912,7 +877,7 @@ test("retains the process lock when runtime shutdown throws", async () => {
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
         release: async () => { releaseCalls += 1; return { ok: true, released: true } },
@@ -948,7 +913,7 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
         release: async () => { releaseCalls += 1; return { ok: true, released: true } },
@@ -977,7 +942,7 @@ test("rejects disabling Journal for TESTNET trading", async () => {
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "false" },
+      env: { runtime profile: "true", Journal runtime flag: "false" },
       createJournalService: disabledJournalService,
       start: async () => { started = true; return { connected: false } },
       logger: { info() {}, error() {}, debug() {} },
@@ -997,7 +962,7 @@ test("retains the process lock when runtime startup fails after it may have acti
   process.exitCode = 0
   try {
     await main({
-      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
         release: async () => { releaseCalls += 1; return { ok: true, released: true } },
@@ -1130,9 +1095,7 @@ test("captures process provenance before trading startup and publishes it separa
     },
     registerSignalHandler: () => {},
     env: {
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
-      HARVESTER_BROKER: "binance",
+      NODE_ENV: "development",
     },
   })
 
