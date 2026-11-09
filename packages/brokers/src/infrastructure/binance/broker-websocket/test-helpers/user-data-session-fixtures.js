@@ -60,6 +60,7 @@ export function createBroker({ warningThreshold = 3 } = {}) {
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
+    tradingMode: "testnet",
     reconnectDelay: 25,
     logger: { error() {}, info() {}, warn() {} },
   }, {
