@@ -396,7 +396,7 @@ test("orders very large and zero-padded collision suffixes deterministically", a
 
   try {
     for (const fileName of [...sessionNames].reverse()) {
-      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(fileName))}\\n`)
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(fileName))}\n`)
     }
 
     const result = await journal.read()
