@@ -438,7 +438,9 @@ Package composition, event publication, and shutdown ordering are defined by Har
 
 ### Initial lifecycle event contract
 
-The application-owned event names are exported from `src/application/events/event-names.js`: `harvester.started`, `harvester.startup_failed`, `harvester.stopped`, `config.validated`, `broker.connected`, `broker.connection_failed`, `broker.disconnected`, `broker.status_changed`, `broker.subscription_established`, and `broker.subscription_failed`. `HARVESTER_EVENT_SOURCE` is `harvester`.
+The application-owned event names are exported from `src/application/events/event-names.js`: `harvester.process_started`, `harvester.started`, `harvester.startup_failed`, `harvester.stopped`, `config.validated`, `broker.connected`, `broker.connection_failed`, `broker.disconnected`, `broker.status_changed`, `broker.subscription_established`, and `broker.subscription_failed`. `HARVESTER_EVENT_SOURCE` is `harvester`.
+
+`harvester.process_started` records the original process-entry timestamp, package version, build source, PID, and runtime-session ID. It is separate from `harvester.started`, which is emitted only after runtime startup succeeds. The process identity is captured once and attached to shared Logger context before startup diagnostics; DEBUG/TRACE file transports retain it separately from log data. Process-start Journal publication waits for Journal subscription readiness but remains best-effort and introduces no new durability barrier; broker-connected startup can include the admitted event in its existing PREFLIGHT flush. Configuration-only/no-broker startup does not wait for optional Journal setup. Startup-failure and shutdown paths do not separately await the process-start publication promise; the existing Journal close lifecycle remains unchanged and may wait for Journal readiness. If the process exits before the Journal subscriber becomes ready, the Journal event is not guaranteed, while DEBUG/TRACE logs retain the process identity. If readiness is delayed, Journal append order may place the process event after `harvester.started`, while the payload retains the original process-entry timestamp.
 
 `src/application/events/lifecycle-event-dtos.js` maps explicit application facts into small allowlisted `toResult({ data })` DTOs. Startup/configuration DTOs contain the broker identifier, current strategy mode, enabled market symbols, and trading-enabled flag as applicable; they never copy the full trading config, credentials, or account snapshot. Failure DTOs contain a bounded error name/message only: stack and cause are omitted, and common labelled secret/token/authorization values and URL credentials are redacted. These mappings are published from the process and bootstrap lifecycle boundaries. `broker.status_changed` is limited to meaningful user-data transitions exposed by the broker callback; unchanged `recovered` reminders are published once per application recovery generation, while every reminder still reaches the recovery coordinator as a retry trigger. `recovered` means the remote stream is restored but does not prove Harvester account/order reconciliation. Journal persistence remains best-effort and can miss events published before its asynchronous subscription is active. No financial decimal values are part of these initial lifecycle DTOs; future financial event contracts must preserve canonical decimal strings.
 
@@ -595,15 +597,16 @@ sequencing to focused bootstrap modules.
 The account-integrity safety halt is an application workflow in
 `src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
 execution or accounting failure is observed, it reconciles broker-owned order
-identities before asking the trading engine to cancel only strategy-owned BUYs.
-Concurrent triggers share one in-flight task. Bootstrap supplies the live
-engine lookup, stopped-process predicate, and logger; the use case does not
-depend on broker SDK or process-global state.
+identities using `reconcileOwnedOrders({ recoveryMode: true })` before asking
+the trading engine to cancel only strategy-owned BUYs. Recovery mode applies
+canonical order and fill facts while suppressing strategy-driven recovery SELL
+cancellation/replacement; it does not skip ownership or fill reconciliation.
+The explicit `cancelOwnedBuyOrdersForSafetyHalt()` stage remains the only
+exchange-mutation stage in this workflow. Concurrent triggers share one
+in-flight task. Bootstrap supplies the live engine lookup, stopped-process
+predicate, and logger; the use case does not depend on broker SDK or
+process-global state.
 
-Shutdown preserves the original safety sequence: stop market intake and drain
-accepted market work; drain accepted user-data events; reconcile owned orders;
-cancel owned BUYs; drain cancellation/fill reports and reconcile again; stop
-user-data intake; publish the CLOSING account audit; then disconnect broker
-resources. User-data intake intentionally remains active through cancellation
-and its follow-up reconciliation so late execution reports are still accounted
-before the final audit.
+The source-verified shutdown sequence, cancellation/fill-race handling,
+CLOSING account audit, resource cleanup, and process-lock retention are defined
+in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).

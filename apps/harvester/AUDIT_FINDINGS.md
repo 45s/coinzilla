@@ -325,8 +325,10 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 **Evidence discipline:** no TESTNET acceptance is inferred from source inspection or offline tests. No exchange writes, bot restarts, or account mutations were performed.
 
 
-**Priority correction (2026-11-06):** This finding is retained only as a future roadmap note. Do not implement restart recovery during the current audit. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
+**Historical priority correction (2026-11-06):** implementation was deferred during the Conservative TESTNET workflow. The 2026-11-09 user request reactivates forensic investigation only; implementation remains separate. Current status and evidence are tracked by F-030. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
 
+
+**2026-11-09 status update:** The offline helper stack and tests remain in the repository, but current runtime wiring is absent. The historical PR #606 startup integration passed `marketUniverseComplete: false` into an audit that requires true and therefore failed closed for prior trading activity. See F-031 and the current session report.
 
 ## F-012 — Conservative residual sell-through and lifecycle conformance (2026-11-06)
 
@@ -606,3 +608,252 @@ Current source and regression inventory:
   - [PR #732](https://github.com/45s/coinzilla/pull/732) added `acknowledgeRecoveryResult()` while preserving the legacy boolean API. It distinguishes accepted/pending, accepted/completed, and rejected stale/inactive or no-recovery-pending calls. Exact tested head `1eb0c1a0d3cb6f7e0f957f2c10308f4510995abf`, merge `adb3639e6c1a1b03e885d394a07f8ce4c05356dd`; all six workflow runs succeeded.
   - [PR #735](https://github.com/45s/coinzilla/pull/735) consumes the additive result without treating accepted/pending as rejection. Harvester records local acceptance but keeps readiness closed until a global `reconciled` status matches the active recovery generation and subscription ID. Exact tested head `541bf9d65e5fd4f073e3619fdba5c6d36734deaa`, merge `899b939e471a4d11b2fdfff0aaedb145da61c420`; all six workflow runs succeeded.
   - No `start-harvester.js` change was required for this contract integration. TESTNET integration was skipped on both PRs; no TESTNET recovery acceptance is claimed. The application readiness gate remains fail-closed until global completion.
+
+
+---
+
+## F-020 — Per-symbol market-data liveness is not independently observable
+
+**Classification:** PARTIAL / UNVERIFIED  
+**Severity:** High investigation priority; no confirmed market-data outage  
+**Tracking:** [#760](https://github.com/45s/coinzilla/issues/760)
+
+**Evidence:** In the 2026-11-08 16:33:33–22:42:05 UTC session, DOGEUSDT produced 1,494 `Harvester market price event received` records (median interval 8.819 seconds; maximum 111.729 seconds). ZROUSDT produced 61 (median interval 88.908 seconds; maximum 3,242.118 seconds). The longest ZRO interval ran from 20:31:06.687 to 21:25:08.805 UTC. DOGE events continued during the gap; no error-level or market-stream error was logged in the afternoon session.
+
+**Expected:** Operators and the application should be able to distinguish an active transport, a confirmed subscription, a recently delivering per-symbol stream, and a stale/silent stream. A connected socket alone is not proof that every desired stream is fresh.
+
+**Actual:** The inspected Streams client retains desired subscriptions, confirms initial subscription state, and reconnects after observed transport closure. The supplied runtime logs do not expose per-symbol last-event age or a silent-stream watchdog. The 54-minute ZRO gap could be low `aggTrade` activity or a delivery/subscription problem; there is no independent exchange feed in the supplied evidence to decide.
+
+**Impact:** A symbol-specific feed stall could be hidden while another symbol continues to trade, and current logs cannot distinguish that from a genuinely quiet market. Do not assert that stale-price decisions occurred; that is not demonstrated.
+
+**Required follow-up:** trace the adapter-to-Harvester path, identify an independent freshness signal (for example bookTicker freshness or a documented exchange heartbeat), add bounded per-symbol/per-stream last-event-age and stale/recovered diagnostics, and define any trading gate only through an explicit domain policy. Instrument successful bookTicker receipt/freshness in a bounded way; do not infer delivery health from the current absence of receipt logs. Add fake-clock tests for one symbol stalling while another remains active, recovery, repeated notifications, and legitimate quiet periods. No TESTNET writes are required.
+
+## F-021 — Shutdown repeats complete fill-history reconciliation
+
+**Classification:** SOURCE-EXPLAINED / LATENCY STRONGLY CORRELATED  
+**Severity:** Medium operational concern  
+**Tracking:** [#766](https://github.com/45s/coinzilla/issues/766)
+
+**Evidence:** Shutdown began at 22:38:29.849 UTC. At approximately 22:40:15 and 22:41:59 UTC, the runtime emitted two batches of 48 duplicate-fill observations. Both batches contained the same 48 fill identities already applied during the process. The accounting path reported `applied: false`, `duplicate: true`, and zero delta. Shutdown captured a complete CLOSING balance snapshot and completed successfully at 22:42:05.491 UTC.
+
+**Owned-order reconstruction:** The Journal records 90 unique submitted orders, 40 unique cancellations without fills, 48 distinct fill-bearing orders (all latest statuses `FILLED`), and two remaining OPEN SELL orders: DOGEUSDT 1333893 and ZROUSDT 756212. Thus 50 owned orders remained in the registry for shutdown reconciliation.
+
+**Source correlation (corrected RPC count):** `create-shutdown-handler.js` invokes `reconcileOwnedOrders()` before BUY cancellation and again after cancellation/user-data queue drain. Each pass calls `collectOwnedOrderSnapshots()`. It fetches open orders once per symbol (2 RPCs), then canonical order history sequentially for each of 50 owned orders. Each `getCanonicalOrderHistory()` call performs both an `allOrders` RPC and an `exchangeInfo` RPC (100 RPCs total). It then fetches fill history sequentially for each order; each `getFills()` page performs both an `exchangeInfo` RPC and a `myTrades` RPC (100 RPCs in this session; one page per order). This is **202 sequential broker REST RPCs per pass, or 404 across both passes**, not the earlier undercount of 102/204. The two 48-record batches align with the two passes and represent idempotent re-observation, not duplicate accounting.
+
+**Latency assessment:** The first batch appears about 105 seconds after shutdown start; the second appears about 104 seconds later. The corrected 202 sequential RPCs per pass strongly correlate with these waits (about 0.52 seconds per RPC if evenly distributed), but the logs do not contain per-request timings. Exact latency attribution is not measured.
+
+**Required follow-up:** [#766](https://github.com/45s/coinzilla) tracks bounded stage/RPC timing and evaluation of safe bounded concurrency/batching. Preserve both reconciliation passes, full order/fill validation, pagination, idempotent accounting, and fail-closed behavior. Do not cancel open SELLs or skip historical fills.
+
+## F-022 — CLOSING balance audit omits the final open-order set
+
+**Classification:** SOURCE-CONFIRMED EVIDENCE GAP / HISTORICAL ORDER SET UNVERIFIED  
+**Severity:** Medium evidence gap  
+**Tracking:** [#764](https://github.com/45s/coinzilla/issues/764). Process-restart reconciliation #654 remains separately deferred.
+
+**Evidence:** The supplied Journal contains one PREFLIGHT `account.open_orders_captured` event and no CLOSING open-orders payload. The CLOSING account snapshot is marked COMPLETE and includes five asset balances, but this is a balance audit, not an independently recorded final order list. CLOSING locked balances were 3,189 DOGE and 59.87 ZRO.
+
+**Source confirmation:** The current shutdown handler invokes `publishAccountSnapshot()` with `phase: "CLOSING"`, but its injected dependencies and shutdown sequence do not include `publishOpenOrdersSnapshot()`. The missing CLOSING order payload is therefore an implementation-level evidence gap, not merely a suspected missing log line.
+
+**Impact:** Exact final exchange order IDs, client IDs, prices, quantities, and statuses cannot be reconstructed from the supplied three artifacts. Locked balances are clues, not a substitute for an open-orders response. A COMPLETE CLOSING balance audit must not be interpreted as a COMPLETE final-order audit.
+
+**Required follow-up:** decide and implement, with DDD/TDD, whether CLOSING should durably capture the complete account-wide open-order set while broker REST remains connected. Specify completeness/failure semantics and preserve open SELL orders; this is read-only evidence capture, not permission to mutate orders. Keep the decision separate from deferred process-restart reconciliation #654.
+
+
+## F-023 — Recovery event-processing failures are mislabeled and overclassified as accounting failures
+
+**Classification:** CONFIRMED DIAGNOSTIC MISCLASSIFICATION; historical recovery-side-effect failure also observed  
+**Severity:** Medium — incident triage can point operators at the wrong failure class  
+**Tracking:** [#769](https://github.com/45s/coinzilla/issues/769), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626)
+
+**Runtime evidence (2026-11-08 03:21–03:23 UTC):** During application recovery, a DOGE BUY TRADE event for broker order `1323351` / client order `h-932a1bcc2b7646df8f4166-29` failed while the engine attempted to cancel the existing DOGE recovery SELL (`1323350`). The broker rejected the cancellation because the user-data stream was unavailable. The subsequent log at 03:21:48.944 UTC was nevertheless labeled `rejected an unowned or invalid order event`, while both `registryMatchedByClientOrderId` and `registryMatchedByBrokerOrderId` were `true`, and both matched registry records identified the same FILLED order. At 03:22:24 UTC, ZRO recovery reconciliation encountered the same blocked-cancellation failure for recovery SELL `749343`; the pair was paused and the recovery attempt ultimately failed at 03:23:00.631 UTC with `User-data accounting failed during recovery`.
+
+**Source confirmation (current `develop`):** `apps/harvester/src/bootstrap/user-data/create-user-data-event-handler.js` still uses the message `rejected an unowned or invalid order event` and sets `state.accountingFailed = true` for every failed `processUserDataEvent()` result, including downstream transition/cancellation/reconciliation failures after the incoming order has matched the registry. Its diagnostic fields can therefore contradict its message, and a non-accounting transition failure can set the sticky flag that prevents `createUserDataRecoveryHandler()` from starting or retrying recovery. The current handler test covers a generic engine rejection described as `unowned order`; it does not distinguish a matched-order transition failure after successful fill application. The recovery-handler tests explicitly refuse to start while `accountingFailed` is true, so the broad latch is a retry barrier by design. The missing proof is whether each engine failure category should set that barrier, not whether the guard exists. **Latch-reset audit:** in the inspected current bootstrap, `accountingFailed` is initialized to `false` in `start-harvester.js` and is only assigned `true` by the event/status handlers; no reset-to-false path exists. `createUserDataStatusHandler()` also requires `!state.accountingFailed` before clearing `requiresReconciliation` on a matching `reconciled` acknowledgement. Therefore, once set, this flag is process-lifetime terminal: later successful transport reconnects or owned-order reconciliation cannot clear it, and the recovery coordinator refuses to retry. That may be intentional for genuine accounting-integrity corruption, but it is too broad for known downstream transition failures unless a deliberate operator/process restart is required. Future design must define explicit, evidence-based reset criteria without weakening fail-closed accounting safety.
+
+**Important historical/current-source distinction:** the direct DOGE user-data-event cancellation path is already explained by earlier finding F-013 and fixed by [PR #673](https://github.com/45s/coinzilla/pull/673): bootstrap previously failed to pass the existing `recoveryMode` option to queued user-data order-event processing. Current `start-harvester.test.js` includes an integration regression that reproduces 254 recovery reminders and asserts the queued BUY fill is processed once with `recoveryMode:true`. Do not reopen that already-fixed direct-event defect as an unfixed current-source bug. Current `develop` also derives `recoveryMode` from `requiresReconciliation || recoveryTask !== null`, and the status handler clears the application gate only for the matching acknowledged `reconciled` generation. The narrower remaining test gap is the exact status interleaving (`recovered` → `executionPending` with both broker flags false → owned BUY fill); `create-user-data-status-handler.test.js` has no explicit `executionPending` case. Separately, F-024 identifies a distinct current path: the account-integrity safety halt calls `reconcileOwnedOrders()` with default `recoveryMode:false`, so its snapshot application is not covered by PR #673's queued-event fix and may still attempt recovery SELL cancellation before the explicit BUY-only safety stage.
+
+**Failure-category map from current engine source:**
+
+| Failure path | What it means | Why a single `accountingFailed` flag is too coarse |
+|---|---|---|
+| `OrderRegistry.applyUpdate()` reports an unknown order | Ownership/identity failure; event is not a Harvester-owned order | This is a genuine ownership-integrity failure and should remain fail-closed. |
+| Missing/non-canonical fill or fill/order identity mismatch | Invalid execution facts | Accounting cannot safely trust the event; fail-closed is appropriate. |
+| `updateTradingAccounting()` fails | Canonical fill could not be committed to accounting projections | This is a direct accounting-integrity failure; fail-closed is appropriate. |
+| Terminal fill history unavailable, conflicting, or quantity-incomplete | The final order state cannot be reconciled to complete distinct executions | Accounting completeness is uncertain; fail-closed is appropriate, but the diagnostic should say fill-history reconciliation. |
+| Recovery SELL cancellation rejected after the BUY fill is applied/deduplicated | Accounting may be correct while an exchange order transition is unresolved/UNKNOWN | Trading must remain blocked, but the failure is not itself proof that fill accounting failed; retry policy must preserve authoritative order reconciliation. |
+| Durable cancellation intent cannot be flushed or recovery-cycle completion fails | Workflow/state transition failed at a different stage | Preserve fail-closed safety, but report the exact stage and do not call it unowned-order or accounting failure without evidence. |
+
+This map is derived from `processExecutionFillTransition()`, `reconcileTerminalOrderFills()`, `processUserDataEventTransition()`, and `cancelAndReconcileRecoverySells()` in `conservative-trading-engine.js`. The exact failure category must be propagated from the engine rather than guessed by the outer event handler.
+
+**Recovery safety context:** Current `develop` passes `recoveryMode` through `reconcileOwnedOrders()` and user-data event processing. The engine regression around lines 4318–4399 verifies that canonical recovery reconciliation does not cancel or replace an existing SELL; the event-handler regression around lines 5040–5110 verifies that recovery mode is passed through to the engine. The status handler also preserves the application reconciliation gate until the matching broker-wide `reconciled` acknowledgement. These are useful protections, but the tests are split across units and do not reproduce the exact historical status/event interleaving. Keep these contracts and add an integration regression before treating the historical cancellation path as fully closed.
+
+**Required follow-up:** distinguish identity/ownership rejection, accounting-integrity failure, and downstream order-transition/reconciliation failure; include the actual processing stage/reason and preserve matched identity evidence. Define retryability explicitly: a reclassified failure must never reopen trading by itself, but transient downstream failures should not be mislabeled as irrecoverable accounting corruption or silently make all future recovery reminders no-ops. Add deterministic handler/recovery tests for (1) unknown/mismatched order identity, (2) matched owned order with downstream cancellation failure after an already-applied fill, (3) terminal fill-history timeout, (4) retry after transient failure, and (5) permanent accounting mismatch. Keep recovery-mode fill processing read-only with respect to exchange order mutations until application/broker recovery is fully acknowledged. No runtime changes are part of this audit.
+
+
+## F-024 — Account-integrity safety halt reconciles in normal trading mode — fixed in task PR
+
+**Classification:** CONFIRMED CURRENT-SOURCE SIDE-EFFECT RISK; HISTORICAL LOG CORRELATION  
+**Severity:** High — a safety-halt reconciliation can initiate recovery SELL cancellation before its explicit BUY-only cancellation stage  
+**Tracking:** [#773](https://github.com/45s/coinzilla/issues/773), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626)
+
+**Current source path:**
+1. `createUserDataEventHandler()` marks `accountingFailed` after any failed engine order event; its queue finalizer invokes `cancelOwnedBuysAfterAccountingFailure()`.
+2. `createAccountIntegritySafetyHalt()` first calls `tradingEngine.reconcileOwnedOrders()` without options.
+3. `reconcileOwnedOrders()` defaults `recoveryMode=false` and passes that mode into `applyOwnedOrderSnapshotsTransition()`.
+4. Applying a recovered FILLED BUY in normal mode can enter `processUserDataEventTransition()` and call `cancelAndReconcileRecoverySells()`.
+5. Only after reconciliation does the safety halt call `cancelOwnedBuyOrdersForSafetyHalt()`.
+
+Thus the reconciliation stage of the safety halt is not guaranteed to be read-only with respect to exchange order transitions. The broker's user-data availability guard may reject the attempted SELL cancellation, but that is a secondary defense and should not be relied upon to prevent the application from issuing the mutation. The broker integration test `packages/brokers/src/binance/broker-websocket/methods/user-data-session.integration.js` explicitly verifies that `userDataUnavailable` remains true after socket resubscription and becomes false only after `acknowledgeRecovery()`. Therefore, in the observed outage, the broker guard prevented the exchange RPC; the demonstrated impact is the unnecessary cancellation attempt and local UNKNOWN transition, not a confirmed exchange-side SELL cancellation. This does not eliminate the current-source risk: the safety halt is also triggered for malformed events and other accounting-failure classes while the broker may remain available. In those cases the same default non-recovery reconciliation can reach the exchange cancellation RPC before the explicit BUY-only stage.
+
+**November 8 runtime correlation:** At 03:22:24 UTC, the ZRO recovery SELL `749343` cancellation stack includes `applyOwnedOrderSnapshotsTransition()`, followed immediately by `account-integrity safety halt could not fully reconcile owned orders before BUY cancellation`. The broker rejected the cancellation because the user-data stream was unavailable. This strongly correlates with the safety-halt's own `reconcileOwnedOrders()` pass; the trace alone cannot prove which caller initiated that particular snapshot-application pass. The earlier DOGE SELL cancellation occurred directly in the user-data event transition.
+
+**Test gap:** `create-account-integrity-safety-halt.test.js` verifies that reconciliation precedes BUY cancellation but does not pass/assert a reconciliation mode or prove no SELL mutation during reconciliation. The F-013/PR #673 integration regression covers queued user-data events in recovery mode, not the safety-halt's separate `reconcileOwnedOrders()` call. The engine tests separately prove (a) `reconcileOwnedOrders({ recoveryMode: true })` preserves recovery SELLs and (b) `cancelOwnedBuyOrdersForSafetyHalt()` cancels only BUYs. There is no end-to-end test of the complete safety-halt workflow combining both guarantees.
+
+**Remediation in task PR:** `createAccountIntegritySafetyHalt()` now invokes `reconcileOwnedOrders({ recoveryMode: true })`. This uses the engine’s established recovery-mode transition policy to apply canonical exchange order/fill facts while deferring strategy-driven SELL cancellation/replacement. The use-case regression verifies that recovery mode is requested before the explicit `cancelOwnedBuyOrdersForSafetyHalt()` stage, including when concurrent triggers coalesce. An engine-level workflow regression drives a recovered FILLED BUY, an additional active BUY, and an active recovery SELL through the complete safety halt; it asserts the fill is accounted, only the active owned BUY is cancelled, and the recovery SELL remains OPEN. The engine retains its existing recovery-mode guards and full identity/fill reconciliation; the explicit safety-halt stage remains responsible for cancelling only acknowledged, owned BUYs. No broker API, credential, endpoint, or order-mutation behavior was added.
+
+
+## F-025 — Known preflight cancellation rejection is recorded as UNKNOWN outcome
+
+**Classification:** CONFIRMED CURRENT-SOURCE STATE-CLASSIFICATION DEFECT  
+**Severity:** High — a known not-sent cancellation can create artificial unresolved owned-order state  
+**Tracking:** [#774](https://github.com/45s/coinzilla/issues/774), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626)
+
+**Current source path:** Binance `cancelOrder()` checks `userDataUnavailable` and returns an error before invoking the state-changing `order.cancel` RPC. The adapter propagates this as `ok:false`. In both `cancelAndReconcileRecoverySells()` and `cancelOwnedBuyOrders()`, every non-ok cancellation result is currently routed to `markCancellationUnknown()`, which changes the local registry status to `UNKNOWN`, publishes an `UNCONFIRMED` cancellation failure, and pauses the pair. The same ambiguity therefore affects recovery SELL cancellation and explicit owned-BUY safety/shutdown cancellation. The engine does not distinguish a local preflight refusal (request definitely not sent) from a timeout/disconnect after request submission (outcome genuinely unknown).
+
+**November 8 runtime evidence:** At 03:21:48.940 UTC, broker `cancelOrder()` rejected DOGE recovery SELL `1323350` with `Cannot change Binance orders while the user-data stream is unavailable`; the broker guard runs before the `order.cancel` request. At 03:21:48.944, the next Harvester market-price record shows this same order in the active-order registry with status `UNKNOWN`. A second order, ZRO recovery SELL `749343`, hit the same preflight guard at 03:22:24.731 UTC; at 03:29:02.493, the next ZRO market-price record shows it as `UNKNOWN`. Thus both attempted SELL cancellations are followed by local UNKNOWN status. The CLOSING audit later reported `UNRESOLVED_OWNED_ORDERS:2`, exactly matching the count of these two observed UNKNOWN owned orders. The CLOSING record itself does not include order IDs, so the identity match is strongly supported by the complete trace but is not directly encoded in the CLOSING audit payload.
+
+**Required follow-up:** define explicit cancellation outcomes (NOT_SENT / CONFIRMED / OUTCOME_UNKNOWN); preserve the previous canonical state on known preflight rejection; retain fail-closed reconciliation for genuine post-send ambiguity; reuse the existing broker regression in `packages/brokers/src/binance/broker-websocket/methods/user-data-session.test.js` (which already asserts blocked `cancelOrder()` makes zero `order.cancel` RPC calls); add/extend the broker result contract to distinguish NOT_SENT, then add engine tests proving NOT_SENT does not mark a known OPEN order UNKNOWN while post-send uncertainty still does. Lifecycle evidence must distinguish a cancellation request that never reached Binance from an exchange-side request with unknown outcome. No runtime changes are part of this audit.
+
+
+## Cross-finding reconstruction — 2026-11-08 recovery failure chain (F-023/F-024/F-025)
+
+The combined runtime and source evidence supports this sequence:
+
+1. **03:21:48.331 — DOGE fill applied.** Fill `binance:DOGEUSDT:231208` (broker order `1323351`) is applied successfully: `applied:true`, `duplicate:false`.
+2. **03:21:48.937 — duplicate observation triggers a transition.** The same fill is correctly deduplicated with zero accounting delta, but the event path requests cancellation of recovery SELL `1323350`.
+3. **03:21:48.940–48.944 — known not-sent refusal becomes UNKNOWN.** Binance rejects before the `order.cancel` RPC because `userDataUnavailable` is true. The next market-price record shows DOGE SELL `1323350` as `UNKNOWN`.
+4. **After the DOGE processing failure — broad accounting latch and safety halt.** Current handler source sets `accountingFailed=true` for every failed engine order transition and invokes the account-integrity safety halt. The recovery coordinator refuses to start/retry while this sticky flag is true.
+5. **03:22:24.725–24.732 — ZRO safety-halt reconciliation attempts another SELL cancellation.** ZRO BUY fill `12374` is applied while snapshot application is running; recovery SELL `749343` cancellation is requested and rejected by the same broker preflight guard. The stack includes `applyOwnedOrderSnapshotsTransition()`, followed by the safety-halt reconciliation-failed log. This strongly correlates with the safety halt's `reconcileOwnedOrders()` call, which current source invokes with default `recoveryMode=false`; exact caller attribution is not present in the trace.
+6. **03:29:02.493 — ZRO order also observed UNKNOWN.** The next ZRO market-price record shows recovery SELL `749343` as `UNKNOWN`.
+7. **03:45:19–03:45:24 — shutdown remains incomplete.** CLOSING audit reports `UNRESOLVED_OWNED_ORDERS:2` and `USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE`; shutdown fails and retains the process lock. The two observed UNKNOWN SELLs match the unresolved count, but the CLOSING audit payload does not contain order IDs.
+
+**Confidence and caveats:** The two preflight rejections, zero-RPC broker guard, and subsequent UNKNOWN local states are directly evidenced. Current source explains how both cancellation paths classify the failures. The two UNKNOWN orders matching the CLOSING count is strong count-level corroboration, not direct CLOSING ID evidence. The DOGE event's historical non-recovery mode and the exact caller of the ZRO snapshot-application transition remain unproven because the logs lack the runtime source revision and `recoveryMode` argument. Current `develop` contains separate recovery-mode protections, but still has the F-023 broad error latch, F-024 safety-halt default-mode risk, and F-025 NOT_SENT/UNKNOWN classification issue.
+
+
+## F-026 — Public Streams error-without-close is diagnostic-only; no stale-stream transition
+
+**Classification:** CONFIRMED CURRENT-SOURCE LIVENESS/RECOVERY GAP; not a proven cause of the November 8 ZRO gap  
+**Severity:** Medium — a post-open transport error that is not followed by close leaves the client without an automatic reconnect or stale-state transition  
+**Tracking:** [#760](https://github.com/45s/coinzilla/issues/760)
+
+**Current source:** `packages/brokers/src/infrastructure/binance/broker-websocket/utils/streams-client.js` attaches transport `onError` to `#reportError()` and transport `onClose` to `#handleClose()`. `#reportError()` only calls the configured observer; it does not change client state, mark subscriptions unhealthy, or schedule reconnect. `#handleClose()` is the path that marks the client closed and schedules reconnect/resubscription. The broker's `createMarketClient()` supplies an `onError` callback that only logs `Binance market stream error`. No per-stream last-receipt watchdog or stale/recovered state transition is present in this path.
+
+**Test boundary:** `packages/brokers/src/infrastructure/binance/broker-websocket/utils/transport.test.js` explicitly tests that a post-open socket error is surfaced to observers without the transport itself silently replaying/reconnecting. That is a transport-level contract, not proof that the higher-level Streams client has a fatal-error recovery policy. The Streams client currently treats error and close as separate signals; a nonfatal error should not automatically force reconnect, but a persistent error with no close needs an explicit health policy.
+
+**Impact and caveat:** If a public stream error occurs after open and no close event follows, the client can remain reported as open while receiving no useful data. Without per-symbol/per-stream receipt-age monitoring, this can be indistinguishable from an exchange market with no trades. This is a current-source liveness gap, but it is **not evidence** that the November 8 ZRO 54-minute aggTrade gap was caused by an error-without-close; no such afternoon error was logged.
+
+**Required follow-up:** distinguish recoverable/fatal transport errors from message/observer errors; expose transport error state and per-stream last-receipt age; define when an error should close/reconnect versus remain diagnostic-only; add deterministic tests for post-open error with no close, error followed by close, stream activity continuing after an error, and one logical stream stalling while another remains active. Do not introduce unconditional reconnect loops or false stale alerts during quiet markets.
+
+
+## F-027 — Per-order reconciliation repeats exchange metadata RPCs
+
+**Classification:** CONFIRMED CURRENT-SOURCE PERFORMANCE INEFFICIENCY  
+**Severity:** Medium operational latency contributor  
+**Tracking:** [#766](https://github.com/45s/coinzilla/issues/766)
+
+**Source evidence:** In the current Binance broker, each `getCanonicalOrderHistory({symbol, orderId})` call performs `allOrders` and then a separate `exchangeInfo({symbol})` request to construct the canonical market. Each `getFills({symbol, orderId, fromId, limit})` page similarly performs `exchangeInfo({symbol})` followed by `myTrades`. Neither method reuses metadata across orders/pages in the inspected path. Notably, the same broker already has `getCanonicalMarket()` backed by `canonicalMarkets` and `canonicalMarketRequests` per-symbol caching/concurrent-request sharing, but the canonical-history and fill-history methods bypass that helper and issue direct `exchangeInfo` requests. The existing broker `get-fills.test.js` models the metadata request on each call.
+
+**November 8 shutdown count:** With 50 owned orders and one fill-history page per order, each reconciliation pass therefore performs 2 open-orders RPCs + 50 `allOrders` + 50 canonical-history `exchangeInfo` + 50 fill-history `exchangeInfo` + 50 `myTrades` = **202 sequential RPCs**. The two required passes total **404 RPCs**. The 100 per-order `exchangeInfo` lookups per pass are repeated for only two symbols; across both passes that is 200 metadata RPCs. If any order requires additional fill-history pages, each additional page adds another `exchangeInfo` + `myTrades` pair. There is an additional payload inefficiency in the 50 `allOrders` requests: `collectOwnedOrderSnapshots()` supplies an exact `orderId` but no `limit`; `createOrderHistoryParams()` defaults the page size to 100, and `getCanonicalOrderHistory()` filters the lower-bound cursor page to the one exact order only after the response arrives. Each request can therefore transfer up to 100 order records to retain one. The logs do not record response page lengths, so the actual number of over-fetched records is unknown; the configured upper bound is 5,000 records per pass across 50 queries.
+
+**Required follow-up:** evaluate a safe per-reconciliation/per-symbol metadata reuse boundary or an adapter contract that accepts already-resolved canonical market metadata. Preserve metadata freshness/validation, exact symbol identity, complete fill pagination, rate limits, and fail-closed semantics. Measure per-RPC timings before deciding whether metadata reuse, bounded concurrency, or both provide the greatest benefit. No implementation is part of this audit.
+
+
+## F-031 — current process-restart recovery integration gap (updated 2026-11-09)
+
+**Status: CONFIRMED STARTUP INTEGRATION GAP; runtime consequence STRONGLY INDICATED; no end-to-end process-death/restart reproduction.** The current authoritative roadmap makes #654 a critical release-readiness requirement before unattended restarts. This is an investigation-only phase; no implementation is authorized here.
+
+**Owner-approved lifecycle:** Harvester runs on a personal workstation and may be stopped while Binance orders remain open. Exchange orders can partially or fully fill while Harvester is offline. This is expected behavior, not an uptime or operator failure. On the next startup, before new trading, Harvester must reconcile offline fills, commissions, partial/terminal order states, balances, locked funds, reservations and open orders. Historical CLOSING snapshots remain immutable; later fills belong to next-session reconciliation.
+
+**Confirmed current-source evidence**
+
+1. `apps/harvester/src/bootstrap/start-harvester.js` initializes a new `Portfolio`, empty `recoveryLedgers` map, `OrderRegistry.empty()`, and empty recovery/session collections (including `journalFills: []`). It explicitly comments that durable Journal replay is disabled and startup uses fresh in-process state.
+2. `apps/harvester/src/use-cases/create-portfolio-workflow.js` creates a new Portfolio and RecoveryLedger map unless initial state is injected. Portfolio and RecoveryLedger fill IDs/fingerprints are part of those in-memory projections.
+3. `apps/harvester/src/use-cases/conservative-trading-engine.js` implements `reconcileOwnedOrders()` over the current registry. When there are no registered owned orders, it returns `{ reconciled: 0, symbols: [] }` without querying canonical order or fill history. Its per-order reconciliation cannot discover prior-process orders without restored identities.
+4. `apps/harvester/src/bootstrap/account/create-account-snapshot-manager.js` and `subscribe-to-user-data.js` capture and durably flush PREFLIGHT account balances and account-wide open orders. The snapshot classifies unmatched orders as `BLOCKED` / `UNOWNED_OPEN_ORDERS`; this is an audit classification, not a trading-readiness gate.
+5. `apps/harvester/src/bootstrap/start-harvester.test.js` explicitly tests that a pre-existing unowned order is recorded but not adopted/cancelled and does not prevent runtime startup. Its “starts from fresh in-memory state without replaying historical Journal records” test supplies a malformed `journalRecoveryRecords` argument, instruments historical broker reads, then asserts no historical reads occurred and `runtime.userDataReady === true`.
+6. `packages/journal/README.md` documents bounded read/replay, but replay is at-least-once and requires an idempotent consumer. `apps/harvester/src/infrastructure/journal/prepare-optional-journal.js` starts, flushes and closes Journal; it does not read/replay prior sessions. `apps/harvester/src/index.js` passes only the event publisher into `startHarvester`, not a restored projection.
+
+**Graceful versus unexpected termination**
+
+- `apps/harvester/src/index.js` registers SIGINT and SIGTERM handlers that invoke the runtime shutdown.
+- `apps/harvester/src/bootstrap/shutdown/create-shutdown-handler.js` performs owned-order reconciliation before and after the owned-BUY cancellation pass, drains user-data, preserves open SELLs, writes the durable CLOSING balance audit, and disconnects.
+- The process then closes Journal/EventBus and releases process locks only after shutdown is confirmed.
+- SIGKILL, process crash and power loss cannot run these handlers or the graceful CLOSING path. Same-host locks are reclaimed only when the recorded PID is demonstrably absent and PID/hostname/token still match on immediate re-read. Foreign-host, unreadable, permission-denied, or possibly-live locks fail closed and require operator verification.
+
+
+
+**Broker history discovery — capability versus current integration**
+
+- The current `@coinzilla/brokers` contract exposes canonical `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })`. Symbol-wide queries are possible without an `orderId`, so an empty Harvester registry does not make exchange-side fill discovery technically impossible.
+- Binance's official Spot WebSocket API `myTrades` documentation specifies an inclusive `fromId` cursor, a maximum `limit` of 1,000, and time filters whose interval cannot exceed 24 hours. `fromId` cannot be combined with `startTime`/`endTime`; `orderId` cannot be combined with time filters but can be combined with `fromId`. With no condition, only the most recent trades up to the limit are returned. See [Binance Account Trade History — Spot WebSocket API](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account).
+- The broker package contract validates trade/fill cursor IDs and rejects values outside JavaScript's safe-integer range rather than rounding int64 identifiers. This is a hard pagination boundary until the transport supports exact int64 representation.
+- Current Harvester `reconcileOwnedOrders()` does not perform a symbol-wide scan: it queries fills only after it has a registered owned order ID, and it returns immediately for an empty registry.
+- **Unresolved:** the official endpoint documentation inspected here does not state a guaranteed historical-retention horizon. Therefore a symbol-wide cursor scan is a possible recovery building block, not proof that every offline execution is always retrievable. A durable per-symbol cursor, page-exhaustion proof, retention policy, market-universe coverage, and fallback/operator procedure are still required.
+
+**Additional persistence boundary discovered — F-028:** the applied-fill path publishes `FILL_APPLIED` after accounting but does not call `eventPublisher.flush()`. Event publisher documentation defines publication as synchronous admission only; EventBus subscriber handlers are asynchronous; Journal `record()` acknowledges `durable: false`, while `flush()` waits for subscribers/write queue and performs fsync. Graceful close drains and syncs, but abrupt termination has no equivalent guarantee. See F-028 in `AUDIT.md`. This confirms a missing durability guarantee, not a reproduced historical lost-fill incident.
+
+
+
+**Existing offline recovery helper pipeline — retained, tested, not wired into current startup**
+
+- `projectHarvesterJournalRecovery({ records })` validates Journal session boundaries, lifecycle transitions, order intents/acknowledgements/cancellation outcomes, fill identity/deduplication, recovery cycles, pause state, PREFLIGHT/CLOSING account snapshots and open-order snapshots.
+- `restoreHarvesterJournalState({ projection, marketMetadata })` reconstructs Portfolio, RecoveryLedger, OrderRegistry, pause/recovery-managed state, replacement/trailing-reprice intents, cancellation identities, completed-cycle identities and Journal fill identities. Unresolved orders are restored conservatively and require canonical exchange reconciliation before trading.
+- `fetchAccountTradeHistory()` paginates exchange `myTrades` for a supplied Market list, beginning at the durable baseline and advancing with `fromId`. It cannot discover symbols outside that list; `marketUniverseComplete` is a caller-supplied assertion.
+- `auditRecoveredTradeHistory()` verifies exact Journal/exchange fill and commission parity, duplicate IDs/trade IDs, ownership attribution and complete pages; it rejects unless `marketUniverseComplete === true`.
+- `auditRecoveredAccountState()` verifies the durable PREFLIGHT baseline against current balances, active open-order ownership/status/quantities and exact locked-asset reservations.
+
+Focused tests exist in `project-harvester-journal-recovery.test.js`, `fetch-account-trade-history.test.js`, `audit-recovered-trade-history.test.js` and `audit-recovered-account-state.test.js`. These helpers are not called by the current `index.js`, `prepareOptionalJournal()` or `startHarvester()` composition.
+
+**Historical PR #606 integration limitation:** its caller passed `marketUniverseComplete: false` to `fetchAccountTradeHistory()`, while `auditRecoveredTradeHistory()` rejects unless that flag is true. Thus the prior trading-enabled integration deliberately failed closed when historical trading state required a complete account-wide history audit. The current Binance symbol catalog cannot prove the universe of historical symbols, including delisted markets. The current runtime later removed the recovery read/replay gate rather than solving this completeness problem; it now starts fresh and can proceed with unowned open orders. That bypass is not a safe equivalent to the previous fail-closed behavior.
+
+**Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` is captured by acknowledgement/cancellation/fill events or recovered by `reconcileOwnedOrders()` through `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries without a broker ID. The engine validates the returned symbol/client ID and attaches the canonical broker ID. Tests cover lost acknowledgements, unresolved lookups, mismatched IDs and immutable-intent conflicts. If lookup fails, the order remains UNKNOWN and the account audit fails closed. The current runtime cannot use this capability after restart because it does not restore the registry entry containing the client ID.
+
+
+
+**PREFLIGHT BLOCKED versus trading readiness — important test boundary**
+
+`subscribeToUserData()` publishes the account-wide open-order audit, drains queued user-data events, and then sets `state.ready = true` when user-data/accounting flags are otherwise safe. It does not reject startup based on `account.open_orders_captured.readiness === "BLOCKED"`. The existing test “journals pre-existing account-wide orders and allows trading startup without adopting or changing them” verifies market subscriptions proceed and the runtime starts with the external order unowned.
+
+The test's fake broker emits no market-price tick, so its `placeCalls === 0` assertion proves only that observing an external order does not itself submit an order. It does **not** prove that later market data cannot trigger a new strategy order while the prior order remains unowned. A live execution event for an unowned order can still trip accounting safety; an order that filled entirely while Harvester was offline produces no new user-data event on the restarted stream and is absent from the current open-order snapshot.
+
+This is an explicit current startup policy for external orders, not a reproduced duplicate-order incident. In a restart scenario, a formerly Harvester-owned order is indistinguishable from an external order because the registry is empty. Treat this as a high-priority #654 reconciliation requirement.
+
+**Additional safety-state finding — F-029:** the startup composition passes empty `pausedMarkets`, `durablePausedMarkets`, `recoveryManagedPausedMarkets`, cancellation IDs and replacement/reprice intents into the engine. The engine's `pause()` only mutates in-memory Sets and publishes `STRATEGY_PAUSED` without a flush. A previous per-market strategy safety pause/recovery intent is therefore not restored on restart; if PREFLIGHT/live events do not rediscover the original condition, readiness may become true. The separate `accountingFailed` process-lifetime latch reset is already tracked by F-023/#769; F-029 records the additional engine pause/recovery-intent state gap. Actual post-restart unsafe order placement is not reproduced. See F-029 in `AUDIT.md`.
+
+**Operational consequence and confidence**
+
+- **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
+- **Confirmed:** current open orders are observed as unowned; the existing startup test allows runtime startup without adopting or cancelling them.
+- **Strongly indicated:** a fill occurring while Harvester is stopped can be absent from the new in-memory accounting projection. A now-terminal order will not appear in the PREFLIGHT open-order list; an empty registry gives `reconcileOwnedOrders()` no order IDs from which to request its fill history.
+- **Not yet proven:** a deterministic end-to-end restart scenario producing a duplicate new order, missed accounting delta, double application, or incorrect reservation/balance decision. Do not report these consequences as reproduced incidents.
+- The November 8 DOGE/ZRO post-shutdown fills remain expected downtime behavior. Their absence from the earlier CLOSING snapshot is not a defect.
+
+**Documentation inconsistency**
+
+The earlier `apps/harvester/docs/JOURNAL_OPERATIONS.md` text incorrectly described prior-session Journal reads and a trading-startup gate that are not present in the current composition. This documentation-only PR corrects it: current `prepareOptionalJournal()` starts the writer without reading prior sessions, and `main()` calls `startHarvester({ eventPublisher })` without a recovery snapshot. The retained PR #606 helper pipeline and its historical fail-closed limitation are now documented separately.
+
+**Required future DDD/TDD work (not implementation in this phase)**
+
+- Define a versioned durable checkpoint covering client/broker order IDs, immutable order intent and terminal state, fill/trade IDs and fingerprints, exact commission facts, reservations, Portfolio/Position, RecoveryLedger/cycle state, strategy ownership, pause/replacement state, and config/schema version.
+- Define crash-consistent ordering for submission/cancellation intents, broker acknowledgements, fills, accounting application and checkpoint advancement. Do not claim exactly-once transport delivery.
+- Restore and validate the complete Journal projection before engine activation; make replay idempotent across a crash between projection application and checkpoint commit.
+- Discover and reconcile orders/fills changed while offline, including OPEN, PARTIALLY_FILLED, FILLED, CANCELED, EXPIRED, REJECTED and UNKNOWN; prove pagination exhaustion and history-retention coverage for every relevant market/order.
+- Reconcile balances, locked funds, reservations and external/unowned activity without silently adopting unrelated assets/orders.
+- Fail closed on missing/invalid history, retention gaps, ownership ambiguity, duplicate identity conflicts, unsupported commission facts or contradictory balances/orders; define explicit operator intervention.
+- Specify first-run versus returning-run behavior, Journal-missing behavior, schema upgrades, stale locks, graceful SIGINT/SIGTERM, abrupt termination, and restart after every order/fill/recovery boundary.
+- Add deterministic tests for crash/restart after submit-before-ack, ack-before-fill, partial/full fill, cancel-before-ack, cancel/fill race, recovery completion, duplicate/conflicting replay, incomplete pagination, stale/malformed Journal, and balance/open-order mismatch. Assert no duplicate order, no missed/double accounting, restored reservations, and no READY before reconciliation.
+
+**Test limitations**
+
+The inspected tests characterize fresh-state startup and graceful lifecycle behavior; they do not reproduce a real process death followed by restoration and exchange reconciliation. No test command was executed during this source-only review.
+
+**Safety:** no source or test files changed; no process restart, private account query, exchange write, order mutation, credential/configuration change, or TESTNET action performed.
