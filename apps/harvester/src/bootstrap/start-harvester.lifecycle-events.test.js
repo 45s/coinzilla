@@ -38,6 +38,7 @@ const config = {
   },
 }
 const env = {
+  TRADING_MODE: "testnet",
   NODE_ENV: "test",
   BINANCE_API_KEY: "fake-key",
   BINANCE_API_SECRET_KEY: "fake-secret",
