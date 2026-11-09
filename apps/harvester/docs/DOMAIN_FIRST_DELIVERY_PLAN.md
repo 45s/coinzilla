@@ -1,5 +1,13 @@
 # Harvester Conservative Domain Delivery Plan
 
+---
+status: superseded
+type: historical-plan
+owner: harvester
+---
+
+> **Superseded — 2026-11-09:** This staged D0–D3 plan is retained as delivery history, not as a current task tracker or implementation gate. The sole Conservative behavior authority is [the canonical domain specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md); current Harvester priorities and implementation status live in [ROADMAP.md](../ROADMAP.md), and repository-wide documentation work is tracked by [#795](https://github.com/45s/coinzilla/issues/795). Do not use the historical checklist below to infer current completion or authorize work.
+
 > **Canonical authority:** all Conservative Strategy rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This plan tracks documentation, implementation, and verification work; it is not a second behavior baseline.
 
 

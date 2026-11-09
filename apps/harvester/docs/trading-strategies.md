@@ -1,5 +1,11 @@
 # Harvester Trading Strategies
 
+---
+status: active
+type: strategy-overview
+owner: harvester
+---
+
 > **Authority and status:** Conservative behavior is defined only by the [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The Aggressive material in this document is exploratory product/design discussion, not an accepted executable contract; Aggressive remains deferred and disabled. Do not implement its proposed rules until the product decisions are explicitly finalized and a dedicated specification is accepted.
 
 Harvester is one independent trading process with a shared Trading Engine and a strategy policy selected through `trading-config.json`. **Conservative is the only enabled and executable strategy for the first release. Configure it under `strategies.conservative.enabled`; keep `strategies.aggressive.enabled` set to `false` until Conservative is proven end to end on TESTNET.** There is no strategy handover or simultaneous strategy control in the current release. Strategy availability belongs in the trading config; environment variables remain for deployment-specific settings and the separate TESTNET execution safety gate.
@@ -206,12 +212,16 @@ The user is making product decisions, not taking a trading terminology test. Con
 
 ## Current implementation status
 
-Conservative is the first executable strategy. The bootstrap composes it when
-TESTNET trading is explicitly enabled. The current implementation is being audited against the canonical Conservative contract. This status is not a rule definition or acceptance claim.
+Conservative is the first executable strategy. The implementation-alignment
+and regression work from the Conservative conformance audit merged in
+[PR #653](https://github.com/45s/coinzilla/pull/653) on 2026-11-07; the parent
+audit [#645](https://github.com/45s/coinzilla/issues/645) is closed. This is
+implementation/test status, not exchange acceptance or a new rule definition.
 
 A fake-broker integration scenario covers the complete first recovery cycle,
 including a second BUY arriving before the recovery SELL completes. This is
-offline evidence only. A real Binance TESTNET run remains outstanding.
-Aggressive, durable restart recovery, comprehensive reconnect reconciliation,
-and broader Journal work remain deferred. Multi-pair TESTNET acceptance is not
-complete until dedicated multi-market regression and exchange checks pass.
+offline evidence only. Binance Spot TESTNET acceptance remains **PAUSED /
+UNVERIFIED** under the regional eligibility restriction; see the
+[controlled TESTNET runbook](./TESTNET_VALIDATION_RUNBOOK.md) and current
+[Harvester roadmap](../ROADMAP.md). Aggressive remains disabled and exploratory.
+Process-restart reconciliation remains separately tracked by [#654](https://github.com/45s/coinzilla/issues/654); broader multi-pair exchange acceptance is also unverified.

@@ -1,5 +1,13 @@
 # Harvester Journal Integration Roadmap
 
+---
+status: active
+type: implementation-roadmap
+owner: harvester
+---
+
+> **Current-state authority:** this file tracks the staged Journal integration and its remaining Step 8 closeout. Current runtime behavior, event payloads and operational requirements are defined in [Journal Operations](./JOURNAL_OPERATIONS.md), [Trading First](./TRADING_FIRST.md), and the current [Harvester roadmap](../ROADMAP.md). Milestone notes below are historical delivery records where a later PR changed the original scope.
+
 ## Purpose and priority
 
 This roadmap records the Harvester integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages. The current evidence contract and coverage matrix live in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md).
@@ -8,7 +16,7 @@ This roadmap records the Harvester integration of the existing `@coinzilla/event
 
 The Journal is an operational observer, not trading-state authority or part of order execution, strategy evaluation, or fill accounting. Its persistence is optional only in configuration-only/no-broker mode. PR #545 added a mandatory account PREFLIGHT gate for every broker-connected startup, including read-only mode: the full account snapshot and account-wide open-order snapshot must be published and durably flushed before market subscriptions or trading-engine activation. After that gate passes, ordinary Journal event delivery remains asynchronous. The separate trading-safety contract requires order-submission and cancellation intent records to be durably flushed before the corresponding broker write; no other Journal I/O is awaited by market, strategy, or fill-accounting workflows. Trading-enabled graceful shutdown also requires a durable CLOSING account snapshot; failure is reported as incomplete shutdown.
 
-Step 1 is implemented and merged into `develop` in [PR #453](https://github.com/45s/coinzilla/pull/453): the process entry point composes one EventBus and injects a best-effort publisher into bootstrap. No events are published and Journal is not initialized.
+Step 1 introduced one EventBus and the best-effort application publisher boundary; it merged into `develop` in [PR #453](https://github.com/45s/coinzilla/pull/453). Journal composition and lifecycle publication were added by later milestones: event DTO contracts in [PR #455](https://github.com/45s/coinzilla/pull/455), Journal composition in [PR #456](https://github.com/45s/coinzilla/pull/456), and process/configuration/broker lifecycle events in [PR #458](https://github.com/45s/coinzilla/pull/458). The original Step 1 scope must not be read as the current runtime state; see [Journal Operations](./JOURNAL_OPERATIONS.md) for the current event inventory and behavior.
 
 ## Audit conclusions
 
@@ -105,7 +113,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 2 — Define stable Harvester event names and DTO mappings
 
-**Status:** [x] Contract constants, allowlisted lifecycle DTO mappings, and offline contract tests are included in this PR; CI is the merge gate.
+**Status:** [x] Merged into `develop` by [PR #455](https://github.com/45s/coinzilla/pull/455). Current event names and allowlisted payloads are documented in [Journal Operations](./JOURNAL_OPERATIONS.md).
 
 **Goal:** Define the application-owned event contract independently of Journal.
 
@@ -129,7 +137,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 3 — Add optional, non-blocking Journal composition
 
-**Status:** [x] Optional Journal service composition, asynchronous startup, health reporting, and offline failure tests are included in this PR; CI is the merge gate.
+**Status:** [x] Initial Journal service composition and lifecycle merged into `develop` by [PR #456](https://github.com/45s/coinzilla/pull/456). Current broker-connected PREFLIGHT durability requirements and configuration-only/no-broker optionality are defined in [Trading First](./TRADING_FIRST.md) and [Journal Operations](./JOURNAL_OPERATIONS.md).
 
 **Goal:** Connect the existing Journal to EventBus while keeping trading startup independent.
 
@@ -152,7 +160,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 4 — Publish configuration, process, and broker lifecycle events
 
-**Status:** [x] Process/configuration/broker lifecycle instrumentation and offline tests are included in this PR; CI is the merge gate.
+**Status:** [x] Merged into `develop` by [PR #458](https://github.com/45s/coinzilla/pull/458). The current event inventory and payload allowlists are maintained in [Journal Operations](./JOURNAL_OPERATIONS.md).
 
 **Goal:** Make application startup and connectivity observable.
 
