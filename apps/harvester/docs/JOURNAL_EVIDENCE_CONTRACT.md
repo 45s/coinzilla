@@ -47,6 +47,10 @@ Fields may be absent when Binance does not supply them:
 
 The broker evidence record is stored separately from normalized `order.updated` and `execution.fill_applied` events. `order.updated` is emitted only when the order registry applies a new canonical state; duplicate or stale reports remain visible in the broker evidence stream without generating duplicate normalized transitions. A broker report does not imply that its execution has been applied to accounting.
 
+## Startup failure and cleanup
+
+A Journal readiness failure remains visible to callers and does not become a successful start. During shutdown, the Harvester wrapper still invokes the Journal's own `close()` lifecycle after a failed start: the Journal is responsible for confirming that resources acquired during startup were rolled back. Completed rollback is a successful cleanup outcome, while any retained-resource cleanup error remains a shutdown failure. This keeps an optional evidence startup failure from being misreported as a second observability-cleanup failure.
+
 ## Known boundaries
 
 - High-frequency market ticks are intentionally not journaled; the decision record captures the price used for an actionable decision.
