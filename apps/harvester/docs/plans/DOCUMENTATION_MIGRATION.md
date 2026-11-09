@@ -130,6 +130,8 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 ## Current status and remaining boundaries
 
+A source-based documentation consistency review also found and corrected a material process-lock discrepancy: the README incorrectly said stale locks are never reclaimed, while the source and tests permit narrowly guarded same-host dead-PID reclamation; Journal Operations described only the directory lock and omitted the broker-wide host lock. Both documents are now aligned with `acquire-harvester-process-lock.js`, `acquire-harvester-process-locks.js` and their deterministic tests. The Journal integration roadmap's Step 8 branch status was also refreshed against merged PR #473; Step 8 remains open rather than being falsely marked complete.
+
 A complete recursive Git tree is available for the baseline commit. The repository inventory covers all 97 Markdown files: 42 Harvester files and 55 other repository/root/package files. The Harvester inventory contains five REVIEW candidates; the repository-wide inventory contains two Brokers REVIEW candidates. All other files are conservatively KEEP at their current paths. This is an initial disposition, not proof that every factual statement is current or every reference has been traced.
 
 The inventory phase has established a complete path/size/category baseline. The remaining work is content-level authority review, inbound/outbound link and GitHub issue/PR reference mapping, source verification, and final disposition of REVIEW candidates. No move, merge, split, supersede or archive operation is authorized by the initial inventories alone.
