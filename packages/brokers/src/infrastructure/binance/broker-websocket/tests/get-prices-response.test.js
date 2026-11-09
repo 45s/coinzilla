@@ -6,7 +6,7 @@ import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 describe("BinanceSdkBroker.getPrices", () => {
   it("passes the symbol and preserves the ticker.price response", async () => {
     const payload = { symbol: "BTCUSDT", price: "65000.12000000" }
-    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret" })
+    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" })
     const rpc = createFakeRpcClient({ "ticker.price": (params) => {
       assert.deepEqual(params, { symbol: "BTCUSDT" })
       return payload

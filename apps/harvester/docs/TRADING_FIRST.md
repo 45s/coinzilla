@@ -9,7 +9,7 @@
 
 The former blanket TESTNET acceptance gate is removed. Explicitly selected user tasks may proceed independently of TESTNET acceptance. TESTNET validation remains a separate operational milestone, not a prerequisite for Journal evidence, documentation, or other selected engineering work.
 
-This does not authorize live trading, exchange writes, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. Live trading remains disabled unless separately and explicitly authorized. Keep TESTNET-only runtime protections and exact-order ownership safeguards intact.
+This does not authorize exchange writes during documentation or engineering preparation, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. The operator explicitly selects the exchange environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice. Keep all order-safety protections, exact-order ownership safeguards, and Journal durability barriers intact.
 
 ## Journal contract boundary
 
@@ -77,7 +77,7 @@ The expected product workflow is the Conservative lifecycle defined in [Trading 
 
 Trading first does not mean careless execution. Implement the smallest safety boundary that makes the TESTNET cycle controlled and testable:
 
-- Resolve execution policy from the selected `trading-config.json` runtime profile. The `development` profile explicitly enables Conservative TESTNET execution; the `test` and unspecified-environment profiles remain read-only. The `production` profile selects Binance LIVE connectivity but MUST keep order execution disabled. Live trading is not implemented and cannot be enabled implicitly.
+- Resolve the Binance environment from the single `TRADING_MODE` environment variable. Accept only `testnet` or `live`; reject missing or invalid values at startup. Binance is the only broker, so no broker selector is needed. Trading is enabled in either mode, with no separate trading-enable flag or runtime-profile selector. `NODE_ENV` may describe the Node.js runtime but must not choose the exchange environment. Implemented: the bootstrap reads `TRADING_MODE` directly; `NODE_ENV` does not select the exchange, and no runtime profile is loaded from `trading-config.json`.
 - Validate the enabled pair, current price, exchange tick/step rules, supported order type, minimum quantity/notional, and available balance needed for the specific order.
 - Use stable client order identifiers where the broker supports them and retain enough in-process order state to associate updates/fills with submitted orders.
 - Never submit duplicate orders because of repeated market events or duplicate execution events.
@@ -136,7 +136,7 @@ All of the following must be demonstrated, not merely described:
 - [ ] A safe, repeatable BUY → fill → SELL → fill → next-cycle sequence succeeds on TESTNET. (One recovery SELL and cycle-completion event are evidenced, but the run exposed a repeated-BUY race and a post-cycle MIN_NOTIONAL failure.)
 - [ ] Disconnect/unknown-outcome behavior pauses new orders rather than blindly duplicating them.
 - [x] Deterministic regression tests and fixes for the rapid-BUY race and post-cycle MIN_NOTIONAL intent are merged into develop and pass all five required workflows on the PR #515 merge commit; live TESTNET effectiveness remains unproven.
-- [x] Live trading remains disabled; the evidence recorded here is Binance Spot TESTNET only.
+- [x] The execution evidence recorded in this document is Binance Spot TESTNET only; no LIVE orders are claimed or authorized by this validation record. A deliberate `TRADING_MODE=live` selection is the separate environment choice for real Binance execution.
 
 Only after this definition of done is met should the team move the main priority to durable Journal integration, restart recovery, comprehensive reconciliation, operational hardening, or Aggressive strategy work.
 

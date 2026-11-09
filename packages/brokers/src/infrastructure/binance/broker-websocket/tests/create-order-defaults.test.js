@@ -8,7 +8,7 @@ describe("BinanceSdkBroker.createOrder defaults", () => {
     const rpc = createFakeRpcClient({
       "order.place": () => ({ symbol: "BTCUSDT", orderId: 9, type: "LIMIT", side: "BUY", price: "100", origQty: "2", executedQty: "0" }),
     })
-    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret" })
+    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" })
     broker.tradingConnection = rpc
     const result = await broker.createOrder({ symbol: "BTCUSDT", quantity: 2, price: 100 })
     assert.deepEqual(rpc.calls[0].params, { symbol: "BTCUSDT", quantity: 2, price: 100, side: "BUY", type: "LIMIT", timeInForce: "GTC" })

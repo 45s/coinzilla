@@ -22,6 +22,7 @@ test("blocks every order mutation while the user-data stream is unavailable", as
   rpc.state = "open"
 
   const broker = new BinanceSdkBroker({
+    tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
     logger: { error() {}, info() {}, warn() {}, debug() {} },

@@ -8,7 +8,6 @@ import { loadTradingConfig } from "../infrastructure/config/load-trading-config.
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
-import { evaluateReadOnlyConservativeStrategy } from "../use-cases/evaluate-read-only-conservative-strategy.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
@@ -35,7 +34,7 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  evaluateStrategy = evaluateReadOnlyConservativeStrategy,
+  evaluateStrategy = conservativeStrategyPolicy.evaluate,
   logger = defaultLogger,
   eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
@@ -79,7 +78,7 @@ export async function startHarvester({
     requiresExchangeReconciliation: false,
   })
   let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
-  let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
+  let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_ENGINE_NOT_READY" } })
   const updatePortfolio = (...args) => portfolioWorkflow.updatePortfolio(...args)
   const updateTradingAccounting = (...args) => portfolioWorkflow.updateTradingAccounting(...args)
   const getPortfolio = (...args) => portfolioWorkflow.getPortfolio(...args)
@@ -92,30 +91,7 @@ export async function startHarvester({
   let tradingEngine
   let hasCanonicalOwnershipReconciliation = false
 
-  if (brokerName === undefined || brokerName === "") {
-    logSystem(logger, { message: "Broker disabled; exchange connectivity unavailable" })
-    return Object.freeze({
-      tradingConfig,
-      eventPublisher,
-      broker: undefined,
-      brokerName: undefined,
-      environment,
-      tradingMode,
-      tradingEnabled: false,
-      strategyMode: "read-only",
-      connected: false,
-      subscriptions: [],
-      processMarketPrice,
-      updatePortfolio,
-      updateTradingAccounting,
-      get portfolio() { return getPortfolio() },
-      getRecoveryLedger,
-      getMarketMetadata,
-      getAccountSnapshot,
-      stop: async () => {},
-    })
-  }
-  const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, eventPublisher, logger })
+  const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, tradingMode, eventPublisher, logger })
 
   const subscriptions = []
   const marketPriceIntake = new Map()
@@ -126,7 +102,7 @@ export async function startHarvester({
     stopped: false,
     ready: false,
     initialAccountSnapshotReady: false,
-    requiresReconciliation: !tradingEnabled,
+    requiresReconciliation: false,
     streamUnsafe: false,
     accountingFailed: false,
     retryableRecoveryFailure: null,
@@ -227,7 +203,6 @@ export async function startHarvester({
   const isMarketBookFresh = (marketBook) => isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
 
   const activateTradingEngine = () => {
-    if (!tradingEnabled) return
     tradingEngine = makeConservativeTradingEngine({
       broker,
       strategyPolicy: conservativeStrategyPolicy,
@@ -269,7 +244,7 @@ export async function startHarvester({
     // Durable Journal replay is intentionally disabled. Harvester starts with
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
-    if (tradingEnabled) activateTradingEngine()
+    activateTradingEngine()
     portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
 
     userDataSubscription = await subscribeToUserData({
@@ -350,11 +325,12 @@ export async function startHarvester({
     brokerName,
     tradingMode,
     tradingEnabled,
-    strategyMode: tradingEnabled ? "conservative" : "read-only",
+    strategyMode: "conservative",
     get userDataReady() { return userDataState.ready },
     get userDataStatus() { return userDataState.status },
     processMarketPrice,
     updatePortfolio,
+    updateTradingAccounting,
     get portfolio() { return getPortfolio() },
     get recoveredState() { return recoveredState },
     getRecoveryLedger,

@@ -1,25 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { main } from '../src/index.js';
+import { main as startMain } from '../src/index.js';
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
   status: { state: 'disabled', enabled: false },
+  flush: async () => ({ ok: true, durable: true }),
   close: async () => ({ ok: true, closed: true, disabled: true }),
 });
 
-test('reports successful configuration startup without claiming a workflow ran', async () => {
+const runMain = (options = {}) => {
+  const { env = {}, ...rest } = options;
+  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), ...rest, env: { TRADING_MODE: 'testnet', ...env } });
+};
+
+test('reports successful Binance TESTNET startup without claiming a workflow ran', async () => {
   const messages = [];
   const logger = {
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
+    system: (message) => messages.push(['system', message]),
   };
 
-  await main({ createJournalService: disabledJournalService, start: async () => ({}), logger });
+  await runMain({ createJournalService: disabledJournalService, start: async () => ({ connected: true, brokerName: 'binance', tradingEnabled: true, strategyMode: 'conservative', subscriptions: [] }), logger });
 
   assert.deepEqual(messages, [[
-    'info',
-    'Configuration validated; broker and market data are disabled.',
+    'system',
+    'Connected; subscribed to 0 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.',
   ]]);
 });
 
@@ -30,6 +37,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   const logger = {
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
+    system() {},
   };
 
   t.after(() => {
@@ -37,7 +45,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   process.exitCode = 0;
-  await main({
+  await runMain({
     createJournalService: disabledJournalService,
     start: async () => {
       throw startupError;

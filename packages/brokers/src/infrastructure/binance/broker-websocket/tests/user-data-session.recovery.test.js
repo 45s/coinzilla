@@ -188,6 +188,7 @@ describe("Binance user-data reconnect behavior", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -299,6 +300,7 @@ describe("Binance user-data reconnect behavior", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: {
         error() { throw new Error("logger failed") },
         info() {},

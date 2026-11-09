@@ -5,6 +5,7 @@ This directory records cross-cutting architecture principles and decisions for t
 ## Start here
 
 - [ADR-0001: Clean and Hexagonal Architecture](./decisions/ADR-0001-clean-hexagonal-architecture.md) — the accepted architectural style and dependency boundaries.
+- [ADR-0002: Explicit Binance trading environment](./decisions/ADR-0002-explicit-binance-trading-environment.md) — `TRADING_MODE` is the sole Binance endpoint selector; `NODE_ENV` is not used.
 
 ## Templates
 

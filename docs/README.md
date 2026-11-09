@@ -16,6 +16,7 @@ This index is the entry point for maintained Coinzilla documentation. The reposi
 
 - [Engineering documentation index](engineering/README.md)
 - [Architecture and decisions](architecture/README.md)
+- [ADR-0002: Explicit Binance trading environment](architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)

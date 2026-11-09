@@ -4,7 +4,7 @@ import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 const createBroker = (handlers) => {
-  const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", logger: { error() {}, info() {} } })
+  const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet", logger: { error() {}, info() {} } })
   broker.tradingConnection = createFakeRpcClient(handlers)
   return broker
 }

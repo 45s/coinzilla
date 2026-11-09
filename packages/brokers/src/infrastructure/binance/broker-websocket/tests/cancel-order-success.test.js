@@ -11,7 +11,7 @@ describe("BinanceSdkBroker.cancelOrder success", () => {
         return { symbol: "BTCUSDT", orderId: 23, type: "LIMIT", side: "BUY", price: "100", origQty: "2", executedQty: "0" }
       },
     })
-    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret" })
+    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" })
     broker.tradingConnection = rpc
     const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 23 })
     assert.equal(rpc.calls[0].method, "order.cancel")

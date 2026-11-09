@@ -22,6 +22,7 @@ export async function connectBroker({
   brokerAdapterFactory,
   env,
   brokerName,
+  tradingMode,
   eventPublisher,
   logger,
 } = {}) {
@@ -30,6 +31,7 @@ export async function connectBroker({
       config: {
         apiKey: env.BINANCE_API_KEY,
         apiSecret: env.BINANCE_API_SECRET_KEY,
+        tradingMode,
       },
     }),
   })

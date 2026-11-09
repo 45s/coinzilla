@@ -4,9 +4,9 @@ import { BinanceWebSocketBroker } from "./broker.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
 import { isTestnetOrderMutationEnabled } from "./testnet-integration-guards.js"
 
-if (process.env.NODE_ENV === "production") {
+if (process.env.TRADING_MODE !== "testnet") {
   throw new Error(
-    "Refusing to run Binance WebSocket integration tests with NODE_ENV=production",
+    'Refusing to run TESTNET integration tests unless TRADING_MODE="testnet"',
   )
 }
 
@@ -32,6 +32,7 @@ describe(
       const config = new BinanceWebSocketConfig({
         apiKey: process.env.BINANCE_API_KEY,
         apiSecret: process.env.BINANCE_API_SECRET_KEY,
+        tradingMode: "testnet",
       })
 
       assert.match(

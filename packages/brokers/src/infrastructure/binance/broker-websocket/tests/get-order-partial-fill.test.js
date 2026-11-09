@@ -11,7 +11,7 @@ describe("BinanceSdkBroker.getOrder partial fills", () => {
         return { symbol: "ETHUSDT", orderId: 17, type: "LIMIT", side: "SELL", price: "2500", origQty: "4", executedQty: "1.5" }
       },
     })
-    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret" })
+    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" })
     broker.tradingConnection = rpc
     const result = await broker.getOrder({ symbol: "ETHUSDT", orderId: 17 })
     assert.equal(result.ok, true)

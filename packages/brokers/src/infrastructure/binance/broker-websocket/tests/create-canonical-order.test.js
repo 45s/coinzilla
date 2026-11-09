@@ -20,7 +20,7 @@ function createBroker({ orderResponse, exchangeInfo } = {}) {
   })
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret",
+    apiSecret: "test-secret", tradingMode: "testnet",
     logger: { error() {}, info() {}, debug() {}, warn() {} },
   })
   broker.tradingConnection = rpc

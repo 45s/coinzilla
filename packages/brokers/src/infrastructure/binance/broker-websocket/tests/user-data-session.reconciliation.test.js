@@ -94,6 +94,7 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -161,6 +162,7 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -220,6 +222,7 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -288,6 +291,7 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -346,6 +350,7 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {
@@ -396,6 +401,7 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       reconnectDelay: 10,
       logger: { error() {}, info() {}, warn() {} },
     }, {

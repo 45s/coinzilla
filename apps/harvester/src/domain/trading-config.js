@@ -11,39 +11,10 @@ const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max
 }
 const requirePrecision = (value, path) => { if (!Number.isInteger(value) || value < 0) fail(path, "a non-negative integer") }
 
-function validateRuntimeProfiles(runtime) {
-  requireRecord(runtime, "runtime")
-  requireRecord(runtime.profiles, "runtime.profiles")
-  for (const [name, profile] of Object.entries(runtime.profiles)) {
-    const profilePath = `runtime.profiles.${name}`
-    if (!["default", "development", "test", "production"].includes(name)) {
-      fail("runtime.profiles", "only default, development, test, and production profiles")
-    }
-    requireRecord(profile, profilePath)
-    if (profile.broker !== null && profile.broker !== "binance") {
-      fail(`${profilePath}.broker`, 'null or "binance"')
-    }
-    requireRecord(profile.trading, `${profilePath}.trading`)
-    requireBoolean(profile.trading.enabled, `${profilePath}.trading.enabled`)
-    if (!["testnet", "live"].includes(profile.trading.mode)) {
-      fail(`${profilePath}.trading.mode`, '"testnet" or "live"')
-    }
-    if (name === "production" && profile.trading.enabled) {
-      fail(`${profilePath}.trading.enabled`, "false; production runtime must remain read-only")
-    }
-    if (profile.trading.enabled && profile.trading.mode !== "testnet") {
-      fail(`${profilePath}.trading.mode`, "testnet; live order execution is not supported")
-    }
-    if (profile.trading.enabled && profile.broker !== "binance") {
-      fail(`${profilePath}.broker`, ' "binance" when trading is enabled')
-    }
-  }
-}
-
 /** Validate CG_coinGrabber and its strategy-owned settings and pairs. */
 export function validateTradingConfig(config) {
   requireRecord(config, "root")
-  if (config.runtime !== undefined) validateRuntimeProfiles(config.runtime)
+  if (config.runtime !== undefined) fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")
   requireRecord(config.strategies, "strategies")
   requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
   const strategy = config.strategies.CG_coinGrabber
@@ -78,37 +49,8 @@ export function validateTradingConfig(config) {
   return config
 }
 
-/** Resolve the runtime profile selected by standard NODE_ENV. Missing profiles fail safe to read-only/no broker. */
-export function resolveHarvesterRuntimeConfig({ config, environment } = {}) {
-  const profileName = ["development", "test", "production"].includes(environment)
-    ? environment
-    : "default"
-  const profile = config?.runtime?.profiles?.[profileName] ?? config?.runtime?.profiles?.default
-  const brokerName = profile?.broker ?? undefined
-  const tradingMode = profile?.trading?.mode ?? "testnet"
-  const tradingRequested = profile?.trading?.enabled === true
-  if (brokerName !== undefined && brokerName !== "binance") {
-    throw new Error("Unsupported broker in runtime profile: " + brokerName)
-  }
-  if (tradingRequested && brokerName !== "binance") {
-    throw new Error("TESTNET trading requires runtime profile broker=binance")
-  }
-  if (tradingRequested && tradingMode !== "testnet") {
-    throw new Error("Order execution requires runtime profile trading.mode=testnet; live order execution is not supported")
-  }
-  if (tradingRequested && profileName === "production") {
-    throw new Error("Production runtime must remain read-only")
-  }
-  const tradingEnabled = tradingRequested &&
-    brokerName === "binance" &&
-    tradingMode === "testnet" &&
-    profileName !== "production"
-
-  return Object.freeze({
-    environment: profileName,
-    brokerName,
-    tradingMode,
-    tradingRequested,
-    tradingEnabled,
-  })
+/** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
+export function resolveHarvesterRuntimeConfig({ tradingMode, environment } = {}) {
+  if (tradingMode !== "testnet" && tradingMode !== "live") throw new Error('TRADING_MODE must be set to "testnet" or "live"')
+  return Object.freeze({ environment: environment ?? "unspecified", brokerName: "binance", tradingMode, tradingEnabled: true })
 }

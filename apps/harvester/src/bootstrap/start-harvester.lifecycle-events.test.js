@@ -19,14 +19,6 @@ const startHarvesterForTest = (input = {}) => {
 
 
 const config = {
-  runtime: {
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
-      test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "binance", trading: { enabled: false, mode: "live" } },
-    },
-  },
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -38,6 +30,7 @@ const config = {
   },
 }
 const env = {
+  TRADING_MODE: "testnet",
   NODE_ENV: "test",
   BINANCE_API_KEY: "fake-key",
   BINANCE_API_SECRET_KEY: "fake-secret",
@@ -66,6 +59,7 @@ function createBroker({
   priceResult,
   userDataError,
   priceError,
+  onRecoveryAcknowledged,
 } = {}) {
   let handlers
   let priceHandler
@@ -95,13 +89,26 @@ function createBroker({
     }),
     getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
     getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
-    getPrices: async () => ({ ok: true }),
+    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
     subscribeForUserData: async (input) => {
       handlers = input
       if (userDataError) throw userDataError
       return userDataResult ?? {
         ok: true,
-        data: { disconnect: async () => {} },
+        data: {
+          disconnect: async () => {},
+          acknowledgeRecoveryResult: (recoveryGeneration) => {
+            handlers.onStatus({
+              type: "reconciled",
+              subscriptionId: 17,
+              recoveryGeneration,
+              recoveryRequired: false,
+              reconciliationRequired: false,
+            })
+            onRecoveryAcknowledged?.()
+            return { accepted: true, completed: true }
+          },
+        },
       }
     },
     subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
@@ -131,7 +138,9 @@ function createPublisher() {
 
 test("publishes validated config, broker/subscription lifecycle and meaningful reconnect transitions", async () => {
   const eventPublisher = createPublisher()
-  const broker = createBroker()
+  let resolveRecoveryAcknowledged
+  const recoveryAcknowledged = new Promise((resolve) => { resolveRecoveryAcknowledged = resolve })
+  const broker = createBroker({ onRecoveryAcknowledged: resolveRecoveryAcknowledged })
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env,
@@ -148,11 +157,12 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
+    HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
   assert.deepEqual(eventPublisher.events[0].data, {
     enabledMarkets: ["BTCUSDT"],
-    strategyMode: "read-only",
-    tradingEnabled: false,
+    strategyMode: "conservative",
+    tradingEnabled: true,
   })
   assert.deepEqual(eventPublisher.events[3].data, {
     broker: "binance",
@@ -165,15 +175,29 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     stream: "market-price",
     market: "BTCUSDT",
   })
+  assert.equal(runtime.tradingMode, "testnet")
+  assert.equal(runtime.tradingEnabled, true)
 
   broker.emitStatus({ type: "ready", recoveryRequired: false })
   broker.emitStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
-  broker.emitStatus({ type: "recovered", recoveryRequired: true, reconciliationRequired: true, attempt: 1 })
-  assert.deepEqual(eventPublisher.events.slice(7).map((event) => event.data.status), [
+  broker.emitStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryGeneration: 1,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+    attempt: 1,
+  })
+  assert.deepEqual(eventPublisher.events.slice(7)
+    .filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED)
+    .map((event) => event.data.status)
+    .slice(0, 2), [
     "connectionClosed",
     "recovered",
   ])
   assert.equal(eventPublisher.events[8].data.recoveryRequired, true)
+  await recoveryAcknowledged
+  assert.equal(runtime.userDataReady, true)
 
   const beforePrice = eventPublisher.events.length
   await broker.emitPrice({ eventType: "aggTrade", symbol: "BTCUSDT", price: "65000", timestamp: 1 })
@@ -316,5 +340,5 @@ test("surfaces Binance fill-normalization failures as an actionable user-data pa
     entry.errorMessage === "Binance fill is missing trade id"
   ))
 
-  await runtime.stop()
+  await assert.rejects(() => runtime.stop(), /Harvester shutdown was incomplete/)
 })

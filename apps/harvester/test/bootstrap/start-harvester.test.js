@@ -13,15 +13,8 @@ import {
 } from '@coinzilla/entities';
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
-
-const runtimeProfiles = {
-  profiles: {
-    default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-    development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
-    test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
-    production: { broker: "binance", trading: { enabled: false, mode: "live" } },
-  },
-}
+import { resolveHarvesterOptions } from '../../src/bootstrap/config/resolve-harvester-options.js';
+import { loadTradingConfig } from '../../src/infrastructure/config/load-trading-config.js';
 
 const createOpenOrderSnapshot = ({ order }) => {
   const openOrder = new Order({
@@ -72,14 +65,14 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = {
-    runtime: runtimeProfiles,
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
   const configSource = '/etc/harvester/trading-config.json';
   const calls = [];
 
-  const context = await startHarvesterForTest({
+  const context = await resolveHarvesterOptions({
     configSource,
+    env: { TRADING_MODE: 'testnet' },
     loadConfig: async (source) => {
       calls.push(source);
       return tradingConfig;
@@ -104,10 +97,10 @@ test('fails startup when configuration loading or validation fails', async () =>
   );
 });
 
-test('loads the default validated trading configuration', async () => {
-  const context = await startHarvesterForTest();
-
-  assert.ok(context.tradingConfig.strategies.CG_coinGrabber.pairs.ZROUSDT);
+test('loads the default validated strategy and pair configuration', async () => {
+  const config = await loadTradingConfig();
+  assert.ok(config.strategies.CG_coinGrabber.pairs.ZROFDUSD);
+  assert.equal(Object.hasOwn(config, 'runtime'), false);
 });
 
 
@@ -145,7 +138,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     }),
   ];
   const tradingConfig = {
-    runtime: runtimeProfiles,
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
@@ -245,6 +237,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     brokerAdapterFactory: () => broker,
     env: {
       NODE_ENV: 'development',
+      TRADING_MODE: 'testnet',
       BINANCE_API_KEY: 'test-key',
       BINANCE_API_SECRET_KEY: 'test-secret',
     },
@@ -361,7 +354,6 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     }),
   ]
   const tradingConfig = {
-    runtime: runtimeProfiles,
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -478,6 +470,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     brokerAdapterFactory: () => broker,
     env: {
       NODE_ENV: "development",
+      TRADING_MODE: "testnet",
       BINANCE_API_KEY: "test-key",
       BINANCE_API_SECRET_KEY: "test-secret",
     },

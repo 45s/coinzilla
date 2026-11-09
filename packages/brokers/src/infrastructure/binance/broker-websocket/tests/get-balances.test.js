@@ -9,6 +9,7 @@ const createBroker = (handlers) => {
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
+      tradingMode: "testnet",
     logger: { error() {}, info() {} },
   })
   broker.tradingConnection = createFakeRpcClient(handlers)

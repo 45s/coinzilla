@@ -144,6 +144,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
     const broker = new BinanceWebSocketBroker({
       apiKey: brokerConfig.apiKey,
       apiSecret: brokerConfig.apiSecret,
+      tradingMode: brokerConfig.tradingMode,
       logger,
     })
     broker.connect = async () => {
@@ -349,6 +350,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       BINANCE_API_KEY: "key",
       BINANCE_API_SECRET_KEY: "secret",
       NODE_ENV: "development",
+      TRADING_MODE: "testnet",
     },
     brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
       createBinanceBrokerAdapter({

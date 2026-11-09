@@ -34,6 +34,7 @@ const createFixture = ({ connect, disconnect } = {}) => {
   const eventPublisher = { publish: (event) => { events.push(event); return { ok: true } } }
   const brokerAdapterFactory = ({ config }) => {
     calls.push("factory")
+    assert.equal(config.tradingMode, "testnet", "The validated exchange mode must reach the broker adapter factory.")
     assert.equal(config.apiKey, "test-key", "The configured API key must reach the broker adapter factory.")
     assert.equal(config.apiSecret, "test-secret", "The configured API secret must reach the broker adapter factory.")
     return broker
@@ -46,7 +47,7 @@ const createFixture = ({ connect, disconnect } = {}) => {
 
 test("connects a validated broker and publishes the connected lifecycle event", async () => {
   const fixture = createFixture()
-  const broker = await connectBroker({ ...fixture, brokerName: "binance", logger: {} })
+  const broker = await connectBroker({ ...fixture, brokerName: "binance", tradingMode: "testnet", logger: {} })
 
   assert.equal(broker, fixture.broker, "The connected broker port must be returned to bootstrap.")
   assert.deepEqual(fixture.calls, ["factory", "connect"], "Broker construction must precede the connection attempt.")
@@ -57,7 +58,7 @@ test("disconnects after connection failure and publishes failure evidence", asyn
   const fixture = createFixture({ connect: async () => { throw new Error("connect failed") } })
 
   await assert.rejects(
-    connectBroker({ ...fixture, brokerName: "binance", logger: { error: () => {} } }),
+    connectBroker({ ...fixture, brokerName: "binance", tradingMode: "testnet", logger: { error: () => {} } }),
     /connect failed/,
     "The original connection error must remain the rejection when cleanup succeeds.",
   )
@@ -72,7 +73,7 @@ test("aggregates connection and disconnect failures without losing either cause"
   })
 
   await assert.rejects(
-    connectBroker({ ...fixture, brokerName: "binance", logger: { error: () => {} } }),
+    connectBroker({ ...fixture, brokerName: "binance", tradingMode: "testnet", logger: { error: () => {} } }),
     (error) => error instanceof AggregateError && error.errors.length === 2,
     "Connection and cleanup failures must be reported together.",
   )

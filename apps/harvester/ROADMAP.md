@@ -6,6 +6,11 @@
 
 This section is the authoritative implementation order for current work. It supersedes older "current direction", P0/P1 and future-work notes below wherever their status or ordering conflicts. Historical incident records remain evidence, not active tasks. Harvester is the only application currently in this workspace.
 
+### Completed — explicit Binance trading-mode propagation (PR #841)
+
+- [x] Harvester reads and validates only `TRADING_MODE=testnet|live`, passes the resolved value explicitly through its Binance broker adapter, and supplies TESTNET explicitly in offline replay/test harnesses. `NODE_ENV` remains application runtime metadata and cannot select exchange endpoints. LIVE selection requires no second confirmation or enable flag.
+- **Boundary:** this is endpoint-selection/configuration completion, not exchange acceptance or restart safety. Hosted read-only TESTNET acceptance remains externally blocked/unverified; process-restart reconciliation remains a separate critical issue tracked by [#654](https://github.com/45s/coinzilla/issues/654).
+
 ### CRITICAL — complete before unattended operation
 
 1. **[x] Make Conservative trailing-BUY replacement failure-safe — PRs #751 and #753 merged.**
@@ -85,7 +90,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
-- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** Merged PR #836 disabled DOGEUSDT and ZROUSDT and enabled only ZROFDUSD, but the controlled TESTNET runbook still described the earlier two-pair plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter configuration or use the runbook for execution until the pair scope and all quote-currency/fee/order limits are explicitly reconciled. The standalone `testnet:sell-zro` helper is separately hardcoded to ZROUSDT and submits a MARKET SELL; the account-wide `testnet:cancel-orders` helper also proceeds without an interactive confirmation. Both are legacy operator writes, not approved cleanup paths while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed config enables only ZROFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -182,7 +187,7 @@ These items are intentionally recorded for future work. They are not current tra
 
 The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
 
-Trading safety requirements remain in force: live trading stays disabled unless explicitly authorized; TESTNET-only runtime protections, exact-order ownership, and the existing mandatory Journal durability barriers must not be weakened. Journal evidence beyond those barriers is bounded, allowlisted, and best-effort. Journal is not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
+Trading safety requirements remain in force: the operator selects TESTNET or LIVE explicitly through `TRADING_MODE`; `live` means real Binance order execution. Keep order-safety protections, exact-order ownership, and the existing mandatory Journal durability barriers intact. Journal evidence beyond those barriers is bounded, allowlisted, and best-effort. Journal is not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
 
 ## Strategy-scoped trading configuration
 
@@ -221,15 +226,14 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 11. Pause new orders safely on disconnect, stale data, unknown order outcomes, unsupported commission, balance/risk violations, or other immediate execution hazards; resume only after the affected live state is refreshed and understood.
 12. Shut down cleanly and do not report in-flight orders as completed. Durable restart recovery is a later hardening milestone.
 
-Live trading must remain explicitly disabled by default. TESTNET verification is required before any live-trading enablement.
+`TRADING_MODE=testnet` selects Binance Spot TESTNET; `TRADING_MODE=live` selects Binance Spot LIVE and enables order execution without a separate trading-enable flag. The startup environment must explicitly contain one of these values; missing or invalid values must fail startup. TESTNET validation remains a separate evidence milestone and does not itself select LIVE.
 
 ## Runtime entrypoint hardening — current task
 
 - [x] Remove public `runtime.placeOrder` and `runtime.broker` escape hatches.
       The broker port remains private to bootstrap and the Conservative engine;
       runtime consumers cannot submit orders outside the engine workflow.
-- [x] Report the actual startup mode: Conservative TESTNET trading enabled,
-      broker-connected read-only, or configuration-only/no broker.
+- [x] Report the actual startup mode: Conservative TESTNET or LIVE trading enabled. Harvester requires an explicit `TRADING_MODE` and always connects to Binance; there is no read-only/no-broker runtime profile.
 - [x] Add regression coverage for startup messages and the absence of public
       broker/order-submission methods.
 - [x] Update the README and agent delivery rules in the same implementation
@@ -242,11 +246,12 @@ TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
 ## Historical implementation snapshot — initial TESTNET pair selection
 
-> The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. Merged PR #836 later disabled both and enabled only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
+> The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. The committed config now enables only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
+
 
 At the time of this snapshot, the task branch had progressed beyond the initial `develop` audit described
 below. The following first-cycle components were implemented and composed
-when the selected development runtime profile explicitly enabled TESTNET trading:
+when `TRADING_MODE=testnet` was selected:
 
 - Conservative pure policy: initial/standing BUY and recovery SELL intents,
   exact tick/step rounding, duplicate suppression, partial-fill wait behavior,
@@ -260,11 +265,7 @@ when the selected development runtime profile explicitly enabled TESTNET trading
 - Recovery completion: a fully filled SELL must satisfy the actual cumulative
   net-profit condition and leave at least `keepQuantity`; the retained amount
   moves to free inventory and the cycle ledger resets.
-- Startup: explicit TESTNET trading opt-in, one or more enabled pairs, a fresh
-  initial canonical account snapshot covering every enabled market's assets. External open orders and pre-existing
-  inventory are not adopted; order checks use in-process cash flow, owned
-  position quantity, and outstanding commitments. The default config enables
-  `ZROUSDT` and `DOGEUSDT`; FDUSD pairs remain disabled.
+- Startup: explicit `TRADING_MODE=testnet` selection, one or more enabled pairs, and a fresh initial canonical account snapshot covering every enabled market's assets. Trading is enabled in either exchange mode; no separate trading-enable flag is used. External open orders and pre-existing inventory are not adopted; order checks use in-process cash flow, owned position quantity, and outstanding commitments. The then-current config enabled `ZROUSDT` and `DOGEUSDT`; FDUSD pairs were disabled.
 
 Offline bootstrap coverage simulates the complete first recovery cycle:
 initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full
@@ -318,9 +319,9 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Enforce configured per-pair investment against available quote balance while coordinating shared quote assets across enabled pairs (e.g. multiple USDT markets) through the exact-decimal allocator.
 - [x] Seed Conservative TESTNET market state after subscribing: use the existing Binance `ticker.price` request/response snapshot when no fresh aggregate-trade event arrived during startup. Reject invalid snapshots, fail startup when neither source provides a usable price, and reject WebSocket prices older than 5 seconds (or more than 1 second in the future). Enforce cached-price freshness at both order-submission gates, including after PENDING registration and before each action in a multi-order decision; defer broker I/O when the price expires.
 - [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
-- [x] Implement minimum process readiness for the first TESTNET cycle. When the development runtime profile sets `trading.enabled=true` with `trading.mode=testnet`, startup requires at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite. Read-only broker mode remains available; genuine reconnect/reconciliation requirements still fail closed.
-- [x] Enable the first TESTNET order only after the selected `development` runtime profile explicitly sets `trading.enabled=true` and `trading.mode=testnet`, validated config, enabled-pair exchange filters, fresh account snapshot, and active user-data stream. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
-- [x] Validate runtime-profile combinations; the selected development profile explicitly selects `broker=binance`, TESTNET mode, and TESTNET execution. Production selects Binance LIVE connectivity but remains read-only; live order execution is unsupported. Implemented and merged in [PR #839](https://github.com/45s/coinzilla/pull/839).
+- [x] Implement minimum process readiness for the first TESTNET cycle. When `TRADING_MODE=testnet` is selected, startup requires at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite; genuine reconnect/reconciliation requirements still fail closed.
+- [x] Enable order execution after the selected `TRADING_MODE` is validated and strategy configuration, enabled-pair exchange filters, a fresh account snapshot, and an active user-data stream are ready. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
+- [~] Replace `trading-config.json` runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Implemented on PR #841: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings remain in `trading-config.json`. Exact-head CI and review remain pending before this can be marked Done.
 - [x] Validate enabled pair configuration against exchange assets/filters at startup: `orderQuantity` is rounded down by the actual base-asset step and checked against supported min/max quantity; quote-asset `investment` is checked against minimum notional. The symbol must match the exchange market metadata. Actual price/quantity/notional validation remains at order submission.
 
 ### P0.3 — Order intent, safety checks, and reservations
@@ -386,7 +387,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Offline coverage verifies pre-submit quote/investment/base budget enforcement, min-notional and precision validation, fresh-book POST-ONLY crossing checks, stale price/book deferral, stream-loss trading gates, and unknown-outcome pause/no-retry behavior. Real Binance rejection, timeout, and recovery behavior remains NOT OBSERVED until the controlled TESTNET session.
 - [ ] Verify loss protection and Conservative takeover do not force a loss-making sale or operate the same Position concurrently.
 - [~] Provide a documented, reproducible TESTNET runbook and evidence for the first successful cycle. The runbook exists; a full recovery SELL fill and `recovery.cycle_completed` are now evidenced, but the same run exposed a rapid-BUY burst and a post-cycle MIN_NOTIONAL failure. A safe next-cycle BUY and repeatable cycle are not verified.
-- [ ] Keep live trading disabled until the user explicitly approves a separate live-trading milestone after TESTNET evidence is reviewed.
+- [~] LIVE execution is explicitly selected by `TRADING_MODE=live` and uses real funds. This code path is implemented, but no live exchange activity is authorized or claimed by this PR; operator selection and separate operational approval remain required.
 
 ## P1 — Implement Aggressive after Conservative is proven
 
@@ -448,7 +449,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - Keep durable recovery, comprehensive reconciliation, and optimization separate from operational observability. EventBus/Journal lifecycle logging may proceed without waiting for a Conservative TESTNET cycle.
 - Do not implement unresolved financial/risk behavior by assumption; close the decision first.
 - Do not mark an item complete until implementation, meaningful tests, required checks, and documentation are complete on the target branch.
-- Keep live trading disabled by default; TESTNET trading must be explicitly opt-in.
+- Keep LIVE execution behind the explicit `TRADING_MODE=live` selection; never infer LIVE from `NODE_ENV` or a deployment profile.
 - Report exact checks actually run; source inspection is not runtime verification.
 
 ### CI lockfile repair

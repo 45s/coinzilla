@@ -1,19 +1,25 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { main } from "../src/index.js"
+import { main as startMain } from "../src/index.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
   status: { state: "disabled", enabled: false },
+  flush: async () => ({ ok: true, durable: true }),
   close: async () => ({ ok: true, closed: true, disabled: true }),
 })
+
+const runMain = (options = {}) => {
+  const { env = {}, ...rest } = options
+  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), ...rest, env: { TRADING_MODE: "testnet", ...env } })
+}
 
 test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notifications", async () => {
   const sentMessages = []
   const signalHandlers = new Map()
   const loggerErrors = []
 
-  await main({
+  await runMain({
     env: {
       TELEGRAM_BOT_TOKEN: "test-telegram-token",
       TELEGRAM_CHAT_ID: "test-chat-id",
@@ -56,8 +62,9 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
 
       return {
         connected: true,
-        tradingEnabled: false,
-        strategyMode: "read-only",
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
         subscriptions: ["DOGEUSDT"],
         stop: async () => ({ ok: true }),
       }
@@ -90,7 +97,7 @@ test("keeps Harvester running when optional Telegram setup fails", async () => {
   const loggerErrors = []
   let startCalled = false
 
-  const result = await main({
+  const result = await runMain({
     env: {
       TELEGRAM_BOT_TOKEN: "configured-token",
       TELEGRAM_CHAT_ID: "configured-chat",
@@ -102,9 +109,10 @@ test("keeps Harvester running when optional Telegram setup fails", async () => {
     start: async () => {
       startCalled = true
       return {
-        connected: false,
-        tradingEnabled: false,
-        strategyMode: "read-only",
+        connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
         subscriptions: [],
         stop: async () => ({ ok: true }),
       }
@@ -124,14 +132,14 @@ test("keeps Harvester running when optional Telegram setup fails", async () => {
 
 test("does not construct Telegram transport when credentials are absent", async () => {
   let notifierCreations = 0
-  await main({
+  await runMain({
     env: {},
     createTelegramNotifier: () => {
       notifierCreations += 1
       throw new Error("Notifier must not be constructed without credentials")
     },
     createJournalService: disabledJournalService,
-    start: async () => ({ connected: false, tradingEnabled: false, strategyMode: "read-only", subscriptions: [] }),
+    start: async () => ({ connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }),
     logger: { info() {}, error() {} },
   })
 
@@ -145,7 +153,7 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
   process.exitCode = 0
 
   try {
-    await main({
+    await runMain({
       env: {
         TELEGRAM_BOT_TOKEN: "configured-token",
         TELEGRAM_CHAT_ID: "configured-chat",
@@ -157,9 +165,10 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
       }),
       createJournalService: disabledJournalService,
       start: async () => ({
-        connected: false,
-        tradingEnabled: false,
-        strategyMode: "read-only",
+        connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
         subscriptions: [],
         stop: async () => ({ ok: true }),
       }),

@@ -19,6 +19,7 @@ const createBroker = ({ config, logger }) =>
   new BinanceWebSocketBroker({
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
+    tradingMode: config.tradingMode,
     logger,
   })
 
@@ -39,6 +40,9 @@ export function createBinanceBrokerAdapter({
   }
   if (typeof config.apiSecret !== "string" || !config.apiSecret.trim()) {
     throw new TypeError("Binance adapter requires a non-empty apiSecret")
+  }
+  if (config.tradingMode !== "testnet" && config.tradingMode !== "live") {
+    throw new TypeError('Binance adapter tradingMode must be "testnet" or "live"')
   }
   if (typeof brokerFactory !== "function") {
     throw new TypeError("brokerFactory must be a function")
