@@ -104,8 +104,14 @@ function main() {
     'AGENTS.md',
     'AI_AGENT_WORKFLOW.md',
     'ENGINEERING_STANDARDS.md',
+    'docs/DOCUMENTATION_GOVERNANCE.md',
+    'docs/README.md',
+    'docs/engineering/README.md',
     'docs/engineering/TASK_WORKFLOWS.md',
     'docs/engineering/DOMAIN_OWNERSHIP.md',
+    'apps/harvester/AGENTS.md',
+    'apps/harvester/docs/README.md',
+    'apps/harvester/docs/plans/DOCUMENTATION_MIGRATION.md',
     '.github/PULL_REQUEST_TEMPLATE.md',
   ];
   const policyDocuments = policyPaths.map((path) => ({
