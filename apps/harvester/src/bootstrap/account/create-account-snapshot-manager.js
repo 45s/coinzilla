@@ -10,7 +10,7 @@ import {
 
 function withRecoveryFailure(error, category, stage, retryable) {
   const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
-  normalized.recoveryFailure = { category, stage, retryable }
+  normalized.recoveryFailure = normalized.recoveryFailure ?? { category, stage, retryable }
   return normalized
 }
 
@@ -51,7 +51,7 @@ export function createAccountSnapshotManager({
     try {
       result = await broker.getAccountSnapshot()
     } catch (error) {
-      throw withRecoveryFailure(error, "REST_RECONCILIATION", "ACCOUNT_SNAPSHOT_READ", true)
+      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_READ_EXCEPTION", false)
     }
     if (result?.ok !== false && result?.ok !== true) {
       throw withRecoveryFailure(
@@ -131,7 +131,7 @@ export function createAccountSnapshotManager({
     if (orders === undefined) {
       let result
       try { result = await broker.getOpenOrders({}) } catch (error) {
-        throw withRecoveryFailure(error, "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true)
+        throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", false)
       }
       if (result?.ok !== false && result?.ok !== true) {
         throw withRecoveryFailure(

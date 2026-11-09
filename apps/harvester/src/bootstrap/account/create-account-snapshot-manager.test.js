@@ -6,7 +6,7 @@ import { createAccountSnapshotManager } from "./create-account-snapshot-manager.
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], openOrders = [], openOrdersResult, flushResults = [] } = {}) => {
+const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [] } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -15,8 +15,14 @@ const createFixture = ({ accountSnapshots = [], openOrders = [], openOrdersResul
   let flushCount = 0
   const manager = createAccountSnapshotManager({
     broker: {
-      getAccountSnapshot: async () => accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)],
-      getOpenOrders: async () => openOrdersResult ?? ({ ok: true, data: openOrders }),
+      getAccountSnapshot: async () => {
+        if (accountSnapshotError) throw accountSnapshotError
+        return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
+      },
+      getOpenOrders: async () => {
+        if (openOrdersError) throw openOrdersError
+        return openOrdersResult ?? ({ ok: true, data: openOrders })
+      },
     },
     eventPublisher: {
       publish: (event) => {
@@ -109,6 +115,19 @@ test("rejects an account snapshot that omits a configured market asset", async (
     "A startup snapshot missing the configured quote asset must fail closed as terminal integrity failure.",
   )
   assert.equal(fixture.manager.getAccountSnapshot(), undefined, "An incomplete account snapshot must not become the accepted account view.")
+})
+
+test("treats unclassified thrown account snapshot and open-orders adapter errors as terminal", async () => {
+  const accountFixture = createFixture({ accountSnapshotError: new Error("unexpected account adapter exception") })
+  await assert.rejects(accountFixture.manager.refreshAccountSnapshot(), (error) => {
+    assert.deepEqual(error.recoveryFailure, { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_SNAPSHOT_READ_EXCEPTION", retryable: false })
+    return true
+  })
+  const ordersFixture = createFixture({ openOrdersError: new Error("unexpected open-orders adapter exception") })
+  await assert.rejects(ordersFixture.manager.publishOpenOrdersSnapshot(), (error) => {
+    assert.deepEqual(error.recoveryFailure, { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", retryable: false })
+    return true
+  })
 })
 
 test("treats account snapshot responses without an explicit success flag as terminal integrity failures", async () => {

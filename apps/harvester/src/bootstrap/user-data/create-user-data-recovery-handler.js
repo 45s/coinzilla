@@ -151,7 +151,7 @@ export function createUserDataRecoveryHandler({
           { category: "ORDER_TRANSITION", stage: "RECOVERY_GENERATION_FENCING", retryable: true },
         )
         const openOrdersResult = await runRecoveryStage({
-          category: "REST_RECONCILIATION", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ", retryable: true,
+          category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", retryable: false,
           task: () => broker.getOpenOrders({}),
         })
         if (openOrdersResult?.ok !== false && openOrdersResult?.ok !== true) {

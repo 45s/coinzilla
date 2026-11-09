@@ -743,3 +743,8 @@ A broker response without an explicit boolean ok field is now treated as an uncl
 ## 41. F-023 audit DTO versus Journal publication boundary — 2026-11-09
 
 Account/open-order audit DTO mapping failures are now terminal ACCOUNTING_INTEGRITY failures. Only a successfully mapped DTO that then fails EventBus publication or Journal durability receives a retryable DURABILITY classification. This prevents malformed audit content from being retried as though the Journal were temporarily unavailable.
+
+
+## 42. F-023 result-contract exception policy — 2026-11-09
+
+Only an explicit broker result with ok:false is classified as a retryable REST reconciliation failure. An adapter method that throws outside the result contract is unclassified and terminal unless the thrown Error already carries valid failure metadata. This rule is tested for account snapshot, account-wide open orders, owned-order open orders, canonical order history, and fill history.

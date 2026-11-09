@@ -586,6 +586,15 @@ test("keeps recovery blocked when owned-order reconciliation returns a failed re
   )
 })
 
+test("treats an unclassified thrown account-wide open-orders read as terminal", async () => {
+  const fixture = createRecovery({ getOpenOrders: async () => { throw new Error("unexpected broker adapter exception") } })
+  fixture.start()
+  await fixture.state.recoveryTask
+  assert.equal(fixture.state.accountingFailed, true)
+  assert.equal(fixture.state.status, "EXECUTION_ACCOUNTING_FAILED")
+  assert.equal(fixture.calls.acknowledgements, 0)
+})
+
 test("treats account-wide open-orders responses without an explicit success flag as terminal", async () => {
   const fixture = createRecovery({ getOpenOrders: async () => ({ data: [] }) })
   fixture.start()

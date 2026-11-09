@@ -5402,6 +5402,23 @@ function assertMalformedRestEnvelopeFailsClosed({
   )
 }
 
+test("treats unclassified thrown owned-order REST adapter errors as terminal", async () => {
+  const openOrdersFixture = await createMalformedRestEnvelopeFixture()
+  openOrdersFixture.harness.broker.getOpenOrders = async () => { throw new Error("unexpected open-orders adapter exception") }
+  const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(openOrdersResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDERS_READ_EXCEPTION", retryable: false })
+
+  const historyFixture = await createMalformedRestEnvelopeFixture()
+  historyFixture.harness.broker.getCanonicalOrderHistory = async () => { throw new Error("unexpected history adapter exception") }
+  const historyResult = await historyFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(historyResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_HISTORY_READ_EXCEPTION", retryable: false })
+
+  const fillsFixture = await createMalformedRestEnvelopeFixture()
+  fillsFixture.harness.broker.getFills = async () => { throw new Error("unexpected fills adapter exception") }
+  const fillsResult = await fillsFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(fillsResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_READ_EXCEPTION", retryable: false })
+})
+
 test("treats REST response envelopes without explicit success flags as terminal integrity failures", async () => {
   const openOrdersFixture = await createMalformedRestEnvelopeFixture({ openOrdersResult: { data: [] } })
   const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
