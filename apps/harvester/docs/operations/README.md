@@ -11,7 +11,7 @@ Start with the procedure matching the task. Do not treat a runbook as standing a
 
 ## Important safety boundaries
 
-- Order execution is enabled only by the `development` runtime profile, which selects Binance TESTNET. The `test` profile is broker-connected read-only; the unspecified profile is no-broker/read-only. `production` selects Binance LIVE connectivity but remains read-only.
+- Order execution is enabled by the `development` profile on Binance TESTNET and by the `production` profile on Binance LIVE. The `test` profile is broker-connected read-only; the unspecified profile is no-broker/read-only. Production uses real funds and requires LIVE API credentials with withdrawals disabled. Startup currently does not restore prior trading state after process restart; see #654.
 - Broker-connected startup requires the Journal PREFLIGHT audit and durable flush.
 - Current startup does not restore prior Portfolio/RecoveryLedger/OrderRegistry state from Journal history; process-restart reconciliation remains tracked by [#654](https://github.com/45s/coinzilla/issues/654).
 - External/unowned orders and balances are not adopted automatically.
