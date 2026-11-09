@@ -14,6 +14,7 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
+      tradingMode: "testnet",
       logger: { error: (...args) => logs.push(args), info() {} },
     }, { apiClientFactory: () => rpc })
     broker.connected = true
@@ -48,6 +49,7 @@ it("logs an unexpected user-data socket close even without an onStatus callback"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
+      tradingMode: "testnet",
     logger: { error: (...args) => logs.push(args), info() {}, warn() {} },
   }, { apiClientFactory: () => rpc })
   broker.connected = true
