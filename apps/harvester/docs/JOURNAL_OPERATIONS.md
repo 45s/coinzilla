@@ -260,7 +260,7 @@ This is an investigation status, not an implementation proposal to be applied in
 
 ## Single-writer trading process lock
 
-- Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before reading Journal history or creating a Journal writer.
+- Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before creating a Journal writer. No prior-session Journal history read is currently wired into startup.
 - A second local process using that same directory fails before Journal startup and before broker connection.
 - The lock is released only after runtime shutdown and Journal writer closure are confirmed. If runtime stop or Journal close is not confirmed, the lock is retained. If Journal shutdown cannot be confirmed, the lock is retained to prevent another writer from trading concurrently.
 - If runtime startup has been attempted and then fails, the lock is retained because broker resources may have been partially activated even when no runtime handle was returned. Verify the process and broker state before manually removing that stale lock.
