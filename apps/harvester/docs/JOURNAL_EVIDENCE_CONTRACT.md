@@ -21,7 +21,6 @@ This contract covers the current selected evidence work in [issue #650](https://
 | Evidence | Producer | Journal representation | Correlation |
 |---|---|---|---|
 | Process build/runtime identity | Process entry | `harvester.process_started`: application/package version, full/short commit, branch, commit subject/date, working-tree and metadata-source status, PID, runtime-session ID, original UTC start timestamp | runtime-session ID, Journal session, event ID/time |
-|---|---|---|---|
 | Actionable strategy decisions | Conservative trading engine | `strategy.decision`: strategy, symbol, reference price, decision reason, compact decision inputs, and executable actions | symbol, event ID/time |
 | Order submission request | Conservative trading engine before broker placement | `order.submission_requested`: client ID, symbol, side, type, price, quantity, pending status | client order ID |
 | Broker order acknowledgement | Conservative trading engine after canonical acknowledgement | `order.submitted`: client/exchange order IDs and canonical status/order facts | client + broker order IDs |

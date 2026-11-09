@@ -45,6 +45,7 @@ const validLifecycle = {
 
 test("exports stable names and source for the initial operational lifecycle contract", () => {
   assert.deepEqual(HARVESTER_EVENT_NAMES, {
+    PROCESS_STARTED: "harvester.process_started",
     STARTED: "harvester.started",
     STARTUP_FAILED: "harvester.startup_failed",
     STOPPED: "harvester.stopped",

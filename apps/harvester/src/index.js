@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url"
+import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
 import os from "node:os"
 import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
@@ -8,7 +9,7 @@ import { prepareOptionalJournal, resolveJournalDirectory } from "./infrastructur
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
-import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
+import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
@@ -16,6 +17,7 @@ import { createLogCommandInterface } from "./infrastructure/logging/create-log-c
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
+const PROCESS_IDENTITY = createHarvesterProcessIdentity()
 
 function logSystem(logger, message) {
   if (typeof logger?.system === "function") {
@@ -129,7 +131,22 @@ export async function main({
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
   closeLogger = async () => {},
   createTelegramNotifier = (options) => new TelegramNotifier(options),
+  processIdentity = PROCESS_IDENTITY,
 } = {}) {
+  const processStartedDataResult = mapHarvesterProcessStartedData(processIdentity)
+  if (processStartedDataResult.ok) {
+    try {
+      logger?.setContext?.(processStartedDataResult.data)
+    } catch (error) {
+      try {
+        logger?.error?.({ message: "Harvester process logger context could not be set.", errorName: error?.name ?? "Error" })
+      } catch {
+        // Process provenance is diagnostic and must not block startup.
+      }
+    }
+  }
+
+  let processStartedPublication = Promise.resolve({ ok: true, skipped: true })
   let eventPublisher
   let eventBus
   let journalService
@@ -163,11 +180,46 @@ export async function main({
     eventPublisher = makeEventPublisher({
       eventBus,
       logger,
-      flush: () => journalService?.flush?.() ?? Promise.resolve({
-        ok: false,
-        errors: [new Error("Harvester Journal durable flush is unavailable")],
-      }),
+      flush: async () => {
+        await processStartedPublication
+        return journalService?.flush?.() ?? Promise.resolve({
+          ok: false,
+          errors: [new Error("Harvester Journal durable flush is unavailable")],
+        })
+      },
     })
+
+    if (processStartedDataResult.ok) {
+      const publishProcessStarted = () => publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.PROCESS_STARTED,
+        dataResult: processStartedDataResult,
+      })
+      if (journalService?.ready && typeof journalService.ready.then === "function") {
+        processStartedPublication = Promise.resolve(journalService.ready)
+          .then((readyResult) => {
+            if (readyResult?.ok !== true) {
+              try {
+                logger?.warn?.({ message: "Harvester process-start Journal event skipped because Journal did not become ready." })
+              } catch {
+                // Optional process provenance must not block startup.
+              }
+              return readyResult
+            }
+            return publishProcessStarted()
+          })
+          .catch(() => {
+            try {
+              logger?.warn?.({ message: "Harvester process-start Journal event skipped because Journal readiness failed." })
+            } catch {
+              // Optional process provenance must not block startup.
+            }
+            return { ok: false }
+          })
+      } else {
+        processStartedPublication = Promise.resolve(publishProcessStarted())
+      }
+    }
 
     const telegramToken = env.TELEGRAM_BOT_TOKEN?.trim()
     const telegramChatId = env.TELEGRAM_CHAT_ID?.trim()
@@ -195,6 +247,7 @@ export async function main({
         const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Conservative TESTNET trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
       }
+      await processStartedPublication
     }
 
     runtimeStartAttempted = true
@@ -251,6 +304,7 @@ export async function main({
               // Logging failure must not prevent the shutdown event attempt.
             }
           }
+          await processStartedPublication
           publishLifecycleEvent({
             eventPublisher,
             eventName: HARVESTER_EVENT_NAMES.STOPPED,
@@ -309,6 +363,7 @@ export async function main({
     }
     return { runtime, journalService }
   } catch (error) {
+    await processStartedPublication
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
@@ -363,10 +418,13 @@ const isDirectExecution = process.argv[1]
   && pathToFileURL(process.argv[1]).href === import.meta.url
 
 if (isDirectExecution) {
+  const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
+  if (processStartedContext.ok) defaultLogger.setContext(processStartedContext.data)
   const logging = await configureHarvesterLogging({ logger: defaultLogger })
   const commandInterface = createLogCommandInterface({ logger: defaultLogger })
 
   await main({
+    processIdentity: PROCESS_IDENTITY,
     closeLogger: async () => {
       commandInterface.close()
       await logging.close()
