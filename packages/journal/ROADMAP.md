@@ -31,6 +31,17 @@ This section supersedes stale checkboxes below where they conflict with merged w
    - **Do:** document file format/versioning, size limits, locking, durability boundaries, error/result semantics, backup/restore and unit-versus-filesystem test commands.
    - **Verify:** docs match executable behavior; package tests and the 85% line / 80% branch gate pass on the exact PR head.
 
+### Journal maintenance follow-ups (2026-11-09)
+
+These focused correctness and test-quality improvements do not reopen completed J-1 through J-5 architecture work or change the public Journal contract.
+
+- [ ] **Correct logger failure coverage.** Startup and shutdown isolation tests must throw from logger.system, the method the lifecycle invokes, and assert that the logger was called. Throwing from logger.info does not exercise this contract.
+- [ ] **Retain failed session handles.** A handle whose close() rejects must remain owned by the filesystem adapter; handles that close successfully must be released independently. A later adapter cleanup attempt must retry only the handles still owned.
+- [ ] **Make session suffix ordering exact and deterministic.** Preserve numeric ordering for arbitrarily large accepted values and define a deterministic lexical tie-break for zero-padded suffixes with equal numeric value. Do not rename or rewrite historical sessions.
+- [ ] **Complete filesystem cleanup failure coverage.** Exercise session-handle close failure, compatibility-handle close failure, lock-handle close failure, lock unlink failure, and rollback after partial lock acquisition. Assert resource ownership and exact lock-file preservation/removal at each boundary.
+
+**TDD sequence:** add focused regressions first and confirm the expected RED against the current implementation; then implement the smallest adapter/ordering changes. Preserve the existing public API, persisted JSONL format, recovery limits, lock semantics, and durability contract. Do not introduce new abstractions or dependencies.
+
 ### CRITICAL consumer constraint
 
 5. **Preserve Harvester's mandatory durability gates without making optional evidence a trading dependency.**

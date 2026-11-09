@@ -381,3 +381,41 @@ test("returns an explicit error when the journal directory cannot be read", asyn
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test("orders very large and zero-padded collision suffixes deterministically", async () => {
+  const { directory, journal } = await createStoppedJournal()
+  const sessionNames = [
+    "2026-01-01_00-00-00-9007199254740993.jsonl",
+    "2026-01-01_00-00-00-1.jsonl",
+    "2026-01-01_00-00-00-0001.jsonl",
+    "2026-01-01_00-00-00-9007199254740992.jsonl",
+    "2026-01-01_00-00-00.jsonl",
+    "2026-01-01_00-00-00-0000.jsonl",
+  ]
+
+  try {
+    for (const fileName of [...sessionNames].reverse()) {
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(fileName))}\\n`)
+    }
+
+    const result = await journal.read()
+    assert.equal(result.ok, true, "All filenames accepted by the session contract must remain readable regardless of numeric suffix length or zero padding.")
+    assert.deepEqual(
+      result.sessions,
+      [
+        "2026-01-01_00-00-00.jsonl",
+        "2026-01-01_00-00-00-0000.jsonl",
+        "2026-01-01_00-00-00-0001.jsonl",
+        "2026-01-01_00-00-00-1.jsonl",
+        "2026-01-01_00-00-00-9007199254740992.jsonl",
+        "2026-01-01_00-00-00-9007199254740993.jsonl",
+      ],
+      "Session ordering must compare arbitrarily large numeric suffixes exactly and use a deterministic lexical tie-break for equivalent zero-padded suffixes.",
+    )
+    assert.deepEqual(result.records.map((record) => record.id), result.sessions, "Recovered record order must follow the exact deterministic session ordering.")
+  } finally {
+    await journal.eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
