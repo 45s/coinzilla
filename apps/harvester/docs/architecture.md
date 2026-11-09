@@ -539,12 +539,16 @@ The Conservative engine serializes its public market-price, user-data, and expli
 
 ## In-memory REST/stream order reconciliation
 
-After the broker reports that its recovered user-data stream has completed
-stream-level reconciliation, bootstrap keeps the trading gate closed and
-starts REST reads without blocking normal stream-event processing. Before the
-REST snapshot is applied, bootstrap drains user-data events received during
-the reads; the engine then validates and applies the snapshot in its serialized
-transition queue. The trading gate is reopened only after both steps succeed.
+When the broker reports `recovered`, the remote user-data subscription
+has returned; application reconciliation is still required. Bootstrap keeps
+the trading gate closed and starts REST reads without blocking normal
+stream-event processing. Before the REST snapshot is applied, bootstrap drains
+user-data events received during the reads; the engine then validates and
+applies the snapshot in its serialized transition queue. Harvester acknowledges
+the exact broker generation only after owned-order/fill reconciliation, queued
+event draining, fresh account and account-wide open-order snapshots, and both
+durable RECOVERY audit barriers succeed. Readiness returns only after the
+matching broker-wide `reconciled` notification.
 
 During application recovery, the account-balance and account-wide open-orders audits are separate durability barriers. After the account snapshot is durably published, bootstrap revalidates the recovery generation and accounting state, drains queued user-data events, and compares the event sequence before it starts the open-orders audit. If the generation was superseded or an event changed the snapshot boundary, the open-orders audit is skipped and the snapshot window is retried. After the open-orders audit flush, bootstrap revalidates the generation and accounting state before draining more queued events; a superseded task does not drain under an obsolete generation. The final drain and stable event-sequence check must then succeed before broker acknowledgement.
 
@@ -578,6 +582,48 @@ or accounting after a process restart, replay startup history, reconcile
 balances or external inventory, or adopt manual orders. It also does not claim
 durable exactly-once delivery. If REST state is incomplete or inconsistent,
 trading remains paused rather than guessing.
+## Recovery failure classification and retry contract
+
+Engine event-processing failures carry an explicit `failure` object with
+`category`, `stage`, and `retryable`. The outer event handler does not infer
+accounting corruption from a generic non-success result.
+
+| Category | Meaning | Retry policy |
+|---|---|---|
+| `OWNERSHIP_INTEGRITY` | Unknown/mismatched order or Fill identity, or invalid ownership transition | Terminal process-lifetime accounting gate; never acknowledge recovery |
+| `ACCOUNTING_INTEGRITY` | Fill/accounting projection failure, conflicting duplicate, or order/fill quantity parity failure | Terminal process-lifetime accounting gate; never acknowledge recovery |
+| `ORDER_TRANSITION` | Cancellation/replacement transition failed after the owned order was matched | Keep readiness closed; require a fresh authoritative order/fill reconciliation |
+| `REST_RECONCILIATION` | Canonical order/fill history or owned-order REST read failed/incomplete | Keep readiness closed; retry only through a new single-flight recovery attempt |
+| `DURABILITY` | Required order-intent Journal durability barrier failed | Keep readiness closed; retry only after a new attempt revalidates canonical state and durability |
+
+An unclassified engine failure defaults to terminal
+`ACCOUNTING_INTEGRITY`; missing metadata never becomes permission to retry.
+Retryable failures set a generation-scoped marker. A recovery attempt that
+observes a marker while draining queued events must stop before audit
+acknowledgement. A later broker reminder may clear that marker only at the
+start of a new single-flight attempt, which must repeat the complete canonical
+order/fill reconciliation, queued-event drain, account/open-order snapshots,
+and both durable audit flushes. The process-lifetime accounting latch is never
+cleared by a transport reconnect or by reclassifying an error.
+
+```mermaid
+flowchart TD
+    A[Owned user-data event] --> B[Conservative engine transition]
+    B --> C{Typed failure}
+    C -->|Ownership or accounting integrity| D[accountingFailed = true]
+    C -->|Order, REST, or durability retryable| E[requiresReconciliation = true]
+    D --> F[Readiness closed; no broker acknowledgement]
+    E --> G[Generation-scoped retryable failure marker]
+    G --> H[Abort current recovery before acknowledgement]
+    H --> I[Next recovered reminder starts a new single-flight attempt]
+    I --> J[Canonical orders and fills; drain queued events]
+    J --> K[Fresh account and open orders; durable RECOVERY audits]
+    K --> L[Revalidate generation and event sequence]
+    L --> M[Exact broker generation acknowledgement]
+    M --> N[Matching global reconciled status]
+    N --> O[Readiness may return]
+```
+
 ## Cancellation preconditions
 
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.

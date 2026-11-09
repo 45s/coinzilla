@@ -648,3 +648,23 @@ The expected RED behavior is that the current event handler sets the sticky
 coordinator does not inspect failure categories or queued retryable failure
 markers. No production source or exchange behavior changes are included in
 this test-first commit.
+
+
+## 32. F-023 failure classification and retry implementation — 2026-11-09
+
+PR #788 carries the test-first regressions into the implementation. Engine
+results now expose explicit failure categories and stages. Ownership and
+accounting-integrity failures remain terminal; downstream order-transition,
+REST reconciliation, and Journal durability failures remain retryable only
+through a new single-flight attempt that repeats authoritative reconciliation.
+
+A generation-scoped retryable failure marker prevents a recovery attempt from
+acknowledging the broker after a queued event failed. A later reminder clears
+that marker only when a new attempt begins. The application still requires
+canonical order/fill reconciliation, queued-event draining, fresh account and
+open-order snapshots, both durable RECOVERY audit flushes, and generation
+revalidation before acknowledgement. Unknown failure metadata defaults to
+terminal fail-closed behavior.
+
+The exact-head CI run is pending at this documentation checkpoint. No live or
+TESTNET order operation was performed; TESTNET acceptance remains paused.

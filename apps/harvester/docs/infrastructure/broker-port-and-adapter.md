@@ -147,13 +147,20 @@ Bootstrap now selects the adapter only when `HARVESTER_BROKER=binance` is explic
 
 Preserve the behavior documented in `packages/brokers/README.md`:
 
-1. A `terminated` or `connectionClosed` user-data status means events may have been missed. After the broker emits its stream-level `reconciled` status, Harvester keeps the trading gate closed while it reconciles only the in-memory owned-order registry against `getOpenOrders()`, `getCanonicalOrderHistory()`, and canonical `getFills()`. Incomplete or conflicting state remains paused. Durable restart state and account-balance reconciliation are not part of this P0.4 workflow.
+1. A `recovered` status means the remote user-data subscription is restored; it is not application readiness. While `recoveryRequired: true`, Harvester keeps trading blocked while it reconciles the in-memory owned-order registry against canonical `getOpenOrders()`, `getCanonicalOrderHistory()`, and `getFills()`, drains queued events in recovery mode, captures fresh account balances and account-wide open orders, and durably flushes both RECOVERY audit records. It acknowledges the exact broker generation only after those checks succeed, then waits for the matching global `reconciled` status before reopening trading. Incomplete, conflicting, stale-generation, or non-durable state remains blocked. Durable restart state remains outside this same-process workflow.
 2. A timeout or disconnect during place/cancel can mean the exchange accepted the operation but its response was lost. Treat the outcome as unknown; reconcile by client order ID, order status, open orders, and available history before retrying. Never blindly resubmit.
 3. Public market-stream reconnect is not user-data event replay.
 4. Only actual fills (including partial fills and actual commission assets) change Portfolio holdings. Acknowledgements, cancellations, rejections, expirations, and prices do not.
 5. Do not claim exactly-once processing or restart recovery until durable deduplication, reconciliation, and tests exist.
 
 A user-data subscription exposes recovery acknowledgement through its returned subscription data. Acknowledge only after reconciliation succeeds.
+
+Engine failures are classified as `OWNERSHIP_INTEGRITY`, `ACCOUNTING_INTEGRITY`,
+`ORDER_TRANSITION`, `REST_RECONCILIATION`, or `DURABILITY`. Only the first two
+are terminal process-lifetime accounting failures. Retryable categories keep
+readiness closed and may retry only through a new full authoritative
+reconciliation; they never bypass the broker-generation acknowledgement or
+durable RECOVERY audit barriers.
 
 ## Testing
 

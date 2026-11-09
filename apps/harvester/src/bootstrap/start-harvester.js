@@ -127,6 +127,8 @@ export async function startHarvester({
     requiresReconciliation: !tradingEnabled,
     streamUnsafe: false,
     accountingFailed: false,
+    retryableRecoveryFailure: null,
+    safetyHaltRequired: false,
     status: "NOT_SUBSCRIBED",
     eventQueue: Promise.resolve(),
     eventSequence: 0,

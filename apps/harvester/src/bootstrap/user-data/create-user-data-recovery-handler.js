@@ -55,8 +55,20 @@ export function createUserDataRecoveryHandler({
     }
 
     state.pendingRecovery = false
+    // A new single-flight attempt clears only the previous retryable marker.
+    // Canonical reconciliation and both durable audit barriers must succeed
+    // again before this generation can be acknowledged.
+    state.retryableRecoveryFailure = null
     const generation = state.recoveryGeneration
     const isCurrentGeneration = () => !isStopped() && generation === state.recoveryGeneration
+    const assertNoRetryableRecoveryFailure = () => {
+      const failure = state.retryableRecoveryFailure
+      if (failure?.generation !== generation) return
+      throw new Error(
+        "Queued user-data event requires another authoritative recovery attempt: " +
+        failure.category + " at " + failure.stage,
+      )
+    }
     const recoveryTask = (async () => {
     try {
       logger.info?.({
@@ -73,9 +85,34 @@ export function createUserDataRecoveryHandler({
         })
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
         if (!reconciliation?.ok) {
+          const failure = reconciliation?.failure
+          if (!failure) {
+            state.retryableRecoveryFailure = {
+              generation,
+              category: "REST_RECONCILIATION",
+              stage: "OWNED_ORDER_RECONCILIATION",
+              retryable: true,
+            }
+          } else if (
+            failure.retryable === true &&
+            ["ORDER_TRANSITION", "REST_RECONCILIATION", "DURABILITY"].includes(failure.category)
+          ) {
+            state.retryableRecoveryFailure = {
+              generation,
+              category: failure.category,
+              stage: failure.stage,
+              retryable: true,
+            }
+          } else {
+            state.accountingFailed = true
+            state.retryableRecoveryFailure = null
+            state.status = "EXECUTION_ACCOUNTING_FAILED"
+          }
           throw reconciliation?.errors?.[0] ?? new Error("Owned-order REST/stream reconciliation failed")
         }
+        assertNoRetryableRecoveryFailure()
         hasCanonicalOwnershipReconciliation = true
         setCanonicalOwnershipReconciled(true)
       }
@@ -83,6 +120,7 @@ export function createUserDataRecoveryHandler({
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
 
         // Keep the account and open-order snapshots on the same side of all
         // user-data events observed during the REST reads and durable flushes.
@@ -101,14 +139,17 @@ export function createUserDataRecoveryHandler({
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
         if (eventSequence !== state.eventSequence) continue
 
         await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
         if (eventSequence !== state.eventSequence) continue
 
         await publishOpenOrdersSnapshot({
@@ -119,9 +160,11 @@ export function createUserDataRecoveryHandler({
         })
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        assertNoRetryableRecoveryFailure()
         if (eventSequence === state.eventSequence) break
       }
 

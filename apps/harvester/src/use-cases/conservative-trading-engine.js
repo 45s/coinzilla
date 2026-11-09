@@ -27,6 +27,23 @@ import { validateCancellationEligibility } from "../domain/orders/validate-cance
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 
+const failureResult = ({ error, errors, category, stage, retryable }) => {
+  const result = {
+    failure: { category, stage, retryable },
+  }
+  if (errors !== undefined) {
+    result.errors = errors
+  } else {
+    result.error = error
+  }
+  return toResult(result)
+}
+
+const withFailure = (result, failure) => {
+  if (result?.failure) return result
+  return toResult({ ...result, failure })
+}
+
 function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
   const mismatch = (field) => {
     throw new Error("Canonical REST fill conflicts with durable Journal " + field + " for execution " + fill.id)
@@ -573,14 +590,25 @@ export function makeConservativeTradingEngine({
         const error = new Error("Cannot safely cancel a recovery SELL with unknown status")
         publishOrderCancelFailed({ order, outcome: "ORDER_STATE_UNKNOWN", error })
         await pause({ symbol, reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN" })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "ORDER_TRANSITION",
+          stage: "RECOVERY_SELL_CANCELLATION",
+          retryable: true,
+        })
       }
       const eligibility = await ensureCancellationEligible({
         symbol,
         order,
         reason: "RECOVERY_SELL_CANCELLATION_INELIGIBLE",
       })
-      if (!eligibility.ok) return eligibility
+      if (!eligibility.ok) {
+        return withFailure(eligibility, {
+          category: "ORDER_TRANSITION",
+          stage: "RECOVERY_SELL_CANCELLATION",
+          retryable: true,
+        })
+      }
       const cancelIntent = await publishDurableIntent({
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
         dataResult: mapOrderCancellationRequestedData({
@@ -591,27 +619,46 @@ export function makeConservativeTradingEngine({
       if (!cancelIntent.ok) {
         const error = cancelIntent.errors?.[0] ?? new Error("Recovery SELL cancellation intent was not durably journaled")
         await pause({ symbol, reason: "RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE", error })
-        return toResult({ errors: cancelIntent.errors ?? [error] })
+        return failureResult({
+          errors: cancelIntent.errors ?? [error],
+          category: "DURABILITY",
+          stage: "RECOVERY_SELL_CANCEL_INTENT",
+          retryable: true,
+        })
       }
       let cancelResult
       try {
         cancelResult = await broker.cancelOrder({ order })
       } catch (error) {
-        return markCancellationUnknown({
-          symbol,
-          order,
-          reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
-          error,
-        })
+        return withFailure(
+          await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+            error,
+          }),
+          {
+            category: "ORDER_TRANSITION",
+            stage: "RECOVERY_SELL_CANCELLATION",
+            retryable: true,
+          },
+        )
       }
       if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
         const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
-        return markCancellationUnknown({
-          symbol,
-          order,
-          reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
-          error: errors[0],
-        })
+        return withFailure(
+          await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+            error: errors[0],
+          }),
+          {
+            category: "ORDER_TRANSITION",
+            stage: "RECOVERY_SELL_CANCELLATION",
+            retryable: true,
+          },
+        )
       }
       const canceledOrder = cancelResult.data
       const update = state.registry.applyUpdate({ order: canceledOrder })
@@ -619,7 +666,12 @@ export function makeConservativeTradingEngine({
         const error = new Error("Canceled recovery SELL is not registered by Harvester")
         publishOrderCancelFailed({ order, outcome: "NOT_REGISTERED", error })
         await pause({ symbol, reason: "CANCELED_ORDER_NOT_REGISTERED" })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "CANCELED_ORDER_REGISTRY_MATCH",
+          retryable: false,
+        })
       }
       state.registry = update.registry
       const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
@@ -630,7 +682,12 @@ export function makeConservativeTradingEngine({
           error: new Error("Recovery SELL did not reach an authoritative terminal state"),
         })
         await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED" })
-        return toResult({ error: new Error("Recovery SELL cancellation did not reach a terminal state") })
+        return failureResult({
+          error: new Error("Recovery SELL cancellation did not reach a terminal state"),
+          category: "ORDER_TRANSITION",
+          stage: "RECOVERY_SELL_CANCELLATION",
+          retryable: true,
+        })
       }
       if (canceledOrder.status === "CANCELED") {
         publishOrderCancelled({ order: canceledOrder })
@@ -1290,10 +1347,20 @@ export function makeConservativeTradingEngine({
           eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
           dataResult: mapExecutionInvalidFillData({ order, reason: "MISSING_FILL", error }),
         })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "REST_RECONCILIATION",
+          stage: "STREAM_FILL_MISSING",
+          retryable: true,
+        })
       }
       if (!(order instanceof CanonicalOrder)) {
-        return toResult({ error: new TypeError("Execution fill requires its registered canonical order") })
+        return failureResult({
+          error: new TypeError("Execution fill requires its registered canonical order"),
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "FILL_ORDER_REGISTRY",
+          retryable: false,
+        })
       }
       const symbol = order.market.symbol
       if (fill.market.id !== order.market.id || fill.side !== order.side ||
@@ -1306,7 +1373,12 @@ export function makeConservativeTradingEngine({
           dataResult: mapExecutionInvalidFillData({ order, fill, reason: "IDENTITY_MISMATCH", error }),
         })
         await pause({ symbol, reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH", error })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "FILL_ORDER_IDENTITY",
+          retryable: false,
+        })
       }
       const accounting = await updateTradingAccounting({ fill })
       if (!accounting?.ok) {
@@ -1317,7 +1389,12 @@ export function makeConservativeTradingEngine({
           dataResult: mapExecutionAccountingFailedData({ order, fill, error }),
         })
         await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
-        return toResult({ errors: accounting?.errors ?? [error] })
+        return failureResult({
+          errors: accounting?.errors ?? [error],
+          category: "ACCOUNTING_INTEGRITY",
+          stage: "FILL_ACCOUNTING",
+          retryable: false,
+        })
       }
       if (fill.side === "BUY") { recordBuyExecutionFill({ fill }); state.completedRecoverySellSymbols.delete(symbol) }
       if (fill.side === "SELL") recordSellExecutionFill({ fill })
@@ -1336,7 +1413,12 @@ export function makeConservativeTradingEngine({
       }
       return toResult({ data: { applied: accounting.data?.applied === true, duplicate: accounting.data?.duplicate === true } })
     } catch (error) {
-      return toResult({ error })
+      return failureResult({
+        error,
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "FILL_ACCOUNTING",
+        retryable: false,
+      })
     }
   }
 
@@ -1344,17 +1426,44 @@ export function makeConservativeTradingEngine({
     const symbol = order?.market?.symbol
     const terminalStatuses = new Set(["FILLED", "CANCELED", "EXPIRED", "REJECTED"])
     if (!order || !terminalStatuses.has(order.status)) {
-      return toResult({ error: new TypeError("Terminal fill reconciliation requires a terminal canonical order") })
+      return failureResult({
+        error: new TypeError("Terminal fill reconciliation requires a terminal canonical order"),
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "TERMINAL_ORDER_STATE",
+        retryable: false,
+      })
     }
     if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-      await pause({ symbol, reason: "TERMINAL_ORDER_MISSING_BROKER_ID" })
-      return toResult({ error: new Error("Terminal order has no broker order ID for fill reconciliation") })
+      const error = new Error("Terminal order has no broker order ID for fill reconciliation")
+      await pause({ symbol, reason: "TERMINAL_ORDER_MISSING_BROKER_ID", error })
+      return failureResult({
+        error,
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "TERMINAL_ORDER_ID",
+        retryable: false,
+      })
     }
-    const fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
+    let fillsResult
+    try {
+      fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
+    } catch (error) {
+      await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
+      return failureResult({
+        error,
+        category: "REST_RECONCILIATION",
+        stage: "TERMINAL_FILL_HISTORY",
+        retryable: true,
+      })
+    }
     if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
       const error = fillsResult?.errors?.[0] ?? new Error("Unable to retrieve terminal order fill history")
       await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
-      return toResult({ error })
+      return failureResult({
+        error,
+        category: "REST_RECONCILIATION",
+        stage: "TERMINAL_FILL_HISTORY",
+        retryable: true,
+      })
     }
     // Processed user-data fills are canonical in-process facts. Prefer them
     // over REST rows when the exchange's REST metadata is contradictory; the
@@ -1373,13 +1482,23 @@ export function makeConservativeTradingEngine({
           (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         const error = new Error("Terminal stream execution does not match its canonical order")
         await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "TERMINAL_FILL_IDENTITY",
+          retryable: false,
+        })
       }
       const previous = fillsById.get(fill.id)
       if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
         const error = new Error("Terminal stream contains conflicting facts for one fill ID")
         await pause({ symbol, reason: "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE", error })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "ACCOUNTING_INTEGRITY",
+          stage: "TERMINAL_FILL_DUPLICATE",
+          retryable: false,
+        })
       }
       if (!previous) fillsById.set(fill.id, fill)
     }
@@ -1422,7 +1541,12 @@ export function makeConservativeTradingEngine({
             ? "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
             : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH"
       await pause({ symbol, reason, error })
-      return toResult({ error })
+      return failureResult({
+        error,
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "TERMINAL_FILL_PARITY",
+        retryable: false,
+      })
     }
     const fullExecution = compareDecimal({
       left: order.executedQuantity.amount,
@@ -1431,14 +1555,26 @@ export function makeConservativeTradingEngine({
     if ((order.status === "FILLED") !== fullExecution) {
       const error = new Error("Terminal order status conflicts with its executed/original quantity")
       await pause({ symbol, reason: "TERMINAL_ORDER_STATUS_QUANTITY_CONFLICT", error })
-      return toResult({ error })
+      return failureResult({
+        error,
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "TERMINAL_ORDER_STATUS",
+        retryable: false,
+      })
     }
     for (const fill of fills) {
       const applied = await processExecutionFillTransition({ order, fill })
       if (!applied?.ok) {
         const error = applied?.errors?.[0] ?? new Error("Terminal order fill could not be applied")
         await pause({ symbol, reason: "TERMINAL_ORDER_FILL_ACCOUNTING_FAILED", error })
-        return toResult({ errors: applied?.errors ?? [error] })
+        return withFailure(
+          toResult({ errors: applied?.errors ?? [error] }),
+          applied?.failure ?? {
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "TERMINAL_FILL_ACCOUNTING",
+            retryable: false,
+          },
+        )
       }
     }
     return toResult({ data: { reconciled: true, fillCount: fills.length, executedQuantity: reconciledQuantity } })
@@ -1455,7 +1591,14 @@ export function makeConservativeTradingEngine({
       }
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
-        if (event?.eventType === "executionReport") throw new TypeError("Execution report requires canonical executedOrder")
+        if (event?.eventType === "executionReport") {
+          return failureResult({
+            error: new TypeError("Execution report requires canonical executedOrder"),
+            category: "OWNERSHIP_INTEGRITY",
+            stage: "CANONICAL_ORDER_VALIDATION",
+            retryable: false,
+          })
+        }
         return toResult({ data: { ignored: true } })
       }
       const symbol = order.market.symbol
@@ -1467,7 +1610,12 @@ export function makeConservativeTradingEngine({
           dataResult: mapExecutionUnownedOrderData({ order }),
         })
         await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
-        return toResult({ error: new Error("Order update does not belong to a Harvester order") })
+        return failureResult({
+          error: new Error("Order update does not belong to a Harvester order"),
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "ORDER_REGISTRY_MATCH",
+          retryable: false,
+        })
       }
       state.registry = update.registry
       if (update.applied === true) {
@@ -1482,7 +1630,12 @@ export function makeConservativeTradingEngine({
           state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
         const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
         await pause({ symbol, reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY", error })
-        return toResult({ error })
+        return failureResult({
+          error,
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "UNREQUESTED_TERMINAL_ORDER_STATE",
+          retryable: false,
+        })
       }
 
       if (recoveryMode && order.status === "CANCELED" &&
@@ -1512,13 +1665,13 @@ export function makeConservativeTradingEngine({
           if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
             const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
-            if (!cancellation.ok) return cancellation
+            if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
             if (cancellation.data?.deferred === true) {
               return toResult({ data: { ignored: true, replacementDeferred: true } })
             }
             state.replacementIntents.delete(symbol)
             const replacement = await evaluateLatestTransition({ symbol })
-            if (!replacement.ok) return replacement
+            if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
             return toResult({ data: { ignored: true, recoverySellReplaced: true, ...replacement.data } })
           }
           return toResult({ data: { ignored: true } })
@@ -1538,13 +1691,13 @@ export function makeConservativeTradingEngine({
           symbol,
           marketId: order.market.id,
         })
-        if (!cancellation.ok) return cancellation
+        if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
         if (cancellation.data?.deferred === true) {
           return toResult({ data: { order, replacementDeferred: true } })
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) return replacement
+        if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
         return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
       }
       if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
@@ -1553,13 +1706,13 @@ export function makeConservativeTradingEngine({
           symbol,
           marketId: order.market.id,
         })
-        if (!cancellation.ok) return cancellation
+        if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
         if (cancellation.data?.deferred === true) {
           return toResult({ data: { order, replacementDeferred: true, waitingForFullFill: true } })
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) return replacement
+        if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
         return toResult({
           data: {
             ...replacement.data,
@@ -1576,7 +1729,12 @@ export function makeConservativeTradingEngine({
           ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0) {
         await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
-        return toResult({ error: new Error("Partially filled order canceled; pair paused for review") })
+        return failureResult({
+          error: new Error("Partially filled order canceled; pair paused for review"),
+          category: "ACCOUNTING_INTEGRITY",
+          stage: "PARTIAL_FILL_TERMINAL_STATE",
+          retryable: false,
+        })
       }
       if (!["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
         return toResult({ data: { order, waitingForTerminalState: true } })
@@ -1589,14 +1747,19 @@ export function makeConservativeTradingEngine({
           executionPrice = getReconciledBuyExecutionPrice({ order })
         } catch (error) {
           await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
-          return toResult({ error })
+          return failureResult({
+            error,
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "BUY_EXECUTION_PRICE",
+            retryable: false,
+          })
         }
         if (!recoveryMode) {
           const cancellation = await cancelAndReconcileRecoverySells({
             symbol,
             marketId: order.market.id,
           })
-          if (!cancellation.ok) return cancellation
+          if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
         }
         state.trailingBuy.set(symbol, false)
         state.buyReferenceOverrides.delete(symbol)
@@ -1623,7 +1786,7 @@ export function makeConservativeTradingEngine({
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) return replacement
+        if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
         return toResult({
           data: {
             ...replacement.data,
@@ -1645,7 +1808,12 @@ export function makeConservativeTradingEngine({
           assertReconciledSellExecution({ order })
         } catch (error) {
           await pause({ symbol, reason: "SELL_FILL_RECONCILIATION_FAILED", error })
-          return toResult({ error })
+          return failureResult({
+            error,
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "SELL_FILL_RECONCILIATION",
+            retryable: false,
+          })
         }
         const completion = await completeRecoveryCycle({
           marketId: order.market.id,
@@ -1654,7 +1822,12 @@ export function makeConservativeTradingEngine({
         })
         if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
-          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
+          return failureResult({
+            errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")],
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "RECOVERY_CYCLE_COMPLETION",
+            retryable: false,
+          })
         }
         if (!completion.data?.eligible) {
           if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
@@ -1674,7 +1847,12 @@ export function makeConservativeTradingEngine({
             })
           }
           await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED" })
-          return toResult({ error: new Error("Recovery cycle did not meet completion conditions") })
+          return failureResult({
+            error: new Error("Recovery cycle did not meet completion conditions"),
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "RECOVERY_CYCLE_COMPLETION",
+            retryable: false,
+          })
         }
         publishLifecycleEvent({
           eventPublisher,
@@ -1696,7 +1874,12 @@ export function makeConservativeTradingEngine({
       }
       return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
-      return toResult({ error })
+      return failureResult({
+        error,
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "UNCLASSIFIED_ORDER_EVENT_TRANSITION",
+        retryable: false,
+      })
     }
   }
 
@@ -1889,8 +2072,16 @@ export function makeConservativeTradingEngine({
       return { snapshots, symbols }
     } catch (caught) {
       const error = caught instanceof Error ? caught : new Error(String(caught))
-      error.reconciliationSymbol = affectedSymbol
-      throw error
+      const recoveryError = error instanceof Error
+        ? error
+        : new Error(String(error), { cause: error })
+      recoveryError.reconciliationSymbol = affectedSymbol
+      recoveryError.recoveryFailure = {
+        category: "REST_RECONCILIATION",
+        stage: "OWNED_ORDER_SNAPSHOT",
+        retryable: true,
+      }
+      throw recoveryError
     }
   }
 
@@ -1944,7 +2135,14 @@ export function makeConservativeTradingEngine({
           if (!processed.ok) {
             const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
             await pause({ symbol: ownedOrder.market.symbol, reason: "REST_FILL_RECONCILIATION_FAILED", error })
-            return toResult({ errors: processed.errors ?? [error] })
+            return withFailure(
+              toResult({ errors: processed.errors ?? [error] }),
+              processed.failure ?? {
+                category: "ACCOUNTING_INTEGRITY",
+                stage: "REST_FILL_ACCOUNTING",
+                retryable: false,
+              },
+            )
           }
         }
 
@@ -1956,13 +2154,25 @@ export function makeConservativeTradingEngine({
         if (!processedOrder.ok) {
           const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
           await pause({ symbol: ownedOrder.market.symbol, reason: "REST_ORDER_RECONCILIATION_FAILED", error })
-          return toResult({ errors: processedOrder.errors ?? [error] })
+          return withFailure(
+            toResult({ errors: processedOrder.errors ?? [error] }),
+            processedOrder.failure ?? {
+              category: "ACCOUNTING_INTEGRITY",
+              stage: "REST_ORDER_STATE_APPLICATION",
+              retryable: false,
+            },
+          )
         }
       }
       return toResult({ data: { reconciled: snapshots.length, symbols } })
     } catch (error) {
       await pause({ symbol: affectedSymbol, reason: "REST_STREAM_RECONCILIATION_FAILED", error })
-      return toResult({ error })
+      return failureResult({
+        error,
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "REST_STREAM_PARITY",
+        retryable: false,
+      })
     }
   }
 
@@ -2241,7 +2451,12 @@ export function makeConservativeTradingEngine({
               reason: "RECONCILIATION_PENDING_ORDER_OUTCOME",
               error,
             })
-            return toResult({ error })
+            return failureResult({
+              error,
+              category: "REST_RECONCILIATION",
+              stage: "PENDING_ORDER_LOOKUP",
+              retryable: true,
+            })
           },
         })
       }
@@ -2267,7 +2482,12 @@ export function makeConservativeTradingEngine({
             reason: "REST_STREAM_RECONCILIATION_FAILED",
             error,
           })
-          return toResult({ error })
+          return failureResult({
+            error,
+            category: error.recoveryFailure?.category ?? "REST_RECONCILIATION",
+            stage: error.recoveryFailure?.stage ?? "OWNED_ORDER_SNAPSHOT",
+            retryable: error.recoveryFailure?.retryable ?? true,
+          })
         },
       })
     }

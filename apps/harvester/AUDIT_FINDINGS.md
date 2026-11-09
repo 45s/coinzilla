@@ -661,7 +661,9 @@ Current source and regression inventory:
 
 ## F-023 — Recovery event-processing failures are mislabeled and overclassified as accounting failures
 
-**TDD RED (2026-11-09):** regressions now cover retryable matched order-transition failure, terminal ownership/accounting-integrity failure, terminal fill-history REST timeout, queued-event failure preventing acknowledgement until a later authoritative retry, permanent integrity failure remaining terminal, and the exact `recovered → executionPending` interleaving. Production behavior is unchanged in this commit.
+**Implementation in PR #788:** the engine now returns typed failure metadata (`category`, `stage`, `retryable`) for ownership, accounting, REST fill-history, and downstream order-transition paths. Bootstrap keeps retryable failures out of the process-lifetime accounting latch, records a generation-scoped marker, and aborts the active recovery before acknowledgement if a queued event failed. A new reminder can clear that marker only at the start of a new single-flight attempt, which repeats the complete canonical and durable checks. Unclassified errors remain terminal. Exact-head CI is pending; no TESTNET acceptance is claimed.
+
+**TDD evidence:** the test-only commit reproduced the broad-latch and premature-acknowledgement defects, and added the missing `recovered → executionPending` interleaving regression.
 
 **Classification:** CONFIRMED DIAGNOSTIC MISCLASSIFICATION; historical recovery-side-effect failure also observed  
 **Severity:** Medium — incident triage can point operators at the wrong failure class  

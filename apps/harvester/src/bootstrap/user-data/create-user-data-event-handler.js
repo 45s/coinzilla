@@ -1,5 +1,44 @@
 import { Fill } from "@coinzilla/entities"
 
+
+const retryableFailureCategories = new Set([
+  "ORDER_TRANSITION",
+  "REST_RECONCILIATION",
+  "DURABILITY",
+])
+
+function resolveUserDataFailure(failure) {
+  if (
+    failure &&
+    typeof failure.category === "string" &&
+    typeof failure.stage === "string" &&
+    typeof failure.retryable === "boolean"
+  ) {
+    return failure
+  }
+  return {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "UNCLASSIFIED_ENGINE_FAILURE",
+    retryable: false,
+  }
+}
+
+function getUserDataFailureMessage(failure) {
+  if (failure.category === "OWNERSHIP_INTEGRITY") {
+    return "rejected an unowned or mismatched order event"
+  }
+  if (failure.category === "ORDER_TRANSITION") {
+    return "user-data order transition failed"
+  }
+  if (failure.category === "REST_RECONCILIATION") {
+    return "user-data REST reconciliation failed"
+  }
+  if (failure.category === "DURABILITY") {
+    return "user-data durability barrier failed"
+  }
+  return "user-data accounting integrity failed"
+}
+
 /**
  * Create the serialized broker user-data event handler.
  *
@@ -44,9 +83,28 @@ export function createUserDataEventHandler({
           recoveryMode,
         })
         if (!processed.ok) {
+          const failure = resolveUserDataFailure(processed.failure)
+          const retryable = failure.retryable === true &&
+            retryableFailureCategories.has(failure.category)
           state.ready = false
-          state.accountingFailed = true
-          state.status = "EXECUTION_ACCOUNTING_FAILED"
+          state.requiresReconciliation = true
+          if (retryable) {
+            state.retryableRecoveryFailure = {
+              generation: state.recoveryGeneration,
+              category: failure.category,
+              stage: failure.stage,
+              retryable: true,
+            }
+          } else {
+            state.accountingFailed = true
+            state.retryableRecoveryFailure = null
+          }
+          state.safetyHaltRequired = true
+          if (state.accountingFailed) {
+            state.status = "EXECUTION_ACCOUNTING_FAILED"
+          } else {
+            state.status = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+          }
           const rejectedOrder = event.executedOrder
           const registeredOrders = tradingEngine.getOrders()
           const incomingBrokerOrderId = rejectedOrder?.brokerOrderId ?? event.fill?.brokerOrderId
@@ -57,7 +115,10 @@ export function createUserDataEventHandler({
             incomingBrokerOrderId !== undefined &&
             order.brokerOrderId === incomingBrokerOrderId)
           logger.error?.({
-            message: "rejected an unowned or invalid order event",
+            message: getUserDataFailureMessage(failure),
+            failureCategory: failure.category,
+            failureStage: failure.stage,
+            failureRetryable: retryable,
             eventType: event.eventType ?? "UNKNOWN",
             executionType: event.executionType,
             symbol: rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol,
@@ -76,6 +137,8 @@ export function createUserDataEventHandler({
               name: error?.name ?? "Error",
               message: error?.message ?? String(error),
               stack: error?.stack,
+              cause: error?.cause,
+              causeStack: error?.cause?.stack,
             })),
           })
           return
@@ -141,8 +204,9 @@ export function createUserDataEventHandler({
         state.status = "STOPPED"
         return
       }
-      if (state.accountingFailed) {
+      if (state.accountingFailed || state.safetyHaltRequired) {
         state.ready = false
+        state.safetyHaltRequired = false
         await cancelOwnedBuysAfterAccountingFailure()
         return
       }

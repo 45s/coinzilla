@@ -256,3 +256,30 @@ and stack text must not contain credentials or signed request data.
 
 The logging refactor is observational only. It does not authorize a TESTNET
 session, order submission/cancellation, or any account mutation.
+
+
+## Recovery failure classification — offline contract
+
+A broker `recovered` status is not evidence that Harvester is ready. Do not
+interpret it as a successful application reconciliation. The acceptance
+sequence remains canonical owned-order history and complete fills, queued
+event drain, fresh balances and account-wide open orders, both durable
+RECOVERY audit flushes, generation/event-sequence revalidation, exact broker
+acknowledgement, and matching global `reconciled`.
+
+The application distinguishes terminal integrity failures from retryable
+workflow failures:
+
+- Ownership/fill identity conflicts and accounting-projection/parity failures
+  remain terminal and prevent acknowledgement.
+- Order-transition, REST-history, and Journal-durability failures keep
+  readiness closed and can retry only after a new single-flight attempt
+  repeats the full authoritative checks.
+- Missing or unclassified failure metadata defaults to terminal fail-closed
+  behavior.
+
+A retryable failure observed while draining queued events aborts that recovery
+attempt before broker acknowledgement. A later reminder starts a new attempt;
+it does not merely clear a flag or resume trading. These are offline code/test
+contracts, not TESTNET acceptance. The runbook execution gate remains
+**CLOSED / PAUSED** and no live or TESTNET order operation is authorized.
