@@ -146,7 +146,7 @@ export async function configureHarvesterLogging({
           return Promise.reject(error)
         }
         return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
-          stream.write(serialized + "\\n", (error) => {
+          stream.write(serialized + "\n", (error) => {
             const currentError = error ?? streamErrors.get(index)
             if (currentError) { reject(currentError); return }
             resolve()
@@ -175,7 +175,10 @@ export async function configureHarvesterLogging({
   }
 
   const consoleTransport = createHarvesterConsoleTransport({ output })
-  let debugTransport\n  let traceTransport\n\n  try {\n    debugTransport = await createFileTransport({
+  let debugTransport
+  let traceTransport
+
+  try {\n    debugTransport = await createFileTransport({
       name: DEBUG_TRANSPORT_NAME,
       level: "debug",
       filename: "harvester.log",
