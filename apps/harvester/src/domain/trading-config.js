@@ -28,11 +28,11 @@ function validateRuntimeProfiles(runtime) {
     if (!["testnet", "live"].includes(profile.trading.mode)) {
       fail(`${profilePath}.trading.mode`, '"testnet" or "live"')
     }
-    if (name === "production" && profile.trading.enabled) {
-      fail(`${profilePath}.trading.enabled`, "false; production runtime must remain read-only")
+    if (name === "development" && profile.trading.enabled && profile.trading.mode !== "testnet") {
+      fail(`${profilePath}.trading.mode`, '"testnet" for development execution')
     }
-    if (profile.trading.enabled && profile.trading.mode !== "testnet") {
-      fail(`${profilePath}.trading.mode`, "testnet; live order execution is not supported")
+    if (name === "production" && profile.trading.enabled && profile.trading.mode !== "live") {
+      fail(`${profilePath}.trading.mode`, '"live" for production execution')
     }
     if (profile.trading.enabled && profile.broker !== "binance") {
       fail(`${profilePath}.broker`, ' "binance" when trading is enabled')
@@ -93,16 +93,15 @@ export function resolveHarvesterRuntimeConfig({ config, environment } = {}) {
   if (tradingRequested && brokerName !== "binance") {
     throw new Error("TESTNET trading requires runtime profile broker=binance")
   }
-  if (tradingRequested && tradingMode !== "testnet") {
-    throw new Error("Order execution requires runtime profile trading.mode=testnet; live order execution is not supported")
+  if (tradingRequested && profileName === "development" && tradingMode !== "testnet") {
+    throw new Error("Development order execution requires runtime profile trading.mode=testnet")
   }
-  if (tradingRequested && profileName === "production") {
-    throw new Error("Production runtime must remain read-only")
+  if (tradingRequested && profileName === "production" && tradingMode !== "live") {
+    throw new Error("Production order execution requires runtime profile trading.mode=live")
   }
-  const tradingEnabled = tradingRequested &&
-    brokerName === "binance" &&
-    tradingMode === "testnet" &&
-    profileName !== "production"
+  const tradingEnabled = tradingRequested && brokerName === "binance" &&
+    ((profileName === "development" && tradingMode === "testnet") ||
+     (profileName === "production" && tradingMode === "live"))
 
   return Object.freeze({
     environment: profileName,
