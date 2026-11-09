@@ -36,7 +36,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `ENGINEERING_STANDARDS.md` | 29505 | Repository governance | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `README.md` | 4326 | Repository entry point | **KEEP** | Source-checked against the Brokers package manifest and README; removes obsolete Binance SDK/`test:sdk` instructions and documents the current native-WebSocket integration scripts and safety gates. |
 | `ROADMAP.md` | 8232 | Repository roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
-| `docs/DOCUMENTATION_GOVERNANCE.md` | 16440 | Operational/reference guide | **KEEP** | Canonical repository-wide documentation policy; source review corrected a freshness-sweep cross-reference that incorrectly pointed to Section 9 (roadmap discipline) instead of the explicit requirement below in Section 11. |
+| `docs/DOCUMENTATION_GOVERNANCE.md` | 16440 | Operational/reference guide | **KEEP** | Canonical repository-wide documentation policy; source review corrected the Section 11 freshness-sweep reference and documents the new deterministic Markdown fence-balance guard. |
 | `docs/README.md` | 2223 | Operational/reference guide | **KEEP** | Repository-wide documentation entry point. |
 | `docs/ai-agent/repository-engineering-audit.md` | 15755 | Historical task brief | **KEEP** | Historical audit task brief; separate from the actual audit report in docs/audits/ and not current agent policy. |
 | `docs/architecture/README.md` | 1595 | Architecture/ADR | **KEEP** | Scope entry point and setup/public contract guide. |
@@ -45,7 +45,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `docs/audits/README.md` | 649 | Historical audit | **KEEP** | Scope entry point and setup/public contract guide. |
 | `docs/audits/repository-engineering-audit.md` | 16323 | Historical audit | **KEEP** | Historical repository assessment; preserve baseline, date and limitations. |
 | `docs/brokers-websocket-contract.md` | 30152 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
-| `docs/ci-workflows.md` | 3292 | Operational/reference guide | **KEEP** | Source-checked against root `package.json` and `.github/workflows/`; PR #816 corrects the JavaScript Syntax workflow's actual steps and missing `develop` push trigger. |
+| `docs/ci-workflows.md` | 3292 | Operational/reference guide | **KEEP** | Source-checked against root `package.json` and `.github/workflows/`; PR #816 corrected triggers/steps, and this change documents the balanced-fence and local-link checks in the agent-policy step. |
 | `docs/contributing.md` | 2622 | Operational/reference guide | **KEEP** | Source-checked against root/package manifests and workflows; removes a nonexistent Brokers `test:sdk` command and lists the three scripts actually defined by `packages/brokers/package.json`. |
 | `docs/dependency-audit-playbook.md` | 2931 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/engineering/BRANCH_AND_RELEASE_POLICY.md` | 349 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
