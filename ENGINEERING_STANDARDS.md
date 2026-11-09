@@ -29,7 +29,7 @@ This section is the canonical policy for assessing and updating documentation in
 - If no documentation update is warranted (for example, an internal refactor or test-only change that does not alter a documented contract), record a concise reason in the PR description.
 - Do not defer a required documentation update to an unspecified follow-up. Include a **Documentation impact** note in every meaningful PR, listing updates or explaining why none are needed.
 
-Other repository instructions and task checklists should link to this section rather than restating its policy.
+Other repository instructions and task checklists should link to this section rather than restating its policy. Document ownership, classification, lifecycle, ADRs, historical evidence, naming, indexes, migration safety and AI-agent maintenance requirements are defined in the canonical [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md); follow it rather than creating local variants.
 
 ## Visual documentation and workflow schemas
 
