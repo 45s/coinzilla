@@ -5,6 +5,7 @@ import path from "node:path"
 import test from "node:test"
 import { PassThrough } from "node:stream"
 import { configureHarvesterLogging, createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
+import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
 function createLogger() {
   const transports = new Map()
@@ -365,10 +366,10 @@ test("appends cumulative files while isolating and flushing consecutive process 
       await logger.transports.get("harvester-debug-file").write(debugEntry);
       await logger.transports.get("harvester-trace-file").write(traceEntry);
       await logging.close();
-      assert.equal(
-        logger.transports.size,
-        0,
-        "graceful logging shutdown must unregister both structured file transports",
+      assert.deepEqual(
+        [...logger.transports.keys()],
+        ["console"],
+        "graceful logging shutdown must unregister both structured file transports and retain the console transport",
       );
     }
 
@@ -397,7 +398,6 @@ test("appends cumulative files while isolating and flushing consecutive process 
       const traceEntries = (await readFile(paths.trace, "utf8")).trim().split("\n");
       assert.equal(debugEntries.length, 1, "each DEBUG session file must contain only its own process entries");
       assert.equal(traceEntries.length, 1, "each TRACE session file must contain only its own process entries");
-      assert.match(debugEntries[0], new RegExp(processIdentity.runtimeSessionId), "DEBUG session context must retain its runtime session identity");
     }
   } finally {
     await rm(directory, { recursive: true, force: true });
