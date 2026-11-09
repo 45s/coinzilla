@@ -242,6 +242,7 @@ test("logs the original Journal startup error with structured diagnostics", asyn
   assert.equal(loggedErrors[0].errorName, "Error", "The console-safe diagnostic must include the original error type.")
   assert.equal(loggedErrors[0].errorMessage, "Journal directory is already locked", "The console-safe diagnostic must include the original failure message.")
   assert.equal(loggedErrors[0].errorCode, "JOURNAL_DIRECTORY_LOCKED", "The console-safe diagnostic must include the stable filesystem error code.")
+  assert.equal(loggedErrors[0].diagnosticId, "ErrorJournal001", "A stale or active Journal directory lock must carry its searchable operator diagnostic identifier.")
   assert.equal(loggedErrors[0].errors[0], startupError, "The diagnostic must preserve the original filesystem error and its code.")
 
   assert.equal(loggedErrors[0].errors[0].code, "JOURNAL_DIRECTORY_LOCKED", "The diagnostic must retain the stable Journal lock error code.")
