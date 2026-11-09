@@ -1,5 +1,7 @@
 # Harvester
 
+> **Documentation:** Start with the [Harvester documentation index](./docs/README.md). Repository-wide documentation lifecycle and AI-agent maintenance requirements are defined in [Documentation Governance](../../docs/DOCUMENTATION_GOVERNANCE.md). The [documentation migration plan](./docs/plans/DOCUMENTATION_MIGRATION.md) tracks the staged reorganization; historical evidence must be preserved.
+
 > **Current status — 2026-11-09:** Process-restart reconciliation is an active forensic/release-readiness workstream under [#654](https://github.com/45s/coinzilla/issues/654). Current startup creates fresh in-memory Portfolio/RecoveryLedger/OrderRegistry state and does not replay prior Journal sessions. This integration gap is source-confirmed; end-to-end restart consequences and history-retention completeness remain under investigation. This phase is documentation/evidence only: no runtime implementation, test changes, or TESTNET acceptance are claimed. See [Harvester Roadmap](./ROADMAP.md) and [Conservative Strategy audit](./AUDIT.md).
 
 
