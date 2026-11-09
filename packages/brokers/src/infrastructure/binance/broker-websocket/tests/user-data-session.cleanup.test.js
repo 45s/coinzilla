@@ -8,6 +8,7 @@ describe("Binance user-data listener setup cleanup", () => {
   it("rolls back listeners when a later listener registration throws", async () => {
     let client
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error() {}, info() {}, warn() {} },
@@ -40,6 +41,7 @@ describe("Binance user-data listener setup cleanup", () => {
   it("rolls back event and error listeners when close-listener registration throws", async () => {
     let client
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error() {}, info() {}, warn() {} },
@@ -83,6 +85,7 @@ describe("Binance user-data listener detach resilience", () => {
     const logs = []
     let client
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: {
@@ -153,6 +156,7 @@ describe("Binance user-data unsubscribe outcome", () => {
   function createUnsubscribeBroker({ unsubscribe, subscriptions }) {
     let client
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error() {}, info() {}, warn() {} },
@@ -246,6 +250,7 @@ describe("Binance user-data unsubscribe retry failure", () => {
     const retryError = new Error("second unsubscribe request failed")
     let client
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error() {}, info() {}, warn() {} },
@@ -285,6 +290,7 @@ describe("Binance user-data failed reconnect cleanup", () => {
     const scheduler = createScheduler()
     const clients = []
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       reconnectDelay: 10,
@@ -339,6 +345,7 @@ describe("Binance stale user-data subscription cleanup", () => {
     })
     let client
     const broker = new BinanceSdkBroker({
+      tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error() {}, info() {}, warn() {} },

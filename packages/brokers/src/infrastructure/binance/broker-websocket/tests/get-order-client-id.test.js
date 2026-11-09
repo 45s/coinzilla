@@ -18,6 +18,7 @@ const rawOrder = {
 
 function createBroker(handlers) {
   const broker = new BinanceSdkBroker({
+    tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
     logger: { error() {}, info() {}, debug() {}, warn() {} },

@@ -19,6 +19,7 @@ test("Binance TESTNET integration suites stay offline without explicit opt-in", 
       env: {
         ...childEnvironment,
         NODE_ENV: "test",
+        TRADING_MODE: "testnet",
         BINANCE_API_KEY: "ci-test-api-key",
         BINANCE_API_SECRET_KEY: "ci-test-api-secret",
         BINANCE_TESTNET_INTEGRATION: "",
