@@ -50,6 +50,36 @@ test("uses the injected logger when startup succeeds without a broker", async ()
   }
 })
 
+test("passes the immutable process identity into Journal composition", async () => {
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "runtime-session",
+    processId: 123,
+    startedAt: "2026-11-09T12:34:56.789Z",
+    source: {
+      branch: null,
+      commit: null,
+      shortCommit: null,
+      commitMessage: null,
+      commitDate: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
+    },
+  }
+  let observedIdentity
+  await runMain({
+    processIdentity,
+    createJournalService: (input) => {
+      observedIdentity = input.processIdentity
+      return disabledJournalService()
+    },
+    start: async () => ({ connected: false }),
+    logger: { info() {}, system() {}, error() {} },
+  })
+  assert.equal(observedIdentity, processIdentity)
+})
+
 test("logs startup failures as one structured logger argument", async () => {
   const calls = []
   const error = new Error("configuration failed")

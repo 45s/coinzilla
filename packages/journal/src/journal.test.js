@@ -243,6 +243,23 @@ test("uses the supplied process identity in its exclusive session filename", asy
     )
     assert.ok((await readdir(directory)).includes(path.basename(started.filePath)))
     assert.equal((await journal.close()).ok, true)
+
+    const duplicateJournal = new Journal({
+      eventBus: new EventBus(),
+      directory,
+      sessionIdentity: {
+        startedAt: "2026-11-09T12:34:56.789Z",
+        runtimeSessionId: "runtime/session:123",
+      },
+    })
+    try {
+      const duplicateStart = await duplicateJournal.start()
+      assert.equal(duplicateStart.ok, false, "a repeated process identity must fail exclusive session creation")
+      assert.match(duplicateStart.errors[0].message, /EEXIST/)
+      assert.ok((await readdir(directory)).includes(path.basename(started.filePath)))
+    } finally {
+      await duplicateJournal.close()
+    }
   } finally {
     await journal.close()
     await eventBus.close()

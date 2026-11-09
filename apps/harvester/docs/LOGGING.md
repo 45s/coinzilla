@@ -27,8 +27,8 @@ exclusive creation and are never overwritten.
 The Journal is a separate durable event store; its JSONL session filename uses
 the same process UTC start timestamp and runtime session ID as the DEBUG, TRACE
 and terminal session filenames. Its records are application events, not copies
-of diagnostic log lines. The console is also not a file: it displays a compact INFO-and-higher
-summary and remains independently configurable.
+of diagnostic log lines. The console is also not a file: it displays a compact
+INFO-and-higher summary and remains independently configurable.
 
 Complete console lines (timestamp, level, message, and displayed details) are
 colored when stdout is an interactive terminal and `NO_COLOR` is not set.

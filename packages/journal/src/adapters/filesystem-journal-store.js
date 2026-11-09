@@ -73,7 +73,8 @@ export class FileSystemJournalStore {
   }
 
   /**
-   * Create a timestamped, exclusively-created JSONL session file.
+   * Create an exclusively-created JSONL session file.
+   * @param {{ startedAt: string, runtimeSessionId: string }} [sessionIdentity] - Optional process identity for a correlated filename.
    * @returns {Promise<{ filePath: string }>} Created session path.
    */
   async createSession(sessionIdentity) {
