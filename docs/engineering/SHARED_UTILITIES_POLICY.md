@@ -140,7 +140,7 @@ The source-tree audit covers the applications and workspace packages present in 
 | Market Simulator arithmetic | [x] Removed app-local arithmetic engine; order matching uses shared comparison and a thin object-input facade delegates arithmetic while preserving the simulator's non-negative subtraction invariant. Candle validation and fill semantics remain local. |
 | Entities decimal values | [x] Canonical decimal normalization and subtraction delegate to shared primitives; `toResult` and entity validation behavior remain in Entities. |
 | Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from application-local; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
-| Logging | [x] Harvester now defaults to `defaultLogger`; application-local uses `defaultLogger`; Coin Farmer's adapter intentionally narrows the shared logger to its application port. |
+| Logging | [x] Harvester uses the public `defaultLogger` API. The former Coin Farmer adapter observation is historical only; that application is not present in the current `develop` workspace. |
 | Brokers | Keep Binance signing, protocol payloads, stream adapters, and broker-specific normalization in `packages/brokers`; they depend on exchange contracts. |
 | Event Bus | Keep event-name validation, payload rules, queue capacity, and delivery semantics in `packages/event-bus`; they define event-bus contracts. |
 | Notifiers | Keep Telegram formatting, Telegram API validation, and Telegram delivery behavior in `packages/notifiers`; these are channel-specific. |
@@ -162,13 +162,15 @@ The following helper groups were inspected and retained because their behavior b
 
 | Location | Examples | Why it stays local |
 | --- | --- | --- |
-| `packages/brokers/src/binance/**/helpers` and `utils` | Binance message/trade adapters, history query parameters, user-data event deduplication, RPC/stream protocol, signing, transport | These encode Binance wire formats, authentication, or broker lifecycle contracts. |
+| `packages/brokers/src/infrastructure/binance/broker-websocket/helpers` and `utils` | Binance message/trade adapters, history query parameters, user-data event deduplication, RPC/stream protocol, signing, transport | These encode Binance wire formats, authentication, or broker lifecycle contracts. |
 | `packages/brokers/**/test-helpers` | Fake broker clients, fake clock, fake WebSocket | Test doubles are scoped to broker protocol tests; they are not production runtime utilities. |
 | `packages/event-bus/src/helpers` | Event-name validation, payload/options validation, delivery capacity | These define EventBus-specific contracts. The one generic object-shape assertion was extracted. |
 | `packages/notifiers/src/telegram` | Telegram request/message validation and token-aware safe error formatting | These depend on Telegram API behavior and token handling. |
 | Application-local trading helpers | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on application-local strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
 | `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
-| `apps/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
-| `apps/bot-coin-farmer/test/helpers` | Configuration test fixtures | Test-only fixtures are not production shared utilities. |
+| `packages/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
+
 
 The shared package already contained and continues to own the general-purpose logger, result normalization, validators, UUID generation, date/time formatting and differences, waits, feature flags, event emitter, file append helper, log formatting/redaction, string capitalization, and Number-based convenience helpers. The new decimal, percentage, keyed queue, and object-input modules extend that existing public utility set.
+
+**Current-workspace clarification:** the former `apps/bot-coin-farmer` application has been removed from `develop`; its test fixtures are not a current utility candidate. The Market Simulator is now owned by `packages/market-simulator`, and Binance infrastructure lives under `packages/brokers/src/infrastructure/binance/`. The intentionally domain-local inventory above uses those current paths; older paths in prior audit snapshots are historical only.

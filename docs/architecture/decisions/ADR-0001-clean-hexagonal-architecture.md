@@ -8,7 +8,7 @@
 
 ## Context
 
-Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. The application architecture transition is defined by ADR-0002.
+Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. Application-specific architecture transitions are documented by their owning applications; the current Harvester architecture is maintained in the [Harvester architecture guide](../../../apps/harvester/docs/architecture.md).
 
 The repository already has useful canonical entities, broker adapters, event and journal packages, and shared application collaborators. It also has an explicit engineering roadmap that requires exact financial arithmetic, canonical fill-level accounting, broker capability contracts, safe reconciliation, deterministic tests, and incremental PRs.
 
