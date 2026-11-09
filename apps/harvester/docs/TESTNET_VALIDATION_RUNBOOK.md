@@ -57,7 +57,7 @@ Hard operational limits for any future session (none is currently approved):
 
 ## 3. Read-only command reference
 
-> The ZROUSDT-specific history/trade commands below are read-only references for the previous incident; ZROUSDT is currently disabled. They do not establish the next session's pair scope. The standalone `testnet:sell-zro` helper is a ZROUSDT MARKET SELL exchange write and is not authorized by this CLOSED / PAUSED runbook; do not invoke it.
+> The ZROUSDT-specific history/trade commands below are read-only references for the previous incident; ZROUSDT is currently disabled. They do not establish the next session's pair scope. The standalone `testnet:sell-zro` helper is a ZROUSDT MARKET SELL exchange write and is not authorized by this CLOSED / PAUSED runbook; do not invoke it. The `testnet:cancel-orders` helper is an account-wide cancellation write that proceeds automatically after a warning without interactive confirmation; it is also not authorized.
 
 Run these commands from `apps/harvester` after confirming `.env.development` contains TESTNET-only credentials. These commands read account state; they do not submit or cancel orders.
 
