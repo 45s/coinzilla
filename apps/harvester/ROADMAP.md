@@ -244,9 +244,9 @@ TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
 > The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. Merged PR #836 later disabled both and enabled only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
 
-The current task branch has progressed beyond the initial `develop` audit described
-below. The following first-cycle components are now implemented and composed
-when the selected development runtime profile explicitly enables TESTNET trading:
+At the time of this snapshot, the task branch had progressed beyond the initial `develop` audit described
+below. The following first-cycle components were implemented and composed
+when the selected development runtime profile explicitly enabled TESTNET trading:
 
 - Conservative pure policy: initial/standing BUY and recovery SELL intents,
   exact tick/step rounding, duplicate suppression, partial-fill wait behavior,
