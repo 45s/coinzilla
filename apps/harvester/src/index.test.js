@@ -111,13 +111,14 @@ test("logs startup failures as one structured logger argument", async () => {
       logger,
     })
 
-    assert.equal(calls.length, 1)
-    assert.equal(calls[0].level, "error")
-    assert.equal(calls[0].data.message, "startup failed.")
-    assert.equal(calls[0].data.error, error)
-    assert.equal(calls[0].data.errorDetails.name, "Error")
-    assert.equal(calls[0].data.errorDetails.message, "configuration failed")
-    assert.match(calls[0].data.errorDetails.stack, /configuration failed/)
+    const startupFailures = calls.filter((call) => call.data?.message === "startup failed.")
+    assert.equal(startupFailures.length, 1)
+    assert.equal(startupFailures[0].level, "error")
+    assert.equal(startupFailures[0].data.error, error)
+    assert.equal(startupFailures[0].data.errorDetails.name, "Error")
+    assert.equal(startupFailures[0].data.errorDetails.message, "configuration failed")
+    assert.match(startupFailures[0].data.errorDetails.stack, /configuration failed/)
+    assert.ok(calls.some((call) => call.data?.message === "observability shutdown incomplete"), "the process lock must remain held when runtime shutdown cannot be confirmed")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -175,11 +176,13 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
         error: (data) => calls.push(data),
       },
     })
-    assert.equal(calls.length, 1)
-    assert.equal(calls[0].errorDetails.name, "AggregateError")
-    assert.equal(calls[0].errorDetails.message, "startup and cleanup failed")
-    assert.equal(calls[0].errorDetails.errors[0].message, "broker request failed")
-    assert.match(calls[0].errorDetails.errors[0].stack, /broker request failed/)
+    const startupFailures = calls.filter((call) => call.message === "startup failed.")
+    assert.equal(startupFailures.length, 1)
+    assert.equal(startupFailures[0].errorDetails.name, "AggregateError")
+    assert.equal(startupFailures[0].errorDetails.message, "startup and cleanup failed")
+    assert.equal(startupFailures[0].errorDetails.errors[0].message, "broker request failed")
+    assert.match(startupFailures[0].errorDetails.errors[0].stack, /broker request failed/)
+    assert.ok(calls.some((call) => call.message === "observability shutdown incomplete"), "the process lock must remain held when runtime shutdown cannot be confirmed")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -224,7 +227,7 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
     {
       name: "harvester.started",
       source: "harvester",
-      data: { broker: "none", strategyMode: "read-only", enabledMarkets: [], tradingEnabled: false },
+      data: { broker: "none", strategyMode: "conservative", enabledMarkets: [], tradingEnabled: false },
     },
     event,
   ], "the existing runtime-start event and caller-published events must retain their order after process provenance is added")
@@ -232,6 +235,8 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
 
 test("waits for required Journal readiness before starting Harvester", async () => {
   let resolveReady
+  let markJournalCreated
+  const journalCreated = new Promise((resolve) => { markJournalCreated = resolve })
   let runtimeStarted = false
   const journalService = {
     ready: new Promise((resolve) => { resolveReady = resolve }),
@@ -241,14 +246,17 @@ test("waits for required Journal readiness before starting Harvester", async () 
 
   journalService.flush = async () => ({ ok: true, durable: true })
   const pending = runMain({
-    createJournalService: () => journalService,
+    createJournalService: () => {
+      markJournalCreated()
+      return journalService
+    },
     start: async () => {
       runtimeStarted = true
       return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }
     },
     logger: { info() {}, error() {}, debug() {} },
   })
-  await Promise.resolve()
+  await journalCreated
   assert.equal(runtimeStarted, false, "Trading startup must wait for the required Journal readiness barrier.")
   resolveReady({ ok: true })
   const result = await pending
