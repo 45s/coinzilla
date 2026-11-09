@@ -1989,3 +1989,8 @@ The engine publishes `FILL_APPLIED` after applying accounting but does not call 
 ### Existing domain serialization seams — #654
 
 The domain already exposes `value` projections for Portfolio, Position, RecoveryLedger and OrderRegistry, and the workflow/engine accept initial domain state. The current `startHarvester()` composition does not expose or populate those initial-state inputs; it always creates empty state. Constructors require typed canonical Market/Asset/Quantity/Money/CanonicalOrder objects, so a validated hydration mapper is still required. Do not characterize this as “no serialization exists”; the confirmed gap is the missing complete hydration and startup integration.
+
+
+### PREFLIGHT unowned-order readiness boundary — #654
+
+The account-wide open-order audit may record `BLOCKED / UNOWNED_OPEN_ORDERS`, but current `subscribeToUserData()` does not use that audit label as a trading-readiness gate. After draining queued events and verifying other user-data/accounting flags, it sets `state.ready = true`. The existing startup test allows runtime/market subscriptions with an unowned order and emits no price tick; it therefore does not prove that later strategy activity cannot overlap a prior-process order. A previous Harvester-owned order is indistinguishable from an external order after the registry resets. This is an explicit current policy and a key #654 reconciliation requirement, not a reproduced duplicate-order incident.
