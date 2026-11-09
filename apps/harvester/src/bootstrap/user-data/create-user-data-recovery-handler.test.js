@@ -8,6 +8,7 @@ const createState = (overrides = {}) => ({
   ready: false,
   requiresReconciliation: true,
   accountingFailed: false,
+  retryableRecoveryFailure: null,
   status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
   eventSequence: 0,
   recoveryGeneration: 1,
@@ -434,6 +435,73 @@ test("does not leave recovery pending when startup is complete but recovery is b
       `A completed startup with ${blockedCase.description} must not acknowledge a recovery generation.`,
     )
   }
+})
+
+
+test("does not acknowledge after a queued retryable event failure and retries on a later recovery reminder", async () => {
+  let failFirstDrain = true
+  const fixture = createRecovery({
+    drainUserDataEvents: async (calls, state) => {
+      if (failFirstDrain) {
+        failFirstDrain = false
+        state.retryableRecoveryFailure = {
+          generation: state.recoveryGeneration,
+          category: "ORDER_TRANSITION",
+          stage: "RECOVERY_SELL_CANCELLATION",
+          retryable: true,
+        }
+      }
+    },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.requiresReconciliation, true, "A failed queued transition must keep application recovery required.")
+  assert.equal(fixture.state.ready, false, "A failed queued transition must not reopen readiness.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after a queued event failed.")
+  assert.deepEqual(fixture.state.retryableRecoveryFailure, {
+    generation: 1,
+    category: "ORDER_TRANSITION",
+    stage: "RECOVERY_SELL_CANCELLATION",
+    retryable: true,
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.retryableRecoveryFailure, null, "A new single-flight recovery attempt may clear the prior retryable marker only before re-running authoritative reconciliation.")
+  assert.equal(fixture.state.requiresReconciliation, false, "Only the successful retry and matching broker acknowledgement may clear the application gate.")
+  assert.equal(fixture.calls.acknowledgements, 1)
+})
+
+test("keeps a permanent accounting-integrity failure terminal across recovery reminders", async () => {
+  let reconciliationCalls = 0
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      return {
+        ok: false,
+        errors: [new Error("REST fill quantity conflicts with canonical order quantity")],
+        failure: {
+          category: "ACCOUNTING_INTEGRITY",
+          stage: "REST_FILL_PARITY",
+          retryable: false,
+        },
+      }
+    },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.accountingFailed, true, "A proven accounting-integrity mismatch must retain the process-lifetime terminal latch.")
+  assert.equal(fixture.state.requiresReconciliation, true)
+  assert.equal(fixture.state.ready, false)
+  assert.equal(fixture.calls.acknowledgements, 0)
+
+  fixture.start()
+  assert.equal(reconciliationCalls, 1, "A terminal accounting-integrity failure must not be retried or cleared by another broker reminder.")
 })
 
 test("keeps recovery blocked when owned-order reconciliation returns a failed result", async () => {

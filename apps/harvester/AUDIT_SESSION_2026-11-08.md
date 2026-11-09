@@ -631,3 +631,20 @@ Key distinctions:
 - ZRO had a 54m 2.118s maximum inter-event gap with no corresponding afternoon market-stream error. This remains unresolved rather than a confirmed outage and is tracked separately in [#760](https://github.com/45s/coinzilla/issues/760).
 - The 48 unique fills reconcile exactly to the closing asset balances. Repeated duplicate-fill observations did not change accounting.
 - The CLOSING balance audit is complete, but no CLOSING open-orders payload was recorded; exact final order states remain unverified.
+
+
+## 31. F-023 failure-classification TDD — 2026-11-09
+
+Test-only regressions now distinguish matched order-transition failure from
+ownership/accounting-integrity failure. They also cover terminal fill-history
+REST timeout classification, a retryable queued-event failure that must block
+broker acknowledgement until a later authoritative retry, a permanent
+accounting-integrity mismatch that remains terminal, and the exact
+`recovered → executionPending` status interleaving with both broker recovery
+flags false before a queued owned BUY event.
+
+The expected RED behavior is that the current event handler sets the sticky
+`accountingFailed` latch for every failed engine result and the recovery
+coordinator does not inspect failure categories or queued retryable failure
+markers. No production source or exchange behavior changes are included in
+this test-first commit.
