@@ -14,7 +14,7 @@ An offline market simulator for testing Coinzilla strategies against historical 
 - Run a strategy with `onStart`, `onPrice`, and `onStop` lifecycle hooks.
 - Simulate MARKET, LIMIT, and LIMIT_MAKER spot orders.
 - Track balances, locked funds, orders, fills, and quote-asset fees.
-- Run offline and deterministically without exchange credentials.
+- Run offline without exchange credentials, using deterministic candle-matching and accounting rules; lifecycle timestamps and complete reports are not fully reproducible across runs.
 
 ## Requirements and setup
 
