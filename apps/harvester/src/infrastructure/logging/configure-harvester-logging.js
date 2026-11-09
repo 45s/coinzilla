@@ -176,16 +176,16 @@ export async function configureHarvesterLogging({
 
   const consoleTransport = createHarvesterConsoleTransport({ output })
   let debugTransport\n  let traceTransport\n\n  try {\n    debugTransport = await createFileTransport({
-    name: DEBUG_TRANSPORT_NAME,
-    level: "debug",
-    filename: "harvester.log",
-    sessionFilename: sessionPaths.debug,
-  })
+      name: DEBUG_TRANSPORT_NAME,
+      level: "debug",
+      filename: "harvester.log",
+      sessionFilename: sessionPaths.debug,
+    })
     traceTransport = await createFileTransport({
-    name: TRACE_TRANSPORT_NAME,
-    level: "trace",
-    filename: "harvester-trace.log",
-    sessionFilename: sessionPaths.trace,
+      name: TRACE_TRANSPORT_NAME,
+      level: "trace",
+      filename: "harvester-trace.log",
+      sessionFilename: sessionPaths.trace,
     })
 
     await logger.removeTransport(CONSOLE_TRANSPORT_NAME)
