@@ -26,7 +26,7 @@ const createClient = () => {
   return { calls, client, result }
 }
 
-const config = { apiKey: "test-key", apiSecret: "test-secret" }
+const config = { apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" }
 
 test("adapts Harvester placeOrder to Binance createOrder without changing the result", async () => {
   const { calls, client, result } = createClient()
