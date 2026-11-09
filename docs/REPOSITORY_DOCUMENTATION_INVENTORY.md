@@ -46,7 +46,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `docs/audits/repository-engineering-audit.md` | 16323 | Historical audit | **KEEP** | Historical repository assessment; preserve baseline, date and limitations. |
 | `docs/brokers-websocket-contract.md` | 30152 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/ci-workflows.md` | 3292 | Operational/reference guide | **KEEP** | Source-checked against root `package.json` and `.github/workflows/`; PR #816 corrects the JavaScript Syntax workflow's actual steps and missing `develop` push trigger. |
-| `docs/contributing.md` | 2622 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
+| `docs/contributing.md` | 2622 | Operational/reference guide | **KEEP** | Source-checked against root/package manifests and workflows; PR corrects a nonexistent Brokers `test:sdk` command to the three scripts actually defined by `packages/brokers/package.json`. |
 | `docs/dependency-audit-playbook.md` | 2931 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/engineering/BRANCH_AND_RELEASE_POLICY.md` | 349 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/engineering/CROSS_DOMAIN_REQUESTS.md` | 2462 | Engineering policy | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
@@ -93,6 +93,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 5. `packages/entities` previously had agent instructions and a roadmap but no README entry point; a package README has now been added.
 6. Package README/AGENTS/ROADMAP files are domain-owned. Root policy should define common standards; package instructions should add only genuinely local constraints.
 7. `docs/ci-workflows.md` had drifted from `.github/workflows/quality-gate.yml`: it incorrectly described the workflow as running `pnpm run quality` and omitted the `develop` push trigger. PR #816 aligns the guide with the actual actionlint, JavaScript syntax, and agent-policy steps.
+8. `docs/contributing.md` advertised a nonexistent `@coinzilla/brokers` `test:sdk` script. The package currently defines `test:integration`, `test:websocket`, and `test:user-data-integration`; the contributor guide now lists the actual commands.
 
 ## Remaining work
 
