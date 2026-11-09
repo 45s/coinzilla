@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-09 15:51 +02:00  
-**Develop checkpoint:** `2204c9462bfd2b20c27de881cf6500cdcab60d46`
+**Last reviewed:** 2026-11-09 16:25 +02:00  
+**Develop checkpoint:** `70dcbed12db1f04e48bc69b8ce6fbf3d60ad4a01`
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -42,8 +42,8 @@
 
 6. **Repository documentation consolidation (#795) — governance foundation and recursive inventory complete; content migration in progress.**
    - **Why:** contributors need one current source of truth per subject, clear ownership and reliable navigation without losing historical evidence.
-   - **Completed:** baseline inventory of 97 Markdown files (42 Harvester, 55 other); governance/agent rules and indexes merged in PRs #796–#797; Harvester roadmap/README history separated in #798–#800; repository-wide Markdown relative-link validation merged in #801; root/domain freshness rules and live `develop-core` enforcement evidence recorded in #806/#799; one invalid TESTNET command example corrected in #808. The required `Check JavaScript syntax` context runs the agent-policy/link check; it is not a standalone documentation status.
-   - **Remaining:** finalize dispositions for the remaining Harvester TESTNET guide and two Brokers documentation candidates; continue content-level source-of-truth/reference review and small evidence-preserving consolidations. Three of four initial Harvester REVIEW candidates now have KEEP/SUPERSEDE outcomes. Do not claim migration completion from the governance foundation alone.
+   - **Completed:** baseline inventory of 97 Markdown files (42 Harvester, 55 other); governance/agent rules and indexes merged in PRs #796–#797; Harvester roadmap/README history separated in #798–#800; repository-wide Markdown relative-link validation merged in #801; root/domain freshness rules and live `develop-core` enforcement evidence recorded in #806/#799; the first Harvester content-disposition batch merged in #809; both Brokers documentation candidates received KEEP dispositions in #810; one invalid TESTNET command example was corrected in #808. The required `Check JavaScript syntax` context runs the agent-policy/link check; it is not a standalone documentation status.
+   - **Remaining:** finalize the Harvester TESTNET guide disposition; continue content-level source-of-truth/reference review and small evidence-preserving consolidations. Three of four initial Harvester REVIEW candidates have KEEP/SUPERSEDE outcomes, and both Brokers documentation candidates are KEEP. Do not claim migration completion from the governance foundation alone.
    - **Owner:** [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md), [documentation index](docs/README.md), and [issue #795](https://github.com/45s/coinzilla/issues/795).
 
 7. **Utilities build provenance and shared-helper reuse.**
