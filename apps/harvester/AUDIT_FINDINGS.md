@@ -304,28 +304,66 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 **Audit classification:** downgrade/remove “post-CLOSING Portfolio/RecoveryLedger application not evidenced” as a same-session defect or operator acceptance blocker. Keep a distinct restart-reconciliation verification item: on next startup Harvester must fetch and idempotently apply all owned fills since its last durable checkpoint, reconcile current balances/open orders/commissions, and keep trading disabled until complete. Classify this behavior UNVERIFIED until source/tests or a controlled restart scenario establish it; do not claim failure based solely on missing post-shutdown runtime logs.
 
 
-## F-011 — durable restart reconciliation (2026-11-06)
+## F-011 — durable restart reconciliation (updated 2026-11-09)
 
-**Status: DEFERRED — outside the active Conservative strategy/policy audit. Not a blocker for issue #645, issue #646, or PR #653 acceptance.**
+**Status: CONFIRMED STARTUP INTEGRATION GAP; runtime consequence STRONGLY INDICATED; no end-to-end process-death/restart reproduction.** The current authoritative roadmap makes #654 a critical release-readiness requirement before unattended restarts. This is an investigation-only phase; no implementation is authorized here.
 
-**Owner-approved lifecycle:** Harvester runs on a personal workstation and may be stopped while Binance orders remain open. Exchange orders can partially or fully fill while Harvester is offline. This is expected. On the next startup, before any new trading, Harvester must reconcile every owned fill since the last durable checkpoint, actual commissions, partial/terminal order states, balances, locked funds, and open orders; update Portfolio/RecoveryLedger exactly once; restore reservations; and remain fail-closed until all checks succeed.
+**Owner-approved lifecycle:** Harvester runs on a personal workstation and may be stopped while Binance orders remain open. Exchange orders can partially or fully fill while Harvester is offline. This is expected behavior, not an uptime or operator failure. On the next startup, before new trading, Harvester must reconcile offline fills, commissions, partial/terminal order states, balances, locked funds, reservations and open orders. Historical CLOSING snapshots remain immutable; later fills belong to next-session reconciliation.
 
-**Source observation:** `apps/harvester/src/bootstrap/start-harvester.js` explicitly states that durable Journal replay is disabled and that startup uses fresh in-process trading state. The startup path does not invoke `restoreHarvesterJournalState` or wire its restored Portfolio, RecoveryLedger, and OrderRegistry into the trading engine. The repository contains separate offline primitives (`projectHarvesterJournalRecovery`, `restoreHarvesterJournalState`, `auditRecoveredTradeHistory`, and `auditRecoveredAccountState`), but no proof that these are integrated into process startup. This is stronger than an absence of later runtime logs: the inspected startup path explicitly bypasses replay.
+**Confirmed current-source evidence**
 
-**Impact:** a process restart after DOGE SELL 1276698 and ZRO BUY 727905 filled while offline cannot currently be claimed to reconstruct those fills from durable state before trading. The historical CLOSING snapshot remains correct and immutable; no same-session update was expected while the process was stopped. This is a startup-safety defect, not an operator uptime issue.
+1. `apps/harvester/src/bootstrap/start-harvester.js` initializes a new `Portfolio`, empty `recoveryLedgers` map, `OrderRegistry.empty()`, and empty recovery/session collections (including `journalFills: []`). It explicitly comments that durable Journal replay is disabled and startup uses fresh in-process state.
+2. `apps/harvester/src/use-cases/create-portfolio-workflow.js` creates a new Portfolio and RecoveryLedger map unless initial state is injected. Portfolio and RecoveryLedger fill IDs/fingerprints are part of those in-memory projections.
+3. `apps/harvester/src/use-cases/conservative-trading-engine.js` implements `reconcileOwnedOrders()` over the current registry. When there are no registered owned orders, it returns `{ reconciled: 0, symbols: [] }` without querying canonical order or fill history. Its per-order reconciliation cannot discover prior-process orders without restored identities.
+4. `apps/harvester/src/bootstrap/account/create-account-snapshot-manager.js` and `subscribe-to-user-data.js` capture and durably flush PREFLIGHT account balances and account-wide open orders. The snapshot classifies unmatched orders as `BLOCKED` / `UNOWNED_OPEN_ORDERS`; this is an audit classification, not a trading-readiness gate.
+5. `apps/harvester/src/bootstrap/start-harvester.test.js` explicitly tests that a pre-existing unowned order is recorded but not adopted/cancelled and does not prevent runtime startup. Its “starts from fresh in-memory state without replaying historical Journal records” test supplies a malformed `journalRecoveryRecords` argument, instruments historical broker reads, then asserts no historical reads occurred and `runtime.userDataReady === true`.
+6. `packages/journal/README.md` documents bounded read/replay, but replay is at-least-once and requires an idempotent consumer. `apps/harvester/src/infrastructure/journal/prepare-optional-journal.js` starts, flushes and closes Journal; it does not read/replay prior sessions. `apps/harvester/src/index.js` passes only the event publisher into `startHarvester`, not a restored projection.
 
-**Required fix and tests:**
-- Restore the durable Journal projection before activating the trading engine.
-- Fetch complete exchange trade history since the durable checkpoint for every relevant symbol/market, with pagination exhaustion and market-universe completeness proven.
-- Correlate fills to owned broker/client order IDs; apply each missing fill atomically to Portfolio and RecoveryLedger exactly once, including base/quote commission amounts and assets.
-- Reconcile partial and terminal order states, canceled orders with late fills, open-order reservations, account free/locked/total balances, and snapshot timestamps.
-- Durably record successful reconciliation/checkpoint before opening the trading gate. Missing/incomplete history, unknown ownership, duplicate-ID conflicts, unsupported commissions, or contradictory balances/orders must leave trading blocked.
-- Add deterministic restart tests for offline DOGE/ZRO fills, partial fills, terminal orders, commissions, repeated startup/replay, duplicate prevention, balance/open-order mismatch, incomplete pagination, and fail-closed readiness.
+**Graceful versus unexpected termination**
 
-**Evidence discipline:** no TESTNET acceptance is inferred from source inspection or offline tests. No exchange writes, bot restarts, or account mutations were performed.
+- `apps/harvester/src/index.js` registers SIGINT and SIGTERM handlers that invoke the runtime shutdown.
+- `apps/harvester/src/bootstrap/shutdown/create-shutdown-handler.js` performs owned-order reconciliation before and after the owned-BUY cancellation pass, drains user-data, preserves open SELLs, writes the durable CLOSING balance audit, and disconnects.
+- The process then closes Journal/EventBus and releases process locks only after shutdown is confirmed.
+- SIGKILL, process crash and power loss cannot run these handlers or the graceful CLOSING path. Stale locks are not automatically reclaimed; an operator must verify the owner before manual cleanup.
 
 
-**Priority correction (2026-11-06):** This finding is retained only as a future roadmap note. Do not implement restart recovery during the current audit. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
+
+**Broker history discovery — capability versus current integration**
+
+- The current `@coinzilla/brokers` contract exposes canonical `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })`. Symbol-wide queries are possible without an `orderId`, so an empty Harvester registry does not make exchange-side fill discovery technically impossible.
+- Binance's official Spot WebSocket API `myTrades` documentation specifies an inclusive `fromId` cursor, a maximum `limit` of 1,000, and time filters whose interval cannot exceed 24 hours. `fromId` cannot be combined with `startTime`/`endTime`; `orderId` cannot be combined with time filters but can be combined with `fromId`. With no condition, only the most recent trades up to the limit are returned. See [Binance Account Trade History — Spot WebSocket API](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account).
+- The broker package contract validates trade/fill cursor IDs and rejects values outside JavaScript's safe-integer range rather than rounding int64 identifiers. This is a hard pagination boundary until the transport supports exact int64 representation.
+- Current Harvester `reconcileOwnedOrders()` does not perform a symbol-wide scan: it queries fills only after it has a registered owned order ID, and it returns immediately for an empty registry.
+- **Unresolved:** the official endpoint documentation inspected here does not state a guaranteed historical-retention horizon. Therefore a symbol-wide cursor scan is a possible recovery building block, not proof that every offline execution is always retrievable. A durable per-symbol cursor, page-exhaustion proof, retention policy, market-universe coverage, and fallback/operator procedure are still required.
+
+**Operational consequence and confidence**
+
+- **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
+- **Confirmed:** current open orders are observed as unowned; the existing startup test allows runtime startup without adopting or cancelling them.
+- **Strongly indicated:** a fill occurring while Harvester is stopped can be absent from the new in-memory accounting projection. A now-terminal order will not appear in the PREFLIGHT open-order list; an empty registry gives `reconcileOwnedOrders()` no order IDs from which to request its fill history.
+- **Not yet proven:** a deterministic end-to-end restart scenario producing a duplicate new order, missed accounting delta, double application, or incorrect reservation/balance decision. Do not report these consequences as reproduced incidents.
+- The November 8 DOGE/ZRO post-shutdown fills remain expected downtime behavior. Their absence from the earlier CLOSING snapshot is not a defect.
+
+**Documentation inconsistency**
+
+`apps/harvester/docs/JOURNAL_OPERATIONS.md` currently states that Harvester reads prior Journal sessions and blocks trading startup if previous trading events exist. The inspected current composition does not implement that gate: `prepareOptionalJournal()` calls `journal.start()`, and `main()` calls `startHarvester({ eventPublisher })`. There is no prior-session read/replay or history-based trading gate wired into this path. The operational document must describe actual behavior rather than an unimplemented safeguard.
+
+**Required future DDD/TDD work (not implementation in this phase)**
+
+- Define a versioned durable checkpoint covering client/broker order IDs, immutable order intent and terminal state, fill/trade IDs and fingerprints, exact commission facts, reservations, Portfolio/Position, RecoveryLedger/cycle state, strategy ownership, pause/replacement state, and config/schema version.
+- Define crash-consistent ordering for submission/cancellation intents, broker acknowledgements, fills, accounting application and checkpoint advancement. Do not claim exactly-once transport delivery.
+- Restore and validate the complete Journal projection before engine activation; make replay idempotent across a crash between projection application and checkpoint commit.
+- Discover and reconcile orders/fills changed while offline, including OPEN, PARTIALLY_FILLED, FILLED, CANCELED, EXPIRED, REJECTED and UNKNOWN; prove pagination exhaustion and history-retention coverage for every relevant market/order.
+- Reconcile balances, locked funds, reservations and external/unowned activity without silently adopting unrelated assets/orders.
+- Fail closed on missing/invalid history, retention gaps, ownership ambiguity, duplicate identity conflicts, unsupported commission facts or contradictory balances/orders; define explicit operator intervention.
+- Specify first-run versus returning-run behavior, Journal-missing behavior, schema upgrades, stale locks, graceful SIGINT/SIGTERM, abrupt termination, and restart after every order/fill/recovery boundary.
+- Add deterministic tests for crash/restart after submit-before-ack, ack-before-fill, partial/full fill, cancel-before-ack, cancel/fill race, recovery completion, duplicate/conflicting replay, incomplete pagination, stale/malformed Journal, and balance/open-order mismatch. Assert no duplicate order, no missed/double accounting, restored reservations, and no READY before reconciliation.
+
+**Test limitations**
+
+The inspected tests characterize fresh-state startup and graceful lifecycle behavior; they do not reproduce a real process death followed by restoration and exchange reconciliation. No test command was executed during this source-only review.
+
+**Safety:** no source or test files changed; no process restart, private account query, exchange write, order mutation, credential/configuration change, or TESTNET action performed.
 
 
 ## F-012 — Conservative residual sell-through and lifecycle conformance (2026-11-06)
