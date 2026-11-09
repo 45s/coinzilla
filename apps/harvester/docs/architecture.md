@@ -309,7 +309,7 @@ Market-data timestamp freshness is a deterministic domain policy in `src/domain/
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
 
-Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its REST/stream sequence plus durable Journal barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial REST ticker seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket-before-REST ordering.
+Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its WebSocket API/stream sequence plus durable Journal barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial Binance WebSocket API `ticker.price` request/response seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket Streams-before-WebSocket API request/response ordering.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
@@ -539,18 +539,18 @@ or user-data workflows.
 
 The Conservative engine serializes its public market-price, user-data, and explicit evaluation entry points through one in-process promise tail. Each transition holds the turn across strategy evaluation, pending-order registration, broker submission and acknowledgement, cancellation, fill-history reconciliation, and accounting callbacks. Internal workflow steps call their already-held transition functions directly; they must not enqueue themselves again. A rejected transition is isolated from the tail so later events can still run. This is process-local ordering only: it is not a cross-process lock, durable queue, exactly-once delivery guarantee, or restart-recovery mechanism.
 
-## In-memory REST/stream order reconciliation
+## In-memory WebSocket API/stream order reconciliation
 
 After the broker reports that its recovered user-data stream has completed
 stream-level reconciliation, bootstrap keeps the trading gate closed and
-starts REST reads without blocking normal stream-event processing. Before the
-REST snapshot is applied, bootstrap drains user-data events received during
+starts WebSocket API request/response reads without blocking normal stream-event processing. Before the
+broker snapshot is applied, bootstrap drains user-data events received during
 the reads; the engine then validates and applies the snapshot in its serialized
 transition queue. The trading gate is reopened only after both steps succeed.
 
 During application recovery, the account-balance and account-wide open-orders audits are separate durability barriers. After the account snapshot is durably published, bootstrap revalidates the recovery generation and accounting state, drains queued user-data events, and compares the event sequence before it starts the open-orders audit. If the generation was superseded or an event changed the snapshot boundary, the open-orders audit is skipped and the snapshot window is retried. After the open-orders audit flush, bootstrap revalidates the generation and accounting state before draining more queued events; a superseded task does not drain under an obsolete generation. The final drain and stable event-sequence check must then succeed before broker acknowledgement.
 
-Immediately after the asynchronous owned-order REST/stream reconciliation returns, bootstrap revalidates the recovery generation and accounting state before certifying canonical ownership. A superseded generation or accounting failure must not set the ownership-reconciled flag and must not proceed to account or open-orders audits.
+Immediately after the asynchronous owned-order WebSocket API/stream reconciliation returns, bootstrap revalidates the recovery generation and accounting state before certifying canonical ownership. A superseded generation or accounting failure must not set the ownership-reconciled flag and must not proceed to account or open-orders audits.
 
 The Conservative engine reconciles only orders already present in its
 in-memory `OrderRegistry`. For each owned symbol it reads `getOpenOrders()`;
@@ -562,9 +562,9 @@ conflicting order-history record, an invalid open-order response, or a fill
 quantity that does not equal the order's cumulative executed quantity keeps
 the affected market paused and the application trading gate closed.
 
-REST fills are validated as a complete set before any are applied, deduplicated
+WebSocket API fill-history responses are validated as a complete set before any are applied, deduplicated
 by stable `Fill.id` (market plus exchange trade ID), and ordered by execution
-time with trade ID as a deterministic fallback. The REST execution quantity
+time with trade ID as a deterministic fallback. The history-response execution quantity
 must match the canonical order's cumulative executed quantity, must not lag the
 latest stream-updated order quantity, and must contain every execution ID
 already processed from the stream. Each recovered execution is then passed
@@ -578,14 +578,14 @@ idempotent accounting path and cannot account the execution twice.
 This is deliberately process-local reconciliation. It does not restore orders
 or accounting after a process restart, replay startup history, reconcile
 balances or external inventory, or adopt manual orders. It also does not claim
-durable exactly-once delivery. If REST state is incomplete or inconsistent,
+durable exactly-once delivery. If broker request/response state is incomplete or inconsistent,
 trading remains paused rather than guessing.
+
 ## Cancellation preconditions
 
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
 
-Market-price subscription setup now awaits an already-received WebSocket tick before deciding whether a REST seed is needed; it does not issue the REST request when the WebSocket price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
-
+Market-price subscription setup now awaits an already-received WebSocket Streams tick before deciding whether a Binance WebSocket API `ticker.price` request/response seed is needed; it does not issue that request when the stream price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
 
 ## Bootstrap composition and safety-halt workflow
 
@@ -632,12 +632,14 @@ Engine event-processing failures carry an explicit `failure` object with
 `category`, `stage`, and `retryable`. The outer event handler does not infer
 accounting corruption from a generic non-success result.
 
+`REST_RECONCILIATION` is a retained legacy failure-category identifier. It does not describe an HTTP REST transport: the current Binance broker performs canonical order/fill reads through WebSocket API request/response RPC.
+
 | Category | Meaning | Retry policy |
 |---|---|---|
 | `OWNERSHIP_INTEGRITY` | Unknown/mismatched order or Fill identity, or invalid ownership transition | Terminal process-lifetime accounting gate; never acknowledge recovery |
 | `ACCOUNTING_INTEGRITY` | Fill/accounting projection failure, conflicting duplicate, or order/fill quantity parity failure | Terminal process-lifetime accounting gate; never acknowledge recovery |
 | `ORDER_TRANSITION` | Cancellation/replacement transition failed after the owned order was matched | Keep readiness closed; require a fresh authoritative order/fill reconciliation |
-| `REST_RECONCILIATION` | Canonical order/fill history or owned-order REST read failed/incomplete | Keep readiness closed; retry only through a new single-flight recovery attempt |
+| `REST_RECONCILIATION` | Canonical order/fill history or owned-order WebSocket API request/response read failed/incomplete | Keep readiness closed; retry only through a new single-flight recovery attempt |
 | `DURABILITY` | Required order-intent Journal durability barrier failed | Keep readiness closed; retry only after a new attempt revalidates canonical state and durability |
 
 An unclassified engine failure defaults to terminal
@@ -655,7 +657,7 @@ flowchart TD
     A[Owned user-data event] --> B[Conservative engine transition]
     B --> C{Typed failure}
     C -->|Ownership or accounting integrity| D[accountingFailed = true]
-    C -->|Order, REST, or durability retryable| E[requiresReconciliation = true]
+    C -->|Order, broker request/response, or durability retryable| E[requiresReconciliation = true]
     D --> F[Readiness closed; no broker acknowledgement]
     E --> G[Generation-scoped retryable failure marker]
     G --> H[Abort current recovery before acknowledgement]
