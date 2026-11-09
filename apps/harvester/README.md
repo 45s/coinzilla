@@ -6,7 +6,7 @@
 > **Latest TESTNET session audit — 2026-11-08:** Source review traced the DOGE follow-up gap to an unowned ZRO execution closing global accounting readiness while an already-resting Harvester BUY remained live. The BUY-cancellation safety fix is in [PR #669](https://github.com/45s/coinzilla/pull/669). The configured-asset snapshot allowlist correction is implemented in [PR #670](https://github.com/45s/coinzilla/pull/670) and tracked in [#667](https://github.com/45s/coinzilla/issues/667). The audit readiness label BLOCKED describes unowned-order reconciliation, not startup readiness. See the [session audit in AUDIT.md](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). This is retrospective evidence, not TESTNET acceptance or authorization to trade.
 
 
-> **AI WORK PRIORITY — HARD RULE:** Until the bulletproof real Binance Spot TESTNET acceptance gate passes, Harvester work is trading workflow only. No Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactoring, optimization, or side quests. Only a narrowly targeted fix for a demonstrated immediate trading-safety blocker is allowed. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
+> **AI WORK PRIORITY — HARD RULE:** The Conservative trading workflow and its safety gates remain the product priority; secondary work must not delay or change them. Explicitly selected, narrowly scoped engineering and evidence tasks may proceed independently when they remain non-blocking. This process-provenance work is explicitly selected and must not add a trading-readiness or Journal durability gate. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
 
 
 Harvester is an independent Node.js process for cryptocurrency trading, built inside the Coinzilla pnpm monorepo.
@@ -158,6 +158,12 @@ The configuration loader and validation live in `src/infrastructure/config/load-
 ## Logging
 
 The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils`. Keep logging at application boundaries, inject a logger where tests or alternate composition need control, and do not call global `console` directly from Harvester modules. The shared logger accepts one data argument per method; pass structured objects when a log needs metadata.
+
+### Process provenance and log correlation
+
+At process entry, Harvester captures its package version, Git branch/commit/subject/date/working-tree state, metadata source, PID, UTC start timestamp, and a unique runtime-session ID once. The immutable identity is attached to the shared logger with `Logger.setContext()` before startup diagnostics. Structured DEBUG and TRACE JSONL entries therefore carry a top-level `context` alongside the original `data`; the compact console formatter remains concise and may omit that context.
+
+When the Journal subscriber is ready, Harvester publishes `harvester.process_started` with the same allowlisted build/runtime identity. Its `startedAt` is the actual process-entry timestamp, not the later EventBus publication time. This attempt event is distinct from `harvester.started`, which is emitted only after runtime startup succeeds. The event is best-effort: broker-connected startup admits it before the existing PREFLIGHT durability barrier, which can include it without adding another flush or gate. Configuration-only/no-broker startup does not wait for the optional Journal; logger context is available immediately even if Journal setup is delayed, disabled, or unavailable. If readiness is delayed until after `harvester.started` is emitted, the process event may appear later in Journal order, but its `startedAt` still identifies the original process entry. Missing Git metadata is explicit and never guessed. This identity is diagnostic only and does not enable Journal replay or process-restart trading recovery.
 
 - `logger.debug({ message, ...context })` remains deliberately detailed during development. Strategy traces include the symbol, current price, last BUY reference, active-order context, pair settings, decision/action/reason, and the market's active/free quantities and quote cash flow. Accounting traces include execution/trade/order IDs, side, price, base/quote quantities, actual commission amount/asset/status, applied/duplicate outcome, and exact before/after accounting deltas. Recovery traces include eligibility inputs, recovery cost/proceeds, outstanding recovery, realized profit, and inventory allocation.
 - Portfolio and RecoveryLedger debug context is emitted as bounded summaries for the market being processed. Applied-fill identity fingerprints and raw fingerprint values are never logged; only the aggregate applied-fill count is included. This avoids large repeated state dumps without reducing useful trading diagnostics.
@@ -502,6 +508,27 @@ This is a narrowly scoped, explicitly authorized observability task. It does
 not change the general TESTNET acceptance gate, authorize exchange writes, or
 modify trading/Journal behavior.
 
+
+## Process identity and build provenance
+
+Each Harvester OS process captures one immutable identity at module entry:
+the application/package version, Git branch and commit (when available),
+commit subject/date, working-tree state, process ID, UTC process-entry time,
+and a unique runtime-session ID. Git metadata is inspected once; if Git is
+unavailable, explicit `COINZILLA_BUILD_*` metadata is used, otherwise source
+fields are recorded as unavailable. This diagnostic capture never blocks
+startup.
+
+The shared Logger receives the sanitized allowlisted identity before startup
+diagnostics. The Journal records it as `harvester.process_started`, distinct
+from `harvester.started` (which means runtime startup succeeded). The event
+is published after Journal subscriber readiness. Configuration-only startup,
+startup-failure cleanup, and shutdown do not wait for optional Journal
+readiness. Broker-connected startup admits the event before the existing
+PREFLIGHT durability barrier; no additional flush or trading gate is added.
+When optional Journal readiness is delayed, the event's Journal append order
+may follow `harvester.started`, but its `startedAt` always represents the
+original process-entry time.
 
 ## Conservative Strategy authority
 

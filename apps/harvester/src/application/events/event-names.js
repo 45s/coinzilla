@@ -6,6 +6,7 @@
 export const HARVESTER_EVENT_SOURCE = "harvester"
 
 export const HARVESTER_EVENT_NAMES = Object.freeze({
+  PROCESS_STARTED: "harvester.process_started",
   STARTED: "harvester.started",
   STARTUP_FAILED: "harvester.startup_failed",
   STOPPED: "harvester.stopped",
