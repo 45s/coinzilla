@@ -61,7 +61,7 @@ function removeCodeExamples(content) {
     const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
     if (activeFence) {
       if (fence && fence[1][0] === activeFence.character && fence[1].length >= activeFence.length &&
-          /^ {0,3}(?:`{3,}|~{3,})\\s*$/.test(line)) {
+          /^ {0,3}(?:`{3,}|~{3,})\s*$/.test(line)) {
         activeFence = null;
       }
       continue;
@@ -75,7 +75,6 @@ function removeCodeExamples(content) {
 
   return output.join('\n').replace(/(`+)[\s\S]*?\1/g, '');
 }
-
 export function findInstructionDirectories(root) {
   const directories = [];
 
@@ -136,7 +135,8 @@ export function findMissingLocalLinks(root, documents) {
   const gaps = [];
 
   for (const document of documents) {
-    const links = document.content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
+    const content = removeCodeExamples(document.content);
+    const links = content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
 
     for (const match of links) {
       const target = match[1];
