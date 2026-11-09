@@ -19,6 +19,7 @@ const createBroker = ({ config, logger }) =>
   new BinanceWebSocketBroker({
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
+    tradingMode: config.tradingMode,
     logger,
   })
 
