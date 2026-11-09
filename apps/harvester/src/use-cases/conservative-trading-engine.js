@@ -2453,26 +2453,99 @@ export function makeConservativeTradingEngine({
 
     for (const pendingOrder of pendingOrders) {
       try {
-        const lookupResult = await broker.getCanonicalOrder({
-          symbol: pendingOrder.market.symbol,
-          clientOrderId: pendingOrder.clientOrderId,
-        })
-        if (!lookupResult?.ok) {
-          throw lookupResult?.errors?.[0] ?? new Error("Unable to resolve order by clientOrderId")
+        let lookupResult
+        try {
+          lookupResult = await broker.getCanonicalOrder({
+            symbol: pendingOrder.market.symbol,
+            clientOrderId: pendingOrder.clientOrderId,
+          })
+        } catch (error) {
+          throw recoveryFailureError(error, "ACCOUNTING_INTEGRITY", "PENDING_ORDER_LOOKUP_EXCEPTION", false)
+        }
+        if (lookupResult?.ok !== false && lookupResult?.ok !== true) {
+          throw recoveryFailureError(
+            new Error("Canonical order lookup response is missing an explicit success flag"),
+            "ACCOUNTING_INTEGRITY",
+            "PENDING_ORDER_LOOKUP_RESPONSE",
+            false,
+          )
+        }
+        if (lookupResult.ok === false) {
+          throw recoveryFailureError(
+            lookupResult?.errors?.[0] ?? new Error("Unable to resolve order by clientOrderId"),
+            "REST_RECONCILIATION",
+            "PENDING_ORDER_LOOKUP",
+            true,
+          )
         }
         const acknowledgedOrder = lookupResult.data
-        if (acknowledgedOrder?.clientOrderId !== pendingOrder.clientOrderId ||
-            acknowledgedOrder?.market?.symbol !== pendingOrder.market.symbol) {
-          throw new Error("Canonical order lookup returned an order that does not match the pending clientOrderId and symbol")
+        if (!(acknowledgedOrder instanceof CanonicalOrder)) {
+          throw recoveryFailureError(
+            new Error("Canonical order lookup did not return a CanonicalOrder"),
+            "ACCOUNTING_INTEGRITY",
+            "PENDING_ORDER_LOOKUP_SHAPE",
+            false,
+          )
+        }
+        if (typeof acknowledgedOrder.brokerOrderId !== "string" || !acknowledgedOrder.brokerOrderId.trim()) {
+          throw recoveryFailureError(
+            new Error("Canonical order lookup returned an order without a brokerOrderId"),
+            "ACCOUNTING_INTEGRITY",
+            "PENDING_ORDER_LOOKUP_SHAPE",
+            false,
+          )
+        }
+        if (acknowledgedOrder.clientOrderId !== pendingOrder.clientOrderId ||
+            acknowledgedOrder.market?.id !== pendingOrder.market.id ||
+            acknowledgedOrder.market?.symbol !== pendingOrder.market.symbol ||
+            acknowledgedOrder.side !== pendingOrder.side ||
+            acknowledgedOrder.type !== pendingOrder.type) {
+          throw recoveryFailureError(
+            new Error("Canonical order lookup returned an order that does not match the pending order identity"),
+            "OWNERSHIP_INTEGRITY",
+            "PENDING_ORDER_LOOKUP_IDENTITY",
+            false,
+          )
+        }
+        const quantityMatches = compareDecimal({
+          left: acknowledgedOrder.originalQuantity.amount,
+          right: pendingOrder.originalQuantity.amount,
+        }) === 0
+        const limitPriceMatches = acknowledgedOrder.limitPrice === undefined
+          ? pendingOrder.limitPrice === undefined
+          : pendingOrder.limitPrice !== undefined &&
+            compareDecimal({
+              left: acknowledgedOrder.limitPrice.amount,
+              right: pendingOrder.limitPrice.amount,
+            }) === 0
+        if (!quantityMatches || !limitPriceMatches) {
+          throw recoveryFailureError(
+            new Error("Canonical order lookup returned immutable order facts that conflict with the pending submission"),
+            "ACCOUNTING_INTEGRITY",
+            "PENDING_ORDER_LOOKUP_PARITY",
+            false,
+          )
         }
 
         const attachmentResult = await runTransition({
           task: async () => {
             const currentOrder = state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId })
-            if (!currentOrder) throw new Error("Pending order disappeared before clientOrderId reconciliation")
+            if (!currentOrder) {
+              throw recoveryFailureError(
+                new Error("Pending order disappeared before clientOrderId reconciliation"),
+                "OWNERSHIP_INTEGRITY",
+                "PENDING_ORDER_ATTACHMENT",
+                false,
+              )
+            }
             if (currentOrder.brokerOrderId !== undefined) {
               if (currentOrder.brokerOrderId !== acknowledgedOrder.brokerOrderId) {
-                throw new Error("Client-order-ID lookup conflicts with the brokerOrderId already attached to the order")
+                throw recoveryFailureError(
+                  new Error("Client-order-ID lookup conflicts with the brokerOrderId already attached to the order"),
+                  "OWNERSHIP_INTEGRITY",
+                  "PENDING_ORDER_ATTACHMENT",
+                  false,
+                )
               }
               return toResult({ data: { order: currentOrder } })
             }
@@ -2484,7 +2557,12 @@ export function makeConservativeTradingEngine({
           },
         })
         if (!attachmentResult?.ok) {
-          throw attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId")
+          throw recoveryFailureError(
+            attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId"),
+            "ACCOUNTING_INTEGRITY",
+            "PENDING_ORDER_ATTACHMENT",
+            false,
+          )
         }
       } catch (error) {
         return runTransition({
@@ -2494,12 +2572,12 @@ export function makeConservativeTradingEngine({
               reason: "RECONCILIATION_PENDING_ORDER_OUTCOME",
               error,
             })
-            return failureResult({
-              error,
-              category: "REST_RECONCILIATION",
-              stage: "PENDING_ORDER_LOOKUP",
-              retryable: true,
-            })
+            const failure = error?.recoveryFailure ?? {
+              category: "ACCOUNTING_INTEGRITY",
+              stage: "UNCLASSIFIED_PENDING_ORDER_RECONCILIATION",
+              retryable: false,
+            }
+            return failureResult({ error, ...failure })
           },
         })
       }

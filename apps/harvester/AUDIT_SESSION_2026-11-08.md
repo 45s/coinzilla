@@ -758,3 +758,8 @@ The terminal-fill timeout regression now models an explicitly classified retryab
 ## 44. F-023 pending clientOrderId lookup RED coverage — 2026-11-09
 
 Added RED regressions for the pre-existing UNKNOWN-submission reconciliation branch. Explicit broker ok:false lookup results may retry; missing response metadata, thrown adapter exceptions, and a canonical response for another clientOrderId must fail closed with terminal classifications. This closes the remaining path that previously converted every pending-order lookup exception into retryable REST reconciliation.
+
+
+## 45. F-023 pending clientOrderId lookup implementation — 2026-11-09
+
+Pending UNKNOWN submissions now use the same explicit classification policy as owned-order snapshot reconciliation. Only a broker-declared ok:false lookup result is retryable REST reconciliation. Missing/malformed response envelopes, unexpected thrown adapter exceptions, invalid CanonicalOrder shapes, client/market/side/type identity mismatches, immutable quantity/price parity failures, and brokerOrderId attachment conflicts are terminal with explicit stage metadata.
