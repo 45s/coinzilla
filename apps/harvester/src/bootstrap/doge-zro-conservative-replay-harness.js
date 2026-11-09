@@ -350,7 +350,6 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       BINANCE_API_SECRET_KEY: "secret",
       NODE_ENV: "development",
       TRADING_MODE: "testnet",
-      TRADING_MODE: "testnet",
     },
     brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
       createBinanceBrokerAdapter({

@@ -274,67 +274,33 @@ test("rejects enabling the deferred Aggressive strategy in trading config", asyn
   )
 })
 
-test("subscribes only enabled pairs and passes the current Portfolio to strategy", async () => {
+test("subscribes only enabled pairs for Binance trading", async () => {
   const calls = []
   const broker = createBroker(calls)
-  const strategyCalls = []
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    evaluateStrategy: (input) => {
-      strategyCalls.push(input)
-      return { action: "NO_ACTION" }
-    },
     logger: { info() {}, error() {} },
   })
   assert.equal(result.connected, true)
+  assert.equal(result.tradingEnabled, true)
+  assert.equal(result.strategyMode, "conservative")
   assert.deepEqual(result.subscriptions, ["BTCUSDT"])
-  assert.deepEqual(calls, [
-    "connect",
-    "filters:BTCUSDT",
-    "filters:ETHUSDT",
-    "subscribe:user-data",
-    "account:snapshot",
-    "subscribe:BTCUSDT",
-  ])
   assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
   assert.ok(result.recoveredState)
   assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
   assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
   assert.equal(result.recoveredState.orderRegistry.orders.length, 0)
-  assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol, "ETHUSDT")
-  assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-
-  await broker.emitPrice("BTCUSDT", {
-    eventType: "aggTrade",
-    symbol: "BTCUSDT",
-    price: "65000.12000000",
-    timestamp: 123,
-  })
-  assert.equal(strategyCalls.length, 1)
-  assert.deepEqual(strategyCalls[0].marketPrice, {
-    symbol: "BTCUSDT",
-    price: "65000.12000000",
-    timestamp: 123,
-  })
-  assert.equal(strategyCalls[0].pairConfig, tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT)
-  assert.equal(strategyCalls[0].settings, tradingConfig.strategies.CG_coinGrabber.settings)
-  assert.ok(strategyCalls[0].portfolio instanceof Portfolio)
-
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
   await result.stop()
   assert.deepEqual(calls, [
-    "connect",
-    "filters:BTCUSDT",
-    "filters:ETHUSDT",
-    "subscribe:user-data",
-    "account:snapshot",
-    "subscribe:BTCUSDT",
-    "unsubscribe:BTCUSDT",
-    "unsubscribe:user-data",
-    "disconnect",
+    "connect", "filters:BTCUSDT", "filters:ETHUSDT", "subscribe:user-data", "account:snapshot",
+    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT",
+    "unsubscribe:user-data", "disconnect",
   ])
 })
 
@@ -415,37 +381,23 @@ test("subscribes every enabled market before waiting for the first market's REST
   await runtime.stop()
 })
 
-test("uses Conservative by default and passes updated Portfolio after a fill", async () => {
-  const broker = createBroker()
+test("starts the Conservative trading engine and applies fills to Portfolio", async () => {
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => broker,
+    brokerAdapterFactory: () => createBroker(),
     logger: { info() {}, error() {} },
   })
-  const decision = await result.processMarketPrice({
-    symbol: "BTCUSDT",
-    priceEvent: { symbol: "BTCUSDT", price: "65000.12", timestamp: 123 },
-    pairConfig: tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-    settings: tradingConfig.strategies.CG_coinGrabber.settings,
-  })
-  assert.equal(decision.ok, true)
-  assert.equal(decision.data.decision.strategy, "CONSERVATIVE")
-  assert.equal(decision.data.decision.action, "NO_ACTION")
-  assert.equal(result.portfolio.positions.length, 0)
-
-  const fillResult = await result.updatePortfolio({ fill: createFill() })
-  assert.equal(fillResult.ok, true)
-  assert.equal(fillResult.data.applied, true)
-  assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
-
-  const nextDecision = await result.processMarketPrice({
-    symbol: "BTCUSDT",
-    priceEvent: { symbol: "BTCUSDT", price: "65000.12", timestamp: 124 },
-    pairConfig: tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-    settings: tradingConfig.strategies.CG_coinGrabber.settings,
-  })
-  assert.equal(nextDecision.data.decision.position.baseQuantity.amount, "0.01")
+  assert.equal(result.tradingEnabled, true)
+  assert.equal(result.strategyMode, "conservative")
+  const first = await result.updatePortfolio({ fill: createFill({ tradeId: "trade-portfolio-1" }) })
+  const second = await result.updatePortfolio({ fill: createFill({ tradeId: "trade-portfolio-2" }) })
+  assert.equal(first.ok, true)
+  assert.equal(first.data.applied, true)
+  assert.equal(second.ok, true)
+  assert.equal(second.data.applied, true)
+  assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.02")
+  assert.equal(result.portfolio.appliedFillIds.length, 2)
   await result.stop()
 })
 
@@ -522,8 +474,12 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
     "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
+    "subscribe:book:BTCUSDT",
     "subscribe:BTCUSDT",
+    "subscribe:book:ETHUSDT",
     "subscribe:ETHUSDT",
+    "unsubscribe:book:BTCUSDT",
+    "unsubscribe:book:ETHUSDT",
     "unsubscribe:BTCUSDT",
     "unsubscribe:user-data",
     "disconnect",
@@ -560,35 +516,23 @@ test("disconnects after a failed broker connection", async () => {
 
 test("does not adopt unowned execution events into strategy accounting", async () => {
   const broker = createBroker()
-  let handled
+  const fill = createFill({ tradeId: "user-data-trade-1" })
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    onUserDataEvent: async (input) => {
-      handled = input.event
-    },
     logger: { info() {}, error() {} },
   })
-
-  broker.emitUserDataEvent({
-    eventType: "executionReport",
-    executionType: "TRADE",
-    fill: createFill({ tradeId: "user-data-trade-1" }),
-  })
+  await broker.emitUserDataEvent({ eventType: "executionReport", executionType: "TRADE", fill })
   await new Promise((resolve) => setImmediate(resolve))
-
-  assert.equal(handled.eventType, "executionReport")
-  assert.ok(handled.fill instanceof Fill)
   assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }), undefined)
   assert.equal(result.getAccountSnapshot().sourceTime, 1)
-  assert.equal(result.getRecoveryLedger({ marketId: handled.fill.market.id }), undefined)
-
+  assert.equal(result.getRecoveryLedger({ marketId: fill.market.id }), undefined)
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
 
 test("does not clear a genuine startup stream-recovery gate with only the initial balance snapshot", async () => {
@@ -941,30 +885,26 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
   await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when a newer disconnect prevents authoritative user-data recovery")
 })
 
-test("does not become ready when recovery is reported during subscription setup", async () => {
+test("fails startup when user-data recovery is required during subscription setup", async () => {
   const broker = createBroker()
   const subscribeForUserData = broker.subscribeForUserData
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
-    handlers.onStatus({
-      type: "recovered",
-      recoveryRequired: true,
-      reconciliationRequired: true,
-    })
+    handlers.onStatus({ type: "recovered", recoveryRequired: true, reconciliationRequired: true })
     return result
   }
-
-  const result = await startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
-    env: binanceEnv,
-    brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
-  })
-  assert.equal(result.userDataReady, false)
-  await result.stop()
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      logger: { info() {}, error() {} },
+    }),
+    /user-data stream reconciliation is required/,
+  )
 })
 
-test("does not surface a stream-ready status as application readiness before reconciliation", async () => {
+test("marks trading ready only after the mandatory account preflight audit", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
@@ -972,19 +912,16 @@ test("does not surface a stream-ready status as application readiness before rec
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
   })
-
+  assert.equal(result.userDataReady, true)
   broker.emitUserDataStatus({ type: "ready", recoveryRequired: false })
-
-  assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(result.userDataReady, true)
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
   await result.stop()
 })
 
-test("does not reopen order placement after execution accounting without authoritative reconciliation", async () => {
-  const calls = []
-  const broker = createBroker(calls)
+test("blocks trading after execution accounting failure", async () => {
+  const broker = createBroker()
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
@@ -992,19 +929,17 @@ test("does not reopen order placement after execution accounting without authori
     onUserDataEvent: async () => {},
     logger: { info() {}, error() {} },
   })
-
-  broker.emitUserDataEvent({
+  await broker.emitUserDataEvent({
     eventType: "executionReport",
     executionType: "TRADE",
     fill: createFill({ tradeId: "trade-2" }),
   })
   await new Promise((resolve) => setImmediate(resolve))
-
   assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
 
 test("fails startup closed when user-data subscription cannot be established", async () => {
@@ -1036,41 +971,34 @@ test("does not expose a broker port that could bypass the trading engine", async
     logger: { info() {}, error() {} },
   })
 
-  broker.emitUserDataStatus({
-    type: "recovered",
-    recoveryRequired: true,
-    reconciliationRequired: true,
-  })
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
   await result.stop()
 })
 
-test("does not adopt malformed external TRADE reports", async () => {
+test("fails closed on malformed external TRADE reports", async () => {
   const broker = createBroker()
-  let observed
-  const eventObserved = new Promise((resolve) => { observed = resolve })
+  let observed = false
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
-    onUserDataEvent: async () => observed(),
+    onUserDataEvent: async () => { observed = true },
   })
-
-  broker.emitUserDataEvent({
+  await broker.emitUserDataEvent({
     eventType: "executionReport",
     executionType: "TRADE",
     fill: { malformed: true },
   })
-  await eventObserved
-
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(observed, false, "Malformed external fills must not be forwarded as owned execution events")
   assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
   assert.equal(result.portfolio.positions.length, 0)
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
 
 test("fails startup before opening streams when required minimum notional is unavailable", async () => {
