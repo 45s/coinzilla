@@ -6,7 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "@coinzilla/journal"
-import { prepareOptionalJournal } from "./prepare-optional-journal.js"
+import { prepareOptionalJournal, resolveJournalDirectory } from "./prepare-optional-journal.js"
 
 const logger = { info() {}, error() {}, debug() {} }
 const createTempDirectory = () =>
