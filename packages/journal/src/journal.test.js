@@ -613,10 +613,14 @@ test("poisons the writer after append failure and releases owned resources on cl
   const context = await createTestJournal()
   let appendCalls = 0
   let syncCalls = 0
+  let partialContent = ""
+  const appendError = new Error("simulated append failure")
 
-  context.journal.store.append = async () => {
+  context.journal.store.append = async (line) => {
     appendCalls += 1
-    throw new Error("simulated append failure")
+    partialContent = line.slice(0, Math.floor(line.length / 2))
+    await context.journal.store.sessionHandle.writeFile(partialContent, "utf8")
+    throw appendError
   }
   context.journal.store.sync = async () => {
     syncCalls += 1
@@ -631,10 +635,16 @@ test("poisons the writer after append failure and releases owned resources on cl
       false,
       "The record whose append fails must report the original storage error.",
     )
-    assert.match(
-      first.errors[0].message,
-      /simulated append failure/,
-      "The first failed append must preserve the original adapter error.",
+    assert.equal(
+      first.errors[0],
+      appendError,
+      "The first failed append must preserve the original adapter error object.",
+    )
+    assert.ok(partialContent.length > 0, "The injected failure must occur after a non-empty prefix reaches the session file.")
+    assert.equal(
+      await readFile(context.filePath, "utf8"),
+      partialContent,
+      "The deterministic append failure must leave the exact prefix already written to the session file.",
     )
 
     const second = await context.journal.record({
@@ -702,8 +712,8 @@ test("poisons the writer after append failure and releases owned resources on cl
     )
     assert.equal(
       await readFile(context.filePath, "utf8"),
-      "",
-      "The failed append must not create a partial line or rewrite the empty session file.",
+      partialContent,
+      "Close must preserve the exact partial bytes from the failed append without truncating, rewriting, or repairing the session file.",
     )
   } finally {
     await context.journal.close()
