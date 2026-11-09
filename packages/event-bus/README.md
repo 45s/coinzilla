@@ -45,9 +45,11 @@ await bus.close()
 
 ### Payload snapshot
 
-Accepted payload graphs contain only primitives, arrays, and plain objects (including null-prototype objects). Cycles and repeated/shared references are preserved. The bus clones the graph before dispatch and freezes the cloned objects, arrays, and event envelope. The caller's original objects are not frozen or retained.
+Supported primitive values are `null`, `undefined`, strings, booleans, numbers (including `NaN`, `Infinity`, and `-Infinity`), and `bigint`. Symbols and functions are rejected. Payload graphs may also contain arrays and plain objects (including null-prototype objects). Cycles and repeated/shared references are preserved. The bus clones the graph before dispatch and freezes the cloned objects, arrays, and event envelope. The caller's original objects are not frozen or retained.
 
-Mutable built-ins (including `Date`, `Map`, `Set`, typed arrays, `ArrayBuffer`, and `DataView`), class instances, functions, accessors, symbol-keyed properties, and unsupported object shapes are rejected. The bus does not claim to make those values immutable.
+Mutable built-ins (including `Date`, `Map`, `Set`, typed arrays, `ArrayBuffer`, and `DataView`), class instances, accessors, non-enumerable properties, symbol-keyed properties, custom array properties, and unsupported object shapes are rejected. The bus does not claim to make those values immutable.
+
+This is an **in-memory payload contract**, not a JSON-serialization guarantee. `bigint`, `undefined`, and non-finite numbers are accepted by EventBus but are not represented losslessly by `JSON.stringify`: BigInt throws, undefined object properties are omitted, and undefined array entries/non-finite numbers become `null`. Journal currently persists EventBus messages as JSONL; until [Journal issue #889](https://github.com/45s/coinzilla/issues/889) is resolved, keep payloads sent to a Journal subscription JSON-safe (no BigInt, undefined values, `NaN`, or infinities). EventBus `publish()` and `flush()` do not themselves guarantee Journal persistence.
 
 ### Publish and delivery
 
