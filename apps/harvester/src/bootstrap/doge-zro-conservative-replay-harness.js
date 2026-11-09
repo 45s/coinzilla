@@ -144,6 +144,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
     const broker = new BinanceWebSocketBroker({
       apiKey: brokerConfig.apiKey,
       apiSecret: brokerConfig.apiSecret,
+      tradingMode: brokerConfig.tradingMode,
       logger,
     })
     broker.connect = async () => {
