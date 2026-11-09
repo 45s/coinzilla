@@ -5,7 +5,7 @@ import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 describe("BinanceSdkBroker.getPrices errors", () => {
   it("returns a structured error when ticker.price fails", async () => {
-    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", logger: { error() {}, info() {} } })
+    const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet", logger: { error() {}, info() {} } })
     broker.tradingConnection = createFakeRpcClient({
       "ticker.price": async () => { throw new Error("ticker endpoint unavailable") },
     })
