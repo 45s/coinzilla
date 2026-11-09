@@ -936,13 +936,13 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
   }
 })
 
-test("rejects disabling Journal for TESTNET trading", async () => {
+test("rejects a TESTNET trading profile when Journal cannot provide durable flush", async () => {
   let started = false
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
     await main({
-      env: { runtime profile: "true", Journal runtime flag: "false" },
+      env: { NODE_ENV: "development" },
       createJournalService: disabledJournalService,
       start: async () => { started = true; return { connected: false } },
       logger: { info() {}, error() {}, debug() {} },
