@@ -199,16 +199,21 @@ export function createAccountSnapshotManager({
       : orders.length > 0
         ? "RECONCILED"
         : "READY"
-    let published
+    let dataResult
     try {
-      published = publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-        dataResult: mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons }),
-      })
+      dataResult = mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons })
     } catch (error) {
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
     }
+    if (!dataResult?.ok) {
+      throw withRecoveryFailure(
+        dataResult?.errors?.[0] ?? new Error("Account open-orders audit payload is invalid"),
+        "ACCOUNTING_INTEGRITY",
+        "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
+        false,
+      )
+    }
+    const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED, dataResult })
     if (!published?.ok) {
       const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       throw withRecoveryFailure(
@@ -258,16 +263,21 @@ export function createAccountSnapshotManager({
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
     const configuredAssetCodes = [...new Set([...marketMetadata.values()]
       .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
-    let published
+    let dataResult
     try {
-      published = publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-        dataResult: mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes: configuredAssetCodes, auditStatus, auditReasons }),
-      })
+      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes: configuredAssetCodes, auditStatus, auditReasons })
     } catch (error) {
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
     }
+    if (!dataResult?.ok) {
+      throw withRecoveryFailure(
+        dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
+        "ACCOUNTING_INTEGRITY",
+        "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
+        false,
+      )
+    }
+    const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED, dataResult })
     if (!published?.ok) {
       throw withRecoveryFailure(
         new Error("Unable to publish " + phase + " account snapshot audit event"),

@@ -140,6 +140,25 @@ test("does not replace a newer accepted account snapshot with stale broker data"
   assert.equal(fixture.manager.getAccountSnapshot().sourceTime, 100, "A stale response must leave the latest accepted account snapshot unchanged.")
 })
 
+test("treats an invalid open-orders audit DTO as terminal integrity failure", async () => {
+  const fixture = createFixture()
+
+  await assert.rejects(
+    fixture.manager.publishOpenOrdersSnapshot({ orders: [{}] }),
+    (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
+        retryable: false,
+      }, "A failed DTO mapping must not be mislabeled as a retryable Journal publication failure.")
+      return true
+    },
+  )
+
+  assert.equal(fixture.publishedEvents.length, 0, "An invalid audit DTO must not be published.")
+  assert.equal(fixture.getFlushCount(), 0, "An invalid audit DTO must not trigger a durability flush.")
+})
+
 test("records unowned open orders as blocked without adopting them", async () => {
   const externalOrder = {
     id: "external-order-1",

@@ -738,3 +738,8 @@ Recovery coordinator tests that inject account snapshot and audit publisher fail
 ## 40. F-023 REST response-envelope validation — 2026-11-09
 
 A broker response without an explicit boolean ok field is now treated as an unclassified protocol/integrity failure. Only an explicit ok:false REST result is eligible for a retryable REST classification. This applies to account snapshots, account-wide open orders, owned-order open orders, canonical order history, and fill history, including terminal-order fill reconciliation.
+
+
+## 41. F-023 audit DTO versus Journal publication boundary — 2026-11-09
+
+Account/open-order audit DTO mapping failures are now terminal ACCOUNTING_INTEGRITY failures. Only a successfully mapped DTO that then fails EventBus publication or Journal durability receives a retryable DURABILITY classification. This prevents malformed audit content from being retried as though the Journal were temporarily unavailable.
