@@ -834,7 +834,7 @@ Current public Streams source separates error and close: an error is reported to
 
 ## 2026-11-09 process-restart forensic investigation — #654
 
-### F-030 — Durable process-restart state restoration is not wired into startup
+### F-031 — Durable process-restart state restoration is not wired into startup
 
 The startup composition creates fresh in-memory Portfolio, RecoveryLedger, OrderRegistry, user-data safety latches and strategy pause sets. Journal read/replay is not invoked. Existing startup tests explicitly characterize fresh state and unowned-open-order behavior. The broker can perform symbol-wide fill-history scans, but Harvester does not use them and no retention guarantee has been established. This is a confirmed integration gap; missed accounting, duplicate orders and unsafe restart resumption remain strongly indicated rather than reproduced.
 
@@ -863,7 +863,7 @@ The November 8 DOGE/ZRO fills after shutdown remain expected downtime behavior. 
 
 ### Documentation correction required
 
-`docs/JOURNAL_OPERATIONS.md` describes a prior-session Journal-read gate that blocks trading when historical trading events exist. Current source composition does not implement that gate. The operational document is being corrected to state that prior Journal replay and process-restart restoration are not wired into Harvester startup.
+The prior `JOURNAL_OPERATIONS.md` statement that current startup reads previous Journal sessions and blocks trading on historical events was inaccurate. Current runtime does not invoke the retained PR #606 recovery helpers; the prior PR #606 integration was a separate historical fail-closed path limited by `marketUniverseComplete: false`. The operations document now distinguishes the historical helper integration from current startup behavior.
 
 Tracking: [#654](https://github.com/45s/coinzilla/issues/654), under [#626](https://github.com/45s/coinzilla/issues/626).
 
@@ -903,7 +903,7 @@ A canonical TRADE fill updates the in-memory accounting projections, then the en
 ### Operational consequence and boundaries
 
 - **Confirmed:** `FILL_APPLIED` publication is not followed by a durable flush in the engine's applied-fill path.
-- **Strongly indicated:** a crash in the admission/write/sync window can leave the next process without a durable Journal fill fact, compounding F-030's missing startup restoration.
+- **Strongly indicated:** a crash in the admission/write/sync window can leave the next process without a durable Journal fill fact, compounding F-031's missing startup restoration.
 - **Not proven:** a specific historical fill was lost from a real Journal file or caused a financial/accounting discrepancy.
 - Graceful shutdown is safer because Journal close drains pending events and syncs. This is not a guarantee for SIGKILL, process crash, or power loss.
 - The exchange remains the authoritative source for executions. Journal is currently operational evidence, not a complete crash-consistent trading-state ledger.
@@ -916,16 +916,16 @@ The pre-side-effect `order.submission_requested` and `order.cancel_requested` ba
 
 Define a durable execution-fact boundary that explicitly orders canonical fill admission, durable Journal persistence, Portfolio/RecoveryLedger projection advancement, and checkpoint advancement. If persistence fails or cannot be confirmed, keep trading readiness closed and reconcile from authoritative broker history; do not equate event publication with durability. Test process interruption at each boundary, including subscriber not yet invoked, append pending, append complete but not synced, fill projection applied, and checkpoint not advanced. Preserve idempotent fill identity and do not claim exactly-once transport delivery.
 
-**Related:** F-030 / #654 process-restart reconciliation; #626 recovery reliability; `event-publisher.js`, EventBus, Journal and Conservative trading engine.
+**Related:** F-031 / #654 process-restart reconciliation; #626 recovery reliability; `event-publisher.js`, EventBus, Journal and Conservative trading engine.
 
 
 **Existing serialization and injection primitives — inspected 2026-11-09**
 
 - `Portfolio.value` includes Position values, applied fill IDs and fill fingerprints. `Position.value` includes canonical Market identity, base/free quantities, quote cash flow and spent amount.
 - `RecoveryLedger.value` includes Market identity, buy cost, net sell proceeds, and applied fill IDs/fingerprints. `OrderRegistry.value` includes canonical order values.
-- These domain constructors require typed objects (`Market`, `Quantity`, `Money`, `CanonicalOrder`); the inspected classes expose value projections but no static JSON hydration factory.
+- These domain constructors require typed objects (`Market`, `Quantity`, `Money`, `CanonicalOrder`). The repository also contains the use-case hydration mapper `restoreHarvesterJournalState()`, which reconstructs these objects from a validated Journal projection.
 - `createPortfolioWorkflow()` accepts `initialPortfolio` and `initialRecoveryLedgers`. `makeConservativeTradingEngine()` accepts an `initialState` containing an `OrderRegistry`, Journal fill identities and strategy/order-control sets.
-- `startHarvester()` exposes no restored-state input. It always constructs fresh Portfolio/RecoveryLedger/OrderRegistry values and passes those empty values into the engine. Thus reusable serialization and injection seams exist, but no JSON-to-domain restoration mapper or startup wiring was found in the traced composition path.
+- `startHarvester()` exposes no `journalRecoveryRecords` input and does not call `projectHarvesterJournalRecovery()` or `restoreHarvesterJournalState()`. It always constructs fresh Portfolio/RecoveryLedger/OrderRegistry values and passes those empty values into the engine. The tested hydration mapper exists; current composition-root wiring is absent.
 
 This narrows the gap: it is not accurate to say that the domain has no serializable state shape. The missing pieces are validated hydration/mapping, complete durable projection semantics, and composition-root integration before engine activation.
 
@@ -976,7 +976,7 @@ Persist safety-halt scope, reason, generation and required operator/reconciliati
 
 Test graceful restart and abrupt termination after each pause cause, including accounting failure, unknown order outcome, user-data liveness failure and reconciliation conflict. Assert that no market-price event can cause a new order before the prior halt is restored and resolved.
 
-**Related:** F-030 / #654, F-028, F-029, F-023, F-024 / #773, #769 and #774.
+**Related:** F-031 / #654, F-028, F-029, F-023, F-024 / #773, #769 and #774.
 
 
 ### Existing offline recovery implementation — retained, not wired into current startup
@@ -993,4 +993,4 @@ Focused offline tests exist in `project-harvester-journal-recovery.test.js`, `fe
 
 **Historical PR #606 integration limitation:** the PR #606 caller passed `marketUniverseComplete: false` to `fetchAccountTradeHistory()`, while `auditRecoveredTradeHistory()` rejects unless that flag is true. Thus the prior trading-enabled integration deliberately failed closed when historical trading state required a complete account-wide history audit. The current Binance symbol catalog cannot prove the universe of historical symbols, including delisted markets. The current runtime later removed the recovery read/replay gate rather than solving this completeness problem; it now starts fresh and can proceed with unowned open orders. That bypass is not a safe equivalent to the previous fail-closed behavior.
 
-**Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` can be recovered from a durable acknowledgement, cancellation intent/failure, or applied-fill event. Tests cover recovery when the acknowledgement event was lost but a later durable fill or cancellation intent supplies the broker ID. If the acknowledgement is lost and no later fill/cancel event supplies the broker ID, the projection retains an unresolved order; `auditRecoveredAccountState()` rejects an active recovered order without `brokerOrderId`. It does not bind that unresolved intent to a current open order solely by `clientOrderId`. This is fail-closed/manual-resolution behavior, not an automatic duplicate-order path.
+**Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` is captured by the acknowledgement event or can be recovered from durable cancellation/fill facts. The engine's `reconcileOwnedOrders()` also queries `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries lacking a broker ID, validates the returned symbol/client ID, and attaches the canonical broker ID. Tests cover accepted orders after a lost acknowledgement, unresolved lookup, mismatched client IDs, and immutable-intent conflicts. If lookup cannot resolve the order, it remains UNKNOWN and the account audit fails closed; no new order should be submitted.
