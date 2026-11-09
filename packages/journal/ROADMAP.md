@@ -11,10 +11,10 @@ This section supersedes stale checkboxes below where they conflict with merged w
    - **Do:** retain the vocabulary and explicit schema-v1 contract from PR #746, plus the lightweight JournalRecord validation/serialization boundary from PR #747. Preserve legacy raw-line compatibility and the current public Journal API.
    - **Verify:** maintain tests for stable ID, reserved metadata, root `toJSON` rejection, identity agreement, source non-mutation, schema round-trip and legacy record recovery. Both PRs are merged to develop.
 
-2. **J-3 — isolate filesystem persistence behind an internal adapter.**
+2. **J-3 — isolate filesystem persistence behind an internal adapter (COMPLETE in PR #748).**
    - **Why:** current orchestration tests must replace instance/file-handle methods directly in places. This couples lifecycle logic to Node filesystem details and makes partial acquisition/append/sync/close failures difficult to exercise consistently.
-   - **Do:** introduce a narrow internal adapter for directory ownership, session creation, append, sync, close and lock release. Inject it only into the internal orchestration path; preserve `new Journal({ eventBus, directory, logger })` and public behavior.
-   - **Verify:** use a fake adapter for deterministic orchestration/failure tests and real temporary directories/child processes for filesystem, locking and crash-safety guarantees. Prove cleanup only releases resources owned by the failed attempt.
+   - **Done in PR #748:** introduced the package-private `FileSystemJournalStore` for directory ownership, session creation, append, sync, close, lock release, and bounded recovery reads. The internal injection seam does not change `new Journal({ eventBus, directory, logger })` or the public package exports.
+   - **Verified:** deterministic orchestration tests use the injected store; real temporary-directory and child-process tests cover filesystem, lock ownership, and process contention. Cleanup releases only resources owned by the failed attempt.
 
    - **TDD evidence:** PR #748 test-first commit `4f541bf9a06420509fefbce8f31f0916bfa59496` produced the expected RED on Node 24.22.2: 54 passed, 1 failed at `src/journal.test.js:903`; Journal returned the physical temporary-directory path instead of the injected store's virtual session path. The failure was an assertion, not a setup or syntax failure.
 
@@ -22,8 +22,9 @@ This section supersedes stale checkboxes below where they conflict with merged w
 
 3. **J-4 — make orchestration state ownership explicit.**
    - **Why:** session lifecycle, subscription state, pending writes and close state must have one clear owner; otherwise races can accept writes after close or lose an uncertain append.
-   - **Do:** map each lifecycle state and transition, define when an event is admitted, persisted, synced and acknowledged, and keep retry semantics explicit. Preserve exclusive directory ownership and write-failure behavior.
-   - **Verify:** test concurrent close/publish, logger failures, append/sync failures, partial startup rollback and retry after uncertain sync. Do not deduplicate uncertain records by business meaning.
+   - **Do:** keep lifecycle sequencing and admission policy in Journal, while the filesystem adapter owns file handles and lock resources. Define when an event is admitted, written, synced, and acknowledged; keep retry and close durability semantics explicit.
+   - **Merged slices:** PR #755 makes close await startup cancellation and resource rollback; PR #758 serializes overlapping close operations. PR #759 serializes explicit flushes with one another and with close; its deterministic barriers cover flush/flush and flush/close overlap. Continue with the remaining observable lifecycle matrix.
+   - **Verify:** test concurrent close/publish, flush/close overlap, logger failures, append/sync failures, partial startup rollback, and retry after uncertain sync. Do not deduplicate uncertain records by business meaning.
 
 4. **J-5 — contract conformance and operational documentation.**
    - **Why:** consumers need to know which facts are durable, when flush completes, what failure means and how to inspect/restore a session.
@@ -73,18 +74,18 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `7103d9d14919620eae371f23f342c51d916d1d0b` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
+**Audit checkpoint:** `develop` at `f3aa201614a491b7e893a86b234174fdc20c8d46` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
 | Bounded context and ownership | Dedicated `@coinzilla/journal` package with package-local instructions, roadmap, README, tests, and one public `Journal` export. | Strong boundary. Keep application strategy and domain decisions out of this package. |
-| Public API and orchestration | `Journal` owns start/record/flush/close/read/replay and coordinates EventBus delivery, queued writes, durability, and lock lifecycle. | Responsibilities are cohesive but the class directly coordinates filesystem details. Separate orchestration from storage mechanics in a focused slice, without changing the public facade. |
+| Public API and orchestration | `Journal` owns start/record/flush/close/read/replay and coordinates EventBus delivery, queued writes, durability, and lifecycle sequencing through the package-private store. | Keep sequencing decisions in Journal and filesystem resource ownership in the adapter; preserve the public facade. |
 | Record identity/schema | `helpers/journal-record.js` contains pure serialization and session parsing; stable IDs and schema-v1 metadata are enforced; legacy raw records are supported. | Good foundation. Formalize the distinction between source event, persisted record representation, and recovered record result; keep the contract lightweight and backward compatible. |
-| Persistence boundary | `journal.js` and `read-journal-records.js` directly call Node filesystem APIs; lock/session creation and read/parse concerns are spread across orchestration and reader modules. | Main architectural improvement. Introduce one internal filesystem adapter/port only where it isolates I/O and allows service-level tests. Do not publish a backend plugin API or add another backend without a concrete use case. |
+| Persistence boundary | `FileSystemJournalStore` owns Node filesystem APIs, lock/session handles, bounded discovery, stat, and byte reads; Journal and recovery services depend on its narrow internal contract. | Implemented in PR #748. Keep the adapter package-private; do not publish a backend plugin API or add another backend without a concrete use case. |
 | EventBus dependency | Constructor injection exists; Journal consumes `subscribeAll` and `flush`. | Dependency injection is already present. Document and validate the narrow consumed contract; do not wrap EventBus in an unnecessary adapter or modify the EventBus package. |
 | Recovery and replay | Complete sessions are validated before replay; duplicate IDs, malformed/incomplete data, unsupported schema, invalid encoding, and configured limits fail closed. Replay stops at the first handler failure and reports progress. | Preserve. Improve contract clarity and test isolation, not semantics. |
 | Concurrency and durability | Exclusive process lock, queued appends, file-content sync acknowledgement, cleanup/rollback, and explicit stale-lock operator handling. | Safety-critical behavior. Preserve lock ownership, fsync meaning, ordering, rollback, and close semantics with adapter-level integration tests. Directory-entry fsync is not currently promised. |
-| Tests | Native `node:test`; filesystem integration tests plus lifecycle, failure, recovery, and child-process lock coverage. Some lifecycle tests replace instance methods/file-handle methods directly. | Strong behavioral base. Add a narrow adapter seam so orchestration tests can control I/O deterministically while retaining real temporary-directory and child-process tests for filesystem guarantees. |
+| Tests | Native `node:test`; fake-store orchestration tests plus real filesystem, recovery, and child-process lock coverage. | Keep service tests focused on observable results and adapter tests focused on resource guarantees; use deterministic barriers for races. |
 | Coverage | Journal-owned source coverage is scoped and enforced at 85% lines / 80% branches by the package coverage command. | Keep thresholds; do not game coverage or weaken failure-path assertions. |
 | Documentation | README explains persistence, durability, replay, compatibility, and operator lock handling. | Add explicit language for event-vs-record semantics, internal dependency boundaries, and the stable public contract as each slice lands. |
 
@@ -296,9 +297,11 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] [J-2 / PR #747](https://github.com/45s/coinzilla/pull/747) — Centralized stable record-ID validation, rejected root-level enumerable `toJSON` hooks, and added serialization/recovery contract tests. Merged to `develop` as `5d38c1659d1fca187386ebe7c737b97540279419`; all six required checks passed on exact PR head `89f01ebde410d705e88bc48647557c5b36f6c201`.
 - [x] [J-3 / PR #748](https://github.com/45s/coinzilla/pull/748) — Isolated filesystem persistence and resource ownership behind the package-private `FileSystemJournalStore`; retained the deprecated internal `fileHandle` test seam without leaking the original descriptor. Merged to `develop` as `9ec03aaf7df3f49f7dbc42187baf9a099de7fe79`; all required CI checks passed on exact PR head `e550803eb47100aa23123aa8f6e42f2b0d1eedb6`.
 - [~] J-4 startup/close race: test-first commit `318df35b7d41d76cda25f96565ba5e9e2b9b961b` added a deterministic deferred-session-creation regression. On the exact RED head, Journal unit tests reported 59 passed / 1 failed; the failure was the expected assertion that `close()` must remain pending until startup cleanup releases its lock (actual `closeSettled: true`).
-- [x] [J-4 startup/close cancellation / PR #755](https://github.com/45s/coinzilla/pull/755) — Close now waits for startup cancellation and releases all resources acquired by that attempt. Merged to `develop` as `7103d9d14919620eae371f23f342c51d916d1d0b`; required CI passed on exact PR head `a803b2773ec8b29d271c7e8677ac29c52120de10`.
+- [x] [J-4 startup/close cancellation / PR #755](https://github.com/45s/coinzilla/pull/755) — Close now waits for startup cancellation and releases all resources acquired by that attempt. Merged to `develop` as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`; required CI passed on exact PR head `a803b2773ec8b29d271c7e8677ac29c52120de10`.
+- [x] [J-4 overlapping close / PR #758](https://github.com/45s/coinzilla/pull/758) — A single close operation owns shutdown while the record-admission cutoff remains delayed until EventBus draining completes. Merged to `develop` as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`; required CI passed on exact PR head `15907cea31bc467e9602b4186827960c04554ef5`.
 - [~] J-4 overlapping-close regression: test-first commit `630196154c1dbfb3ed5fad93f7bd4976764639bb` added a deferred EventBus flush test. On the exact RED head, Journal tests reported 59 passed / 1 failed; the expected failure observed two EventBus flush invocations for overlapping close calls (actual 2, expected 1).
-- [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/serialize-close-operations`).
+- [~] J-4 flush/close overlap regression: test-first commit `9f5e7c20cf67827fbe0cc68f958d983dcea9eb5f` added a deferred session-sync barrier. On the exact RED head, Journal tests reported 60 passed / 1 failed; the failure showed a flush started after close claimed shutdown reaching the store and returning the sync-overlap error instead of the stopped/closing guard result.
+- [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/flush-close-serialization`).
 - [ ] J-5 — Contract conformance and operational documentation.
 
 ## Current contract
@@ -326,4 +329,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `7103d9d14919620eae371f23f342c51d916d1d0b`.
+**Current `develop` checkpoint:** `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`.

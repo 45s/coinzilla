@@ -78,6 +78,23 @@ flowchart TD
   H --> I[Release close operation guard]
 ```
 
+### Coordinating flush with close
+
+A close operation first waits for every flush that was already in progress before it unsubscribes and performs its final EventBus drain. New `flush()` calls are rejected as soon as close claims shutdown. This prevents overlapping file-content syncs or closing a session handle while an earlier flush still uses it, while preserving the rule that record admission is stopped only after the final EventBus drain.
+
+```mermaid
+flowchart TD
+  A[Journal.flush] --> B[Register active flush]
+  B --> C[Drain EventBus and queued writes]
+  C --> D[Sync session file]
+  E[Journal.close] --> F[Claim close operation]
+  F --> G[Reject new flush calls]
+  G --> H[Await active flushes]
+  H --> I[Unsubscribe and perform final EventBus drain]
+  I --> J[Set closing admission gate]
+  J --> K[Drain writes, final sync, close session, release lock]
+```
+
 ## Internal persistence boundary
 
 `Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
