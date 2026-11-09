@@ -201,7 +201,7 @@ See [TESTNET order tools — balances](./docs/testnet-order-tools.md#list-non-ze
 
 ## Standalone Binance TESTNET ZRO market sell
 
-See [TESTNET order tools — ZRO market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This command is destructive and requires explicit operator authorization.
+See [TESTNET order tools — legacy ZROUSDT market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This is a hardcoded ZROUSDT TESTNET MARKET SELL, not the current ZROFDUSD configured pair; it is outside the paused validation runbook and requires separate explicit authorization.
 
 ## Standalone Binance TESTNET order history
 
