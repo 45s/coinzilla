@@ -93,7 +93,7 @@ For the source-verified shutdown ordering and failure behavior, see [Journal Ope
 
 ### Process-restart recovery — active forensic workstream (#654)
 
-The repository still contains the tested offline helper stack from PR #606 (`projectHarvesterJournalRecovery`, `restoreHarvesterJournalState`, `fetchAccountTradeHistory`, `auditRecoveredTradeHistory`, and `auditRecoveredAccountState`), but current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not invoke it. The old PR #606 startup integration passed `marketUniverseComplete: false` into an audit that requires `true`, so it failed closed after prior trading activity. The current runtime bypasses that gate rather than solving market-universe completeness; it is not a safe equivalent. See F-030.
+The repository still contains the tested offline helper stack from PR #606 (`projectHarvesterJournalRecovery`, `restoreHarvesterJournalState`, `fetchAccountTradeHistory`, `auditRecoveredTradeHistory`, and `auditRecoveredAccountState`), but current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not invoke it. The old PR #606 startup integration passed `marketUniverseComplete: false` into an audit that requires `true`, so it failed closed after prior trading activity. The current runtime bypasses that gate rather than solving market-universe completeness; it is not a safe equivalent. See F-031.
 
 Safety pauses and accounting-failure/reconciliation latches are also process-local in the current composition. Startup initializes them clear and does not replay `STRATEGY_PAUSED`; a prior safety halt is not guaranteed to survive restart. This is a confirmed state-reset gap tracked by F-029. Do not assume restarting Harvester is equivalent to resolving the original safety condition.
 
