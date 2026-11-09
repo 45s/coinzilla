@@ -125,6 +125,6 @@ test("rejects production execution when profile selects TESTNET", () => {
   assert.throws(
     () => validateTradingConfig(config),
     /live" for production execution/,
-    "Production must remain read-only even if a profile accidentally requests TESTNET trading.",
+    "Production execution must use LIVE mode, never TESTNET.",
   )
 })
