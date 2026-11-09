@@ -7,7 +7,7 @@ const DEFAULT_LIMITS = Object.freeze({
   maxBytes: 64 * 1024 * 1024,
   maxRecordBytes: 1024 * 1024,
 })
-const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d+)?\.jsonl$/
+const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-[a-zA-Z0-9_-]+)?\.jsonl$/
 
 function validateReadOptions({ store, directory, maxRecords, maxSessions, maxBytes, maxRecordBytes }) {
   if (!store || typeof store.listSessions !== "function" || typeof store.statSession !== "function" || typeof store.readSession !== "function") {
@@ -78,11 +78,22 @@ export async function readJournalRecords({
 
       const leftSuffix = left.name.slice(19, -6)
       const rightSuffix = right.name.slice(19, -6)
-      const leftIndex = BigInt(leftSuffix.slice(1) || "0")
-      const rightIndex = BigInt(rightSuffix.slice(1) || "0")
-
-      if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1
       if (leftSuffix === rightSuffix) return 0
+      if (leftSuffix === "") return -1
+      if (rightSuffix === "") return 1
+
+      const leftNumericSuffix = /^-(\d+)$/.exec(leftSuffix)
+      const rightNumericSuffix = /^-(\d+)$/.exec(rightSuffix)
+      if (leftNumericSuffix && rightNumericSuffix) {
+        const leftIndex = BigInt(leftNumericSuffix[1])
+        const rightIndex = BigInt(rightNumericSuffix[1])
+        if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1
+      } else if (leftNumericSuffix) {
+        return -1
+      } else if (rightNumericSuffix) {
+        return 1
+      }
+
       return leftSuffix < rightSuffix ? -1 : 1
     })
 
