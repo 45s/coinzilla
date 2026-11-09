@@ -33,7 +33,7 @@ cp apps/harvester/.env.example apps/harvester/.env.development
 pnpm --filter @coinzilla/harvester dev
 ```
 
-The development launcher pins `NODE_ENV=development` before application and broker modules load, then reads `.env.development`. This selects the Binance Spot TESTNET profile and enables the Conservative TESTNET strategy. Put TESTNET API credentials in `.env.development`; do not add broker, trading-mode, trading-enable, or Journal flags.
+The development launcher starts Node with `--env-file=.env.development` and sets `NODE_ENV=development` in the child environment before application and broker modules load. This selects the Binance Spot TESTNET profile and enables the Conservative TESTNET strategy. Put TESTNET API credentials in `.env.development`; do not add broker, trading-mode, trading-enable, or Journal flags.
 
 For production, prepare a separate secrets file and start command:
 
@@ -42,7 +42,7 @@ cp apps/harvester/.env.production.example apps/harvester/.env.production
 pnpm --filter @coinzilla/harvester start
 ```
 
-The production launcher pins `NODE_ENV=production` before application and broker modules load, then reads `.env.production` when that file exists. This selects Binance Spot LIVE market/account endpoints in read-only mode. Provide LIVE API credentials through `.env.production` or the deployment secret manager. Use an API key with account-read permissions; keep trading and withdrawals disabled. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
+The production launcher loads `.env.production` when that file exists and preloads an initializer that sets `NODE_ENV=production` before application and broker modules load. This selects Binance Spot LIVE market/account endpoints in read-only mode. Provide LIVE API credentials through `.env.production` or the deployment secret manager. Use an API key with account-read permissions; keep trading and withdrawals disabled. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
 
 Tests:
 
