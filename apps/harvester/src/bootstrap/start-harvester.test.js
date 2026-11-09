@@ -10,7 +10,7 @@ const testEventPublisher = Object.freeze({
 })
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher
-    ? typeof input.eventPublisher.flush !== "function"
+    ? input.env?.NODE_ENV === "development" && typeof input.eventPublisher.flush !== "function"
       ? { ...input.eventPublisher, flush: testEventPublisher.flush }
       : input.eventPublisher
     : testEventPublisher
