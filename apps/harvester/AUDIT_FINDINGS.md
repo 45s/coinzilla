@@ -803,15 +803,19 @@ The combined runtime and source evidence supports this sequence:
 
 
 
-**Existing serialization and injection primitives — inspected 2026-11-09**
+**Existing offline recovery helper pipeline — retained, tested, not wired into current startup**
 
-- `Portfolio.value` includes Position values, applied fill IDs and fill fingerprints. `Position.value` includes canonical Market identity, base/free quantities, quote cash flow and spent amount.
-- `RecoveryLedger.value` includes Market identity, buy cost, net sell proceeds, and applied fill IDs/fingerprints. `OrderRegistry.value` includes canonical order values.
-- These domain constructors require typed objects (`Market`, `Quantity`, `Money`, `CanonicalOrder`); the domain classes expose value projections; the existing use-case mapper `restoreHarvesterJournalState()` performs hydration, but the current startup composition does not invoke it.
-- `createPortfolioWorkflow()` accepts `initialPortfolio` and `initialRecoveryLedgers`. `makeConservativeTradingEngine()` accepts an `initialState` containing an `OrderRegistry`, Journal fill identities and strategy/order-control sets.
-- `startHarvester()` exposes no restored-state input. It always constructs fresh Portfolio/RecoveryLedger/OrderRegistry values and passes those empty values into the engine. Thus reusable serialization and injection seams exist, but no JSON-to-domain restoration mapper or startup wiring was found in the traced composition path.
+- `projectHarvesterJournalRecovery({ records })` validates Journal session boundaries, lifecycle transitions, order intents/acknowledgements/cancellation outcomes, fill identity/deduplication, recovery cycles, pause state, PREFLIGHT/CLOSING account snapshots and open-order snapshots.
+- `restoreHarvesterJournalState({ projection, marketMetadata })` reconstructs Portfolio, RecoveryLedger, OrderRegistry, pause/recovery-managed state, replacement/trailing-reprice intents, cancellation identities, completed-cycle identities and Journal fill identities. Unresolved orders are restored conservatively and require canonical exchange reconciliation before trading.
+- `fetchAccountTradeHistory()` paginates exchange `myTrades` for a supplied Market list, beginning at the durable baseline and advancing with `fromId`. It cannot discover symbols outside that list; `marketUniverseComplete` is a caller-supplied assertion.
+- `auditRecoveredTradeHistory()` verifies exact Journal/exchange fill and commission parity, duplicate IDs/trade IDs, ownership attribution and complete pages; it rejects unless `marketUniverseComplete === true`.
+- `auditRecoveredAccountState()` verifies the durable PREFLIGHT baseline against current balances, active open-order ownership/status/quantities and exact locked-asset reservations.
 
-This narrows the gap: it is not accurate to say that the domain has no serializable state shape. The missing pieces are validated hydration/mapping, complete durable projection semantics, and composition-root integration before engine activation.
+Focused tests exist in `project-harvester-journal-recovery.test.js`, `fetch-account-trade-history.test.js`, `audit-recovered-trade-history.test.js` and `audit-recovered-account-state.test.js`. These helpers are not called by the current `index.js`, `prepareOptionalJournal()` or `startHarvester()` composition.
+
+**Historical PR #606 integration limitation:** its caller passed `marketUniverseComplete: false` to `fetchAccountTradeHistory()`, while `auditRecoveredTradeHistory()` rejects unless that flag is true. Thus the prior trading-enabled integration deliberately failed closed when historical trading state required a complete account-wide history audit. The current Binance symbol catalog cannot prove the universe of historical symbols, including delisted markets. The current runtime later removed the recovery read/replay gate rather than solving this completeness problem; it now starts fresh and can proceed with unowned open orders. That bypass is not a safe equivalent to the previous fail-closed behavior.
+
+**Order-ID recovery boundary:** durable submission intent preserves `clientOrderId`; broker `brokerOrderId` is captured by acknowledgement/cancellation/fill events or recovered by `reconcileOwnedOrders()` through `broker.getCanonicalOrder({ symbol, clientOrderId })` for restored registry entries without a broker ID. The engine validates the returned symbol/client ID and attaches the canonical broker ID. Tests cover lost acknowledgements, unresolved lookups, mismatched IDs and immutable-intent conflicts. If lookup fails, the order remains UNKNOWN and the account audit fails closed. The current runtime cannot use this capability after restart because it does not restore the registry entry containing the client ID.
 
 
 
