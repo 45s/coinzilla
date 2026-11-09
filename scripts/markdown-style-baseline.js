@@ -64,11 +64,6 @@ export function collectMarkdownStyleBaseline(documents) {
       const line = lines[index]
       const lineNumber = index + 1
 
-      if (/[ \t]+$/.test(line)) trailingWhitespaceLines.push(lineNumber)
-      if (index > 0 && line.trim() === "" && lines[index - 1].trim() === "") {
-        repeatedBlankLines.push(lineNumber)
-      }
-
       const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
       if (activeFence) {
         const closesFence = fenceMatch &&
@@ -88,6 +83,11 @@ export function collectMarkdownStyleBaseline(documents) {
           length: fenceMatch[1].length,
         }
         continue
+      }
+
+      if (/[ \t]+$/.test(line)) trailingWhitespaceLines.push(lineNumber)
+      if (index > 0 && line.trim() === "" && lines[index - 1].trim() === "") {
+        repeatedBlankLines.push(lineNumber)
       }
 
       const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|$)/)
