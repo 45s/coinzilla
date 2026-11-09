@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test --test-reporter=spec",
     "test:coverage": "node --test --experimental-test-coverage",
-    "start": "node src/index.js",
+    "start": "node --env-file-if-exists=.env.production src/index.js",
     "dev": "node scripts/run-dev-with-log.js",
     "testnet:orders": "node --env-file=.env.development scripts/list-testnet-open-orders.js",
     "testnet:cancel-orders": "node --env-file=.env.development scripts/cancel-testnet-open-orders.js",
