@@ -16,6 +16,7 @@ test("public Binance broker can be constructed without opening network connectio
   const broker = new brokers.BinanceWebSocketBroker({
     apiKey: "contract-test-key",
     apiSecret: "contract-test-secret",
+    tradingMode: "testnet",
   })
 
   assert.ok(broker instanceof brokers.CoreBroker)
