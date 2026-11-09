@@ -487,6 +487,23 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   ])
 })
 
+test("passes live TRADING_MODE to the Binance broker factory during startup", async () => {
+  let brokerConfig
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, NODE_ENV: "test", TRADING_MODE: "live" },
+    brokerAdapterFactory: ({ config }) => {
+      brokerConfig = config
+      return createBroker()
+    },
+    logger: { info() {}, error() {} },
+  })
+
+  assert.equal(result.tradingMode, "live")
+  assert.equal(brokerConfig.tradingMode, "live")
+  await result.stop()
+})
+
 test("rejects an invalid TRADING_MODE before connecting to Binance", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({
