@@ -22,6 +22,8 @@ Import the supported API from the package entry point:
 - `generateUUID`: UUID v4 generation.
 - `capitalize`: trims and uppercases a string.
 - `toResult`: normalizes success and error result objects.
+- `createKeyedQueue`: creates independent serialized promise queues per key; tasks sharing a key run in enqueue order, different keys run concurrently, and `drain()` waits for tasks pending when it is called. An optional `onError({ key, error })` reports task failures without poisoning later tasks for that key.
+- `assertObjectInput`: validates that an operation received a non-null, non-array object. It checks only the input shape and deliberately does not read its properties; callers own property access and its error boundary.
 - `checkIfFeatureEnable`: enables a feature only when its environment variable is exactly `1`; warning diagnostics never include the variable's value.
 - `addTextToFile`: append text to a UTF-8 file.
 - `handleErr`: report structured error context.
