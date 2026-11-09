@@ -4,7 +4,7 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-09 21:23 +02:00  
+**Last reviewed:** 2026-11-09 21:23 +02:00
 **Develop checkpoint:** `dd18f2280fdc885211e678bf8218f59c3362a2ea`
 
 ## CRITICAL — Harvester readiness and recovery
@@ -104,4 +104,3 @@
 6. Preserve historical reports and provenance. Correct stale historical conclusions with a dated addendum or link to the current living source; never silently rewrite evidence.
 7. Run focused checks, repository agent-policy/link checks and applicable CI on the exact PR head. A skipped integration check is not a pass.
 8. Keep task branches short-lived and delete them after merge when repository permissions allow. Never bypass branch protection or release approval.
-
