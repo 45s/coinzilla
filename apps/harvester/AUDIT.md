@@ -862,3 +862,12 @@ The November 8 DOGE/ZRO fills after shutdown remain expected downtime behavior. 
 `docs/JOURNAL_OPERATIONS.md` describes a prior-session Journal-read gate that blocks trading when historical trading events exist. Current source composition does not implement that gate. The operational document is being corrected to state that prior Journal replay and process-restart restoration are not wired into Harvester startup.
 
 Tracking: [#654](https://github.com/45s/coinzilla/issues/654), under [#626](https://github.com/45s/coinzilla/issues/626).
+
+
+### Broker history capability and remaining completeness limits
+
+The current broker contract exposes symbol-wide canonical fill queries through `getFills({ symbol, fromId?, startTime?, endTime?, limit? })`, in addition to per-order queries. Therefore offline trade discovery is technically possible without a pre-existing local order ID, if Harvester scans each configured symbol from a durable cursor.
+
+Binance's official Spot WebSocket API `myTrades` documentation specifies inclusive `fromId` pagination, a maximum page size of 1,000, and time windows no longer than 24 hours. `fromId` cannot be combined with time filters; no filter returns only the most recent records. The broker package rejects cursor IDs outside JavaScript's safe-integer range rather than rounding int64 identifiers. The official documentation reviewed does not state a guaranteed historical-retention horizon.
+
+Current Harvester does not use this capability for startup discovery: its existing reconciliation is per registered order and no-ops for an empty registry. A durable per-symbol cursor, complete pagination, safe identifier representation, symbol-universe coverage and retention policy remain unresolved requirements. See [Binance Account Trade History](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) and [#654](https://github.com/45s/coinzilla/issues/654).
