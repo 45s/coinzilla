@@ -888,6 +888,7 @@ test("keeps missing build provenance explicit and rejects malformed process iden
   assert.deepEqual(unavailable.data.source, unavailableSource, "unavailable provenance must be represented with explicit null and unknown values")
   assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, processId: "12345" }).ok, false, "process IDs must be numeric safe integers")
   assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, startedAt: "not-a-timestamp" }).ok, false, "process-start timestamps must be valid ISO date strings")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, startedAt: "2026-11-09" }).ok, false, "process-start timestamps must be canonical UTC ISO values, not date-only strings")
   assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, commit: "not-a-sha" } }).ok, false, "Git commit identities must be validated before Journal publication")
   assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, metadataSource: "guessed" } }).ok, false, "provenance source must use one of the documented capture outcomes")
 })

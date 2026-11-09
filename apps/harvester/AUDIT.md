@@ -799,3 +799,34 @@ The separately uploaded evening-session Journal and full runtime/TRACE logs have
 **CLOSING order evidence gap:** source review confirms the shutdown handler publishes a CLOSING balance snapshot but does not request/publish a CLOSING open-orders snapshot. CLOSING locked DOGE (3,189) is consistent with two PREFLIGHT unowned SELLs (1,196 + 797) plus the owned OPEN DOGE SELL (1,196); locked ZRO (59.87) matches the owned OPEN ZRO SELL (59.87). This corroborates, but does not prove, the final resting-order set or statuses. Follow [#764](https://github.com/45s/coinzilla/issues/764) to decide whether to add a complete account-wide CLOSING order audit; keep this separate from deferred process-restart reconciliation [#654](https://github.com/45s/coinzilla/issues/654).
 
 The separate 03:20–03:45 UTC transport/recovery failure earlier the same day remains part of #626/#680 and must not be conflated with this successfully started afternoon session. No exchange writes, process restart, or TESTNET acceptance are claimed.
+
+## 2026-11-09 forensic continuation — recovery diagnostics and market-stream evidence
+
+The latest source/log cross-check adds two qualifications to the November 8 findings register:
+
+- **bookTicker evidence boundary:** the subscription callback forwards successful bookTicker updates to `processMarketBook()` but does not log normal receipt events. Therefore, the absence of bookTicker update lines in the supplied multi-day logs is not evidence of a stalled bookTicker stream. The 54-minute ZRO aggTrade gap remains unresolved; see [#760](https://github.com/45s/coinzilla/issues/760) and F-020/F-023 in [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md).
+- **recovery failure classification and historical mode discrepancy:** during the 03:21–03:23 UTC outage, a DOGE BUY fill was applied and then deduplicated, but its later recovery SELL cancellation failed while the user-data stream was unavailable. The log called this an unowned/invalid order even though both registry IDs matched. The trace proves that the historical event entered the non-recovery cancellation branch, but does not record the `recoveryMode` argument or runtime source revision. Current `develop` has separate protections in the status handler, event handler, and engine; the exact historical status/event interleaving still lacks an integration regression. Separately, the handler still sets sticky `accountingFailed` for every failed engine transition and labels failures unowned/invalid even when identities match. See [#769](https://github.com/45s/coinzilla/issues/769), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626).
+
+The `executionPending` status reports `recoveryRequired:false`, but current source does not use that status to clear the application gate: only the matching acknowledged `reconciled` generation can do so. Therefore, do not infer that this status alone caused the historical mode change. Current recovery-mode tests prove no cancellation during isolated recovery reconciliation; add an integration test covering the complete event/status sequence before declaring the incident path closed.
+
+All follow-up remains investigation/documentation and future DDD/TDD work only. No runtime code, tests, trading behavior, exchange state, or configuration was changed.
+
+
+## 2026-11-09 forensic continuation — safety-halt reconciliation side-effect risk
+
+Current `createAccountIntegritySafetyHalt()` calls `reconcileOwnedOrders()` with default `recoveryMode=false` before explicit BUY-only cancellation. A FILLED BUY encountered during snapshot application can therefore trigger recovery SELL cancellation during the safety-halt reconciliation stage. The November 8 ZRO cancellation stack through `applyOwnedOrderSnapshotsTransition()` followed by the safety-halt reconciliation-failed log strongly correlates with this path, though it does not prove caller attribution. Tracked as F-024/#773. Future DDD/TDD work should ensure the reconciliation stage is side-effect-free and only the explicit owned-BUY cancellation stage mutates orders.
+
+
+## 2026-11-09 forensic continuation — cancellation outcome classification
+
+The November 8 DOGE recovery SELL `1323350` was rejected by Binance's local user-data-unavailable guard before the state-changing RPC, but the next Harvester record shows the local order marked `UNKNOWN`. Current engine code treats all non-ok cancel results as unconfirmed, without distinguishing known not-sent preflight refusal from post-send ambiguity. This can manufacture unresolved owned-order state. Tracked as F-025/#774. Preserve fail-closed handling for genuine ambiguity while keeping the prior canonical state for known not-sent outcomes.
+
+
+## 2026-11-09 forensic continuation — accounting-failure latch is process-lifetime terminal
+
+Current source initializes `accountingFailed=false` only once in `start-harvester.js`. Event/status handlers set it true; no reset-to-false path exists in the inspected bootstrap. The status handler also refuses to clear `requiresReconciliation` after broker acknowledgement when this latch is true, and the recovery coordinator refuses to start/retry while it is true. A downstream cancellation/transition error can therefore permanently block recovery for the lifetime of the process, even when the underlying fill accounting was already applied. Preserve this fail-closed behavior for genuine accounting-integrity failures, but define explicit typed failure categories and evidence-based recovery/reset policy for other failures. Tracked under F-023/#769.
+
+
+## 2026-11-09 forensic continuation — public market-stream error handling
+
+Current public Streams source separates error and close: an error is reported to the logger/observer, while only close marks the client closed and schedules reconnect. There is no per-stream receipt-age watchdog. A post-open error without close can therefore leave an open-looking client without data, but this is not proven to have caused the Nov 8 ZRO gap (no afternoon error was logged). Tracked as F-026 under #760; future work must classify fatal transport errors and add bounded per-stream liveness diagnostics rather than blindly reconnecting on every error.

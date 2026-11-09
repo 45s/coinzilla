@@ -115,12 +115,7 @@ const requireBuildSource = ({ value }) => {
 }
 
 /**
- * Map one process-entry attempt to a small, sanitized build/runtime identity DTO.
- * The source object is explicitly allowlisted; arbitrary environment or runtime
- * properties are never copied into Journal evidence.
- */
-/**
- * Map process-start facts to a small allowlisted DTO.
+ * Map process-start facts to a small sanitized allowlisted DTO.
  * Extra input properties (including credentials and account data) are ignored.
  */
 export const mapHarvesterProcessStartedData = (input = {}) =>
@@ -133,8 +128,9 @@ export const mapHarvesterProcessStartedData = (input = {}) =>
     source,
   }) => {
     const normalizedStartedAt = requireString({ value: startedAt, field: "startedAt" })
-    if (Number.isNaN(Date.parse(normalizedStartedAt))) {
-      throw new TypeError("startedAt must be a valid timestamp")
+    const startedAtDate = new Date(normalizedStartedAt)
+    if (Number.isNaN(startedAtDate.getTime()) || startedAtDate.toISOString() !== normalizedStartedAt) {
+      throw new TypeError("startedAt must be a canonical UTC ISO timestamp")
     }
     if (!Number.isSafeInteger(processId) || processId <= 0) {
       throw new TypeError("processId must be a positive safe integer")
