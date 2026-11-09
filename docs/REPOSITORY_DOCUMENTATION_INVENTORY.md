@@ -1,6 +1,6 @@
 # Repository documentation inventory
 
-- Status: Initial recursive inventory complete; both Brokers REVIEW candidates resolved as KEEP; no Brokers REVIEW candidates remain
+- Status: Initial recursive inventory complete; all 6 initial REVIEW candidates now have evidence-based dispositions; content-level review of KEEP documents remains in progress
 - Type: Repository documentation inventory
 - Owner: Repository engineering
 - Baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
@@ -95,13 +95,15 @@ The table records path, byte size, category and a conservative first-pass dispos
 
 ## Remaining work
 
-- [ ] Complete the 42-file Harvester content/reference review and resolve its REVIEW candidates.
+- [x] Complete first-pass dispositions for all 42 Harvester files and resolve all four initial Harvester REVIEW candidates (see the Harvester inventory for evidence).
+- [ ] Continue source/behavior/reference review of KEEP documents; KEEP is a preservation disposition, not proof that every statement has been revalidated.
 - [x] Review `packages/brokers/ARCHITECTURE.md`: KEEP at its current path; it is an explicit target architecture and migration contract.
 - [x] Review `packages/brokers/ROADMAP.md`: KEEP at its current path; the current priority/status sections are authoritative and historical phases/dated investigation notes are explicitly identified as evidence.
 - [ ] Inspect all other package/app README, AGENTS and ROADMAP combinations for stale links, competing rules and status drift.
 - [ ] Trace inbound references from Markdown, source comments, GitHub Issues/PRs and workflows before any migration.
 - [ ] Add/verify local indexes wherever a substantial documentation subdirectory exists.
-- [ ] Verify the policy/index checks are required by live branch rulesets; a passing workflow alone does not prove enforcement.
+- [x] Verify policy/index checks are required by the live `develop-core` ruleset; the required `Check JavaScript syntax` context runs `check:agent-policy` and recursive Markdown link validation. See [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) and PR #799.
 - [ ] Evaluate Markdown linting and external-link checks with a baseline before adding new CI dependencies.
-- [ ] Record final dispositions and rationale for each REVIEW entry; update indexes after every migration.
+- [x] Record evidence-based dispositions and rationale for all six initial REVIEW entries; no initial Harvester or Brokers REVIEW candidates remain.
+- [ ] Record any new REVIEW findings discovered during continued content-level review and update indexes after each approved migration.
 
