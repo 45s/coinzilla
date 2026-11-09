@@ -80,6 +80,8 @@ Before merging a meaningful Markdown change, verify:
 
 ## Tooling status
 
-The repository currently enforces balanced fenced-code delimiters and recursive local-path link validation through the required agent-policy check. These checks do not enforce the full style rules above.
+The required JavaScript Syntax workflow enforces balanced fenced-code delimiters and recursive local-path link validation through the agent-policy check. It also runs `scripts/markdown-style-baseline.js` as a **report-only** measurement; this report does not fail on existing findings, rewrite files, or enforce the style rules above.
 
-A full Markdown linter and external URL/heading-anchor checker remain separate evaluation items under [#795](https://github.com/45s/coinzilla/issues/795). Do not describe this style standard as automatically enforced until a corresponding check is configured, run in CI and required by the repository's branch rules.
+The 2026-11-09 baseline covers 112 tracked Markdown/MDX files: 28 files / 128 trailing-whitespace occurrences, 2 files missing a final newline, 0 CRLF files, 51 files / 385 repeated-blank-line occurrences, 2 files without an H1, 1 file with multiple H1 headings (11 headings), 4 files / 5 heading-level skips, and 0 files with unlabeled fenced-code blocks. The prose whitespace metrics exclude fenced-code contents. These are measurements, not a blanket violation list: the scan includes historical evidence and GitHub templates, and it does not distinguish intentional Markdown hard-break syntax. Preserve historical snapshots and review the maintained-document scope before enabling enforcement.
+
+A full Markdown linter and external URL/heading-anchor checker remain separate evaluation items under [#795](https://github.com/45s/coinzilla/issues/795). Do not describe the style standard as automatically enforced until a corresponding check is configured, run in CI and required by the repository's branch rules.
