@@ -104,7 +104,7 @@ These files were added deliberately as indexes, historical evidence, inventories
 | `packages/notifiers/ROADMAP.md` | 15672 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/utils/AGENTS.md` | 2271 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/utils/README.md` | 19711 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
-| `packages/utils/ROADMAP.md` | 11241 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
+| `packages/utils/ROADMAP.md` | 11241 | Package roadmap | **KEEP** | Current work/status authority; PRs #767/#770 and closed issue #763 establish build-provenance/Logger rollout as complete, while the repository-wide helper inventory, direct console/stderr audit, and guard remain open. Historical PR #383 closeout wording is explicitly labeled as a dated snapshot. |
 
 ## Initial findings
 

@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-09 21:05 +02:00  
-**Develop checkpoint:** `6568ca99a0e016a39e1e86fe0db52706fa259f42`
+**Last reviewed:** 2026-11-09 21:06 +02:00  
+**Develop checkpoint:** `f21a5b5665224571ce23a73194f2c700b170ece3`
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -46,9 +46,9 @@
    - **Remaining:** continue content-level source-of-truth/reference review of KEEP documents; inspect remaining app/package README and AGENTS guidance; trace issue/PR/source references; add ADRs only for durable decisions; and evaluate Markdown lint/external-link checks against a baseline. All four initial Harvester REVIEW candidates and both Brokers REVIEW candidates now have evidence-based KEEP/SUPERSEDE dispositions. Do not claim migration completion from the governance foundation alone.
    - **Owner:** [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md), [documentation index](docs/README.md), and [issue #795](https://github.com/45s/coinzilla/issues/795).
 
-7. **Utilities build provenance and shared-helper reuse.**
-   - **Why:** logs and Journal evidence need trustworthy process/build identity, while duplicated generic helpers can drift.
-   - **Remaining:** finish the shared build-provenance/Logger context work and coordinated consumer rollout; complete the helper inventory with an explicit reuse/domain-local/intentional-duplication disposition. Avoid speculative utility APIs.
+7. **Shared utility reuse inventory and logging guard.**
+   - **Why:** duplicated generic helpers can drift, and routine direct-console diagnostics bypass the shared structured Logger contract. The build-provenance/Logger context capability and Harvester consumer rollout are already complete in PRs #767/#770; issue #763 is closed.
+   - **Remaining:** complete the helper inventory with an explicit reuse/domain-local/intentional-duplication disposition; finish the direct console/stderr and app-local logger-adapter audit; agree the narrow CLI/fatal-diagnostic allowlist; add the repository guard; and verify consumer migration/dependency-direction requirements. Avoid speculative utility APIs.
    - **Owner:** [Utils roadmap](packages/utils/ROADMAP.md).
 
 8. **Entities package-owned quality and dependency boundaries.**
