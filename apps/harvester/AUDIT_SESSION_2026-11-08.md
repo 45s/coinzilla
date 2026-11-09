@@ -668,3 +668,13 @@ terminal fail-closed behavior.
 
 The exact-head CI run is pending at this documentation checkpoint. No live or
 TESTNET order operation was performed; TESTNET acceptance remains paused.
+
+
+## 33. Empty TypeError cause preservation — 2026-11-09
+
+The recovery and event-handler diagnostics now retain wrapper error name,
+message, stack, original cause name/message, and cause stack. An empty wrapper
+`TypeError` falls back to the useful cause message without discarding either
+stack. The REST snapshot error wrapper preserves a non-Error thrown value as
+the original `cause`. Deterministic tests cover both event-processing and
+application-recovery diagnostics.

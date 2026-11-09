@@ -2071,10 +2071,9 @@ export function makeConservativeTradingEngine({
       }
       return { snapshots, symbols }
     } catch (caught) {
-      const error = caught instanceof Error ? caught : new Error(String(caught))
-      const recoveryError = error instanceof Error
-        ? error
-        : new Error(String(error), { cause: error })
+      const recoveryError = caught instanceof Error
+        ? caught
+        : new Error(String(caught), { cause: caught })
       recoveryError.reconciliationSymbol = affectedSymbol
       recoveryError.recoveryFailure = {
         category: "REST_RECONCILIATION",

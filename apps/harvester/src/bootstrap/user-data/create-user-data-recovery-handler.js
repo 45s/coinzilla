@@ -234,13 +234,34 @@ export function createUserDataRecoveryHandler({
       state.status = state.accountingFailed
         ? "EXECUTION_ACCOUNTING_FAILED"
         : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+      const cause = error?.cause
+      let errorMessage
+      if (typeof error?.message === "string" && error.message) {
+        errorMessage = error.message
+      } else if (cause instanceof Error && cause.message) {
+        errorMessage = cause.message
+      } else {
+        errorMessage = "(empty error message)"
+      }
+      let causeMessage
+      if (cause instanceof Error) {
+        causeMessage = cause.message
+      } else if (cause !== undefined) {
+        causeMessage = String(cause)
+      }
       logger.error?.({
         message: "application recovery failed; trading remains blocked",
         generation,
+        failureCategory: state.retryableRecoveryFailure?.category,
+        failureStage: state.retryableRecoveryFailure?.stage,
         error,
         errorName: error?.name ?? "Error",
-        errorMessage: error?.message || String(error),
+        errorMessage,
         errorStack: error?.stack,
+        cause,
+        causeName: cause instanceof Error ? cause.name : undefined,
+        causeMessage,
+        causeStack: cause instanceof Error ? cause.stack : undefined,
       })
     } finally {
       if (state.recoveryTask === recoveryTask) state.recoveryTask = null

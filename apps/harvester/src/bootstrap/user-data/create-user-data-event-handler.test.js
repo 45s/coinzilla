@@ -105,7 +105,7 @@ test("classifies a matched order-transition failure as retryable without poisoni
   const engine = {
     processUserDataEvent: async () => ({
       ok: false,
-      errors: [new Error("broker rejected cancellation before send")],
+      errors: [new TypeError("", { cause: new Error("broker rejected cancellation before send") })],
       failure,
     }),
     getOrders: () => [{
@@ -148,6 +148,11 @@ test("classifies a matched order-transition failure as retryable without poisoni
   assert.equal(logs[0]?.registryMatchedByClientOrderId, true)
   assert.equal(logs[0]?.failureCategory, "ORDER_TRANSITION")
   assert.equal(logs[0]?.failureStage, "RECOVERY_SELL_CANCELLATION")
+  assert.equal(logs[0]?.errors[0]?.message, "broker rejected cancellation before send")
+  assert.equal(logs[0]?.errors[0]?.causeName, "Error")
+  assert.equal(logs[0]?.errors[0]?.causeMessage, "broker rejected cancellation before send")
+  assert.ok(logs[0]?.errors[0]?.stack, "The wrapper stack must remain available.")
+  assert.ok(logs[0]?.errors[0]?.causeStack, "The original cause stack must remain available.")
 })
 
 test("contains observer failures without rolling back a valid event", async () => {

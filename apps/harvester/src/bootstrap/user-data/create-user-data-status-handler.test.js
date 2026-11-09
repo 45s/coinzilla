@@ -376,3 +376,34 @@ test("logs user-data transport errors once with their original error context", (
   assert.equal(logs.error[0].error, transportError, "The stream error log must preserve the original broker Error object for diagnosis.")
   assert.equal(logs.error[0].attempt, 2, "The stream error log must retain the broker reconnect attempt when supplied.")
 })
+
+test("a matching broker completion cannot clear readiness while a retryable failure marker remains", () => {
+  const { handler, state } = createHandler({
+    state: createState({
+      requiresReconciliation: true,
+      recoveryGeneration: 7,
+      recoveryBrokerGeneration: 42,
+      recoverySubscriptionId: 11,
+      lastAcknowledgedRecoveryGeneration: 7,
+      retryableRecoveryFailure: {
+        generation: 7,
+        category: "ORDER_TRANSITION",
+        stage: "RECOVERY_SELL_CANCELLATION",
+        retryable: true,
+      },
+    }),
+  })
+
+  handler({
+    type: "reconciled",
+    subscriptionId: 11,
+    recoveryGeneration: 42,
+    recoveryRequired: false,
+    reconciliationRequired: false,
+  })
+
+  assert.equal(state.streamUnsafe, false, "The broker transport may be globally reconciled.")
+  assert.equal(state.requiresReconciliation, true, "A queued retryable event failure must still block application readiness.")
+  assert.equal(state.ready, false)
+})
+

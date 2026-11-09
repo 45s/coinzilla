@@ -135,9 +135,13 @@ export function createUserDataEventHandler({
             brokerIdMatchClientOrderId: brokerIdMatch?.clientOrderId,
             errors: (processed.errors ?? []).map((error) => ({
               name: error?.name ?? "Error",
-              message: error?.message ?? String(error),
+              message: typeof error?.message === "string" && error.message
+                ? error.message
+                : error?.cause?.message ?? String(error),
               stack: error?.stack,
               cause: error?.cause,
+              causeName: error?.cause?.name,
+              causeMessage: error?.cause?.message,
               causeStack: error?.cause?.stack,
             })),
           })

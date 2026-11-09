@@ -504,6 +504,27 @@ test("keeps a permanent accounting-integrity failure terminal across recovery re
   assert.equal(reconciliationCalls, 1, "A terminal accounting-integrity failure must not be retried or cleared by another broker reminder.")
 })
 
+
+test("preserves an empty wrapper TypeError cause and stack in recovery diagnostics", async () => {
+  const cause = new Error("terminal fill history REST request timed out")
+  const wrapper = new TypeError("", { cause })
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => { throw wrapper },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.logs.error[0]?.errorMessage, cause.message)
+  assert.equal(fixture.logs.error[0]?.errorName, "TypeError")
+  assert.equal(fixture.logs.error[0]?.causeName, "Error")
+  assert.equal(fixture.logs.error[0]?.causeMessage, cause.message)
+  assert.equal(fixture.logs.error[0]?.errorStack, wrapper.stack)
+  assert.equal(fixture.logs.error[0]?.causeStack, cause.stack)
+  assert.equal(fixture.state.ready, false)
+  assert.equal(fixture.state.requiresReconciliation, true)
+})
+
 test("keeps recovery blocked when owned-order reconciliation returns a failed result", async () => {
   const fixture = createRecovery({
     reconcileOwnedOrders: async () => ({
