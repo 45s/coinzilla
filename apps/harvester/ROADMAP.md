@@ -1984,3 +1984,8 @@ See F-011 in `AUDIT_FINDINGS.md`, the 2026-11-09 section in `AUDIT.md`, and [#65
 ### F-028 — applied-fill Journal durability boundary
 
 The engine publishes `FILL_APPLIED` after applying accounting but does not call the durable flush barrier in that path. Event publisher publication is admission-only; EventBus delivery is asynchronous; Journal append returns `durable: false`; only explicit Journal flush waits for subscriber/write completion and fsync. Graceful close drains/syncs, but an abrupt crash has no equivalent guarantee. This is a confirmed missing durability guarantee, not a reproduced lost-fill incident. See F-028 in `AUDIT.md`. Future DDD/TDD work must define the crash-consistent ordering of durable execution facts, accounting projection advancement and checkpoints.
+
+
+### Existing domain serialization seams — #654
+
+The domain already exposes `value` projections for Portfolio, Position, RecoveryLedger and OrderRegistry, and the workflow/engine accept initial domain state. The current `startHarvester()` composition does not expose or populate those initial-state inputs; it always creates empty state. Constructors require typed canonical Market/Asset/Quantity/Money/CanonicalOrder objects, so a validated hydration mapper is still required. Do not characterize this as “no serialization exists”; the confirmed gap is the missing complete hydration and startup integration.
