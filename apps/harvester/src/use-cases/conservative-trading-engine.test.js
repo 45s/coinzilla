@@ -5477,6 +5477,58 @@ test("treats a pending-order lookup response without an explicit success flag as
   })
 })
 
+test("treats a pending-order lookup CanonicalOrder without brokerOrderId as terminal shape failure", async () => {
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: true,
+    data: new CanonicalOrder({
+      clientOrderId: pendingOrder.clientOrderId,
+      market,
+      side: pendingOrder.side,
+      type: pendingOrder.type,
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      status: "UNKNOWN",
+    }),
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_SHAPE",
+    retryable: false,
+  })
+})
+
+test("treats pending-order lookup quantity and price conflicts as terminal accounting failures", async () => {
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
+  const wrongQuantity = pendingOrder.originalQuantity.amount === "999999" ? "888888" : "999999"
+  const wrongPrice = pendingOrder.limitPrice.amount === "999999" ? "888888" : "999999"
+  harness.broker.getCanonicalOrder = async () => ({
+    ok: true,
+    data: new CanonicalOrder({
+      clientOrderId: pendingOrder.clientOrderId,
+      brokerOrderId: "broker-pending-order-parity-conflict",
+      market,
+      side: pendingOrder.side,
+      type: pendingOrder.type,
+      limitPrice: new Money({ amount: wrongPrice, asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: wrongQuantity, asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    }),
+  })
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "PENDING_ORDER_LOOKUP_PARITY",
+    retryable: false,
+  })
+})
+
 test("classifies a pending-order clientOrderId mismatch as terminal ownership failure", async () => {
   const { harness, pendingOrder } = await createUnknownSubmissionHarness()
   harness.broker.getCanonicalOrder = async () => ({

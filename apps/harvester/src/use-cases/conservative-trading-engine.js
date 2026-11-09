@@ -2559,7 +2559,7 @@ export function makeConservativeTradingEngine({
         if (!attachmentResult?.ok) {
           throw recoveryFailureError(
             attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId"),
-            "ACCOUNTING_INTEGRITY",
+            "OWNERSHIP_INTEGRITY",
             "PENDING_ORDER_ATTACHMENT",
             false,
           )

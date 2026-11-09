@@ -773,3 +773,8 @@ The pending-order identity mismatch test now constructs a broker-acknowledged Ca
 ## 47. F-023 identity fixture uses canonical shared Market/Asset values — 2026-11-09
 
 The pending-order identity mismatch regression now constructs its broker response from the suite's canonical Market and Asset fixtures. This ensures the fixture itself is a valid acknowledged CanonicalOrder and the only intended conflict is its foreign clientOrderId.
+
+
+## 48. F-023 pending lookup shape/parity and attachment ownership — 2026-11-09
+
+Added coverage for a canonical pending-order lookup response that omits brokerOrderId and for immutable quantity/price conflicts. BrokerOrderId attachment failures are classified as terminal ownership failures because they represent a broken binding between the pending Harvester order and the exchange order identity.
