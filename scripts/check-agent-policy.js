@@ -197,7 +197,7 @@ function collectMarkdownHeadingAnchors(content) {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
       .trim()
-      .replace(/\s+/g, '-');
+      .replace(/ /g, '-');
     if (!baseSlug) return;
 
     let slug = baseSlug;
