@@ -35,6 +35,8 @@ export class Journal {
     this.startupCleanupErrors = []
     // Serializes close calls while `closing` remains the later record-admission gate.
     this.closeInProgress = false
+    this.flushPromises = new Set()
+    this.flushQueue = Promise.resolve()
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -249,14 +251,32 @@ export class Journal {
 
   /**
    * Flush EventBus delivery and queued writes, then sync the active session file.
+   * Concurrent flushes are serialized; close rejects new flushes and waits for accepted flushes.
    *
    * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
    */
   async flush({} = {}) {
-    if (!this.started || !this.filePath || this.closing || this.closed) {
+    if (!this.started || !this.filePath || this.closeInProgress || this.closing || this.closed) {
       return toResult({ error: new Error("Journal must be started to flush durable records") })
     }
 
+    const flushPromise = this.flushQueue.then(() => this.flushLifecycle())
+    this.flushPromises.add(flushPromise)
+    this.flushQueue = flushPromise.then(() => undefined, () => undefined)
+    try {
+      return await flushPromise
+    } finally {
+      this.flushPromises.delete(flushPromise)
+    }
+  }
+
+  /**
+   * Drain EventBus delivery and queued writes, then sync the active session file.
+   *
+   * @private
+   * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
+   */
+  async flushLifecycle() {
     const errors = []
 
     try {
@@ -287,6 +307,7 @@ export class Journal {
 
     return toResult({ flushed: true, durable: true, filePath: this.filePath })
   }
+
 
   /**
    * Serialize close requests, then cancel startup or stop the active writer and release owned resources.
@@ -350,6 +371,10 @@ export class Journal {
       }
       this.closeDurable = true
       return toResult({ closed: true, durable: true })
+    }
+
+    if (this.flushPromises.size > 0) {
+      await Promise.all([...this.flushPromises])
     }
 
     const errors = []
