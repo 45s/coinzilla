@@ -96,7 +96,7 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
       },
       {
         path: 'docs/target.md',
-        content: '## Repeated\n\n## Repeated\n\nUnderlined Heading\n------------------\n\n<a id="custom-anchor"></a>\n\n## Café &amp; tea!',
+        content: '## Repeated\n\n## Repeated\n\nUnderlined Heading\n------------------\n\n<a id="custom-anchor"></a>\n\n## Café &amp; tea!\n\n## First — second\n\n## 2026-11-07/08 session audit — issue #667',
       },
     ];
 
