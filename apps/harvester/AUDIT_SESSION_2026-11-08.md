@@ -763,3 +763,8 @@ Added RED regressions for the pre-existing UNKNOWN-submission reconciliation bra
 ## 45. F-023 pending clientOrderId lookup implementation — 2026-11-09
 
 Pending UNKNOWN submissions now use the same explicit classification policy as owned-order snapshot reconciliation. Only a broker-declared ok:false lookup result is retryable REST reconciliation. Missing/malformed response envelopes, unexpected thrown adapter exceptions, invalid CanonicalOrder shapes, client/market/side/type identity mismatches, immutable quantity/price parity failures, and brokerOrderId attachment conflicts are terminal with explicit stage metadata.
+
+
+## 46. F-023 canonical pending-order fixture correction — 2026-11-09
+
+The pending-order identity mismatch test now constructs a broker-acknowledged CanonicalOrder with the domain's supported OPEN status. This keeps the regression focused on clientOrderId ownership mismatch rather than an invalid test entity.

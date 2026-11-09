@@ -5490,7 +5490,7 @@ test("classifies a pending-order clientOrderId mismatch as terminal ownership fa
       limitPrice: pendingOrder.limitPrice,
       originalQuantity: pendingOrder.originalQuantity,
       executedQuantity: new Quantity({ amount: "0", asset: pendingOrder.originalQuantity.asset }),
-      status: "NEW",
+      status: "OPEN",
       createdAt: 1,
       acknowledgedAt: 1,
       updatedAt: 1,
