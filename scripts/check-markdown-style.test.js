@@ -21,10 +21,18 @@ test("enforces style on changed maintained documents but preserves historical an
       path: "apps/harvester/AUDIT_2026-11-09.md",
       content: "# Historical  \n\n\nEvidence",
     },
+    {
+      path: "docs/ai-agent/repository-engineering-audit.md",
+      content: "# Historical task brief  \n\n\nEvidence",
+    },
+    {
+      path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
+      content: "## Summary\n\n## Context\n\nDescription.\n",
+    },
   ])
 
-  assert.equal(result.scannedFiles, 3)
-  assert.equal(result.skippedHistorical, 1)
+  assert.equal(result.scannedFiles, 4)
+  assert.equal(result.skippedHistorical, 2)
   assert.deepEqual(result.violations.trailingWhitespace.map(({ path }) => path), [
     "docs/bad.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
