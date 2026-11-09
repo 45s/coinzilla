@@ -187,7 +187,7 @@ Trading safety requirements remain in force: live trading stays disabled unless 
 
 - [x] Keep Harvester configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
-- [~] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
+- [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together — completed in [PR #839](https://github.com/45s/coinzilla/pull/839).
 
 ## Journal evidence workstream
 
@@ -317,7 +317,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
 - [x] Implement minimum process readiness for the first TESTNET cycle. When the development runtime profile sets `trading.enabled=true` with `trading.mode=testnet`, startup requires at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite. Read-only broker mode remains available; genuine reconnect/reconciliation requirements still fail closed.
 - [x] Enable the first TESTNET order only after the selected `development` runtime profile explicitly sets `trading.enabled=true` and `trading.mode=testnet`, validated config, enabled-pair exchange filters, fresh account snapshot, and active user-data stream. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
-- [~] Validate runtime-profile combinations; the selected profile must explicitly select `broker=binance`, TESTNET mode, and the development environment before order execution is enabled. Production selects Binance LIVE connectivity but remains read-only; live order execution is unsupported.
+- [x] Validate runtime-profile combinations; the selected development profile explicitly selects `broker=binance`, TESTNET mode, and TESTNET execution. Production selects Binance LIVE connectivity but remains read-only; live order execution is unsupported. Implemented and merged in [PR #839](https://github.com/45s/coinzilla/pull/839).
 - [x] Validate enabled pair configuration against exchange assets/filters at startup: `orderQuantity` is rounded down by the actual base-asset step and checked against supported min/max quantity; quote-asset `investment` is checked against minimum notional. The symbol must match the exchange market metadata. Actual price/quantity/notional validation remains at order submission.
 
 ### P0.3 — Order intent, safety checks, and reservations
@@ -387,7 +387,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ## P1 — Implement Aggressive after Conservative is proven
 
-- [x] Disable Aggressive at runtime with `HARVESTER_ENABLE_AGGRESSIVE=false`; reject startup if an attempt is made to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
+- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `trading-config.json`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
 
 Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
 
