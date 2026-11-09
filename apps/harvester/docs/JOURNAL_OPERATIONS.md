@@ -240,6 +240,12 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each actual commission as an exact decimal amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. This preserves the fee facts needed for a future deterministic recovery projection, but does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
 
+## Safety-pause state is process-local
+
+The current startup composition initializes `userDataState.accountingFailed=false`, trading-enabled `requiresReconciliation=false`, and empty engine pause/recovery-intent Sets. The engine's `pause()` adds symbols to in-memory `paused` and `durablePausedMarkets` Sets and publishes `STRATEGY_PAUSED`; it does not persist a durable checkpoint or restore that event on startup.
+
+A previous safety halt/accounting-failure latch is therefore not guaranteed to survive a process restart. PREFLIGHT and new live events may detect some unresolved conditions, but they do not reconstruct every previous pause reason or offline terminal fill. Do not treat restart as resolution of an earlier safety halt. Keep trading disabled until the prior cause has been authoritatively reconciled or explicitly acknowledged. See F-029 in [AUDIT.md](../AUDIT.md), F-011/#654 and F-028.
+
 ## Applied-fill Journal durability boundary
 
 The Harvester engine publishes `execution.fill_applied` after applying the canonical fill to in-memory accounting. The current applied-fill path does not invoke the durable Journal flush barrier. Publication is synchronous admission only; EventBus subscriber delivery is asynchronous. Journal append reports `durable: false`; explicit `flush()` waits for pending EventBus deliveries and Journal writes, then performs filesystem sync/fsync.
