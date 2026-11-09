@@ -8,15 +8,23 @@ The Journal is an operational observer, not trading-state authority. Portfolio a
 
 ## Configuration
 
-The Journal is enabled by default.
+The application enables the Journal by default and writes sessions to
+`apps/harvester/logs/`. The application entrypoint does not expose environment
+or `trading-config.json` settings to disable the Journal or change its
+directory. The lower-level `prepareOptionalJournal()` helper accepts
+`enabled` and `directory` options for controlled programmatic composition
+and tests; these are not deployment settings.
 
-| Setting | Behavior |
-|---|---|
-| `HARVESTER_JOURNAL_ENABLED=false` | Disable the Journal writer. Matching is case-insensitive after trimming. |
-| `HARVESTER_JOURNAL_DIRECTORY` | Override the session directory. Relative paths resolve from `apps/harvester`; absolute paths are accepted. |
-| Unset directory | Defaults to `apps/harvester/logs/`. |
-
-The `dev` script loads `.env.development`; the `start` script uses the process environment. The default Journal directory is shared with Harvester diagnostic logs at `apps/harvester/logs/`, but their formats and lifecycles are independent. See [Logging](./LOGGING.md) for cumulative and timestamped diagnostic files. The Harvester `.gitignore` excludes its `/logs/` directory. Keep custom Journal directories outside source control as well.
+The `dev` launcher pins `NODE_ENV=development` before importing application
+and broker modules, then loads `.env.development`. The `start` launcher pins
+`NODE_ENV=production` and loads `.env.production` when that file exists.
+Environment files and externally injected environment values provide
+credentials and optional notifier secrets, not Journal configuration or
+broker/trading-policy flags. The default Journal directory is shared with
+Harvester diagnostic logs at `apps/harvester/logs/`, but their formats and
+lifecycles are independent. See [Logging](./LOGGING.md) for cumulative and
+timestamped diagnostic files. The Harvester `.gitignore` excludes its
+`/logs/` directory.
 
 ## Session files and JSONL format
 
@@ -231,12 +239,11 @@ A process kill, machine crash, power loss, or failed filesystem sync can still l
 
 ## Diagnosing a missing or incomplete session
 
-1. Confirm `HARVESTER_JOURNAL_ENABLED` is not `false`.
-2. Confirm `HARVESTER_JOURNAL_DIRECTORY` resolves to the expected writable directory.
-3. Check startup logs for `Journal started` or `Optional Harvester Journal setup failed`.
-4. Check the latest UTC-named `.jsonl` file and verify that each line parses as JSON and includes `__coinzillaJournal.schemaVersion = 1`.
-5. Check the process logs for `Failed to write journal event`, `Journal closed with errors`, or `Harvester observability shutdown incomplete`.
-6. If a programmatic caller is available, inspect `journalService.status`: `state`, `enabled`, `started`, `writeFailed`, `writeErrorCount`, and `closed`.
+1. Confirm the application is using its default `apps/harvester/logs/` directory and that the operating-system user can create and write files there.
+2. Check startup logs for `Journal started` or the structured `Optional Harvester Journal startup failed` entry. Inspect its `errors` array for the original filesystem error code, message, and path.
+3. Check the latest UTC-named `.jsonl` file and verify that each line parses as JSON and includes `__coinzillaJournal.schemaVersion = 1`.
+4. Check the process logs for `Failed to write journal event`, `Journal closed with errors`, or `observability shutdown incomplete`.
+5. If a programmatic caller is available, inspect `journalService.status`: `state`, `enabled`, `started`, `writeFailed`, `writeErrorCount`, and `closed`.
 
 An absent first startup event can be the documented asynchronous-subscription gap. A `writeFailed` session will not resume writing automatically. A missing final stopped event or a failed close can indicate interrupted shutdown or failed durability confirmation.
 
@@ -289,7 +296,7 @@ This is an investigation status, not an implementation proposal to be applied in
 
 Trading-enabled startup acquires two exclusive locks before the Journal writer starts or the broker connects:
 
-1. **Broker-wide host lock:** a file named `.<broker>-harvester-trading.lock` (for Binance, `.binance-harvester-trading.lock`) under `~/.coinzilla/harvester/process-locks/`. It is independent of `HARVESTER_JOURNAL_DIRECTORY` and prevents another Harvester process running under the same OS user from trading through the same broker with a different Journal directory.
+1. **Broker-wide host lock:** a file named `.<broker>-harvester-trading.lock` (for Binance, `.binance-harvester-trading.lock`) under `~/.coinzilla/harvester/process-locks/`. It is independent of the Journal directory and prevents another Harvester process running under the same OS user from trading through the same broker even when a programmatic caller uses a different Journal directory.
 2. **Journal-directory lock:** `.harvester-trading.lock` inside the configured Journal directory. It prevents concurrent writers to the same recovery-history directory.
 
 The host lock is acquired first, then the Journal lock. If Journal-lock acquisition fails, startup attempts to release the host lock; an uncertain host-lock release is surfaced rather than ignored. During shutdown, the Journal lock is released first and the host lock only after Journal-lock release is confirmed. If Journal-lock release is uncertain, the host lock is deliberately retained. Both locks remain held unless runtime shutdown and Journal close are confirmed. If runtime startup was attempted and then failed before a runtime handle was returned, the locks are retained because broker resources may have been partially activated.
