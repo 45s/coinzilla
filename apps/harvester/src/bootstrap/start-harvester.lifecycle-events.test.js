@@ -19,14 +19,6 @@ const startHarvesterForTest = (input = {}) => {
 
 
 const config = {
-  runtime: {
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
-      test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "binance", trading: { enabled: false, mode: "live" } },
-    },
-  },
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -152,8 +144,8 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   ])
   assert.deepEqual(eventPublisher.events[0].data, {
     enabledMarkets: ["BTCUSDT"],
-    strategyMode: "read-only",
-    tradingEnabled: false,
+    strategyMode: "conservative",
+    tradingEnabled: true,
   })
   assert.deepEqual(eventPublisher.events[3].data, {
     broker: "binance",
