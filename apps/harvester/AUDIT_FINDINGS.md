@@ -624,7 +624,7 @@ Current source and regression inventory:
 
 **Impact:** A symbol-specific feed stall could be hidden while another symbol continues to trade, and current logs cannot distinguish that from a genuinely quiet market. Do not assert that stale-price decisions occurred; that is not demonstrated.
 
-**Required follow-up:** trace the adapter-to-Harvester path, identify an independent freshness signal (for example bookTicker freshness or a documented exchange heartbeat), add bounded per-symbol last-event-age and stale/recovered diagnostics, and define any trading gate only through an explicit domain policy. Add fake-clock tests for one symbol stalling while another remains active, recovery, repeated notifications, and legitimate quiet periods. No TESTNET writes are required.
+**Required follow-up:** trace the adapter-to-Harvester path, identify an independent freshness signal (for example bookTicker freshness or a documented exchange heartbeat), add bounded per-symbol/per-stream last-event-age and stale/recovered diagnostics, and define any trading gate only through an explicit domain policy. Instrument successful bookTicker receipt/freshness in a bounded way; do not infer delivery health from the current absence of receipt logs. Add fake-clock tests for one symbol stalling while another remains active, recovery, repeated notifications, and legitimate quiet periods. No TESTNET writes are required.
 
 ## F-021 — Shutdown repeats complete fill-history reconciliation
 
