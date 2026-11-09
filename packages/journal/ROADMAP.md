@@ -8,7 +8,7 @@ owner: journal
 
 ## Priority execution plan — current develop direction (2026-11-08)
 
-### In progress — accept writer-generated session identity filenames (#877)
+### In progress — accept writer-generated session identity filenames (#877 / PR #880)
 
 - [~] Fix the reader to accept the timestamp plus sanitized runtime-session-ID suffix already emitted by `createSession(sessionIdentity)`.
 - [~] Preserve timestamp ordering, exact numeric collision-suffix ordering, and deterministic lexical ordering for identity suffixes.

@@ -165,7 +165,7 @@ for (const record of result.records) {
 }
 ```
 
-Sessions are ordered by timestamp and then exact numeric collision suffix (the unsuffixed file first). Suffixes larger than JavaScript's safe-integer range retain their numeric order; suffixes with equal numeric values, such as zero-padded aliases, use a deterministic lexical tie-break. Records retain their line order within each session. Each record includes its source filename and 1-based line number.
+Sessions are ordered by timestamp, then by suffix kind: the unsuffixed file comes first, numeric collision suffixes follow in exact numeric order (including values larger than JavaScript's safe-integer range), and non-numeric runtime-session-ID suffixes follow in deterministic lexical order. Zero-padded numeric aliases with equal numeric values use a lexical tie-break. Records retain their line order within each session. Each record includes its source filename and 1-based line number.
 
 The reader rejects invalid UTF-8 and duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current additive metadata format. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 
