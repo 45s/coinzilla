@@ -107,7 +107,7 @@
       "production": {
         "broker": "binance",
         "trading": {
-          "enabled": false,
+          "enabled": true,
           "mode": "live"
         }
       }
