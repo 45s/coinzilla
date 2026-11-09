@@ -30,7 +30,7 @@ export function findMarkdownDocuments(root) {
         continue;
       }
 
-      if (!entry.isFile() || !/\\.mdx?$/i.test(entry.name)) continue;
+      if (!entry.isFile() || !/\.mdx?$/i.test(entry.name)) continue;
       const path = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
       documents.push({ path, content: readFileSync(join(directory, entry.name), 'utf8') });
     }
@@ -57,7 +57,7 @@ function removeCodeExamples(content) {
   const output = [];
   let activeFence = null;
 
-  for (const line of content.split(/\\r?\\n/)) {
+  for (const line of content.split(/\r?\n/)) {
     const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
     if (activeFence) {
       if (fence && fence[1][0] === activeFence.character && fence[1].length >= activeFence.length &&
@@ -73,7 +73,7 @@ function removeCodeExamples(content) {
     output.push(line);
   }
 
-  return output.join('\\n').replace(/(`+)[\\s\\S]*?\\1/g, '');
+  return output.join('\n').replace(/(`+)[\s\S]*?\1/g, '');
 }
 
 export function findInstructionDirectories(root) {
@@ -125,7 +125,7 @@ export function findOwnershipGaps(directories, ownershipDocument) {
 
 
 /**
- * Find broken relative Markdown links in the repository's central policy documents.
+ * Find broken relative Markdown links in all discovered repository Markdown/MDX documents.
  * External URLs, mail links, and same-document anchors are intentionally ignored.
  *
  * @param {string} root Repository root.
