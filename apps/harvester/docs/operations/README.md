@@ -3,7 +3,7 @@
 Start with the procedure matching the task. Do not treat a runbook as standing authorization to interact with TESTNET or place/cancel orders.
 
 - [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/CLOSING durability, process locks, shutdown ordering and failure diagnosis.
-- [Logging](../LOGGING.md) — logger levels, output transports, structured fields and diagnostics.
+- [Logging](../LOGGING.md) — cumulative and timestamped session files, shared process identity, stream lifecycle, logger levels and diagnostics.
 - [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) — controlled, jointly authorized validation procedure and abort conditions.
 - [TESTNET order tools](../testnet-order-tools.md) — read-only account/order/trade inspection and explicitly destructive TESTNET operator scripts.
 - [Trading First](../TRADING_FIRST.md) — priority and non-negotiable trading safety constraints.
