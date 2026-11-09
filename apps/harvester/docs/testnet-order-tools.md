@@ -190,9 +190,14 @@ dependencies or connect to the trading runtime.
 
 ## Diagnosing an unowned execution report
 
-If Harvester pauses a pair with UNKNOWN_OR_EXTERNAL_ORDER_EVENT, capture the structured log entry named "Harvester rejected an unowned or invalid order event". It now includes safe correlation fields: symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and whether the current registry matched either identifier. When a match exists, the registered status and paired identifier are included.
+When a user-data order event fails with the `OWNERSHIP_INTEGRITY` category, the event handler logs **"rejected an unowned or invalid order event"** and keeps trading readiness closed. Preserve the complete structured log entry, including:
 
-Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Preserve the complete structured error entry (including native Error details) and compare its identifiers with the same-time order history and submission/acknowledgement journal entries. A client-ID match with a different exchange order ID is an identity mismatch, not proof that the event is owned. Unknown events must continue to pause the pair.
+- `failureCategory`, `failureStage`, `failureRetryable`, `eventType`, and `executionType`;
+- `symbol`, `brokerOrderId`, `clientOrderId`, `originalClientOrderId`, `side`, `orderStatus`, and `executionId`;
+- `registryMatchedByClientOrderId`, `registryMatchedByBrokerOrderId`, `clientIdMatchStatus`, `clientIdMatchBrokerOrderId`, and `brokerIdMatchClientOrderId`;
+- the structured `errors` array, including native Error and cause details.
+
+Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Compare the captured identifiers with same-time order history and submission/acknowledgement Journal entries. A client-ID match with a different exchange order ID is not proof that the event is owned. Unknown broker order IDs must remain unowned and must not be adopted to restore readiness.
 
 
 ### Historical ownership investigation
