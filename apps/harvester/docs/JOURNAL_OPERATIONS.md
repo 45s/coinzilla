@@ -121,7 +121,7 @@ sequenceDiagram
     participant Market as Price and book streams
     participant Engine as Trading engine
     participant User as User-data stream and queue
-    participant Broker as Broker REST API
+    participant Broker as Broker WebSocket API
     participant Journal
     participant Bus as EventBus
     participant Telegram as Optional Telegram subscriber
@@ -161,10 +161,10 @@ sequenceDiagram
                 Engine->>Engine: mark outcome unsafe and pause affected market
             end
         end
-        Note over Engine,User: Execution reports may arrive during REST cancellation; the stream remains active so accepted reports can be applied before the audit.
+        Note over Engine,User: Execution reports may arrive during WebSocket API cancellation; the stream remains active so accepted reports can be applied before the audit.
         Stop->>User: await queued cancellation and execution-report work
         Stop->>Engine: reconcileOwnedOrders() final verification
-        Engine->>Broker: reconcile registered owned orders against canonical REST state
+        Engine->>Broker: reconcile registered owned orders against canonical WebSocket API request/response state
         Broker-->>Engine: final canonical order and fill state
         Engine-->>Stop: final reconciliation result
         Note over Stop,Engine: This final pass verifies state; the handler does not call BUY cancellation a second time. A still-open BUY is unresolved and fails shutdown.
@@ -221,9 +221,9 @@ sequenceDiagram
 
 - The handler marks the runtime stopped and not ready before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
 - For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
-- User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final REST/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
+- User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final WebSocket API/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
 - Shutdown never cancels SELL orders. An owned SELL in OPEN or PARTIALLY_FILLED state is explicitly excluded from the unresolved-order check and remains resting at the broker. Other non-terminal/unknown owned-order states are unresolved.
-- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker REST is connected, filtered to configured market assets, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
+- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker WebSocket API is connected, filtered to configured market assets, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
 - Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes `harvester.stopped`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
 
 ### Failure and process-lock behavior
@@ -329,13 +329,16 @@ Failures are classified by the engine and carried to bootstrap with a
 - `ORDER_TRANSITION`, `REST_RECONCILIATION`, and `DURABILITY` are retryable
   only after a new single-flight attempt repeats the authoritative checks.
   They keep readiness closed and carry a generation-scoped failure marker.
+
+The `REST_RECONCILIATION` identifier is retained for compatibility; current
+canonical reads use Binance WebSocket API request/response RPC, not HTTP REST.
 - An unclassified error defaults to terminal accounting-integrity failure.
   Missing metadata is never treated as evidence that trading is safe.
 
 If a retryable failure occurs while queued user-data events are being drained,
 the active recovery attempt stops before either RECOVERY audit can authorize
 broker acknowledgement. A later `recovered` reminder may clear that marker
-only when a new attempt begins; it must then repeat all canonical REST reads,
+only when a new attempt begins; it must then repeat all canonical WebSocket API request/response reads,
 queued-event draining, both durable Journal barriers, and generation
 revalidation. Reclassification alone never clears readiness or acknowledges a
 broker generation.
