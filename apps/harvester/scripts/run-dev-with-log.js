@@ -1,14 +1,27 @@
+import { randomUUID } from "node:crypto"
 import { createWriteStream, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { forwardChildOutput } from "./forward-child-output.js"
+import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 
-const logDirectory = resolve(process.cwd(), "../../logs_harvester")
+const logDirectory = resolve(process.cwd(), "logs")
 const logPath = resolve(logDirectory, "terminal.log")
+const sessionStartedAt = new Date().toISOString()
+const runtimeSessionId = randomUUID()
+const sessionPaths = createHarvesterLogSessionPaths({
+  directory: logDirectory,
+  startedAt: sessionStartedAt,
+  runtimeSessionId,
+})
 
 mkdirSync(logDirectory, { recursive: true })
 
-const logStream = createWriteStream(logPath, { flags: "a" })
+const logStreams = [
+  createWriteStream(logPath, { flags: "a" }),
+  createWriteStream(sessionPaths.terminal, { flags: "wx" }),
+]
+const [, sessionLogStream] = logStreams
 const child = spawn(
   process.execPath,
   ["--env-file=.env.development", "src/index.js"],
@@ -23,6 +36,8 @@ const child = spawn(
       HARVESTER_LOG_COLOR: process.env.NO_COLOR === undefined && process.stdout.isTTY
         ? "1"
         : "0",
+      HARVESTER_PROCESS_STARTED_AT: sessionStartedAt,
+      HARVESTER_RUNTIME_SESSION_ID: runtimeSessionId,
     },
   },
 )
@@ -30,13 +45,10 @@ const child = spawn(
 let childClosed = false
 let logStreamFailed = false
 
-const closeLogStream = () => new Promise((resolveClose) => {
-  if (logStream.destroyed || logStream.closed) {
-    resolveClose()
-    return
-  }
-  logStream.end(resolveClose)
-})
+const closeLogStreams = () => Promise.all(logStreams.map((stream) => new Promise((resolveClose) => {
+  if (stream.destroyed || stream.closed) { resolveClose(); return }
+  stream.end(resolveClose)
+})))
 
 const handleSignal = (signal) => {
   // The child has its own process group on POSIX, so it needs an explicit
@@ -56,7 +68,7 @@ const forwardOutput = async (stream, output) => {
   try {
     return await forwardChildOutput({
       source: stream,
-      destinations: () => (!logStreamFailed ? [logStream] : []),
+      destinations: () => (!logStreamFailed ? logStreams : []),
       bestEffortDestinations: () => [output],
     })
   } catch (error) {
@@ -74,13 +86,15 @@ const outputForwarding = [
   forwardOutput(child.stderr, process.stderr),
 ]
 
-logStream.on("error", (error) => {
-  if (logStreamFailed) return
+logStreams.forEach((stream) => stream.on("error", (error) => {
+  if (logStreamFailed) {
+    return
+  }
   logStreamFailed = true
   process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1
   if (!childClosed && !child.killed) child.kill("SIGTERM")
-})
+}))
 
 child.on("error", (error) => {
   process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
@@ -95,7 +109,7 @@ child.on("close", async (code, signal) => {
   const droppedChunks = (await Promise.all(outputForwarding))
     .reduce((total, count) => total + count, 0)
 
-  await closeLogStream()
+  await closeLogStreams()
 
   if (
     droppedChunks > 0
@@ -103,7 +117,7 @@ child.on("close", async (code, signal) => {
     && !process.stderr.writableNeedDrain
   ) {
     process.stderr.write(
-      `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath}\n`,
+      `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath} and ${sessionLogStream.path}\n`,
     )
   }
 

@@ -20,7 +20,9 @@ const UNAVAILABLE_SOURCE = Object.freeze({
  *
  * The process-entry timestamp and runtime-session ID are captured before the
  * synchronous, one-time Git inspection. Git inspection failure is diagnostic
- * only and produces explicit unavailable provenance.
+ * only and produces explicit unavailable provenance. The development runner
+ * may supply the original timestamp and session ID through its internal child
+ * environment so terminal and structured files share one session identity.
  *
  * @param {object} [options]
  * @param {NodeJS.ProcessEnv} [options.env]
@@ -43,12 +45,12 @@ export function createHarvesterProcessIdentity({
     throw new TypeError("processId must be a positive safe integer")
   }
 
-  const startedAtDate = now()
+  const startedAtDate = env.HARVESTER_PROCESS_STARTED_AT === undefined ? now() : new Date(env.HARVESTER_PROCESS_STARTED_AT)
   if (!(startedAtDate instanceof Date) || Number.isNaN(startedAtDate.getTime())) {
     throw new TypeError("Process-entry timestamp must be a valid Date")
   }
 
-  const runtimeSessionId = generateRuntimeSessionId()
+  const runtimeSessionId = env.HARVESTER_RUNTIME_SESSION_ID ?? generateRuntimeSessionId()
   if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
     throw new TypeError("Runtime session ID must be a non-empty string")
   }

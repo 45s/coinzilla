@@ -7,6 +7,7 @@ node_modules
 
 # Application session logs
 /logs_bot-free-roll/
+# Legacy Harvester terminal-log location; retained for existing local history.
 /logs_harvester/
 /apps/harvester/logs/harvester.log
 /apps/harvester/logs/harvester-trace.log

@@ -90,3 +90,15 @@ test("rejects invalid process identity dependencies before returning a misleadin
     "an invalid process-entry clock result must not be serialized as a valid UTC timestamp",
   )
 })
+
+test("uses the development runner shared timestamp and runtime session ID when supplied", () => {
+  const identity = createHarvesterProcessIdentity({
+    env: { HARVESTER_PROCESS_STARTED_AT: "2026-11-09T10:15:30.000Z", HARVESTER_RUNTIME_SESSION_ID: "shared-session-123" },
+    processId: 67890,
+    now: () => { throw new Error("runner-provided timestamp must avoid a second clock read") },
+    generateRuntimeSessionId: () => { throw new Error("runner-provided session ID must avoid a second ID") },
+    captureBuildMetadata: () => availableBuildMetadata,
+  })
+  assert.equal(identity.startedAt, "2026-11-09T10:15:30.000Z", "process provenance must retain the timestamp shared with log session filenames")
+  assert.equal(identity.runtimeSessionId, "shared-session-123", "process provenance must retain the session ID shared with log session filenames")
+})

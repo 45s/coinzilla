@@ -16,7 +16,7 @@ The Journal is enabled by default.
 | `HARVESTER_JOURNAL_DIRECTORY` | Override the session directory. Relative paths resolve from `apps/harvester`; absolute paths are accepted. |
 | Unset directory | Defaults to `apps/harvester/logs/`. |
 
-The `dev` script loads `.env.development`; the `start` script uses the process environment. The Harvester `.gitignore` excludes its `/logs/` directory. Keep custom Journal directories outside source control as well.
+The `dev` script loads `.env.development`; the `start` script uses the process environment. The default Journal directory is shared with Harvester diagnostic logs at `apps/harvester/logs/`, but their formats and lifecycles are independent. See [Logging](./LOGGING.md) for cumulative and timestamped diagnostic files. The Harvester `.gitignore` excludes its `/logs/` directory. Keep custom Journal directories outside source control as well.
 
 ## Session files and JSONL format
 
