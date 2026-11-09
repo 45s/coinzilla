@@ -115,20 +115,27 @@ export class FileSystemJournalStore {
    * @returns {Promise<void>}
    */
   async closeSession() {
+    const overrideHandle = this.sessionHandleOverride
+    const ownedHandle = this.ownedSessionHandle
     const sessionHandles = [
-      ...new Set([this.sessionHandleOverride, this.ownedSessionHandle].filter(Boolean)),
+      ...new Set([overrideHandle, ownedHandle].filter(Boolean)),
     ]
-    this.sessionHandleOverride = null
-    this.ownedSessionHandle = null
-
+    const failedHandles = new Set()
     const errors = []
+
     for (const sessionHandle of sessionHandles) {
       try {
         await sessionHandle.close()
       } catch (error) {
         errors.push(error)
+        failedHandles.add(sessionHandle)
       }
     }
+
+    // Release only handles whose close operation completed. Retain failed
+    // handles so a later cleanup attempt can retry without losing ownership.
+    this.sessionHandleOverride = failedHandles.has(overrideHandle) ? overrideHandle : null
+    this.ownedSessionHandle = failedHandles.has(ownedHandle) ? ownedHandle : null
 
     if (errors.length === 1) throw errors[0]
     if (errors.length > 1) {

@@ -784,11 +784,13 @@ test("reports a failed disk sync during close and still closes the file handle",
 })
 
 
-test("keeps close successful when the shutdown info logger throws", async () => {
+test("keeps close successful when the shutdown system logger throws", async () => {
   const context = await createTestJournal()
 
   try {
-    context.journal.logger.info = () => {
+    let systemLogCalls = 0
+    context.journal.logger.system = () => {
+      systemLogCalls += 1
       throw new Error("simulated logger failure")
     }
 
@@ -796,6 +798,7 @@ test("keeps close successful when the shutdown info logger throws", async () => 
 
     assert.equal(result.ok, true)
     assert.equal(result.closed, true)
+    assert.equal(systemLogCalls, 1, "The shutdown system logger must be invoked exactly once even when its failure is isolated.")
     assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
@@ -828,11 +831,13 @@ test("returns close errors even when the error logger throws", async () => {
 })
 
 
-test("keeps startup successful when the startup info logger throws", async () => {
+test("keeps startup successful when the startup system logger throws", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-logger-"))
   const eventBus = new EventBus()
+  let systemLogCalls = 0
   const logger = {
-    info: () => {
+    system: () => {
+      systemLogCalls += 1
       throw new Error("simulated startup logger failure")
     },
     error: () => {
@@ -845,6 +850,7 @@ test("keeps startup successful when the startup info logger throws", async () =>
     const result = await journal.start()
 
     assert.equal(result.ok, true)
+    assert.equal(systemLogCalls, 1, "The startup system logger must be invoked exactly once even when its failure is isolated.")
     assert.equal(journal.started, true)
     assert.ok(journal.store.sessionHandle)
 

@@ -97,7 +97,7 @@ flowchart TD
 
 ## Internal persistence boundary
 
-`Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
+`Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. It clears each owned handle or lock path only after the corresponding close/unlink operation succeeds; failed cleanup retains the resource reference so a subsequent adapter cleanup attempt can retry it. If multiple session handles are being closed, one failed close does not prevent the adapter from closing the other handles successfully. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
 
 This is one internal filesystem implementation, not a public storage plugin API or a promise of multiple backends. The internal store injection token exists only for deterministic Journal service tests and is not exported from the package entry point. A deprecated `@internal` `Journal.fileHandle` accessor remains as a compatibility bridge for existing failure-injection tests; it forwards overrides to the adapter, which retains ownership of both the replacement and original handles. EventBus remains independently injected and is not wrapped by Journal.
 
@@ -158,7 +158,7 @@ for (const record of result.records) {
 }
 ```
 
-Sessions are ordered by timestamp and then numeric collision suffix (the unsuffixed file first); records retain their line order within each session. Each record includes its source filename and 1-based line number.
+Sessions are ordered by timestamp and then exact numeric collision suffix (the unsuffixed file first). Suffixes larger than JavaScript's safe-integer range retain their numeric order; suffixes with equal numeric values, such as zero-padded aliases, use a deterministic lexical tie-break. Records retain their line order within each session. Each record includes its source filename and 1-based line number.
 
 The reader rejects invalid UTF-8 and duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current additive metadata format. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 

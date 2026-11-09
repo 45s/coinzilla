@@ -31,6 +31,17 @@ This section supersedes stale checkboxes below where they conflict with merged w
    - **Do:** document file format/versioning, size limits, locking, durability boundaries, error/result semantics, backup/restore and unit-versus-filesystem test commands.
    - **Verify:** docs match executable behavior; package tests and the 85% line / 80% branch gate pass on the exact PR head.
 
+### Journal maintenance follow-ups (2026-11-09)
+
+**Status:** [x] complete in this maintenance PR.
+
+- [x] **Correct logger failure coverage.** Startup and shutdown isolation tests throw from logger.system, the method the lifecycle invokes, and assert that the logger was called. The prior logger.info setup did not exercise this contract.
+- [x] **Retain failed session handles.** A handle whose close() rejects remains owned by the filesystem adapter; successfully closed handles are released independently. A subsequent adapter cleanup attempt retries only handles still owned.
+- [x] **Make session suffix ordering exact and deterministic.** BigInt comparison preserves numeric ordering for arbitrarily large accepted suffixes; a lexical tie-break makes zero-padded aliases deterministic. Historical session files are not renamed or rewritten.
+- [x] **Complete filesystem cleanup failure coverage.** Tests cover session-handle close failure, compatibility-handle close failure, lock-handle close failure, lock unlink failure, and rollback after partial lock acquisition, including ownership and lock-file preservation/removal assertions.
+
+**TDD evidence:** test-first commit `808b15900b12422eec1eeae50282e3f9fa529983` is based on the latest develop checkpoint; the implementation commit follows it. CI results are recorded on the PR after the final head completes verification. No public API, persisted JSONL format, recovery limits, lock semantics, or durability contract changed.
+
 ### CRITICAL consumer constraint
 
 5. **Preserve Harvester's mandatory durability gates without making optional evidence a trading dependency.**

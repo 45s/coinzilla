@@ -75,9 +75,15 @@ export async function readJournalRecords({
     validSessionEntries.sort((left, right) => {
       const timestampOrder = left.name.slice(0, 19).localeCompare(right.name.slice(0, 19))
       if (timestampOrder !== 0) return timestampOrder
+
       const leftSuffix = left.name.slice(19, -6)
       const rightSuffix = right.name.slice(19, -6)
-      return Number(leftSuffix.slice(1) || 0) - Number(rightSuffix.slice(1) || 0)
+      const leftIndex = BigInt(leftSuffix.slice(1) || "0")
+      const rightIndex = BigInt(rightSuffix.slice(1) || "0")
+
+      if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1
+      if (leftSuffix === rightSuffix) return 0
+      return leftSuffix < rightSuffix ? -1 : 1
     })
 
     const records = []
