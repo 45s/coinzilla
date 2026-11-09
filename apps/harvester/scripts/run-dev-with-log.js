@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto"
+import { once } from "node:events"
+import { finished } from "node:stream/promises"
 import { createWriteStream, mkdirSync } from "node:fs"
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
 import { forwardChildOutput } from "./forward-child-output.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 
-const logDirectory = resolve(process.cwd(), "logs")
+const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
+const logDirectory = resolve(packageDirectory, "logs")
 const logPath = resolve(logDirectory, "terminal.log")
 const sessionStartedAt = new Date().toISOString()
 const runtimeSessionId = randomUUID()
@@ -22,10 +26,38 @@ const logStreams = [
   createWriteStream(sessionPaths.terminal, { flags: "wx" }),
 ]
 const [, sessionLogStream] = logStreams
-const child = spawn(
+let child
+let childClosed = false
+let logStreamFailed = false
+const onLogStreamError = (error) => {
+  if (logStreamFailed) return
+  logStreamFailed = true
+  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
+  process.exitCode = 1
+  if (child && !childClosed && !child.killed) child.kill("SIGTERM")
+}
+logStreams.forEach((stream) => stream.on("error", onLogStreamError))
+
+const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((resolve, reject) => {
+  stream.once("open", resolve)
+  stream.once("error", reject)
+})))
+const streamOpenErrors = streamOpenResults
+  .filter((result) => result.status === "rejected")
+  .map((result) => result.reason)
+if (streamOpenErrors.length > 0) {
+  await Promise.allSettled(logStreams.map(async (stream) => {
+    if (!stream.destroyed) stream.destroy()
+    if (!stream.closed) await once(stream, "close")
+  }))
+  throw streamOpenErrors[0]
+}
+
+child = spawn(
   process.execPath,
   ["--env-file=.env.development", "src/index.js"],
   {
+    cwd: packageDirectory,
     // On POSIX, isolate the child in its own process group so Ctrl+C is
     // handled once by this runner and can be forwarded deliberately.
     // Windows console control events are delivered to both processes.
@@ -41,14 +73,23 @@ const child = spawn(
     },
   },
 )
+if (logStreamFailed) child.kill("SIGTERM")
 
-let childClosed = false
-let logStreamFailed = false
-
-const closeLogStreams = () => Promise.all(logStreams.map((stream) => new Promise((resolveClose) => {
-  if (stream.destroyed || stream.closed) { resolveClose(); return }
-  stream.end(resolveClose)
-})))
+const closeLogStreams = async () => {
+  const results = await Promise.allSettled(logStreams.map(async (stream) => {
+    if (stream.closed) return
+    if (stream.destroyed) {
+      await once(stream, "close")
+      return
+    }
+    const completion = finished(stream)
+    stream.end()
+    await completion
+  }))
+  if (results.some((result) => result.status === "rejected")) {
+    process.exitCode = 1
+  }
+}
 
 const handleSignal = (signal) => {
   // The child has its own process group on POSIX, so it needs an explicit
@@ -85,16 +126,6 @@ const outputForwarding = [
   forwardOutput(child.stdout, process.stdout),
   forwardOutput(child.stderr, process.stderr),
 ]
-
-logStreams.forEach((stream) => stream.on("error", (error) => {
-  if (logStreamFailed) {
-    return
-  }
-  logStreamFailed = true
-  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
-  process.exitCode = 1
-  if (!childClosed && !child.killed) child.kill("SIGTERM")
-}))
 
 child.on("error", (error) => {
   process.stderr.write(`Failed to start Harvester: ${error.message}\n`)

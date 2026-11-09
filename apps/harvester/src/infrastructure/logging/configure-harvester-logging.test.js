@@ -1,10 +1,11 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { PassThrough } from "node:stream"
 import { configureHarvesterLogging, createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
+import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
 function createLogger() {
   const transports = new Map()
@@ -309,3 +310,138 @@ test("appends cumulative logs while keeping separate timestamped session histori
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test("rejects an existing session file before registering transports or leaking streams", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-collision-"));
+  const logger = createLogger();
+  const sessionFile = path.join(directory, "harvester-2026-11-09_12-00-00-session-collision.log");
+  try {
+    await writeFile(sessionFile, "preserve existing session\n");
+    await assert.rejects(
+      configureHarvesterLogging({
+        logger,
+        directory,
+        processIdentity: {
+          startedAt: "2026-11-09T12:00:00.000Z",
+          runtimeSessionId: "session-collision",
+        },
+      }),
+      /EEXIST/,
+      "a session filename collision must fail startup instead of silently omitting or mixing a session",
+    );
+    assert.equal(logger.transports.size, 0, "failed logging setup must not leave partially registered transports");
+    assert.equal(
+      await readFile(sessionFile, "utf8"),
+      "preserve existing session\n",
+      "exclusive session creation must never truncate an existing session file",
+    );
+    assert.deepEqual(
+      (await readdir(directory)).sort(),
+      ["harvester-2026-11-09_12-00-00-session-collision.log", "harvester.log"],
+      "failed setup must close its cumulative stream while preserving the pre-existing session file",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("appends cumulative files while isolating and flushing consecutive process sessions", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"));
+  const sessionIdentities = [
+    { startedAt: "2026-11-09T12:00:00.000Z", runtimeSessionId: "first-run" },
+    { startedAt: "2026-11-09T12:01:00.000Z", runtimeSessionId: "second-run" },
+  ];
+  try {
+    for (const [index, processIdentity] of sessionIdentities.entries()) {
+      const logger = createLogger();
+      const logging = await configureHarvesterLogging({ logger, directory, processIdentity });
+      const debugEntry = {
+        timestamp: processIdentity.startedAt,
+        level: "debug",
+        method: "debug",
+        data: { message: "session diagnostic " + (index + 1) },
+      };
+      const traceEntry = { ...debugEntry, level: "trace", method: "trace" };
+      await logger.transports.get("harvester-debug-file").write(debugEntry);
+      await logger.transports.get("harvester-trace-file").write(traceEntry);
+      await logging.close();
+      assert.deepEqual(
+        [...logger.transports.keys()],
+        ["console"],
+        "graceful logging shutdown must unregister both structured file transports and retain the console transport",
+      );
+    }
+
+    const cumulativeDebugEntries = (await readFile(path.join(directory, "harvester.log"), "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    const cumulativeTraceEntries = (await readFile(path.join(directory, "harvester-trace.log"), "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(
+      cumulativeDebugEntries.map(({ data }) => data.message),
+      ["session diagnostic 1", "session diagnostic 2"],
+      "cumulative DEBUG history must append in order across process restarts",
+    );
+    assert.deepEqual(
+      cumulativeTraceEntries.map(({ data }) => data.message),
+      ["session diagnostic 1", "session diagnostic 2"],
+      "cumulative TRACE history must append in order across process restarts",
+    );
+
+    for (const processIdentity of sessionIdentities) {
+      const paths = createHarvesterLogSessionPaths({
+        directory,
+        startedAt: processIdentity.startedAt,
+        runtimeSessionId: processIdentity.runtimeSessionId,
+      });
+      const debugEntries = (await readFile(paths.debug, "utf8")).trim().split("\n");
+      const traceEntries = (await readFile(paths.trace, "utf8")).trim().split("\n");
+      assert.equal(debugEntries.length, 1, "each DEBUG session file must contain only its own process entries");
+      assert.equal(traceEntries.length, 1, "each TRACE session file must contain only its own process entries");
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("closes the already-open DEBUG streams when TRACE session creation fails", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-partial-"));
+  const logger = createLogger();
+  const processIdentity = {
+    startedAt: "2026-11-09T12:05:00.000Z",
+    runtimeSessionId: "trace-collision",
+  };
+  const traceSessionFile = path.join(directory, "harvester-trace-2026-11-09_12-05-00-trace-collision.log");
+  try {
+    await writeFile(traceSessionFile, "preserve trace history\n");
+    await assert.rejects(
+      configureHarvesterLogging({ logger, directory, processIdentity }),
+      /EEXIST/,
+      "TRACE session collision must abort setup after cleaning up the already-open DEBUG transport",
+    );
+    assert.equal(logger.transports.size, 0, "partial startup must not leave any file or console transport registered");
+    assert.equal(
+      await readFile(traceSessionFile, "utf8"),
+      "preserve trace history\n",
+      "failed TRACE setup must never overwrite the existing session file",
+    );
+    assert.equal(
+      await readFile(path.join(directory, "harvester-2026-11-09_12-05-00-trace-collision.log"), "utf8"),
+      "",
+      "the partial DEBUG session file must be closed and remain available as an empty failed-start record",
+    );
+    assert.deepEqual(
+      (await readdir(directory)).sort(),
+      [
+        "harvester-2026-11-09_12-05-00-trace-collision.log",
+        "harvester-trace-2026-11-09_12-05-00-trace-collision.log",
+        "harvester-trace.log",
+        "harvester.log",
+      ],
+      "failed partial setup must close every stream without deleting any created or pre-existing log file",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

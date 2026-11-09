@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
+import { once } from "node:events"
+import { finished } from "node:stream/promises"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
@@ -102,13 +104,29 @@ export async function configureHarvesterLogging({
     runtimeSessionId: processIdentity.runtimeSessionId,
   })
 
-  const createFileTransport = ({ name, level, filename, sessionFilename }) => {
+  const createFileTransport = async ({ name, level, filename, sessionFilename }) => {
     const streams = [
       createWriteStream(path.join(directory, filename), { flags: "a", encoding: "utf8" }),
       createWriteStream(sessionFilename, { flags: "wx", encoding: "utf8" }),
     ]
     const streamErrors = new Map()
     streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
+
+    const openResults = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
+      stream.once("open", resolve)
+      stream.once("error", reject)
+    })))
+    const openErrors = openResults
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason)
+    if (openErrors.length > 0) {
+      await Promise.allSettled(streams.map(async (stream) => {
+        if (!stream.destroyed) stream.destroy()
+        if (!stream.closed) await once(stream, "close")
+      }))
+      throw openErrors[0]
+    }
+
     return {
       name,
       level,
@@ -131,33 +149,45 @@ export async function configureHarvesterLogging({
           })
         })))
       },
-      close() {
-        return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
-          stream.end((error) => {
-            const currentError = error ?? streamErrors.get(index)
-            if (currentError) { reject(currentError); return }
-            resolve()
-          })
-        })))
+      async close() {
+        const results = await Promise.allSettled(streams.map(async (stream) => {
+          if (stream.closed) return
+          if (stream.destroyed) {
+            await once(stream, "close")
+            return
+          }
+          const completion = finished(stream)
+          stream.end()
+          await completion
+        }))
+        const errors = results
+          .filter((result) => result.status === "rejected")
+          .map((result) => result.reason)
+        if (errors.length > 0) {
+          throw new AggregateError(errors, "Failed to flush and close Harvester log streams")
+        }
       },
     }
   }
 
   const consoleTransport = createHarvesterConsoleTransport({ output })
-  const debugTransport = createFileTransport({
-    name: DEBUG_TRANSPORT_NAME,
-    level: "debug",
-    filename: "harvester.log",
-    sessionFilename: sessionPaths.debug,
-  })
-  const traceTransport = createFileTransport({
-    name: TRACE_TRANSPORT_NAME,
-    level: "trace",
-    filename: "harvester-trace.log",
-    sessionFilename: sessionPaths.trace,
-  })
+  let debugTransport
+  let traceTransport
 
   try {
+    debugTransport = await createFileTransport({
+      name: DEBUG_TRANSPORT_NAME,
+      level: "debug",
+      filename: "harvester.log",
+      sessionFilename: sessionPaths.debug,
+    })
+    traceTransport = await createFileTransport({
+      name: TRACE_TRANSPORT_NAME,
+      level: "trace",
+      filename: "harvester-trace.log",
+      sessionFilename: sessionPaths.trace,
+    })
+
     await logger.removeTransport(CONSOLE_TRANSPORT_NAME)
     await logger.removeTransport(DEBUG_TRANSPORT_NAME)
     await logger.removeTransport(TRACE_TRANSPORT_NAME)
@@ -169,8 +199,8 @@ export async function configureHarvesterLogging({
     const debugRemoved = await logger.removeTransport(DEBUG_TRANSPORT_NAME).catch(() => false)
     const traceRemoved = await logger.removeTransport(TRACE_TRANSPORT_NAME).catch(() => false)
     await Promise.allSettled([
-      ...(debugRemoved ? [] : [debugTransport.close()]),
-      ...(traceRemoved ? [] : [traceTransport.close()]),
+      ...(!debugRemoved && debugTransport ? [debugTransport.close()] : []),
+      ...(!traceRemoved && traceTransport ? [traceTransport.close()] : []),
     ])
     throw error
   }

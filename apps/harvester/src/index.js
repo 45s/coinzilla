@@ -419,7 +419,13 @@ if (isDirectExecution) {
   const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
   if (processStartedContext.ok) defaultLogger.setContext(processStartedContext.data)
   const logging = await configureHarvesterLogging({ logger: defaultLogger, processIdentity: PROCESS_IDENTITY })
-  const commandInterface = createLogCommandInterface({ logger: defaultLogger })
+  let commandInterface
+  try {
+    commandInterface = createLogCommandInterface({ logger: defaultLogger })
+  } catch (error) {
+    await logging.close()
+    throw error
+  }
 
   await main({
     processIdentity: PROCESS_IDENTITY,
