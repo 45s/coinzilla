@@ -1994,3 +1994,8 @@ The domain already exposes `value` projections for Portfolio, Position, Recovery
 ### PREFLIGHT unowned-order readiness boundary — #654
 
 The account-wide open-order audit may record `BLOCKED / UNOWNED_OPEN_ORDERS`, but current `subscribeToUserData()` does not use that audit label as a trading-readiness gate. After draining queued events and verifying other user-data/accounting flags, it sets `state.ready = true`. The existing startup test allows runtime/market subscriptions with an unowned order and emits no price tick; it therefore does not prove that later strategy activity cannot overlap a prior-process order. A previous Harvester-owned order is indistinguishable from an external order after the registry resets. This is an explicit current policy and a key #654 reconciliation requirement, not a reproduced duplicate-order incident.
+
+
+### F-029 — safety-state reset across process restart
+
+Current startup initializes `userDataState.accountingFailed=false`, trading-enabled `requiresReconciliation=false`, and empty engine pause/recovery-intent sets. The engine's `pause()` mutates in-memory Sets and publishes `STRATEGY_PAUSED` without a durable flush. Startup can later set user-data readiness true after PREFLIGHT and queued-event checks. Thus prior safety pauses/accounting-failure latches are not restored; actual unsafe post-restart order placement remains strongly indicated, not reproduced. Persist and restore pause scope/reason/generation before engine activation, and keep `canTrade` false until authoritative reconciliation or explicit operator acknowledgement. See F-029 in `AUDIT.md`, F-011/#654 and F-028.
