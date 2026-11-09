@@ -8,7 +8,10 @@ import { loadTradingConfig } from '../../../src/infrastructure/config/load-tradi
 test('loads and validates the default trading config', async () => {
   const config = await loadTradingConfig();
 
-  assert.equal(config.strategies.CG_coinGrabber.pairs.ZROUSDT.enabled, true);
+  const pairs = config.strategies.CG_coinGrabber.pairs;
+
+  assert.equal(pairs.ZROFDUSD.enabled, true, 'the default config enables ZROFDUSD');
+  assert.equal(pairs.ZROUSDT.enabled, false, 'the default config keeps ZROUSDT disabled');
 });
 
 test('loads a config from a supplied path', async () => {
