@@ -40,7 +40,7 @@ export async function resolveHarvesterOptions({
   } = runtime
 
   if (tradingRequested && brokerName !== "binance") {
-    throw new Error("TESTNET trading requires runtime profile broker=binance")
+    throw new Error("Order execution requires runtime profile broker=binance")
   }
   if (tradingRequested && environment === "development" && tradingMode !== "testnet") {
     throw new Error("Development order execution requires runtime profile trading.mode=testnet")
@@ -67,7 +67,7 @@ export async function resolveHarvesterOptions({
     broker: brokerName ?? "none",
     tradingMode,
     enabledSymbols,
-    strategyMode: tradingRequested ? "conservative-testnet" : "read-only",
+    strategyMode: tradingEnabled ? `conservative-${tradingMode}` : "read-only",
   }
   if (typeof logger?.system === "function") logger.system(log)
   else logger?.info?.(log)
