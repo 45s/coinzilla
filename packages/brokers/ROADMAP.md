@@ -18,6 +18,7 @@ This section is authoritative for next work and orders the broker package by ris
 - `NODE_ENV` must never select or influence exchange endpoints.
 - Harvester must pass its resolved `TRADING_MODE` into the broker adapter. All broker fixtures must state `tradingMode: "testnet"` explicitly unless a test specifically covers LIVE selection.
 - TESTNET integration suites must assert `TRADING_MODE=testnet` and the actual TESTNET endpoint pair before connecting.
+- [x] **Explicit Binance trading-mode selection — PR #841.** `TRADING_MODE` is the sole endpoint selector; required `tradingMode` configuration is validated fail-closed, Harvester passes the resolved value, and broker fixtures state TESTNET/LIVE explicitly. Offline endpoint, invalid-mode, override, and `NODE_ENV`-independence tests pass. Hosted TESTNET acceptance remains a separate, externally blocked verification.
 
 ### CRITICAL — protocol and recovery safety
 
