@@ -9,11 +9,10 @@ const testEventPublisher = Object.freeze({
   flush: async () => ({ ok: true, durable: true }),
 })
 const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? typeof input.eventPublisher.flush === "function"
-      ? input.eventPublisher
-      : { ...input.eventPublisher, flush: testEventPublisher.flush }
-    : testEventPublisher
+  const eventPublisher = input.eventPublisher ?? testEventPublisher
+  if (eventPublisher !== testEventPublisher && typeof eventPublisher.flush !== "function") {
+    eventPublisher.flush = testEventPublisher.flush
+  }
   return startHarvester({
     ...input,
     env: { ...binanceEnv, ...input.env },
@@ -300,7 +299,7 @@ test("subscribes only enabled pairs for Binance trading", async () => {
   assert.deepEqual(calls, [
     "connect", "filters:BTCUSDT", "filters:ETHUSDT", "subscribe:user-data", "account:snapshot",
     "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT",
-    "unsubscribe:user-data", "disconnect",
+    "unsubscribe:user-data", "account:snapshot", "disconnect",
   ])
 })
 
@@ -433,7 +432,9 @@ test("disconnects when a market price subscription fails", async () => {
     "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
+    "subscribe:book:BTCUSDT",
     "subscribe:BTCUSDT",
+    "unsubscribe:book:BTCUSDT",
     "unsubscribe:user-data",
     "disconnect",
   ])
@@ -1083,13 +1084,13 @@ test("does not request another account snapshot after a TRADE when later snapsho
   await new Promise((resolve) => setImmediate(resolve))
 
   assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }), undefined)
   assert.equal(result.getAccountSnapshot().sourceTime, 1)
   assert.equal(calls, 1)
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
 
 test("fails startup when the exchange snapshot omits a configured market asset", async () => {
@@ -2167,6 +2168,7 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
   }
   const broker = createBinanceBrokerAdapter({
+    tradingMode: "testnet",
     config: { apiKey: "test-key", apiSecret: "test-secret" },
     brokerFactory: () => client,
   })
