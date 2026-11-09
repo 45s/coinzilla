@@ -350,6 +350,16 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 
 This narrows the gap: it is not accurate to say that the domain has no serializable state shape. The missing pieces are validated hydration/mapping, complete durable projection semantics, and composition-root integration before engine activation.
 
+
+
+**PREFLIGHT BLOCKED versus trading readiness — important test boundary**
+
+`subscribeToUserData()` publishes the account-wide open-order audit, drains queued user-data events, and then sets `state.ready = true` when user-data/accounting flags are otherwise safe. It does not reject startup based on `account.open_orders_captured.readiness === "BLOCKED"`. The existing test “journals pre-existing account-wide orders and allows trading startup without adopting or changing them” verifies market subscriptions proceed and the runtime starts with the external order unowned.
+
+The test's fake broker emits no market-price tick, so its `placeCalls === 0` assertion proves only that observing an external order does not itself submit an order. It does **not** prove that later market data cannot trigger a new strategy order while the prior order remains unowned. A live execution event for an unowned order can still trip accounting safety; an order that filled entirely while Harvester was offline produces no new user-data event on the restarted stream and is absent from the current open-order snapshot.
+
+This is an explicit current startup policy for external orders, not a reproduced duplicate-order incident. In a restart scenario, a formerly Harvester-owned order is indistinguishable from an external order because the registry is empty. Treat this as a high-priority #654 reconciliation requirement.
+
 **Operational consequence and confidence**
 
 - **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
