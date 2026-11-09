@@ -346,12 +346,9 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
   const runtime = await startHarvester({
     loadConfig: async () => tradingConfig,
     env: {
-      HARVESTER_BROKER: "binance",
       BINANCE_API_KEY: "key",
       BINANCE_API_SECRET_KEY: "secret",
-      NODE_ENV: "test",
-      HARVESTER_TRADING_MODE: "testnet",
-      HARVESTER_ENABLE_TRADING: "true",
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
       createBinanceBrokerAdapter({

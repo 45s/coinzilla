@@ -31,6 +31,7 @@ function logSystem(logger, data) {
 
 export async function startHarvester({
   configSource,
+  tradingConfig: suppliedTradingConfig,
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
@@ -54,9 +55,11 @@ export async function startHarvester({
     settings,
     pairs,
     enabledSymbols,
+    environment,
     brokerName,
+    tradingMode,
     tradingEnabled,
-  } = await resolveHarvesterOptions({ configSource, loadConfig, env, eventPublisher, logger })
+  } = await resolveHarvesterOptions({ configSource, tradingConfig: suppliedTradingConfig, loadConfig, env, eventPublisher, logger })
 
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
   let recoveredState = Object.freeze({
@@ -95,6 +98,9 @@ export async function startHarvester({
       tradingConfig,
       eventPublisher,
       broker: undefined,
+      brokerName: undefined,
+      environment,
+      tradingMode,
       tradingEnabled: false,
       strategyMode: "read-only",
       connected: false,
@@ -109,10 +115,6 @@ export async function startHarvester({
       stop: async () => {},
     })
   }
-  if (tradingEnabled && (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production")) {
-    throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
-  }
-
   const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, eventPublisher, logger })
 
   const subscriptions = []
@@ -344,6 +346,9 @@ export async function startHarvester({
   return Object.freeze({
     tradingConfig,
     eventPublisher,
+    environment,
+    brokerName,
+    tradingMode,
     tradingEnabled,
     strategyMode: tradingEnabled ? "conservative" : "read-only",
     get userDataReady() { return userDataState.ready },

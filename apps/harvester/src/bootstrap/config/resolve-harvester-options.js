@@ -1,19 +1,21 @@
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapConfigValidatedData } from "../../application/events/lifecycle-event-dtos.js"
+import { resolveHarvesterRuntimeConfig } from "../../domain/trading-config.js"
 
 /**
- * Resolve the Harvester's enabled strategy configuration and safety-gated mode.
+ * Resolve the enabled strategy and validated environment-specific runtime profile.
  * Performs no broker I/O; the returned object is the startup configuration contract.
  */
 export async function resolveHarvesterOptions({
   configSource,
+  tradingConfig: suppliedTradingConfig,
   loadConfig,
-  env,
+  env = process.env,
   eventPublisher,
   logger,
 } = {}) {
-  const tradingConfig = await loadConfig(configSource)
+  const tradingConfig = suppliedTradingConfig ?? await loadConfig(configSource)
   const strategyConfig = tradingConfig.strategies?.CG_coinGrabber
   if (strategyConfig?.enabled !== true) {
     throw new Error("CG_coinGrabber strategy must remain enabled in trading config")
@@ -28,20 +30,26 @@ export async function resolveHarvesterOptions({
   const enabledSymbols = Object.entries(pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
-  const brokerName = env.HARVESTER_BROKER
-  if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
-    throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
+  const runtime = resolveHarvesterRuntimeConfig({ config: tradingConfig, environment: env.NODE_ENV })
+  const {
+    environment,
+    brokerName,
+    tradingMode,
+    tradingRequested,
+    tradingEnabled,
+  } = runtime
+
+  if (tradingRequested && brokerName !== "binance") {
+    throw new Error("TESTNET trading requires runtime profile broker=binance")
   }
-  const tradingRequested = env.HARVESTER_ENABLE_TRADING === "true"
+  if (tradingRequested && tradingMode !== "testnet") {
+    throw new Error("Order execution requires runtime profile trading.mode=testnet")
+  }
+  if (tradingRequested && environment === "production") {
+    throw new Error("Production runtime must remain read-only")
+  }
   if (tradingRequested && enabledSymbols.length === 0) {
     throw new Error("Conservative TESTNET trading requires at least one enabled pair")
-  }
-  if (tradingRequested && (brokerName === undefined || brokerName === "")) {
-    throw new Error("HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true")
-  }
-  const tradingEnabled = brokerName === "binance" && tradingRequested
-  if (tradingEnabled && (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production")) {
-    throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
   publishLifecycleEvent({
@@ -53,26 +61,25 @@ export async function resolveHarvesterOptions({
       tradingEnabled,
     }),
   })
-  if (typeof logger?.system === "function") {
-    logger.system({
-      message: "Trading configuration validated",
-      enabledSymbols,
-      strategyMode: tradingRequested ? "conservative-testnet" : "read-only",
-    })
-  } else {
-    logger?.info?.({
-      message: "Trading configuration validated",
-      enabledSymbols,
-      strategyMode: tradingRequested ? "conservative-testnet" : "read-only",
-    })
+  const log = {
+    message: "Trading configuration validated",
+    environment,
+    broker: brokerName ?? "none",
+    tradingMode,
+    enabledSymbols,
+    strategyMode: tradingRequested ? "conservative-testnet" : "read-only",
   }
+  if (typeof logger?.system === "function") logger.system(log)
+  else logger?.info?.(log)
 
   return Object.freeze({
     tradingConfig,
     settings,
     pairs,
     enabledSymbols: Object.freeze(enabledSymbols),
+    environment,
     brokerName,
+    tradingMode,
     tradingRequested,
     tradingEnabled,
   })

@@ -12,6 +12,8 @@ import { publishLifecycleEvent } from "./application/events/publish-lifecycle-ev
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
+import { loadTradingConfig } from "./infrastructure/config/load-trading-config.js"
+import { resolveHarvesterRuntimeConfig } from "./domain/trading-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
@@ -27,8 +29,8 @@ function logSystem(logger, message) {
   logger?.info?.(message)
 }
 
-function createDefaultJournalService({ eventBus, logger, enabled, directory, processIdentity }) {
-  return prepareOptionalJournal({ eventBus, logger, enabled, directory, processIdentity })
+function createDefaultJournalService({ eventBus, logger, processIdentity }) {
+  return prepareOptionalJournal({ eventBus, logger, processIdentity })
 }
 
 async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger }) {
@@ -127,6 +129,8 @@ export async function main({
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
   acquireProcessLock = acquireHarvesterProcessLocks,
+  loadConfig = loadTradingConfig,
+  configSource,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
   closeLogger = async () => {},
@@ -155,14 +159,16 @@ export async function main({
   let runtimeStartAttempted = false
   try {
     eventBus = createEventBus({ logger })
-    if (env.HARVESTER_ENABLE_TRADING === "true") {
-      if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
-        throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
-      }
+    const tradingConfig = await loadConfig(configSource)
+    const runtimeConfig = resolveHarvesterRuntimeConfig({
+      config: tradingConfig,
+      environment: env.NODE_ENV,
+    })
+    if (runtimeConfig.tradingEnabled) {
       const lockResult = await acquireProcessLock({
-        journalDirectory: resolveJournalDirectory({ directory: env.HARVESTER_JOURNAL_DIRECTORY }),
+        journalDirectory: resolveJournalDirectory({}),
         globalDirectory: resolveHostProcessLockDirectory(),
-        broker: env.HARVESTER_BROKER || "binance",
+        broker: runtimeConfig.brokerName,
         logger,
       })
       if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
@@ -174,8 +180,6 @@ export async function main({
     journalService = createJournalService({
       eventBus,
       logger,
-      enabled: env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() !== "false",
-      directory: env.HARVESTER_JOURNAL_DIRECTORY,
       processIdentity,
     })
     eventPublisher = makeEventPublisher({
@@ -236,10 +240,7 @@ export async function main({
       logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
     }
 
-    if (env.HARVESTER_ENABLE_TRADING === "true") {
-      if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
-        throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
-      }
+    if (runtimeConfig.tradingEnabled) {
       if (!journalService || typeof journalService.flush !== "function" || !journalService.ready) {
         throw new Error("Conservative TESTNET trading requires a ready Journal with durable flush() support")
       }
@@ -252,7 +253,7 @@ export async function main({
     }
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher })
+    const runtime = await start({ eventPublisher, tradingConfig, env })
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
@@ -262,7 +263,7 @@ export async function main({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.STARTED,
       dataResult: mapHarvesterStartedData({
-        broker: runtime.connected ? (env.HARVESTER_BROKER || "unknown") : "none",
+        broker: runtime.connected ? (runtime.brokerName ?? runtimeConfig.brokerName ?? "binance") : "none",
         strategyMode: runtime.strategyMode ?? "read-only",
         enabledMarkets,
         tradingEnabled: runtime.tradingEnabled === true,

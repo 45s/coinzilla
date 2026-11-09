@@ -19,6 +19,14 @@ const startHarvesterForTest = (input = {}) => {
 
 
 const config = {
+  runtime: {
+    profiles: {
+      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
+      development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
+      test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
+      production: { broker: "binance", trading: { enabled: false, mode: "live" } },
+    },
+  },
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -30,7 +38,7 @@ const config = {
   },
 }
 const env = {
-  HARVESTER_BROKER: "binance",
+  NODE_ENV: "test",
   BINANCE_API_KEY: "fake-key",
   BINANCE_API_SECRET_KEY: "fake-secret",
 }
