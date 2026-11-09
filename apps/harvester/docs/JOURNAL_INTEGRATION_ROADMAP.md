@@ -8,6 +8,8 @@ owner: harvester
 
 > **Current-state authority:** this file tracks the staged Journal integration and its remaining Step 8 closeout. Current runtime behavior, event payloads and operational requirements are defined in [Journal Operations](./JOURNAL_OPERATIONS.md), [Trading First](./TRADING_FIRST.md), and the current [Harvester roadmap](../ROADMAP.md). Milestone notes below are historical delivery records where a later PR changed the original scope.
 
+> **Current runtime configuration — 2026-11-09:** The application no longer reads `HARVESTER_JOURNAL_ENABLED` or `HARVESTER_JOURNAL_DIRECTORY`. The default application composition always enables Journal and writes to `apps/harvester/logs/`. The PR #473 entry below records the historical environment wiring at that time; it is not current deployment guidance. See [Journal Operations](./JOURNAL_OPERATIONS.md#configuration) for the current contract.
+
 ## Purpose and priority
 
 This roadmap records the Harvester integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages. The current evidence contract and coverage matrix live in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md).
