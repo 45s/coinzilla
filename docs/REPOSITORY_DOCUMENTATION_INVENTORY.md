@@ -28,7 +28,6 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 | `apps/harvester/docs/audits/README_HISTORY.md` | Preserved historical README material and its navigation. |
 | `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved Harvester roadmap history and evidence. |
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. |
-| `apps/harvester/docs/error-vocabulary.md` | Harvester operator-facing diagnostic identifier reference, added in merged PR #866; maps stable diagnostic IDs to causes and safe recovery procedures. |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. |
 | `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures; surfaces the current ZROFDUSD-only config versus historical runbook scope mismatch, CLOSED / PAUSED status, and legacy ZROUSDT market-sell/account-wide-cancel write boundaries and the interactive menu wrapper, its audit links, and the no-confirmation account-wide cancel boundary. |
@@ -49,19 +48,8 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | --- | --- | ---: |
 | `ec13d3b30b901b809cb20839b02da2f25b161c97` | `docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md` | 111 |
 | `dd18f2280fdc885211e678bf8218f59c3362a2ea` | `docs/MARKDOWN_STYLE.md` (merged in [PR #853](https://github.com/45s/coinzilla/pull/853)) | 112 |
-| `2bc9f6f2593e12626ff8c01358a2ea792b63b631` | `apps/harvester/docs/error-vocabulary.md` (added in [PR #866](https://github.com/45s/coinzilla/pull/866)); current develop checkpoint | 113 |
-| `96065e86851aac1c99314d0aa7fb0b2f2a5ca19c` | Current develop checkpoint after [PR #879](https://github.com/45s/coinzilla/pull/879); 113 tracked Markdown/MDX files | 113 |
 
-The current checkpoint is therefore **113 tracked Markdown/MDX files**: 97 frozen baseline files plus 16 additions, zero removals. PR #866 added the Harvester Error Vocabulary (`apps/harvester/docs/error-vocabulary.md`) after the 112-file checkpoint; the original 97-file table remains frozen and the new file is recorded in the additions table below. These dated/path-specific checkpoints are additive; do not reinterpret the earlier 110- or 112-file counts as errors.
-
-## Source-verified content reviews (post-baseline)
-
-The original 97-file inventory table above is a frozen baseline: its recorded byte sizes and first-pass dispositions are not current file metadata. Source-review findings and later document changes are recorded separately here rather than rewriting baseline rows.
-
-| Document(s) | Source-verified review | Delivery |
-| --- | --- | --- |
-| `packages/notifiers/AGENTS.md`; `packages/notifiers/README.md` | Verified the formatter's caller-owned free-form `message`/`reason` boundary, EventBus error-reporter fallback, delivery-queue recovery and smoke-test confirmation output against source and tests. | [PR #873](https://github.com/45s/coinzilla/pull/873) |
-| `packages/utils/README.md` | Verified the exported per-key serialized queue and non-null/non-array object assertion against implementation, tests, public exports and consumers. | [PR #876](https://github.com/45s/coinzilla/pull/876) |
+The current checkpoint is therefore **112 tracked Markdown/MDX files**: 97 frozen baseline files plus 15 additions, zero removals. These dated/path-specific checkpoints are additive; do not reinterpret the earlier 110-file count as an error.
 
 ## Disposition vocabulary
 
@@ -122,8 +110,8 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 | `packages/market-simulator/AGENTS.md` | 1953 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/market-simulator/README.md` | 13568 | Package entry point | **KEEP** | Clarifies Node 22.23.4 package floor versus Node 24+ workspace/CI; now also records source-verified limits: wall-clock lifecycle timestamps, unchecked final snapshot results, and unsubscribe failure potentially skipping disconnect; qualifies the offline deterministic wording so it does not imply full report reproducibility. |
 | `packages/market-simulator/ROADMAP.md` | 8682 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
-| `packages/notifiers/AGENTS.md` | 4694 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
-| `packages/notifiers/README.md` | 12254 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
+| `packages/notifiers/AGENTS.md` | 4972 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. PR #873 source-verified and clarified the formatter's caller-owned free-form text sanitization boundary and delivery-error reporting fallback. |
+| `packages/notifiers/README.md` | 12571 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide; PR #873 source-verified the free-form message/reason security boundary, EventBus error-reporter fallback, and smoke-test output contract. |
 | `packages/notifiers/ROADMAP.md` | 15672 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/utils/AGENTS.md` | 2271 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/utils/README.md` | 19711 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
