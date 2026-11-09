@@ -113,10 +113,6 @@ export async function configureHarvesterLogging({
     streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
 
     const openResults = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
-      if (stream.fd !== null) {
-        resolve()
-        return
-      }
       stream.once("open", resolve)
       stream.once("error", reject)
     })))
