@@ -99,7 +99,7 @@ The exact final PR head passed:
 - JavaScript syntax ([run](https://github.com/45s/coinzilla/actions/runs/41289828493)).
 - Production dependency audit and actionlint ([run](https://github.com/45s/coinzilla/actions/runs/41289828470)).
 
-**Historical PR #383 closeout note (not the current remaining-work summary):** no runtime dependencies were added and no consumer package source files were changed in that PR. At that time, remaining work was described as reviewing duplicate generic helpers when a concrete use case justified consolidation. That snapshot predates the build-provenance/Logger rollout (PRs #767/#770) and the current repository-wide reuse audit; use the priority plan and Repository-wide reuse audit below for current remaining work. No speculative API changes are planned.
+**Historical PR #383 closeout note (not the current remaining-work summary):** no runtime dependencies were added and no consumer package source files were changed in that PR. At that time, remaining work was described as reviewing duplicate generic helpers when a concrete use case justified consolidation. That snapshot is not the current remaining-work summary; use the priority plan and Repository-wide reuse audit below for current remaining work. No speculative API changes are planned.
 
 ## Repository-wide reuse audit
 
