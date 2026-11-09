@@ -8,11 +8,11 @@ const APPLICATION_DIRECTORY = path.resolve(
   "../../../",
 )
 
-function reportConstructionFailure({ logger, error }) {
+function reportJournalFailure({ logger, error, errors }) {
   try {
     logger?.error?.({
-      message: "Optional Harvester Journal setup failed",
-      errorName: error?.name ?? "Error",
+      message: "Optional Harvester Journal startup failed",
+      errors: errors ?? [error],
     })
   } catch {
     // Optional observability and its diagnostics must not affect startup.
@@ -42,7 +42,7 @@ export function prepareOptionalJournal({
   let state = enabled ? "starting" : "disabled"
   let journal
 
-  const reportFailure = ({ error }) => reportConstructionFailure({ logger, error })
+  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger, error, errors })
 
   if (!enabled) {
     const ready = Promise.resolve(toResult({ disabled: true }))
@@ -91,9 +91,11 @@ export function prepareOptionalJournal({
           return result
         }
         state = "failed"
-        return result?.ok === false
-          ? result
-          : toResult({ error: new TypeError("Journal start returned an invalid result") })
+        const errors = Array.isArray(result?.errors) && result.errors.length > 0
+          ? result.errors
+          : [new TypeError("Journal start returned an invalid result")]
+        reportFailure({ errors })
+        return result?.ok === false ? result : toResult({ errors })
       })
       .catch((error) => {
         state = "failed"
@@ -138,7 +140,15 @@ export function prepareOptionalJournal({
 
   const close = async () => {
     const startResult = await ready
-    if (!startResult.ok || !journal) return startResult
+    if (!journal) {
+      state = "closed"
+      return toResult({
+        closed: true,
+        durable: true,
+        skipped: true,
+        startupFailed: startResult?.ok !== true,
+      })
+    }
 
     try {
       const result = await journal.close()

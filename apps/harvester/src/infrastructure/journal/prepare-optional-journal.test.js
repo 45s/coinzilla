@@ -169,6 +169,56 @@ test("contains an asynchronous Journal initialization rejection", async () => {
   assert.equal(service.status.state, "failed")
 })
 
+test("closes a Journal whose startup failed after its startup rollback completed", async () => {
+  const startupError = new Error("journal directory is already locked")
+  let closeCalls = 0
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: false, errors: [startupError] }),
+      close: async () => {
+        closeCalls += 1
+        return { ok: true, closed: true, durable: true }
+      },
+    }),
+  })
+
+  const ready = await service.ready
+  assert.equal(ready.ok, false, "The original Journal startup failure must remain visible to readiness consumers.")
+  assert.equal(ready.errors[0], startupError, "Readiness must preserve the original startup error identity.")
+
+  const closed = await service.close()
+  assert.equal(closeCalls, 1, "Shutdown must invoke Journal.close() so its lifecycle can confirm startup rollback.")
+  assert.equal(closed.ok, true, "A completed cleanup after failed startup must not be reported as a second shutdown failure.")
+  assert.equal(closed.closed, true, "The wrapper must expose that the failed-start Journal lifecycle was closed.")
+  assert.equal(service.status.state, "closed", "The wrapper health state must reflect completed cleanup rather than remain failed.")
+})
+
+test("logs the original Journal startup error with structured diagnostics", async () => {
+  const startupError = new Error("Journal directory is already locked")
+  startupError.code = "JOURNAL_DIRECTORY_LOCKED"
+  const loggedErrors = []
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger: { error: (entry) => loggedErrors.push(entry) },
+    journalFactory: () => ({
+      start: async () => ({ ok: false, errors: [startupError] }),
+      close: async () => ({ ok: true, closed: true, durable: true }),
+    }),
+  })
+
+  const ready = await service.ready
+  assert.equal(ready.ok, false, "A failed Journal start must remain a failed readiness result.")
+  assert.equal(loggedErrors.length, 1, "Harvester must emit one structured diagnostic for the failed Journal start.")
+  assert.equal(loggedErrors[0].message, "Optional Harvester Journal startup failed", "The diagnostic must identify the failed Journal startup operation.")
+  assert.equal(loggedErrors[0].errors[0], startupError, "The diagnostic must preserve the original filesystem error and its code.")
+  assert.equal(loggedErrors[0].errors[0].code, "JOURNAL_DIRECTORY_LOCKED", "The diagnostic must retain the stable Journal lock error code.")
+  await service.close()
+})
+
 test("contains a Journal construction exception even when logger.error throws", async () => {
   const error = new Error("construction failed")
   const service = prepareOptionalJournal({
