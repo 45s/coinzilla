@@ -10,7 +10,7 @@ const testEventPublisher = Object.freeze({
 })
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher
-    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+    ? typeof input.eventPublisher.flush !== "function"
       ? { ...input.eventPublisher, flush: testEventPublisher.flush }
       : input.eventPublisher
     : testEventPublisher
@@ -43,6 +43,14 @@ async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_
 }
 
 const tradingConfig = {
+  runtime: {
+    profiles: {
+      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
+      development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
+      test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
+      production: { broker: "binance", trading: { enabled: false, mode: "live" } },
+    },
+  },
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -225,7 +233,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
   }
 }
 const binanceEnv = {
-  HARVESTER_BROKER: "binance",
+  NODE_ENV: "test",
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
 }
@@ -376,8 +384,6 @@ test("subscribes every enabled market before waiting for the first market's REST
     loadConfig: async () => config,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -527,8 +533,8 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
 
 test("rejects an unsupported broker selection", async () => {
   await assert.rejects(
-    startHarvesterForTest({ loadConfig: async () => tradingConfig, env: { HARVESTER_BROKER: "unknown" } }),
-    /Unsupported HARVESTER_BROKER value: unknown/,
+    startHarvesterForTest({ loadConfig: async () => tradingConfig, env: { NODE_ENV: "test" } }),
+    /Unsupported broker in runtime profile: unknown/,
   )
 })
 
@@ -597,8 +603,6 @@ test("does not clear a genuine startup stream-recovery gate with only the initia
       loadConfig: async () => tradingConfig,
       env: {
         ...binanceEnv,
-        HARVESTER_ENABLE_TRADING: "true",
-        HARVESTER_TRADING_MODE: "testnet",
         NODE_ENV: "test",
       },
       brokerAdapterFactory: () => broker,
@@ -625,8 +629,6 @@ test("does not adopt an external order report received before the ownership regi
       loadConfig: async () => tradingConfig,
       env: {
         ...binanceEnv,
-        HARVESTER_ENABLE_TRADING: "true",
-        HARVESTER_TRADING_MODE: "testnet",
         NODE_ENV: "test",
       },
       brokerAdapterFactory: () => broker,
@@ -682,8 +684,6 @@ test("starts application reconciliation on transport recovery and acknowledges o
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -771,7 +771,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
   }
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
   })
@@ -850,7 +850,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
 
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
@@ -910,7 +910,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
 
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
@@ -1472,9 +1472,6 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     loadConfig: async () => config,
     env: {
       NODE_ENV: "development",
-      HARVESTER_BROKER: "binance",
-      HARVESTER_TRADING_MODE: "testnet",
-      HARVESTER_ENABLE_TRADING: "true",
       BINANCE_API_KEY: "test-key",
       BINANCE_API_SECRET_KEY: "test-secret",
     },
@@ -1920,7 +1917,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   broker.getOpenOrders = async () => ({ ok: true, data: [] })
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     now: () => 123,
@@ -2065,7 +2062,7 @@ test("stops broker intake before draining queued user-data and disconnects after
   let queuedEvents = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     onUserDataEvent: async () => {
@@ -2108,8 +2105,6 @@ test("logs safe correlation details when an execution report is not owned", asyn
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -2202,8 +2197,6 @@ test("reconciles the in-memory order registry before reopening trading after str
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -2236,8 +2229,6 @@ test("fails closed when trading is explicitly enabled without selecting a broker
     startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: {
-        HARVESTER_ENABLE_TRADING: "true",
-        HARVESTER_TRADING_MODE: "testnet",
         NODE_ENV: "test",
       },
       brokerAdapterFactory: () => {
@@ -2246,7 +2237,7 @@ test("fails closed when trading is explicitly enabled without selecting a broker
       },
       logger: { info() {}, error() {} },
     }),
-    /HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true/,
+    /runtime profile broker=binance is required when TESTNET trading is enabled/,
   )
   assert.equal(brokerFactoryCalled, false)
 })
@@ -2349,7 +2340,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   let flushCount = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
@@ -2429,7 +2420,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
@@ -2498,7 +2489,7 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: { info() {}, error() {}, debug() {} },
@@ -2542,7 +2533,7 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: () => ({ ok: true }),
@@ -2599,7 +2590,7 @@ test("journals pre-existing account-wide orders and allows trading startup witho
         },
       },
     }),
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: { info() {}, error() {}, debug() {} },
@@ -2632,7 +2623,7 @@ test("fails closed before market subscriptions when the account-wide open-order 
   })
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
@@ -2870,8 +2861,6 @@ test("starts from fresh in-memory state without replaying historical Journal rec
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -2983,8 +2972,6 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     loadConfig: async () => config,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -3115,8 +3102,6 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     loadConfig: async () => tradingConfigWithRegularLimitBuys,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
@@ -3285,7 +3270,7 @@ test("account snapshots include every configured pair asset, including disabled 
   const events = []
   const runtime = await startHarvesterForTest({
     loadConfig: async () => snapshotConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    env: { ...binanceEnv, NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
@@ -3389,8 +3374,6 @@ test("identifies user-data events received during application recovery as recove
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
