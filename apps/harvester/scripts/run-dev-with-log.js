@@ -73,6 +73,7 @@ child = spawn(
     },
   },
 )
+if (logStreamFailed) child.kill("SIGTERM")
 
 const closeLogStreams = () => Promise.all(logStreams.map((stream) => new Promise((resolveClose) => {
   if (stream.destroyed || stream.closed) { resolveClose(); return }
