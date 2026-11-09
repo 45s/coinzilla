@@ -35,6 +35,7 @@ Keep these responsibilities inside the owning transport folder as specified abov
 - Prefer Node.js built-ins and injected side-effect boundaries; do not add dependencies without a documented concrete need.
 - Validate configuration and external API responses at boundaries, including malformed success responses.
 - Never log or include bot tokens, credentials, raw exchange payloads, stack traces, or unrelated event fields in outbound notifications or transport error messages.
+- The formatter allowlists field names but cannot determine whether free-form `message`/`reason` text embeds a secret. Consuming applications must sanitize and bound those strings before publishing; never forward raw `Error.message`, stack traces, credentials, or raw payloads.
 - Use explicit event allowlists. Do not subscribe to every event by default.
 - Normalize and bound untrusted dynamic message fields; validate provider-specific payload limits before network I/O.
 - Notification failures must not alter trading state or interrupt event publication. Preserve an observable error path through the subscriber logger or event-bus error reporter.
