@@ -1133,39 +1133,30 @@ test("fails startup when the exchange snapshot omits a configured market asset",
 
 test("does not clear the ownership gate after stream recovery acknowledgement", async () => {
   const broker = createBroker()
-  let observed
-  const eventObserved = new Promise((resolve) => { observed = resolve })
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
-    onUserDataEvent: async () => observed(),
   })
 
-  broker.emitUserDataEvent({
-    eventType: "executionReport",
-    executionType: "TRADE",
-    fill: { malformed: true },
-  })
-  await eventObserved
-
+  broker.emitUserDataStatus({ type: "connectionClosed", recoveryRequired: true })
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
 
   broker.emitUserDataStatus({
     type: "reconciled",
     recoveryRequired: false,
+    reconciliationRequired: false,
+    subscriptionId: "stale-subscription",
+    recoveryGeneration: 0,
   })
-
-  assert.equal(result.userDataReady, false)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(result.userDataReady, false, "A stream acknowledgement without a matching application recovery audit cannot clear the ownership gate")
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  assert.equal(result.placeOrder, undefined)
-  assert.equal(result.broker, undefined)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
-
-
 test("explicit TESTNET trading drains its first BUY fill once after 254 recovery reminders and completes the cycle", { timeout: 90_000 }, async () => {
   const calls = []
   const buyCancellationCount = { value: 0 }
