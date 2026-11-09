@@ -8,12 +8,15 @@ The Journal is an operational observer, not trading-state authority. Portfolio a
 
 ## Configuration
 
-The application enables the Journal by default and writes sessions to
-`apps/harvester/logs/`. The application entrypoint does not expose environment
-or `trading-config.json` settings to disable the Journal or change its
-directory. The lower-level `prepareOptionalJournal()` helper accepts
-`enabled` and `directory` options for controlled programmatic composition
-and tests; these are not deployment settings.
+The application enables the Journal by default. Each process writes its
+Journal JSONL session inside the matching
+`apps/harvester/logs/sessions/<UTC timestamp>-<runtime session ID>/`
+directory, beside that process's structured logs. Cumulative diagnostic files
+remain under `apps/harvester/logs/cumulative/`. The application entrypoint
+does not expose environment or `trading-config.json` settings to disable the
+Journal or change its directory. The lower-level `prepareOptionalJournal()`
+helper accepts `enabled` and `directory` options for controlled programmatic
+composition and tests; these are not deployment settings.
 
 The `dev` package script loads `.env.development` before starting the logging
 runner; the child Harvester process inherits those values. Set
@@ -25,16 +28,19 @@ exchange. No launcher or preload script forces either value.
 Environment files and externally injected environment values may provide
 `TRADING_MODE`, Binance API credentials, standard process settings, and
 optional notifier secrets; they do not provide a broker selector,
-trading-enable flag, runtime profile, or Journal configuration. The default Journal directory is shared with
-Harvester diagnostic logs at `apps/harvester/logs/`, but their formats and
-lifecycles are independent. See [Logging](./LOGGING.md) for cumulative and
-timestamped diagnostic files. The Harvester `.gitignore` excludes its
-`/logs/` directory.
+trading-enable flag, runtime profile, or Journal configuration.
+
+The Journal and diagnostic logs share the same process session directory,
+but retain independent formats and lifecycles. Legacy flat JSONL files remain
+readable. The balance-reconciliation CLI scans both legacy root-level sessions
+and new per-process session directories. See [Logging](./LOGGING.md) for the
+directory layout and cumulative destinations. The Harvester `.gitignore`
+excludes its `/logs/` directory.
 
 ## Session files and JSONL format
 
-- One new session file is created for each Journal start.
-- Filenames use a UTC timestamp: `YYYY-MM-DD_HH-MM-SS.jsonl`. A numeric suffix is added if a file with that name already exists.
+- One new session file is created for each Journal start inside the current process session directory.
+- With the Harvester process identity, the filename is `YYYY-MM-DD_HH-MM-SS-<runtime-session-id>.jsonl`; standalone Journal consumers without an identity retain the timestamp-only filename and numeric collision suffix.
 - Files are opened exclusively; an existing session file is never overwritten.
 - Each line is one JSON object containing the EventBus event fields (`id`, `timestamp`, `source`, `name`, and `data`) plus `__coinzillaJournal` metadata with `schemaVersion: 1` and the same event ID.
 - Writes are serialized in arrival order for that Journal subscription.
@@ -125,7 +131,7 @@ sequenceDiagram
     participant Journal
     participant Bus as EventBus
     participant Telegram as Optional Telegram subscriber
-    participant Locks as Host and Journal locks
+    participant Locks as Host and application locks
 
     Signal->>Main: shutdown(reason)
     Main->>Stop: runtime.stop()
@@ -209,7 +215,7 @@ sequenceDiagram
     Main->>Journal: close and drain writes; sync and close session file
     Main->>Bus: close with 5000 ms timeout
     alt Runtime stop and Journal close both confirmed
-        Main->>Locks: release Journal lock, then broker-wide host lock
+        Main->>Locks: release application lock, then broker-wide host lock
         Locks-->>Main: release result
     else Runtime stop or Journal close not confirmed
         Note over Main,Locks: Retain the trading-process locks and exit non-zero.
@@ -230,7 +236,21 @@ sequenceDiagram
 
 For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed.
 
-The process owns two locks: a broker-wide host lock and a Journal-directory lock. Lock release is allowed only when runtime shutdown was confirmed and Journal close returned a successful result. If runtime shutdown is uncertain, or Journal close/drain/sync is not confirmed, both locks are retained. The lock-release function removes the Journal lock first and only then the host lock; if Journal-lock release is uncertain, the host lock is deliberately retained. A failed lock release is reported and leaves the remaining lock in place.
+The process owns two Harvester locks: a broker-wide host lock and an
+application process lock. Both live under
+`~/.coinzilla/harvester/process-locks/`, outside the logs tree. Lock release
+is allowed only when runtime shutdown was confirmed and Journal close returned
+a successful result. If runtime shutdown is uncertain, or Journal
+close/drain/sync is not confirmed, both locks are retained. The release
+function removes the application lock first and only then the host lock; if
+application-lock release is uncertain, the host lock is deliberately
+retained. A failed lock release is reported and leaves the remaining lock in
+place.
+
+Separately, the Journal package owns a hidden `.coinzilla-journal.lock` in the
+active session directory while its JSONL writer is open. Journal removes only
+the lock it acquired. This package-level writer lock is not one of the two
+Harvester process-ownership locks.
 
 An EventBus close timeout (bounded at five seconds) still causes a non-zero process exit, but it does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are also reported separately from the runtime-stop and Journal-close lock-release gates. This distinction prevents an ancillary delivery failure from being described as an unresolved trading state.
 
@@ -244,9 +264,9 @@ A process kill, machine crash, power loss, or failed filesystem sync can still l
 
 ## Diagnosing a missing or incomplete session
 
-1. Confirm the application is using its default `apps/harvester/logs/` directory and that the operating-system user can create and write files there.
+1. Confirm the application can create and write `apps/harvester/logs/cumulative/` and `apps/harvester/logs/sessions/<current-session>/` under the default `apps/harvester/logs/` root.
 2. Check startup logs for `Journal started` or the structured `Optional Harvester Journal startup failed` entry. Inspect its `errors` array for the original filesystem error code, message, and path. For a known operator-facing identifier and recovery procedure, use the [Harvester Error Vocabulary](./error-vocabulary.md).
-3. Check the latest UTC-named `.jsonl` file and verify that each line parses as JSON and includes `__coinzillaJournal.schemaVersion = 1`.
+3. Check the latest session directory under `logs/sessions/`, then verify that its UTC-named `.jsonl` file parses line-by-line as JSON and includes `__coinzillaJournal.schemaVersion = 1`. Older flat root-level JSONL sessions are retained and remain readable by the balance-reconciliation CLI.
 4. Check the process logs for `Failed to write journal event`, `Journal closed with errors`, or `observability shutdown incomplete`.
 5. If a programmatic caller is available, inspect `journalService.status`: `state`, `enabled`, `started`, `writeFailed`, `writeErrorCount`, and `closed`.
 
@@ -301,14 +321,14 @@ This is an investigation status, not an implementation proposal to be applied in
 
 Trading-enabled startup acquires two exclusive locks before the Journal writer starts or the broker connects:
 
-1. **Broker-wide host lock:** a file named `.<broker>-harvester-trading.lock` (for Binance, `.binance-harvester-trading.lock`) under `~/.coinzilla/harvester/process-locks/`. It is independent of the Journal directory and prevents another Harvester process running under the same OS user from trading through the same broker even when a programmatic caller uses a different Journal directory.
-2. **Journal-directory lock:** `.harvester-trading.lock` inside the configured Journal directory. It prevents concurrent writers to the same recovery-history directory.
+1. **Broker-wide host lock:** a file named `.<broker>-harvester-trading.lock` (for Binance, `.binance-harvester-trading.lock`) under `~/.coinzilla/harvester/process-locks/`. It prevents another Harvester process running under the same OS user from trading through the same broker.
+2. **Harvester application lock:** `.harvester-trading.lock` in the same dedicated `~/.coinzilla/harvester/process-locks/` directory. It is no longer mixed into the logs or per-session Journal directories.
 
-The host lock is acquired first, then the Journal lock. If Journal-lock acquisition fails, startup attempts to release the host lock; an uncertain host-lock release is surfaced rather than ignored. During shutdown, the Journal lock is released first and the host lock only after Journal-lock release is confirmed. If Journal-lock release is uncertain, the host lock is deliberately retained. Both locks remain held unless runtime shutdown and Journal close are confirmed. If runtime startup was attempted and then failed before a runtime handle was returned, the locks are retained because broker resources may have been partially activated.
+The host lock is acquired first, then the application lock. If application-lock acquisition fails, startup attempts to release the host lock; an uncertain host-lock release is surfaced rather than ignored. During shutdown, the application lock is released first and the host lock only after application-lock release is confirmed. If application-lock release is uncertain, the host lock is deliberately retained. Both locks remain held unless runtime shutdown and Journal close are confirmed. If runtime startup was attempted and then failed before a runtime handle was returned, the locks are retained because broker resources may have been partially activated.
 
 Each lock records PID, hostname, start time and a random ownership token. A stale lock is automatically reclaimed only when its recorded hostname matches the current host, its PID is confirmed absent, and an immediate reread confirms the PID, hostname and ownership token are unchanged. A different-host lock, live or ambiguous PID, unreadable metadata, permission-denied process inspection or changed ownership token fails closed. The process check treats permission-denied inspection as potentially alive; it does not guess that the owner is dead. Verify the recorded owner before any manual removal.
 
-The host lock is local to one OS user's home directory and one broker identifier. It does not coordinate different machines or different OS users. The Journal lock is directory-scoped; different Journal directories do not share that lock, but the broker-wide host lock still prevents a second same-user process for the same broker.
+Both Harvester process locks are local to one OS user's home directory; they do not coordinate different machines or different OS users. The Journal package's hidden writer lock remains scoped to the active session directory and protects that directory's JSONL writer.
 
 ## Same-process recovery failure classification
 

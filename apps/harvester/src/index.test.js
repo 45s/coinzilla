@@ -623,10 +623,15 @@ test("writes and durably closes a JSONL session in the injected Journal director
     assert.equal(result.journalService.status.state, "closed")
     assert.equal(result.journalService.status.closed, true)
 
-    const files = await readdir(directory)
+    const sessionDirectory = path.join(
+      directory,
+      "sessions",
+      "2026-11-09_12-34-56-journal-integration-test",
+    )
+    const files = await readdir(sessionDirectory)
     assert.equal(files.length, 1)
     assert.equal(files[0], "2026-11-09_12-34-56-journal-integration-test.jsonl")
-    const content = await readFile(path.join(directory, files[0]), "utf8")
+    const content = await readFile(path.join(sessionDirectory, files[0]), "utf8")
     const records = content.trim().split("\n").map((line) => JSON.parse(line))
     assert.ok(records.some((record) => record.name === "harvester.stopped"))
     assert.ok(records.every((record) => record.__coinzillaJournal?.schemaVersion === 1))
@@ -1467,4 +1472,44 @@ test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer loc
   assert.strictEqual(startInput.tradingConfig, tradingConfig, "Strategy and pair configuration must be passed unchanged to Harvester startup.")
   assert.equal(startInput.env.NODE_ENV, "development", "NODE_ENV must not select the exchange.")
   assert.equal(startInput.env.TRADING_MODE, "live", "TRADING_MODE must select Binance LIVE independently of NODE_ENV.")
+})
+
+
+test("keeps Harvester process ownership locks outside the application logs directory", async () => {
+  let receivedLockDirectories
+  await main({
+    loadConfig: async () => ({}),
+    createJournalService: disabledJournalService,
+    acquireProcessLock: async (input) => {
+      receivedLockDirectories = {
+        journal: input.journalDirectory,
+        global: input.globalDirectory,
+      }
+      return acquireProcessLock()
+    },
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+    }),
+    logger: { info() {}, system() {}, error() {}, warn() {} },
+    env: { TRADING_MODE: "testnet" },
+  })
+
+  assert.equal(
+    receivedLockDirectories.journal,
+    receivedLockDirectories.global,
+    "The application and broker ownership locks must share the dedicated runtime lock directory",
+  )
+  assert.equal(
+    path.basename(receivedLockDirectories.global),
+    "process-locks",
+    "Process ownership locks must be stored under the dedicated process-lock directory, not under logs",
+  )
+  assert.equal(
+    receivedLockDirectories.global.includes(path.join("apps", "harvester", "logs")),
+    false,
+    "The Harvester logs tree must contain log/session artifacts rather than trading-process ownership locks",
+  )
 })

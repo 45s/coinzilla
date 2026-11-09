@@ -10,7 +10,8 @@ import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/cr
 
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const logDirectory = resolve(packageDirectory, "logs")
-const logPath = resolve(logDirectory, "terminal.log")
+const cumulativeDirectory = resolve(logDirectory, "cumulative")
+const logPath = resolve(cumulativeDirectory, "terminal.log")
 const sessionStartedAt = new Date().toISOString()
 const runtimeSessionId = randomUUID()
 const sessionPaths = createHarvesterLogSessionPaths({
@@ -19,7 +20,8 @@ const sessionPaths = createHarvesterLogSessionPaths({
   runtimeSessionId,
 })
 
-mkdirSync(logDirectory, { recursive: true })
+mkdirSync(cumulativeDirectory, { recursive: true })
+mkdirSync(sessionPaths.sessionDirectory, { recursive: true })
 
 const logStreams = [
   createWriteStream(logPath, { flags: "a" }),
