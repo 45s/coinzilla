@@ -71,7 +71,7 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
   try {
     mkdirSync(join(root, 'docs'), { recursive: true });
     writeFileSync(join(root, 'docs', 'source.md'), '# Source');
-    writeFileSync(join(root, 'docs', 'target.md'), '## Repeated\\n\\n## Repeated\\n\\nUnderlined Heading\\n------------------\\n\\n<a id="custom-anchor"></a>\\n\\n## Café &amp; tea!');
+    writeFileSync(join(root, 'docs', 'target.md'), '## Repeated\n\n## Repeated\n\nUnderlined Heading\n------------------\n\n<a id="custom-anchor"></a>\n\n## Café &amp; tea!');
     writeFileSync(join(root, 'docs', 'asset.png'), '');
 
     const documents = [
@@ -91,11 +91,11 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
           '```',
           '',
           '`[inline example](#ignored-inline)`',
-        ].join('\\n'),
+        ].join('\n'),
       },
       {
         path: 'docs/target.md',
-        content: '## Repeated\\n\\n## Repeated\\n\\nUnderlined Heading\\n------------------\\n\\n<a id="custom-anchor"></a>\\n\\n## Café &amp; tea!',
+        content: '## Repeated\n\n## Repeated\n\nUnderlined Heading\n------------------\n\n<a id="custom-anchor"></a>\n\n## Café &amp; tea!',
       },
     ];
 
@@ -131,7 +131,7 @@ test('includes archived Markdown documents in the report-only anchor inventory',
     writeFileSync(join(root, 'docs', 'audits', 'old.md'), '# Archived');
     assert.deepEqual(findMissingLocalAnchors(root, [{
       path: 'docs/audits/old.md',
-      content: '# Archived\\n\\n[stale](#removed-section)',
+      content: '# Archived\n\n[stale](#removed-section)',
     }]), [
       'docs/audits/old.md links to missing heading anchor "#removed-section" in docs/audits/old.md',
     ], 'historical documents remain visible in the baseline rather than being silently omitted');
