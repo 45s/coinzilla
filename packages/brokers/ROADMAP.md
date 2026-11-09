@@ -22,6 +22,10 @@ This section is authoritative for next work and orders the broker package by ris
    - **Do:** retain the explicit per-subscriber acknowledgement result API, monotonic generation token, active-subscriber fencing and one terminal `reconciled` notification per active subscriber. Keep state-changing RPCs blocked until global recovery completion; removed subscribers must not receive terminal events.
    - **Verify:** cover multiple subscribers, first-versus-last acknowledgement, duplicate/stale token, subscriber removal, second disconnect during reconciliation, reminder cancellation and exactly one terminal event. Do not regress the legacy boolean API's documented meaning.
 
+### Accepted cross-domain contract work — Harvester issue #774
+
+- [~] **Cancellation request outcome classification — PR [#786](https://github.com/45s/coinzilla/pull/786).** Expose `NOT_SENT` when the local user-data readiness guard rejects `cancelOrder()` before the Binance RPC, and `OUTCOME_UNKNOWN` when the broker invokes the state-changing RPC but cannot return an authoritative canonical order result. Preserve the public success/result envelope and existing fail-closed readiness gate. The Harvester consumer preserves known canonical order state for `NOT_SENT`, keeps its safety pause, and continues marking ambiguity UNKNOWN. Deterministic offline broker and consumer regressions are required. Keep this item in progress until exact-head CI passes and the coordinated PR is merged.
+
 ### IMPORTANT — lifecycle quality and maintainability
 
 3. **Complete the read-only integration matrix and document what remains unverified.**

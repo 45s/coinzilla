@@ -28,6 +28,8 @@ The reference workflow is config → broker connection/price subscription → pr
 
 **Pending-order rule:** register PENDING before submission so events can be correlated, but keep it non-cancellable until broker acknowledgement provides a validated broker order ID. If a replacement is needed while submission is pending, defer that replacement intent; after acknowledgement, cancel and reconcile fills before placing the replacement.
 
+**Cancellation-outcome rule:** the broker reports `NOT_SENT` only when a local guard proves the exchange cancellation RPC was never invoked. Harvester preserves the last known canonical order state for that result, publishes `order.cancel_failed` with outcome `NOT_SENT`, and still pauses the pair. A failed/ambiguous state-changing RPC remains `UNKNOWN` / `UNCONFIRMED` until authoritative reconciliation. Harvester accepts `NOT_SENT` only on an unsuccessful broker result (`ok: false`) with that exact classification. A success-shaped, contradictory, missing, or unknown classification is treated as unconfirmed and remains fail-closed.
+
 Before changing an execution path, compare it with the approved Conservative Domain Specification and the current Harvester implementation. Keep only the minimum safeguards that prevent a demonstrated duplicate, oversell, double-accounting, or unknown-outcome hazard. Do not build generic polling, sleeps, or broad reconciliation to handle ordinary event ordering.
 
 ## Architectural roles
