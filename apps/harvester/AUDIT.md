@@ -857,7 +857,7 @@ Unexpected process termination cannot run those handlers or guarantee the CLOSIN
 
 ### Confidence and boundaries
 
-**Confirmed:** current startup does not restore prior-process Portfolio/RecoveryLedger state, fill deduplication identities or order ownership. **Strongly indicated:** fills during downtime can be absent from the new accounting projection; an empty registry prevents the existing per-owned-order reconciliation from discovering them. **Not reproduced:** a complete process-death/restart scenario causing a duplicate order, missed accounting delta, double application or incorrect reservation decision.
+**Confirmed:** current startup does not restore prior-process Portfolio/RecoveryLedger state, fill deduplication identities or order ownership. **Strongly indicated:** fills during downtime can be absent from the new accounting projection; an empty registry prevents per-owned-order reconciliation from discovering them; and a new same-symbol order may be submitted while a prior-process order remains open if the strategy emits an action and sufficient free balance remains. **Not reproduced:** a complete process-death/restart scenario causing a duplicate order, missed accounting delta, double application or incorrect reservation decision.
 
 The November 8 DOGE/ZRO fills after shutdown remain expected downtime behavior. The earlier CLOSING snapshots are historically correct and must not be rewritten.
 
