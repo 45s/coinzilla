@@ -40,6 +40,16 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 
 These files were added deliberately as indexes, historical evidence, inventories or package guidance. Their addition does not alter the original baseline dispositions above.
 
+## Latest recursive tree delta
+
+A subsequent complete recursive tree comparison against `develop` at `ec13d3b30b901b809cb20839b02da2f25b161c97` found **one additional Markdown file and no removed paths** relative to the 110-file checkpoint above. The current checkpoint therefore contains **111 tracked Markdown/MDX files** (97 frozen baseline files plus 14 additions). The additional file is:
+
+| Added path | Purpose |
+| --- | --- |
+| `docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md` | Durable architecture decision documenting explicit Binance trading-environment selection. |
+
+The 110-file checkpoint and its 13-file delta remain historical facts; this later addition is recorded separately rather than rewriting the earlier inventory history.
+
 ## Disposition vocabulary
 
 - **KEEP** — preserve at the current path; maintain authority boundaries and index links.
