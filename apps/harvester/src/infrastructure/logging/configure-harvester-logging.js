@@ -173,6 +173,8 @@ export async function configureHarvesterLogging({
   const consoleTransport = createHarvesterConsoleTransport({ output })
   let debugTransport
   let traceTransport
+  let debugTransportRegistered = false
+  let traceTransportRegistered = false
 
   try {
     debugTransport = await createFileTransport({
@@ -193,15 +195,23 @@ export async function configureHarvesterLogging({
     await logger.removeTransport(TRACE_TRANSPORT_NAME)
     logger.addTransport(consoleTransport)
     logger.addTransport(debugTransport)
+    debugTransportRegistered = true
     logger.addTransport(traceTransport)
+    traceTransportRegistered = true
     logger.setLevel({ transport: CONSOLE_TRANSPORT_NAME, level: "info" })
   } catch (error) {
-    const debugRemoved = await logger.removeTransport(DEBUG_TRANSPORT_NAME).catch(() => false)
-    const traceRemoved = await logger.removeTransport(TRACE_TRANSPORT_NAME).catch(() => false)
-    await Promise.allSettled([
-      ...(!debugRemoved && debugTransport ? [debugTransport.close()] : []),
-      ...(!traceRemoved && traceTransport ? [traceTransport.close()] : []),
-    ])
+    const cleanup = []
+    if (debugTransportRegistered) {
+      cleanup.push(logger.removeTransport(DEBUG_TRANSPORT_NAME))
+    } else if (debugTransport) {
+      cleanup.push(debugTransport.close())
+    }
+    if (traceTransportRegistered) {
+      cleanup.push(logger.removeTransport(TRACE_TRANSPORT_NAME))
+    } else if (traceTransport) {
+      cleanup.push(traceTransport.close())
+    }
+    await Promise.allSettled(cleanup)
     throw error
   }
 

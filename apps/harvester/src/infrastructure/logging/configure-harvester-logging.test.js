@@ -312,6 +312,56 @@ test("appends cumulative logs while keeping separate timestamped session histori
 })
 
 
+test("preserves pre-existing transports after partial logging setup failure", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-existing-transport-"))
+  const logger = createLogger()
+  let existingDebugCloseCount = 0
+  const existingDebugTransport = {
+    name: "harvester-debug-file",
+    level: "debug",
+    write() {},
+    close() { existingDebugCloseCount += 1 },
+  }
+  const processIdentity = {
+    startedAt: "2026-11-09T12:10:00.000Z",
+    runtimeSessionId: "existing-debug",
+  }
+  const sessionPaths = createHarvesterLogSessionPaths({
+    directory,
+    startedAt: processIdentity.startedAt,
+    runtimeSessionId: processIdentity.runtimeSessionId,
+  })
+  try {
+    logger.addTransport(existingDebugTransport)
+    await writeFile(sessionPaths.trace, "preserve trace session\\n")
+
+    await assert.rejects(
+      configureHarvesterLogging({ logger, directory, processIdentity }),
+      /EEXIST/,
+      "a TRACE session collision must fail setup",
+    )
+
+    assert.equal(
+      logger.transports.get("harvester-debug-file"),
+      existingDebugTransport,
+      "failed setup must not remove or close a pre-existing DEBUG transport",
+    )
+    assert.equal(existingDebugCloseCount, 0, "the existing DEBUG transport must remain open")
+    assert.deepEqual(
+      [...logger.transports.keys()],
+      ["harvester-debug-file"],
+      "failed setup must leave the logger's original transport configuration intact",
+    )
+    assert.equal(
+      await readFile(sessionPaths.trace, "utf8"),
+      "preserve trace session\\n",
+      "failed setup must preserve the colliding session file",
+    )
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("rejects an existing session file before registering transports or leaking streams", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-collision-"));
   const logger = createLogger();
