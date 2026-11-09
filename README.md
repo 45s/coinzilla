@@ -8,6 +8,8 @@ AI agents and contributors must follow [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.
 
 See [the contributing guide](docs/contributing.md), [domain ownership map](docs/workspace-package-map.md), [engineering standards](ENGINEERING_STANDARDS.md), and the [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md).
 
+See the [documentation index](docs/README.md) for repository-wide guidance, application documentation and historical records. [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md) defines how documentation is owned, maintained and verified.
+
 See the [architecture documentation](docs/architecture/README.md) for Coinzilla-wide architecture principles and decisions.
 
 ## Requirements

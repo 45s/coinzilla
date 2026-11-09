@@ -4,7 +4,9 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 
 ## Documentation-only change
 
-- Confirm the owning documentation/domain and check linked references.
+- Confirm the owning documentation/domain, canonical source of truth and linked references.
+- Follow [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md): classify the document, preserve historical provenance, and avoid creating competing sources of truth.
+- Update the nearest documentation index when adding, moving, renaming, superseding or archiving a document.
 - Follow the canonical [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact).
 - Preserve technical meaning; verify every command, path, and policy statement against the repository.
 - Run pnpm run check:agent-policy when ownership or agent instructions change.
