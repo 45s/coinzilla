@@ -4,14 +4,15 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-09  
-**Develop checkpoint:** `3eb5efd1966c1619ee98e62853ff624403555bbd`
+**Last reviewed:** 2026-11-09 15:51 +02:00  
+**Develop checkpoint:** `2204c9462bfd2b20c27de881cf6500cdcab60d46`
 
 ## CRITICAL — Harvester readiness and recovery
 
 1. **Harvester user-data recovery acceptance (#626) — implementation hardening substantially complete; final acceptance remains PAUSED / UNVERIFIED.**
    - **Why:** transport reconnection alone does not prove that account, orders and fills are reconciled or that readiness can safely reopen.
-   - **Remaining:** complete the outstanding offline recovery failure-classification follow-up (PR [#794](https://github.com/45s/coinzilla/pull/794) is open and not merged at this checkpoint), then obtain a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
+   - **Completed offline follow-up:** recovery failure classification #769 was implemented test-first and merged in [PR #794](https://github.com/45s/coinzilla/pull/794) on 2026-11-09; exact-head offline CI passed. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [closeout PR #807](https://github.com/45s/coinzilla/pull/807).
+   - **Remaining:** keep #626 open for final acceptance traceability and a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
    - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
    - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).
 
@@ -39,9 +40,10 @@
    - **Blocker:** current hosted Spot TESTNET regional eligibility restriction; acceptance is not established.
    - **Owners:** [Brokers roadmap](packages/brokers/ROADMAP.md) and [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-6. **Repository documentation consolidation (#795).**
+6. **Repository documentation consolidation (#795) — governance foundation and recursive inventory complete; content migration in progress.**
    - **Why:** contributors need one current source of truth per subject, clear ownership and reliable navigation without losing historical evidence.
-   - **Remaining:** complete the recursive Markdown inventory and per-file dispositions, resolve duplicate/stale living guidance, and keep indexes synchronized. Do not claim migration completion from the governance foundation alone.
+   - **Completed:** baseline inventory of 97 Markdown files (42 Harvester, 55 other); governance/agent rules and indexes merged in PRs #796–#797; Harvester roadmap/README history separated in #798–#800; repository-wide Markdown relative-link validation merged in #801; root/domain freshness rules and live `develop-core` enforcement evidence recorded in #806/#799; one invalid TESTNET command example corrected in #808. The required `Check JavaScript syntax` context runs the agent-policy/link check; it is not a standalone documentation status.
+   - **Remaining:** finalize dispositions for the remaining Harvester TESTNET guide and two Brokers documentation candidates; continue content-level source-of-truth/reference review and small evidence-preserving consolidations. Three of four initial Harvester REVIEW candidates now have KEEP/SUPERSEDE outcomes. Do not claim migration completion from the governance foundation alone.
    - **Owner:** [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md), [documentation index](docs/README.md), and [issue #795](https://github.com/45s/coinzilla/issues/795).
 
 7. **Utilities build provenance and shared-helper reuse.**
