@@ -15,12 +15,14 @@ directory. The lower-level `prepareOptionalJournal()` helper accepts
 `enabled` and `directory` options for controlled programmatic composition
 and tests; these are not deployment settings.
 
-The `dev` launcher pins `NODE_ENV=development` before importing application
-and broker modules, then loads `.env.development`. The `start` launcher pins
-`NODE_ENV=production` and loads `.env.production` when that file exists.
-Environment files and externally injected environment values provide
-credentials and optional notifier secrets, not Journal configuration or
-broker/trading-policy flags. The default Journal directory is shared with
+The `dev` launcher starts Node with `--env-file=.env.development` and sets
+`NODE_ENV=development` in the child environment before application and broker
+modules load. The `start` launcher loads `.env.production` when that file exists
+and preloads an initializer that sets `NODE_ENV=production` before those modules
+load.
+Environment files and externally injected environment values may provide
+standard process settings, credentials, and optional notifier secrets; they do
+not provide Journal configuration or broker/trading-policy flags. The default Journal directory is shared with
 Harvester diagnostic logs at `apps/harvester/logs/`, but their formats and
 lifecycles are independent. See [Logging](./LOGGING.md) for cumulative and
 timestamped diagnostic files. The Harvester `.gitignore` excludes its
