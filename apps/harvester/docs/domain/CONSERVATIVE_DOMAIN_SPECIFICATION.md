@@ -54,7 +54,7 @@ Keep cumulative confirmed netSellProceeds with the current position's full spent
 
 ## 4. Recovery SELL economics
 
-The minimum realized net profit is at least 0.01 quote currency. In the configured USDT market this is $0.01. A value below 0.01 is invalid. Never intentionally close a recovery position at a loss or break-even.
+The minimum realized net profit is at least 0.01 units of the pair's quote asset. For a USDT-quoted pair this is 0.01 USDT; for the currently enabled ZROFDUSD pair it is 0.01 FDUSD. The strategy compares quote-asset amounts directly and performs no USD conversion. A value below 0.01 is invalid. Never intentionally close a recovery position at a loss or break-even.
 
 Sell all exchange-sellable strategy inventory except the exact configured pair-level keepQuantity. This is the only retained-inventory setting name. Do not introduce coinToKeep or keepCoinQuantity.
 
