@@ -160,23 +160,18 @@ export async function main({
   try {
     eventBus = createEventBus({ logger })
     const tradingConfig = await loadConfig(configSource)
-    const runtimeConfig = resolveHarvesterRuntimeConfig({
-      config: tradingConfig,
-      environment: env.NODE_ENV,
+    const runtimeConfig = resolveHarvesterRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
+    const lockResult = await acquireProcessLock({
+      journalDirectory: resolveJournalDirectory({}),
+      globalDirectory: resolveHostProcessLockDirectory(),
+      broker: runtimeConfig.brokerName,
+      logger,
     })
-    if (runtimeConfig.tradingEnabled) {
-      const lockResult = await acquireProcessLock({
-        journalDirectory: resolveJournalDirectory({}),
-        globalDirectory: resolveHostProcessLockDirectory(),
-        broker: runtimeConfig.brokerName,
-        logger,
-      })
-      if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
-        const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Conservative TESTNET trading cannot start because the single-writer process lock could not be acquired" + (details ? ": " + details : ""))
-      }
-      processLock = lockResult
+    if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
+      const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
+    processLock = lockResult
     journalService = createJournalService({
       eventBus,
       logger,
@@ -242,12 +237,12 @@ export async function main({
 
     if (runtimeConfig.tradingEnabled) {
       if (!journalService || typeof journalService.flush !== "function" || !journalService.ready) {
-        throw new Error("Conservative TESTNET trading requires a ready Journal with durable flush() support")
+        throw new Error("Harvester trading requires a ready Journal with durable flush() support")
       }
       const journalReady = await journalService.ready
       if (journalReady?.ok !== true) {
         const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Conservative TESTNET trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
+        throw new Error("Harvester trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
       }
       await processStartedPublication
     }
@@ -273,10 +268,9 @@ export async function main({
     const startupMessage = runtime.connected
       ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
         ? "Connected; subscribed to " + runtime.subscriptions.length +
-          " enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness."
-        : "Connected; subscribed to " + runtime.subscriptions.length +
-          " enabled market(s) in read-only mode; order execution is disabled."
-      : "Configuration validated; broker and market data are disabled."
+          " enabled market(s). Conservative " + runtimeConfig.tradingMode.toUpperCase() + " trading is enabled; waiting for validated market prices and user-data readiness."
+        : "Connected; Binance trading mode is " + runtimeConfig.tradingMode.toUpperCase() + "."
+      : "Binance connection was not established."
     logSystem(logger, startupMessage)
 
     if (typeof runtime.stop === "function") {
