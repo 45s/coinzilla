@@ -655,3 +655,18 @@ Current source and regression inventory:
 **Impact:** Exact final exchange order IDs, client IDs, prices, quantities, and statuses cannot be reconstructed from the supplied three artifacts. Locked balances are clues, not a substitute for an open-orders response. A COMPLETE CLOSING balance audit must not be interpreted as a COMPLETE final-order audit.
 
 **Required follow-up:** decide and implement, with DDD/TDD, whether CLOSING should durably capture the complete account-wide open-order set while broker REST remains connected. Specify completeness/failure semantics and preserve open SELL orders; this is read-only evidence capture, not permission to mutate orders. Keep the decision separate from deferred process-restart reconciliation #654.
+
+
+## F-023 — Recovery event-processing failures are mislabeled as unowned/invalid orders
+
+**Classification:** CONFIRMED DIAGNOSTIC MISCLASSIFICATION; historical recovery-side-effect failure also observed  
+**Severity:** Medium — incident triage can point operators at the wrong failure class  
+**Tracking:** [#626](https://github.com/45s/coinzilla/issues/626)
+
+**Runtime evidence (2026-11-08 03:21–03:23 UTC):** During application recovery, a DOGE BUY TRADE event for broker order `1323351` / client order `h-932a1bcc2b7646df8f4166-29` failed while the engine attempted to cancel the existing DOGE recovery SELL (`1323350`). The broker rejected the cancellation because the user-data stream was unavailable. The subsequent log at 03:21:48.944 UTC was nevertheless labeled `rejected an unowned or invalid order event`, while both `registryMatchedByClientOrderId` and `registryMatchedByBrokerOrderId` were `true`, and both matched registry records identified the same FILLED order. At 03:22:24 UTC, ZRO recovery reconciliation encountered the same blocked-cancellation failure for recovery SELL `749343`; the pair was paused and the recovery attempt ultimately failed at 03:23:00.631 UTC with `User-data accounting failed during recovery`.
+
+**Source confirmation:** `apps/harvester/src/bootstrap/user-data/create-user-data-event-handler.js` currently uses the message `rejected an unowned or invalid order event` for every failed `processUserDataEvent()` result, including downstream transition/cancellation/reconciliation failures after the incoming order has matched the registry. Its own diagnostic fields can therefore contradict its message. This is not merely a historical wording issue; the generic classification remains in current source.
+
+**Recovery safety context:** Current `develop` passes `recoveryMode` through `reconcileOwnedOrders()` into order-transition processing. The regression in `apps/harvester/src/use-cases/conservative-trading-engine.test.js` around lines 5040–5110 verifies that a canonical BUY fill processed in recovery mode is accounted without canceling the existing recovery SELL and retains a deferred evaluation. This is the desired recovery contract and should remain protected. The historical log demonstrates why: broker order mutation was unavailable until user-data transport recovery completed.
+
+**Required follow-up:** distinguish identity/ownership rejection from a valid owned-order event whose transition failed; include the actual processing stage/reason and preserve matched identity evidence. Add deterministic handler tests for (1) unknown/mismatched order identity and (2) matched owned order with downstream cancellation/reconciliation failure, asserting distinct diagnostic classifications. Keep recovery-mode fill processing read-only with respect to exchange order mutations until application/broker recovery is fully acknowledged. No runtime changes are part of this audit.
