@@ -2,6 +2,10 @@
 
 This index is for Harvester-specific historical evidence. The [Harvester documentation index](../README.md) links to current application guides and migration plans. Repository-wide evidence rules are defined in [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md).
 
+## Current audit process
+
+- [Harvester audit working rules](../AUDIT_WORKING_RULES.md) — current pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
+
 ## Roadmap history
 
 - [Historical Harvester roadmap](ROADMAP_HISTORY.md) — dated implementation, incident and audit chronology extracted from the living roadmap; original section anchors remain in `apps/harvester/ROADMAP.md` for compatibility.

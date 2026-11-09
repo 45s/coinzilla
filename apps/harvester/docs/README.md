@@ -33,9 +33,13 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Incident audit playbook](INCIDENT_AUDIT_PLAYBOOK.md)
 - [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
 
+## Audit process
+
+- [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
+- [Harvester audit records index](audits/README.md) — historical evidence and investigation records.
+
 ## Historical records and evidence
 
-- [Harvester audit index](audits/README.md)
 - [Harvester roadmap history](audits/ROADMAP_HISTORY.md) — historical progress/evidence; current priorities remain in `../ROADMAP.md`.
 - [Historical DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md)
 - [Incident records](incidents/README.md)
