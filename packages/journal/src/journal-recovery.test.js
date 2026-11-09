@@ -468,7 +468,7 @@ test("orders timestamp-only, numeric collision, and identity-suffixed sessions d
 
   try {
     for (const [fileName, id] of entries) {
-      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(id))}\\n`)
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(id))}\n`)
     }
     const result = await journal.read()
     assert.equal(result.ok, true, "Every filename emitted by the supported Journal writers must be readable")
