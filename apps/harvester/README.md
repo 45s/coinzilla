@@ -193,7 +193,7 @@ Current priorities and blockers live in [ROADMAP.md](./ROADMAP.md). Historical a
 
 ## Standalone Binance TESTNET order tools
 
-All standalone TESTNET account/order tools are documented in [TESTNET order tools](./docs/testnet-order-tools.md).
+All standalone TESTNET account/order tools are documented in [TESTNET order tools](./docs/testnet-order-tools.md). The interactive `pnpm --filter @coinzilla/harvester testnet` menu wraps the same scripts; it includes destructive actions and does not grant authorization.
 
 ## Standalone Binance TESTNET balance inspection
 
