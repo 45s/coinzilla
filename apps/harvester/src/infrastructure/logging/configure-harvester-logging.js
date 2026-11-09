@@ -11,7 +11,6 @@ const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
 const CONSOLE_DETAIL_KEYS = Object.freeze([
-  "diagnosticId",
   "errorCode",
   "errorName",
   "errorMessage",
