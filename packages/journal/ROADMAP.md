@@ -352,4 +352,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint at this review:** `1b5dd010fe4791eb27ebfe14d5903f691ba53f48` (2026-11-09).
+**Current `develop` checkpoint at this review:** `7b2345c5e2fea538ba5bc023f36cc6a8c77259ca` (2026-11-09).
