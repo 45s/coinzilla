@@ -631,3 +631,24 @@ Key distinctions:
 - ZRO had a 54m 2.118s maximum inter-event gap with no corresponding afternoon market-stream error. This remains unresolved rather than a confirmed outage and is tracked separately in [#760](https://github.com/45s/coinzilla/issues/760).
 - The 48 unique fills reconcile exactly to the closing asset balances. Repeated duplicate-fill observations did not change accounting.
 - The CLOSING balance audit is complete, but no CLOSING open-orders payload was recorded; exact final order states remain unverified.
+
+
+## 30. F-024 account-integrity safety-halt reconciliation correction — 2026-11-09
+
+PR [#787](https://github.com/45s/coinzilla/pull/787) adds a real-engine
+integration regression for the safety-halt path. The test-only commit
+reproduced the defect: a canonical FILLED BUY encountered during the safety
+halt caused the engine to cancel an existing recovery SELL before the
+explicit BUY-only cancellation stage.
+
+The implementation passes `{ recoveryMode: true }` to the safety-halt's
+`reconcileOwnedOrders()` call. Canonical owned-order history and fills are
+still reconciled, but strategy-driven cancel/replace/submit behavior is
+suppressed during that pass. The subsequent
+`cancelOwnedBuyOrdersForSafetyHalt()` stage remains the only cancellation
+stage and continues to target acknowledged owned BUYs only.
+
+The exact-head PR checks are pending at this documentation checkpoint. This
+change does not alter the Journal durability barriers, broker generation
+acknowledgement, process-restart behavior, or TESTNET configuration. No live
+or TESTNET order operation was performed.

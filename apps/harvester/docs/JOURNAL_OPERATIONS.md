@@ -240,6 +240,42 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each actual commission as an exact decimal amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. This preserves the fee facts needed for a future deterministic recovery projection, but does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
 
+## Same-process user-data recovery and safety-halt ordering
+
+A broker `recovered` notification means the remote user-data subscription is
+restored. It does **not** mean Harvester application recovery is complete.
+While the broker reports `recoveryRequired: true`, keep trading readiness
+closed and do not acknowledge the generation until all application barriers
+have succeeded:
+
+1. Reconcile every tracked owned order against canonical REST order history and
+   complete distinct fills; apply missing executions through the serialized
+   accounting transition.
+2. Drain queued user-data events in recovery mode. A queued fill may update
+   Portfolio/RecoveryLedger, but must not trigger strategy-driven
+   cancellation, replacement, or submission while recovery is unresolved.
+3. Fetch a fresh account snapshot and the complete account-wide open-order set.
+   Publish the two RECOVERY audit records and await each durable Journal flush.
+4. Revalidate the broker generation, subscription identity, accounting state,
+   and queued-event sequence. A stale generation or any failed/incomplete
+   reconciliation remains blocked.
+5. Acknowledge the exact generation and wait for the matching global
+   `reconciled` notification. Only that terminal acknowledgement can reopen
+   Harvester readiness.
+
+If an account-integrity safety halt runs during an unsafe state, its first
+`reconcileOwnedOrders({ recoveryMode: true })` pass is authoritative
+fact-collection/application only. It must not run strategy-driven SELL
+cancellation or order replacement. The subsequent
+`cancelOwnedBuyOrdersForSafetyHalt()` stage is the only safety-halt stage
+allowed to request cancellation, and it selects acknowledged Harvester-owned
+BUY orders only. Existing recovery SELLs remain resting.
+
+This section describes same-process stream recovery and safety-halt behavior.
+It does not enable Journal replay or process-restart recovery; that separate
+workstream remains tracked by [#654](https://github.com/45s/coinzilla/issues/654).
+TESTNET acceptance remains separately paused/unverified.
+
 ## Restart recovery gate
 
 - Before starting a new Journal writer session, Harvester reads and validates all prior JSONL sessions. A missing Journal directory is treated as a first run; malformed, truncated, unsupported, duplicate-ID, or over-limit history fails the Journal readiness gate.

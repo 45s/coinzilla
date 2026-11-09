@@ -596,11 +596,33 @@ sequencing to focused bootstrap modules.
 
 The account-integrity safety halt is an application workflow in
 `src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
-execution or accounting failure is observed, it reconciles broker-owned order
-identities before asking the trading engine to cancel only strategy-owned BUYs.
-Concurrent triggers share one in-flight task. Bootstrap supplies the live
-engine lookup, stopped-process predicate, and logger; the use case does not
-depend on broker SDK or process-global state.
+execution or accounting failure is observed, it first reconciles broker-owned
+order identities in `recoveryMode: true`. That pass applies canonical REST
+order/fill facts and retains deferred strategy evaluations, but cannot trigger
+strategy-driven order cancellation, replacement, or submission. Only after
+that fact-reconciliation pass does the workflow call
+`cancelOwnedBuyOrdersForSafetyHalt()`; that explicit stage may request
+cancellation of acknowledged Harvester-owned BUY orders. Existing recovery
+SELLs are never canceled by the safety halt. Concurrent triggers share one
+in-flight task. Bootstrap supplies the live engine lookup, stopped-process
+predicate, and logger; the use case does not depend on broker SDK or
+process-global state.
+
+```mermaid
+sequenceDiagram
+    participant H as Account-integrity safety halt
+    participant E as Conservative engine
+    participant B as Broker
+    H->>E: reconcileOwnedOrders({ recoveryMode: true })
+    E->>B: Read canonical open orders, order history, and fills
+    B-->>E: Canonical REST facts
+    E->>E: Apply owned fills and defer strategy evaluation
+    Note over E,B: No strategy-driven cancel, replace, or submit
+    H->>E: cancelOwnedBuyOrdersForSafetyHalt()
+    E->>B: Cancel acknowledged owned BUYs only
+    B-->>E: Canonical cancellation outcomes
+    Note over E,B: Existing recovery SELLs remain untouched
+```
 
 The source-verified shutdown sequence, cancellation/fill-race handling,
 CLOSING account audit, resource cleanup, and process-lock retention are defined

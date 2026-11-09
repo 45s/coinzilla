@@ -256,3 +256,28 @@ and stack text must not contain credentials or signed request data.
 
 The logging refactor is observational only. It does not authorize a TESTNET
 session, order submission/cancellation, or any account mutation.
+
+
+## Same-process recovery and account-integrity safety halt
+
+The offline recovery contract distinguishes transport recovery from application
+readiness. A broker `recovered` notification does not authorize trading while
+`recoveryRequired` remains true. Harvester must reconcile owned order history
+and fills, drain queued user-data events in recovery mode, capture fresh
+balances and account-wide open orders, durably flush both RECOVERY audit
+records, revalidate the exact generation, acknowledge it, and wait for the
+matching global `reconciled` notification.
+
+An account-integrity safety halt has two ordered stages:
+
+1. Reconcile owned orders with `recoveryMode: true`. This applies canonical
+   order/fill facts and defers strategy evaluation without strategy-driven
+   cancellation, replacement, or submission.
+2. Request cancellation only for acknowledged Harvester-owned BUY orders
+   through `cancelOwnedBuyOrdersForSafetyHalt()`. Existing recovery SELLs are
+   not safety-halt cancellation targets.
+
+These are source-level and deterministic offline-test contracts, not evidence
+of TESTNET acceptance. The execution gate at the top of this runbook remains
+**CLOSED / PAUSED**; no live or TESTNET order operation is authorized by this
+documentation update.

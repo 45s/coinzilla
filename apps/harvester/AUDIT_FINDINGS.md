@@ -706,9 +706,20 @@ Thus the reconciliation stage of the safety halt is not guaranteed to be read-on
 
 **Test gap:** `create-account-integrity-safety-halt.test.js` verifies that reconciliation precedes BUY cancellation but does not pass/assert a reconciliation mode or prove no SELL mutation during reconciliation. The F-013/PR #673 integration regression covers queued user-data events in recovery mode, not the safety-halt's separate `reconcileOwnedOrders()` call. The engine tests separately prove (a) `reconcileOwnedOrders({ recoveryMode: true })` preserves recovery SELLs and (b) `cancelOwnedBuyOrdersForSafetyHalt()` cancels only BUYs. There is no end-to-end test of the complete safety-halt workflow combining both guarantees.
 
-**Required follow-up:** define safety-halt reconciliation as authoritative fact collection/application only; evaluate using `recoveryMode: true` or a more explicit side-effect-free reconciliation policy; add a RED test with an active recovery SELL and a FILLED BUY encountered during safety-halt reconciliation; assert no SELL cancellation/replacement occurs and only the explicit owned-BUY cancellation stage may mutate orders. Preserve complete identity/fill reconciliation, fail-closed behavior, and ownership-before-cancellation ordering. No runtime changes are part of this audit.
+**Implementation (PR #787):** the safety-halt now calls
+`reconcileOwnedOrders({ recoveryMode: true })`. This preserves canonical
+identity/order/fill reconciliation while suppressing strategy-driven exchange
+mutations in the fact-application pass. The following explicit
+`cancelOwnedBuyOrdersForSafetyHalt()` stage remains unchanged and is still
+limited to acknowledged owned BUYs. The recovery SELL is not a cancellation
+target.
 
-**TDD RED (2026-11-09):** a new integration regression composes the safety-halt workflow with the real Conservative engine and asserts that reconciliation cannot cancel the recovery SELL; only the explicit owned-BUY stage may cancel the standing BUY. The test is committed before the production fix.
+**TDD evidence:** the test-only commit reproduced the exact defect with the
+real Conservative engine: the recovery SELL was canceled before the standing
+BUY. The implementation retains the regression and asserts the recovery SELL
+remains OPEN, the recovered BUY becomes FILLED, and the standing BUY becomes
+CANCELED. PR #787 exact-head CI and merge are pending; no TESTNET acceptance is
+claimed.
 
 
 ## F-025 — Known preflight cancellation rejection is recorded as UNKNOWN outcome
