@@ -419,3 +419,66 @@ test("orders very large and zero-padded collision suffixes deterministically", a
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test("reads a session filename produced by the Journal sessionIdentity writer option", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-session-identity-read-"))
+  const writerBus = new EventBus()
+  const readerBus = new EventBus()
+  const identity = {
+    startedAt: "2026-11-09T12:34:56.789Z",
+    runtimeSessionId: "runtime-session-abc-123",
+  }
+  const writer = new Journal({ directory, eventBus: writerBus, sessionIdentity: identity })
+  const reader = new Journal({ directory, eventBus: readerBus })
+
+  try {
+    assert.equal((await writer.start()).ok, true, "The writer must create a session using the public sessionIdentity option")
+    const published = writerBus.publish({
+      name: "journal.session_identity_read_test",
+      source: "test",
+      data: { runtimeSessionId: identity.runtimeSessionId },
+    })
+    assert.equal(published.ok, true, "The test event must be accepted by the writer EventBus")
+    assert.equal((await writer.flush()).ok, true, "The identity-suffixed record must be durably flushed before reading")
+    assert.equal((await writer.close()).ok, true, "The writer must release its directory ownership before the reader starts")
+
+    const result = await reader.read()
+    assert.equal(result.ok, true, "Journal.read() must accept the identity-suffixed filename emitted by Journal.start()")
+    assert.equal(result.count, 1, "The identity-suffixed session must contribute its single persisted event")
+    assert.equal(result.records[0].payload.name, "journal.session_identity_read_test")
+    assert.deepEqual(result.sessions, [path.basename(writer.filePath)])
+  } finally {
+    await writer.close()
+    await writerBus.close()
+    await readerBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("orders timestamp-only, numeric collision, and identity-suffixed sessions deterministically", async () => {
+  const { directory, journal } = await createStoppedJournal()
+  const entries = [
+    ["2026-01-01_00-00-00-session-beta.jsonl", "identity-beta"],
+    ["2026-01-01_00-00-00-002.jsonl", "numeric-two"],
+    ["2026-01-01_00-00-00.jsonl", "base"],
+    ["2026-01-01_00-00-00-session-alpha.jsonl", "identity-alpha"],
+    ["2026-01-01_00-00-00-001.jsonl", "numeric-one"],
+  ]
+
+  try {
+    for (const [fileName, id] of entries) {
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(id))}\\n`)
+    }
+    const result = await journal.read()
+    assert.equal(result.ok, true, "Every filename emitted by the supported Journal writers must be readable")
+    assert.deepEqual(
+      result.records.map((record) => record.id),
+      ["base", "numeric-one", "numeric-two", "identity-alpha", "identity-beta"],
+      "Same-timestamp sessions must sort base first, numeric suffixes numerically, and identity suffixes lexically",
+    )
+  } finally {
+    await journal.eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})

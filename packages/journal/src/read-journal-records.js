@@ -7,7 +7,7 @@ const DEFAULT_LIMITS = Object.freeze({
   maxBytes: 64 * 1024 * 1024,
   maxRecordBytes: 1024 * 1024,
 })
-const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d+)?\.jsonl$/
+const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-[a-zA-Z0-9_-]+)?\.jsonl$/
 
 function validateReadOptions({ store, directory, maxRecords, maxSessions, maxBytes, maxRecordBytes }) {
   if (!store || typeof store.listSessions !== "function" || typeof store.statSession !== "function" || typeof store.readSession !== "function") {
