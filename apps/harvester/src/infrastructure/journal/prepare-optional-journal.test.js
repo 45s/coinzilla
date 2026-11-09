@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "@coinzilla/journal"
 import { prepareOptionalJournal } from "./prepare-optional-journal.js"
@@ -10,6 +11,30 @@ import { prepareOptionalJournal } from "./prepare-optional-journal.js"
 const logger = { info() {}, error() {}, debug() {} }
 const createTempDirectory = () =>
   mkdtemp(path.join(os.tmpdir(), "harvester-journal-"))
+
+test("resolves the legacy /logs spelling inside the Harvester application directory", () => {
+  const applicationDirectory = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../../",
+  )
+  assert.equal(
+    resolveJournalDirectory({ directory: "/logs" }),
+    path.join(applicationDirectory, "logs"),
+  )
+  assert.equal(
+    resolveJournalDirectory({ directory: "logs" }),
+    path.join(applicationDirectory, "logs"),
+  )
+})
+
+test("preserves explicitly absolute Journal directories", async () => {
+  const directory = await createTempDirectory()
+  try {
+    assert.equal(resolveJournalDirectory({ directory }), directory)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
 
 test("starts a real Journal with the shared process identity and closes it successfully", async () => {
   const directory = await createTempDirectory()
