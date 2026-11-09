@@ -913,3 +913,14 @@ The pre-side-effect `order.submission_requested` and `order.cancel_requested` ba
 Define a durable execution-fact boundary that explicitly orders canonical fill admission, durable Journal persistence, Portfolio/RecoveryLedger projection advancement, and checkpoint advancement. If persistence fails or cannot be confirmed, keep trading readiness closed and reconcile from authoritative broker history; do not equate event publication with durability. Test process interruption at each boundary, including subscriber not yet invoked, append pending, append complete but not synced, fill projection applied, and checkpoint not advanced. Preserve idempotent fill identity and do not claim exactly-once transport delivery.
 
 **Related:** F-011 / #654 process-restart reconciliation; #626 recovery reliability; `event-publisher.js`, EventBus, Journal and Conservative trading engine.
+
+
+**Existing serialization and injection primitives — inspected 2026-11-09**
+
+- `Portfolio.value` includes Position values, applied fill IDs and fill fingerprints. `Position.value` includes canonical Market identity, base/free quantities, quote cash flow and spent amount.
+- `RecoveryLedger.value` includes Market identity, buy cost, net sell proceeds, and applied fill IDs/fingerprints. `OrderRegistry.value` includes canonical order values.
+- These domain constructors require typed objects (`Market`, `Quantity`, `Money`, `CanonicalOrder`); the inspected classes expose value projections but no static JSON hydration factory.
+- `createPortfolioWorkflow()` accepts `initialPortfolio` and `initialRecoveryLedgers`. `makeConservativeTradingEngine()` accepts an `initialState` containing an `OrderRegistry`, Journal fill identities and strategy/order-control sets.
+- `startHarvester()` exposes no restored-state input. It always constructs fresh Portfolio/RecoveryLedger/OrderRegistry values and passes those empty values into the engine. Thus reusable serialization and injection seams exist, but no JSON-to-domain restoration mapper or startup wiring was found in the traced composition path.
+
+This narrows the gap: it is not accurate to say that the domain has no serializable state shape. The missing pieces are validated hydration/mapping, complete durable projection semantics, and composition-root integration before engine activation.
