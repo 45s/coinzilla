@@ -360,6 +360,8 @@ The test's fake broker emits no market-price tick, so its `placeCalls === 0` ass
 
 This is an explicit current startup policy for external orders, not a reproduced duplicate-order incident. In a restart scenario, a formerly Harvester-owned order is indistinguishable from an external order because the registry is empty. Treat this as a high-priority #654 reconciliation requirement.
 
+**Additional safety-state finding — F-029:** the startup composition initializes `userDataState.accountingFailed` and (for trading-enabled mode) `requiresReconciliation` to false, and passes empty `pausedMarkets`/`durablePausedMarkets` sets into the engine. The engine's `pause()` only mutates in-memory Sets and publishes `STRATEGY_PAUSED` without a flush. A previous safety halt is therefore not restored on restart; if PREFLIGHT/live events do not rediscover the original condition, readiness may become true. This is a confirmed state-reset gap; actual post-restart unsafe order placement is not reproduced. See F-029 in `AUDIT.md`.
+
 **Operational consequence and confidence**
 
 - **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
