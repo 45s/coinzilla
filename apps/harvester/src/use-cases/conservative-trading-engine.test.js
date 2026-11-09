@@ -1356,6 +1356,34 @@ test("preserves an OPEN recovery SELL after a locally blocked NOT_SENT cancellat
 })
 
 
+test("preserves an OPEN trailing BUY after a locally blocked NOT_SENT replacement cancellation", async () => {
+  const events = []
+  const { engine, orders } = await createHarness({
+    cancelNotSent: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false, "A trailing BUY replacement must stop when the broker proves cancellation was not sent")
+  assert.equal(orders.length, 1, "A locally blocked trailing BUY cancellation must prevent replacement submission")
+  const failed = events.find((event) => event.name === "order.cancel_failed")
+  assert.ok(failed, "A locally blocked trailing BUY cancellation must publish lifecycle evidence")
+  assert.equal(failed.data.outcome, "NOT_SENT", "A preflight-blocked trailing BUY cancellation must not be mislabeled as an unknown outcome")
+  assert.equal(failed.data.status, "OPEN", "The trailing BUY failure event must retain the known OPEN order state")
+  assert.equal(engine.getOrders()[0].status, "OPEN", "The standing BUY must remain OPEN when no exchange cancellation request was sent")
+  assert.ok(events.some((event) =>
+    event.name === "strategy.paused" && event.data.reason === "TRAILING_BUY_CANCELLATION_NOT_SENT"),
+  "A preflight-blocked trailing BUY cancellation must preserve the pair safety pause")
+})
+
+
 test("preserves an OPEN owned BUY after a locally blocked NOT_SENT shutdown cancellation", async () => {
   const events = []
   const ownedBuyOrder = makeShutdownOrder({
