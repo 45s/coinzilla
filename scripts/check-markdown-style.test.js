@@ -17,6 +17,10 @@ test("parses changed Markdown lines and new files from a unified diff", () => {
     "+# Changed heading",
     "-## Old heading",
     " context after",
+    "@@ -6,2 +6,3 @@",
+    "+++added content",
+    "---removed content",
+    " context after",
     "diff --git a/docs/new.md b/docs/new.md",
     "new file mode 100644",
     "--- /dev/null",
@@ -27,7 +31,7 @@ test("parses changed Markdown lines and new files from a unified diff", () => {
   ].join("\n")
 
   const changes = parseChangedMarkdownDiff(diff)
-  assert.deepEqual([...changes.get("docs/existing.md").lines], [3, 4, 5])
+  assert.deepEqual([...changes.get("docs/existing.md").lines], [3, 4, 5, 6, 7])
   assert.equal(changes.get("docs/existing.md").isNewFile, false)
   assert.equal(changes.get("docs/existing.md").removedHeading, true)
   assert.deepEqual([...changes.get("docs/new.md").lines], [1, 2])
