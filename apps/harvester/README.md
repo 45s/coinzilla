@@ -33,7 +33,7 @@ cp apps/harvester/.env.example apps/harvester/.env.development
 pnpm --filter @coinzilla/harvester dev
 ```
 
-The development profile connects to Binance Spot TESTNET and explicitly enables the Conservative TESTNET strategy. Edit `.env.development` with TESTNET credentials. The development runner loads this file using Node's native `--env-file` option.
+The development launcher starts Node with `--env-file=.env.development` and sets `NODE_ENV=development` in the child environment before application and broker modules load. This selects the Binance Spot TESTNET profile and enables the Conservative TESTNET strategy. Put TESTNET API credentials in `.env.development`; do not add broker, trading-mode, trading-enable, or Journal flags.
 
 For production, prepare a separate secrets file and start command:
 
@@ -42,7 +42,7 @@ cp apps/harvester/.env.production.example apps/harvester/.env.production
 pnpm --filter @coinzilla/harvester start
 ```
 
-The production profile connects to Binance Spot LIVE market/account endpoints in read-only mode. Set `NODE_ENV=production` and provide LIVE API credentials through `.env.production` or the deployment secret manager. Use an API key with account-read permissions; keep trading and withdrawals disabled. The start script loads `.env.production` when that file exists, while externally injected environment variables remain supported. Never copy TESTNET credentials into production.
+The production launcher loads `.env.production` when that file exists and preloads an initializer that sets `NODE_ENV=production` before application and broker modules load. This selects Binance Spot LIVE market/account endpoints in read-only mode. Provide LIVE API credentials through `.env.production` or the deployment secret manager. Use an API key with account-read permissions; keep trading and withdrawals disabled. Externally injected credentials remain supported. Never copy TESTNET credentials into production.
 
 Tests:
 
@@ -103,7 +103,7 @@ The configuration loader and validation live in `src/infrastructure/config/load-
 
 ## Runtime and safety
 
-- Journal is enabled by default and writes to the application-local `logs/` directory. Broker-connected startup requires a ready Journal and a durable PREFLIGHT account audit before market subscriptions or trading-engine activation when TESTNET trading is enabled.
+- Journal is enabled by default and writes to the application-local `logs/` directory. Every broker-connected startup, including production read-only mode, requires a ready Journal and a durable PREFLIGHT account audit before market subscriptions. TESTNET trading additionally fails closed unless the Journal exposes durable `flush()` support before the trading engine activates.
 - Current startup creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state; it does not replay prior Journal sessions. Do not treat a process restart after trading as reconciled or safe. Follow [#654](https://github.com/45s/coinzilla/issues/654).
 - Pre-existing external/unowned orders are reported but are not adopted or canceled automatically.
 - Order execution is TESTNET-only. Production connects to Binance LIVE in read-only mode; live order execution is not implemented and is rejected by configuration validation. Use the documented TESTNET runbook and explicit authorization for any operator action.
