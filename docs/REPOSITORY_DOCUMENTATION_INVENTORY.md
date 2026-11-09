@@ -1,6 +1,6 @@
 # Repository documentation inventory
 
-- Status: Initial recursive inventory complete; content-based consolidation in progress
+- Status: Initial recursive inventory complete; one of two Brokers REVIEW candidates resolved as KEEP; the Brokers roadmap remains REVIEW
 - Type: Repository documentation inventory
 - Owner: Repository engineering
 - Baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
@@ -26,7 +26,7 @@ The table records path, byte size, category and a conservative first-pass dispos
 
 ## File-by-file inventory outside Harvester
 
-| Path | Size (bytes) | Category | Initial disposition | Rationale / next review |
+| Path | Size (bytes) | Category | Current disposition | Rationale / next review |
 | --- | ---: | --- | --- | --- |
 | `.github/ISSUE_TEMPLATE/cross-domain-request.md` | 816 | GitHub workflow/template | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `.github/PULL_REQUEST_TEMPLATE.md` | 2773 | GitHub workflow/template | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
@@ -60,9 +60,9 @@ The table records path, byte size, category and a conservative first-pass dispos
 | `docs/release-and-rollback.md` | 2504 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `docs/workspace-package-map.md` | 4790 | Operational/reference guide | **KEEP** | KEEP pending normal source-of-truth and reference review; no move/archive is proposed by this inventory. |
 | `packages/brokers/AGENTS.md` | 8605 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
-| `packages/brokers/ARCHITECTURE.md` | 35221 | Package architecture | **REVIEW** | REVIEW: large/target-architecture content; verify current source/status and references before any restructure. |
+| `packages/brokers/ARCHITECTURE.md` | 35221 | Package architecture | **KEEP** | Explicitly labels itself as target architecture/migration contract, distinguishes its dated implementation snapshot from current source, and documents verified consumer boundaries and enforced dependency direction. Linked by the package README and roadmap; no move/split is warranted. |
 | `packages/brokers/README.md` | 19671 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
-| `packages/brokers/ROADMAP.md` | 109813 | Package roadmap | **REVIEW** | REVIEW: large/target-architecture content; verify current source/status and references before any restructure. |
+| `packages/brokers/ROADMAP.md` | 109813 | Package roadmap | **REVIEW** | Current priority plan is useful, but the historical 2026-11-08 multi-subscriber note still says the #702 result-shape proposal awaits owner agreement even though issue #702 is closed and PRs #732/#735/#740 merged. Requires a full status/history sweep and dated addendum; do not silently rewrite the historical note. |
 | `packages/db/AGENTS.md` | 2897 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/db/README.md` | 5933 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
 | `packages/db/ROADMAP.md` | 7652 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
@@ -88,15 +88,16 @@ The table records path, byte size, category and a conservative first-pass dispos
 
 1. `docs/ai-agent/repository-engineering-audit.md` is an AI-agent task brief, while `docs/audits/repository-engineering-audit.md` is an actual historical repository assessment. They are distinct documents, not duplicate copies.
 2. Repository policy is now centralized in `docs/DOCUMENTATION_GOVERNANCE.md`; root `AGENTS.md`, `AI_AGENT_WORKFLOW.md` and `ENGINEERING_STANDARDS.md` are mandatory entry points that link to the canonical policy.
-3. `packages/brokers/ARCHITECTURE.md` explicitly describes a target architecture, not a claim that the current source tree already matches it. Preserve that distinction.
-4. `packages/brokers/ROADMAP.md` is very large and has a current-priority section followed by historical phases. Review its active/historical boundary before any split.
+3. `packages/brokers/ARCHITECTURE.md` explicitly describes a target architecture, not a claim that the current source tree already matches it. Its current-snapshot baseline and target dependency rules are useful; KEEP it in place and preserve that distinction.
+4. `packages/brokers/ROADMAP.md` is very large and has a current-priority section followed by historical phases. Its 2026-11-08 multi-subscriber history contains a stale pending-owner-agreement sentence: issue #702 is closed and PRs #732, #735 and #740 merged. Preserve the original observation and add a dated correction only after the full roadmap/status review.
 5. `packages/entities` previously had agent instructions and a roadmap but no README entry point; a package README has now been added.
 6. Package README/AGENTS/ROADMAP files are domain-owned. Root policy should define common standards; package instructions should add only genuinely local constraints.
 
 ## Remaining work
 
 - [ ] Complete the 42-file Harvester content/reference review and resolve its REVIEW candidates.
-- [ ] Review the two Brokers REVIEW candidates against current implementation and roadmap status.
+- [x] Review `packages/brokers/ARCHITECTURE.md`: KEEP at its current path; it is an explicit target architecture and migration contract.
+- [ ] Complete the remaining `packages/brokers/ROADMAP.md` review, including its historical/current status boundary and the stale #702 note.
 - [ ] Inspect all other package/app README, AGENTS and ROADMAP combinations for stale links, competing rules and status drift.
 - [ ] Trace inbound references from Markdown, source comments, GitHub Issues/PRs and workflows before any migration.
 - [ ] Add/verify local indexes wherever a substantial documentation subdirectory exists.
