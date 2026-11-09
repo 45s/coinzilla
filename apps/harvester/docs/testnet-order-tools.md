@@ -143,7 +143,7 @@ pnpm --filter @coinzilla/harvester testnet:history
 pnpm --filter @coinzilla/harvester testnet:history ZROUSDT 50
 
 # Latest 20 orders for another symbol
-pnpm --filter @coinzilla/harvester testnet:history -- BTCUSDT 20
+pnpm --filter @coinzilla/harvester testnet:history BTCUSDT 20
 ```
 
 The command calls the signed Spot TESTNET endpoint `GET /api/v3/allOrders`.
