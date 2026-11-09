@@ -328,7 +328,7 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 **Historical priority correction (2026-11-06):** implementation was deferred during the Conservative TESTNET workflow. The 2026-11-09 user request reactivates forensic investigation only; implementation remains separate. Current status and evidence are tracked by F-030. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
 
 
-**2026-11-09 status update:** The offline helper stack and tests are confirmed to remain in the repository, but current runtime wiring is absent. The prior PR #606 startup integration passed `marketUniverseComplete: false` into an audit that requires true and therefore failed closed for prior trading activity. See F-030 and the current session report.
+**2026-11-09 status update:** The offline helper stack and tests remain in the repository, but current runtime wiring is absent. The historical PR #606 startup integration passed `marketUniverseComplete: false` into an audit that requires true and therefore failed closed for prior trading activity. See F-031 and the current session report.
 
 ## F-012 — Conservative residual sell-through and lifecycle conformance (2026-11-06)
 
@@ -767,7 +767,7 @@ The combined runtime and source evidence supports this sequence:
 **Required follow-up:** evaluate a safe per-reconciliation/per-symbol metadata reuse boundary or an adapter contract that accepts already-resolved canonical market metadata. Preserve metadata freshness/validation, exact symbol identity, complete fill pagination, rate limits, and fail-closed semantics. Measure per-RPC timings before deciding whether metadata reuse, bounded concurrency, or both provide the greatest benefit. No implementation is part of this audit.
 
 
-## F-030 — durable process-restart reconciliation (updated 2026-11-09)
+## F-031 — current process-restart recovery integration gap (updated 2026-11-09)
 
 **Status: CONFIRMED STARTUP INTEGRATION GAP; runtime consequence STRONGLY INDICATED; no end-to-end process-death/restart reproduction.** The current authoritative roadmap makes #654 a critical release-readiness requirement before unattended restarts. This is an investigation-only phase; no implementation is authorized here.
 
