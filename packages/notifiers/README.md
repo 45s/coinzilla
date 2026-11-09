@@ -177,4 +177,4 @@ The default unit and coverage suites never contact Telegram. For an operator-con
 
     pnpm --filter @coinzilla/notifiers test:telegram-smoke
 
-This command sends exactly one clearly labeled test message and prints only the returned message ID. It does not retry. A successful result means Telegram accepted the API request; it does not mean the message was read. Do not run this command in ordinary pull-request CI, against a production alert channel without approval, or with credentials copied into shell history. The smoke test is intentionally excluded from the default test suite.
+This command sends exactly one clearly labeled test message and prints a confirmation containing only the returned message ID; it never prints the token or message payload. It does not retry. A successful result means Telegram accepted the API request; it does not mean the message was read. Do not run this command in ordinary pull-request CI, against a production alert channel without approval, or with credentials copied into shell history. The smoke test is intentionally excluded from the default test suite.
