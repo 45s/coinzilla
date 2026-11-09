@@ -839,7 +839,7 @@ This is an explicit current startup policy for external orders, not a reproduced
 
 **Documentation inconsistency**
 
-`apps/harvester/docs/JOURNAL_OPERATIONS.md` currently states that Harvester reads prior Journal sessions and blocks trading startup if previous trading events exist. The inspected current composition does not implement that gate: `prepareOptionalJournal()` calls `journal.start()`, and `main()` calls `startHarvester({ eventPublisher })`. There is no prior-session read/replay or history-based trading gate wired into this path. The operational document must describe actual behavior rather than an unimplemented safeguard.
+The earlier `apps/harvester/docs/JOURNAL_OPERATIONS.md` text incorrectly described prior-session Journal reads and a trading-startup gate that are not present in the current composition. This documentation-only PR corrects it: current `prepareOptionalJournal()` starts the writer without reading prior sessions, and `main()` calls `startHarvester({ eventPublisher })` without a recovery snapshot. The retained PR #606 helper pipeline and its historical fail-closed limitation are now documented separately.
 
 **Required future DDD/TDD work (not implementation in this phase)**
 
