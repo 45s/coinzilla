@@ -243,3 +243,23 @@ The Binance adapter exposes the two execution-report identifiers separately:
 Harvester logs both values on event receipt and on rejection, along with exchange order ID, side, status, execution ID, registry match details, and structured error name/message/stack. A debug log records whether an event was accepted or ignored after engine processing. This preserves useful diagnostics without dumping raw exchange messages or account payloads.
 
 For the observed TESTNET event, order history confirms `666845` belongs to `h-ZROUSDT-1` and is CANCELED with zero execution. The event's different `c` value no longer prevents matching that already-registered exchange order ID. Do not reintroduce client-ID-only ownership matching or accept unknown broker order IDs.
+
+
+## List actual trade history (read-only)
+
+Run from the repository root:
+
+```sh
+# Latest 1,000 DOGEUSDT trades (default)
+pnpm --filter @coinzilla/harvester testnet:trades
+
+# Latest 500 ZROUSDT trades
+pnpm --filter @coinzilla/harvester testnet:trades ZROUSDT 500
+
+# Continue from an exchange trade ID
+pnpm --filter @coinzilla/harvester testnet:trades ZROUSDT 500 123456
+```
+
+The command calls the signed Spot TESTNET endpoint `GET /api/v3/myTrades` for one symbol. The default symbol is `DOGEUSDT`; the default and maximum page size is 1,000. The optional `FROM_ID` is the exchange trade ID cursor. It prints exact price, base quantity, quote quantity, commission amount and commission asset, plus side, maker/taker role, order ID and exchange time.
+
+This is a read-only account-history query. Preserve the raw returned rows when reconciling executions or commissions. A single page is not proof of complete account history; use the exchange trade-ID cursor to retrieve subsequent pages when required. The script is outside the Harvester runtime and has deterministic offline argument/normalization tests.

@@ -21,6 +21,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Operations and safety
 
+- [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
+
 - [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — requires all documented safety gates and explicit authorization
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)

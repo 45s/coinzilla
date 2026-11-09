@@ -610,3 +610,16 @@ process-global state.
 The source-verified shutdown sequence, cancellation/fill-race handling,
 CLOSING account audit, resource cleanup, and process-lock retention are defined
 in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
+
+
+## Runtime API and process boundary
+
+`startHarvester()` returns a frozen application runtime handle with the validated trading configuration, strategy mode, selected event publisher and application capabilities such as market-price processing, Portfolio/account access, readiness/status, subscriptions and `stop()`. It does **not** expose the raw broker port or a standalone `placeOrder()` function. Order placement must flow through the Conservative Trading Engine so strategy decisions, market rules, balance/commitment checks, order ownership and fill lifecycle cannot be bypassed by runtime callers.
+
+The process entry point in `src/index.js` composes process identity/logging, EventBus, the optional notifier, the Journal service, the broker-wide and Journal-directory process locks, runtime startup, signal handling and coordinated shutdown. Broker-connected startup requires the durable PREFLIGHT account audit before market subscriptions proceed. Detailed event payloads, Journal durability, lock acquisition/release, failure handling and shutdown ordering are maintained in [Journal Operations](./JOURNAL_OPERATIONS.md); do not duplicate those operational procedures here.
+
+## Client order identity
+
+The Conservative order executor creates one random process-local namespace at engine construction using a UUID-derived 22-hex-character value (88 bits), then increments a local sequence for each submitted order. Client IDs use the `h-<namespace>-<sequence>` shape; preflight validation uses a separate `preflight` marker within the same namespace. This avoids predictable counter-only identifiers being reused when a new process starts.
+
+A unique client ID is an identity/correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original identity; never create a replacement order merely because an acknowledgement was lost. Durable cross-process retry idempotency and process-restart state restoration are not implemented.

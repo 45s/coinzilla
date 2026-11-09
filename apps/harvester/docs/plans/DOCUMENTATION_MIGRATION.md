@@ -87,6 +87,7 @@ No file may be deleted solely because it is old, large, similarly named or appar
 - [ ] Replace repeated rules with links to the canonical document.
 - [x] Separate the Harvester roadmap's historical audit/implementation narrative into `docs/audits/ROADMAP_HISTORY.md`; retain original headings as compatibility anchors.
 - [ ] Further reduce the active roadmap to concise priorities and links without breaking preserved section anchors or losing current acceptance criteria.
+- [x] Reduce the Harvester README to an entry point with links to authoritative architecture, domain, operations, TESTNET and historical records; preserve old section anchors and archive the historical README notes.
 - [ ] Add ADRs only for decisions with durable rationale that is not already captured.
 - [ ] Update all indexes, README references, AGENTS instructions and roadmap links.
 
