@@ -169,7 +169,7 @@ export function findUnbalancedMarkdownFences(documents) {
 
   for (const document of documents) {
     let activeFence = null;
-    const lines = document.content.split(/\\r?\\n/);
+    const lines = document.content.split(/\r?\n/);
 
     for (let index = 0; index < lines.length; index += 1) {
       const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
@@ -186,7 +186,7 @@ export function findUnbalancedMarkdownFences(documents) {
 
       const isClosingFence = match[1][0] === activeFence.character &&
         match[1].length >= activeFence.length &&
-        /^[ \\t]*$/.test(match[2]);
+        /^[ \t]*$/.test(match[2]);
 
       if (isClosingFence) activeFence = null;
     }
