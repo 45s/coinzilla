@@ -47,7 +47,7 @@ export function collectMarkdownStyleBaseline(documents) {
     const addFinding = (name, affectedLines = []) => {
       findings[name].push({
         path,
-        count: affectedLines.length,
+        count: Math.max(1, affectedLines.length),
         lines: affectedLines,
       })
     }
@@ -105,7 +105,7 @@ export function collectMarkdownStyleBaseline(documents) {
       addFinding("trailingWhitespace", trailingWhitespaceLines)
     }
     if (!content.endsWith("\n")) addFinding("missingFinalNewline")
-    if (content.includes("\r\n")) addFinding("crlfLineEndings", [1])
+    if (content.includes("\r\n")) addFinding("crlfLineEndings")
     if (repeatedBlankLines.length > 0) {
       addFinding("repeatedBlankLines", repeatedBlankLines)
     }
