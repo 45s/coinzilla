@@ -109,7 +109,7 @@ test("rejects LIVE execution in the development profile", () => {
 
   assert.throws(
     () => validateTradingConfig(config),
-    /live" for development execution/,
+    /expected "testnet" for development execution/,
     "Selecting LIVE exchange connectivity must not enable real-money order execution.",
   )
 })
