@@ -207,9 +207,9 @@ For example, with the writer already stopped:
 
 ```sh
 mkdir -p /secure/backups/coinzilla-journal
-find ./data/journal -maxdepth 1 -type f -name '*.jsonl' -print0 \
-  | sort -z \
-  | tar --null -T - -czf /secure/backups/coinzilla-journal/sessions.tar.gz
+find ./data/journal -maxdepth 1 -type f -name '*.jsonl' -printf '%f\\0' \\
+  | sort -z \\
+  | tar -czf /secure/backups/coinzilla-journal/sessions.tar.gz -C ./data/journal --null -T -
 sha256sum /secure/backups/coinzilla-journal/sessions.tar.gz
 ```
 
