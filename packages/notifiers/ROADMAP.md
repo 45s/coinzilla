@@ -1,5 +1,11 @@
 # Notifiers roadmap
 
+---
+status: active
+type: roadmap
+owner: notifiers
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 > Current assessment: no critical defect was established in the audited notifier package. Telegram transport, bounded serialized delivery, credential redaction, failure isolation and Harvester integration are already implemented.
@@ -25,7 +31,7 @@
 
 
 **Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, #360, and Harvester integration PR #734). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.  
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
