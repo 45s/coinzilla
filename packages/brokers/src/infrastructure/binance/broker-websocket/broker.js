@@ -532,12 +532,20 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
-  /** @param {{symbol: string, orderId: string|number}} options @returns {Promise<BrokerResult<import("@coinzilla/entities").Order>>} */
+  /**
+   * @param {{symbol: string, orderId: string|number}} options
+   * @returns {Promise<BrokerResult<import("@coinzilla/entities").Order> & {cancellationOutcome?: "NOT_SENT"|"OUTCOME_UNKNOWN"}>}
+   */
   async cancelOrder({ symbol, orderId }) {
-    try {
-      if (this.userDataUnavailable) {
-        throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
+    if (this.userDataUnavailable) {
+      const error = new Error("Cannot change Binance orders while the user-data stream is unavailable")
+      handleErr({ where: "BinanceWebSocketBroker.cancelOrder()", error })
+      return {
+        ...toResult({ errors: [error] }),
+        cancellationOutcome: "NOT_SENT",
       }
+    }
+    try {
       const response = await this.tradingConnection.request(
         "order.cancel",
         { symbol, orderId },
@@ -546,7 +554,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.cancelOrder()", error })
-      return toResult({ errors: [error] })
+      return {
+        ...toResult({ errors: [error] }),
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+      }
     }
   }
 
