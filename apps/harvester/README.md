@@ -93,6 +93,8 @@ For the source-verified shutdown ordering and failure behavior, see [Journal Ope
 
 ### Process-restart recovery — active forensic workstream (#654)
 
+Safety pauses and accounting-failure/reconciliation latches are also process-local in the current composition. Startup initializes them clear and does not replay `STRATEGY_PAUSED`; a prior safety halt is not guaranteed to survive restart. This is a confirmed state-reset gap tracked by F-029. Do not assume restarting Harvester is equivalent to resolving the original safety condition.
+
 The current startup path explicitly disables prior-session Journal replay and initializes fresh in-process Portfolio, RecoveryLedger, and OrderRegistry state. This is a confirmed startup integration gap, not a reproduced end-to-end duplicate-order or accounting incident. Existing PREFLIGHT balances/open orders are account evidence, not restored Portfolio or ownership state. Unmatched open orders are recorded as unowned and the current startup test permits runtime startup without adopting/cancelling them.
 
 Harvester is expected to run on a personal PC; 24/7 uptime is not required. Resting exchange orders may fill while the process is stopped. Historical shutdown snapshots remain immutable. The required future #654 acceptance gate must reconcile all intervening fills and actual commissions, balances, reservations, order ownership and Portfolio/RecoveryLedger state before new trading. This phase is forensic/documentation only; implementation belongs in separate DDD/TDD PRs.
