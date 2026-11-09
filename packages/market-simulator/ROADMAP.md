@@ -6,7 +6,7 @@ type: roadmap
 owner: market-simulator
 ---
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Priority execution plan — current develop direction (2026-11-10)
 
 ### LOW PRIORITY — deferred until a real consumer exists
 
@@ -41,9 +41,8 @@ The following items are intentionally deferred; they are not current release blo
    - **Do:** document each simulation assumption and introduce one behavior at a time with source fixtures and an explicit model version.
    - **Verify:** compare deterministic fixtures and clearly label unsupported market microstructure behavior in every report.
 
-
-**Package path:** `packages/market-simulator`  
-**Package:** `@coinzilla/market-simulator`  
+- **Package path:** `packages/market-simulator`
+- **Package:** `@coinzilla/market-simulator`
 **Target branch:** `develop`
 
 ## Mission
@@ -134,7 +133,6 @@ These limitations are intentional. Extend the model only with explicit semantics
 - Verify Node 22 and Node 24.
 - Keep the default test suite offline.
 - Do not mark a phase delivered until the corresponding checks pass on the branch and the change is merged into `develop`.
-
 
 ## Shared utility reuse
 
