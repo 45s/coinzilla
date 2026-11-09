@@ -36,6 +36,7 @@ export class Journal {
     // Serializes close calls while `closing` remains the later record-admission gate.
     this.closeInProgress = false
     this.flushPromises = new Set()
+    this.flushQueue = Promise.resolve()
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -259,8 +260,9 @@ export class Journal {
       return toResult({ error: new Error("Journal must be started to flush durable records") })
     }
 
-    const flushPromise = this.flushLifecycle()
+    const flushPromise = this.flushQueue.then(() => this.flushLifecycle())
     this.flushPromises.add(flushPromise)
+    this.flushQueue = flushPromise.then(() => undefined, () => undefined)
     try {
       return await flushPromise
     } finally {
