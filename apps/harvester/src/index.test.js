@@ -1390,9 +1390,9 @@ test("does not register runtime shutdown handlers before the required Journal is
     createJournalService: () => {
       markJournalCreated()
       return {
-      ready: new Promise((resolve) => { resolveReady = resolve }),
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true }),
+        ready: new Promise((resolve) => { resolveReady = resolve }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
       }
     },
     start: async () => {
