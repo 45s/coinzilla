@@ -685,3 +685,25 @@ This map is derived from `processExecutionFillTransition()`, `reconcileTerminalO
 **Recovery safety context:** Current `develop` passes `recoveryMode` through `reconcileOwnedOrders()` and user-data event processing. The engine regression around lines 4318–4399 verifies that canonical recovery reconciliation does not cancel or replace an existing SELL; the event-handler regression around lines 5040–5110 verifies that recovery mode is passed through to the engine. The status handler also preserves the application reconciliation gate until the matching broker-wide `reconciled` acknowledgement. These are useful protections, but the tests are split across units and do not reproduce the exact historical status/event interleaving. Keep these contracts and add an integration regression before treating the historical cancellation path as fully closed.
 
 **Required follow-up:** distinguish identity/ownership rejection, accounting-integrity failure, and downstream order-transition/reconciliation failure; include the actual processing stage/reason and preserve matched identity evidence. Define retryability explicitly: a reclassified failure must never reopen trading by itself, but transient downstream failures should not be mislabeled as irrecoverable accounting corruption or silently make all future recovery reminders no-ops. Add deterministic handler/recovery tests for (1) unknown/mismatched order identity, (2) matched owned order with downstream cancellation failure after an already-applied fill, (3) terminal fill-history timeout, (4) retry after transient failure, and (5) permanent accounting mismatch. Keep recovery-mode fill processing read-only with respect to exchange order mutations until application/broker recovery is fully acknowledged. No runtime changes are part of this audit.
+
+
+## F-024 — Account-integrity safety halt reconciles in normal trading mode
+
+**Classification:** CONFIRMED CURRENT-SOURCE SIDE-EFFECT RISK; HISTORICAL LOG CORRELATION  
+**Severity:** High — a safety-halt reconciliation can initiate recovery SELL cancellation before its explicit BUY-only cancellation stage  
+**Tracking:** [#773](https://github.com/45s/coinzilla/issues/773), under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626)
+
+**Current source path:**
+1. `createUserDataEventHandler()` marks `accountingFailed` after any failed engine order event; its queue finalizer invokes `cancelOwnedBuysAfterAccountingFailure()`.
+2. `createAccountIntegritySafetyHalt()` first calls `tradingEngine.reconcileOwnedOrders()` without options.
+3. `reconcileOwnedOrders()` defaults `recoveryMode=false` and passes that mode into `applyOwnedOrderSnapshotsTransition()`.
+4. Applying a recovered FILLED BUY in normal mode can enter `processUserDataEventTransition()` and call `cancelAndReconcileRecoverySells()`.
+5. Only after reconciliation does the safety halt call `cancelOwnedBuyOrdersForSafetyHalt()`.
+
+Thus the reconciliation stage of the safety halt is not guaranteed to be read-only with respect to exchange order transitions. The broker's user-data availability guard may reject the attempted SELL cancellation, but that is a secondary defense and should not be relied upon to prevent the application from issuing the mutation.
+
+**November 8 runtime correlation:** At 03:22:24 UTC, the ZRO recovery SELL `749343` cancellation stack includes `applyOwnedOrderSnapshotsTransition()`, followed immediately by `account-integrity safety halt could not fully reconcile owned orders before BUY cancellation`. The broker rejected the cancellation because the user-data stream was unavailable. This strongly correlates with the safety-halt's own `reconcileOwnedOrders()` pass; the trace alone cannot prove which caller initiated that particular snapshot-application pass. The earlier DOGE SELL cancellation occurred directly in the user-data event transition.
+
+**Test gap:** `create-account-integrity-safety-halt.test.js` verifies that reconciliation precedes BUY cancellation but does not pass/assert a reconciliation mode or prove no SELL mutation during reconciliation. The engine tests separately prove (a) `reconcileOwnedOrders({ recoveryMode: true })` preserves recovery SELLs and (b) `cancelOwnedBuyOrdersForSafetyHalt()` cancels only BUYs. There is no end-to-end test of the complete safety-halt workflow combining both guarantees.
+
+**Required follow-up:** define safety-halt reconciliation as authoritative fact collection/application only; evaluate using `recoveryMode: true` or a more explicit side-effect-free reconciliation policy; add a RED test with an active recovery SELL and a FILLED BUY encountered during safety-halt reconciliation; assert no SELL cancellation/replacement occurs and only the explicit owned-BUY cancellation stage may mutate orders. Preserve complete identity/fill reconciliation, fail-closed behavior, and ownership-before-cancellation ordering. No runtime changes are part of this audit.
