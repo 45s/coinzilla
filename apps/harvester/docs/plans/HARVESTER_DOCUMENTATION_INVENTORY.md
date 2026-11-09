@@ -57,7 +57,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 | `apps/harvester/docs/audits/README.md` | 1005 | Index | **KEEP** | Historical audit/evidence index; include every application-level snapshot. |
 | `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md` | 9482 | Domain verification | **KEEP** | Accounting verification matrix; current verification status must remain explicit. |
 | `apps/harvester/docs/domain/CONSERVATIVE_BEHAVIOR_BASELINE.md` | 1010 | Superseded pointer | **KEEP** | Already explicitly superseded and points to canonical spec; retain for inbound-link compatibility. |
-| `apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md` | 23090 | Canonical domain specification | **KEEP** | Sole authoritative Conservative behavior contract. |
+| `apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md` | 23090 | Canonical domain specification | **KEEP** | Sole authoritative Conservative behavior contract; minimum-profit denomination is quote-asset units, including the current ZROFDUSD/FDUSD configuration. |
 | `apps/harvester/docs/domain/DOMAIN_GLOSSARY.md` | 6964 | Domain reference | **KEEP** | Domain vocabulary and responsibility boundaries. |
 | `apps/harvester/docs/domain/portfolio.md` | 14533 | Domain reference | **KEEP** | Portfolio concepts and invariants; ensure it does not redefine strategy behavior. |
 | `apps/harvester/docs/incidents/2026-11-05-user-data-stream-recovery.md` | 8105 | Incident record | **KEEP** | Dated incident record with source issue and evidence. |
