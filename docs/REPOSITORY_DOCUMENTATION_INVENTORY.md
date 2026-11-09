@@ -97,7 +97,7 @@ These files were added deliberately as indexes, historical evidence, inventories
 | `packages/journal/README.md` | 19624 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
 | `packages/journal/ROADMAP.md` | 39476 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/market-simulator/AGENTS.md` | 1953 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
-| `packages/market-simulator/README.md` | 13568 | Package entry point | **KEEP** | Clarifies Node 22.23.4 package floor versus Node 24+ workspace/CI; now also records source-verified limits: wall-clock lifecycle timestamps, unchecked final snapshot results, and unsubscribe failure potentially skipping disconnect. |
+| `packages/market-simulator/README.md` | 13568 | Package entry point | **KEEP** | Clarifies Node 22.23.4 package floor versus Node 24+ workspace/CI; now also records source-verified limits: wall-clock lifecycle timestamps, unchecked final snapshot results, and unsubscribe failure potentially skipping disconnect; qualifies the offline deterministic wording so it does not imply full report reproducibility. |
 | `packages/market-simulator/ROADMAP.md` | 8682 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/notifiers/AGENTS.md` | 4694 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
 | `packages/notifiers/README.md` | 12254 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
