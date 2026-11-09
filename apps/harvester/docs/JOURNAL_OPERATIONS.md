@@ -244,7 +244,7 @@ Event DTOs do not include credentials, raw exchange messages, or SDK objects. Th
 
 The current startup composition initializes `userDataState.accountingFailed=false`, trading-enabled `requiresReconciliation=false`, and empty engine pause/recovery-intent Sets. The engine's `pause()` adds symbols to in-memory `paused` and `durablePausedMarkets` Sets and publishes `STRATEGY_PAUSED`; it does not persist a durable checkpoint or restore that event on startup.
 
-A previous safety halt/accounting-failure latch is therefore not guaranteed to survive a process restart. PREFLIGHT and new live events may detect some unresolved conditions, but they do not reconstruct every previous pause reason or offline terminal fill. Do not treat restart as resolution of an earlier safety halt. Keep trading disabled until the prior cause has been authoritatively reconciled or explicitly acknowledged. See F-029 in [AUDIT.md](../AUDIT.md), F-011/#654 and F-028.
+A previous safety halt/accounting-failure latch is therefore not guaranteed to survive a process restart. PREFLIGHT and new live events may detect some unresolved conditions, but they do not reconstruct every previous pause reason or offline terminal fill. Do not treat restart as resolution of an earlier safety halt. Keep trading disabled until the prior cause has been authoritatively reconciled or explicitly acknowledged. See F-029 in [AUDIT.md](../AUDIT.md), F-030/#654 and F-028.
 
 ## Applied-fill Journal durability boundary
 
@@ -271,7 +271,7 @@ The shared Journal package supports bounded read/replay, but replay is at-least-
 
 **Operational restriction:** do not enable unattended process restarts until [#654](https://github.com/45s/coinzilla/issues/654) has a separately implemented and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
 
-This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](../AUDIT.md), [AUDIT_FINDINGS.md](../AUDIT_FINDINGS.md) F-011, and [ROADMAP.md](../ROADMAP.md).
+This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](../AUDIT.md), [AUDIT_FINDINGS.md](../AUDIT_FINDINGS.md) F-030, and [ROADMAP.md](../ROADMAP.md).
 
 ## Single-writer trading process lock
 
