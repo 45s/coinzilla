@@ -16,7 +16,7 @@ const config = ({
       default: { broker: null, trading: { enabled: false, mode: "testnet" } },
       development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
       test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "binance", trading: { enabled: false, mode: "live" } },
+      production: { broker: "binance", trading: { enabled: true, mode: "live" } },
       ...runtimeProfiles,
     },
   },
@@ -96,22 +96,14 @@ test("rejects TESTNET trading without an enabled market or Binance broker", asyn
   )
 })
 
-test("keeps production read-only and rejects LIVE order execution", async () => {
+test("enables production Binance LIVE order execution", async () => {
   const production = createFixture({ env: { NODE_ENV: "production" } })
   const result = await resolveHarvesterOptions(production.input)
   assert.equal(result.brokerName, "binance")
   assert.equal(result.tradingMode, "live")
-  assert.equal(result.tradingEnabled, false)
+  assert.equal(result.tradingEnabled, true)
 
-  const unsafe = createFixture({
-    cfg: config({
-      runtimeProfiles: {
-        production: { broker: "binance", trading: { enabled: true, mode: "live" } },
-      },
-    }),
-    env: { NODE_ENV: "production" },
-  })
-  await assert.rejects(resolveHarvesterOptions(unsafe.input), /trading.mode=testnet/)
+
 })
 
 test("rejects invalid strategy flags", async () => {
