@@ -38,6 +38,15 @@ const FINDING_LABELS = Object.freeze({
   unlabelledCodeFences: "unlabeled fenced-code blocks",
 })
 
+/**
+ * Parse changed-line ranges from a unified Markdown diff.
+ * @param {string} diffText
+ * @returns {Map<string, {lines: Set<number>, isNewFile: boolean}>}
+ */
+export function parseChangedMarkdownDiff(diffText) {
+  return new Map()
+}
+
 function matchesAny(path, patterns) {
   return patterns.some((pattern) => pattern.test(path))
 }
