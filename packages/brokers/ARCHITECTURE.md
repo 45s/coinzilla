@@ -1,5 +1,11 @@
 # Brokers Package Architecture
 
+---
+status: active
+type: architecture
+owner: brokers
+---
+
 > Status: **target architecture and migration contract**. This document describes the intended internal structure of `@coinzilla/brokers`; it is not a claim that the current source tree already has this structure. The migration is incremental and must preserve the working broker.
 
 ## Purpose and scope
