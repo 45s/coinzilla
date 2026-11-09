@@ -71,7 +71,7 @@ test("enforces whitespace and heading rules when the affected lines change", () 
   ])
 })
 
-test("checks new files fully while preserving historical and GitHub template exceptions", () => {
+test("checks new files fully while preserving historical, superseded and GitHub template exceptions", () => {
   const result = analyzeMarkdownStyleDocuments(
     [
       {
@@ -114,17 +114,17 @@ test("checks new files fully while preserving historical and GitHub template exc
   assert.deepEqual(result.violations.trailingWhitespace.map(({ path }) => path), [
     "docs/new.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
-  ])
+  ], "maintained documents and templates should retain whitespace enforcement")
   assert.deepEqual(result.violations.missingFinalNewline.map(({ path }) => path), [
     "docs/new.md",
-  ])
+  ], "new maintained documents should require a final newline")
   assert.deepEqual(result.violations.repeatedBlankLines.map(({ path }) => path), [
     "docs/new.md",
-  ])
+  ], "new maintained documents should not contain repeated blank lines")
   assert.deepEqual(result.violations.headingLevelSkips.map(({ path }) => path), [
     "docs/new.md",
-  ])
-  assert.deepEqual(result.violations.missingH1.map(({ path }) => path), [])
+  ], "new maintained documents should use sequential heading levels")
+  assert.deepEqual(result.violations.missingH1.map(({ path }) => path), [], "new maintained documents should contain one H1")
 })
 
 test("accepts a clean changed document", () => {
