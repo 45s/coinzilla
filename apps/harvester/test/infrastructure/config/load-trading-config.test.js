@@ -16,7 +16,7 @@ function assertTradingConfigStructure(config) {
   });
   assert.deepEqual(config.runtime.profiles.production, {
     broker: 'binance',
-    trading: { enabled: false, mode: 'live' },
+    trading: { enabled: true, mode: 'live' },
   });
 
   const strategy = config.strategies.CG_coinGrabber;
