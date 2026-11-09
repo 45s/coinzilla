@@ -81,7 +81,7 @@ function summarizeConsoleData({ data } = {}) {
  * The compact console destination remains independently configurable.
  *
  * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
- * @returns {Promise<{ directory: string, sessionPaths: object, close: () => Promise<void> }>}
+ * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
  */
 export async function configureHarvesterLogging({
   logger = defaultLogger,

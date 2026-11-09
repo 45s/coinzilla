@@ -61,7 +61,7 @@ that working directory, so its terminal files always live in the canonical
 `apps/harvester/logs/` directory.
 
 The development runner appends raw child stdout and stderr to
-`apps/harvester/logs/cumulative/terminal.log` and its timestamped session counterpart.
+`apps/harvester/logs/cumulative/terminal.log` and the `terminal.log` inside the current process session directory.
 Both files receive identical raw output. The runner opens both destinations
 before starting the child; a session-name collision or stream-open failure
 stops startup without overwriting an existing session. Durable file capture

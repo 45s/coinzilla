@@ -28,7 +28,9 @@ exchange. No launcher or preload script forces either value.
 Environment files and externally injected environment values may provide
 `TRADING_MODE`, Binance API credentials, standard process settings, and
 optional notifier secrets; they do not provide a broker selector,
-trading-enable flag, runtime profile, or Journal configuration. The Journal and diagnostic logs share the same process session directory,
+trading-enable flag, runtime profile, or Journal configuration.
+
+The Journal and diagnostic logs share the same process session directory,
 but retain independent formats and lifecycles. Legacy flat JSONL files remain
 readable. The balance-reconciliation CLI scans both legacy root-level sessions
 and new per-process session directories. See [Logging](./LOGGING.md) for the
