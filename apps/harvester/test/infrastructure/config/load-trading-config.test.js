@@ -9,6 +9,15 @@ function assertTradingConfigStructure(config) {
   assert.ok(config && typeof config === 'object' && !Array.isArray(config));
   assert.ok(config.strategies && typeof config.strategies === 'object');
   assert.ok(config.strategies.CG_coinGrabber, 'the config contains the CG_coinGrabber strategy');
+  assert.ok(config.runtime?.profiles, 'the config contains environment-specific runtime profiles');
+  assert.deepEqual(config.runtime.profiles.development, {
+    broker: 'binance',
+    trading: { enabled: true, mode: 'testnet' },
+  });
+  assert.deepEqual(config.runtime.profiles.production, {
+    broker: 'binance',
+    trading: { enabled: false, mode: 'live' },
+  });
 
   const strategy = config.strategies.CG_coinGrabber;
   assert.equal(typeof strategy.enabled, 'boolean');
