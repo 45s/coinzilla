@@ -5,8 +5,7 @@ import {
   validateTradingConfig,
 } from "./trading-config.js"
 
-const createTradingConfig = (runtime = {}) => ({
-  runtime,
+const createTradingConfig = () => ({
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -16,7 +15,7 @@ const createTradingConfig = (runtime = {}) => ({
         aggressive: { enabled: false },
       },
       pairs: {
-        ZROUSDT: {
+        ZROFDUSD: {
           enabled: true,
           investment: 100,
           orderQuantity: 5,
@@ -24,7 +23,7 @@ const createTradingConfig = (runtime = {}) => ({
           priceStepPercent: 0.05,
           pricePrecision: 3,
           quantityPrecision: 1,
-          makerPercent: 0.1,
+          makerPercent: 0,
           takerPercent: 0.1,
         },
       },
@@ -32,99 +31,50 @@ const createTradingConfig = (runtime = {}) => ({
   },
 })
 
-const runtimeProfiles = {
-  profiles: {
-    default: {
-      broker: null,
-      trading: { enabled: false, mode: "testnet" },
-    },
-    development: {
-      broker: "binance",
-      trading: { enabled: true, mode: "testnet" },
-    },
-    test: {
-      broker: "binance",
-      trading: { enabled: false, mode: "testnet" },
-    },
-    production: {
-      broker: "binance",
-      trading: { enabled: true, mode: "live" },
-    },
-  },
-}
-
-test("selects the explicit development profile for Binance TESTNET trading", () => {
-  const config = validateTradingConfig(createTradingConfig(runtimeProfiles))
-  const runtime = resolveHarvesterRuntimeConfig({ config, environment: "development" })
-
-  assert.equal(runtime.brokerName, "binance", "Development must connect to the configured Binance broker.")
-  assert.equal(runtime.tradingMode, "testnet", "Development trading must use Binance TESTNET.")
-  assert.equal(runtime.tradingRequested, true, "Development profile must preserve its explicit TESTNET trading opt-in.")
-  assert.equal(runtime.tradingEnabled, true, "Development profile must enable Conservative execution only on TESTNET.")
+test("validates strategy-owned pairs without requiring exchange-mode configuration in JSON", () => {
+  const config = createTradingConfig()
+  assert.equal(validateTradingConfig(config), config, "Strategy and pair settings must remain valid without a runtime profile block.")
+  assert.equal(Object.hasOwn(config, "runtime"), false, "Exchange selection must not be stored in trading-config.json.")
+  assert.equal(config.strategies.CG_coinGrabber.pairs.ZROFDUSD.investment, 100, "The pair investment setting must remain part of strategy configuration.")
 })
 
-test("selects the production profile for Binance LIVE order execution", () => {
-  const config = validateTradingConfig(createTradingConfig(runtimeProfiles))
-  const runtime = resolveHarvesterRuntimeConfig({ config, environment: "production" })
-
-  assert.equal(runtime.brokerName, "binance", "Production must connect to Binance LIVE market and account endpoints.")
-  assert.equal(runtime.tradingMode, "live", "Production profile must select LIVE exchange connectivity.")
-  assert.equal(runtime.tradingRequested, true, "Production profile must explicitly opt into LIVE order execution.")
-  assert.equal(runtime.tradingEnabled, true, "Production profile must enable LIVE execution.")
+test("selects Binance TESTNET from TRADING_MODE even when NODE_ENV says production", () => {
+  const runtime = resolveHarvesterRuntimeConfig({ config: createTradingConfig(), tradingMode: "testnet", environment: "production" })
+  assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for TESTNET.")
+  assert.equal(runtime.tradingMode, "testnet", "TRADING_MODE must select TESTNET independently of NODE_ENV.")
+  assert.equal(runtime.tradingEnabled, true, "Trading must be enabled when TESTNET is explicitly selected.")
 })
 
-test("uses a safe read-only profile for tests and unspecified environments", () => {
-  const config = validateTradingConfig(createTradingConfig(runtimeProfiles))
-  const testRuntime = resolveHarvesterRuntimeConfig({ config, environment: "test" })
-  const defaultRuntime = resolveHarvesterRuntimeConfig({ config })
-
-  assert.equal(testRuntime.brokerName, "binance", "The test profile must allow broker fakes without enabling trading.")
-  assert.equal(testRuntime.tradingEnabled, false, "Tests must never inherit development order execution by default.")
-  assert.equal(defaultRuntime.brokerName, undefined, "An unspecified environment must not silently connect to an exchange.")
-  assert.equal(defaultRuntime.tradingEnabled, false, "An unspecified environment must remain read-only.")
+test("selects Binance LIVE from TRADING_MODE even when NODE_ENV says development", () => {
+  const runtime = resolveHarvesterRuntimeConfig({ config: createTradingConfig(), tradingMode: "live", environment: "development" })
+  assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for LIVE.")
+  assert.equal(runtime.tradingMode, "live", "TRADING_MODE must select LIVE independently of NODE_ENV.")
+  assert.equal(runtime.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
 
-test("rejects unsupported broker names in every declared runtime profile", () => {
-  const config = createTradingConfig({
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "unknown", trading: { enabled: false, mode: "live" } },
-    },
-  })
-
+test("fails startup when TRADING_MODE is missing", () => {
   assert.throws(
-    () => validateTradingConfig(config),
-    /runtime\.profiles\.production\.broker/,
-    "A runtime profile must not silently select an unsupported broker implementation.",
+    () => resolveHarvesterRuntimeConfig({ config: createTradingConfig() }),
+    /TRADING_MODE must be set to "testnet" or "live"/,
+    "Startup must fail rather than silently choose an exchange mode when TRADING_MODE is absent.",
   )
 })
 
-test("rejects LIVE execution in the development profile", () => {
-  const config = createTradingConfig({
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      development: { broker: "binance", trading: { enabled: true, mode: "live" } },
-    },
-  })
-
-  assert.throws(
-    () => validateTradingConfig(config),
-    /expected "testnet" for development execution/,
-    "Selecting LIVE exchange connectivity must not enable real-money order execution.",
-  )
+test("rejects every TRADING_MODE value except exact testnet and live", () => {
+  for (const tradingMode of ["", "TESTNET", "production", " live", "live "]) {
+    assert.throws(
+      () => resolveHarvesterRuntimeConfig({ config: createTradingConfig(), tradingMode }),
+      /TRADING_MODE must be set to "testnet" or "live"/,
+      "An invalid exchange mode must fail startup instead of falling back to another environment: " + JSON.stringify(tradingMode),
+    )
+  }
 })
 
-test("rejects production execution when profile selects TESTNET", () => {
-  const config = createTradingConfig({
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
-    },
-  })
-
+test("rejects legacy runtime profiles in strategy configuration", () => {
+  const config = { ...createTradingConfig(), runtime: { profiles: {} } }
   assert.throws(
     () => validateTradingConfig(config),
-    /live" for production execution/,
-    "Production execution must use LIVE mode, never TESTNET.",
+    /runtime.*must not be present/,
+    "The trading JSON must not retain a second exchange-mode selector.",
   )
 })

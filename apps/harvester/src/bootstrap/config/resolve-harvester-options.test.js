@@ -9,21 +9,12 @@ const config = ({
   enabledSymbols = ["BTCUSDT"],
   conservative = true,
   aggressive = false,
-  runtimeProfiles = {},
 } = {}) => ({
-  runtime: {
-    profiles: {
-      default: { broker: null, trading: { enabled: false, mode: "testnet" } },
-      development: { broker: "binance", trading: { enabled: true, mode: "testnet" } },
-      test: { broker: "binance", trading: { enabled: false, mode: "testnet" } },
-      production: { broker: "binance", trading: { enabled: true, mode: "live" } },
-      ...runtimeProfiles,
-    },
-  },
   strategies: {
     CG_coinGrabber: {
       enabled: true,
       settings: {
+        minProfit: 0.01,
         conservative: { enabled: conservative },
         aggressive: { enabled: aggressive },
       },
@@ -49,64 +40,55 @@ const createFixture = ({ cfg = config(), env = {} } = {}) => {
   }
 }
 
-test("resolves the safe default profile and publishes the validated configuration event", async () => {
+test("requires an explicit TRADING_MODE before publishing validated configuration", async () => {
   const fixture = createFixture()
-  const result = await resolveHarvesterOptions(fixture.input)
+  await assert.rejects(
+    resolveHarvesterOptions(fixture.input),
+    /TRADING_MODE must be set to "testnet" or "live"/,
+    "Missing exchange mode must stop startup before configuration is reported as validated.",
+  )
+  assert.equal(fixture.events.length, 0, "Invalid environment configuration must not publish config.validated.")
+})
 
-  assert.equal(result.tradingEnabled, false, "Trading must remain disabled unless an environment profile explicitly enables TESTNET.")
-  assert.equal(result.brokerName, undefined, "An unspecified environment must not silently connect to an exchange.")
+test("selects TESTNET and enables trading even when NODE_ENV is production", async () => {
+  const fixture = createFixture({ env: { NODE_ENV: "production", TRADING_MODE: "testnet" } })
+  const result = await resolveHarvesterOptions(fixture.input)
+  assert.equal(result.tradingEnabled, true, "An explicit TESTNET mode must enable trading.")
+  assert.equal(result.brokerName, "binance", "Binance must be selected without a broker selector.")
+  assert.equal(result.tradingMode, "testnet", "NODE_ENV must not override TRADING_MODE.")
   assert.deepEqual(result.enabledSymbols, ["BTCUSDT"], "Only enabled market symbols must be returned.")
-  assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.CONFIG_VALIDATED, "Configuration validation must publish the lifecycle event.")
-  assert.equal(fixture.events[0].data.strategyMode, "read-only", "The event must report read-only mode.")
+  assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.CONFIG_VALIDATED, "Successful validation must publish the lifecycle event.")
 })
 
-test("allows trading only with Binance, enabled markets, TESTNET mode, and development environment", async () => {
-  const fixture = createFixture({ env: { NODE_ENV: "development" } })
+test("selects LIVE and enables trading even when NODE_ENV is development", async () => {
+  const fixture = createFixture({ env: { NODE_ENV: "development", TRADING_MODE: "live" } })
   const result = await resolveHarvesterOptions(fixture.input)
-
-  assert.equal(result.tradingEnabled, true, "The development profile must explicitly enable TESTNET execution.")
-  assert.equal(result.brokerName, "binance", "The selected profile must resolve the broker.")
-  assert.equal(result.tradingMode, "testnet", "The selected profile must resolve the exchange mode.")
-  assert.equal(fixture.events[0].data.tradingEnabled, true, "The lifecycle event must reflect the resolved trading mode.")
+  assert.equal(result.brokerName, "binance", "LIVE mode must use the fixed Binance broker.")
+  assert.equal(result.tradingMode, "live", "NODE_ENV must not override the explicit LIVE mode.")
+  assert.equal(result.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
 
-test("rejects TESTNET trading without an enabled market or Binance broker", async () => {
-  const noMarkets = createFixture({
-    cfg: config({ enabledSymbols: [] }),
-    env: { NODE_ENV: "development" },
-  })
+test("rejects an invalid TRADING_MODE", async () => {
+  const fixture = createFixture({ env: { TRADING_MODE: "production" } })
   await assert.rejects(
-    resolveHarvesterOptions(noMarkets.input),
+    resolveHarvesterOptions(fixture.input),
+    /TRADING_MODE must be set to "testnet" or "live"/,
+    "Only the exact supported exchange-mode values may pass startup validation.",
+  )
+})
+
+test("rejects configurations without an enabled pair", async () => {
+  const fixture = createFixture({ cfg: config({ enabledSymbols: [] }), env: { TRADING_MODE: "testnet" } })
+  await assert.rejects(
+    resolveHarvesterOptions(fixture.input),
     /requires at least one enabled pair/,
-    "Trading must not start without an enabled market.",
+    "Trading must not start when the strategy has no enabled market.",
   )
-
-  const noBroker = createFixture({
-    cfg: config({
-      runtimeProfiles: {
-        development: { broker: null, trading: { enabled: true, mode: "testnet" } },
-      },
-    }),
-    env: { NODE_ENV: "development" },
-  })
-  await assert.rejects(
-    resolveHarvesterOptions(noBroker.input),
-    /runtime profile broker=binance/,
-    "Trading must require an explicit Binance broker in the selected profile.",
-  )
-})
-
-test("enables production Binance LIVE order execution", async () => {
-  const production = createFixture({ env: { NODE_ENV: "production" } })
-  const result = await resolveHarvesterOptions(production.input)
-  assert.equal(result.brokerName, "binance")
-  assert.equal(result.tradingMode, "live")
-  assert.equal(result.tradingEnabled, true)
-
-
 })
 
 test("rejects invalid strategy flags", async () => {
-  const aggressive = createFixture({ cfg: config({ aggressive: true }) })
+  const aggressive = createFixture({ cfg: config({ aggressive: true }), env: { TRADING_MODE: "testnet" } })
   await assert.rejects(resolveHarvesterOptions(aggressive.input), /Aggressive strategy is disabled and deferred/)
+  const conservative = createFixture({ cfg: config({ conservative: false }), env: { TRADING_MODE: "testnet" } })
+  await assert.rejects(resolveHarvesterOptions(conservative.input), /Conservative strategy must remain enabled/)
 })
