@@ -1,5 +1,11 @@
 # Binance Broker Roadmap
 
+---
+status: active
+type: roadmap
+owner: brokers
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
