@@ -114,7 +114,7 @@ The current checkpoint is therefore **112 tracked Markdown/MDX files**: 97 froze
 | `packages/notifiers/README.md` | 12571 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide; PR #873 source-verified the free-form message/reason security boundary, EventBus error-reporter fallback, and smoke-test output contract. |
 | `packages/notifiers/ROADMAP.md` | 15672 | Package roadmap | **KEEP** | Current work/status authority for the owning scope; reconcile status against GitHub issues/PRs. |
 | `packages/utils/AGENTS.md` | 2271 | Package agent instructions | **KEEP** | Mandatory contributor/AI-agent instructions; local rules supplement central policy. |
-| `packages/utils/README.md` | 19711 | Package entry point | **KEEP** | Scope entry point and setup/public contract guide. |
+| `packages/utils/README.md` | 20337 | Package entry point | **KEEP** | Scope entry point and public contract guide; now documents the exported per-key serialized queue and object-input boundary helper against their source and tests. |
 | `packages/utils/ROADMAP.md` | 11241 | Package roadmap | **KEEP** | Current work/status authority; PRs #767/#770 and closed issue #763 establish build-provenance/Logger rollout as complete, while the repository-wide helper inventory, direct console/stderr audit, and guard remain open. Historical PR #383 closeout wording is explicitly labeled as a dated snapshot. |
 
 ## Initial findings
