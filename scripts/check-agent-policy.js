@@ -156,14 +156,350 @@ export function findMissingLocalLinks(root, documents) {
 }
 
 /**
+ * Decode the common named and numeric HTML entities used in Markdown headings.
+ *
+ * @param {string} value Heading text.
+ * @returns {string} Decoded heading text.
+ */
+function decodeHeadingEntities(value) {
+  const namedEntities = {
+    amp: '&',
+    apos: "'",
+    copy: '©',
+    gt: '>',
+    ldquo: '"',
+    lsquo: "'",
+    lt: '<',
+    mdash: '—',
+    nbsp: ' ',
+    ndash: '–',
+    quot: '"',
+    rdquo: '"',
+    reg: '®',
+    rsquo: "'",
+  };
+
+  return value.replace(/&(#x[\\da-f]+|#\\d+|[a-z]+);/gi, (match, entity) => {
+    const normalizedEntity = entity.toLowerCase();
+
+    if (normalizedEntity.startsWith('#x')) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(2), 16);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    }
+
+    if (normalizedEntity.startsWith('#')) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(1), 10);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match;
+    }
+
+    return namedEntities[normalizedEntity] ?? match;
+  });
+}
+
+/**
+ * Convert Markdown heading content into its rendered text before GitHub slugging.
+ *
+ * @param {string} value Raw Markdown heading content.
+ * @returns {string} Plain heading text.
+ */
+function stripHeadingMarkup(value) {
+  const inlineCodePattern = new RegExp('\\\\x60+([^\\\\x60]*?)\\\\x60+', 'g');
+
+  return decodeHeadingEntities(
+    value
+      .replace(/<!--.*?-->/g, '')
+      .replace(/<((?:https?:\\/\\/|mailto:)[^>]+)>/gi, '$1')
+      .replace(/!\\[([^\\]]*)\\]\\([^)]*\\)/g, '$1')
+      .replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, '$1')
+      .replace(/\\[([^\\]]+)\\]\\[[^\\]]*\\]/g, '$1')
+      .replace(inlineCodePattern, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\\\\([#.+!?()[\\]{}])/g, '$1')
+      .replace(/[\\*~]/g, '')
+      .replace(/(^|\\s)_([^_]+)_($|\\s)/g, '$1$2$3')
+      .trim(),
+  );
+}
+
+/**
+ * Collect GitHub-compatible heading slugs and explicit HTML anchor IDs.
+ *
+ * @param {string} content Markdown/MDX source.
+ * @returns {Set<string>} Anchor identifiers present in the document.
+ */
+function collectMarkdownHeadingAnchors(content) {
+  const anchors = new Set();
+  const lines = content.split(/\\r?\\n/);
+  const fencePattern = new RegExp('^ {0,3}(\\\\x60{3,}|~{3,})(.*)
+
+/**
+ * Find unclosed fenced code blocks in repository Markdown/MDX documents.
+ *
+ * Fences may use backticks or tildes, with a closing fence of the same
+ * character and at least the opening fence length.
+ *
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable Markdown structure errors.
+ */
+export function findUnbalancedMarkdownFences(documents) {
+  const gaps = [];
+
+  for (const document of documents) {
+    let activeFence = null;
+    const lines = document.content.split(/\r?\n/);
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (!match) continue;
+
+      if (!activeFence) {
+        activeFence = {
+          character: match[1][0],
+          length: match[1].length,
+          line: index + 1,
+        };
+        continue;
+      }
+
+      const isClosingFence = match[1][0] === activeFence.character &&
+        match[1].length >= activeFence.length &&
+        /^[ \t]*$/.test(match[2]);
+
+      if (isClosingFence) activeFence = null;
+    }
+
+    if (activeFence) {
+      gaps.push(
+        `${document.path} has an unclosed ${activeFence.character.repeat(activeFence.length)} fence opened at line ${activeFence.line}`,
+      );
+    }
+  }
+
+  return gaps.sort();
+}
+
+/**
+ * Ensure every top-level domain in the ownership map has its own roadmap.
+ *
+ * @param {string} root Repository root.
+ * @param {string} ownershipDocument Domain ownership Markdown.
+ * @returns {string[]} Missing roadmap errors.
+ */
+export function findMissingRoadmaps(root, ownershipDocument) {
+  return extractMappedPaths(ownershipDocument, '/')
+    .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
+    .map((directory) => `${directory} is missing ROADMAP.md`);
+}
+
+function main() {
+  const directories = findInstructionDirectories(repositoryRoot);
+  const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
+  const requiredDocumentationPaths = [
+    'AGENTS.md',
+    'AI_AGENT_WORKFLOW.md',
+    'ENGINEERING_STANDARDS.md',
+    'docs/DOCUMENTATION_GOVERNANCE.md',
+    'docs/README.md',
+    'apps/harvester/AGENTS.md',
+    'apps/harvester/README.md',
+    'apps/harvester/docs/README.md',
+  ];
+  const markdownDocuments = findMarkdownDocuments(repositoryRoot);
+  const anchorGaps = findMissingLocalAnchors(repositoryRoot, markdownDocuments);
+  console.log(
+    'Markdown heading-anchor baseline (report-only): ' + anchorGaps.length +
+    ' unresolved local anchors across ' + markdownDocuments.length + ' Markdown/MDX files.',
+  );
+  for (const gap of anchorGaps) console.log('- ' + gap);
+
+  const gaps = [
+    ...findOwnershipGaps(directories, ownershipDocument),
+    ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
+    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
+    ...findUnbalancedMarkdownFences(markdownDocuments),
+    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
+  ];
+
+  if (gaps.length > 0) {
+    console.error('Agent policy ownership check failed:');
+    for (const gap of gaps) console.error(`- ${gap}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and local paths are valid; heading anchors are report-only).`);
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+);
+  const explicitIdPattern = /\\b(?:id|name)\\s*=\\s*(?:"([^"]+)"|'([^']+)'|([^\\s>]+))/gi;
+  let activeFence = null;
+  let inHtmlComment = false;
+  let inFrontMatter = lines[0]?.trim() === '---';
+
+  function addHeading(rawHeading) {
+    if (/[{}]/.test(rawHeading)) return;
+
+    const plainText = stripHeadingMarkup(rawHeading);
+    const baseSlug = plainText
+      .toLowerCase()
+      .replace(/[^\\p{L}\\p{N}\\p{M}\\-_ ]/gu, '')
+      .trim()
+      .replace(/\\s+/g, '-');
+
+    if (!baseSlug) return;
+
+    let slug = baseSlug;
+    let suffix = 0;
+    while (anchors.has(slug)) {
+      suffix += 1;
+      slug = baseSlug + '-' + suffix;
+    }
+    anchors.add(slug);
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    let line = lines[index];
+
+    if (inFrontMatter) {
+      if (index > 0 && line.trim() === '---') inFrontMatter = false;
+      continue;
+    }
+
+    if (inHtmlComment) {
+      if (line.includes('-->')) inHtmlComment = false;
+      continue;
+    }
+
+    if (line.includes('<!--')) {
+      if (!line.includes('-->')) {
+        inHtmlComment = true;
+        continue;
+      }
+      line = line.replace(/<!--.*?-->/g, '');
+    }
+
+    const fenceMatch = line.match(fencePattern);
+    if (activeFence) {
+      const isClosingFence = fenceMatch &&
+        fenceMatch[1][0] === activeFence.character &&
+        fenceMatch[1].length >= activeFence.length &&
+        /^[ \\t]*$/.test(fenceMatch[2]);
+
+      if (isClosingFence) activeFence = null;
+      continue;
+    }
+
+    if (fenceMatch) {
+      activeFence = {
+        character: fenceMatch[1][0],
+        length: fenceMatch[1].length,
+      };
+      continue;
+    }
+
+    for (const match of line.matchAll(explicitIdPattern)) {
+      const identifier = match[1] ?? match[2] ?? match[3];
+      if (identifier) anchors.add(identifier);
+    }
+
+    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \\t]+|$)(.*)$/);
+    if (atxHeading) {
+      addHeading(atxHeading[1].replace(/[ \\t]+#+[ \\t]*$/, ''));
+      continue;
+    }
+
+    if (/^ {0,3}(=+|-+)[ \\t]*$/.test(line) && index > 0) {
+      const setextHeading = lines[index - 1].trim();
+      if (setextHeading && !setextHeading.startsWith('>') && !setextHeading.startsWith('|')) {
+        addHeading(setextHeading);
+      }
+    }
+  }
+
+  return anchors;
+}
+
+/**
  * Find unresolved local Markdown heading fragments.
+ *
+ * Local Markdown paths are resolved against the source document. External URLs,
+ * non-Markdown assets, missing target paths (reported by findMissingLocalLinks),
+ * code examples and text fragments are excluded. Historical documents remain
+ * included so the report-only baseline does not hide preserved evidence.
  *
  * @param {string} root Repository root.
  * @param {{ path: string, content: string }[]} documents Documents to inspect.
  * @returns {string[]} Human-readable heading-anchor errors.
  */
 export function findMissingLocalAnchors(root, documents) {
-  return [];
+  const gaps = [];
+  const documentsByAbsolutePath = new Map(
+    documents.map((document) => [resolve(root, document.path), document]),
+  );
+  const anchorCache = new Map();
+
+  for (const document of documents) {
+    const content = removeCodeExamples(document.content);
+    const links = content.matchAll(/\\[[^\\]]*\\]\\(([^)\\s]+)(?:\\s+[^)]*)?\\)/g);
+
+    for (const match of links) {
+      const target = match[1];
+      if (/^(?:[a-z][a-z\\d+.-]*:|\\/\\/)/i.test(target)) continue;
+
+      const hashIndex = target.indexOf('#');
+      if (hashIndex < 0) continue;
+
+      const rawFragment = target.slice(hashIndex + 1);
+      if (!rawFragment || rawFragment.startsWith(':~:text=')) continue;
+
+      const pathAndQuery = target.slice(0, hashIndex);
+      const rawPath = pathAndQuery.split('?', 1)[0];
+      let absoluteTarget;
+
+      try {
+        absoluteTarget = rawPath
+          ? resolve(root, dirname(document.path), decodeURIComponent(rawPath))
+          : resolve(root, document.path);
+      } catch {
+        continue;
+      }
+
+      if (!existsSync(absoluteTarget) || !/\\.mdx?$/i.test(absoluteTarget)) continue;
+
+      const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
+      if (!targetDocument) continue;
+
+      let fragment;
+      try {
+        fragment = decodeURIComponent(rawFragment);
+      } catch {
+        gaps.push(
+          document.path + ' has malformed URL-encoded heading fragment "#' + rawFragment + '"',
+        );
+        continue;
+      }
+
+      if (!anchorCache.has(absoluteTarget)) {
+        anchorCache.set(
+          absoluteTarget,
+          collectMarkdownHeadingAnchors(targetDocument.content),
+        );
+      }
+
+      if (!anchorCache.get(absoluteTarget).has(fragment)) {
+        gaps.push(
+          document.path + ' links to missing heading anchor "#' + fragment + '" in ' + targetDocument.path,
+        );
+      }
+    }
+  }
+
+  return gaps.sort();
 }
 
 /**
