@@ -23,7 +23,7 @@ This section supersedes stale checkboxes below where they conflict with merged w
 3. **J-4 — make orchestration state ownership explicit.**
    - **Why:** session lifecycle, subscription state, pending writes and close state must have one clear owner; otherwise races can accept writes after close or lose an uncertain append.
    - **Do:** keep lifecycle sequencing and admission policy in Journal, while the filesystem adapter owns file handles and lock resources. Define when an event is admitted, written, synced, and acknowledged; keep retry and close durability semantics explicit.
-   - **Merged slices:** PR #755 makes close await startup cancellation and resource rollback; PR #758 serializes overlapping close operations. Continue with flush/close serialization and the remaining observable lifecycle matrix.
+   - **Merged slices:** PR #755 makes close await startup cancellation and resource rollback; PR #758 serializes overlapping close operations. PR #759 serializes explicit flushes with one another and with close; its deterministic barriers cover flush/flush and flush/close overlap. Continue with the remaining observable lifecycle matrix.
    - **Verify:** test concurrent close/publish, flush/close overlap, logger failures, append/sync failures, partial startup rollback, and retry after uncertain sync. Do not deduplicate uncertain records by business meaning.
 
 4. **J-5 — contract conformance and operational documentation.**
@@ -74,7 +74,7 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
+**Audit checkpoint:** `develop` at `f3aa201614a491b7e893a86b234174fdc20c8d46` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
