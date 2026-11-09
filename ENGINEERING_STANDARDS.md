@@ -31,6 +31,10 @@ This section is the canonical policy for assessing and updating documentation in
 
 Other repository instructions and task checklists should link to this section rather than restating its policy. Document ownership, classification, lifecycle, ADRs, historical evidence, naming, indexes, migration safety and AI-agent maintenance requirements are defined in the canonical [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md); follow it rather than creating local variants.
 
+## Exchange environment configuration
+
+Binance exchange endpoint selection is governed by [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md). All consumers MUST pass an explicit `TRADING_MODE=testnet|live`; missing or invalid values fail closed. `NODE_ENV` is application runtime metadata only and MUST NOT select or influence Binance endpoints. Keep the ADR as the cross-workspace decision source and the Brokers/Harvester documentation as the operational guides.
+
 ## Visual documentation and workflow schemas
 
 Visual explanations are a preferred documentation technique across **all applications, packages, infrastructure, and engineering workflows** when they make a non-trivial process easier to understand. They complement—not replace—the authoritative prose contract.
