@@ -1,20 +1,22 @@
 # Utilities roadmap
 
+---
+status: active
+type: roadmap
+owner: utils
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
-### IN PROGRESS — build and runtime provenance (issue #763 / PR #765)
+### COMPLETED — build and runtime provenance (issue #763)
 
-**Why:** rapid development changes `develop` between process starts. Journal and TRACE evidence must identify the exact application version, Git revision, working-tree state, and runtime process that produced it.
+The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/767). Harvester's separate process-start Journal event and runtime identity consumer rollout merged in [PR #770](https://github.com/45s/coinzilla/pull/770). Issue #763 is closed as completed.
 
-**Utilities-owned scope:**
-- Capture allowlisted Git metadata once at process startup: full/short SHA, branch, commit subject/date, and clean/dirty state.
-- Use explicit `COINZILLA_BUILD_*` variables only when Git metadata is unavailable; missing values remain unknown.
-- Add opt-in Logger context that is separate from caller data, redacted, frozen, replaceable, and backward-compatible when unset.
-- Preserve native Node.js APIs and avoid new dependencies.
+- `captureBuildMetadata()` captures allowlisted Git provenance once at process startup, with explicit `COINZILLA_BUILD_*` fallback values and unknown states when metadata is unavailable.
+- Logger context is opt-in, separate from caller data, redacted, frozen, replaceable, and backward-compatible when unset.
+- Harvester attaches build/runtime identity and publishes the dedicated `harvester.process_started` Journal lifecycle event while preserving optional Journal startup and mandatory trading durability barriers.
 
-**Coordinated consumer rollout:** after this shared capability is merged, Harvester will add a distinct process-start Journal event with PID, UTC start time, runtime session ID, package version, and source identity. That consumer change belongs to the Harvester roadmap and a separate owner-scoped PR. It must preserve non-blocking optional read-only Journal initialization and mandatory durable Journal barriers for TESTNET trading.
-
-**Verification:** native unit tests and package coverage; workspace CI, JavaScript syntax, dependency audit, and actionlint on the exact final PR head. No CI thresholds or assertions may be weakened.
+**Verification:** all six required offline CI contexts passed on the exact PR #767 and PR #770 heads; the Harvester process-lock check also passed on PR #770. The read-only TESTNET integration job was skipped; no exchange operations were performed.
 
 
 ### IMPORTANT — protect shared helper correctness and dependency direction
@@ -24,10 +26,9 @@
    - **Do:** inspect each application/package candidate and record one disposition: reuse existing utility, extend a genuinely generic utility, keep domain-local, or intentionally duplicate with reason. Keep the inventory linked to the shared-utilities policy and update consumer roadmaps when a shared helper is adopted.
    - **Verify:** every candidate has an owner and rationale; consumer migration tests preserve exact behavior. Do not consolidate code solely to reduce line count.
 
-2. **Finish the Logger API status and consumer contract documentation.**
-   - **Why:** the roadmap still describes configurable levels/transports as in progress on a feature branch, but PR #631 is merged. Stale status can cause duplicate implementation or consumers to rely on an incomplete contract.
-   - **Do:** mark configurable severity levels, independent transport thresholds, runtime changes, safe structured entries and transport lifecycle as complete. Document `success`/`system` severity mapping, default console behavior, custom transport failure isolation and close semantics. Audit existing Harvester logging use without changing its established output unnecessarily.
-   - **Verify:** Logger tests cover independent thresholds, runtime level changes, asynchronous write/close failure, redaction and queue/lifecycle behavior; README/JSDoc/roadmap agree with the merged API.
+2. **COMPLETE — Logger API and consumer contract documentation (PR #631, #659).**
+   - Configurable severity levels, independent transport thresholds, runtime changes, safe structured entries and transport lifecycle are implemented; `success`/`system` severity mapping, console defaults, transport failure isolation and close semantics are documented in the README/JSDoc.
+   - The stale feature-branch status is removed; do not schedule duplicate Logger API work without a newly demonstrated contract gap.
 
 3. **Enforce dependency direction for shared utilities.**
    - **Why:** broad public-index imports can create avoidable dependency cycles or make domain packages depend on unrelated filesystem/logging capabilities.
@@ -82,7 +83,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
-- [~] Capture build provenance and structured Logger context (issue #763 / PR #765). Test-first contract commit is in place; GitHub CI confirmed the expected missing-API RED result. Implementation and consumer rollout remain in progress.
+- [x] Capture build provenance and structured Logger context (issue #763): shared capability merged in PR #767; Harvester process-start consumer integration merged in PR #770. PR #765 was an abandoned test-first draft and is not the delivery reference.
 - [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains.
 - [x] Review dependency usage and keep the package minimal; no new runtime dependencies introduced.
 
