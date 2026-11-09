@@ -54,6 +54,8 @@ Harvester uses one `trading-config.json` with strategy-scoped configuration. The
 
 All settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Strategy availability is not configured through environment variables.
 
+Runtime connectivity and execution policy also belong in the same JSON file, under `runtime.profiles`. The `development` profile selects Binance TESTNET and explicitly opts into Conservative TESTNET execution; the `production` profile selects Binance LIVE connectivity but keeps order execution disabled. `NODE_ENV` selects the profile. The `test` and unspecified-environment defaults remain read-only. Environment files contain only standard process settings and secrets (Binance API credentials and optional Telegram credentials), never broker, trading-mode, Journal, or application feature flags.
+
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup performs REST ticker seeding or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
 
 Example:
