@@ -33,14 +33,14 @@ This section supersedes stale checkboxes below where they conflict with merged w
 
 ### Journal maintenance follow-ups (2026-11-09)
 
-These focused correctness and test-quality improvements do not reopen completed J-1 through J-5 architecture work or change the public Journal contract.
+**Status:** [x] complete in this maintenance PR.
 
-- [ ] **Correct logger failure coverage.** Startup and shutdown isolation tests must throw from logger.system, the method the lifecycle invokes, and assert that the logger was called. Throwing from logger.info does not exercise this contract.
-- [ ] **Retain failed session handles.** A handle whose close() rejects must remain owned by the filesystem adapter; handles that close successfully must be released independently. A later adapter cleanup attempt must retry only the handles still owned.
-- [ ] **Make session suffix ordering exact and deterministic.** Preserve numeric ordering for arbitrarily large accepted values and define a deterministic lexical tie-break for zero-padded suffixes with equal numeric value. Do not rename or rewrite historical sessions.
-- [ ] **Complete filesystem cleanup failure coverage.** Exercise session-handle close failure, compatibility-handle close failure, lock-handle close failure, lock unlink failure, and rollback after partial lock acquisition. Assert resource ownership and exact lock-file preservation/removal at each boundary.
+- [x] **Correct logger failure coverage.** Startup and shutdown isolation tests throw from logger.system, the method the lifecycle invokes, and assert that the logger was called. The prior logger.info setup did not exercise this contract.
+- [x] **Retain failed session handles.** A handle whose close() rejects remains owned by the filesystem adapter; successfully closed handles are released independently. A subsequent adapter cleanup attempt retries only handles still owned.
+- [x] **Make session suffix ordering exact and deterministic.** BigInt comparison preserves numeric ordering for arbitrarily large accepted suffixes; a lexical tie-break makes zero-padded aliases deterministic. Historical session files are not renamed or rewritten.
+- [x] **Complete filesystem cleanup failure coverage.** Tests cover session-handle close failure, compatibility-handle close failure, lock-handle close failure, lock unlink failure, and rollback after partial lock acquisition, including ownership and lock-file preservation/removal assertions.
 
-**TDD sequence:** add focused regressions first and confirm the expected RED against the current implementation; then implement the smallest adapter/ordering changes. Preserve the existing public API, persisted JSONL format, recovery limits, lock semantics, and durability contract. Do not introduce new abstractions or dependencies.
+**TDD evidence:** test-first commit `808b15900b12422eec1eeae50282e3f9fa529983` is based on the latest develop checkpoint; the implementation commit follows it. CI results are recorded on the PR after the final head completes verification. No public API, persisted JSONL format, recovery limits, lock semantics, or durability contract changed.
 
 ### CRITICAL consumer constraint
 
