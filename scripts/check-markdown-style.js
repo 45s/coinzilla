@@ -115,7 +115,9 @@ export function checkChangedMarkdownStyle(baseSha) {
     `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.`,
   )
 
-  const violationEntries = Object.entries(result.violations)
+  const violationEntries = Object.entries(result.violations).filter(
+    ([, entries]) => entries.length > 0,
+  )
   if (violationEntries.length === 0) {
     console.log("Changed maintained Markdown files satisfy the style standard.")
     return result
