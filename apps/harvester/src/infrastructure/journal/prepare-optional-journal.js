@@ -8,11 +8,30 @@ const APPLICATION_DIRECTORY = path.resolve(
   "../../../",
 )
 
+function describeJournalError(error) {
+  if (error instanceof AggregateError) {
+    const firstError = error.errors[0]
+    return {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: firstError?.code,
+    }
+  }
+  return {
+    errorName: error?.name ?? "Error",
+    errorMessage: error?.message ?? String(error),
+    errorCode: error?.code,
+  }
+}
+
 function reportJournalFailure({ logger, error, errors }) {
   try {
+    const originalErrors = errors ?? [error]
+    const firstError = originalErrors[0]
     logger?.error?.({
       message: "Optional Harvester Journal startup failed",
-      errors: errors ?? [error],
+      ...describeJournalError(firstError),
+      errors: originalErrors,
     })
   } catch {
     // Optional observability and its diagnostics must not affect startup.
