@@ -23,6 +23,7 @@ This index is the entry point for maintained Coinzilla documentation. The canoni
 
 ## Audits and historical records
 
+- [Audit records index](audits/README.md)
 - [Repository engineering audit](audits/repository-engineering-audit.md)
 
 Audit reports are historical snapshots. Their conclusions must be interpreted against their recorded branch/commit and date; they do not automatically describe current implementation.
