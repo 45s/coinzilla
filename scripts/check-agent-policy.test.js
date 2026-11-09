@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps, findUnbalancedMarkdownFences } from './check-agent-policy.js';
+import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalAnchors, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps, findUnbalancedMarkdownFences } from './check-agent-policy.js';
 
 const ownershipRow = (path) => `| Domain | \`${path}/\` | Responsibility |\n`;
 
@@ -61,6 +61,80 @@ test('detects missing local Markdown links and ignores external links and anchor
       content: '[valid](existing.md) [broken](missing.md) [external](https://example.com) [anchor](#section)\n\n```md\n[code example](missing-in-code.md)\n```\n\n`[inline example](missing-inline.md)`',
     }]);
     assert.deepEqual(gaps, ['docs/policy.md links to missing path missing.md']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('detects missing same-file and cross-file heading anchors with GitHub-style slugs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-heading-anchors-'));
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'source.md'), '# Source');
+    writeFileSync(join(root, 'docs', 'target.md'), '## Repeated\\n\\n## Repeated\\n\\nUnderlined Heading\\n------------------\\n\\n<a id="custom-anchor"></a>\\n\\n## Café &amp; tea!');
+    writeFileSync(join(root, 'docs', 'asset.png'), '');
+
+    const documents = [
+      {
+        path: 'docs/source.md',
+        content: [
+          '# Source',
+          '',
+          '[valid same-file](#source) [missing same-file](#missing)',
+          '[duplicate](target.md#repeated-1) [setext](target.md#underlined-heading)',
+          '[custom](target.md#custom-anchor) [unicode](target.md#café-tea)',
+          '[missing target](target.md#absent)',
+          '[external](https://example.com#external) [asset](asset.png#not-a-heading)',
+          '',
+          '```md',
+          '[code example](#ignored)',
+          '```',
+          '',
+          '`[inline example](#ignored-inline)`',
+        ].join('\\n'),
+      },
+      {
+        path: 'docs/target.md',
+        content: '## Repeated\\n\\n## Repeated\\n\\nUnderlined Heading\\n------------------\\n\\n<a id="custom-anchor"></a>\\n\\n## Café &amp; tea!',
+      },
+    ];
+
+    assert.deepEqual(findMissingLocalAnchors(root, documents), [
+      'docs/source.md links to missing heading anchor "#missing" in docs/source.md',
+      'docs/source.md links to missing heading anchor "#absent" in docs/target.md',
+    ], 'only unresolved local Markdown fragments should be reported');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('reports malformed percent-encoded heading fragments without throwing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-heading-encoding-'));
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'source.md'), '# Source');
+    assert.deepEqual(findMissingLocalAnchors(root, [{
+      path: 'docs/source.md',
+      content: '[malformed](#bad%ZZ)',
+    }]), [
+      'docs/source.md has malformed URL-encoded heading fragment "#bad%ZZ"',
+    ], 'malformed fragments should be reported as a controlled validation finding');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('includes archived Markdown documents in the report-only anchor inventory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-historical-heading-'));
+  try {
+    mkdirSync(join(root, 'docs', 'audits'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'audits', 'old.md'), '# Archived');
+    assert.deepEqual(findMissingLocalAnchors(root, [{
+      path: 'docs/audits/old.md',
+      content: '# Archived\\n\\n[stale](#removed-section)',
+    }]), [
+      'docs/audits/old.md links to missing heading anchor "#removed-section" in docs/audits/old.md',
+    ], 'historical documents remain visible in the baseline rather than being silently omitted');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
