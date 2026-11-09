@@ -124,11 +124,11 @@ The operator and assistant explicitly authorize each phase together. Do not trea
 1. For each enabled pair, observe its initial market price and calculated BUY intent. Verify symbol, side, order type, price tick, quantity step, notional, per-pair investment cap, client order ID, and post-only constraints before allowing submission.
 2. Verify the exchange acknowledgement and correlate it to the exact client order ID and exchange order ID. There must be no duplicate active BUY.
 2a. **Specific regression-race observation:** record each strategy evaluation ID, order intent/client order ID, BUY limit price, `lastBuyPrice` before evaluation, canonical fill trade IDs, and the weighted execution price after reconciliation. A new BUY decision must not use the previous market price or an un-reconciled/empty reference after the preceding BUY has been acknowledged FILLED. A later BUY must be based on the preceding reconciled weighted execution price. If a second BUY is submitted while the prior FILLED acknowledgement's execution history is still being fetched/applied, or if the same BUY price is resubmitted from stale state, abort immediately and preserve evidence. Do not deliberately create twelve live orders to test this; the offline twelve-sequential-immediate-fill regression already exercises twelve transitions at a fixed market input, and the live session is bounded to one recovery cycle.
-3. Reconcile every execution report against REST order/trade history. For every fill, record trade ID, order ID, client order ID, side, price, base quantity, quote quantity, commission amount/asset/status, and event time.
+3. Reconcile every execution report against Binance WebSocket API order/trade history. For every fill, record trade ID, order ID, client order ID, side, price, base quantity, quote quantity, commission amount/asset/status, and event time.
 4. Verify Portfolio and RecoveryLedger are updated exactly once for each canonical fill. Base-asset commissions affect net base inventory; quote-asset commissions affect net quote cash flow. Third-asset commission data requires reliable quote-currency valuation; otherwise fail closed. Never estimate actual realized fees from the configured percentage.
 5. Verify the next standing BUY and recovery SELL against the canonical specification, reconciled position quantity/spent, cumulative net SELL proceeds, actual commissions, applicable fee reserve, exchange filters, available balances, and the one-BUY/one-SELL limit.
 6. If a BUY fills while a recovery SELL is open, apply the BUY fill once, cancel only that identified owned SELL, reconcile its terminal state and every actual fill/commission (including fill-during-cancel), update accounting, and only then plan a replacement. If the SELL becomes FILLED during cancellation, process it as FILLED. Incomplete reconciliation fails closed.
-7. Verify any partial fills and multiple fills are accumulated by unique trade ID and exact decimal arithmetic. A partial SELL without a new BUY must remain the same exchange order at the same price. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete REST history require a safe pause. Do not manufacture a cancel/fill race or exceed the one-cycle order limit to force a rare event. If partial-fill/cancel/late-event paths are not exercised naturally in this bounded session, record those live paths as NOT OBSERVED; the merged offline regression matrix remains evidence for implementation behavior, but it is not live exchange proof and cannot be reported as TESTNET acceptance.
+7. Verify any partial fills and multiple fills are accumulated by unique trade ID and exact decimal arithmetic. A partial SELL without a new BUY must remain the same exchange order at the same price. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete WebSocket API history require a safe pause. Do not manufacture a cancel/fill race or exceed the one-cycle order limit to force a rare event. If partial-fill/cancel/late-event paths are not exercised naturally in this bounded session, record those live paths as NOT OBSERVED; the merged offline regression matrix remains evidence for implementation behavior, but it is not live exchange proof and cannot be reported as TESTNET acceptance.
 8. After the recovery SELL is terminal, verify actual net proceeds, commissions, full accumulated cost recovery, the configured minimum net profit in the pair's quote asset, sell-through of all sellable inventory above exact configured keepQuantity, and exact retained allocation. If exchange-constrained dust remains, verify its exact quantity and limiting filter and that its original basis is preserved; do not treat it as extra retained inventory or reset the cycle while position quantity is above keepQuantity.
 9. Stop after the first completed recovery cycle. Do not allow another cycle without a separate explicit decision.
 
@@ -136,7 +136,7 @@ Expected result: the symbol set, per-pair cycle count, and limits must be writte
 
 ## 7. Reconciliation during and after execution
 
-For each order, reconcile the user-data stream with REST order status and complete trade history. Do not infer fills solely from cumulative order status. Use exchange trade IDs as execution identity and verify each trade is applied once.
+For each order, reconcile the user-data stream with WebSocket API order status and complete trade history. Do not infer fills solely from cumulative order status. Use exchange trade IDs as execution identity and verify each trade is applied once.
 
 Reconcile these projections independently:
 
@@ -153,7 +153,7 @@ Portfolio/RecoveryLedger agreement does not by itself prove account-wide reconci
 
 1. During the joint session, agree whether any final Harvester-owned order must remain open. Prefer no outstanding owned orders for the first closed-session audit.
 2. If an order must be canceled, authorize that exact order only, wait for the terminal acknowledgement, and reconcile all fills including cancel/fill races. Never use cancel-all.
-3. Stop Harvester gracefully. Shutdown must stop market-price/book intake, cancel only acknowledged strategy-owned BUY orders, keep user-data intake active while cancellation-racing fills are reconciled, preserve all SELL orders, drain accepted user-data work, reconcile owned orders, make a final BUY-cancellation pass for newly acknowledged orders, then stop user-data intake and capture CLOSING while broker REST is still available.
+3. Stop Harvester gracefully. Shutdown stops market-price/book intake and drains accepted market callbacks, reconciles owned orders before cancellation, cancels only acknowledged strategy-owned BUY orders once, keeps user-data intake active while cancellation-racing fills are processed, preserves all SELL orders, drains accepted user-data work, and performs a second owned-order reconciliation as verification only (there is no second BUY-cancellation pass). It then stops user-data intake and captures CLOSING while the broker WebSocket API remains connected.
 4. Verify one durable CLOSING snapshot exists for the same Journal session and includes every returned asset with exact free, locked, and total amounts.
 5. Verify CLOSING is COMPLETE. Known open SELL orders are expected to remain active and are not unresolved. If a BUY remains open, an order state is unknown, reconciliation fails, intake/accounting is unsafe, or flush fails, CLOSING must be INCOMPLETE; shutdown reports failure and retains the process lock.
 6. Run the read-only `journal:balance-audit` against that closed session. Capture its full output and exit code.
@@ -170,8 +170,8 @@ Immediately stop new order intake and do not restart or resubmit if any of the f
 - Unexpected open order, unknown client order ID, or order not attributable to Harvester.
 - More than one active BUY or one active recovery SELL, any second BUY submitted before the prior FILLED acknowledgement is fully reconciled, any repeated same-price BUY attributable to stale strategy state, or any order beyond the agreed cap.
 - Order submission has an unknown outcome, acknowledgement identity mismatch, or duplicate active order.
-- User-data disconnect, readiness loss, stale market data, or broker REST failure.
-- Partial-fill/cancel race, REST/stream disagreement, missing trade IDs, conflicting duplicate facts, or incomplete execution history.
+- User-data disconnect, readiness loss, stale market data, or Binance WebSocket API request/response failure.
+- Partial-fill/cancel race, request/response/stream disagreement, missing trade IDs, conflicting duplicate facts, or incomplete execution history.
 - Missing, unknown, malformed, or unsupported commission asset/status.
 - Portfolio, RecoveryLedger, Journal, or exchange facts disagree without a fully evidenced explanation.
 - Insufficient balance, filter rejection, post-only rejection loop, unexpected fee, or any risk/limit breach.
@@ -191,7 +191,7 @@ Capture and retain, with secrets redacted:
 - Read-only account baseline, all open orders, relevant trade history, and any clientOrderId lookup/order-history/fill reconciliation evidence from an unknown submission.
 - OPENING snapshot and durable Journal confirmation.
 - Harvester startup/readiness logs.
-- Every order intent, acknowledgement, cancellation authorization/result, execution report, REST reconciliation result, and trade row.
+- Every order intent, acknowledgement, cancellation authorization/result, execution report, WebSocket API request/response reconciliation result, and trade row.
 - Per-fill commission amount/asset/status and Portfolio/RecoveryLedger before/after evidence.
 - Cycle completion record and realized net profit.
 - CLOSING snapshot, completeness status, balance-audit output/exit code, and final trade-history completeness evidence.
@@ -232,7 +232,7 @@ Canonical `allOrders` history must retain the requested order's exact identity a
 
 A cursor page may contain orders after the requested `orderId`; filter to the exact exchange order ID before adapting the target row. An absent target row is incomplete history, not proof that the order never existed. Shutdown reconciliation must require exactly one target row and independently match its immutable identity against the Harvester registry.
 
-The offline regression suite also covers fill-history visibility lag: a FILLED acknowledgement with no currently visible trades remains UNKNOWN with the acknowledged broker order ID and zero reconciled quantity; the pair stays paused. Once exact trade history becomes visible, REST reconciliation must match the order's cumulative executed quantity, apply each trade once, and leave the pause in place. Conflicting broker order ID, market, side, or a present-but-different client order ID is rejected before accounting.
+The offline regression suite also covers fill-history visibility lag: a FILLED acknowledgement with no currently visible trades remains UNKNOWN with the acknowledged broker order ID and zero reconciled quantity; the pair stays paused. Once exact trade history becomes visible, WebSocket API request/response reconciliation must match the order's cumulative executed quantity, apply each trade once, and leave the pause in place. Conflicting broker order ID, market, side, or a present-but-different client order ID is rejected before accounting.
 
 These are offline tests only. They do not authorize or substitute for the separately controlled TESTNET validation.
 
@@ -276,7 +276,7 @@ workflow failures:
 
 - Ownership/fill identity conflicts and accounting-projection/parity failures
   remain terminal and prevent acknowledgement.
-- Order-transition, REST-history, and Journal-durability failures keep
+- Order-transition, WebSocket API history, and Journal-durability failures keep
   readiness closed and can retry only after a new single-flight attempt
   repeats the full authoritative checks.
 - Missing or unclassified failure metadata defaults to terminal fail-closed
