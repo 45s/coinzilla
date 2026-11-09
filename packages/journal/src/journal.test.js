@@ -1608,7 +1608,7 @@ test("close drains a published event before releasing the session and writer loc
       "The session handle must be released after the admitted event has been drained and synchronized.",
     )
 
-    const lines = (await readFile(context.filePath, "utf8")).trim().split("\\n")
+    const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
     assert.equal(
       lines.length,
       1,
