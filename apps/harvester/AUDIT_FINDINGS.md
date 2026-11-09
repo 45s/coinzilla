@@ -324,7 +324,7 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 - `apps/harvester/src/index.js` registers SIGINT and SIGTERM handlers that invoke the runtime shutdown.
 - `apps/harvester/src/bootstrap/shutdown/create-shutdown-handler.js` performs owned-order reconciliation before and after the owned-BUY cancellation pass, drains user-data, preserves open SELLs, writes the durable CLOSING balance audit, and disconnects.
 - The process then closes Journal/EventBus and releases process locks only after shutdown is confirmed.
-- SIGKILL, process crash and power loss cannot run these handlers or the graceful CLOSING path. Stale locks are not automatically reclaimed; an operator must verify the owner before manual cleanup.
+- SIGKILL, process crash and power loss cannot run these handlers or the graceful CLOSING path. Same-host locks are reclaimed only when the recorded PID is demonstrably absent and PID/hostname/token still match on immediate re-read. Foreign-host, unreadable, permission-denied, or possibly-live locks fail closed and require operator verification.
 
 
 
