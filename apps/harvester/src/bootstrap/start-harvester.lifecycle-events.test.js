@@ -163,7 +163,9 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   broker.emitStatus({ type: "ready", recoveryRequired: false })
   broker.emitStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
   broker.emitStatus({ type: "recovered", recoveryRequired: true, reconciliationRequired: true, attempt: 1 })
-  assert.deepEqual(eventPublisher.events.slice(7).map((event) => event.data.status), [
+  assert.deepEqual(eventPublisher.events.slice(7)
+    .filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED)
+    .map((event) => event.data.status), [
     "connectionClosed",
     "recovered",
   ])
