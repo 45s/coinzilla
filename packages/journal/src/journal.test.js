@@ -1589,6 +1589,10 @@ test("close drains a published event before releasing the session and writer loc
       context.journal.store.sessionHandle,
       "The session handle must remain owned and open while an admitted publish is still being persisted.",
     )
+    assert.ok(
+      (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
+      "The exclusive writer lock must remain owned while an admitted publish is still being persisted.",
+    )
 
     releaseAppend()
     const closeResult = await closePromise
@@ -1606,6 +1610,11 @@ test("close drains a published event before releasing the session and writer loc
       context.journal.store.sessionHandle,
       null,
       "The session handle must be released after the admitted event has been drained and synchronized.",
+    )
+    assert.equal(
+      (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
+      false,
+      "The exclusive writer lock must be released only after the admitted event has been drained and durably synchronized.",
     )
 
     const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
