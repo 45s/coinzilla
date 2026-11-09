@@ -17,7 +17,7 @@ Import the supported API from the package entry point:
 - `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft })` accepts `[value, rules, fieldName?]` tuples; soft mode returns structured errors and hard mode throws them.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
 - `calculateTimeDiff`: date difference in seconds, minutes, or hours; omitted `end` defaults to the current time.
-- `formatTimeRelatively`: localized relative-time formatting.
+- `formatTimeRelatively`: English relative-time formatting via `Intl.RelativeTimeFormat` (default unit: hours; callers may select another supported unit).
 - `wait`: promise-based delay; accepts a finite duration from 0 through 2,147,483,647 milliseconds.
 - `generateUUID`: UUID v4 generation.
 - `capitalize`: trims and uppercases a string.
