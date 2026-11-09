@@ -309,3 +309,38 @@ test("appends cumulative logs while keeping separate timestamped session histori
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test("rejects an existing session file before registering transports or leaking streams", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-collision-"));
+  const logger = createLogger();
+  const sessionFile = path.join(directory, "harvester-2026-11-09_12-00-00-session-collision.log");
+  try {
+    await import("node:fs/promises").then(({ writeFile }) => writeFile(sessionFile, "preserve existing session\\n"));
+    await assert.rejects(
+      configureHarvesterLogging({
+        logger,
+        directory,
+        processIdentity: {
+          startedAt: "2026-11-09T12:00:00.000Z",
+          runtimeSessionId: "session-collision",
+        },
+      }),
+      /EEXIST/,
+      "a session filename collision must fail startup instead of silently omitting or mixing a session",
+    );
+    assert.equal(logger.transports.size, 0, "failed logging setup must not leave partially registered transports");
+    assert.equal(
+      await readFile(sessionFile, "utf8"),
+      "preserve existing session\\n",
+      "exclusive session creation must never truncate an existing session file",
+    );
+    assert.deepEqual(
+      (await readdir(directory)).sort(),
+      ["harvester-2026-11-09_12-00-00-session-collision.log"],
+      "failed setup must close and remove no existing files or leave partial new session files",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
