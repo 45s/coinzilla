@@ -47,20 +47,26 @@ threshold change does not change either file threshold.
 
 The log directory is relative to the Harvester working directory. Run
 `pnpm --filter @coinzilla/harvester dev` from the repository root, or run
-the package command from `apps/harvester`.
+the package command from `apps/harvester`. The canonical development log
+directory is `apps/harvester/logs/`.
 
 The development runner appends raw child stdout and stderr to
-`logs/terminal.log` and its timestamped session counterpart. The former
-`logs_harvester/terminal.log` location is no longer written by the runner; any
-existing file there is left untouched for manual archival. The cumulative file
-is retained for compatibility and continues to append. The file
-capture applies backpressure so output is not intentionally discarded during
-normal disk operation. The VS Code/console display is best-effort and bounded:
-if the terminal stops consuming output, display chunks are skipped until it
-catches up, while file capture continues. At shutdown, the runner reports the
-number of skipped display chunks when stderr is writable. A disk write failure
-is reported and causes the child process to be stopped; no software can
-guarantee capture through a storage failure.
+`apps/harvester/logs/terminal.log` and its timestamped session counterpart.
+Both files receive identical raw output. The runner opens both destinations
+before starting the child; a session-name collision or stream-open failure
+stops startup without overwriting an existing session. Durable file capture
+applies backpressure so output is not intentionally discarded during normal
+disk operation. The VS Code/console display is best-effort and bounded: if the
+terminal stops consuming output, display chunks are skipped until it catches
+up, while file capture continues. At shutdown, the runner reports the number
+of skipped display chunks when stderr is writable. A terminal-log write
+failure is reported and stops the child process; no software can guarantee
+capture through a storage failure.
+
+The standalone `pnpm --filter @coinzilla/harvester start` command creates
+structured DEBUG and TRACE session files using its own process identity. It
+does not run the development terminal-capture runner and therefore does not
+create terminal log files.
 
 ## Message design
 
