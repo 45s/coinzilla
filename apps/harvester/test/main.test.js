@@ -19,13 +19,13 @@ test('reports successful Binance TESTNET startup without claiming a workflow ran
   const logger = {
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
-    system() {},
+    system: (message) => messages.push(['system', message]),
   };
 
   await runMain({ createJournalService: disabledJournalService, start: async () => ({ connected: true, brokerName: 'binance', tradingEnabled: true, strategyMode: 'conservative', subscriptions: [] }), logger });
 
   assert.deepEqual(messages, [[
-    'info',
+    'system',
     'Connected; subscribed to 0 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.',
   ]]);
 });
