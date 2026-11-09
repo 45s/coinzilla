@@ -25,7 +25,7 @@ function resolveUserDataFailure(failure) {
 
 function getUserDataFailureMessage(failure) {
   if (failure.category === "OWNERSHIP_INTEGRITY") {
-    return "rejected an unowned or mismatched order event"
+    return "rejected an unowned or invalid order event"
   }
   if (failure.category === "ORDER_TRANSITION") {
     return "user-data order transition failed"

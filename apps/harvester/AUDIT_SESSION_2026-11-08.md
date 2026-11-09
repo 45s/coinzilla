@@ -687,3 +687,12 @@ regressions, recovery contract, architecture diagram, and operational
 documentation are committed on the PR branch. Full GitHub Actions validation
 is pending on the resulting branch head. TESTNET acceptance remains paused;
 no live or TESTNET order operation was performed.
+
+
+## 35. Diagnostic compatibility correction — 2026-11-09
+
+The first full CI pass found one existing startup integration assertion tied
+to the stable log message for an unowned order. The typed failure categories
+and new cause/stack diagnostics were correct; the category-specific message
+was restored to the existing stable wording without weakening or removing the
+regression. All other tests in the initial unit/coverage/targeted runs passed.
