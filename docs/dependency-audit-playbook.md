@@ -20,7 +20,7 @@ Run from the repository root:
 # Reproduce the same production-dependency audit threshold as CI
 pnpm audit --prod --audit-level high
 
-# Check workspace tests and JavaScript syntax
+# Run workspace tests, JavaScript syntax, and agent-policy checks
 pnpm run quality
 
 # Confirm the lockfile can reproduce the install
