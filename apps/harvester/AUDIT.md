@@ -820,3 +820,8 @@ Current `createAccountIntegritySafetyHalt()` calls `reconcileOwnedOrders()` with
 ## 2026-11-09 forensic continuation — cancellation outcome classification
 
 The November 8 DOGE recovery SELL `1323350` was rejected by Binance's local user-data-unavailable guard before the state-changing RPC, but the next Harvester record shows the local order marked `UNKNOWN`. Current engine code treats all non-ok cancel results as unconfirmed, without distinguishing known not-sent preflight refusal from post-send ambiguity. This can manufacture unresolved owned-order state. Tracked as F-025/#774. Preserve fail-closed handling for genuine ambiguity while keeping the prior canonical state for known not-sent outcomes.
+
+
+## 2026-11-09 forensic continuation — accounting-failure latch is process-lifetime terminal
+
+Current source initializes `accountingFailed=false` only once in `start-harvester.js`. Event/status handlers set it true; no reset-to-false path exists in the inspected bootstrap. The status handler also refuses to clear `requiresReconciliation` after broker acknowledgement when this latch is true, and the recovery coordinator refuses to start/retry while it is true. A downstream cancellation/transition error can therefore permanently block recovery for the lifetime of the process, even when the underlying fill accounting was already applied. Preserve this fail-closed behavior for genuine accounting-integrity failures, but define explicit typed failure categories and evidence-based recovery/reset policy for other failures. Tracked under F-023/#769.
