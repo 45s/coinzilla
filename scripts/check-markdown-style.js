@@ -177,11 +177,11 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
         )
         isRelevant = Boolean(change.removedHeading || changedHeading)
       } else if (name === "multipleH1") {
-        isRelevant = entry.lines.some((lineNumber) =>
+        isRelevant = Boolean(change.removedHeading) || entry.lines.some((lineNumber) =>
           change.lines.has(lineNumber),
         )
       } else if (name === "headingLevelSkips") {
-        isRelevant = entry.lines.some((lineNumber) =>
+        isRelevant = Boolean(change.removedHeading) || entry.lines.some((lineNumber) =>
           [lineNumber, lineNumber - 1, lineNumber - 2].some((candidate) =>
             change.lines.has(candidate),
           ),
