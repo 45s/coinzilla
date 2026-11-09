@@ -748,3 +748,8 @@ Account/open-order audit DTO mapping failures are now terminal ACCOUNTING_INTEGR
 ## 42. F-023 result-contract exception policy — 2026-11-09
 
 Only an explicit broker result with ok:false is classified as a retryable REST reconciliation failure. An adapter method that throws outside the result contract is unclassified and terminal unless the thrown Error already carries valid failure metadata. This rule is tested for account snapshot, account-wide open orders, owned-order open orders, canonical order history, and fill history.
+
+
+## 43. F-023 terminal fill adapter exception tests — 2026-11-09
+
+The terminal-fill timeout regression now models an explicitly classified retryable REST failure. A separate regression proves an unclassified thrown terminal-fill adapter exception is terminal. This aligns the fixture with the broker port's result contract instead of treating arbitrary thrown exceptions as transient network failures.

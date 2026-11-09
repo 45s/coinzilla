@@ -2738,7 +2738,11 @@ test("classifies terminal fill-history REST timeouts as retryable reconciliation
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    getTerminalFills: () => { throw new Error("terminal fill history timed out") },
+    getTerminalFills: () => {
+      throw Object.assign(new Error("terminal fill history timed out"), {
+        recoveryFailure: { category: "REST_RECONCILIATION", stage: "TERMINAL_FILL_HISTORY", retryable: true },
+      })
+    },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -2762,6 +2766,37 @@ test("classifies terminal fill-history REST timeouts as retryable reconciliation
     retryable: true,
   })
   assert.ok(harness.pauses.includes("TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE"))
+})
+
+test("treats unclassified thrown terminal fill-history adapter errors as terminal", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getTerminalFills: () => { throw new Error("unclassified terminal fill-history adapter exception") },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: sellOrder,
+        status: "CANCELED",
+        executedQuantity: "0",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "TERMINAL_FILL_HISTORY_READ_EXCEPTION",
+    retryable: false,
+  })
 })
 
 test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {
