@@ -77,7 +77,7 @@ The expected product workflow is the Conservative lifecycle defined in [Trading 
 
 Trading first does not mean careless execution. Implement the smallest safety boundary that makes the TESTNET cycle controlled and testable:
 
-- Resolve execution policy from the selected `trading-config.json` runtime profile. The `development` profile explicitly enables Conservative TESTNET execution; the `test` and unspecified-environment profiles remain read-only. The `production` profile selects Binance LIVE connectivity but MUST keep order execution disabled. Live trading is not implemented and cannot be enabled implicitly.
+- Resolve execution policy from the selected `trading-config.json` runtime profile. The `development` profile explicitly enables Conservative TESTNET execution; the `test` and unspecified-environment profiles remain read-only. The `production` profile selects Binance LIVE connectivity and explicitly enables Conservative LIVE execution. `NODE_ENV` from `.env` or `.env.development` selects the profile; launchers must not force or rewrite it.
 - Validate the enabled pair, current price, exchange tick/step rules, supported order type, minimum quantity/notional, and available balance needed for the specific order.
 - Use stable client order identifiers where the broker supports them and retain enough in-process order state to associate updates/fills with submitted orders.
 - Never submit duplicate orders because of repeated market events or duplicate execution events.
