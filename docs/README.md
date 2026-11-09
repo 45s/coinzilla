@@ -46,4 +46,15 @@ Each active application/package owns its local README, agent instructions, roadm
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
 - [Workspace ownership map](engineering/DOMAIN_OWNERSHIP.md)
 
+## Shared package entry points
+
+- [Brokers](../packages/brokers/README.md) — exchange integration and broker operations
+- [Database](../packages/db/README.md) — SQLite persistence infrastructure
+- [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
+- [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
+- [Journal](../packages/journal/README.md) — durable event recording and replay
+- [Market Simulator](../packages/market-simulator/README.md) — offline market simulation
+- [Notifiers](../packages/notifiers/README.md) — optional operational notifications
+- [Utils](../packages/utils/README.md) — shared domain-neutral helpers
+
 For other domains, start at the owning directory's README and AGENTS.md, then follow its ROADMAP.md and local docs index.
