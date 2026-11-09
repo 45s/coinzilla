@@ -337,8 +337,8 @@ test("rejects an existing session file before registering transports or leaking 
     );
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["harvester-2026-11-09_12-00-00-session-collision.log"],
-      "failed setup must close and remove no existing files or leave partial new session files",
+      ["harvester-2026-11-09_12-00-00-session-collision.log", "harvester.log"],
+      "failed setup must close its cumulative stream while preserving the pre-existing session file",
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
