@@ -11,7 +11,7 @@ test("enforces style on changed maintained documents but preserves historical an
     },
     {
       path: "docs/bad.md",
-      content: "# Bad  \n\n\n### Skipped\n",
+      content: "# Bad  \n\n\n### Skipped",
     },
     {
       path: ".github/PULL_REQUEST_TEMPLATE.md",
