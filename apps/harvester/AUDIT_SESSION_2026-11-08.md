@@ -768,3 +768,8 @@ Pending UNKNOWN submissions now use the same explicit classification policy as o
 ## 46. F-023 canonical pending-order fixture correction — 2026-11-09
 
 The pending-order identity mismatch test now constructs a broker-acknowledged CanonicalOrder with the domain's supported OPEN status. This keeps the regression focused on clientOrderId ownership mismatch rather than an invalid test entity.
+
+
+## 47. F-023 identity fixture uses canonical shared Market/Asset values — 2026-11-09
+
+The pending-order identity mismatch regression now constructs its broker response from the suite's canonical Market and Asset fixtures. This ensures the fixture itself is a valid acknowledged CanonicalOrder and the only intended conflict is its foreign clientOrderId.
