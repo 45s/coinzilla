@@ -1,6 +1,7 @@
 # Market Simulator
 
-**Package:** `@coinzilla/market-simulator`  
+**Package:** `@coinzilla/market-simulator`
+
 **Path:** `packages/market-simulator`
 
 An offline market simulator for testing Coinzilla strategies against historical candles, with deterministic candle-matching rules and exact decimal accounting. The complete simulation report is not fully reproducible because some lifecycle timestamps use wall-clock time. It implements the existing `CoreBroker` contract and can simulate a documented subset of spot order execution. It never connects to an exchange.
