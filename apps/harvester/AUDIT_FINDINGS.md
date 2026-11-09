@@ -336,6 +336,8 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 - Current Harvester `reconcileOwnedOrders()` does not perform a symbol-wide scan: it queries fills only after it has a registered owned order ID, and it returns immediately for an empty registry.
 - **Unresolved:** the official endpoint documentation inspected here does not state a guaranteed historical-retention horizon. Therefore a symbol-wide cursor scan is a possible recovery building block, not proof that every offline execution is always retrievable. A durable per-symbol cursor, page-exhaustion proof, retention policy, market-universe coverage, and fallback/operator procedure are still required.
 
+**Additional persistence boundary discovered — F-028:** the applied-fill path publishes `FILL_APPLIED` after accounting but does not call `eventPublisher.flush()`. Event publisher documentation defines publication as synchronous admission only; EventBus subscriber handlers are asynchronous; Journal `record()` acknowledges `durable: false`, while `flush()` waits for subscribers/write queue and performs fsync. Graceful close drains and syncs, but abrupt termination has no equivalent guarantee. See F-028 in `AUDIT.md`. This confirms a missing durability guarantee, not a reproduced historical lost-fill incident.
+
 **Operational consequence and confidence**
 
 - **Confirmed:** previous-process Portfolio/Position, RecoveryLedger totals, fill deduplication identities and owned-order registry are not restored by the current Harvester startup composition.
