@@ -1,5 +1,11 @@
 # Event Bus Reliability Roadmap
 
+---
+status: active
+type: roadmap
+owner: event-bus
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 > Current assessment: no critical defect was established in the audited Event Bus implementation. Core validation, bounded fan-out, failure isolation, lifecycle diagnostics and package coverage gates are already implemented.
