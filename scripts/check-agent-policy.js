@@ -185,7 +185,8 @@ function main() {
   const gaps = [
     ...findOwnershipGaps(directories, ownershipDocument),
     ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
-    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),\n    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
+    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
+    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
   ];
 
   if (gaps.length > 0) {
