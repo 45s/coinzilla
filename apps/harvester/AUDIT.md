@@ -810,3 +810,8 @@ The latest source/log cross-check adds two qualifications to the November 8 find
 The `executionPending` status reports `recoveryRequired:false`, but current source does not use that status to clear the application gate: only the matching acknowledged `reconciled` generation can do so. Therefore, do not infer that this status alone caused the historical mode change. Current recovery-mode tests prove no cancellation during isolated recovery reconciliation; add an integration test covering the complete event/status sequence before declaring the incident path closed.
 
 All follow-up remains investigation/documentation and future DDD/TDD work only. No runtime code, tests, trading behavior, exchange state, or configuration was changed.
+
+
+## 2026-11-09 forensic continuation — safety-halt reconciliation side-effect risk
+
+Current `createAccountIntegritySafetyHalt()` calls `reconcileOwnedOrders()` with default `recoveryMode=false` before explicit BUY-only cancellation. A FILLED BUY encountered during snapshot application can therefore trigger recovery SELL cancellation during the safety-halt reconciliation stage. The November 8 ZRO cancellation stack through `applyOwnedOrderSnapshotsTransition()` followed by the safety-halt reconciliation-failed log strongly correlates with this path, though it does not prove caller attribution. Tracked as F-024/#773. Future DDD/TDD work should ensure the reconciliation stage is side-effect-free and only the explicit owned-BUY cancellation stage mutates orders.
