@@ -1,5 +1,11 @@
 # Market Simulator Engineering Roadmap
 
+---
+status: active
+type: roadmap
+owner: market-simulator
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 ### LOW PRIORITY — deferred until a real consumer exists

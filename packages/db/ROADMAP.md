@@ -1,5 +1,11 @@
 # Database roadmap
 
+---
+status: active
+type: roadmap
+owner: db
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 No current production defect in this package was established by the repository audit. The priorities below are deliberate groundwork, not a reason to introduce persistence abstractions before a real consumer needs them.

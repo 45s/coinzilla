@@ -1,5 +1,11 @@
 # Entities roadmap
 
+---
+status: active
+type: roadmap
+owner: entities
+---
+
 ## Priority execution plan — current develop direction (2026-11-08)
 
 ### IMPORTANT — preserve canonical financial and broker contracts
