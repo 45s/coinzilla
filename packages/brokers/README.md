@@ -30,7 +30,7 @@ The package remains plain JavaScript. JSDoc improves editor type information; it
 
 - The broker package declares a standalone floor of Node.js **22.23.4 or newer**. The repository workspace currently requires Node.js **24 or newer**. Independently, the native transport requires a patched bundled Undici release: **6.29.1 or newer in major 6, 7.30.1 or newer in major 7, or 8.12.2 or newer in major 8**. Unknown or unsupported Undici majors are rejected. Meeting the Node floor alone does not prove that the bundled Undici version passes this runtime guard.
 - Construct the broker with non-empty `apiKey` and `apiSecret`.
-- The default endpoint pair is selected by the repository's `isProdMode` setting: production endpoints in production mode, TESTNET endpoints otherwise.
+- `tradingMode` is required and must be exactly `testnet` or `live`. It alone selects the endpoint pair: `testnet` uses Binance Spot TESTNET; `live` uses Binance Spot LIVE. The broker does not inspect `NODE_ENV` or silently choose a default.
 - `websocketApiUrl` and `websocketStreamsUrl` can be supplied explicitly for controlled environments. Do not point integration tests at production.
 - `reconnectDelay` defaults to 5,000 ms and must be a non-negative integer.
 
@@ -42,6 +42,7 @@ import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 const broker = new BinanceWebSocketBroker({
   apiKey: process.env.BINANCE_API_KEY,
   apiSecret: process.env.BINANCE_API_SECRET_KEY,
+  tradingMode: process.env.TRADING_MODE,
 })
 
 await broker.connect()
