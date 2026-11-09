@@ -6,7 +6,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Purpose | Main check |
 | --- | --- | --- |
-| `quality-gate.yml` | **JavaScript Syntax** workflow: lint GitHub Actions, check JavaScript syntax, and enforce agent-policy/domain-ownership checks on pull requests and pushes to `main`/`develop` | `actionlint`; `node scripts/check-syntax.js`; `node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js` |
+| `quality-gate.yml` | **JavaScript Syntax** workflow: lint GitHub Actions, check JavaScript syntax, and enforce agent-policy/domain-ownership plus Markdown structure/link checks on pull requests and pushes to `main`/`develop` | `actionlint`; `node scripts/check-syntax.js`; `node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js` |
 | `unit-tests.yml` | Run workspace package tests on pushes and pull requests | `pnpm test` |
 | `utils-unit-tests.yml` | Focused checks for the utility package | `pnpm --filter @coinzilla/utils test` |
 | `test-coverage.yml` | Run workspace tests with Node.js coverage reporting | `pnpm run test:coverage` |
@@ -17,6 +17,8 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 - **JavaScript Syntax** runs for pull requests, pushes to `main` and `develop`, and manual dispatch.
 - **Unit Tests**, **Utils Unit Tests**, and **Test Coverage** run for pushes, pull requests, and manual dispatch.
 - **Dependency Audit** runs for pushes, pull requests, manual dispatch, and a weekly scheduled run (Monday at 07:23 UTC).
+
+The agent-policy check also verifies balanced fenced-code delimiters across discovered Markdown/MDX files and checks relative local links; it does not validate heading anchors or external URL availability.
 
 A workflow trigger starting a run does not, by itself, make that check a merge requirement. The active `develop-core` ruleset requires the `Check JavaScript syntax` context; its workflow includes actionlint, JavaScript syntax, and agent-policy/domain-ownership validation. Re-read the live ruleset before changing workflow names or required contexts; see [Documentation Governance](./DOCUMENTATION_GOVERNANCE.md).
 

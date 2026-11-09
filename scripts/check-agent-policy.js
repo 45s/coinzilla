@@ -156,6 +156,52 @@ export function findMissingLocalLinks(root, documents) {
 }
 
 /**
+ * Find unclosed fenced code blocks in repository Markdown/MDX documents.
+ *
+ * Fences may use backticks or tildes, with a closing fence of the same
+ * character and at least the opening fence length.
+ *
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable Markdown structure errors.
+ */
+export function findUnbalancedMarkdownFences(documents) {
+  const gaps = [];
+
+  for (const document of documents) {
+    let activeFence = null;
+    const lines = document.content.split(/\r?\n/);
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (!match) continue;
+
+      if (!activeFence) {
+        activeFence = {
+          character: match[1][0],
+          length: match[1].length,
+          line: index + 1,
+        };
+        continue;
+      }
+
+      const isClosingFence = match[1][0] === activeFence.character &&
+        match[1].length >= activeFence.length &&
+        /^[ \t]*$/.test(match[2]);
+
+      if (isClosingFence) activeFence = null;
+    }
+
+    if (activeFence) {
+      gaps.push(
+        `${document.path} has an unclosed ${activeFence.character.repeat(activeFence.length)} fence opened at line ${activeFence.line}`,
+      );
+    }
+  }
+
+  return gaps.sort();
+}
+
+/**
  * Ensure every top-level domain in the ownership map has its own roadmap.
  *
  * @param {string} root Repository root.
@@ -186,6 +232,7 @@ function main() {
     ...findOwnershipGaps(directories, ownershipDocument),
     ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
     ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
+    ...findUnbalancedMarkdownFences(markdownDocuments),
     ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
   ];
 
@@ -196,7 +243,7 @@ function main() {
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points and local links are valid).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and local links are valid).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
