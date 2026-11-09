@@ -580,6 +580,7 @@ or accounting after a process restart, replay startup history, reconcile
 balances or external inventory, or adopt manual orders. It also does not claim
 durable exactly-once delivery. If broker request/response state is incomplete or inconsistent,
 trading remains paused rather than guessing.
+
 ## Cancellation preconditions
 
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
