@@ -5,16 +5,45 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadTradingConfig } from '../../../src/infrastructure/config/load-trading-config.js';
 
-test('loads and validates the default trading config', async () => {
+function assertTradingConfigStructure(config) {
+  assert.ok(config && typeof config === 'object' && !Array.isArray(config));
+  assert.ok(config.strategies && typeof config.strategies === 'object');
+  assert.ok(config.strategies.CG_coinGrabber, 'the config contains the CG_coinGrabber strategy');
+
+  const strategy = config.strategies.CG_coinGrabber;
+  assert.equal(typeof strategy.enabled, 'boolean');
+  assert.ok(strategy.settings && typeof strategy.settings === 'object');
+  assert.ok(strategy.pairs && typeof strategy.pairs === 'object' && !Array.isArray(strategy.pairs));
+  assert.ok(Object.keys(strategy.pairs).length > 0, 'the strategy contains at least one pair');
+
+  for (const pair of Object.values(strategy.pairs)) {
+    assert.ok(pair && typeof pair === 'object' && !Array.isArray(pair));
+    assert.equal(typeof pair.enabled, 'boolean');
+    for (const key of [
+      'investment',
+      'orderQuantity',
+      'keepQuantity',
+      'priceStepPercent',
+      'pricePrecision',
+      'quantityPrecision',
+      'makerPercent',
+      'takerPercent',
+    ]) {
+      assert.ok(Object.hasOwn(pair, key), `each pair contains the system field ${key}`);
+    }
+  }
+}
+
+test('loads and validates the default trading config structure', async () => {
   const config = await loadTradingConfig();
 
-  assert.equal(config.strategies.CG_coinGrabber.pairs.ZROUSDT.enabled, true);
+  assertTradingConfigStructure(config);
 });
 
 test('loads a config from a supplied path', async () => {
   const config = await loadTradingConfig(new URL('../../../trading-config.json', import.meta.url));
 
-  assert.ok(config.strategies.CG_coinGrabber.pairs.ZROUSDT);
+  assertTradingConfigStructure(config);
 });
 
 test('reports the source path when JSON is malformed', async (t) => {

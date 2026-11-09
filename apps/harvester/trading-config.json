@@ -12,8 +12,30 @@
         }
       },
       "pairs": {
+        "LINKUSDT": {
+          "enabled": false,
+          "investment": 100,
+          "orderQuantity": 2,
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.1,
+          "pricePrecision": 3,
+          "quantityPrecision": 2,
+          "makerPercent": 0.075,
+          "takerPercent": 0.075
+        },
+        "LINKFDUSD": {
+          "enabled": false,
+          "investment": 100,
+          "orderQuantity": 2,
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.1,
+          "pricePrecision": 3,
+          "quantityPrecision": 2,
+          "makerPercent": 0,
+          "takerPercent": 0.075
+        },
         "DOGEUSDT": {
-          "enabled": true,
+          "enabled": false,
           "investment": 100,
           "orderQuantity": 400,
           "keepQuantity": 1,
@@ -35,7 +57,7 @@
           "takerPercent": 0.1
         },
         "ZROUSDT": {
-          "enabled": true,
+          "enabled": false,
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
@@ -46,7 +68,7 @@
           "takerPercent": 0.1
         },
         "ZROFDUSD": {
-          "enabled": false,
+          "enabled": true,
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
