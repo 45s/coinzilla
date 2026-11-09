@@ -6,7 +6,7 @@ import { createFakeRpcClient, createFakeStreamsClient } from "./test-helpers/fak
 
 const loggerCalls = []
 const logger = { debug() {}, error() {}, info() {}, system(message) { loggerCalls.push(message) }, warn() {} }
-const config = { apiKey: "test-key", apiSecret: "test-secret", logger }
+const config = { apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet", logger }
 
 function createBroker(handlers = {}) {
   const rpc = createFakeRpcClient(handlers)
