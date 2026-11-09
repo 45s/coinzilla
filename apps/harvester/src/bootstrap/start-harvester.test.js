@@ -2258,7 +2258,7 @@ test("fails closed when trading is explicitly enabled without selecting a broker
       },
       logger: { info() {}, error() {} },
     }),
-    /runtime profile broker=binance is required when TESTNET trading is enabled/,
+    /TESTNET trading requires runtime profile broker=binance/,
   )
   assert.equal(brokerFactoryCalled, false)
 })
