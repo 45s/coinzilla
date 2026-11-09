@@ -71,6 +71,8 @@ A `strategy.decision` event is emitted only when the strategy produces at least 
 
 The broker status `recovered` means the remote user-data subscription has returned; it does not mean Harvester has reconciled account state or reopened order placement.
 
+A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no contradictory reconciliation flag is diagnostic-only and does not itself invalidate the application recovery generation. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status, including code `1006`, starts recovery; that abnormal close code does not identify the underlying network cause.
+
 ## Startup and capture gaps
 
 A standalone read-only audit can be run while Harvester remains stopped with `pnpm run testnet:audit`. It creates its own Journal session and writes both account events with phase `PREFLIGHT`; it does not start trading or alter exchange state. Exit code 2 means the audit was persisted successfully but open orders were found.
