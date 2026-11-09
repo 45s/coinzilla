@@ -22,7 +22,7 @@ const createFixture = ({ tradingEnabled = false, pairs = { BTCUSDT: { enabled: t
         return subscribeForBookTicker ? subscribeForBookTicker(input, calls) : ({ ok: true, data: { unsubscribe: async () => {}, stream: "book" } })
       },
       getPrices: async (input) => {
-        calls.push("rest-price:" + input.symbol)
+        calls.push("ticker-price-request:" + input.symbol)
         return getPrices ? getPrices(input, calls) : ({ ok: true, data: { symbol: input.symbol, price: "65000" } })
       },
     },
@@ -51,21 +51,21 @@ const createFixture = ({ tradingEnabled = false, pairs = { BTCUSDT: { enabled: t
   return { result, calls, events, subscriptions, bookSubscriptions, marketPriceIntake }
 }
 
-test("establishes all enabled book/price streams before REST ticker seeding", async () => {
+test("establishes all enabled book/price streams before WebSocket API ticker.price seeding", async () => {
   const fixture = createFixture({ tradingEnabled: true })
   const result = await fixture.result
 
   assert.deepEqual(
     fixture.calls,
-    ["subscribe-book:BTCUSDT", "subscribe-price:BTCUSDT", "rest-price:BTCUSDT", "process-price:BTCUSDT"],
-    "Every enabled stream must be active before the initial REST ticker is processed.",
+    ["subscribe-book:BTCUSDT", "subscribe-price:BTCUSDT", "ticker-price-request:BTCUSDT", "process-price:BTCUSDT"],
+    "Every enabled stream must be active before the initial WebSocket API ticker.price response is processed.",
   )
   assert.equal(result.subscriptions.length, 1, "The market-price subscription must be returned for shutdown ownership.")
   assert.equal(result.bookSubscriptions.length, 1, "The book subscription must be returned for shutdown ownership.")
   assert.equal(result.marketPriceIntake.has("BTCUSDT"), true, "Per-market WebSocket intake state must be retained.")
 })
 
-test("skips REST seeding when a fresh WebSocket price arrives during subscription setup", async () => {
+test("skips WebSocket API ticker.price seeding when a fresh stream price arrives during subscription setup", async () => {
   const fixture = createFixture({
     tradingEnabled: true,
     subscribeForPrices: async ({ symbol, onPrice }) => {
@@ -75,15 +75,15 @@ test("skips REST seeding when a fresh WebSocket price arrives during subscriptio
   })
   await fixture.result
 
-  assert.equal(fixture.calls.includes("rest-price:BTCUSDT"), false, "A fresh first WebSocket price must avoid a redundant REST seed.")
+  assert.equal(fixture.calls.includes("ticker-price-request:BTCUSDT"), false, "A fresh first WebSocket Streams price must avoid a redundant ticker.price request.")
   assert.equal(fixture.calls.includes("process-price:BTCUSDT"), true, "The fresh WebSocket price must be processed.")
 })
 
-test("read-only mode subscribes to prices without book streams or REST ticker seeding", async () => {
+test("read-only mode subscribes to prices without book streams or WebSocket API ticker.price seeding", async () => {
   const fixture = createFixture({ tradingEnabled: false })
   await fixture.result
 
-  assert.deepEqual(fixture.calls, ["subscribe-price:BTCUSDT"], "Read-only mode must not establish trading book streams or REST seed prices.")
+  assert.deepEqual(fixture.calls, ["subscribe-price:BTCUSDT"], "Read-only mode must not establish trading book streams or request ticker-price snapshots.")
   assert.equal(fixture.bookSubscriptions.length, 0, "Read-only mode must not retain book subscriptions.")
 })
 

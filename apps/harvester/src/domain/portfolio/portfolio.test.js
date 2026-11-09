@@ -96,19 +96,19 @@ test("rejects a reused Fill ID when execution facts differ", () => {
 })
 
 
-test("deduplicates equivalent REST and WebSocket fills in either delivery order", () => {
-  const restDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
-  const websocketDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
+test("deduplicates equivalent history-response and user-data stream fills in either delivery order", () => {
+  const historyResponseDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
+  const userDataStreamDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
 
-  const restThenWebsocket = new Portfolio().applyFill({ fill: restDelivery }).portfolio
-  const duplicateWebsocket = restThenWebsocket.applyFill({ fill: websocketDelivery })
-  assert.equal(duplicateWebsocket.applied, false)
-  assert.equal(duplicateWebsocket.duplicate, true)
-  assert.equal(duplicateWebsocket.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
+  const historyThenStream = new Portfolio().applyFill({ fill: historyResponseDelivery }).portfolio
+  const duplicateStream = historyThenStream.applyFill({ fill: userDataStreamDelivery })
+  assert.equal(duplicateStream.applied, false)
+  assert.equal(duplicateStream.duplicate, true)
+  assert.equal(duplicateStream.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
 
-  const websocketThenRest = new Portfolio().applyFill({ fill: websocketDelivery }).portfolio
-  const duplicateRest = websocketThenRest.applyFill({ fill: restDelivery })
-  assert.equal(duplicateRest.applied, false)
-  assert.equal(duplicateRest.duplicate, true)
-  assert.equal(duplicateRest.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
+  const streamThenHistory = new Portfolio().applyFill({ fill: userDataStreamDelivery }).portfolio
+  const duplicateHistory = streamThenHistory.applyFill({ fill: historyResponseDelivery })
+  assert.equal(duplicateHistory.applied, false)
+  assert.equal(duplicateHistory.duplicate, true)
+  assert.equal(duplicateHistory.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
 })
