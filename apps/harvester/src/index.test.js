@@ -1382,14 +1382,19 @@ test("fails closed when required Journal readiness fails", async () => {
 
 test("does not register runtime shutdown handlers before the required Journal is ready", async () => {
   let resolveReady
+  let markJournalCreated
+  const journalCreated = new Promise((resolve) => { markJournalCreated = resolve })
   const registered = []
   let started = false
   const pending = main({
-    createJournalService: () => ({
+    createJournalService: () => {
+      markJournalCreated()
+      return {
       ready: new Promise((resolve) => { resolveReady = resolve }),
       flush: async () => ({ ok: true, durable: true }),
       close: async () => ({ ok: true, closed: true }),
-    }),
+      }
+    },
     start: async () => {
       started = true
       return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [], stop: async () => ({ ok: true }) }
@@ -1398,7 +1403,7 @@ test("does not register runtime shutdown handlers before the required Journal is
     logger: { info() {}, system() {}, error() {}, warn() {} },
     env: {},
   })
-  await Promise.resolve()
+  await journalCreated
   assert.equal(started, false)
   assert.deepEqual(registered, [])
   resolveReady({ ok: true })
