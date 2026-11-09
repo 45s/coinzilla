@@ -235,6 +235,8 @@ Enforce objective, low-cost rules first:
 4. Prefer internal-link checks on every PR. External-link checks may run separately because external sites are flaky and can rate-limit.
 5. Do not add a documentation website generator or dependency until there is a concrete publishing/navigation need.
 
+**Verified enforcement baseline (2026-11-09):** the active repository ruleset `develop-core` targets `refs/heads/develop` and requires the `Check JavaScript syntax` status context. The existing JavaScript Syntax workflow runs the agent-policy/domain-ownership check, including canonical documentation/index link validation. The same active ruleset also requires `Run package tests`, `Workspace test coverage`, `packages/utils tests`, and `Audit production dependencies`. The ruleset API was readable and confirmed active; the separate branch-protection endpoint was not accessible to this integration. Do not claim the documentation check is a standalone required context: it is enforced as a step within the required `Check JavaScript syntax` context. If the workflow/context or check step is renamed/removed, update and verify the live ruleset before merging.
+
 A successful workflow run is not proof that a check is required by branch protection. Verify live rulesets separately before claiming enforcement.
 
 ## 14. Migration and archive safety
