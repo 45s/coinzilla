@@ -849,7 +849,7 @@ This section supersedes earlier statements that #654 was deferred outside the ac
 
 SIGINT and SIGTERM are registered in `src/index.js` and call the same runtime stop handler. Graceful shutdown reconciles currently owned orders before and after the owned-BUY cancellation pass, keeps user-data intake through final reconciliation, preserves open SELLs, writes a durable CLOSING balance snapshot, disconnects, closes Journal and releases process locks only after confirmed cleanup.
 
-Unexpected process termination cannot run those handlers or guarantee the CLOSING audit. Stale locks are intentionally not reclaimed automatically and require operator verification. This lock behavior is a separate process-safety concern, not a substitute for state restoration.
+Unexpected process termination cannot run those handlers or guarantee the CLOSING audit. After unclean termination, a same-host lock is automatically reclaimed only when its recorded PID is demonstrably absent and the lock's PID/hostname/token still match on an immediate re-read before unlink. Locks owned by another host, unreadable locks, permission-denied owners, or same-host PIDs that may still be alive fail closed and require operator verification; do not manually remove them without confirming ownership. This lock behavior is a separate process-safety concern, not a substitute for state restoration.
 
 ### Confidence and boundaries
 
