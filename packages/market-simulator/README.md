@@ -18,7 +18,8 @@ A deterministic, offline market simulator for testing Coinzilla strategies again
 
 ## Requirements and setup
 
-- Node.js `>=22.23.4`
+- Package engine floor: Node.js `>=22.23.4` (as declared by this package manifest).
+- Repository workspace development and CI: Node.js `>=24` (as declared by the root `package.json` and workflow setup).
 - pnpm (use the version declared by the repository)
 
 This is a private workspace package, not a published npm package. From the repository root, install workspace dependencies using the repository's normal setup:
