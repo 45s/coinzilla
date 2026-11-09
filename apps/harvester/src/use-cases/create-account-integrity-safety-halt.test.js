@@ -8,7 +8,7 @@ test("reconciles owned order identities before cancelling BUYs", async () => {
   const calls = []
   const cancel = createAccountIntegritySafetyHalt({
     getTradingEngine: () => ({
-      reconcileOwnedOrders: async () => { calls.push("reconcile"); return { ok: true } },
+      reconcileOwnedOrders: async (options) => { calls.push(["reconcile", options]); return { ok: true } },
       cancelOwnedBuyOrdersForSafetyHalt: async () => { calls.push("cancel-owned-buys"); return { ok: true } },
     }),
     logger: {},
@@ -16,7 +16,7 @@ test("reconciles owned order identities before cancelling BUYs", async () => {
 
   await cancel()
 
-  assert.deepEqual(calls, ["reconcile", "cancel-owned-buys"], "Safety halt must resolve broker ownership before selecting BUY orders for cancellation.")
+  assert.deepEqual(calls, [["reconcile", { recoveryMode: true }], "cancel-owned-buys"], "Safety-halt reconciliation must apply exchange facts without strategy-driven SELL cancellation before selecting owned BUYs.")
 })
 
 test("shares concurrent safety-halt work and skips execution after stop", async () => {
@@ -27,8 +27,8 @@ test("shares concurrent safety-halt work and skips execution after stop", async 
   const reconciliationStarted = new Promise((resolve) => { signalReconciliation = resolve })
   const cancel = createAccountIntegritySafetyHalt({
     getTradingEngine: () => ({
-      reconcileOwnedOrders: async () => {
-        calls.push("reconcile")
+      reconcileOwnedOrders: async (options) => {
+        calls.push(["reconcile", options])
         signalReconciliation()
         await reconciliationGate
         return { ok: true }
@@ -41,11 +41,11 @@ test("shares concurrent safety-halt work and skips execution after stop", async 
   const first = cancel()
   const second = cancel()
   await reconciliationStarted
-  assert.deepEqual(calls, ["reconcile"], "Concurrent safety-halt triggers must share the reconciliation task.")
+  assert.deepEqual(calls, [["reconcile", { recoveryMode: true }]], "Concurrent safety-halt triggers must share one recovery-mode reconciliation task.")
 
   releaseReconciliation()
   await Promise.all([first, second])
-  assert.deepEqual(calls, ["reconcile", "cancel-owned-buys"], "The shared workflow must cancel once after reconciliation.")
+  assert.deepEqual(calls, [["reconcile", { recoveryMode: true }], "cancel-owned-buys"], "The shared recovery-mode workflow must cancel once after reconciliation.")
 
   let stopped = true
   const stoppedCancel = createAccountIntegritySafetyHalt({

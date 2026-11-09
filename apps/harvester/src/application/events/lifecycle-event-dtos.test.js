@@ -14,6 +14,7 @@ import {
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
+  mapHarvesterProcessStartedData,
   mapHarvesterStartedData,
   mapHarvesterStartupFailedData,
   mapHarvesterStoppedData,
@@ -44,6 +45,7 @@ const validLifecycle = {
 
 test("exports stable names and source for the initial operational lifecycle contract", () => {
   assert.deepEqual(HARVESTER_EVENT_NAMES, {
+    PROCESS_STARTED: "harvester.process_started",
     STARTED: "harvester.started",
     STARTUP_FAILED: "harvester.startup_failed",
     STOPPED: "harvester.stopped",
@@ -815,4 +817,78 @@ test("maps the exact validated exchange trading rules as a bounded plain DTO", (
   assert.equal(result.ok, true)
   assert.equal(result.data.constraints[0].amount, "0.00001")
   assert.equal(result.data.constraints[1].status, "UNSUPPORTED")
+})
+
+
+const validProcessIdentity = {
+  application: "harvester",
+  version: "1.0.001",
+  runtimeSessionId: "runtime-session-123",
+  processId: 12345,
+  startedAt: "2026-11-09T10:15:30.000Z",
+  source: {
+    branch: "develop",
+    commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    shortCommit: "aaaaaaaa",
+    commitMessage: "release",
+    commitDate: "2026-11-09T09:00:00.000Z",
+    workingTree: "clean",
+    metadataSource: "git",
+  },
+}
+
+test("maps process-start identity to a sanitized allowlisted Journal DTO", () => {
+  const result = mapHarvesterProcessStartedData({
+    ...validProcessIdentity,
+    source: {
+      ...validProcessIdentity.source,
+      commitMessage: 'release apiKey="private-value"',
+      privateCredential: "must-not-be-copied",
+    },
+    apiSecret: "must-not-be-copied",
+  })
+
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "runtime-session-123",
+      processId: 12345,
+      startedAt: "2026-11-09T10:15:30.000Z",
+      source: {
+        branch: "develop",
+        commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        shortCommit: "aaaaaaaa",
+        commitMessage: "release apiKey=[REDACTED]",
+        commitDate: "2026-11-09T09:00:00.000Z",
+        workingTree: "clean",
+        metadataSource: "git",
+      },
+    },
+  }, "process-start evidence must preserve safe provenance fields and discard unapproved fields and embedded credentials")
+})
+
+test("keeps missing build provenance explicit and rejects malformed process identity", () => {
+  const unavailableSource = {
+    branch: null,
+    commit: null,
+    shortCommit: null,
+    commitMessage: null,
+    commitDate: null,
+    workingTree: "unknown",
+    metadataSource: "unavailable",
+  }
+  const unavailable = mapHarvesterProcessStartedData({
+    ...validProcessIdentity,
+    source: unavailableSource,
+  })
+
+  assert.equal(unavailable.ok, true, "a process-start event must remain valid when Git provenance is unavailable")
+  assert.deepEqual(unavailable.data.source, unavailableSource, "unavailable provenance must be represented with explicit null and unknown values")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, processId: "12345" }).ok, false, "process IDs must be numeric safe integers")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, startedAt: "not-a-timestamp" }).ok, false, "process-start timestamps must be valid ISO date strings")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, startedAt: "2026-11-09" }).ok, false, "process-start timestamps must be canonical UTC ISO values, not date-only strings")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, commit: "not-a-sha" } }).ok, false, "Git commit identities must be validated before Journal publication")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, metadataSource: "guessed" } }).ok, false, "provenance source must use one of the documented capture outcomes")
 })
