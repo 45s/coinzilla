@@ -60,6 +60,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
 
 ## Principles
+
 - Keep utilities generic and independent of application or exchange business rules.
 - Prefer pure functions with deterministic inputs/outputs.
 - Avoid adding dependencies when Node.js built-ins or existing code are sufficient.
@@ -96,6 +97,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 Core audit hardening was merged in [PR #383](https://github.com/45s/coinzilla/pull/383) at merge commit `852f789805f9cabf53a0b8994314a09e38c8d9fb`.
 
 The exact final PR head passed:
+
 - Package utils tests ([run](https://github.com/45s/coinzilla/actions/runs/41289828477)).
 - Workspace tests on Node.js 22.23.4 and Node.js 24.x ([run](https://github.com/45s/coinzilla/actions/runs/41289828472)).
 - Workspace coverage, including the new utilities package threshold and its negative self-check ([run](https://github.com/45s/coinzilla/actions/runs/41289828464)).

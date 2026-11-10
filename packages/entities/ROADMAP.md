@@ -39,6 +39,7 @@ owner: entities
 Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
 
 ## Principles
+
 - Stable canonical identity; do not infer asset identity from exchange symbols.
 - Exact decimal representations for financial amounts and increments.
 - Immutable, explicit value contracts with validation at construction/boundaries.

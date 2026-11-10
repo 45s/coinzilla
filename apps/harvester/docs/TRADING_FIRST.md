@@ -234,6 +234,7 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 5. **Ownership baseline:** the account is pre-funded (12,321 DOGE and 517 non-zero assets). Do not infer Harvester-owned inventory from wallet totals. Separate Harvester executions/orders from external balances/trades before any controlled run.
 6. **Commission verification:** historical executions reported zero commissions under the earlier account setting. Verify the later 0.1% maker/taker setting before any future controlled execution. Use actual per-fill commission amount, asset, and status; never retroactively apply the new rate.
 7. **Controlled TESTNET gate:** keep the process stopped. No restart or order submission until follow-up lifecycle/account-baseline checks pass and an operator explicitly approves the controlled run.
+
 #### Current gate
 
 - Confirmed source fixes: committed to PR #513.

@@ -12,6 +12,7 @@ Roadmap: [ROADMAP.md](./ROADMAP.md).
 Do not silently change another domain's implementation, tests, roadmap, or public contract. For cross-domain needs, follow [the cross-domain request process](../../docs/engineering/CROSS_DOMAIN_REQUESTS.md).
 
 ## Local engineering rules
+
 - Inspect the package manifest, public exports, consumers, tests, and current storage behavior before changing contracts.
 - Keep journal storage and record semantics independent of application strategy decisions.
 - Preserve historical records; make serialization, schema evolution, replay, and recovery behavior explicit.
