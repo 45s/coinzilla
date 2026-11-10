@@ -10,6 +10,15 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const GET_FALLBACK_STATUSES = new Set([401, 403, 404, 405, 410, 501]);
+const CREDENTIAL_QUERY_PARAMETERS = new Set([
+  'access_token', 'accesstoken', 'refresh_token', 'refreshtoken', 'id_token', 'idtoken',
+  'token', 'api_key', 'apikey', 'client_secret', 'clientsecret', 'secret', 'password',
+  'signature', 'sig', 'authorization', 'auth', 'credential', 'credentials', 'session',
+  'session_id', 'sessionid', 'jwt', 'x-amz-signature', 'x-amz-credential',
+  'x-amz-security-token', 'x-goog-signature', 'x-goog-credential',
+  'x-goog-security-token', 'awsaccesskeyid', 'oauth_token', 'oauth_signature',
+  'oauth_consumer_key', 'key', 'code',
+]);
 const USER_AGENT = 'Coinzilla-Documentation-Link-Checker/1.0';
 
 function countCharacter(value, character) {
@@ -28,8 +37,32 @@ function trimUrlPunctuation(value) {
   return result;
 }
 
+function isCredentialQueryParameter(name) {
+  return CREDENTIAL_QUERY_PARAMETERS.has(String(name).toLowerCase());
+}
+
 function redactCredentials(value) {
-  return value.replace(/(https?:\/\/)[^/@\s]+@/i, '$1[redacted]@');
+  const userInfoRedacted = value.replace(/(https?:\/\/)[^/@\s]+@/i, '$1[redacted]@');
+
+  try {
+    const parsed = new URL(userInfoRedacted);
+    for (const key of parsed.searchParams.keys()) {
+      if (isCredentialQueryParameter(key)) parsed.searchParams.set(key, '[redacted]');
+    }
+    return parsed.href;
+  } catch {
+    return userInfoRedacted.replace(/([?&])([^=&#]+)=([^&#]*)/g, (match, separator, name) => {
+      let decodedName = name;
+      try {
+        decodedName = decodeURIComponent(name.replace(/\+/g, ' '));
+      } catch {
+        // Keep malformed parameter names unchanged.
+      }
+      return isCredentialQueryParameter(decodedName)
+        ? separator + name + '=[redacted]'
+        : match;
+    });
+  }
 }
 
 function isLocalHostname(hostname) {
@@ -50,7 +83,8 @@ function isLocalHostname(hostname) {
 
 /**
  * Parse an HTTP(S) destination and classify URLs that must not be requested.
- * IP-literal and local-only hosts are skipped to avoid probing private endpoints.
+ * IP-literal and local-only hosts are skipped. DNS answers are not pinned yet;
+ * do not run this checker against untrusted Markdown until issue #901 is complete.
  * @param {string} raw
  * @returns {{status: 'candidate'|'skipped'|'invalid', url: string, host?: string, reason?: string}|null}
  */
@@ -65,10 +99,13 @@ export function parseExternalUrl(raw) {
     return { status: 'invalid', url: redactCredentials(value), reason: 'Malformed HTTP(S) URL' };
   }
 
-  if (parsed.username || parsed.password) {
-    parsed.username = '';
-    parsed.password = '';
-    return { status: 'invalid', url: parsed.href, reason: 'URL embeds credentials' };
+  const credentialQueryParameters = [...parsed.searchParams.keys()].filter(isCredentialQueryParameter);
+  if (parsed.username || parsed.password || credentialQueryParameters.length > 0) {
+    return {
+      status: 'invalid',
+      url: redactCredentials(value),
+      reason: 'URL embeds credentials or credential-like query parameters',
+    };
   }
 
   parsed.hash = '';
@@ -327,6 +364,13 @@ export async function checkExternalLink(link, options = {}) {
     return { ...link, status: 'ok', checkedUrl: get.finalUrl };
   }
   if (isBrokenStatus(get.response.status)) {
+    if (head.response.status === 401 || head.response.status === 403) {
+      return {
+        ...link,
+        status: 'unverifiable',
+        reason: 'GET returned HTTP ' + get.response.status + ' after HEAD returned an access-control response (HTTP ' + head.response.status + ')',
+      };
+    }
     return { ...link, status: 'broken', reason: 'GET confirmed HTTP ' + get.response.status };
   }
   return { ...link, status: 'unverifiable', reason: 'GET returned HTTP ' + get.response.status };
