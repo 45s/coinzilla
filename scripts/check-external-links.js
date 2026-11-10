@@ -18,7 +18,7 @@ function countCharacter(value, character) {
 
 function trimUrlPunctuation(value) {
   let result = value.trim().replace(/^<|>$/g, '');
-  while (/[.,;:!?]$/.test(result)) result = result.slice(0, -1);
+  while (/[.,;:]$/.test(result)) result = result.slice(0, -1);
   const pairs = [['(', ')'], ['[', ']'], ['{', '}']];
   for (const [opening, closing] of pairs) {
     while (result.endsWith(closing) && countCharacter(result, closing) > countCharacter(result, opening)) {
@@ -34,12 +34,18 @@ function redactCredentials(value) {
 
 function isLocalHostname(hostname) {
   return hostname === 'localhost' ||
+    hostname === 'localdomain' ||
     hostname.endsWith('.localhost') ||
     hostname.endsWith('.local') ||
     hostname.endsWith('.internal') ||
     hostname.endsWith('.test') ||
     hostname.endsWith('.invalid') ||
-    hostname.endsWith('.example');
+    hostname.endsWith('.example') ||
+    hostname.endsWith('.home.arpa') ||
+    hostname.endsWith('.lan') ||
+    hostname.endsWith('.corp') ||
+    hostname.endsWith('.intranet') ||
+    hostname.endsWith('.private');
 }
 
 /**
@@ -49,7 +55,7 @@ function isLocalHostname(hostname) {
  * @returns {{status: 'candidate'|'skipped'|'invalid', url: string, host?: string, reason?: string}|null}
  */
 export function parseExternalUrl(raw) {
-  const value = trimUrlPunctuation(String(raw).replace(/&amp;/g, '&'));
+  const value = String(raw).trim().replace(/^<([^>]+)>$/, '$1').replace(/&amp;/g, '&');
   if (!/^https?:\/\//i.test(value)) return null;
 
   let parsed;
@@ -66,11 +72,12 @@ export function parseExternalUrl(raw) {
   }
 
   parsed.hash = '';
-  const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
   if (isIP(hostname) || isLocalHostname(hostname)) {
     return { status: 'skipped', url: parsed.href, host: hostname, reason: 'Local-only or IP-literal host is not requested' };
   }
 
+  parsed.hostname = hostname;
   return { status: 'candidate', url: parsed.href, host: hostname };
 }
 
@@ -99,17 +106,22 @@ export function extractExternalLinks(documents) {
 
   for (const document of documents) {
     const content = removeCodeExamples(document.content).replace(/<!--[\s\S]*?-->/g, '');
-    const patterns = [
-      /!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))/g,
-      /^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|([^\s]+))/gm,
-      /<(https?:\/\/[^>\s]+)>/gi,
-      /https?:\/\/[^\s<>"']+/gi,
-    ];
+    const inlineLinks = /!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))/g;
+    const referenceDefinitions = /^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|([^\s]+))/gm;
+    const autolinks = /<(https?:\/\/[^>\s]+)>/gi;
+    const bareUrls = /https?:\/\/[^\s<>"']+/gi;
 
-    for (const pattern of patterns) {
-      for (const match of content.matchAll(pattern)) {
-        add(match[1] || match[2] || match[0], document.path);
-      }
+    for (const match of content.matchAll(inlineLinks)) {
+      add(match[1] || match[2], document.path);
+    }
+    for (const match of content.matchAll(referenceDefinitions)) {
+      add(match[1] || trimUrlPunctuation(match[2]), document.path);
+    }
+    for (const match of content.matchAll(autolinks)) {
+      add(match[1], document.path);
+    }
+    for (const match of content.matchAll(bareUrls)) {
+      add(trimUrlPunctuation(match[0]), document.path);
     }
   }
 
