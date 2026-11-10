@@ -505,36 +505,53 @@ export const mapFillAppliedData = (input = {}) =>
       ...(fill.executedAt === undefined ? {} : {
         executedAt: requireNonNegativeSafeInteger({ value: fill.executedAt, field: "fill.executedAt" }),
       }),
-      commissions: fill.commissions.map((commission, index) => ({
-        amount: requireDecimalString({
+      commissions: fill.commissions.map((commission, index) => {
+        const amount = requireDecimalString({
           value: commission.amount?.amount,
           field: "commissions[" + index + "].amount",
-        }),
-        assetId: requireString({
+        })
+        const assetId = requireString({
           value: commission.amount?.asset?.id,
           field: "commissions[" + index + "].assetId",
-        }),
-        asset: requireString({
+        })
+        const asset = requireString({
           value: commission.amount?.asset?.code,
           field: "commissions[" + index + "].asset",
-        }),
-        ...(commission.quoteValue === undefined ? {} : {
-          quoteValue: {
-            amount: requireDecimalString({
-              value: commission.quoteValue?.amount,
-              field: "commissions[" + index + "].quoteValue.amount",
-            }),
-            assetId: requireString({
-              value: commission.quoteValue?.asset?.id,
-              field: "commissions[" + index + "].quoteValue.assetId",
-            }),
-            asset: requireString({
-              value: commission.quoteValue?.asset?.code,
-              field: "commissions[" + index + "].quoteValue.asset",
-            }),
-          },
-        }),
-      })),
+        })
+        const isThirdAsset = assetId !== fill.market.baseAsset?.id &&
+          assetId !== fill.market.quoteAsset?.id
+        if (isThirdAsset && commission.quoteValue === undefined) {
+          throw new TypeError("Third-asset commission requires historical quote valuation")
+        }
+        let quoteValue
+        if (commission.quoteValue !== undefined) {
+          const quoteAmount = requireDecimalString({
+            value: commission.quoteValue?.amount,
+            field: "commissions[" + index + "].quoteValue.amount",
+          })
+          const quoteAssetId = requireString({
+            value: commission.quoteValue?.asset?.id,
+            field: "commissions[" + index + "].quoteValue.assetId",
+          })
+          const quoteAsset = requireString({
+            value: commission.quoteValue?.asset?.code,
+            field: "commissions[" + index + "].quoteValue.asset",
+          })
+          if (quoteAssetId !== fill.market.quoteAsset?.id || quoteAsset !== fill.market.quoteAsset?.code) {
+            throw new TypeError("Commission quote valuation must use the market quote asset")
+          }
+          if (compareDecimal({ left: quoteAmount, right: "0" }) <= 0) {
+            throw new RangeError("Commission quote valuation must be greater than zero")
+          }
+          quoteValue = { amount: quoteAmount, assetId: quoteAssetId, asset: quoteAsset }
+        }
+        return {
+          amount,
+          assetId,
+          asset,
+          ...(quoteValue === undefined ? {} : { quoteValue }),
+        }
+      }),
       commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
     }
   })
