@@ -22,9 +22,9 @@ const FINDING_LABELS = Object.freeze({
 })
 
 function parseListItem(line) {
-  const match = line.match(/^([ \t]*)([-+*]|\d+[.)])(?:[ \t]+|$)/)
+  const match = line.match(/^([ \t]*)([-+*]|\d+[.)])([ \t]+|$)/)
   if (!match) return null
-  return { indent: match[1], marker: match[2] }
+  return { indent: match[1], marker: match[2], separator: match[3] }
 }
 
 function splitTableCells(line) {
@@ -90,22 +90,47 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
   const unorderedListMarkers = []
   const nestedListIndentation = []
   const listSpacing = []
+  const parentStack = []
 
   for (let index = 0; index < lines.length; index += 1) {
     if (codeLineIndexes.has(index)) continue
 
     const item = parseListItem(lines[index])
-    if (!item) continue
+    if (!item) {
+      if (lines[index].trim() === "") continue
+      const indentation = (lines[index].match(/^([ \t]*)/)?.[1] ?? "")
+        .replace(/\t/g, "    ").length
+      const parent = parentStack[parentStack.length - 1]
+      if (parent && indentation >= parent.contentColumn) continue
+      parentStack.length = 0
+      continue
+    }
 
     const lineNumber = index + 1
     if (item.marker === "*" || item.marker === "+") {
       unorderedListMarkers.push(lineNumber)
     }
 
-    const indentWidth = item.indent.replace(/\t/g, "  ").length
-    if (item.indent.includes("\t") || indentWidth % 2 !== 0) {
+    const indentWidth = item.indent.replace(/\t/g, "    ").length
+    while (
+      parentStack.length > 0 &&
+      parentStack[parentStack.length - 1].indent >= indentWidth
+    ) {
+      parentStack.pop()
+    }
+
+    const parent = parentStack[parentStack.length - 1]
+    if (
+      item.indent.includes("\t") ||
+      (indentWidth > 0 && (!parent || indentWidth !== parent.contentColumn))
+    ) {
       nestedListIndentation.push(lineNumber)
     }
+
+    parentStack.push({
+      indent: indentWidth,
+      contentColumn: indentWidth + item.marker.length + item.separator.length,
+    })
   }
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -164,7 +189,6 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
     listSpacing: [...new Set(listSpacing)].sort((left, right) => left - right),
   }
 }
-
 function collectTableFormattingFindings(lines, codeLineIndexes) {
   const malformedTableDelimiters = []
   const tableColumnMismatches = []
