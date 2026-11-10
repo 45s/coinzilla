@@ -1412,75 +1412,83 @@ test("does not retry application recovery after a permanent Journal write failur
   assert.equal(fixture.calls.acknowledgements, 0, "Later reminders must never acknowledge the unresolved recovery.")
 })
 
-test("does not let a terminal failure from a superseded recovery generation poison the current generation", async () => {
-  let resolveFirstReconciliation
-  const firstReconciliation = new Promise((resolve) => {
-    resolveFirstReconciliation = resolve
+
+test("does not let a terminal account-snapshot failure from a superseded recovery generation poison the current generation", async () => {
+  let rejectFirstSnapshot
+  let markFirstSnapshotStarted
+  const firstSnapshotStarted = new Promise((resolve) => {
+    markFirstSnapshotStarted = resolve
   })
-  let reconciliationCalls = 0
+  const firstSnapshot = new Promise((_resolve, reject) => {
+    rejectFirstSnapshot = reject
+  })
+  let snapshotReads = 0
   const fixture = createRecovery({
-    reconcileOwnedOrders: async () => {
-      reconciliationCalls += 1
-      if (reconciliationCalls === 1) {
-        return firstReconciliation
+    refreshAccountSnapshot: async () => {
+      snapshotReads += 1
+      if (snapshotReads === 1) {
+        markFirstSnapshotStarted()
+        return firstSnapshot
       }
-      return { ok: true, data: { reconciled: 2 } }
+      return { sourceTime: 101 }
     },
   })
 
   fixture.start()
   const staleAttempt = fixture.state.recoveryTask
+  await firstSnapshotStarted
   fixture.state.recoveryGeneration = 2
   fixture.state.recoveryBrokerGeneration = 43
-  resolveFirstReconciliation({
-    ok: false,
-    errors: [new Error("stale canonical order history conflict")],
-    failure: {
-      category: "ACCOUNTING_INTEGRITY",
-      stage: "OWNED_ORDER_HISTORY_CONFLICT",
-      retryable: false,
+  rejectFirstSnapshot(Object.assign(
+    new Error("stale account snapshot validation failed"),
+    {
+      recoveryFailure: {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "ACCOUNT_SNAPSHOT_VALIDATION",
+        retryable: false,
+      },
     },
-  })
+  ))
   await staleAttempt
 
   assert.equal(
     fixture.state.accountingFailed,
     false,
-    "A terminal failure returned by an obsolete recovery generation must not poison accounting for the newer generation.",
+    "A terminal account-snapshot failure returned after its recovery generation was superseded must not poison accounting for the newer generation.",
   )
   assert.equal(
     fixture.state.retryableRecoveryFailure,
     null,
-    "A stale terminal failure must not leave a failure marker that belongs to an obsolete recovery generation.",
+    "A stale terminal account-snapshot failure must not leave retry metadata attached to the current recovery state.",
   )
   assert.equal(
     fixture.state.status,
     "AUTHORITATIVE_RECONCILIATION_REQUIRED",
-    "A superseded recovery attempt must preserve the current generation's reconciliation-required status.",
+    "A superseded account-snapshot failure must preserve the current generation's reconciliation-required status.",
   )
   assert.equal(
     fixture.state.requiresReconciliation,
     true,
-    "A stale failure must leave the newer recovery generation blocked until its own reconciliation succeeds.",
+    "A stale account-snapshot failure must leave the newer recovery generation blocked until its own reconciliation succeeds.",
   )
   assert.equal(
     fixture.calls.acknowledgements,
     0,
-    "An obsolete recovery generation must never acknowledge the broker after its terminal failure.",
+    "An obsolete recovery generation must never acknowledge the broker after its account-snapshot failure.",
   )
 
   fixture.start()
   await fixture.state.recoveryTask
 
   assert.equal(
-    reconciliationCalls,
+    snapshotReads,
     2,
-    "The current recovery generation must be allowed to perform its own authoritative reconciliation after stale work exits.",
+    "The current recovery generation must be allowed to fetch its own authoritative account snapshot after stale work exits.",
   )
   assert.equal(
     fixture.state.accountingFailed,
     false,
-    "Successful reconciliation of the current generation must not inherit a terminal failure from obsolete work.",
+    "Successful recovery of the current generation must not inherit a terminal account-snapshot failure from obsolete work.",
   )
   assert.equal(
     fixture.state.requiresReconciliation,
