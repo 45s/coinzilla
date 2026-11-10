@@ -96,7 +96,7 @@ test("checks new files fully while preserving historical, superseded and GitHub 
       },
       {
         path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
-        content: "## Summary\n\n## Context\n\nDescription.\n",
+        content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
       },
     ],
     new Map([
@@ -125,6 +125,9 @@ test("checks new files fully while preserving historical, superseded and GitHub 
     "docs/new.md",
   ], "new maintained documents should use sequential heading levels")
   assert.deepEqual(result.violations.missingH1.map(({ path }) => path), [], "new maintained documents should contain one H1")
+  assert.deepEqual(result.violations.listSpacing.map(({ path }) => path), [
+    ".github/ISSUE_TEMPLATE/cross-domain-request.md",
+  ], "template heading exemptions must not disable list-spacing enforcement")
 })
 
 test("accepts a clean changed document", () => {
@@ -178,7 +181,7 @@ test("enforces every existing style rule for new maintained documents", () => {
   }
 })
 
-test("keeps list and table structure metrics report-only until their baseline is reviewed", () => {
+test("keeps non-spacing list and table structure metrics report-only after list-spacing migration", () => {
   const content = [
     "# Title",
     "Paragraph",
@@ -202,7 +205,6 @@ test("keeps list and table structure metrics report-only until their baseline is
   for (const rule of [
     "unorderedListMarkers",
     "nestedListIndentation",
-    "listSpacing",
     "malformedTableDelimiters",
     "tableColumnMismatches",
     "tableSpacing",
@@ -211,9 +213,47 @@ test("keeps list and table structure metrics report-only until their baseline is
   }
 })
 
+test("enforces blank lines before and after list blocks in changed maintained documents", () => {
+  const content = "# Title\n\nIntro paragraph.\n- item\nAfter list.\n"
+  const result = analyzeMarkdownStyleDocuments(
+    [{ path: "docs/list-spacing.md", content }],
+    new Map([["docs/list-spacing.md", {
+      lines: new Set(content.split("\n").map((line, index) => index + 1)),
+      isNewFile: true,
+    }]]),
+  )
+
+  assert.deepEqual(result.violations.listSpacing, [
+    { path: "docs/list-spacing.md", count: 2, lines: [4, 5] },
+  ])
+})
+
+test("accepts list blocks separated from surrounding content by blank lines", () => {
+  const content = "# Title\n\nIntro paragraph.\n\n- item\n\nAfter list.\n"
+  const result = analyzeMarkdownStyleDocuments(
+    [{ path: "docs/list-spacing.md", content }],
+    new Map([["docs/list-spacing.md", {
+      lines: new Set(content.split("\n").map((line, index) => index + 1)),
+      isNewFile: true,
+    }]]),
+  )
+
+  assert.deepEqual(result.violations.listSpacing, [])
+})
+
+test("does not require unrelated pre-existing list spacing to be cleaned in an edited document", () => {
+  const content = "# Existing\n\nIntro paragraph.\n- old item\n\nChanged paragraph.\n"
+  const result = analyzeMarkdownStyleDocuments(
+    [{ path: "docs/existing.md", content }],
+    new Map([["docs/existing.md", { lines: new Set([6]), isNewFile: false }]]),
+  )
+
+  assert.deepEqual(result.violations.listSpacing, [])
+})
+
 test("excludes historical documents from every changed-file style rule", () => {
   const fence = String.fromCharCode(96).repeat(3)
-  const content = "# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n" + fence + "\ncode\n" + fence
+  const content = "# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n" + fence + "\ncode\n" + fence + "\nParagraph\n- item\n"
   const result = analyzeMarkdownStyleDocuments(
     [{ path: "apps/harvester/docs/audits/legacy-style.md", content }],
     new Map([["apps/harvester/docs/audits/legacy-style.md", {

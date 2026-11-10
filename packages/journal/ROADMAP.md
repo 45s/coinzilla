@@ -155,6 +155,7 @@ Each numbered slice below is a separate task PR targeting `develop`, with one pr
 **Intent:** make the existing contract explicit before changing its structure.
 
 Scope:
+
 - Document the source-event → persisted-record → recovered-record distinction in the README, including ownership of event meaning and replay effects.
 - Specify the runtime shapes for source events, the current on-disk JSONL representation, and recovered records (`id`, `schemaVersion`, `payload`, `position`).
 - Clarify which fields are Journal-owned, which are copied from the source event, and which are derived during reading.
@@ -162,12 +163,14 @@ Scope:
 - Review public JSDoc for `Journal` methods and add only accurate descriptions of observable behavior and failure results.
 
 Acceptance criteria:
+
 - A consumer can understand the three concepts without inferring semantics from implementation details.
 - No event is renamed, reclassified, wrapped differently on disk, or otherwise changed.
 - README examples continue to match the current public API and runtime behavior.
 - No new dependency, public export, or runtime behavior is introduced.
 
 Tests and verification:
+
 - Documentation-only unless an executable example or clarified contract exposes a mismatch; if it does, stop and create a separate test-first behavior slice rather than silently changing semantics.
 - Manually verify every example, path, default, and error claim against implementation and tests.
 - Run the documentation-only checks required by the repository workflow; no unrelated broad test suite is required for prose-only edits.
@@ -181,6 +184,7 @@ Tests and verification:
 **Intent:** give record identity and schema rules one explicit owner without introducing a heavyweight domain model.
 
 Scope:
+
 - Refine the existing pure functions in `src/helpers/journal-record.js` into a cohesive internal record contract (factory/validator plus explicit persisted and recovered representations where useful).
 - Keep serialization and parsing at the format boundary; keep record invariants in the record contract.
 - Keep source event payload fields compatible with the existing top-level JSONL representation and retain the reserved `__coinzillaJournal` metadata format.
@@ -189,6 +193,7 @@ Scope:
 - Keep the current public `Journal` API and recovered-record shape unless tests demonstrate a necessary compatibility-preserving clarification.
 
 Acceptance criteria:
+
 - Record identity and schema invariants have one authoritative implementation; serialization/parsing do not duplicate those rules.
 - Inputs are not unexpectedly mutated; returned values do not expose mutable internal state through accidental aliasing.
 - Legacy raw records and current schema-v1 records round-trip with equivalent source payloads.
@@ -196,6 +201,7 @@ Acceptance criteria:
 - No inheritance hierarchy, generic entity base class, shared-utils extraction, or speculative version registry is added.
 
 Required test matrix:
+
 - Valid schema-v1 serialize/parse round trip preserving all source event fields and stable ID.
 - Legacy raw record parse compatibility and equivalence to current recovered-record contract.
 - Missing, blank, non-string, and malformed IDs; reserved metadata collision; invalid metadata shape; payload/metadata ID mismatch.
@@ -204,6 +210,7 @@ Required test matrix:
 - Non-mutation/aliasing behavior for caller input and returned record values, if immutability is adopted as part of the contract.
 
 TDD and documentation:
+
 - Test-first commit `a1c0807962008ee981e1caff31fe96d2e53c66af` added focused tests and the README contract. On Node 24.22.2, `pnpm --filter @coinzilla/journal test` produced the expected RED: 51 passed, 1 failed because the source event's root `toJSON` hook was not rejected (`src/journal-record.test.js:61`).
 - Implementation commit makes the smallest change that turns those tests GREEN and updates JSDoc/README to the actual behavior.
 - Refactor only after GREEN; keep tests passing and update affected docs in that same commit.
@@ -218,6 +225,7 @@ TDD and documentation:
 **Intent:** separate Journal lifecycle/orchestration from Node filesystem mechanics and provide deterministic control of I/O in service tests.
 
 Scope:
+
 - Define a small package-private persistence contract for the operations Journal actually needs: exclusive writer ownership, session creation/append, file-content sync, session close, bounded session discovery/read, and ownership release.
 - Move Node filesystem calls, JSONL session file mechanics, lock-file creation/metadata, and lock cleanup into one filesystem implementation with cohesive responsibilities.
 - Inject the adapter into the internal Journal orchestration path while preserving the existing `new Journal({ eventBus, directory, logger })` public construction contract. If a test-only/internal factory is needed, keep it non-public.
@@ -225,6 +233,7 @@ Scope:
 - Preserve read limits, deterministic session sorting, error codes/details, file permissions, lock acquisition order, and cleanup behavior.
 
 Design guardrails:
+
 - This is one internal filesystem adapter, not a public plugin system or a commitment to multiple storage backends.
 - Do not add a database adapter, memory production adapter, repository abstraction, dependency-injection framework, or new package.
 - Keep actual filesystem semantics tested against temporary directories; a fake adapter is for orchestration/failure tests, not a substitute for filesystem integration coverage.
@@ -232,6 +241,7 @@ Design guardrails:
 - Do not claim directory-entry durability or change the existing file-content fsync contract.
 
 Acceptance criteria:
+
 - Journal orchestration no longer imports Node filesystem APIs directly.
 - Filesystem adapter owns all storage-specific side effects and lock/session resource lifecycle.
 - Public API, JSONL bytes, file naming/order, stable errors, durability acknowledgements, and recovery behavior remain compatible.
@@ -239,6 +249,7 @@ Acceptance criteria:
 - Adapter contract is narrow, package-private, and documented where it is declared.
 
 Required test matrix:
+
 - Adapter contract tests for acquire/create/append/sync/read/close/release success and representative failures.
 - Journal orchestration tests with a deterministic adapter for start/record/flush/close sequencing, EventBus subscription and flush ordering, rejected operations, and startup/close races.
 - Real temporary-directory integration tests for JSONL bytes, timestamp/suffix ordering, bounded reads, malformed data preservation, permissions where supported, and lock behavior.
@@ -246,6 +257,7 @@ Required test matrix:
 - Resource-leak assertions for open handles, subscriptions, and acquired locks after every failed lifecycle path.
 
 TDD and documentation:
+
 - Each behavior increment follows RED → GREEN → REFACTOR. Add the failing adapter/orchestration test before changing production code and record the expected failure.
 - Update the README architecture/operational sections and relevant JSDoc in the same commit as each changed behavior.
 - Keep each commit focused; do not combine extraction, behavior fixes, and API changes.
@@ -259,6 +271,7 @@ TDD and documentation:
 **Intent:** ensure the Journal service owns lifecycle policy while the adapter owns resource mechanics.
 
 Scope:
+
 - Review the lifecycle state machine (`starting`, `started`, `closing`, `closed`, write-failure and close-durability state) for one clear owner and explicit legal transitions.
 - Keep sequencing decisions in the Journal service and file-handle/lock ownership in the adapter.
 - Replace direct tests of private adapter internals with observable service outcomes where possible; retain focused adapter tests for resource-specific guarantees.
@@ -266,6 +279,7 @@ Scope:
 - Keep error reporting contextual and ensure logging failures cannot mask original persistence failures or interrupt cleanup.
 
 Acceptance criteria:
+
 - Every lifecycle transition has a documented precondition, observable result, and tested failure/cleanup behavior.
 - No duplicate lifecycle state is maintained in both service and adapter without a documented reason.
 - Concurrent start/close, overlapping operations, write failure, sync failure, repeated close, and startup rollback retain existing outcomes.
@@ -273,17 +287,20 @@ Acceptance criteria:
 - The public `Journal` facade remains backward compatible.
 
 Required test matrix:
+
 - Valid and invalid lifecycle transitions, concurrent start, close-during-start, close-while-active, and repeated close.
 - EventBus subscribe/flush/unsubscribe success and failure, including logger failure.
 - Append queue ordering, write failure poisoning, transient sync retry, durable close and failed durability.
 - Cleanup assertions for every acquired resource and all relevant races using deterministic barriers/deferred promises rather than arbitrary sleeps.
 
 TDD and documentation:
+
 - Add each missing state-transition regression test first and verify RED for the expected reason.
 - Implement one state transition or duplicated ownership concern per PR/commit; avoid broad lifecycle rewrites.
 - Update lifecycle/state documentation and JSDoc in each implementation commit.
 
 **Merged J-4 slices:**
+
 - [J-4 startup cancellation / PR #755](https://github.com/45s/coinzilla/pull/755), merged as `7103d9d14919620eae371f23f342c51d916d1d0b`: close waits for in-flight startup rollback and only releases resources acquired by that attempt.
 - [J-4 active close serialization / PR #758](https://github.com/45s/coinzilla/pull/758), merged as `951bb60030a2f1eaab375b52a6ea9b84a38cf0ab`: a separate close-operation guard rejects overlapping close calls before a second EventBus flush, while the record-admission cutoff remains after the first EventBus drain.
 
@@ -298,18 +315,21 @@ TDD and documentation:
 **Intent:** make the final architecture easy for package consumers and maintainers to use correctly.
 
 Scope:
+
 - Consolidate the README's public API, record semantics, compatibility, replay guarantees, durability acknowledgement, writer ownership, and read/write concurrency limitations.
 - Document the internal dependency direction and adapter responsibility without promising unsupported extension points.
 - Add a concise package-maintainer test guide describing unit vs filesystem integration coverage and the package coverage gate.
 - Review exported API and JSDoc for accuracy against implementation and tests; avoid generating API docs or adding tooling without a concrete publication requirement.
 
 Acceptance criteria:
+
 - README and JSDoc agree with actual runtime behavior and tests.
 - [x] Every public method's success/failure and durability/replay guarantee is described accurately.
 - [x] Examples do not imply exactly-once replay, business-level deduplication, automatic stale-lock cleanup, or directory-entry fsync.
 - [x] No root-level or other-package documentation is needed; all changes remain under `packages/journal/**`.
 
 Tests and verification:
+
 - Verify README examples and all documented defaults/error codes against executable tests.
 - Run Journal package unit tests and package coverage; confirm the 85% line / 80% branch thresholds remain enforced.
 - Run applicable syntax/policy checks and repository-required CI on the exact final PR head.

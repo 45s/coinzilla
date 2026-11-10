@@ -34,6 +34,7 @@ This package's domain model owns only database-infrastructure concepts: database
 Follow [the mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for task branches, PRs, synchronization, merge gates, and cleanup.
 
 Required checks:
+
 - `pnpm --filter @coinzilla/db test`
 - `pnpm --filter @coinzilla/db test:coverage`
 - Applicable workspace tests and repository checks.

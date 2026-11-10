@@ -208,6 +208,7 @@ These items are intentionally recorded for future work. They are not current tra
 - [ ] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
 - [ ] Reuse existing notifier and event-bus contracts; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
 - [ ] Define configuration, credential handling, message content, and tests when this feature is selected. Notifications remain disabled unless explicitly configured.
+
 ## Current work selection
 
 - [x] Close the 2026-11-07/08 session follow-up: source-level findings are resolved by PRs [#653](https://github.com/45s/coinzilla/pull/653), [#663](https://github.com/45s/coinzilla/pull/663), [#664](https://github.com/45s/coinzilla/pull/664), [#669](https://github.com/45s/coinzilla/pull/669), [#670](https://github.com/45s/coinzilla/pull/670), and [#673](https://github.com/45s/coinzilla/pull/673). Tracking audit [#667](https://github.com/45s/coinzilla/issues/667) is closed; evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). TESTNET acceptance is separate and paused/unverified.

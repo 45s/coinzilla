@@ -100,6 +100,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 **Likely files:** `apps/harvester/package.json`; a focused application event publisher module; bootstrap composition; focused tests; this roadmap.
 
 **Work:**
+
 - Add `@coinzilla/event-bus` as a direct Harvester dependency.
 - Construct exactly one EventBus in application composition and inject it explicitly.
 - Implement a best-effort publisher that accepts one object argument and returns one object result.
@@ -122,6 +123,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 **Likely files:** `src/application/events/`; mapping helpers near the relevant application boundary; contract tests; architecture documentation; roadmap.
 
 **Work:**
+
 - Define stable event-name constants and focused DTO mapping functions for the initial process/configuration/broker lifecycle contract.
 - Verify current Harvester startup/configuration fields and broker identifier before selecting payload fields; no SDK or domain objects are required for these lifecycle DTOs.
 - Use one object input and one object result (`toResult({ data })`).
@@ -146,6 +148,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 **Likely files:** `apps/harvester/package.json`; focused Journal preparation/lifecycle helper; `src/index.js` or bootstrap composition; tests; README/operations docs; roadmap.
 
 **Work:**
+
 - Add `@coinzilla/journal` as a direct dependency.
 - Construct Journal with the shared EventBus, configured directory, and logger in `prepareOptionalJournal`.
 - Start Journal asynchronously during process composition. Configuration-only/no-broker startup may proceed without it; broker-connected startup must complete the PREFLIGHT audit's durable flush before market subscriptions or engine activation.
@@ -169,6 +172,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 **Likely files:** `src/index.js`; `src/bootstrap/start-harvester.js`; event contract/mapping modules; tests; README/operations docs; roadmap.
 
 **Work:**
+
 - Publish validated non-secret configuration facts after trading configuration validation.
 - Publish process startup/startup failure/shutdown outcomes from the process entry point.
 - Publish broker connect/disconnect and user-data/market-price subscription outcomes from bootstrap.
@@ -225,6 +229,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 **Likely files:** `src/bootstrap/start-harvester.js`; `src/use-cases/update-trading-accounting.js`; focused DTO mappers; tests; event documentation; roadmap.
 
 **Work:**
+
 - Publish `execution.fill_applied` only when `updateTradingAccounting` reports `applied: true`, after the existing wrapper has committed both Portfolio and RecoveryLedger.
 - Use a small allowlisted DTO containing stable fill/trade/order identifiers, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, exact commission amount plus asset ID/code for each commission, and commission status.
 - Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6c.
@@ -316,6 +321,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 **Likely files:** Harvester README, architecture, operations/journal documentation, roadmap, AI task closeout.
 
 **Work:**
+
 - Document event inventory and actual payloads.
 - Document journal path/configuration, file naming/session behavior, permissions, disk-full behavior, and retention/rotation limitations based on the actual Journal package.
 - Document how to diagnose Journal health and missing capture windows.
@@ -330,6 +336,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 ## Cross-step definition of done
 
 Every implementation PR must:
+
 - Be one small milestone; do not bundle future steps.
 - Update this roadmap and relevant docs in the same PR.
 - Add deterministic offline tests for success, failure, boundaries, and lifecycle behavior relevant to that step.
@@ -350,6 +357,7 @@ Every implementation PR must:
 - Journal replay as a source of trading state within this observability integration.
 
 A separate Harvester P0 recovery track may consume the Journal as validated recovery evidence; that work must define its own idempotency, ownership, checkpoint, and exchange-reconciliation guarantees. The operational Journal integration remains an observer and does not independently authorize trading.
+
 - Exactly-once delivery.
 - Database/outbox infrastructure.
 - Every-tick market data capture.
