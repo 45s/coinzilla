@@ -43,6 +43,19 @@ export async function subscribeToMarketData({
 } = {}) {
   const enabledSymbols = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled).map(([symbol]) => symbol)
 const reportPriceError = (details) => {
+  const expectedPostOnlyRejection = details?.errors?.length === 1 &&
+    details.errors[0]?.code === "POST_ONLY_WOULD_TAKE"
+  if (expectedPostOnlyRejection) {
+    const rejection = details.errors[0]
+    logger.warn?.({
+      message: "Binance rejected a post-only LIMIT_MAKER order",
+      symbol: details.symbol,
+      orderType: "LIMIT_MAKER",
+      reason: "WOULD_IMMEDIATELY_MATCH",
+      brokerMessage: rejection.message,
+    })
+    return
+  }
   try {
     onMarketPriceError(details)
   } catch (error) {
