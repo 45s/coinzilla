@@ -206,7 +206,7 @@ test("treats identical order updates as idempotent", () => {
   assert.equal(duplicate.registry, first.registry)
 })
 
-test("rejects decreasing executed quantity and stale update timestamps", () => {
+test("rejects decreasing executed quantity and stale update timestamps without changing registry state", () => {
   const registry = OrderRegistry.empty().registerPending({
     order: makeOrder(),
   }).registry
@@ -219,6 +219,7 @@ test("rejects decreasing executed quantity and stale update timestamps", () => {
     updatedAt: 102,
   })
   const current = registry.applyUpdate({ order: partial }).registry
+  const before = current.value
 
   assert.throws(() => current.applyUpdate({
     order: makeOrder({
@@ -229,7 +230,12 @@ test("rejects decreasing executed quantity and stale update timestamps", () => {
       acknowledgedAt: 101,
       updatedAt: 103,
     }),
-  }), /cannot move backwards/)
+  }), /cannot move backwards/, "A report with less executed quantity must be rejected instead of reducing the broker's cumulative execution.")
+  assert.deepEqual(
+    current.value,
+    before,
+    "Rejecting a decreasing execution report must leave every canonical order field and the current registry unchanged.",
+  )
   assert.throws(() => current.applyUpdate({
     order: makeOrder({
       brokerOrderId: "9001",
@@ -239,7 +245,32 @@ test("rejects decreasing executed quantity and stale update timestamps", () => {
       acknowledgedAt: 101,
       updatedAt: 101,
     }),
-  }), /timestamp cannot move backwards/)
+  }), /timestamp cannot move backwards/, "A report with a timestamp older than the current order state must be rejected even when its executed quantity is higher.")
+  assert.deepEqual(
+    current.value,
+    before,
+    "Rejecting a stale-timestamp report must preserve the accepted PARTIALLY_FILLED order and all of its identities, quantities and timestamps.",
+  )
+  assert.equal(
+    current.getOrderByBrokerOrderId({ brokerOrderId: "9001" }).remainingQuantity.amount,
+    "60",
+    "The current order must retain 60 unfilled units after both rejected reports.",
+  )
+  assert.equal(
+    current.getActiveOrders({ marketId: market.id }).length,
+    1,
+    "The rejected reports must not release the active order commitment.",
+  )
+  assert.equal(
+    current.getTerminalOrders({ marketId: market.id }).length,
+    0,
+    "The rejected reports must not move the order into terminal state.",
+  )
+  assert.equal(
+    registry.getOrder({ clientOrderId: "harvester-1" }).status,
+    "PENDING",
+    "Applying the accepted partial update must not mutate the original pre-update registry snapshot.",
+  )
 })
 
 test("rejects immutable order intent changes and invalid status transitions", () => {
@@ -278,36 +309,83 @@ test("rejects immutable order intent changes and invalid status transitions", ()
   }), /Rejected orders cannot have changing executed quantity/)
 })
 
-test("allows a late terminal FILLED update after partial CANCELED or EXPIRED races", () => {
+test("preserves the complete order state when a late FILLED update follows partial CANCELED or EXPIRED", () => {
   for (const terminalStatus of ["CANCELED", "EXPIRED"]) {
     const registry = OrderRegistry.empty().registerPending({
       order: makeOrder(),
     }).registry
-    const terminal = registry.applyUpdate({
-      order: makeOrder({
-        brokerOrderId: "9001",
-        status: terminalStatus,
-        executedQuantity: "40",
-        createdAt: 100,
-        acknowledgedAt: 101,
-        updatedAt: 102,
-        completedAt: 102,
-      }),
-    }).registry
-    const filled = terminal.applyUpdate({
-      order: makeOrder({
-        brokerOrderId: "9001",
-        status: "FILLED",
-        executedQuantity: "100",
-        createdAt: 100,
-        acknowledgedAt: 101,
-        updatedAt: 103,
-        completedAt: 103,
-      }),
+    const terminalOrder = makeOrder({
+      brokerOrderId: "9001",
+      status: terminalStatus,
+      executedQuantity: "40",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+      completedAt: 102,
     })
+    const terminal = registry.applyUpdate({ order: terminalOrder }).registry
+    const expectedFilledOrder = makeOrder({
+      brokerOrderId: "9001",
+      status: "FILLED",
+      executedQuantity: "100",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 103,
+      completedAt: 103,
+    })
+    const filled = terminal.applyUpdate({ order: expectedFilledOrder })
+    const trackedFilledOrder = filled.registry.getOrder({ clientOrderId: "harvester-1" })
 
-    assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
-    assert.equal(filled.registry.getActiveOrders().length, 0)
+    assert.deepEqual(
+      terminal.getOrder({ clientOrderId: "harvester-1" }).value,
+      terminalOrder.value,
+      "The " + terminalStatus + " report must retain its broker identity, 40 executed units, 60 remaining units and terminal timestamps.",
+    )
+    assert.equal(
+      filled.applied,
+      true,
+      "A later authoritative FILLED report with increased execution quantity must advance the " + terminalStatus + " order.",
+    )
+    assert.equal(
+      filled.duplicate,
+      false,
+      "The late FILLED report must be applied as new execution state, not classified as a duplicate.",
+    )
+    assert.equal(
+      filled.stale,
+      false,
+      "A late FILLED report with greater cumulative execution must not be discarded as stale.",
+    )
+    assert.equal(
+      filled.unknown,
+      false,
+      "The late FILLED report must remain matched to the owned canonical order.",
+    )
+    assert.deepEqual(
+      trackedFilledOrder.value,
+      expectedFilledOrder.value,
+      "The resulting FILLED order must preserve client/broker IDs, market, side, type, price, original quantity, full executed quantity, zero remaining quantity and all timestamps.",
+    )
+    assert.deepEqual(
+      filled.registry.getActiveOrders(),
+      [],
+      "A fully executed order must no longer appear in the active registry.",
+    )
+    assert.deepEqual(
+      filled.registry.getTerminalOrders().map((order) => order.value),
+      [expectedFilledOrder.value],
+      "The terminal registry must contain exactly the fully executed canonical order.",
+    )
+    assert.equal(
+      terminal.getOrder({ clientOrderId: "harvester-1" }).status,
+      terminalStatus,
+      "Applying the late FILLED report must not mutate the earlier " + terminalStatus + " registry snapshot.",
+    )
+    assert.equal(
+      registry.getOrder({ clientOrderId: "harvester-1" }).status,
+      "PENDING",
+      "Applying terminal reports must not mutate the original PENDING registry snapshot.",
+    )
   }
 })
 

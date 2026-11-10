@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `631e82c4630f7b57d47fd6fd43adfdbb8656bd95` (2026-11-10). The domain tree contained 28 production JavaScript files and 26 domain test files. The branch contained no Harvester domain-source changes after the PR #909 baseline; the four intervening commits changed roadmap/documentation and Markdown tooling only.
+Reviewed baseline: `develop` at `429c815531cfaf96cfb9d99a6806681c98e645ea` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -40,7 +40,7 @@ Two decision-path defects are confirmed in `strategies/conservative/strategy.js`
 
 RED evidence: PR #917 head `59003fc8ae6fafe6dc5f7528f3356adf03372cdc` ran the full Harvester suite with 870 passed / 2 failed (872 total). The MAX_PRICE failure showed an unexpected `NEXT_STANDING_BUY` at `0.099` for quantity `100`; the PENDING failure showed the same unexpected BUY. The PENDING/UNKNOWN regression is table-driven; its first PENDING assertion fails before the UNKNOWN row executes. The implementation on PR #917 now suppresses BUY intents for both unsafe states and for a `PRICE_FILTER_BLOCKED` required recovery SELL. The OPEN/PARTIALLY_FILLED matrix explicitly protects the approved coexistence behavior.
 
-GREEN evidence on PR head `ffb611507b14efc87338f64521766fbdff9434b3`: the full Harvester suite passed 872/872; Harvester coverage passed at 75.80% lines, 79.05% branches and 74.86% functions; configured Harvester targeted tests passed. All six required checks passed: package unit tests, workspace coverage, JavaScript syntax/Markdown enforcement, Utils tests, production dependency audit and actionlint. The advisory external documentation link check also passed. The TESTNET integration probe was skipped; no exchange activity occurred. The coverage workflow measures Harvester coverage but skips a package-specific threshold enforcement step; no threshold was changed.
+GREEN evidence on merged PR #917 head `85fc8e9080a45f1ab8509e26ce517380d9f11de2`: the full Harvester suite passed 872/872; Harvester coverage was 75.94% lines, 79.34% branches and 74.86% functions. Configured Harvester targeted tests, workspace unit tests and coverage, Utils tests, JavaScript syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links passed. PR #917 merged into `develop` as `0c0e40c271e6a68b90ca7f7ce8753a295f974ffa`. The TESTNET integration probe was skipped; no exchange activity occurred.
 
 ### High — assertion diagnostics are inconsistent
 
@@ -48,15 +48,15 @@ Many existing domain tests omit the detailed assertion messages required by `ENG
 
 ### Medium — expected arithmetic must remain independent
 
-Some scenario fixtures calculate expected fill quote quantities by calling the same production decimal helper used by the implementation. Where practical, fixtures should use independently calculated exact decimal literals, so a shared arithmetic defect cannot make both setup and implementation agree incorrectly.
+The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously used production `multiplyDecimal` both to construct quoteQuantity and to calculate the expected capped notional. This allowed a shared arithmetic defect to affect setup and expected output. [PR #926](https://github.com/45s/coinzilla/pull/926) replaces fixture quote quantities with exact literals (10.78 and 10.8845) and asserts the expected 0.1 price / 0.6 quantity directly. No production behavior changed. Exact PR head `0d4655ccd1ca39299a6c6c922c883d9edc3f2ee6` passed 872/872 Harvester tests; coverage was 75.79% lines, 79.06% branches and 74.88% functions. Workspace unit tests and coverage, configured Harvester targeted tests, Utils tests, JavaScript syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links all passed. PR #926 remains open and unmerged.
 
 ### Medium — capital-limit boundaries need stronger decision assertions
 
-The existing Conservative strategy suite tests a BUY blocked when outstanding recovery plus the next BUY exceeds the configured investment. It does not yet establish both exact-cap equality and the immediately-over-cap outcome as a decision matrix, including the resulting SELL/BUY intents.
+The exact-cap decision matrix is added in open [PR #922](https://github.com/45s/coinzilla/pull/922): exact equality at 19.900 quote units (10.00 outstanding recovery + 9.90 next BUY notional) permits both the recovery SELL and next BUY; a limit of 19.899 blocks only the BUY; a materially lower limit of 15.00 also blocks only the BUY. Exact PR-head CI passed 872/872 Harvester tests and all required checks. PR #922 remains open and unmerged.
 
 ### Medium — lifecycle tests need complete-state assertions
 
-The OrderRegistry suite already covers many important transitions, including UNKNOWN, stale events, identity mismatch and late FILLED reports. Follow-up review should prioritize complete canonical order state, remaining commitment, and immutability after rejected/stale transitions rather than adding duplicate status-only scenarios.
+The OrderRegistry suite already covers UNKNOWN, stale events, identity mismatch and late FILLED reports. The late-FILLED-after-CANCELED/EXPIRED test previously asserted only terminal status and absence from the active list; decreasing-execution and stale-timestamp tests asserted rejection without checking the full state remained unchanged. The current PR adds full CanonicalOrder value assertions (market, side, type, client/broker identity, price, original/executed/remaining quantities and timestamps), active/terminal membership checks, and immutable prior-registry snapshots after both accepted and rejected updates. No production behavior changed; exact-head CI verification is pending.
 
 ### Explicitly deferred — Aggressive grid behavior
 
@@ -64,9 +64,9 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ## Execution order
 
-1. **Strategy decisions:** close the blocked-recovery-SELL decision gap; then add exact investment-cap boundary cases and review active-order/market isolation matrices.
-2. **Portfolio and accounting:** strengthen independent expected values, commission-identity conflicts and multi-fill sequence invariants.
-3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
+1. **Strategy decisions:** blocked-recovery-SELL gating is fixed in merged PR #917; exact investment-cap boundaries are green in open PR #922; independent fixture arithmetic is green in open PR #926. Review active-order/market isolation matrices next.
+2. **Portfolio and accounting:** exact multi-market isolation is green in open PR #924; then review commission-identity conflicts. Existing application-level multi-fill sequence/atomicity tests are already present and should not be duplicated.
+3. **Order lifecycle:** complete-state and failed-update immutability assertions are added in the current PR; next review accepted, stale, duplicate, conflicting and terminal transitions for remaining proof gaps.
 4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
