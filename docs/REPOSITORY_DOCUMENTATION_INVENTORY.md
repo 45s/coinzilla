@@ -64,34 +64,16 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | `31754f7f207ae42556f9c0032e8e5b25cddeb02d` | Current develop checkpoint after [PR #925](https://github.com/45s/coinzilla/pull/925); 114 tracked Markdown/MDX files remain unchanged from the prior checkpoint (zero path additions/removals) | 114 |
 | `186ac3066ba515ead2eae8dbfcc4dc25d6e594bb` | Current develop checkpoint after [PR #934](https://github.com/45s/coinzilla/pull/934); 114 tracked Markdown/MDX files remain unchanged (zero path additions/removals) | 114 |
 | `f98c4e02be5707c550bde5c63e223b0f160bb406` | Current develop checkpoint after [PR #938](https://github.com/45s/coinzilla/pull/938); 114 tracked Markdown/MDX files remain unchanged (zero path additions/removals) | 114 |
-| `4ed4a8d81ed3afb743d75f2beca67c2e0d4e604b` | Current develop checkpoint after [PR #943](https://github.com/45s/coinzilla/pull/943); 114 tracked Markdown/MDX files | 114 |
-| `752f0a7a6f2f4acaa0be461980f4853220805f3b` | Current develop checkpoint after [PR #951](https://github.com/45s/coinzilla/pull/951); 117 tracked Markdown/MDX files after three archive indexes were added and nine historical records were relocated | 117 |
+| `752f0a7a6f2f4acaa0be461980f4853220805f3b` | Current source-verified develop checkpoint after [PR #951](https://github.com/45s/coinzilla/pull/951); three new audit indexes and nine evidence-path relocations; 117 tracked Markdown/MDX files | 117 |
 
-At the current source-verified develop checkpoint `752f0a7a6f2f4acaa0be461980f4853220805f3b` (after PR #951), the repository contains **117 tracked Markdown/MDX files**: 97 frozen baseline files plus 20 net additions. The complete recursive tree is not truncated. PR #951 added three archive indexes and relocated nine existing historical audit/evidence records into `apps/harvester/docs/audits/{reports,sessions,evidence}/`; no evidence content was deleted. The original 97-file baseline table remains frozen, and the earlier 110-, 112-, 113- and 114-file counts remain valid historical checkpoints.
-
-## Harvester audit archive relocation — PR #951
-
-PR [#951](https://github.com/45s/coinzilla/pull/951) moved nine historical records without deleting evidence or collapsing distinct sessions:
-
-| Previous root path | Current archive path |
-| --- | --- |
-| `apps/harvester/AUDIT.md` | `apps/harvester/docs/audits/reports/AUDIT.md` |
-| `apps/harvester/AUDIT_FINDINGS.md` | `apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md` |
-| `apps/harvester/AUDIT_EXECUTION_HISTORY.md` | `apps/harvester/docs/audits/reports/AUDIT_EXECUTION_HISTORY.md` |
-| `apps/harvester/AUDIT_SESSION_2026-11-08.md` | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-08.md` |
-| `apps/harvester/AUDIT_SESSION_2026-11-08_16-33-33.md` | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-08_16-33-33.md` |
-| `apps/harvester/AUDIT_SESSION_2026-11-09_11-33-00.md` | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-09_11-33-00.md` |
-| `apps/harvester/AUDIT_DOGE_TRADES_2026-11-06.md` | `apps/harvester/docs/audits/evidence/AUDIT_DOGE_TRADES_2026-11-06.md` |
-| `apps/harvester/AUDIT_LOG_EVIDENCE_2026-11-06.md` | `apps/harvester/docs/audits/evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md` |
-| `apps/harvester/AUDIT_ZRO_TRADES_2026-11-06.md` | `apps/harvester/docs/audits/evidence/AUDIT_ZRO_TRADES_2026-11-06.md` |
-
-The three new navigation indexes are `apps/harvester/docs/audits/reports/README.md`, `sessions/README.md` and `evidence/README.md`.
+At the current source-verified develop checkpoint `752f0a7a6f2f4acaa0be461980f4853220805f3b` (after PR #951), the repository contains **117 tracked Markdown/MDX files**: 97 frozen baseline files plus 20 additions, zero net file removals. The complete recursive tree is not truncated. The 113-to-114 increase was `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` in PR #917; PR #951 added three audit-category indexes and relocated nine existing evidence files without deleting their contents. `docs/MARKDOWN_STYLE.md` remains in the outside-Harvester inventory. Earlier 110-, 112-, 113- and 114-file counts remain valid historical snapshots.
 
 ## Source-verified content reviews (post-baseline)
 
 The original 97-file inventory table above is a frozen baseline: its recorded byte sizes and first-pass dispositions are not current file metadata. Source-review findings and later document changes are recorded separately here rather than rewriting baseline rows.
 
 | Document(s) | Source-verified review | Delivery |
+| `apps/harvester/docs/audits/README.md`; `reports/`, `sessions/`, and `evidence/` archive indexes; Harvester entry points and inventory | Moved nine historical records out of the application root, preserved their contents/provenance, repaired internal links, and retained only README/AGENTS/ROADMAP at the Harvester root. Exact-head required checks and advisory external documentation links passed. | [PR #951](https://github.com/45s/coinzilla/pull/951) |
 | --- | --- | --- |
 | `packages/notifiers/AGENTS.md`; `packages/notifiers/README.md` | Verified the formatter's caller-owned free-form `message`/`reason` boundary, EventBus error-reporter fallback, delivery-queue recovery and smoke-test confirmation output against source and tests. | [PR #873](https://github.com/45s/coinzilla/pull/873) |
 | `packages/utils/README.md` | Verified the exported per-key serialized queue and non-null/non-array object assertion against implementation, tests, public exports and consumers; the Validator configuration limitation remains tracked in #892. | [PR #876](https://github.com/45s/coinzilla/pull/876) |
