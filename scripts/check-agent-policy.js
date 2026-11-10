@@ -364,68 +364,23 @@ export function findMissingLocalAnchors(root, documents) {
 }
 
 /**
- * Ensure all Markdown/MDX fenced code blocks are closed with a compatible delimiter.
+ * Find unclosed fenced code blocks in repository Markdown/MDX documents.
  *
- * @param {{path: string, content: string}[]} documents Documents to inspect.
- * @returns {string[]} Unbalanced fence errors.
+ * Fences may use backticks or tildes, with a closing fence of the same
+ * character and at least the opening fence length.
+ *
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable Markdown structure errors.
  */
 export function findUnbalancedMarkdownFences(documents) {
   const gaps = [];
-  const codeCharacter = String.fromCharCode(96);
-  const fencePattern = new RegExp('^ {0,3}(' + codeCharacter + '{3,}|~{3,})(.*)
-  return extractMappedPaths(ownershipDocument, '/')
-    .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
-    .map((directory) => `${directory} is missing ROADMAP.md`);
-}
-
-function main() {
-  const directories = findInstructionDirectories(repositoryRoot);
-  const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
-  const requiredDocumentationPaths = [
-    'AGENTS.md',
-    'AI_AGENT_WORKFLOW.md',
-    'ENGINEERING_STANDARDS.md',
-    'docs/DOCUMENTATION_GOVERNANCE.md',
-    'docs/README.md',
-    'apps/harvester/AGENTS.md',
-    'apps/harvester/README.md',
-    'apps/harvester/docs/README.md',
-  ];
-  const markdownDocuments = findMarkdownDocuments(repositoryRoot);
-  const anchorGaps = findMissingLocalAnchors(repositoryRoot, markdownDocuments);
-  console.log(
-    'Markdown heading-anchor baseline (report-only): ' + anchorGaps.length +
-    ' unresolved local anchors across ' + markdownDocuments.length + ' Markdown/MDX files.',
-  );
-  for (const gap of anchorGaps) console.log('- ' + gap);
-
-  const gaps = [...new Set([
-    ...findOwnershipGaps(directories, ownershipDocument),
-    ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
-    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
-    ...findUnbalancedMarkdownFences(markdownDocuments),
-    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
-  ])];
-
-  if (gaps.length > 0) {
-    console.error('Agent policy ownership check failed:');
-    for (const gap of gaps) console.error(`- ${gap}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and inline/reference-style local paths are valid; heading anchors are report-only).`);
-}
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
-);
 
   for (const document of documents) {
     let activeFence = null;
     const lines = document.content.split(/\r?\n/);
 
     for (let index = 0; index < lines.length; index += 1) {
-      const match = lines[index].match(fencePattern);
+      const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
       if (!match) continue;
 
       if (!activeFence) {
@@ -446,8 +401,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
 
     if (activeFence) {
       gaps.push(
-        document.path + ' has an unclosed ' + activeFence.character.repeat(activeFence.length) +
-        ' fence opened at line ' + activeFence.line,
+        `${document.path} has an unclosed ${activeFence.character.repeat(activeFence.length)} fence opened at line ${activeFence.line}`,
       );
     }
   }
@@ -455,6 +409,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) main();
   return gaps.sort();
 }
 
+/**
+ * Ensure every top-level domain in the ownership map has its own roadmap.
+ *
+ * @param {string} root Repository root.
+ * @param {string} ownershipDocument Domain ownership Markdown.
+ * @returns {string[]} Missing roadmap errors.
+ */
 export function findMissingRoadmaps(root, ownershipDocument) {
   return extractMappedPaths(ownershipDocument, '/')
     .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
