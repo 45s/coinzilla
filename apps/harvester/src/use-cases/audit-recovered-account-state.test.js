@@ -60,7 +60,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       status: "FILLED",
     }, 4),
     ...(thirdAssetCommission ? [record("account.snapshot_captured", {
-      phase: "PREFLIGHT",
+      phase: "COMMISSION_BASELINE",
       sourceTime: 1000,
       auditStatus: "COMPLETE",
       balances: [{ asset: "BNB", free: "1", locked: "0", total: "1" }],
