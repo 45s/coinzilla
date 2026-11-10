@@ -1411,3 +1411,90 @@ test("does not retry application recovery after a permanent Journal write failur
   assert.equal(fixture.calls.accountAudits.length, 1, "Later reminders must not republish futile recovery audits.")
   assert.equal(fixture.calls.acknowledgements, 0, "Later reminders must never acknowledge the unresolved recovery.")
 })
+
+test("does not let a terminal failure from a superseded recovery generation poison the current generation", async () => {
+  let resolveFirstReconciliation
+  const firstReconciliation = new Promise((resolve) => {
+    resolveFirstReconciliation = resolve
+  })
+  let reconciliationCalls = 0
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      if (reconciliationCalls === 1) {
+        return firstReconciliation
+      }
+      return { ok: true, data: { reconciled: 2 } }
+    },
+  })
+
+  fixture.start()
+  const staleAttempt = fixture.state.recoveryTask
+  fixture.state.recoveryGeneration = 2
+  fixture.state.recoveryBrokerGeneration = 43
+  resolveFirstReconciliation({
+    ok: false,
+    errors: [new Error("stale canonical order history conflict")],
+    failure: {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "OWNED_ORDER_HISTORY_CONFLICT",
+      retryable: false,
+    },
+  })
+  await staleAttempt
+
+  assert.equal(
+    fixture.state.accountingFailed,
+    false,
+    "A terminal failure returned by an obsolete recovery generation must not poison accounting for the newer generation.",
+  )
+  assert.equal(
+    fixture.state.retryableRecoveryFailure,
+    null,
+    "A stale terminal failure must not leave a failure marker that belongs to an obsolete recovery generation.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "A superseded recovery attempt must preserve the current generation's reconciliation-required status.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A stale failure must leave the newer recovery generation blocked until its own reconciliation succeeds.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "An obsolete recovery generation must never acknowledge the broker after its terminal failure.",
+  )
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    reconciliationCalls,
+    2,
+    "The current recovery generation must be allowed to perform its own authoritative reconciliation after stale work exits.",
+  )
+  assert.equal(
+    fixture.state.accountingFailed,
+    false,
+    "Successful reconciliation of the current generation must not inherit a terminal failure from obsolete work.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    false,
+    "The current generation may clear its gate only after its own reconciliation and durable audits succeed.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    2,
+    "Only the successfully reconciled current application generation may be recorded as acknowledged.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "The broker must receive exactly one acknowledgement after the current generation completes its required audits.",
+  )
+})
