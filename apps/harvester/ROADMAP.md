@@ -221,7 +221,7 @@ Trading safety requirements remain in force: the operator selects TESTNET or LIV
 
 ## Journal evidence workstream
 
-- [ ] **#923 — Journal DTO compatibility:** validate Journal-bound timestamps and numeric diagnostics, report best-effort mapper failures, and prevent invalid DTO publication. Production changes and regression tests are in [PR #925](https://github.com/45s/coinzilla/pull/925); exact-head CI passed on `29dc9c4440e794a4426765dc7c810e2e103d3a2b` (875/875 Harvester tests), with fresh verification required after this develop sync.
+- [x] **#923 — Journal DTO compatibility:** implemented and merged in [PR #925](https://github.com/45s/coinzilla/pull/925). Non-negative safe-integer timestamps excluding negative zero, finite numeric diagnostics, structured mapper-failure reporting and no-publication-on-failure are enforced at the DTO boundary. Exact PR head `9329fe2dc2fb1af785548261f23dff4757e0282b` passed 875/875 Harvester tests; coverage was 75.62% lines, 78.94% branches and 74.95% functions. All six required checks passed; no TESTNET/LIVE activity occurred.
 
 Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
 
