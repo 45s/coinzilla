@@ -26,6 +26,7 @@ The 97-file inventory above is a frozen baseline at `cea27e580f9f9bf3d7fa109b9e6
 | --- | --- |
 | `apps/harvester/docs/architecture/README.md` | Local index for Harvester architecture documentation. |
 | `apps/harvester/docs/audits/README_HISTORY.md` | Preserved historical README material and its navigation. |
+| `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved historical Harvester roadmap material, provenance and compatibility anchors. |
 | `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved Harvester roadmap history and evidence. |
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. |
