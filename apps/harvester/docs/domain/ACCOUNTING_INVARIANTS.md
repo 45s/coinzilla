@@ -11,7 +11,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Area | Required case | Current Harvester evidence | Status |
 |---|---|---|---|
 | Portfolio | BUY adds gross quantity less base commission | `position.test.js` | Existing |
-| Portfolio | Same trade ID in different markets preserves exact per-market quantity, spent basis and quote cash flow | `portfolio.test.js` — `keeps exact fill accounting isolated when different markets reuse the same trade ID` | Existing — complete state assertion added in current PR; CI pending |
+| Portfolio | Same trade ID in different markets preserves exact per-market quantity, spent basis and quote cash flow | `portfolio.test.js` — `keeps exact fill accounting isolated when different markets reuse the same trade ID` | Existing — PR #924 exact-head CI passed; awaiting merge |
 | Portfolio | BUY quote commission increases quote cash outflow | `position.test.js` | Existing |
 | Portfolio | SELL consumes gross quantity plus base commission | `position.test.js` | Existing |
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
