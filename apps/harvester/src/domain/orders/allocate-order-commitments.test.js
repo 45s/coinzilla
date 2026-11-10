@@ -313,8 +313,8 @@ test("subtracts only a new SELL lock created after the account snapshot", () => 
     baseFreeBalance: "1000",
     quoteCashFlow: "0",
     activeBaseQuantity: "200",
-    portfolioBaseBalance: "100",
-    portfolioBaseBalanceBaseline: "100",
+    portfolioBaseBalance: "200",
+    portfolioBaseBalanceBaseline: "200",
     outstandingRecoveryAmount: "0",
     committedQuote: "0",
     committedQuoteBalance: "0",
@@ -378,6 +378,132 @@ test("retained free allocation does not reduce account-wide free-base availabili
   assert.equal(result.ok, true, "Moving ten base units from active inventory to retained keepQuantity must not change the account-wide free balance already reported by the exchange.")
   assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "5" }], "The account still has ten free base units and the strategy still has ninety active units, so a five-unit SELL must be admissible.")
   assert.equal(result.data.remainingBaseBalance, "5", "After a five-unit SELL, exactly five account-free base units must remain.")
+})
+
+
+test("rejects pair active inventory greater than total Portfolio base inventory", () => {
+  const result = allocateOrderCommitments({
+    actions: [],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "100",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "2",
+    portfolioBaseBalance: "1",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false, "Pair active inventory cannot exceed the account-wide total Portfolio inventory that includes this Position.")
+  assert.match(result.errors[0].message, /activeBaseQuantity cannot exceed portfolioBaseBalance/, "The allocator must identify the impossible active-versus-total inventory relationship.")
+})
+
+test("rejects existing pair SELL commitments greater than active sellable inventory", () => {
+  const result = allocateOrderCommitments({
+    actions: [],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "100",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "1",
+    portfolioBaseBalance: "2",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: "1.1",
+    committedBaseBalance: "1.1",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false, "Existing pair SELL reservations must be fully backed by active strategy inventory before any new allocation is considered.")
+  assert.match(result.errors[0].message, /committedBase cannot exceed activeBaseQuantity/, "The allocator must identify an existing SELL overcommitment against pair-owned active inventory.")
+})
+
+test("rejects pair BUY commitments greater than the account-wide shared-quote commitments", () => {
+  const result = allocateOrderCommitments({
+    actions: [],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "101",
+    committedQuoteBalance: "100",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false, "The account-wide shared-quote commitment total must include every pair's current BUY commitments, including this pair.")
+  assert.match(result.errors[0].message, /committedQuote cannot exceed committedQuoteBalance/, "The allocator must identify a pair BUY commitment that is absent from its account-wide aggregate.")
+})
+
+test("rejects pair SELL commitments greater than the account-wide shared-base commitments", () => {
+  const result = allocateOrderCommitments({
+    actions: [],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "100",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "5",
+    portfolioBaseBalance: "10",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedBase: "4",
+    committedBaseBalance: "3",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false, "The account-wide shared-base commitment total must include every pair's current SELL commitments, including this pair.")
+  assert.match(result.errors[0].message, /committedBase cannot exceed committedBaseBalance/, "The allocator must identify a pair SELL commitment that is absent from its account-wide aggregate.")
+})
+
+test("rejects aggregate SELL commitments greater than total Portfolio base inventory", () => {
+  const result = allocateOrderCommitments({
+    actions: [],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "100",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "1",
+    portfolioBaseBalance: "2",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedBase: "0.5",
+    committedBaseBalance: "2.1",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false, "All Harvester-owned SELL commitments against a shared base asset must be backed by total Portfolio holdings across markets.")
+  assert.match(result.errors[0].message, /committedBaseBalance cannot exceed portfolioBaseBalance/, "The allocator must identify account-wide SELL reservations that exceed tracked total base inventory.")
+})
+
+
+test("credits only net base from a partial BUY fill received after the account snapshot", () => {
+  // A 0.4 base BUY fill less a 0.004 base commission leaves 0.396 tracked base.
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "0.396" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "0",
+    quoteCashFlow: "-40",
+    activeBaseQuantity: "0.396",
+    portfolioBaseBalance: "0.396",
+    portfolioBaseBalanceBaseline: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, true, "The net base quantity added by a post-snapshot partial BUY fill must become available to the same pair's recovery SELL.")
+  assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "0.396" }], "The recovery SELL may use exactly the 0.396 base units remaining after the 0.004 base commission.")
+  assert.equal(result.data.remainingBaseBalance, "0", "The post-snapshot base credit must be applied exactly once and fully consumed by the SELL.")
+  assert.equal(result.data.remainingActiveBase, "0", "The pair active inventory cap must reach zero after selling the complete net fill quantity.")
+  assert.equal(result.data.remainingQuoteBalance, "60", "The 40-unit BUY quote cash flow must be applied once to the 100-unit snapshot free quote balance.")
 })
 
 test("returns structured failures for invalid action sides and negative balance inputs", () => {

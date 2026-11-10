@@ -112,7 +112,7 @@ export class AccountSnapshot {
     return this.getBalance({ assetId })?.locked
   }
 
-  /** Return active Portfolio base quantity already represented by this snapshot. */
+  /** Return total Portfolio base quantity (active plus retained free) already represented by this snapshot. */
   getPortfolioBaseQuantityBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getPortfolioBaseQuantityBaseline requires assetId")
