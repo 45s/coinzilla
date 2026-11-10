@@ -15,6 +15,7 @@
 - [x] Exact inclusive pre-submission exchange-filter boundaries for MIN/MAX price, quantity and notional merged in [PR #932](https://github.com/45s/coinzilla/pull/932); existing immediately-outside rejection matrix retained.
 - [x] Independent Conservative strategy fixture arithmetic merged in [PR #937](https://github.com/45s/coinzilla/pull/937); residual SELL quote totals and MAX_NOTIONAL expectations use independent exact values.
 - [x] OrderRegistry complete-state and immutable-snapshot assertions merged in [PR #928](https://github.com/45s/coinzilla/pull/928); exact-head CI passed 874/874 Harvester tests.
+- [~] Extend OrderRegistry coverage for decreasing execution and stale timestamps, proving rejected reports preserve the complete canonical state and commitment in [PR #927](https://github.com/45s/coinzilla/pull/927). Synchronized-head CI is pending.
 - [x] Precise account-snapshot failure classification, no partial result data and immutable input snapshots merged in [PR #931](https://github.com/45s/coinzilla/pull/931); exact-head CI passed 872/872 Harvester tests.
 - [~] Cover equal broker trade IDs across different markets in the Conservative engine; deduplicate the test harness by canonical Fill ID in [PR #933](https://github.com/45s/coinzilla/pull/933). Synchronized-head CI is pending.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
