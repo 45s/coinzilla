@@ -112,9 +112,7 @@ Migration functions must be synchronous. Applied versions must remain in the mig
 
 `@coinzilla/db` is the **Database Infrastructure** bounded context. Its domain model describes database infrastructure concepts; it does not own Coinzilla business aggregates or their repository contracts.
 
-The source is organized by dependency direction:
-
-The Domain contracts are represented by factory functions and frozen plain objects, not exported `Database` or `Migration` classes.
+The source is organized by dependency direction. Domain contracts are represented by factory functions and frozen plain objects, not exported `Database` or `Migration` classes.
 
 - `domain/entities/database.js` (`createDatabaseEntity`): factory for the provider-independent lifecycle aggregate; returns a frozen facade with lifecycle state, active-transaction tracking, and close-time draining.
 - `domain/entities/migration.js` (`createMigration`): validates and returns a frozen migration definition; the positive integer version is its stable identity and `up` must be synchronous. This is a factory-produced value, not an exported `Migration` class.
