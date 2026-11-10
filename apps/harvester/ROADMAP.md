@@ -13,8 +13,8 @@
 - [~] Portfolio multi-market isolation assertions added in [PR #924](https://github.com/45s/coinzilla/pull/924); exact-head CI passed, but PR remains open and unmerged.
 - [~] Independent Conservative accounting fixture arithmetic added in [PR #926](https://github.com/45s/coinzilla/pull/926); exact-head CI passed, but PR remains open and unmerged.
 - [~] OrderRegistry complete-state and rejected-update immutability assertions added in [PR #927](https://github.com/45s/coinzilla/pull/927); exact-head CI passed, but PR remains open and unmerged.
-- [~] Exchange filter equality boundaries added in [PR #929](https://github.com/45s/coinzilla/pull/929); initial test-head CI passed, final documentation-head verification pending.
-- [~] Strengthen account snapshot reconciliation failure diagnostics, independent fixtures and input immutability in the current focused PR.
+- [~] Exchange filter equality boundaries added in [PR #929](https://github.com/45s/coinzilla/pull/929); final exact PR head passed 873/873 Harvester tests and all required checks; awaiting merge.
+- [~] Strengthen account snapshot reconciliation failure diagnostics, independent fixtures and input immutability in [PR #931](https://github.com/45s/coinzilla/pull/931). Exact PR-head CI passed 872/872 Harvester tests and all required checks; awaiting merge.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 

@@ -64,7 +64,7 @@ The OrderRegistry suite already covers UNKNOWN, stale events, identity mismatch 
 
 ### Medium — exchange filter equality boundaries need direct proof
 
-Existing order-filter tests rejected values just below MIN and above MAX, but did not directly prove inclusive equality for every supported MIN/MAX price, quantity and notional rule. [PR #929](https://github.com/45s/coinzilla/pull/929) adds an exact-equality matrix for all six filter bounds, plus market-readiness checks that accept investment exactly at MIN_NOTIONAL and a configured quantity of 1000.9 after rounding down to MAX_QUANTITY 1000. The initial test head passed 873/873 Harvester tests; final documentation-head CI is pending. PR #929 remains open and unmerged.
+Existing order-filter tests rejected values just below MIN and above MAX, but did not directly prove inclusive equality for every supported MIN/MAX price, quantity and notional rule. [PR #929](https://github.com/45s/coinzilla/pull/929) adds an exact-equality matrix for all six filter bounds, plus market-readiness checks that accept investment exactly at MIN_NOTIONAL and a configured quantity of 1000.9 after rounding down to MAX_QUANTITY 1000. Final exact PR head `17091caf026e57b7cbddc62c1eb2430d2a29494a` passed 873/873 Harvester tests; coverage was 75.61% lines, 79.13% branches and 74.88% functions. Workspace unit tests and coverage, configured Harvester targeted tests, Utils tests, JavaScript syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links all passed. PR #929 remains open and unmerged.
 
 ### Explicitly deferred — Aggressive grid behavior
 
@@ -72,7 +72,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ### Medium — account snapshot reconciliation failures need precise diagnostics and immutability assertions
 
-The account snapshot delta test previously asserted only `ok === false` for out-of-order, inconsistent, negative and duplicate-asset snapshots. It did not prove the exact domain error or that neither input snapshot changed. Its balance fixture also called production `addDecimal` to derive the expected total. The current PR replaces those fixture totals with explicit exact literals and checks the precise error message, absence of partial data, and unchanged opening/closing snapshots for each failure case. Exact-head CI verification is pending.
+The account snapshot delta test previously asserted only `ok === false` for out-of-order, inconsistent, negative and duplicate-asset snapshots. It did not prove the exact domain error or that neither input snapshot changed. Its balance fixture also called production `addDecimal` to derive the expected total. [PR #931](https://github.com/45s/coinzilla/pull/931) replaces those fixture totals with explicit exact literals and checks the precise error message, absence of partial data, and unchanged opening/closing snapshots for each failure case. Exact PR head `2bd798a12c6ce2b887e2a0e2236f7dfdeab783c2` passed 872/872 Harvester tests; coverage was 75.94% lines, 79.21% branches and 74.88% functions. Workspace unit tests and coverage, configured Harvester targeted tests, Utils tests, JavaScript syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links all passed. PR #931 remains open and unmerged.
 
 ## Execution order
 
@@ -80,7 +80,7 @@ The account snapshot delta test previously asserted only `ok === false` for out-
 2. **Portfolio and accounting:** exact multi-market isolation is green in open PR #924; then review commission-identity conflicts. Existing application-level multi-fill sequence/atomicity tests are already present and should not be duplicated.
 3. **Order lifecycle:** complete-state and failed-update immutability assertions are green in open PR #927; next review accepted, stale, duplicate, conflicting and terminal transitions for remaining proof gaps.
 4. **Market and configuration:** exact MIN/MAX price, quantity and notional equality cases are added in open PR #929; final documentation-head CI is pending, then review missing/unsupported rule combinations.
-5. **Domain failure handling:** the current PR strengthens account snapshot failure classification, independent fixture values and no-mutation guarantees. Then review existing retryability/integrity contracts and stale-result isolation. Do not resume #626 or add runtime recovery behavior.
+5. **Domain failure handling:** account snapshot failure classification, independent fixture values and no-mutation guarantees are green in open PR #931. Then review existing retryability/integrity contracts and stale-result isolation. Do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
 
