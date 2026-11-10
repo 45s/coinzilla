@@ -598,14 +598,14 @@ const completedCycleRecords = () => [
 
 test("restores Portfolio, RecoveryLedger, free inventory, and order ownership from replayed fills", () => {
   const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords() })
-  assert.equal(projection.ok, true)
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
 
   const restored = restoreHarvesterJournalState({
     projection,
     marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
   })
 
-  assert.equal(restored.ok, true)
+  assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join('; '))
   const position = restored.data.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0.0896")
   assert.equal(position.freeBaseQuantity.amount, "0.01")

@@ -128,12 +128,12 @@ const recoveryProjection = () => {
 
 const restoreState = () => {
   const projection = recoveryProjection()
-  assert.equal(projection.ok, true)
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
   const restored = restoreHarvesterJournalState({
     projection,
     marketMetadata: new Map([["BTCUSDT", market]]),
   })
-  assert.equal(restored.ok, true)
+  assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join('; '))
   return { projection, restored: restored.data }
 }
 
