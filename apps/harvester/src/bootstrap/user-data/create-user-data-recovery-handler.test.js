@@ -854,47 +854,6 @@ test("repeats account snapshot baseline capture when a user-data event crosses t
   assert.equal(fixture.calls.acknowledgements, 1, "Recovery may be acknowledged only after account and order audits share a stable event sequence.")
 })
 
-
-  let fixture
-  let accountAuditAttempts = 0
-  let openOrderReads = 0
-  fixture = createRecovery({
-    getOpenOrders: async () => {
-      openOrderReads += 1
-      return { ok: true, data: [] }
-    },
-    publishAccountSnapshot: async () => {
-      accountAuditAttempts += 1
-      if (accountAuditAttempts === 1) {
-        fixture.state.eventSequence += 1
-      }
-    },
-  })
-  fixture.start()
-  await fixture.state.recoveryTask
-
-  assert.equal(
-    accountAuditAttempts,
-    2,
-    "A user-data event during the account audit must force a fresh account snapshot audit for a stable recovery window.",
-  )
-  assert.equal(
-    openOrderReads,
-    2,
-    "The account-wide open-orders REST request must be repeated after the account audit observes an intervening user-data event.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    1,
-    "Only the open-orders snapshot from the stable post-event recovery window may be published.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    1,
-    "Recovery may be acknowledged only after the account and open-orders audits describe a stable event window.",
-  )
-})
-
 test("does not drain queued user-data events after recovery is superseded during the open-orders audit", async () => {
   let fixture
   fixture = createRecovery({
