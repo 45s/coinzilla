@@ -116,14 +116,18 @@
 
 **Steps:**
 
-1. [ ] **RED — Third-asset DTO round-trip:** canonical fill has commission asset different from base and quote, exact commission amount and historical quoteValue. Assert serialization/deserialization preserves every field exactly; expose current quoteValue loss.
-2. [ ] **GREEN — Preserve valuation in safe DTO:** extend only the relevant DTO schema/mapping/validation. Keep decimal representation exact; never substitute current market price for historical valuation.
+1. [x] **RED — Third-asset DTO round-trip:** canonical fill has commission asset different from base and quote, exact commission amount and historical quoteValue. Assert serialization/deserialization preserves every field exactly; expose current quoteValue loss.
+2. [x] **GREEN — Preserve valuation in safe DTO:** extend only the relevant DTO schema/mapping/validation. Keep decimal representation exact; never substitute current market price for historical valuation.
 3. [ ] **RED — Live BUY/SELL accounting:** assert quote-denominated cost/proceeds for base-, quote- and third-asset fees; include multiple and partial fills. Verify fee amount, asset and valuation.
 4. [ ] **GREEN — One canonical accounting path:** use existing domain accounting; no parallel fee calculator. Missing, malformed, negative or contradictory valuation fails closed, without treating fee as zero.
 5. [ ] **RED — Fee-asset balance:** commission asset is not a configured trading pair. Assert it is included in reconciliation inputs and unexplained balance delta/shortfall is detected.
 6. [ ] **GREEN — Include required fee assets:** extend asset selection only for assets required by actual owned fills/commission facts; do not classify the entire wallet as strategy-owned.
 7. [ ] **Parity — Live versus DTO/projection/restore:** apply identical fills through each supported path and compare complete Position and RecoveryLedger state, including all three commission-asset cases.
 8. [ ] **Atomicity — Invalid fee evidence:** incomplete/contradictory commission facts leave complete pre-fill Position, ledger and portfolio snapshots unchanged.
+
+**Implementation update — PR #989:** the DTO → journal projection → offline restore segment is implemented test-first. The mapper preserves the exact third-asset commission amount/asset ID/code and historical quoteValue amount/quote-asset ID/code; it rejects missing third-asset valuation, non-positive valuation, or a valuation in the wrong quote asset. The projector retains and validates those exact strings. Restoration rebuilds a canonical Commission with the original fee Asset and historical quoteValue; legacy third-asset records without quoteValue fail closed. BUY restoration regression verifies Position spent/quote cash flow and RecoveryLedger buyCost include the exact historical valuation. Exact-head CI at `1b9d01e6125b4bfa391ee409db3bb0cea363483a`: Harvester 939 passed/0 failed; all package unit tests, targeted tests, JavaScript syntax, dependency audit, coverage workflow and external documentation links passed. No Binance/TESTNET/LIVE operations were performed. PR #989 is not yet merged.
+
+**Remaining P0.2 work:** live BUY/SELL multi-fill accounting parity; complete DTO/projection/restore parity assertions for base-, quote- and third-asset commissions; commission-asset balance reconciliation; and failure atomicity for invalid fee evidence. Do not mark P0.2 complete until these gates pass.
 
 **Acceptance:** every accepted fill retains exact commission asset, amount and historical quote valuation through supported lifecycle representations; live and replay results match; fee assets reconcile; unavailable valuation is an explicit unresolved safety condition, never zero.
 
