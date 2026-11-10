@@ -86,24 +86,57 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
 })
 
-test("retains an unconfigured commission asset in the account snapshot and durable audit", async () => {
+test("publishes only the actual third-asset commission baseline and excludes unrelated wallet assets", async () => {
   const market = createFixture().market
   const bnb = new Asset({ id: "asset:BNB", code: "BNB" })
+  const xrp = new Asset({ id: "asset:XRP", code: "XRP" })
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({
       market,
       sourceTime: 100,
-      extraBalances: [new Balance({
-        free: new Quantity({ amount: "1", asset: bnb }),
-        locked: new Quantity({ amount: "0", asset: bnb }),
-      })],
+      extraBalances: [
+        new Balance({
+          free: new Quantity({ amount: "1", asset: bnb }),
+          locked: new Quantity({ amount: "0", asset: bnb }),
+        }),
+        new Balance({
+          free: new Quantity({ amount: "25", asset: xrp }),
+          locked: new Quantity({ amount: "0", asset: xrp }),
+        }),
+      ],
     })],
   })
 
   const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
 
-  assert.equal(snapshot.getFreeBalance({ assetId: bnb.id }).amount, "1")
-  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "BNB"), true)
+  assert.equal(snapshot.getFreeBalance({ assetId: bnb.id }), undefined)
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "BNB"), false)
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "XRP"), false)
+
+  const baseline = await fixture.manager.publishCommissionAssetBaseline({
+    assetId: bnb.id,
+    assetCode: bnb.code,
+  })
+
+  assert.equal(baseline.ok, true)
+  assert.equal(fixture.publishedEvents.length, 2)
+  assert.equal(fixture.publishedEvents[1].data.phase, "PREFLIGHT")
+  assert.equal(fixture.publishedEvents[1].data.sourceTime, 100)
+  assert.deepEqual(fixture.publishedEvents[1].data.balances, [{
+    asset: "BNB",
+    free: "1",
+    locked: "0",
+    total: "1",
+  }])
+  assert.equal(fixture.publishedEvents.some(({ data }) => data.balances.some(({ asset }) => asset === "XRP")), false)
+
+  const duplicate = await fixture.manager.publishCommissionAssetBaseline({
+    assetId: bnb.id,
+    assetCode: bnb.code,
+  })
+  assert.equal(duplicate.data.reason, "BASELINE_ALREADY_CAPTURED")
+  assert.equal(fixture.publishedEvents.length, 2)
+  assert.equal(fixture.getFlushCount(), 2)
 })
 
 test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
