@@ -13,7 +13,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies`. |
 | `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not one of the six `develop-core` required contexts. |
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not one of the six `develop-core` required contexts. |
-| `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX and fails only on malformed/credential-bearing HTTP(S) destinations or GET-confirmed 404/410. Weekly/manual full-tree scans include historical docs and are report-only. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
+| `external-links.yml` (**External Documentation Links**) | Manual dispatch only; job intentionally skipped | Disabled placeholder retained for the future advisory checker. No network requests run until DNS pinning/private-address protection is complete in issue #901. | Disabled; not a required context. |
 
 ## Required status contexts on `develop`
 
@@ -26,7 +26,7 @@ As verified against the active repository ruleset `develop-core` on 2026-11-10, 
 5. `Audit production dependencies`
 6. `actionlint`
 
-The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names.
+The two Harvester workflows run as additional checks but are not required contexts in this ruleset. External Documentation Links is currently disabled and is not a required context. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names.
 
 ## Markdown and documentation checks
 
@@ -37,7 +37,7 @@ The required JavaScript Syntax workflow runs these documentation checks:
 - On pull requests, `check-markdown-style.js` enforces the changed-line/file-level Markdown style rules against the exact PR base SHA. This is a blocking check within `Check JavaScript syntax`, not a separate status context.
 - `check-external-links.test.js` exercises the external URL checker with mocked fetch responses. These tests run in required CI but make no network requests.
 
-External URL availability is checked by the separate **External Documentation Links** advisory workflow, following the [documented reliability policy](MARKDOWN_STYLE.md). PRs targeting `develop` that change Markdown/MDX or checker sources inspect only changed maintained documents and fail only on malformed/credential-bearing HTTP(S) destinations or GET-confirmed 404/410. Weekly (Monday 08:00 UTC) and manual runs scan the full `develop` documentation tree, including historical evidence, in report-only mode. Transient, access-control, rate-limit, server, timeout, network, and redirect failures are unverifiable. The workflow sends no credentials and is not one of the six required contexts; required CI remains network-free.
+The networked **External Documentation Links** workflow is disabled until issue #901 provides DNS answer validation and connection pinning. The CLI remains available for trusted local use only; do not run it against untrusted PR content. Any future advisory workflow will be non-required and must follow the [documented reliability policy](MARKDOWN_STYLE.md).
 
 ## Triggers and optional broker validation
 
@@ -45,7 +45,7 @@ External URL availability is checked by the separate **External Documentation Li
 - **Dependency Audit** has the same triggers plus a weekly scheduled run on Monday at 07:23 UTC.
 - **Harvester Targeted Tests** runs for pull requests and manual dispatch.
 - **Harvester Process Lock** runs for matching path changes on pull requests/pushes to `main`/`develop`, plus manual dispatch.
-- **External Documentation Links** runs for matching Markdown/MDX or checker-source changes on PRs targeting `develop`; it also runs a full-tree report-only scan every Monday at 08:00 UTC and on manual dispatch (both scan `develop`).
+- **External Documentation Links** is manual-dispatch-only with its job intentionally skipped until issue #901 is complete; it currently makes no network requests.
 
 The `unit-tests.yml` workflow exposes an opt-in `run_broker_testnet_read_only` dispatch input on `develop`. The TESTNET job uses repository secrets only in its final integration step; checkout, tool setup, and dependency installation do not receive exchange credentials. It rejects missing or case-insensitive placeholder credentials before running the read-only broker integration suite. Order mutations and externally triggered user-data event waiting are fixed to `0`; the job does not upload integration artifacts.
 
@@ -73,7 +73,7 @@ pnpm run check:agent-policy
 # Offline external-link checker unit tests (mocked responses; no network)
 pnpm run test:external-links
 
-# Live full-tree external URL report (network requests; report-only)
+# Manual/local full-tree external URL report (network requests; report-only; trusted content only until #901)
 pnpm run check:external-links
 
 # Changed-file Markdown style; use the exact 40-character PR base SHA
