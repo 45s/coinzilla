@@ -4,7 +4,7 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `f98c4e02be5707c550bde5c63e223b0f160bb406` (`truncated: false`; 54 Harvester Markdown/MDX files; zero path additions/removals since `f4fd2ab`)
+- Latest recursive checkpoint: `develop` at `99a9573f6673db2a1512b6374bba077232ed6886` (`truncated: false`; 54 Harvester Markdown/MDX files before the proposed archive relocation)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-10
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
