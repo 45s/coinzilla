@@ -61,7 +61,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -205,6 +205,9 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
     getQuoteCashFlowBaseline: ({ assetId }) => assetId === quoteAsset.id
       ? quoteCashFlowBaseline
       : "0",
+    getPortfolioBaseQuantityBaseline: ({ assetId }) => assetId === baseAsset.id ? portfolioBaseQuantityBaseline : "0",
+    getCommittedQuoteBalanceBaseline: ({ assetId }) => assetId === quoteAsset.id ? committedQuoteBalanceBaseline : "0",
+    getCommittedBaseBalanceBaseline: ({ assetId }) => assetId === baseAsset.id ? committedBaseBalanceBaseline : "0",
   }
   let currentPortfolio = initialPortfolio ?? new Portfolio()
   let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
@@ -274,6 +277,37 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
     },
   }
 }
+
+test("subtracts only shared BUY commitments created after the account snapshot", async () => {
+  const ethAsset = new Asset({ id: "eth", code: "ETH" })
+  const ethMarket = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset: ethAsset, quoteAsset })
+  const otherMarketBuy = new CanonicalOrder({
+    clientOrderId: "eth-shared-quote-buy",
+    brokerOrderId: "broker-eth-shared-quote-buy",
+    market: ethMarket,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "50", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "3", asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: ethAsset }),
+    status: "PARTIALLY_FILLED",
+  })
+  assert.equal(otherMarketBuy.remainingQuantity.amount, "2", "The partially filled ETHUSDT BUY must expose the exact two-unit remaining commitment (three original units minus one executed unit), which is the quantity used by account-wide quote reservation.")
+  const harness = await createHarness({
+    quoteFreeBalance: "100",
+    committedQuoteBalanceBaseline: "100",
+    initialState: { orderRegistry: new OrderRegistry({ orders: [otherMarketBuy] }) },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, "A BUY on DOGEUSDT must remain fundable when the shared USDT snapshot already excludes a partially filled ETHUSDT BUY lock.")
+  assert.equal(harness.orders.length, 1, "The current DOGEUSDT decision must submit exactly one BUY after accounting for only post-snapshot shared-quote commitment changes.")
+  assert.equal(harness.orders[0].side, "BUY", "The submitted action must remain the strategy's BUY, not an unrelated order from the other market.")
+})
 
 test("does not double-count historical quote cash flow already reflected in a refreshed account snapshot", async () => {
   const position = new Position({

@@ -1,12 +1,12 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { createAccountSnapshotManager } from "./create-account-snapshot-manager.js"
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [] } = {}) => {
+const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [] } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -35,8 +35,8 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
       },
     },
     marketMetadata: new Map([[market.symbol, { market }]]),
-    getPortfolio: () => new Portfolio(),
-    getTradingEngine: () => undefined,
+    getPortfolio: () => portfolio,
+    getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
     logger: {},
@@ -83,6 +83,56 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
   assert.equal(fixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
+})
+
+test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
+  const fixtureMarket = createFixture().market
+  const portfolioFill = new Fill({
+    tradeId: "snapshot-baseline-buy-fill",
+    brokerOrderId: "snapshot-baseline-buy-order",
+    market: fixtureMarket,
+    side: "BUY",
+    price: new Money({ amount: "10", asset: fixtureMarket.quoteAsset }),
+    quantity: new Quantity({ amount: "10", asset: fixtureMarket.baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: fixtureMarket.quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const portfolio = new Portfolio().applyFill({ fill: portfolioFill }).portfolio
+  const activeBuyOrder = new CanonicalOrder({
+    clientOrderId: "snapshot-baseline-active-buy",
+    brokerOrderId: "snapshot-baseline-active-buy-broker",
+    market: fixtureMarket,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "50", asset: fixtureMarket.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "3", asset: fixtureMarket.baseAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: fixtureMarket.baseAsset }),
+    status: "PARTIALLY_FILLED",
+  })
+  const activeSellOrder = new CanonicalOrder({
+    clientOrderId: "snapshot-baseline-active-sell",
+    brokerOrderId: "snapshot-baseline-active-sell-broker",
+    market: fixtureMarket,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "11", asset: fixtureMarket.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "5", asset: fixtureMarket.baseAsset }),
+    executedQuantity: new Quantity({ amount: "2", asset: fixtureMarket.baseAsset }),
+    status: "PARTIALLY_FILLED",
+  })
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market: fixtureMarket, sourceTime: 100 })],
+    portfolio,
+    activeOrders: [activeBuyOrder, activeSellOrder],
+  })
+
+  const snapshot = await fixture.manager.refreshAccountSnapshot()
+
+  assert.equal(snapshot.getQuoteCashFlowBaseline({ assetId: fixtureMarket.quoteAsset.id }), "-100", "The quote cash-flow baseline must reflect the Portfolio BUY already represented by the exchange snapshot.")
+  assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: fixtureMarket.baseAsset.id }), "10", "The total Portfolio base baseline must include active and retained free quantities at snapshot time.")
+  assert.equal(snapshot.getCommittedQuoteBalanceBaseline({ assetId: fixtureMarket.quoteAsset.id }), "100", "The BUY commitment baseline must equal the remaining two units multiplied by the exact 50 quote limit price.")
+  assert.equal(snapshot.getCommittedBaseBalanceBaseline({ assetId: fixtureMarket.baseAsset.id }), "3", "The SELL commitment baseline must equal the remaining three units of the partially filled SELL order.")
 })
 
 test("rejects an account snapshot that omits a configured market asset", async () => {

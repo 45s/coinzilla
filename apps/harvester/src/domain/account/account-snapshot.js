@@ -1,6 +1,27 @@
 import { Balance } from "@coinzilla/entities"
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
+function createBaselineMap({ records = [], field, allowNegative = false } = {}) {
+  if (!Array.isArray(records) || records.some((item) =>
+    !item || typeof item.assetId !== "string" || !item.assetId.trim()
+  )) {
+    throw new TypeError("AccountSnapshot." + field + " must contain assetId/amount records")
+  }
+  const values = new Map()
+  for (const item of records) {
+    assertDecimalString({ value: item.amount, field: field + ".amount" })
+    if (!allowNegative && compareDecimal({ left: item.amount, right: "0" }) < 0) {
+      throw new RangeError("AccountSnapshot." + field + ".amount must be non-negative")
+    }
+    if (values.has(item.assetId)) {
+      throw new TypeError("AccountSnapshot " + field + " contains duplicate asset " + item.assetId)
+    }
+    values.set(item.assetId, item.amount)
+  }
+  return values
+}
+
+
 /**
  * Immutable point-in-time view of exchange balances.
  *
@@ -12,8 +33,18 @@ export class AccountSnapshot {
   #balancesByAssetId
   #sourceTime
   #quoteCashFlowBaselineByAssetId
+  #portfolioBaseQuantityBaselineByAssetId
+  #committedQuoteBalanceBaselineByAssetId
+  #committedBaseBalanceBaselineByAssetId
 
-  constructor({ balances, sourceTime, quoteCashFlowBaseline = [] } = {}) {
+  constructor({
+    balances,
+    sourceTime,
+    quoteCashFlowBaseline = [],
+    portfolioBaseQuantityBaseline = [],
+    committedQuoteBalanceBaseline = [],
+    committedBaseBalanceBaseline = [],
+  } = {}) {
     if (!Array.isArray(balances) || balances.some((balance) => !(balance instanceof Balance))) {
       throw new TypeError("AccountSnapshot.balances must contain canonical Balance values")
     }
@@ -35,25 +66,31 @@ export class AccountSnapshot {
       balancesByAssetId.set(balance.asset.id, balance)
     }
 
-    if (!Array.isArray(quoteCashFlowBaseline) ||
-        quoteCashFlowBaseline.some((item) =>
-          !item || typeof item.assetId !== "string" || !item.assetId.trim()
-        )) {
-      throw new TypeError("AccountSnapshot.quoteCashFlowBaseline must contain assetId/amount records")
-    }
-    const quoteCashFlowBaselineByAssetId = new Map()
-    for (const item of quoteCashFlowBaseline) {
-      assertDecimalString({ value: item.amount, field: "quoteCashFlowBaseline.amount" })
-      if (quoteCashFlowBaselineByAssetId.has(item.assetId)) {
-        throw new TypeError("AccountSnapshot quote cash-flow baseline contains duplicate asset " + item.assetId)
-      }
-      quoteCashFlowBaselineByAssetId.set(item.assetId, item.amount)
-    }
+    const quoteCashFlowBaselineByAssetId = createBaselineMap({
+      records: quoteCashFlowBaseline,
+      field: "quoteCashFlowBaseline",
+      allowNegative: true,
+    })
+    const portfolioBaseQuantityBaselineByAssetId = createBaselineMap({
+      records: portfolioBaseQuantityBaseline,
+      field: "portfolioBaseQuantityBaseline",
+    })
+    const committedQuoteBalanceBaselineByAssetId = createBaselineMap({
+      records: committedQuoteBalanceBaseline,
+      field: "committedQuoteBalanceBaseline",
+    })
+    const committedBaseBalanceBaselineByAssetId = createBaselineMap({
+      records: committedBaseBalanceBaseline,
+      field: "committedBaseBalanceBaseline",
+    })
 
     this.#balances = Object.freeze([...balances])
     this.#balancesByAssetId = balancesByAssetId
     this.#sourceTime = sourceTime
     this.#quoteCashFlowBaselineByAssetId = quoteCashFlowBaselineByAssetId
+    this.#portfolioBaseQuantityBaselineByAssetId = portfolioBaseQuantityBaselineByAssetId
+    this.#committedQuoteBalanceBaselineByAssetId = committedQuoteBalanceBaselineByAssetId
+    this.#committedBaseBalanceBaselineByAssetId = committedBaseBalanceBaselineByAssetId
     Object.freeze(this)
   }
 
@@ -75,10 +112,29 @@ export class AccountSnapshot {
     return this.getBalance({ assetId })?.locked
   }
 
-  /**
-   * Portfolio quote cash flow already reflected in this point-in-time exchange
-   * snapshot. The trading engine adds only cash flow accrued after this baseline.
-   */
+  /** Return active Portfolio base quantity already represented by this snapshot. */
+  getPortfolioBaseQuantityBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getPortfolioBaseQuantityBaseline requires assetId")
+    }
+    return this.#portfolioBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  getCommittedQuoteBalanceBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getCommittedQuoteBalanceBaseline requires assetId")
+    }
+    return this.#committedQuoteBalanceBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  getCommittedBaseBalanceBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getCommittedBaseBalanceBaseline requires assetId")
+    }
+    return this.#committedBaseBalanceBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  /** Return Portfolio quote cash flow already reflected by this snapshot. */
   getQuoteCashFlowBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getQuoteCashFlowBaseline requires assetId")

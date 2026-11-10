@@ -9,8 +9,12 @@ function assertNonNegativeDecimal({ value, field } = {}) {
 
 /**
  * Allocate a strategy decision against the remaining account and pair budgets.
- * Existing active orders are supplied as commitments; each accepted action
- * immediately consumes the remaining budget before the next action is checked.
+ * Exchange free balances are point-in-time values, so only current-minus-snapshot
+ * deltas for Portfolio inventory and active-order commitments adjust them. This
+ * prevents pre-snapshot locks from being subtracted twice while reserving orders
+ * created after the snapshot. `portfolioBaseBalance` is total tracked base (active
+ * plus retained free); `activeBaseQuantity` remains the pair-level SELLable amount.
+ * Each accepted action consumes the remaining budget.
  * SELL overcommitment rejects the whole decision before any broker submission.
  */
 export function allocateOrderCommitments({
@@ -19,29 +23,35 @@ export function allocateOrderCommitments({
   baseFreeBalance,
   quoteCashFlow,
   activeBaseQuantity,
-  activeBaseBalance,
+  portfolioBaseBalance,
+  portfolioBaseBalanceBaseline = "0",
   outstandingRecoveryAmount,
   committedQuote,
   committedQuoteBalance,
+  committedQuoteBalanceBaseline = "0",
   committedBase,
   committedBaseBalance,
+  committedBaseBalanceBaseline = "0",
   investmentLimit,
 } = {}) {
   try {
     if (!Array.isArray(actions)) throw new TypeError("actions must be an array")
-    const accountActiveBaseQuantity = activeBaseBalance ?? activeBaseQuantity
+    const accountPortfolioBaseBalance = portfolioBaseBalance
     const accountCommittedQuote = committedQuoteBalance ?? committedQuote
     const accountCommittedBase = committedBaseBalance ?? committedBase
     for (const [field, value] of Object.entries({
       quoteFreeBalance,
       baseFreeBalance,
       activeBaseQuantity,
-      activeBaseBalance: accountActiveBaseQuantity,
+      portfolioBaseBalance: accountPortfolioBaseBalance,
+      portfolioBaseBalanceBaseline,
       outstandingRecoveryAmount,
       committedQuote,
       committedQuoteBalance: accountCommittedQuote,
+      committedQuoteBalanceBaseline,
       committedBase,
       committedBaseBalance: accountCommittedBase,
+      committedBaseBalanceBaseline,
       investmentLimit,
     })) {
       assertNonNegativeDecimal({ value, field })
@@ -50,11 +60,14 @@ export function allocateOrderCommitments({
 
     let remainingQuoteBalance = subtractDecimal({
       left: addDecimal({ left: quoteFreeBalance, right: quoteCashFlow }),
-      right: accountCommittedQuote,
+      right: subtractDecimal({ left: accountCommittedQuote, right: committedQuoteBalanceBaseline }),
     })
     let remainingBaseBalance = subtractDecimal({
-      left: addDecimal({ left: baseFreeBalance, right: accountActiveBaseQuantity }),
-      right: accountCommittedBase,
+      left: addDecimal({
+        left: baseFreeBalance,
+        right: subtractDecimal({ left: accountPortfolioBaseBalance, right: portfolioBaseBalanceBaseline }),
+      }),
+      right: subtractDecimal({ left: accountCommittedBase, right: committedBaseBalanceBaseline }),
     })
     let remainingActiveBase = subtractDecimal({
       left: activeBaseQuantity,

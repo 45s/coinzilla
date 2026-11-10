@@ -1,6 +1,7 @@
-import { addDecimal, compareDecimal } from "@coinzilla/utils"
+import { compareDecimal } from "@coinzilla/utils"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../../domain/account/assert-account-snapshot-covers-markets.js"
+import { calculateAccountSnapshotBaselines } from "../../domain/account/calculate-account-snapshot-baselines.js"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import {
@@ -91,15 +92,18 @@ export function createAccountSnapshotManager({
         false,
       )
     }
-    const quoteCashFlowBaselineByAssetId = new Map()
-    for (const position of getPortfolio().positions) {
-      const assetId = position.market.quoteAsset.id
-      quoteCashFlowBaselineByAssetId.set(
-        assetId,
-        addDecimal({
-          left: quoteCashFlowBaselineByAssetId.get(assetId) ?? "0",
-          right: position.quoteNetCashFlow.amount,
-        }),
+    const activeOrders = getTradingEngine()?.getActiveOrders?.() ??
+      getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
+    const baselineResult = calculateAccountSnapshotBaselines({
+      portfolio: getPortfolio(),
+      activeOrders,
+    })
+    if (!baselineResult.ok) {
+      throw withRecoveryFailure(
+        baselineResult.errors?.[0] ?? new Error("Unable to capture account snapshot accounting baselines"),
+        "ACCOUNTING_INTEGRITY",
+        "ACCOUNT_SNAPSHOT_BASELINE",
+        false,
       )
     }
     const accountAuditMarkets = [...marketMetadata.values()].map(({ market }) => market)
@@ -114,10 +118,7 @@ export function createAccountSnapshotManager({
       nextSnapshot = new AccountSnapshot({
         balances: configuredBalances,
         sourceTime: result.data.sourceTime,
-        quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
-          assetId,
-          amount,
-        })),
+        ...baselineResult.data,
       })
       assertAccountSnapshotCoversMarkets({ accountSnapshot: nextSnapshot, markets: accountAuditMarkets })
       if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
