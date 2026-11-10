@@ -89,15 +89,27 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/plans/README.md` | Local index for Harvester plans and migration tracking. | **KEEP** |
 | `apps/harvester/docs/tasks/README.md` | Local index for Harvester task records and historical handoffs. | **KEEP** |
 
+## Pending archive reorganization — PR #951
+
+The proposed destination structure preserves the nine historical records and separates their roles:
+
+| Archive | Records | Purpose |
+| --- | --- | --- |
+| `docs/audits/reports/` | Conservative audit, findings register, execution history | Analysis, finding status and order/fill chronology |
+| `docs/audits/sessions/` | Three distinct dated session audits | Session-specific observations and evidence boundaries |
+| `docs/audits/evidence/` | DOGE/ZRO trade exports and log-integrity addendum | Supporting read-only evidence and integrity metadata |
+
+Three focused category indexes are also proposed at each directory's `README.md`. PR #951 updates the Harvester README, docs index, parent audit index, historical README references and internal relative links. The current `develop` inventory checkpoint above remains the pre-move baseline until the PR merges and a fresh recursive tree is verified.
+
 ## Content-based findings
 
-1. The root-level Conservative audit, findings register, execution history and trade/log/session records are distinct evidence artifacts with different roles. Similar topic or filename does not establish duplication.
+1. The Conservative audit, findings register, execution history and trade/log/session records are distinct evidence artifacts with different roles. PR #951 relocates them into reports, sessions and evidence archives; similar topic or filename does not establish duplication.
 2. `AUDIT_SESSION_2026-11-08.md` and `AUDIT_SESSION_2026-11-08_16-33-33.md` describe distinct sessions/time windows and must not be merged by date alone.
 3. `CONSERVATIVE_BEHAVIOR_BASELINE.md` already declares itself superseded and points to the canonical domain specification. Preserve it for inbound-link compatibility.
 4. `CONSERVATIVE_SESSION_AUDIT.md` is a reusable checklist, while `INCIDENT_AUDIT_PLAYBOOK.md` is a broader incident workflow; they serve different purposes.
 5. The two broker/Harvester flow documents are visual and text alternatives, not automatically redundant.
 6. Three `AI_TASK_*.md` files are task briefs/handoff history, not current agent policy. Their historical task context should remain discoverable but must not be treated as active instructions.
-7. `ROADMAP.md` (274 KB), `README.md` (56 KB), `architecture.md` (54 KB), `AUDIT.md` (122 KB), and `AUDIT_FINDINGS.md` (130 KB) are large. Size alone is not grounds for splitting; identify mixed responsibilities and preserve every fact/reference before proposing a split.
+7. `ROADMAP.md`, `README.md`, and `architecture.md` remain the largest living Harvester documents and need separate content-level review. The large historical audit records are grouped under `docs/audits/`; archive organization does not imply that their content should be split or rewritten.
 8. `DOMAIN_FIRST_DELIVERY_PLAN.md` is superseded as a task tracker but retained at its original path; `trading-strategies.md` is a non-authoritative strategy overview whose Conservative content points to the canonical specification and whose Aggressive material remains exploratory.
 9. `JOURNAL_INTEGRATION_ROADMAP.md` remains a useful active implementation plan because Step 8 is still open; its original Step 1–4 status notes were stale and have been reconciled with merged PRs and current operational documentation.
 10. `testnet-order-tools.md` remains the canonical TESTNET operator guide. Historical ownership findings are preserved in `ROADMAP_HISTORY.md`; current diagnostics now document the source-confirmed `OWNERSHIP_INTEGRITY` fields and broker-order-ID-first registry behavior. No further split is justified because command procedures and current troubleshooting form one operational subject.
