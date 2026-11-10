@@ -594,6 +594,19 @@ const mapRecoveryDustData = ({ dust }) => {
   const mapped = { status: "EXCHANGE_CONSTRAINED_DUST", quantity: requireDecimalString({ value: dust.quantity, field: "dust.quantity" }), reason: dust.reason }
   const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
   for (const field of fields) mapped[field] = requireDecimalString({ value: dust[field], field: "dust." + field })
+  if (compareDecimal({ left: mapped.quantity, right: "0" }) <= 0) throw new RangeError("dust.quantity must be positive")
+  if (dust.reason === "MIN_QUANTITY" &&
+      compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
+    throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
+  }
+  if (dust.reason === "MIN_NOTIONAL" &&
+      (compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) < 0 ||
+       compareDecimal({ left: mapped.evaluatedNotional, right: mapped.minimumNotional }) >= 0)) {
+    throw new RangeError("dust MIN_NOTIONAL evidence does not prove the notional is below the minimum")
+  }
+  if (dust.reason === "QUANTITY_INCREMENT" && mapped.evaluatedQuantity !== "0") {
+    throw new RangeError("dust QUANTITY_INCREMENT evidence must record a zero rounded candidate")
+  }
   return mapped
 }
 
