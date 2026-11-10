@@ -153,9 +153,19 @@ test("replays recovery completion only after all sellable inventory is sold and 
   assert.deepEqual(ledger.appliedFillIds, restored.portfolio.appliedFillIds, "Fill identities must survive the cycle reset for duplicate protection.")
 })
 
-test("rejects a journal completion that leaves active sellable inventory unallocated", () => {
-  const projection = recoveryProjection({ freeQuantity: "0.009" })
-  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+test("rejects a journal completion projection that leaves active sellable inventory unallocated", () => {
+  const validProjection = recoveryProjection()
+  assert.equal(validProjection.ok, true, validProjection.errors?.map(({ message }) => message).join("; "))
+  const projection = {
+    ...validProjection,
+    data: {
+      ...validProjection.data,
+      recoveryCycles: validProjection.data.recoveryCycles.map((cycle) => ({
+        ...cycle,
+        freeQuantity: "0.009",
+      })),
+    },
+  }
 
   const restored = restoreHarvesterJournalState({
     projection,
@@ -183,7 +193,7 @@ const resolveRestoredOrdersAsFilled = ({ recoveredState }) => ({
   }),
 })
 
-const snapshot = ({ btcFree = "0.0996", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", sourceTime = 3000 } = {}) =>
+const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", sourceTime = 3000 } = {}) =>
   new AccountSnapshot({
     sourceTime,
     balances: [
