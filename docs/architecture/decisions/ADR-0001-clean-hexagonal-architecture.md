@@ -1,6 +1,5 @@
 # ADR-0001: Clean and Hexagonal Architecture for Coinzilla
 
-
 - **Status:** Accepted
 - **Date:** 2026-11-01
 - **Owners:** Coinzilla architecture (cross-cutting)

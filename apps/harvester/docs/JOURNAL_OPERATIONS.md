@@ -397,4 +397,3 @@ broker generation.
 
 This is same-process recovery only. It does not enable Journal replay or
 process-restart recovery. TESTNET acceptance remains PAUSED / UNVERIFIED.
-
