@@ -64,7 +64,7 @@ The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLU
 
 ### Medium — lifecycle tests need complete-state assertions
 
-The OrderRegistry suite already covers many important transitions, including UNKNOWN, stale events, identity mismatch and late FILLED reports. Follow-up review should prioritize complete canonical order state, remaining commitment, and immutability after rejected/stale transitions rather than adding duplicate status-only scenarios.
+The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. PR #928 strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve the accepted state and commitment. Exact PR head `0c26369ddff3460b6244fbe3e4825d16b25cc62f` passed 872/872 Harvester tests (75.94% lines, 79.28% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred. No production code changed.
 
 ### Explicitly deferred — Aggressive grid behavior
 
@@ -74,7 +74,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 1. **Strategy decisions:** the blocked-recovery-SELL gap is fixed in merged PR #917 and the exact investment-cap boundary matrix is added in the current PR; next review active-order/market isolation matrices.
 2. **Portfolio and accounting:** PR #924 strengthens exact multi-market accounting and conflicting-fill no-mutation assertions; continue reviewing independent expected values and commission-identity conflicts.
-3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
+3. **Order lifecycle:** PR #928 adds complete-state assertions for accepted, stale, duplicate, rejected and terminal transitions; review remaining domain failure contracts next.
 4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 

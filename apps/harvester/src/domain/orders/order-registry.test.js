@@ -94,12 +94,28 @@ test("applies broker acknowledgement and partial-fill updates immutably", () => 
   })
   const partiallyFilled = opened.registry.applyUpdate({ order: partial })
 
-  assert.equal(registry.getOrder({ clientOrderId: pending.clientOrderId }).status, "PENDING")
-  assert.equal(opened.registry.getOrder({ clientOrderId: pending.clientOrderId }).status, "OPEN")
-  assert.equal(partiallyFilled.registry.getOrder({
+  const trackedPartial = partiallyFilled.registry.getOrder({
     clientOrderId: pending.clientOrderId,
-  }).remainingQuantity.amount, "60")
-  assert.equal(partiallyFilled.registry.getActiveOrders().length, 1)
+  })
+
+  assert.equal(
+    registry.getOrder({ clientOrderId: pending.clientOrderId }).status,
+    "PENDING",
+    "Applying later reports must not mutate the original PENDING registry snapshot.",
+  )
+  assert.equal(
+    opened.registry.getOrder({ clientOrderId: pending.clientOrderId }).status,
+    "OPEN",
+    "Applying a partial fill must not mutate the earlier acknowledged OPEN snapshot.",
+  )
+  assert.equal(trackedPartial.status, "PARTIALLY_FILLED", "The latest accepted report must own the partial-fill state.")
+  assert.equal(trackedPartial.clientOrderId, pending.clientOrderId, "The Harvester client identity must remain stable.")
+  assert.equal(trackedPartial.brokerOrderId, "9001", "The exchange-assigned broker identity must remain attached.")
+  assert.equal(trackedPartial.originalQuantity.amount, "100", "The original order commitment must remain unchanged.")
+  assert.equal(trackedPartial.executedQuantity.amount, "40", "The registry must retain the exact cumulative executed quantity.")
+  assert.equal(trackedPartial.remainingQuantity.amount, "60", "Only the unexecuted quantity remains committed.")
+  assert.equal(trackedPartial.updatedAt, 102, "The latest accepted exchange update timestamp must be retained.")
+  assert.equal(partiallyFilled.registry.getActiveOrders().length, 1, "A partially filled order remains active until terminal.")
 })
 
 test("matches an execution report by broker order ID when Binance client ID differs", () => {
@@ -202,8 +218,14 @@ test("treats identical order updates as idempotent", () => {
   const first = registry.applyUpdate({ order: update })
   const duplicate = first.registry.applyUpdate({ order: update })
 
-  assert.equal(duplicate.duplicate, true)
-  assert.equal(duplicate.registry, first.registry)
+  const tracked = first.registry.getOrder({ clientOrderId: "harvester-1" })
+  assert.equal(duplicate.duplicate, true, "An identical exchange report must be recognized as a replay.")
+  assert.equal(duplicate.applied, false, "A replay must not be applied a second time.")
+  assert.equal(duplicate.registry, first.registry, "An identical replay must preserve the exact registry snapshot.")
+  assert.equal(tracked.status, "OPEN", "The acknowledged order must remain OPEN after an identical replay.")
+  assert.equal(tracked.brokerOrderId, "9001", "The exchange order identity must remain attached.")
+  assert.equal(tracked.executedQuantity.amount, "0", "A duplicate acknowledgement must not invent execution.")
+  assert.equal(tracked.remainingQuantity.amount, "100", "The original commitment must remain unchanged.")
 })
 
 test("rejects decreasing executed quantity and stale update timestamps", () => {
@@ -256,6 +278,7 @@ test("rejects immutable order intent changes and invalid status transitions", ()
     }),
   }).registry
 
+  const originalOrder = open.getOrder({ clientOrderId: "harvester-1" })
   assert.throws(() => open.applyUpdate({
     order: makeOrder({
       brokerOrderId: "9001",
@@ -276,6 +299,13 @@ test("rejects immutable order intent changes and invalid status transitions", ()
       updatedAt: 102,
     }),
   }), /Rejected orders cannot have changing executed quantity/)
+
+  assert.equal(open.getOrder({ clientOrderId: "harvester-1" }), originalOrder, "Rejected updates must not replace the canonical order in the immutable registry.")
+  assert.equal(originalOrder.status, "OPEN", "A rejected conflicting report must not alter the accepted status.")
+  assert.equal(originalOrder.executedQuantity.amount, "0", "A rejected report must not mutate executed quantity.")
+  assert.equal(originalOrder.remainingQuantity.amount, "100", "A rejected report must not release or consume order commitment.")
+  assert.equal(open.getActiveOrders({ marketId: market.id }).length, 1, "The previously accepted order must remain active.")
+  assert.equal(open.getTerminalOrders({ marketId: market.id }).length, 0, "A rejected report must not terminalize the order.")
 })
 
 test("allows a late terminal FILLED update after partial CANCELED or EXPIRED races", () => {
@@ -305,9 +335,26 @@ test("allows a late terminal FILLED update after partial CANCELED or EXPIRED rac
         completedAt: 103,
       }),
     })
+    const beforeLateFill = terminal.getOrder({ clientOrderId: "harvester-1" })
+    const afterLateFill = filled.registry.getOrder({ clientOrderId: "harvester-1" })
 
-    assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
-    assert.equal(filled.registry.getActiveOrders().length, 0)
+    assert.equal(beforeLateFill.status, terminalStatus, "The previously accepted terminal report must remain immutable.")
+    assert.equal(beforeLateFill.executedQuantity.amount, "40", "The terminal snapshot must retain the partial quantity known at cancellation/expiry.")
+    assert.equal(beforeLateFill.remainingQuantity.amount, "60", "The terminal snapshot must retain its then-unfilled commitment.")
+    assert.equal(afterLateFill.status, "FILLED", "A later authoritative full execution must resolve the terminal race.")
+    assert.equal(afterLateFill.clientOrderId, "harvester-1", "The original Harvester order identity must remain stable.")
+    assert.equal(afterLateFill.brokerOrderId, "9001", "The exchange order identity must remain stable.")
+    assert.equal(afterLateFill.originalQuantity.amount, "100", "The original order quantity must not change.")
+    assert.equal(afterLateFill.executedQuantity.amount, "100", "The final state must account for the complete executed quantity.")
+    assert.equal(afterLateFill.remainingQuantity.amount, "0", "A FILLED order must leave no remaining commitment.")
+    assert.equal(afterLateFill.updatedAt, 103, "The final exchange update timestamp must be retained.")
+    assert.equal(afterLateFill.completedAt, 103, "The final completion timestamp must be retained.")
+    assert.deepEqual(
+      filled.registry.getTerminalOrders({ marketId: market.id }).map((order) => order.clientOrderId),
+      ["harvester-1"],
+      "The fully executed order must be terminal exactly once for its market.",
+    )
+    assert.equal(filled.registry.getActiveOrders({ marketId: market.id }).length, 0, "The resolved order must no longer reserve active quantity.")
   }
 })
 
@@ -341,10 +388,20 @@ test("ignores a stale OPEN acknowledgement that arrives after a newer fill event
     }),
   })
 
-  assert.equal(staleAcknowledgement.stale, true)
-  assert.equal(staleAcknowledgement.applied, false)
-  assert.equal(staleAcknowledgement.registry, partial)
-  assert.equal(partial.getOrder({ clientOrderId: "harvester-1" }).status, "PARTIALLY_FILLED")
+  const tracked = partial.getOrder({ clientOrderId: "harvester-1" })
+
+  assert.equal(staleAcknowledgement.stale, true, "The older OPEN acknowledgement must be classified as stale.")
+  assert.equal(staleAcknowledgement.applied, false, "A stale acknowledgement must not be applied.")
+  assert.equal(staleAcknowledgement.unknown, false, "A stale known order report is not an unknown order.")
+  assert.equal(staleAcknowledgement.registry, partial, "A stale report must return the exact unchanged registry snapshot.")
+  assert.equal(tracked.status, "PARTIALLY_FILLED", "The latest accepted partial-fill state must remain authoritative.")
+  assert.equal(tracked.brokerOrderId, "9001", "The known exchange order identity must be preserved.")
+  assert.equal(tracked.originalQuantity.amount, "100", "The original order commitment must be preserved.")
+  assert.equal(tracked.executedQuantity.amount, "40", "The accepted cumulative execution must not move backwards.")
+  assert.equal(tracked.remainingQuantity.amount, "60", "The active remaining commitment must be unchanged.")
+  assert.equal(tracked.updatedAt, 102, "The accepted newer timestamp must not be replaced by the stale acknowledgement.")
+  assert.equal(partial.getActiveOrders({ marketId: market.id }).length, 1, "The unresolved partial order must remain active.")
+  assert.equal(partial.getTerminalOrders({ marketId: market.id }).length, 0, "A stale OPEN report must not terminalize the order.")
 })
 
 
@@ -375,9 +432,19 @@ test("allows a late FILLED update after an EXPIRED order report", () => {
     }),
   })
 
-  assert.equal(filled.applied, true)
-  assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
-  assert.equal(filled.registry.getActiveOrders().length, 0)
+  const trackedFilled = filled.registry.getOrder({ clientOrderId: "harvester-1" })
+  const trackedExpired = expired.getOrder({ clientOrderId: "harvester-1" })
+
+  assert.equal(filled.applied, true, "The authoritative full execution must be applied after the zero-fill EXPIRED report.")
+  assert.equal(trackedExpired.status, "EXPIRED", "The previously accepted EXPIRED snapshot must remain unchanged.")
+  assert.equal(trackedExpired.executedQuantity.amount, "0", "The expired snapshot must retain its zero executed quantity.")
+  assert.equal(trackedFilled.status, "FILLED", "The final canonical state must be FILLED.")
+  assert.equal(trackedFilled.brokerOrderId, "9001", "The exchange order identity must remain attached.")
+  assert.equal(trackedFilled.executedQuantity.amount, "100", "The complete exchange execution must be represented.")
+  assert.equal(trackedFilled.remainingQuantity.amount, "0", "No commitment remains after full execution.")
+  assert.equal(trackedFilled.completedAt, 103, "The final completion timestamp must be preserved.")
+  assert.equal(filled.registry.getTerminalOrders({ marketId: market.id }).length, 1, "The order must appear once in terminal state.")
+  assert.equal(filled.registry.getActiveOrders({ marketId: market.id }).length, 0, "The filled order must no longer be active.")
 })
 
 
