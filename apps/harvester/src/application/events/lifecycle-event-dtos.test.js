@@ -597,6 +597,31 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
   })
   assert.equal(contradictoryAssetIdentity.ok, false)
   assert.match(contradictoryAssetIdentity.errors[0].message, /asset ID and code do not match/)
+
+  const invalidQuoteValuation = (quoteValue) => mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-45",
+      brokerOrderId: "broker-order-45",
+      clientOrderId: "harvester-order-45",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 126,
+      commissions: [new Commission({
+        amount: new Money({ amount: "0.0001", asset: feeAsset }),
+        quoteValue,
+      })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(invalidQuoteValuation(new Money({ amount: "0", asset: quoteAsset })).ok, false)
+  assert.equal(invalidQuoteValuation(new Money({
+    amount: "0.01",
+    asset: new Asset({ id: "asset:USDC", code: "USDC" }),
+  })).ok, false)
 })
 
 
