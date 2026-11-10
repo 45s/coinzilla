@@ -10,7 +10,7 @@
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
 - [~] Conservative BUY-gating regression and correction are implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact PR-head CI passed 872/872 Harvester tests and all required checks; merge remains pending.
 - [~] Conservative investment-cap boundary matrix is added in [PR #922](https://github.com/45s/coinzilla/pull/922); exact-head CI passed, but the PR remains open and unmerged.
-- [~] Strengthen Portfolio multi-market isolation assertions in [PR #924](https://github.com/45s/coinzilla/pull/924): verify exact per-market quantities, cost basis, quote cash flow and market-scoped fill identities when trade IDs are reused. Exact PR-head CI passed 872/872 Harvester tests and all required checks; awaiting merge.
+- [~] Strengthen Portfolio multi-market isolation assertions in [PR #924](https://github.com/45s/coinzilla/pull/924): verify exact per-market quantities, cost basis, quote cash flow and market-scoped fill identities when trade IDs are reused. Exact PR-head CI passed 872/872 Harvester tests (75.80% lines, 79.07% branches, 74.88% functions) and all required checks; PR remains open and unmerged.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
