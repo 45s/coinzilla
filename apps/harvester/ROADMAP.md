@@ -8,10 +8,9 @@
 
 - [~] Establish and maintain the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md).
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
-- [~] RED confirmed on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING recovery SELL both incorrectly allowed a next BUY. Minimal policy correction and GREEN verification are in progress.
+- [~] RED confirmed and policy correction implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL now prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. The full Harvester suite passed 872/872 and coverage passed; the changed-file Markdown style check is being rerun after this whitespace-only cleanup.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
-
 
 ### Completed — per-session log directory layout (PR #874, 2026-11-10)
 
@@ -100,7 +99,6 @@ This section is the authoritative implementation order for current work. It supe
 - #654 is an active forensic/release-readiness investigation; runtime implementation remains a separate DDD/TDD workstream and a blocker for unattended process restarts.
 - Remove obsolete references to the deleted legacy application; no extraction or migration work remains for it.
 
-
 ## Current blockers and work selection — 2026-11-09
 
 This section is the current operational status and supersedes older statements below that describe TESTNET acceptance as the immediate next action.
@@ -148,7 +146,6 @@ This section is the current operational status and supersedes older statements b
 - **Legacy application removal:** complete. No extraction, migration or maintenance work remains; keep its former implementation and terminology out of current Harvester documentation.
 
 > **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
-
 
 **CURRENT DIRECTION — 2026-11-09: FORENSIC RESTART-RECOVERY PHASE.** The active task is to establish source/test evidence for #654, validate the retained PR #606 recovery helpers, document why current runtime wiring is absent, and resolve market-universe completeness and crash-consistency requirements. No application implementation or test changes are allowed in this phase.
 >
@@ -268,7 +265,6 @@ TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
 > The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. The committed config now enables only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
 
-
 At the time of this snapshot, the task branch had progressed beyond the initial `develop` audit described
 below. The following first-cycle components were implemented and composed
 when `TRADING_MODE=testnet` was selected:
@@ -297,8 +293,6 @@ MIN_NOTIONAL intent. Reservations and the safe repeatable TESTNET acceptance cyc
 milestone complete until the incident fixes, reconciliation, and required CI
 checks pass.
 
-
-
 ## Automated TESTNET startup account audit
 
 - [x] On every trading-enabled startup, fetch the full exchange account balance snapshot and durably journal the OPENING account event before the trading engine is activated.
@@ -307,8 +301,6 @@ checks pass.
 - [x] Add DTO and bootstrap regressions for full order facts, empty-account READY, pre-existing-order BLOCKED, and no market subscription/order activation after a block.
 - [ ] Verify Harvester tests and repository CI on the feature branch.
 - [ ] After merge, the user only needs to start Harvester; no repeated manual balances/orders output is required. Inspect the Journal automatically for account baseline and open-order audit results.
-
-
 
 ## Standalone read-only TESTNET account preflight
 
@@ -481,8 +473,6 @@ pnpm 12 lockfile document invalid YAML and blocked dependency installation,
 unit tests, coverage, and audit. The root importer has been restored to the
 empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
-
-
 
 ## Historical records archive
 
@@ -1122,8 +1112,6 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - Added recovery-coordinator regressions proving a queued retryable transition failure blocks acknowledgement until a later authoritative retry, while a permanent accounting-integrity mismatch remains terminal.
 - These test-first changes belong to [#769](https://github.com/45s/coinzilla/issues/769) under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626). Production behavior is unchanged in this commit.
 
-
-
 ## 2026-11-09 — F-023 failure-classification implementation
 
 - Ported the test-first recovery classification work onto a branch based on current `develop`, including the newer Journal publish/close changes; the stale PR #788 branch remains untouched.
@@ -1139,8 +1127,6 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - Engine snapshot collection distinguishes explicit broker REST read failures from malformed successful payloads and ownership/accounting contradictions. Unknown snapshot errors default terminal, not retryable.
 - Account snapshot and account-wide open-order reads, both RECOVERY durability barriers, and broker-generation acknowledgement have explicit failure stages.
 - No TESTNET or live exchange operations. Exact-head CI and review remain required.
-
-
 
 ## 2026-11-09 recovery failure-classification closeout — PR #794 merged
 
