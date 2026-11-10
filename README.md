@@ -100,4 +100,4 @@ GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.
 
 The Unit Tests and Utils Unit Tests workflows overlap with other workspace/package checks. Keep their independent status checks until branch-protection requirements have been reviewed; removing a workflow can invalidate a required status check.
 
-A workflow reporting success does not, by itself, prevent merging. Configure GitHub branch protection or a ruleset for `main` and require the relevant status checks. The repository's root `ROADMAP.md` records the currently configured check contexts and the remaining ruleset follow-up; re-check the live ruleset before changing workflow names or removing checks.
+A workflow reporting success does not, by itself, prevent merging. The active `core` ruleset protects `main` and `develop-core` protects `develop`; both currently require the same six status contexts documented in [`docs/ci-workflows.md`](docs/ci-workflows.md). The root `ROADMAP.md` records the verified configuration; re-check live rulesets before changing workflow names or removing checks.
