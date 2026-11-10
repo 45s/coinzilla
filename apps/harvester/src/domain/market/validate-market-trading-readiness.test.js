@@ -119,19 +119,47 @@ test("rejects mismatched market, rules, and invalid configuration", () => {
   }), /canonical Market/)
 })
 
-test("rejects configured BUY quantity below the exchange minimum or above its maximum", () => {
-  for (const [orderQuantity, expectedRule] of [
-    [0.99, "MIN_QUANTITY"],
-    [1001, "MAX_QUANTITY"],
-  ]) {
-    assert.throws(
-      () => validateMarketTradingReadiness({
-        symbol: "DOGEUSDT",
-        pairConfig: { ...pairConfig, orderQuantity },
-        marketMetadata: makeMetadata(),
-      }),
-      new RegExp(expectedRule),
-    )
+test("enforces exchange quantity limits at exact boundaries and immediately outside them", () => {
+  const scenarios = [
+    {
+      name: "one increment below MIN_QUANTITY",
+      orderQuantity: 0.99,
+      expectedRule: "MIN_QUANTITY",
+    },
+    {
+      name: "exact MIN_QUANTITY",
+      orderQuantity: 1,
+    },
+    {
+      name: "exact MAX_QUANTITY",
+      orderQuantity: 1000,
+    },
+    {
+      name: "one increment above MAX_QUANTITY",
+      orderQuantity: 1001,
+      expectedRule: "MAX_QUANTITY",
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const evaluate = () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig: { ...pairConfig, orderQuantity: scenario.orderQuantity },
+      marketMetadata: makeMetadata(),
+    })
+
+    if (scenario.expectedRule) {
+      assert.throws(
+        evaluate,
+        new RegExp(scenario.expectedRule),
+        "The " + scenario.name + " configuration must be rejected after exchange-step rounding.",
+      )
+    } else {
+      assert.doesNotThrow(
+        evaluate,
+        "The " + scenario.name + " configuration is an inclusive supported boundary.",
+      )
+    }
   }
 })
 
@@ -144,7 +172,15 @@ test("uses exact exchange increments when validating the effective configured BU
   assert.equal(result.market, market)
 })
 
-test("rejects quote investment limits below the exchange minimum notional", () => {
+test("enforces MIN_NOTIONAL at exact equality and immediately below the configured investment", () => {
+  assert.doesNotThrow(
+    () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig: { ...pairConfig, investment: 5 },
+      marketMetadata: makeMetadata(),
+    }),
+    "An investment exactly equal to the exchange MIN_NOTIONAL is admissible.",
+  )
   assert.throws(
     () => validateMarketTradingReadiness({
       symbol: "DOGEUSDT",
@@ -152,5 +188,6 @@ test("rejects quote investment limits below the exchange minimum notional", () =
       marketMetadata: makeMetadata(),
     }),
     /investment.*MIN_NOTIONAL/,
+    "An investment immediately below the exchange MIN_NOTIONAL must fail closed.",
   )
 })
