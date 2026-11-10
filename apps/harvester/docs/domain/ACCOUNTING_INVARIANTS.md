@@ -22,6 +22,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
 | Order ownership | Multi-market isolation; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` | Existing |
 | Order lifecycle | NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and unknown states map and drive safe engine behavior | `adapt-canonical-order.test.js`, `order-registry.test.js`, `conservative-trading-engine.test.js` | Existing |
+| Exchange filters | Exact inclusive MIN/MAX price, quantity and notional boundaries are accepted; immediately-outside values remain rejected | `validate-order-against-trading-rules.test.js` — `accepts exact inclusive MIN/MAX price, quantity and notional boundaries`, existing `rejects min/max price, quantity and notional violations` | Existing — equality matrix added in current PR; CI pending |
 | Cancellation race | A recovery SELL fill returned during cancellation is applied once when its late stream event is replayed | `conservative-trading-engine.test.js` | Existing |
 | Fill identity | Same fill applied to Portfolio and ledger atomically | `update-trading-accounting.test.js` | Existing |
 | Recovery ledger | Multiple BUY fills accumulate actual cost | Actual multi-BUY DOGE/ZRO fixtures in `conservative-strategy.test.js`; full-cycle engine regression | Existing — execution pending |

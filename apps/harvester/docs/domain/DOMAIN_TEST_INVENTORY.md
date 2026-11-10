@@ -50,6 +50,10 @@ Many existing domain tests omit the detailed assertion messages required by `ENG
 
 Some scenario fixtures calculate expected fill quote quantities by calling the same production decimal helper used by the implementation. Where practical, fixtures should use independently calculated exact decimal literals, so a shared arithmetic defect cannot make both setup and implementation agree incorrectly.
 
+### Medium — pre-submission exchange-filter equality boundaries are incomplete
+
+The order pre-submission validator already rejects immediately-outside PRICE, QUANTITY and NOTIONAL limits and rejects off-increment values. Its existing valid-order test used only interior values, so inclusive exact MIN/MAX equality was not explicitly protected. The current PR adds independent exact notional expectations for each inclusive boundary while retaining the existing negative matrix.
+
 ### Medium — capital-limit boundaries need stronger decision assertions
 
 The existing Conservative strategy suite tests a BUY blocked when outstanding recovery plus the next BUY exceeds the configured investment. It does not yet establish both exact-cap equality and the immediately-over-cap outcome as a decision matrix, including the resulting SELL/BUY intents.
@@ -67,7 +71,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 1. **Strategy decisions:** close the blocked-recovery-SELL decision gap; then add exact investment-cap boundary cases and review active-order/market isolation matrices.
 2. **Portfolio and accounting:** strengthen independent expected values, commission-identity conflicts and multi-fill sequence invariants.
 3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
-4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
+4. **Market and configuration:** readiness quantity/notional equality is covered in PR #930; exact pre-submission price/quantity/notional equality is covered in the current PR.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
