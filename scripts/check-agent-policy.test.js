@@ -316,7 +316,7 @@ test('detects direct console access in production code while ignoring comments, 
     writeFileSync(join(root, 'apps', 'sample', 'src', 'runtime.js'), [
       '// console.log("comment only")',
       'const message = "console.warn(\\"string only\\")";',
-      'const pattern = /console\\\\.error\\\\(/;',
+      'const pattern = /console\\.error\\(/;',
       'const example = ' + tick + 'console.info("template text only")' + tick + ';',
       'const actual = ' + tick + 'template ' + '$' + '{console.error("interpolation")} ' + tick + ';',
       'console["warn"]("computed access");',
