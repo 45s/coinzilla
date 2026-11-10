@@ -40,9 +40,41 @@ function getInitialTradingSnapshot({ projection }) {
     session.tradingEnabled || session.hasTradingActivity
   )
   if (!firstTradingSession) return undefined
-  return projection.data.accountSnapshots.find((snapshot) =>
+  const snapshots = projection.data.accountSnapshots.filter((snapshot) =>
     snapshot.fileName === firstTradingSession.fileName && snapshot.phase === "PREFLIGHT"
   )
+  if (snapshots.length === 0) return undefined
+
+  const initial = snapshots[0]
+  const balancesByAsset = new Map()
+  const auditReasons = new Set()
+  let auditStatus = "COMPLETE"
+  for (const snapshot of snapshots) {
+    if (snapshot.sourceTime !== initial.sourceTime) {
+      throw new Error("PREFLIGHT commission-asset baseline must retain the original account snapshot time")
+    }
+    if (snapshot.auditStatus !== "COMPLETE" || snapshot.auditReasons.length > 0) {
+      auditStatus = "INCOMPLETE"
+      for (const reason of snapshot.auditReasons) auditReasons.add(reason)
+    }
+    for (const balance of snapshot.balances) {
+      const previous = balancesByAsset.get(balance.asset)
+      if (previous && (
+        previous.free !== balance.free ||
+        previous.locked !== balance.locked ||
+        previous.total !== balance.total
+      )) {
+        throw new Error("PREFLIGHT account snapshots contain contradictory baseline balances for " + balance.asset)
+      }
+      balancesByAsset.set(balance.asset, balance)
+    }
+  }
+  return {
+    ...initial,
+    auditStatus,
+    auditReasons: [...auditReasons],
+    balances: [...balancesByAsset.values()].sort((left, right) => left.asset.localeCompare(right.asset)),
+  }
 }
 
 /**
