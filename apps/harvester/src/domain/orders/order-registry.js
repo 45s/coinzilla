@@ -342,9 +342,15 @@ export class OrderRegistry {
     // Match acknowledged exchange events by Binance's exchange-assigned order ID,
     // exactly like Free-Roll's trackedOrderIds. Client order IDs are metadata and
     // may differ in Binance cancel/replace execution reports (c versus C).
-    const brokerIdIndex = this.#orders.findIndex(
-      (item) => item.brokerOrderId === order.brokerOrderId,
-    )
+    // UNKNOWN submissions can legitimately have no broker ID after a lost
+    // acknowledgement. Undefined is not an identity shared by all such orders:
+    // resolve those updates only by clientOrderId and compare broker IDs only
+    // when the incoming exchange report actually supplies one.
+    const brokerIdIndex = order.brokerOrderId === undefined
+      ? -1
+      : this.#orders.findIndex(
+          (item) => item.brokerOrderId === order.brokerOrderId,
+        )
     const clientIdIndex = this.#orders.findIndex(
       (item) => item.clientOrderId === order.clientOrderId,
     )
