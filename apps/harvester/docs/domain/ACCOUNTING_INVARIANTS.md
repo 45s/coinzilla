@@ -43,6 +43,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Recovery ledger | Base commissions do not alter quote ledger | `recovery-fill-accounting.test.js` | Existing |
 | Recovery ledger | Multiple base/quote commission entries aggregate correctly | `recovery-fill-accounting.test.js` aggregated commission validation and per-asset accounting cases | Existing — execution pending |
 | Recovery ledger | Third-asset/incomplete/negative commission reject | recovery accounting tests | Partial |
+| Journal recovery-cycle replay | Replaying a completed cycle must allocate exact keepQuantity, preserve active residual Free-Roll inventory, reset Position.spent and RecoveryLedger cycle totals together, and retain fill identities | `audit-recovered-account-state.test.js` — completed-cycle replay regression | RED pending exact-head CI |
 | Recovery ledger reset | A cycle resets only with explicit minProfit (at least 0.01 quote units), authoritative quote-asset Position.spent matching the compatibility mirror, and realizedNetProfit >= minProfit; execution identities remain preserved | `recovery-ledger.test.js` — missing threshold, below-threshold profit and outstanding-capital regressions | RED confirmed on PR #973 test-only head `6d51c8e0bce63dab18ad809ef5e62697669bc84a` (921 passed / 3 failed); source guard committed, GREEN pending exact-head CI |
 | Recovery ledger | Reset clears cycle amounts but preserves IDs | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Late duplicate after reset stays duplicate | reset test | Existing |
