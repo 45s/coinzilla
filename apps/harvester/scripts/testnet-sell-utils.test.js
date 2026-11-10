@@ -94,3 +94,74 @@ test("rejects malformed balances and missing quantity filters", () => {
     /No usable MARKET_LOT_SIZE or LOT_SIZE filter/,
   )
 })
+
+
+test("preserves the maximum input precision after rounding to the exchange step", () => {
+  const { quantity } = getMarketSellQuantity({
+    freeBalance: "1.239000",
+    symbolInfo: {
+      filters: [
+        {
+          filterType: "MARKET_LOT_SIZE",
+          minQty: "0.01",
+          maxQty: "100",
+          stepSize: "0.01",
+        },
+      ],
+    },
+  })
+
+  assert.equal(quantity, "1.230000")
+})
+
+test("accepts exact inclusive minimum and maximum quantity boundaries", () => {
+  const filters = {
+    filters: [
+      {
+        filterType: "MARKET_LOT_SIZE",
+        minQty: "0.1",
+        maxQty: "1.00",
+        stepSize: "0.1",
+      },
+    ],
+  }
+
+  assert.equal(
+    getMarketSellQuantity({ freeBalance: "0.1", symbolInfo: filters }).quantity,
+    "0.1",
+  )
+  assert.equal(
+    getMarketSellQuantity({ freeBalance: "1.00", symbolInfo: filters }).quantity,
+    "1.00",
+  )
+})
+
+test("rejects a zero LOT_SIZE fallback instead of treating it as disabled rounding", () => {
+  assert.throws(
+    () =>
+      getMarketSellQuantity({
+        freeBalance: "1",
+        symbolInfo: {
+          filters: [
+            {
+              filterType: "LOT_SIZE",
+              minQty: "0",
+              maxQty: "100",
+              stepSize: "0",
+            },
+          ],
+        },
+      }),
+    /stepSize must be positive/,
+  )
+})
+
+test("retains the strict non-negative plain-decimal input contract", () => {
+  for (const freeBalance of ["-0", "-1", "01", "1e2", " 1", "1 "]) {
+    assert.throws(
+      () => getMarketSellQuantity({ freeBalance, symbolInfo }),
+      /freeBalance must be a non-negative decimal string/,
+      freeBalance,
+    )
+  }
+})
