@@ -6,14 +6,14 @@ type: roadmap
 owner: brokers
 ---
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Priority execution plan — current develop direction (2026-11-10)
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
 
 ### Canonical order acknowledgement completeness — issue #960
 
-- [~] **Request complete Binance RESULT acknowledgements for canonical order placement.** Binance's default response for `LIMIT_MAKER` is minimal `ACK`, which omits the order facts required by `adaptCanonicalOrder()`. Canonical placement must explicitly request `newOrderRespType: "RESULT"`; this returns the canonical order fields without the optional fills array.
-- [ ] Verify the test-first regression and full broker/workspace CI on the exact PR head before merge. The implementation must not add a retry, infer missing facts from an ACK, or change the compatibility `createOrder()` contract.
+- [x] **Request complete Binance RESULT acknowledgements for canonical order placement — issue [#960](https://github.com/45s/coinzilla/issues/960), implemented in merged [PR #961](https://github.com/45s/coinzilla/pull/961).** Binance's default response for `LIMIT_MAKER` is minimal `ACK`, which omits the order facts required by `adaptCanonicalOrder()`. Canonical placement explicitly requests `newOrderRespType: "RESULT"`, returning the canonical order fields without the optional fills array.
+- [x] **Verification:** the test-first regression and all seven GitHub Actions workflows passed on exact PR head `37b4a805219edc9fc901cc5c11dd44bf850b4908`; PR #961 merged as `8e2f795223a4d594947a6577a09bd183f9b48328` and issue #960 is closed. The compatibility `createOrder()` contract is unchanged; no automatic retry or inference from incomplete ACK was added.
 - Consumer recovery remains Harvester-owned and is tracked separately in [issue #962](https://github.com/45s/coinzilla/issues/962).
 
 ### Trading environment selection — explicit contract
