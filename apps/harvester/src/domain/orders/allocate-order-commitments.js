@@ -9,8 +9,10 @@ function assertNonNegativeDecimal({ value, field } = {}) {
 
 /**
  * Allocate a strategy decision against the remaining account and pair budgets.
- * Existing active orders are supplied as commitments; each accepted action
- * immediately consumes the remaining budget before the next action is checked.
+ * Exchange free balances are point-in-time values, so only current-minus-snapshot
+ * deltas for Portfolio inventory and active-order commitments adjust them. This
+ * prevents pre-snapshot locks from being subtracted twice while reserving orders
+ * created after the snapshot. Each accepted action consumes the remaining budget.
  * SELL overcommitment rejects the whole decision before any broker submission.
  */
 export function allocateOrderCommitments({
