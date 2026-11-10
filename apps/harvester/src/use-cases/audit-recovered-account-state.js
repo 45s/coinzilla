@@ -144,7 +144,10 @@ export function auditRecoveredAccountState({
       throw new Error("Current exchange account snapshot is older than the latest durable Journal account snapshot")
     }
 
-    const baselineByAsset = new Map(baseline.balances.map((balance) => [balance.asset, balance.total]))
+    const baselineByAsset = new Map(baseline.balances.map((balance) => [balance.asset, {
+      total: balance.total,
+      locked: balance.locked,
+    }]))
     const currentByAsset = new Map()
     for (const balance of currentAccountSnapshot.balances) {
       const code = balance.asset.code
@@ -192,6 +195,7 @@ export function auditRecoveredAccountState({
 
     const commissionAssetIdByCode = new Map()
     const commissionAssetCodeById = new Map()
+    const thirdAssetCommissionCodes = new Set()
     for (const market of markets) {
       for (const asset of [market.baseAsset, market.quoteAsset]) {
         const knownId = commissionAssetIdByCode.get(asset.code)
@@ -260,6 +264,7 @@ export function auditRecoveredAccountState({
             }), right: "0" }) <= 0) {
           throw new Error("Recovered third-asset commission has no valid historical quote valuation for " + fill.symbol)
         }
+        thirdAssetCommissionCodes.add(asset)
         addAmount({
           amounts: expectedDeltas,
           asset,
@@ -268,12 +273,16 @@ export function auditRecoveredAccountState({
       }
     }
 
+    const marketAssetCodes = new Set(markets.flatMap((market) => [
+      market.baseAsset.code,
+      market.quoteAsset.code,
+    ]))
     const assetCodes = new Set([
-      ...markets.flatMap((market) => [market.baseAsset.code, market.quoteAsset.code]),
+      ...marketAssetCodes,
       ...expectedDeltas.keys(),
     ])
     for (const asset of assetCodes) {
-      const initial = baselineByAsset.get(asset) ?? "0"
+      const initial = baselineByAsset.get(asset)?.total ?? "0"
       const delta = expectedDeltas.get(asset) ?? "0"
       const expected = addDecimal({ left: initial, right: delta })
       if (compareDecimal({ left: expected, right: "0" }) < 0) {
@@ -380,7 +389,9 @@ export function auditRecoveredAccountState({
       }
     }
     for (const [asset, actual] of currentByAsset) {
-      const expected = expectedLocked.get(asset) ?? "0"
+      const initialLocked = baselineByAsset.get(asset)?.locked ?? "0"
+      const expected = expectedLocked.get(asset) ??
+        (thirdAssetCommissionCodes.has(asset) && !marketAssetCodes.has(asset) ? initialLocked : "0")
       if (compareDecimal({ left: actual.locked, right: expected }) !== 0) {
         throw new Error(
           "Exchange has unexplained locked funds for " + asset +
