@@ -1402,7 +1402,7 @@ test("does not retry application recovery after a permanent Journal write failur
   assert.equal(reconciliationCalls, 1, "The first attempt must perform one authoritative reconciliation.")
   assert.deepEqual(
     fixture.logs.error[0]?.error?.recoveryFailure,
-    permanentWriteFailure.recoveryFailure,
+    { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false },
     "The terminal Journal write-failure classification must survive recovery error handling.",
   )
 
