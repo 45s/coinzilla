@@ -1,6 +1,6 @@
 # Harvester Conservative Strategy Audit
 
-> This is a historical evidence report, not a strategy-rule authority. The sole current Conservative contract is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old rule summaries and status tables below are historical unless explicitly updated; they must not override the canonical specification.
+> This is a historical evidence report, not a strategy-rule authority. The sole current Conservative contract is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old rule summaries and status tables below are historical unless explicitly updated; they must not override the canonical specification.
 
 
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
@@ -17,7 +17,7 @@ ZRO's pre-CLOSING recovery SELL and DOGE's post-CLOSING SELL reconcile at the tr
 
 ## Current closure decision — 2026-11-07
 
-**The in-scope Conservative Strategy implementation/documentation audit is CLOSED.** The code and regression inventory have been reviewed against the sole authority, [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This closure does not mean tests or CI passed, and it does not grant TESTNET or live-trading acceptance.
+**The in-scope Conservative Strategy implementation/documentation audit is CLOSED.** The code and regression inventory have been reviewed against the sole authority, [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This closure does not mean tests or CI passed, and it does not grant TESTNET or live-trading acceptance.
 
 Implemented and represented by focused regression coverage on this branch:
 
@@ -34,7 +34,7 @@ Historical evidence disposition:
 - Historical exact exchange-filter values were not preserved in runtime logs. Actual exchange acceptance and trade arithmetic are known, but candidate historical filter assumptions are not promoted to facts.
 - Process-restart reconstruction remains explicitly deferred to [#654](https://github.com/45s/coinzilla/issues/654) and is outside this audit.
 
-**Verification boundary:** regression tests are present and mapped in [ACCOUNTING_INVARIANTS.md](./docs/domain/ACCOUNTING_INVARIANTS.md), but have not yet been executed on this exact head. The next phase is to run the focused Harvester tests, full Harvester suite, and required CI, then fix any failures. Do not describe this audit closure as test, CI, or TESTNET acceptance.
+**Verification boundary:** regression tests are present and mapped in [ACCOUNTING_INVARIANTS.md](../../domain/ACCOUNTING_INVARIANTS.md), but have not yet been executed on this exact head. The next phase is to run the focused Harvester tests, full Harvester suite, and required CI, then fix any failures. Do not describe this audit closure as test, CI, or TESTNET acceptance.
 
 ## Evidence and provenance
 
@@ -44,8 +44,8 @@ Historical evidence disposition:
 | DOGEUSDT order history, 100 rows | [#645 DOGE order-history comment](https://github.com/45s/coinzilla/issues/645#issuecomment-6680477550) | All 100 rows parsed; six current-session orders isolated |
 | ZROUSDT order history, 100 rows | [#645 ZRO order-history comment](https://github.com/45s/coinzilla/issues/645#issuecomment-6680478011) | All 100 rows parsed; seventeen current-session orders isolated |
 | Latest open-orders snapshot | [#645 evidence inventory](https://github.com/45s/coinzilla/issues/645#issuecomment-6680483675) | One ZRO BUY order 727905 NEW, corroborated |
-| `harvester.log` | Original conversation attachment; 16,878,030 bytes, 4,880 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
-| `harvester-trace.log` | Original conversation attachment; 17,021,746 bytes, 5,739 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
+| `harvester.log` | Original conversation attachment; 16,878,030 bytes, 4,880 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md) |
+| `harvester-trace.log` | Original conversation attachment; 17,021,746 bytes, 5,739 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md) |
 
 Original log checksums recorded in #645 and independently recomputed against the original attachments:
 - `harvester.log`: `5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d`
@@ -206,7 +206,7 @@ Two focused child issues were created: [#646 — Align Conservative specificatio
 | DOGE BUY inventory/cash debit | PASS | Three fills and account deltas reconcile |
 | DOGE SELL/order/balance state | CONFLICT | History FILLED vs Journal OPEN, no applied SELL fill, 1,196 DOGE locked |
 | DOGE realized net PnL | UNVERIFIED | Missing applied SELL fill/actual commission correlation |
-| Original log integrity and parsing | PASS | Both original files independently hashed and parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
+| Original log integrity and parsing | PASS | Both original files independently hashed and parsed; see [log evidence addendum](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md) |
 | Source behavior review | PARTIAL | Relevant code inspected; no full runtime execution |
 | Regression coverage | PARTIAL | Relevant tests inspected, not run |
 | Live TESTNET acceptance | UNVERIFIED | No new exchange operation authorized or performed |
@@ -241,7 +241,7 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 
 ### 3. Recovery SELL calculation and completion contract
 
-The expected Conservative behavior is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This evidence report does not repeat SELL formulas, commission reserves, retained-inventory rules, residual handling, terminal outcomes, or recovery-completion criteria.
+The expected Conservative behavior is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This evidence report does not repeat SELL formulas, commission reserves, retained-inventory rules, residual handling, terminal outcomes, or recovery-completion criteria.
 
 Historical source observations in the original audit baseline are superseded by the current canonical contract and current source. Implementation conformance remains unaccepted until focused regressions and exact-head CI pass.
 
@@ -305,12 +305,12 @@ Observed fact is from Journal/order-history/account records. Source behavior is 
 
 ## Verified original application-log addendum — 2026-11-06
 
-The former evidence-access blocker is resolved. Both original files were read-only hashed and parsed; byte counts, physical line counts, newline termination, and SHA-256 values are recorded in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). The trace directly records ZRO Portfolio and RecoveryLedger before/after SELL accounting and cycle completion (0.01 free + 0.04 active residual). It also records DOGE order 1276698 OPEN with zero executed at the final runtime evaluations and no DOGE SELL among the 12 shutdown execution records. This strengthens, but does not resolve, the conflict with the separate exchange order-history FILLED row. The second unresolved order remains unidentified; DOGE order 1276698 is only a candidate. Do not book DOGE SELL proceeds or PnL. See the addendum for exact line references, timestamps, and remaining evidence.
+The former evidence-access blocker is resolved. Both original files were read-only hashed and parsed; byte counts, physical line counts, newline termination, and SHA-256 values are recorded in [AUDIT_LOG_EVIDENCE_2026-11-06.md](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md). The trace directly records ZRO Portfolio and RecoveryLedger before/after SELL accounting and cycle completion (0.01 free + 0.04 active residual). It also records DOGE order 1276698 OPEN with zero executed at the final runtime evaluations and no DOGE SELL among the 12 shutdown execution records. This strengthens, but does not resolve, the conflict with the separate exchange order-history FILLED row. The second unresolved order remains unidentified; DOGE order 1276698 is only a candidate. Do not book DOGE SELL proceeds or PnL. See the addendum for exact line references, timestamps, and remaining evidence.
 
 
 ## 2026-11-06 post-CLOSING TESTNET trade-history reconciliation
 
-New read-only exports are preserved verbatim, including all 50 rows each, in [DOGE trade evidence](./AUDIT_DOGE_TRADES_2026-11-06.md) and [ZRO trade evidence](./AUDIT_ZRO_TRADES_2026-11-06.md). Both commands requested 50 rows with no `fromId`; neither is asserted to be exhaustive all-time history.
+New read-only exports are preserved verbatim, including all 50 rows each, in [DOGE trade evidence](../evidence/AUDIT_DOGE_TRADES_2026-11-06.md) and [ZRO trade evidence](../evidence/AUDIT_ZRO_TRADES_2026-11-06.md). Both commands requested 50 rows with no `fromId`; neither is asserted to be exhaustive all-time history.
 
 **DOGE order 1276698 / client suffix -11:** trade 221990 (278 DOGE) and trade 221991 (918 DOGE) are SELL MAKER fills at 0.07185, at 08:03:01.841Z and 08:03:18.202Z. Total 1,196 DOGE; gross quote 85.93260000 USDT; quote commission 0.08593260 USDT; net quote proceeds 85.84666740 USDT. The final runtime evaluation (~07:57:19Z) and CLOSING snapshot (~07:58:11Z) predate both fills. This is a chronology resolution, not contradictory same-time evidence. Exchange execution is confirmed after shutdown; application accounting and later account balance remain unverified.
 
@@ -771,7 +771,7 @@ PR #670 adds a fake-broker regression for enabled BTCUSDT plus disabled ETHUSDT,
 
 ## 2026-11-08 reconnect recovery failure — issue #626 / PR #673
 
-The complete four-artifact evidence inventory, session timeline, 16-fill ledger, exact PREFLIGHT/CLOSING balance reconciliation, two unresolved owned SELLs, source-level root cause, and shutdown outcome are preserved in [AUDIT_SESSION_2026-11-08.md](./AUDIT_SESSION_2026-11-08.md). The repeatable evidence-handling procedure is [INCIDENT_AUDIT_PLAYBOOK.md](./docs/INCIDENT_AUDIT_PLAYBOOK.md).
+The complete four-artifact evidence inventory, session timeline, 16-fill ledger, exact PREFLIGHT/CLOSING balance reconciliation, two unresolved owned SELLs, source-level root cause, and shutdown outcome are preserved in [AUDIT_SESSION_2026-11-08.md](../sessions/AUDIT_SESSION_2026-11-08.md). The repeatable evidence-handling procedure is [INCIDENT_AUDIT_PLAYBOOK.md](../../INCIDENT_AUDIT_PLAYBOOK.md).
 
 **Confirmed defect:** while application reconciliation was pending after transport reconnect, bootstrap processed queued user-data order events without the engine's recovery-mode flag. A BUY fill therefore attempted to cancel a recovery SELL while the broker still reported the user-data stream unavailable. Both cancellation attempts failed, the orders became UNKNOWN, accounting readiness closed, and application recovery failed. A second gap failed to retain the required post-recovery evaluation for terminal events consumed while the bootstrap correctly deferred normal evaluation.
 
@@ -786,7 +786,7 @@ The complete four-artifact evidence inventory, session timeline, 16-fill ledger,
  
 ## 2026-11-08 evening trading session — 16:33:33–22:42:05 UTC
 
-The separately uploaded evening-session Journal and full runtime/TRACE logs have been parsed and reconciled. The complete evidence inventory, SHA-256 hashes, line ranges, symbol event cadence, fill ledger, exact five-asset PREFLIGHT/CLOSING balance reconciliation, shutdown observations, and explicit unknowns are preserved in [AUDIT_SESSION_2026-11-08_16-33-33.md](./AUDIT_SESSION_2026-11-08_16-33-33.md).
+The separately uploaded evening-session Journal and full runtime/TRACE logs have been parsed and reconciled. The complete evidence inventory, SHA-256 hashes, line ranges, symbol event cadence, fill ledger, exact five-asset PREFLIGHT/CLOSING balance reconciliation, shutdown observations, and explicit unknowns are preserved in [AUDIT_SESSION_2026-11-08_16-33-33.md](../sessions/AUDIT_SESSION_2026-11-08_16-33-33.md).
 
 **Session verdict:** no global process freeze is demonstrated in this afternoon session. The runtime processed 1,555 market-price events, 1,616 strategy evaluations, 90 submitted orders, 40 confirmed cancellations, 48 unique applied fills, and four recovery completions; the afternoon logs contain no error-level records. Shutdown completed successfully.
 

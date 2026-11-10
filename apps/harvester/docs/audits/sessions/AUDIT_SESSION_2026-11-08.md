@@ -4,7 +4,7 @@
 
 **Owning issue:** [#626 — user-data stream recovery stuck with recoveryRequired=true](https://github.com/45s/coinzilla/issues/626)
 
-**Audit method:** [Incident Audit Playbook](./docs/INCIDENT_AUDIT_PLAYBOOK.md)
+**Audit method:** [Incident Audit Playbook](../../INCIDENT_AUDIT_PLAYBOOK.md)
 
 ## Executive conclusion
 
