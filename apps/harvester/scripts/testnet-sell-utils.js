@@ -75,7 +75,7 @@ export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
     throw new RangeError("stepSize must be positive")
   }
 
-  const scale = Math.max(balance.scale, step.scale, min.scale, max.scale)
+  const scale = Math.max(balance.scale, step.scale)
   const quantity = roundDecimalToIncrement({
     value: balance.value,
     increment: step.value,
