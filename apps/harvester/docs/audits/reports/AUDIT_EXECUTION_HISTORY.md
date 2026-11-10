@@ -104,7 +104,7 @@ ZRO order 727905 is consistent across order history, the supplied open-orders sn
 
 ## Original application logs — verified and parsed
 
-The original `harvester.log` and `harvester-trace.log` were read-only inspected, independently SHA-256 verified against #645, and parsed. Integrity metadata, exact line references, ZRO Portfolio/RecoveryLedger transitions, DOGE final runtime state, shutdown execution inventory, and timestamp interpretation are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO runtime accounting is now directly observed. DOGE order 1276698 is OPEN/zero-executed in the last runtime evaluations and no DOGE SELL appears in the 12 shutdown execution records, but the separate exchange order-history row reports FILLED; retain CONFLICT. The logs do not identify the second CLOSING unresolved order with certainty.
+The original `harvester.log` and `harvester-trace.log` were read-only inspected, independently SHA-256 verified against #645, and parsed. Integrity metadata, exact line references, ZRO Portfolio/RecoveryLedger transitions, DOGE final runtime state, shutdown execution inventory, and timestamp interpretation are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO runtime accounting is now directly observed. DOGE order 1276698 is OPEN/zero-executed in the last runtime evaluations and no DOGE SELL appears in the 12 shutdown execution records, but the separate exchange order-history row reports FILLED; retain CONFLICT. The logs do not identify the second CLOSING unresolved order with certainty.
 
 ## Expanded per-symbol decision and lifecycle interpretation
 
@@ -231,7 +231,7 @@ These equations prove ZRO arithmetic and DOGE BUY leg only. They do not resolve 
 
 ## 2026-11-06 post-CLOSING exchange trade timeline (operator-supplied read-only exports)
 
-The complete 50-row DOGE and ZRO trade-history outputs are preserved in [AUDIT_DOGE_TRADES_2026-11-06.md](./AUDIT_DOGE_TRADES_2026-11-06.md) and [AUDIT_ZRO_TRADES_2026-11-06.md](./AUDIT_ZRO_TRADES_2026-11-06.md).
+The complete 50-row DOGE and ZRO trade-history outputs are preserved in [AUDIT_DOGE_TRADES_2026-11-06.md](../evidence/AUDIT_DOGE_TRADES_2026-11-06.md) and [AUDIT_ZRO_TRADES_2026-11-06.md](../evidence/AUDIT_ZRO_TRADES_2026-11-06.md).
 
 | UTC timestamp | Symbol | Trade | Order | Side | Qty | Quote | Fee |
 |---|---|---:|---:|---|---:|---:|---:|

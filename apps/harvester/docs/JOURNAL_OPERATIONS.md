@@ -282,7 +282,7 @@ Event DTOs do not include credentials, raw exchange messages, or SDK objects. Th
 
 The current startup composition initializes `userDataState.accountingFailed=false`, trading-enabled `requiresReconciliation=false`, and empty engine pause/recovery-intent Sets. The engine's `pause()` adds symbols to in-memory `paused` and `durablePausedMarkets` Sets and publishes `STRATEGY_PAUSED`; it does not persist a durable checkpoint or restore that event on startup.
 
-The per-market strategy pause/recovery-intent sets are not guaranteed to survive a process restart. The separate `accountingFailed` process-lifetime latch is tracked by F-023/#769. PREFLIGHT and new live events may detect some unresolved conditions, but they do not reconstruct every previous pause reason or offline terminal fill. Do not treat restart as resolution of an earlier safety halt. Keep trading disabled until the prior cause has been authoritatively reconciled or explicitly acknowledged. See F-029 in [AUDIT.md](../AUDIT.md), F-031/#654 and F-028.
+The per-market strategy pause/recovery-intent sets are not guaranteed to survive a process restart. The separate `accountingFailed` process-lifetime latch is tracked by F-023/#769. PREFLIGHT and new live events may detect some unresolved conditions, but they do not reconstruct every previous pause reason or offline terminal fill. Do not treat restart as resolution of an earlier safety halt. Keep trading disabled until the prior cause has been authoritatively reconciled or explicitly acknowledged. See F-029 in [AUDIT.md](audits/reports/AUDIT.md), F-031/#654 and F-028.
 
 ## Applied-fill Journal durability boundary
 
@@ -290,7 +290,7 @@ The Harvester engine publishes `execution.fill_applied` after applying the canon
 
 The engine's durable flush barrier protects order submission/cancellation intent before the exchange side effect. It does not immediately protect the post-fill accounting event. Graceful Journal close drains and syncs accepted events; unexpected process termination or power loss has no equivalent guarantee.
 
-Therefore the Journal must not be described as a crash-consistent fill ledger or complete trading-state authority. This is a confirmed missing durability guarantee, not evidence that a particular historical fill was lost. See F-028 in [AUDIT.md](../AUDIT.md) and [#654](https://github.com/45s/coinzilla/issues/654).
+Therefore the Journal must not be described as a crash-consistent fill ledger or complete trading-state authority. This is a confirmed missing durability guarantee, not evidence that a particular historical fill was lost. See F-028 in [AUDIT.md](audits/reports/AUDIT.md) and [#654](https://github.com/45s/coinzilla/issues/654).
 
 ## Existing offline recovery helpers — not wired into current runtime
 
@@ -309,7 +309,7 @@ Current source behavior:
 - `start-harvester.js` creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state and explicitly disables Journal replay.
 - PREFLIGHT captures and durably records account balances and account-wide open orders. An unmatched order is classified as unowned and is not adopted. The current startup test explicitly permits runtime startup with an unowned open order; the `BLOCKED` audit classification is not itself a trading-readiness gate.
 
-The engine's active-order and commitment guards read only the in-memory `OrderRegistry`; they do not include unowned account-wide open orders. With an empty registry, the Conservative policy can emit an `INITIAL_BUY`, and if free quote remains the order allocator can permit another same-symbol order while the prior exchange order is still open. The submission guard checks pause/readiness, price freshness and post-only crossing, not the unowned order. This is strongly indicated by source, not reproduced: the existing startup test does not emit a market-price tick. See F-031 in [AUDIT.md](../AUDIT.md) and #654.
+The engine's active-order and commitment guards read only the in-memory `OrderRegistry`; they do not include unowned account-wide open orders. With an empty registry, the Conservative policy can emit an `INITIAL_BUY`, and if free quote remains the order allocator can permit another same-symbol order while the prior exchange order is still open. The submission guard checks pause/readiness, price freshness and post-only crossing, not the unowned order. This is strongly indicated by source, not reproduced: the existing startup test does not emit a market-price tick. See F-031 in [AUDIT.md](audits/reports/AUDIT.md) and #654.
 
 - `reconcileOwnedOrders()` reconciles the orders already in the in-memory ownership registry. When that registry is empty, it returns without discovering historical order IDs or querying their fill history.
 - The broker contract supports symbol-wide `getFills({ symbol, fromId })` discovery, but Harvester does not perform a startup-wide scan or restore a per-symbol cursor. Binance documents inclusive cursors, a maximum page size of 1,000 and time windows no longer than 24 hours. No guaranteed history-retention horizon was established; complete offline-fill discovery remains unproven.
@@ -318,7 +318,7 @@ The shared Journal package supports bounded read/replay, but replay is at-least-
 
 **Operational restriction:** do not enable unattended process restarts until [#654](https://github.com/45s/coinzilla/issues/654) has a separately implemented and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
 
-This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](../AUDIT.md), [AUDIT_FINDINGS.md](../AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
+This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](audits/reports/AUDIT.md), [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
 
 ## Trading process ownership locks
 

@@ -10,7 +10,7 @@
 
 - Current Journal procedures: [Journal Operations](../JOURNAL_OPERATIONS.md).
 - Current TESTNET procedures: [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) and [TESTNET order tools](../testnet-order-tools.md).
-- Current audit authority: [Harvester audit index](README.md) and [Conservative audit](../../AUDIT.md).
+- Current audit authority: [Harvester audit index](README.md) and [Conservative audit](reports/AUDIT.md).
 
 ---
 
@@ -18,7 +18,7 @@
 
 **BUY-burst clarification:** the twelve DOGEUSDT BUYs were twelve distinct exchange orders with distinct client IDs and broker order IDs; they were not duplicate IDs. All twelve nevertheless used the exact same 0.07598 USDT price and 400 DOGE quantity, executed as TAKER within roughly three seconds. A 12-order burst may be expected during a sharp price dump; twelve independently submitted orders at the identical price are the anomaly. The Conservative strategy interprets priceStepPercent: 0.05 as 0.05% and computes the next BUY from the last reconciled BUY execution price. The repeated identical price is consistent with submissions occurring before the previous BUY fill had updated strategy state. PR #513 adds the immediate-FILLED acknowledgement reconciliation barrier; review and test the non-terminal acknowledgement followed by streamed FILLED/TRADE event path as well. Do not describe this as a client-ID collision or treat the burst count alone as proof of a defect.
 
-PR #513 is a historical incident-remediation checkpoint. Its original residual-suppression behavior is superseded by the current Conservative implementation: residual inventory above `keepQuantity` is sold through when exchange-sellable, while only validated exchange-constrained dust is retained as a keepQuantity bonus. The current lifecycle, commission, dust, and completion implementation is tracked in PR #653 and the current [audit closure](../../AUDIT.md). CI/test verification remains pending, and no TESTNET restart is authorized by this documentation.
+PR #513 is a historical incident-remediation checkpoint. Its original residual-suppression behavior is superseded by the current Conservative implementation: residual inventory above `keepQuantity` is sold through when exchange-sellable, while only validated exchange-constrained dust is retained as a keepQuantity bonus. The current lifecycle, commission, dust, and completion implementation is tracked in PR #653 and the current [audit closure](reports/AUDIT.md). CI/test verification remains pending, and no TESTNET restart is authorized by this documentation.
 
 
 ### Follow-up execution-history validation
