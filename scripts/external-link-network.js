@@ -153,11 +153,12 @@ function createUnsafeAddressError() {
  * @returns {Promise<Array<{address: string, family: number}>>}
  */
 export async function resolvePublicAddresses(hostname, options = {}) {
-  if (isIP(hostname) || isLocalHostname(hostname)) {
+  const normalizedHostname = hostname.toLowerCase().replace(/\.$/, '');
+  if (isIP(normalizedHostname) || isLocalHostname(normalizedHostname)) {
     throw createUnsafeAddressError();
   }
   const resolver = options.resolveHost ?? dnsLookup;
-  const answers = await resolver(hostname, { all: true, verbatim: true });
+  const answers = await resolver(normalizedHostname, { all: true, verbatim: true });
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('DNS resolution returned no addresses');
   }
@@ -179,7 +180,7 @@ export async function resolvePublicAddresses(hostname, options = {}) {
  * Create a Node lookup callback that can return only the already-vetted DNS answers.
  * @param {string} hostname
  * @param {Array<{address: string, family: number}>} addresses
- * @returns {Function}
+ * @returns {(hostname: string, options: object, callback: (error: Error|null, address: string|Array<{address: string, family: number}>, family?: number) => void) => void}
  */
 export function createPinnedLookup(hostname, addresses) {
   const expectedHostname = hostname.toLowerCase().replace(/\.$/, '');
@@ -224,10 +225,13 @@ export function createPinnedLookup(hostname, addresses) {
  * @param {object} options
  * @param {DnsResolver} [options.resolveHost] Injectable DNS resolver for deterministic tests.
  * @param {HttpRequestImplementation} [options.requestImpl] Injectable HTTP(S) request implementation for deterministic tests.
- * @returns {Promise<{status: number, headers: {get: Function}, body: null}>}
+ * @returns {Promise<{status: number, headers: {get: (name: string) => string|null}, body: null}>}
  */
 export async function fetchPinned(input, init = {}, options = {}) {
   const url = new URL(input);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new TypeError('Pinned transport only supports HTTP(S) URLs');
+  }
   const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
   const addresses = await resolvePublicAddresses(hostname, options);
   const transport = options.requestImpl ?? (url.protocol === 'https:' ? httpsRequest : httpRequest);
