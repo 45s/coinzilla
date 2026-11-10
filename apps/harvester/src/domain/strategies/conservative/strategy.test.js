@@ -383,7 +383,7 @@ test("classifies residual quantity below the exchange quantity step instead of s
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false, "The DOGE residual below MIN_NOTIONAL must not produce another SELL order.")
   assert.deepEqual(decision.inventoryDisposition, {
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: "0.05",
@@ -453,8 +453,8 @@ test("classifies residual quantity below MIN_NOTIONAL instead of submitting an i
   })
 
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
-  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST", "The DOGE residual must be classified as exchange-constrained dust.")
+  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL", "The DOGE dust blocker must identify the minimum-notional filter.")
   assert.equal(decision.inventoryDisposition.quantity, "1")
   assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.1")
 })
@@ -821,10 +821,10 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
   }
 
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
-  assert.equal(position.quantity.amount, "2.8")
+  assert.equal(position.quantity.amount, "2.8", "After the three DOGE BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "85.836", "The three DOGE BUY fills must accumulate their exact quote notional in Position cost basis.")
   assert.equal(recoveryLedger.buyCost, "85.836", "RecoveryLedger must mirror the accumulated quote cost of all three DOGE BUY fills.")
-  assert.equal(recoveryLedger.netSellProceeds, "85.8466674")
+  assert.equal(recoveryLedger.netSellProceeds, "85.8466674", "RecoveryLedger must accumulate the exact net quote proceeds from the DOGE SELL fills.")
 
   const completion = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
@@ -834,9 +834,9 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
     keepQuantity: "1",
     minProfit: "0.01",
   })
-  assert.equal(completion.eligible, false)
-  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
-  assert.equal(completion.freeQuantity, "0")
+  assert.equal(completion.eligible, false, "Recovery must remain incomplete while exchange-constrained DOGE inventory still requires sell-through.")
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "The DOGE residual must be classified for sell-through rather than retained as free inventory.")
+  assert.equal(completion.freeQuantity, "0", "No DOGE quantity may be allocated to free inventory before sell-through completes.")
 
   const decision = evaluateConservativeStrategy({
     marketPrice: { symbol: "DOGEUSDT", price: "0.07185", timestamp: 100 },
@@ -856,9 +856,9 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
   assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
   assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
-  assert.equal(decision.inventoryDisposition.quantity, "1.8")
-  assert.equal(decision.inventoryDisposition.evaluatedQuantity, "1")
-  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.07185")
+  assert.equal(decision.inventoryDisposition.quantity, "1.8", "The full DOGE residual quantity must be retained in the dust disposition.")
+  assert.equal(decision.inventoryDisposition.evaluatedQuantity, "1", "The DOGE quantity evaluated for the exchange filter must remain independently exact.")
+  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.07185", "The DOGE evaluated notional must match the exact residual quantity and current price.")
 })
 
 test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust", () => {
@@ -928,10 +928,10 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
   }))
 
   const position = portfolio.getPosition({ symbol: "ZROUSDT" })
-  assert.equal(position.quantity.amount, "0.05")
+  assert.equal(position.quantity.amount, "0.05", "After the eight ZRO BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "64.02", "The eight ZRO BUY fills must accumulate their exact quote notional in Position cost basis.")
   assert.equal(recoveryLedger.buyCost, "64.02", "RecoveryLedger must mirror the accumulated quote cost of all eight ZRO BUY fills.")
-  assert.equal(recoveryLedger.netSellProceeds, "64.03136454")
+  assert.equal(recoveryLedger.netSellProceeds, "64.03136454", "RecoveryLedger must accumulate the exact net quote proceeds from the ZRO SELL fills.")
 
   const completion = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
@@ -942,7 +942,7 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
     minProfit: "0.01",
   })
   assert.equal(completion.eligible, false)
-  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "The ZRO residual must be classified for sell-through rather than retained as free inventory.")
   assert.equal(completion.freeQuantity, "0")
 
   const decision = evaluateConservativeStrategy({
@@ -963,7 +963,7 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
   assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
   assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
-  assert.equal(decision.inventoryDisposition.quantity, "0.04")
-  assert.equal(decision.inventoryDisposition.evaluatedQuantity, "0.03")
-  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.04818")
+  assert.equal(decision.inventoryDisposition.quantity, "0.04", "The full ZRO residual quantity must be retained in the dust disposition.")
+  assert.equal(decision.inventoryDisposition.evaluatedQuantity, "0.03", "The ZRO quantity evaluated for the exchange filter must remain independently exact.")
+  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.04818", "The ZRO evaluated notional must match the exact residual quantity and current price.")
 })

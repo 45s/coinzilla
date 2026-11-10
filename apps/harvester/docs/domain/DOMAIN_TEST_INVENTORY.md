@@ -64,7 +64,7 @@ The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLU
 
 ### Medium — multi-BUY RecoveryLedger cost mirror is not asserted in actual execution sequences
 
-The existing DOGE and ZRO fixtures apply three and eight separate BUY fills respectively and assert exact `Position.spent`, but did not assert the corresponding `RecoveryLedger.buyCost`. Add exact mirror assertions (`85.836` DOGE and `64.02` ZRO) so a regression that updates Portfolio but omits or miscalculates the recovery cost projection cannot pass. This is a test-only assertion gap; no production defect is claimed. Exact PR-head CI is pending.
+The existing DOGE and ZRO fixtures apply three and eight separate BUY fills respectively and assert exact `Position.spent`, but did not assert the corresponding `RecoveryLedger.buyCost`. Add exact mirror assertions (`85.836` DOGE and `64.02` ZRO) so a regression that updates Portfolio but omits or miscalculates the recovery cost projection cannot pass. The same actual-fill scenarios now provide explicit diagnostics for retained inventory, sell-through eligibility, exchange dust classification and net SELL proceeds. This is a test-only assertion gap; no production defect is claimed. Exact PR-head CI is pending.
 
 ### Medium — market trading-readiness boundaries are incomplete
 
