@@ -622,6 +622,24 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     amount: "0.01",
     asset: new Asset({ id: "asset:USDC", code: "USDC" }),
   })).ok, false)
+
+  const zeroThirdAssetFee = mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-46",
+      brokerOrderId: "broker-order-46",
+      clientOrderId: "harvester-order-46",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 127,
+      commissions: [new Commission({ amount: new Money({ amount: "0", asset: feeAsset }) })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(zeroThirdAssetFee.ok, true)
 })
 
 
