@@ -493,7 +493,13 @@ test("fails closed when active inventory has no positive recovery cost basis", (
     pairConfig,
     settings,
     portfolio,
-    recoveryLedger: recoveryLedger.resetCycle(),
+    recoveryLedger: new RecoveryLedger({
+      market,
+      buyCost: "0",
+      netSellProceeds: "0",
+      appliedFillIds: recoveryLedger.appliedFillIds,
+      appliedFillFingerprints: recoveryLedger.appliedFillFingerprints,
+    }),
     marketMetadata,
     lastBuyPrice: "0.1",
   }), /Position\.spent and legacy RecoveryLedger cost mirror diverged/)

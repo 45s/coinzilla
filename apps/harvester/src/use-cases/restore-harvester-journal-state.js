@@ -6,7 +6,7 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { compareDecimal, toResult } from "@coinzilla/utils"
+import { compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -142,8 +142,12 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (!recoveryLedger || !position) {
         throw new Error("Recovery-cycle completion has no replayed Position and RecoveryLedger for " + item.symbol)
       }
+      const realizedNetProfit = subtractDecimal({
+        left: recoveryLedger.netSellProceeds,
+        right: position.spent.amount,
+      })
       if (compareDecimal({
-        left: recoveryLedger.realizedNetProfit,
+        left: realizedNetProfit,
         right: item.realizedNetProfit,
       }) !== 0) {
         throw new Error("Recovery-cycle realized profit conflicts with replayed fills for " + item.symbol)
@@ -151,14 +155,23 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (compareDecimal({
         left: position.baseQuantity.amount,
         right: item.freeQuantity,
-      }) < 0) {
-        throw new Error("Recovery-cycle free quantity exceeds replayed active inventory for " + item.symbol)
+      }) !== 0) {
+        throw new Error("Recovery-cycle completion must allocate all replayed active inventory (keepQuantity plus validated dust) for " + item.symbol)
       }
-      portfolio = portfolio.allocateFreeQuantity({
-        marketId: market.id,
-        quantity: item.freeQuantity,
+      let nextPortfolio = portfolio
+      if (compareDecimal({ left: item.freeQuantity, right: "0" }) > 0) {
+        nextPortfolio = nextPortfolio.allocateFreeQuantity({
+          marketId: market.id,
+          quantity: item.freeQuantity,
+        })
+      }
+      nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id })
+      const resetLedger = recoveryLedger.resetCycle({
+        minProfit: item.minProfit,
+        spent: position.spent,
       })
-      recoveryLedgers.set(market.id, recoveryLedger.resetCycle())
+      portfolio = nextPortfolio
+      recoveryLedgers.set(market.id, resetLedger)
       completedOrderClientIds.add(item.completedOrderClientId)
       completedCycleSequenceBySymbol.set(item.symbol, event.sequence)
     }

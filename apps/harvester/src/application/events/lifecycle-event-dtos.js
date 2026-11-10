@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, assertObjectInput, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, assertObjectInput, compareDecimal, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
 const OUTCOMES = Object.freeze(["success", "failed"])
@@ -594,18 +594,47 @@ const mapRecoveryDustData = ({ dust }) => {
   const mapped = { status: "EXCHANGE_CONSTRAINED_DUST", quantity: requireDecimalString({ value: dust.quantity, field: "dust.quantity" }), reason: dust.reason }
   const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
   for (const field of fields) mapped[field] = requireDecimalString({ value: dust[field], field: "dust." + field })
+  if (compareDecimal({ left: mapped.quantity, right: "0" }) <= 0) throw new RangeError("dust.quantity must be positive")
+  if (dust.reason === "MIN_QUANTITY" &&
+      compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
+    throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
+  }
+  if (dust.reason === "MIN_NOTIONAL" &&
+      (compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) < 0 ||
+       compareDecimal({ left: mapped.evaluatedNotional, right: mapped.minimumNotional }) >= 0)) {
+    throw new RangeError("dust MIN_NOTIONAL evidence does not prove the notional is below the minimum")
+  }
+  if (dust.reason === "QUANTITY_INCREMENT" && mapped.evaluatedQuantity !== "0") {
+    throw new RangeError("dust QUANTITY_INCREMENT evidence must record a zero rounded candidate")
+  }
   return mapped
 }
 
-/** Map a completed recovery cycle with exact retained-dust evidence. */
+/** Map a completed recovery cycle with its profit threshold and exact retained-inventory evidence. */
 export const mapRecoveryCycleCompletedData = (input = {}) =>
-  mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, realizedNetProfit, dust }) => ({
-    symbol: requireString({ value: symbol, field: "symbol" }),
-    marketId: requireString({ value: marketId, field: "marketId" }),
-    freeQuantity: requireDecimalString({ value: freeQuantity, field: "freeQuantity" }),
-    realizedNetProfit: requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" }),
-    ...(dust === undefined ? {} : { dust: mapRecoveryDustData({ dust }) }),
-  }))
+  mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, keepQuantity, minProfit, realizedNetProfit, dust }) => {
+    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity, field: "keepQuantity" })
+    const mappedMinProfit = requireDecimalString({ value: minProfit, field: "minProfit" })
+    const mappedFreeQuantity = requireDecimalString({ value: freeQuantity, field: "freeQuantity" })
+    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" })
+    if (compareDecimal({ left: mappedKeepQuantity, right: "0" }) < 0) throw new RangeError("keepQuantity must be non-negative")
+    if (compareDecimal({ left: mappedMinProfit, right: "0.01" }) < 0) throw new RangeError("minProfit must be at least 0.01")
+    if (compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) < 0) throw new RangeError("realizedNetProfit must meet minProfit")
+    const mappedDust = dust === undefined ? undefined : mapRecoveryDustData({ dust })
+    const expectedFreeQuantity = addDecimal({ left: mappedKeepQuantity, right: mappedDust?.quantity ?? "0" })
+    if (compareDecimal({ left: mappedFreeQuantity, right: expectedFreeQuantity }) !== 0) {
+      throw new RangeError("freeQuantity must equal keepQuantity plus validated exchange-constrained dust")
+    }
+    return {
+      symbol: requireString({ value: symbol, field: "symbol" }),
+      marketId: requireString({ value: marketId, field: "marketId" }),
+      freeQuantity: mappedFreeQuantity,
+      keepQuantity: mappedKeepQuantity,
+      minProfit: mappedMinProfit,
+      realizedNetProfit: mappedRealizedNetProfit,
+      ...(mappedDust === undefined ? {} : { dust: mappedDust }),
+    }
+  })
 
 
 
