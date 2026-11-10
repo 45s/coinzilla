@@ -14,7 +14,7 @@ const FINDING_LABELS = Object.freeze({
   headingLevelSkips: "files with skipped heading levels",
   unlabelledCodeFences: "files with unlabeled fenced-code blocks",
   unorderedListMarkers: "files with non-hyphen unordered-list markers",
-  nestedListIndentation: "files with non-two-space nested-list indentation",
+  nestedListIndentation: "files with nested-list items misaligned to parent content columns",
   listSpacing: "list blocks without blank-line separation",
   malformedTableDelimiters: "tables with malformed delimiter cells",
   tableColumnMismatches: "tables with inconsistent column counts",
