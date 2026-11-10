@@ -713,3 +713,30 @@ test("returns an error when marking an unregistered order UNKNOWN", () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /unregistered order/)
 })
+
+
+test("accepts the first authoritative OPEN report for an UNKNOWN submission and attaches its broker identity", () => {
+  const pending = makeOrder({ clientOrderId: "h-LINKFDUSD-1" })
+  const registered = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const unknownResult = registered.markUnknown({ clientOrderId: pending.clientOrderId })
+  assert.equal(unknownResult.ok, true, "A lost broker acknowledgement must leave the submitted order explicitly UNKNOWN.")
+  const unknownRegistry = unknownResult.data.registry
+  const exchangeReport = makeOrder({
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: "616421001",
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+
+  const acknowledged = unknownRegistry.applyUpdate({ order: exchangeReport })
+  assert.equal(acknowledged.stale, false, "The first matching exchange NEW report resolves an UNKNOWN submission; it is not a delayed OPEN regression.")
+  assert.equal(acknowledged.applied, true, "A matching exchange acknowledgement must be applied.")
+  assert.equal(acknowledged.registry.getOrder({ clientOrderId: pending.clientOrderId }).status, "OPEN", "The owned order must leave UNKNOWN after authoritative exchange acknowledgement.")
+  assert.equal(acknowledged.registry.getOrder({ clientOrderId: pending.clientOrderId }).brokerOrderId, "616421001", "The exchange-assigned broker identity must be attached for shutdown cancellation.")
+
+  const duplicate = acknowledged.registry.applyUpdate({ order: exchangeReport })
+  assert.equal(duplicate.applied, false, "Repeated identical NEW reports must not mutate the registry.")
+  assert.equal(duplicate.duplicate, true, "Repeated identical NEW reports must be classified as duplicates.")
+})

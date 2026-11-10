@@ -4,6 +4,14 @@
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
+### Critical runtime reliability — order acknowledgement and shutdown ownership (2026-11-10)
+
+- [~] **Resolve UNKNOWN submissions from authoritative Binance NEW reports — issue [#962](https://github.com/45s/coinzilla/issues/962).** A matching exchange report carrying the original Harvester clientOrderId and assigned brokerOrderId is authoritative evidence that an ambiguous submission exists. Accept the first `UNKNOWN → OPEN` transition and attach the exchange ID; keep conflicting identities, stale terminal reports, and unresolved orders fail-closed. Regression coverage belongs in OrderRegistry, Conservative engine and user-data orchestration tests.
+- [ ] **Prove shutdown after recovered acknowledgement.** The existing shutdown sequence is retained: stop/drain market intake; reconcile owned orders; cancel only acknowledged owned OPEN/PARTIALLY_FILLED BUYs; keep user-data intake active for racing reports/fills; reconcile again; preserve owned SELLs and external orders; write the CLOSING audit; retain process locks if reconciliation, cancellation, audit, or cleanup is incomplete. Do not add a second cancellation pass or cancel UNKNOWN orders without an exchange identity.
+- [~] **Report the actual exchange mode in startup status — issue [#963](https://github.com/45s/coinzilla/issues/963).** Pass the already validated `TRADING_MODE` value into user-data startup and use it for success and blocked-state messages. `NODE_ENV` must not select or relabel the exchange.
+- **Broker dependency:** canonical Binance order placement requests `newOrderRespType: "RESULT"` to avoid the minimal default `ACK` for `LIMIT_MAKER`; broker-side implementation and documentation are tracked in [issue #960](https://github.com/45s/coinzilla/issues/960) and [PR #961](https://github.com/45s/coinzilla/pull/961).
+- **Verification status:** all seven GitHub Actions workflows passed on exact PR #964 head `36f9a182a2b333f1714149b744e11f626e4a8e39`: workspace unit tests, workspace/package coverage, Harvester targeted tests, JavaScript syntax/actionlint, Utils tests, production dependency audit and external documentation links. The read-only Binance TESTNET integration was skipped by workflow policy; no Binance TESTNET/LIVE connection or order mutation was performed. Merge remains pending final synchronization.
+
 ### In progress — domain logic test quality initiative
 
 - [x] Establish the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) — added and merged in PR #917.

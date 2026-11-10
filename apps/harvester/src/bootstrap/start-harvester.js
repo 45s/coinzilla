@@ -253,6 +253,7 @@ export async function startHarvester({
       eventPublisher,
       logger,
       state: userDataState,
+      tradingMode,
       tradingEnabled,
       enabledSymbols,
       onEvent: handleUserDataEvent,

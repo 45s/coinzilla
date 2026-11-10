@@ -54,9 +54,11 @@ function isStaleOrderUpdate({ current, next }) {
     // response. The cancellation snapshot and fill history remain authoritative.
     return true
   }
-  return current.status !== "PENDING" &&
-    next.status === "OPEN" &&
-    current.status !== "OPEN"
+  // An OPEN report is a stale regression only after a partial fill.
+  // UNKNOWN may mean the placement acknowledgement was lost, so its first
+  // identity-matching exchange NEW report must be allowed to establish ownership.
+  return current.status === "PARTIALLY_FILLED" &&
+    next.status === "OPEN"
 }
 
 function validateOrderUpdate({ current, next }) {
