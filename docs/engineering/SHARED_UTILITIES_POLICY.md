@@ -61,7 +61,7 @@ Shared low-level primitives may support these packages, but packages/utils must 
 
 ### Automated source guard
 
-The required `check:agent-policy` command checks production `.js`, `.mjs`, and `.cjs` files recursively under `apps/` and `packages/`. It reports direct global-console member access with a repository-relative path and line number. Comments, string literals, regular-expression literals, and template text are ignored; executable template interpolations are inspected.
+The required `check:agent-policy` command checks production `.js`, `.mjs`, and `.cjs` files recursively under `apps/` and `packages/`. It reports global `console` identifier references (including member, computed, destructured, and `globalThis.console` access) with a repository-relative path and line number. Comments, string literals, regular-expression literals, and template text are ignored; executable template interpolations are inspected.
 
 The current exact-file exceptions are:
 
