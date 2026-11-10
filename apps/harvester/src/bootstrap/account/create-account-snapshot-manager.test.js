@@ -91,20 +91,36 @@ test("publishes only the actual third-asset commission baseline and excludes unr
   const bnb = new Asset({ id: "asset:BNB", code: "BNB" })
   const xrp = new Asset({ id: "asset:XRP", code: "XRP" })
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({
-      market,
-      sourceTime: 100,
-      extraBalances: [
-        new Balance({
-          free: new Quantity({ amount: "1", asset: bnb }),
-          locked: new Quantity({ amount: "0", asset: bnb }),
-        }),
-        new Balance({
-          free: new Quantity({ amount: "25", asset: xrp }),
-          locked: new Quantity({ amount: "0", asset: xrp }),
-        }),
-      ],
-    })],
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 100,
+        extraBalances: [
+          new Balance({
+            free: new Quantity({ amount: "1", asset: bnb }),
+            locked: new Quantity({ amount: "0", asset: bnb }),
+          }),
+          new Balance({
+            free: new Quantity({ amount: "25", asset: xrp }),
+            locked: new Quantity({ amount: "0", asset: xrp }),
+          }),
+        ],
+      }),
+      createAccountSnapshot({
+        market,
+        sourceTime: 200,
+        extraBalances: [
+          new Balance({
+            free: new Quantity({ amount: "0.9999", asset: bnb }),
+            locked: new Quantity({ amount: "0", asset: bnb }),
+          }),
+          new Balance({
+            free: new Quantity({ amount: "25", asset: xrp }),
+            locked: new Quantity({ amount: "0", asset: xrp }),
+          }),
+        ],
+      }),
+    ],
   })
 
   const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
@@ -137,6 +153,10 @@ test("publishes only the actual third-asset commission baseline and excludes unr
   assert.equal(duplicate.data.reason, "BASELINE_ALREADY_CAPTURED")
   assert.equal(fixture.publishedEvents.length, 2)
   assert.equal(fixture.getFlushCount(), 2)
+
+  const refreshed = await fixture.manager.refreshAccountSnapshot()
+  assert.equal(refreshed.getFreeBalance({ assetId: bnb.id }).amount, "0.9999")
+  assert.equal(refreshed.getFreeBalance({ assetId: xrp.id }), undefined)
 })
 
 test("fails closed when an actual commission asset has no PREFLIGHT balance", async () => {
