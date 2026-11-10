@@ -63,7 +63,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       phase: "COMMISSION_BASELINE",
       sourceTime: 1000,
       auditStatus: "COMPLETE",
-      balances: [{ asset: "BNB", free: "1", locked: "0", total: "1" }],
+      balances: [{ asset: "BNB", free: "0.75", locked: "0.25", total: "1" }],
       auditReasons: [],
     }, 5)] : []),
     record("execution.fill_applied", {
@@ -136,7 +136,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       balances: [
         { asset: "BTC", free: "0.01", locked: "0", total: "0.01" },
         { asset: "USDT", free: thirdAssetCommission ? "1000.24" : "1000.25", locked: "0", total: thirdAssetCommission ? "1000.24" : "1000.25" },
-        ...(thirdAssetCommission ? [{ asset: "BNB", free: "0.9999", locked: "0", total: "0.9999" }] : []),
+        ...(thirdAssetCommission ? [{ asset: "BNB", free: "0.7499", locked: "0.25", total: "0.9999" }] : []),
       ],
       auditReasons: [],
     }, thirdAssetCommission ? 11 : 10),
