@@ -292,7 +292,7 @@ test("subtracts only shared BUY commitments created after the account snapshot",
     executedQuantity: new Quantity({ amount: "1", asset: ethAsset }),
     status: "PARTIALLY_FILLED",
   })
-  assert.equal(otherMarketBuy.remainingQuantity.amount, "2", "The partially filled ETHUSDT BUY must expose its exact two-unit remaining commitment.")
+  assert.equal(otherMarketBuy.remainingQuantity.amount, "2", "The partially filled ETHUSDT BUY must expose the exact two-unit remaining commitment (three original units minus one executed unit), which is the quantity used by account-wide quote reservation.")
   const harness = await createHarness({
     quoteFreeBalance: "100",
     committedQuoteBalanceBaseline: "100",
