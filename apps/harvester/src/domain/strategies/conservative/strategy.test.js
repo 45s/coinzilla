@@ -2,7 +2,6 @@ import nodeTest from "node:test"
 const test = (name, ...args) => nodeTest("[strategy.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { multiplyDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { RecoveryLedger } from "./recovery-ledger.js"
 import { evaluateConservativeStrategy } from "./strategy.js"
@@ -263,7 +262,9 @@ test("includes the actual BUY quote commission in the recovery SELL limit price"
   assert.equal(sell.price, "0.104")
 })
 
-function makeProfitableResidualState({ soldQuantity = "98" } = {}) {
+// Exact quote-quantity literals keep fixture inputs independent of production decimal arithmetic:
+ // 98 DOGE × 0.11 USDT = 10.78 USDT; 98.95 DOGE × 0.11 USDT = 10.8845 USDT.
+function makeProfitableResidualState({ soldQuantity = "98", quoteQuantity = "10.78" } = {}) {
   const bought = makeBoughtState()
   const fill = new Fill({
     tradeId: "sell-1",
@@ -272,7 +273,7 @@ function makeProfitableResidualState({ soldQuantity = "98" } = {}) {
     side: "SELL",
     price: new Money({ amount: "0.11", asset: quoteAsset }),
     quantity: new Quantity({ amount: soldQuantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: multiplyDecimal({ left: soldQuantity, right: "0.11" }), asset: quoteAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -317,7 +318,7 @@ test("continues selling residual inventory after cumulative recovery profit is a
 })
 
 test("classifies residual quantity below the exchange quantity step instead of submitting an invalid SELL", () => {
-  const { portfolio, recoveryLedger } = makeProfitableResidualState({ soldQuantity: "98.95" })
+  const { portfolio, recoveryLedger } = makeProfitableResidualState({ soldQuantity: "98.95", quoteQuantity: "10.8845" })
   const decision = evaluateConservativeStrategy({
     marketPrice,
     pairConfig,
@@ -348,7 +349,7 @@ test("classifies residual quantity below the exchange quantity step instead of s
 })
 
 test("combines exchange-constrained dust with a later BUY and preserves the full recovery basis", () => {
-  const dustState = makeProfitableResidualState({ soldQuantity: "98.95" })
+  const dustState = makeProfitableResidualState({ soldQuantity: "98.95", quoteQuantity: "10.8845" })
   const laterBuy = new Fill({
     tradeId: "later-buy-after-dust",
     brokerOrderId: "later-buy-order",
@@ -622,8 +623,16 @@ test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-t
   })
 
   const sell = decision.actions.find((action) => action.side === "SELL")
-  assert.equal(sell.quantity, "0.6")
-  assert.equal(multiplyDecimal({ left: sell.price, right: sell.quantity }), "0.06")
+  assert.equal(
+    sell.price,
+    "0.1",
+    "The residual SELL must use the 0.1 USDT market reference price after the recovery target is already secured.",
+  )
+  assert.equal(
+    sell.quantity,
+    "0.6",
+    "A 0.06 USDT maximum notional at a 0.1 USDT price permits exactly 0.6 DOGE; the expected quantity must not be calculated with the production decimal helper.",
+  )
 })
 
 test("blocks the next BUY when the required recovery SELL exceeds MAX_PRICE", () => {
