@@ -92,6 +92,8 @@ A `strategy.decision` event is emitted only when the strategy produces at least 
 
 The broker status `recovered` means the remote user-data subscription has returned; it does not mean Harvester has reconciled account state or reopened order placement.
 
+For `account.open_orders_captured`, `readiness: BLOCKED` with `UNOWNED_OPEN_ORDERS` is an ownership-attribution result, not a global trading-startup rejection. The owner-confirmed policy allows pre-existing external orders: Harvester records them, leaves them unowned, and never adopts, cancels, or modifies them. Global trading readiness is decided separately by durable account auditing and user-data/accounting safety checks. An actual unowned execution event triggers the fail-closed accounting safety halt; a transport reconnect alone does not clear that latch. See [issue #667](https://github.com/45s/coinzilla/issues/667#issuecomment-6717086777).
+
 A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no contradictory reconciliation flag is diagnostic-only and does not itself invalidate the application recovery generation. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status, including code `1006`, starts recovery; that abnormal close code does not identify the underlying network cause.
 
 ## Startup and capture gaps
