@@ -285,7 +285,7 @@ test("fails closed when a positive third-asset commission has no durable baselin
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /negative account balance for BNB/)
+  assert.match(result.errors[0].message, /missing required third-asset commission baseline for BNB/)
 })
 
 test("rejects an unexplained third-asset balance movement despite matching market balances", () => {
