@@ -88,7 +88,6 @@ Before D2 can pass:
 - Every completion/reset path is idempotent.
 - No test uses broker connectivity, TESTNET, network calls, or exchange credentials as proof of domain correctness.
 
-
 ## Current verification status
 
 This matrix is evidence only; the canonical specification remains the sole rule authority. PR #921 added projection-level commission-conflict regressions: a reused Fill ID with a changed quote-commission amount is rejected by Portfolio, and a changed commission asset is rejected by RecoveryLedger; each test asserts the complete original projection remains unchanged. On exact PR head `c6a8de21cf6f241583ae95ab88d1afb6febc1123`, the full Harvester suite passed 873/873; Harvester coverage was 75.87% lines, 79.13% branches and 74.85% functions. Configured targeted tests, workspace unit tests/coverage, JavaScript syntax and Markdown, Utils tests, production dependency audit and actionlint all passed; the external documentation link check passed. The TESTNET integration probe was skipped. No production code changed. Other rows marked execution pending remain pending and must not be treated as verified by this PR. Restart reconciliation remains explicitly deferred in #654.

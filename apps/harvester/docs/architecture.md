@@ -4,13 +4,11 @@
 >
 > **Documentation rule:** this guide contains both stable architecture rules and implementation examples/snapshots. Treat claims about what is currently wired or not wired as time-sensitive; verify them against the current source and [Harvester Roadmap](../ROADMAP.md). Historical snapshots must not be used as current implementation instructions.
 
-
 ## Purpose
 
 Harvester uses one shared Trading Engine with multiple strategy policies. The engine coordinates trading workflows; a strategy decides what trading action should be taken. This lets Conservative and Aggressive use the same execution, broker, and portfolio capabilities without sharing their trading rules.
 
 This document records the current architectural direction. It does not define implementation APIs or settle the strategy and portfolio decisions listed in the roadmap.
-
 
 ## Product priority: make the trading loop work first
 
@@ -225,7 +223,6 @@ There is exactly one Position per trading pair, shared by both strategies. The T
 - [Harvester Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md)
 - [Broker–Harvester Trading Flow](./architecture/BROKER_HARVESTER_TRADING_FLOW.md)
 
-
 ## Implementation pattern for use cases
 
 Harvester follows a dependency-injected, factory-based style for application workflows. This is the useful part of the Clean Architecture tutorial pattern: separate domain behavior, application orchestration, external adapters, and composition. The pattern is adapted to Harvester's trading-process architecture; it does **not** require copying the tutorial's Express/MongoDB/controller stack.
@@ -328,7 +325,6 @@ Use dependency-injected functions for application workflows and plain pure funct
 
 The tutorial's companion implementation is a pattern reference, not a source of Harvester APIs. Reuse its separation of concerns and explicit dependency composition, while retaining Harvester's ports-and-adapters direction, existing package contracts, exact-decimal accounting, and reliability requirements.
 
-
 ## Exchange market metadata
 
 The Binance infrastructure adapter converts raw exchange filters into canonical `Market` and `TradingRules` entities. Exact decimal strings are preserved; absent or disabled optional bounds are represented as `UNSUPPORTED`, never as guessed zero-valued limits. Required price/quantity increments, minimum quantity, minimum notional, and the configured order type are validated for every enabled pair before Harvester subscribes to account events or market prices.
@@ -336,7 +332,6 @@ The Binance infrastructure adapter converts raw exchange filters into canonical 
 Startup readiness also checks configured pair values against the exchange-reported assets and filters: `orderQuantity` is rounded down by the actual base-asset quantity increment and the effective quantity must satisfy supported minimum/maximum quantity bounds; the quote-asset `investment` allocation must be at least the minimum notional. The market symbol must match the configured pair. This is an early configuration-feasibility check, not a substitute for validating concrete orders.
 
 Immediately before submission, `validateOrderAgainstTradingRules` independently checks each actual order's price and quantity increments and all supported minimum/maximum price, quantity, and notional bounds using exact decimal arithmetic. Account-wide available balances, quote/base reservations, and authoritative post-only crossing validation remain separate execution-safety requirements.
-
 
 ## Account balance snapshot
 
@@ -360,7 +355,6 @@ never mutates Portfolio.
 The Binance adapter prefers the broker's canonical order-placement operation
 so the application receives a `CanonicalOrder` acknowledgement rather than a
 raw exchange response.
-
 
 ## In-process Conservative trading engine
 
@@ -418,7 +412,6 @@ the fills are accounted and the pair pauses; it never submits a replacement
 from uncertain inventory. A clean zero-fill cancellation is followed by a
 new BUY below the current last trade, rounded down to the exchange tick.
 
-
 ## Operational event journal
 
 **Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Step 5a adds actionable Conservative decisions and order submission request/acknowledgement/failure events from the application engine boundary. Journal initialization is awaited for broker-connected startup and the mandatory durable PREFLIGHT account audit. Ordinary event delivery remains asynchronous, while order-submission and cancellation intent events are durably flushed immediately before their broker writes. Coordinated shutdown draining remains Step 7.
@@ -449,7 +442,6 @@ The application-owned event names are exported from `src/application/events/even
 
 The implementation is deliberately split into independently testable PRs and has no TESTNET prerequisite. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
 
-
 ### Strategy decision and order submission events
 
 The Step 5a contract adds `strategy.decision`, `order.submission_requested`,
@@ -474,7 +466,6 @@ failure cannot prevent broker submission. Pair pause and trailing BUY
 cancellation events are Step 5b; recovery SELL cancellation is Step 5c.
 Execution and accounting facts remain Step 6.
 
-
 ### Strategy pause and order cancellation events
 
 Step 5b adds `strategy.paused`, `order.cancelled`, and
@@ -491,7 +482,6 @@ recorded even if subsequent fill reconciliation fails; that later failure
 remains represented by the existing pause/error behavior. Recovery SELL cancellation events are implemented separately in Step 5c, after the first pause and trailing BUY cancellation milestone. All event publication is best-effort
 and does not wait for subscriber delivery or Journal persistence.
 
-
 ### Recovery SELL cancellation events
 
 Step 5c publishes the same `order.cancelled` and `order.cancel_failed`
@@ -503,7 +493,6 @@ non-CANCELED broker response are represented as safe failure outcomes.
 The existing recovery SELL fill reconciliation remains authoritative and runs
 unchanged after the cancellation response. Event publication does not wait for
 Journal delivery and cannot alter accounting or pause behavior.
-
 
 ### Applied execution events
 
@@ -520,7 +509,6 @@ commission objects, account snapshots, credentials, or mutable domain values.
 Event publication is best-effort and is not awaited by the user-data queue.
 Invalid/unowned execution and accounting-failure diagnostics remain Step 6b.
 
-
 ### Duplicate Fill and recovery completion events
 
 Step 6c adds `execution.duplicate_fill` only when the accounting workflow
@@ -534,7 +522,6 @@ The recovery event contains only the market identifier, allocated free
 quantity, and realized net profit. It does not expose the full ledger or
 account snapshot. Both events are best-effort and are not awaited by trading
 or user-data workflows.
-
 
 ## In-process engine transition serialization
 
@@ -614,7 +601,6 @@ The source-verified shutdown sequence, cancellation/fill-race handling,
 CLOSING account audit, resource cleanup, and process-lock retention are defined
 in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
 
-
 ## Runtime API and process boundary
 
 `startHarvester()` returns a frozen application runtime handle with the validated trading configuration, strategy mode, selected event publisher and application capabilities such as market-price processing, Portfolio/account access, readiness/status, subscriptions and `stop()`. It does **not** expose the raw broker port or a standalone `placeOrder()` function. Order placement must flow through the Conservative Trading Engine so strategy decisions, market rules, balance/commitment checks, order ownership and fill lifecycle cannot be bypassed by runtime callers.
@@ -681,4 +667,3 @@ single-flight reconciliation and durable audit barriers before readiness can
     M --> N[Matching global reconciled status]
     N --> O[Readiness may return]
 ```
-

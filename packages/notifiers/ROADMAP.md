@@ -29,9 +29,8 @@ owner: notifiers
    - **Do:** require a concrete consumer, duplicate-send/idempotency policy, rate-limit contract and storage owner before implementation.
    - **Verify:** each future provider receives isolated tests, coverage and explicit shutdown/error guarantees. Keep the package dependency-free where practical.
 
-
-**Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, #360, and Harvester integration PR #734). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.  
+**Owner:** packages/notifiers/
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, #360, and Harvester integration PR #734). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -143,7 +142,6 @@ Each provider owns its transport client, provider-specific formatter, event inte
 
 A roadmap item is complete only after its task PR is merged into develop and required CI checks pass. Never mark a task complete merely because code has been committed or a PR has been opened.
 
-
 ## Validation record
 
 The refactor was merged to develop in PR #348. All required post-merge checks passed on commit 620818cb3ff3624c9869ab1d13fa181784dbbcbb:
@@ -155,7 +153,6 @@ The refactor was merged to develop in PR #348. All required post-merge checks pa
 - Utilities unit tests: passed.
 
 CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703343), [Test Coverage](https://github.com/45s/coinzilla/actions/runs/41240703334), [JavaScript Syntax](https://github.com/45s/coinzilla/actions/runs/41240703427), [Dependency Audit](https://github.com/45s/coinzilla/actions/runs/41240703340), [Utils Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703355).
-
 
 ## Phase 4 — Integration confidence and operational diagnostics
 
@@ -175,7 +172,6 @@ CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/4124070
 - [x] Record PR-head CI evidence and merge only after branch freshness and all required checks are verified (PRs #356 and #360).
 
 **Acceptance:** supported Node lines are continuously exercised, operational guidance matches implementation, and any stronger quality gate is evidence-based rather than cosmetic.
-
 
 ## Phase 6 — Operator-controlled live verification
 

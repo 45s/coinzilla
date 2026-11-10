@@ -4,8 +4,6 @@
 
 This document defines how independent AI workstreams collaborate in the Coinzilla monorepo. The goal is to keep domain ownership clear, integration safe, and human process overhead low. These rules are mandatory; do not invent a different workflow for an individual task.
 
-
-
 ## Harvester priority
 
 Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). Harvester agents must read and follow that document; do not duplicate its product priorities here.
@@ -17,9 +15,7 @@ Visual workflow diagrams follow the canonical [visual documentation and workflow
 
 Before **any** task or state-changing action, every agent MUST complete the documentation preflight defined in the repository-root [AGENTS.md](AGENTS.md#mandatory-documentation-and-requirements-preflight--hard-gate) and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Start from the [repository documentation index](docs/README.md) and the owning domain's local index. Inventory and read in full all repository-wide policies and every applicable task checklist, domain instruction, roadmap, specification, architecture/ADR, runbook, contract, configuration guide, and test requirement; follow applicable document links recursively. Then inspect the affected implementation, consumers, tests, and configuration, and provide a concise readiness summary with the documents read, constraints, acceptance criteria, and blockers. **Do not implement, edit, mutate configuration/state, or start adjacent work until this review is complete and understanding is established.** If anything required is inaccessible, unclear, or contradictory, stop and report the blocker. Each agent must do this independently.
 
-
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
-
 
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
 2. Identify one owning domain and one focused task.
@@ -180,7 +176,6 @@ After configuration, read back both live rulesets and verify they match the requ
 
 If the workflow cannot be followed because a branch, rule, permission, check, or domain owner is missing, do not invent a bypass. Report the blocker and the smallest safe action needed. A task prompt, deadline, or convenience is not authorization to violate ownership, test, or release rules.
 
-
 ## 12. Mandatory task-branch deletion after merge
 
 Task branches are disposable working references, not permanent history. **After a task PR is merged into `develop`, its work is closed, and no other open PR or active task depends on the branch, the responsible agent MUST delete that source branch.**
@@ -203,7 +198,6 @@ Safety rules:
 
 This rule applies to every AI agent, coding assistant, human contributor, and automated workflow. It is part of task completion, not optional cleanup.
 
-
 ## 13. JavaScript-first and JSDoc policy
 
 Follow the authoritative [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md). Do not restate or fork its language/tooling rules in workflow instructions.
@@ -221,7 +215,6 @@ CI is part of the repository's release safety boundary. Before changing a workfl
 7. Update policy-script tests and `ROADMAP.md`; distinguish a configured workflow from a required branch-protection check.
 8. Verify the exact final commit SHA against every required check before merge. If the tools cannot run checks or read a required ruleset, stop before merge and report the blocker.
 
-
 ## User-provided file protection — mandatory
 
 **DO NOT MODIFY PROVIDED FILE WITHOUT MY APPROVAL!**
@@ -238,7 +231,6 @@ These rules apply to every AI agent and coding assistant in this repository, in 
 - **No unsolicited follow-up prompt or menu.** Do not add generic offers, suggested next steps, or question lists merely to keep the conversation going. Ask a question only when a missing detail blocks safe or correct progress.
 
 These communication rules do not reduce the required engineering work, testing, or accuracy. Report material limitations and verification evidence concisely.
-
 
 ## Execution-first behavior for user requests — mandatory
 
