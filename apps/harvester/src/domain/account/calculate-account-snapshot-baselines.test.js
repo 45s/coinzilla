@@ -45,6 +45,10 @@ test("aggregates Portfolio and active-order baselines by shared exchange asset",
     .applyFill({ fill: makeBuyFill({ market: btcMarket, tradeId: "btc-buy", quantity: "10", quoteQuantity: "100" }) }).portfolio
     .applyFill({ fill: makeBuyFill({ market: ethMarket, tradeId: "eth-buy", quantity: "5", quoteQuantity: "50" }) }).portfolio
     .applyFill({ fill: makeBuyFill({ market: btcFdusdMarket, tradeId: "btc-fdusd-buy", quantity: "5", quoteQuantity: "25" }) }).portfolio
+  const portfolioWithRetainedFreeBase = portfolio.allocateFreeQuantity({
+    marketId: btcMarket.id,
+    quantity: "2",
+  })
   const activeOrders = [
     makeOrder({ market: btcMarket, clientOrderId: "btc-buy-open", side: "BUY", originalQuantity: "3", executedQuantity: "1", limitPrice: "10" }),
     makeOrder({ market: ethMarket, clientOrderId: "eth-buy-open", side: "BUY", originalQuantity: "4", executedQuantity: "1", limitPrice: "20" }),
@@ -53,17 +57,20 @@ test("aggregates Portfolio and active-order baselines by shared exchange asset",
     makeOrder({ market: btcFdusdMarket, clientOrderId: "btc-fdusd-sell-open", side: "SELL", originalQuantity: "3", executedQuantity: "1", limitPrice: "6" }),
   ]
 
-  const result = calculateAccountSnapshotBaselines({ portfolio, activeOrders })
+  const result = calculateAccountSnapshotBaselines({ portfolio: portfolioWithRetainedFreeBase, activeOrders })
 
   assert.equal(result.ok, true, "Canonical Portfolio and active orders must produce a complete accounting baseline.")
   assert.deepEqual(result.data.quoteCashFlowBaseline, [
     { assetId: fdusd.id, amount: "-25" },
     { assetId: usdt.id, amount: "-150" },
   ], "Quote cash flow from markets sharing USDT must aggregate exactly once while separate quote assets remain isolated.")
+  assert.equal(portfolioWithRetainedFreeBase.getPosition({ marketId: btcMarket.id }).baseQuantity.amount, "8", "Free allocation must reduce only the strategy-active quantity for the selected market.")
+  assert.equal(portfolioWithRetainedFreeBase.getPosition({ marketId: btcMarket.id }).freeBaseQuantity.amount, "2", "The allocated keep quantity must remain explicitly tracked as retained free inventory.")
+  assert.equal(portfolioWithRetainedFreeBase.getPosition({ marketId: btcMarket.id }).totalBaseQuantity.amount, "10", "Moving quantity from active to retained free inventory must conserve total Portfolio base holdings.")
   assert.deepEqual(result.data.activeBaseQuantityBaseline, [
     { assetId: btc.id, amount: "15" },
     { assetId: eth.id, amount: "5" },
-  ], "Active base inventory must remain isolated by asset while aggregating positions across markets.")
+  ], "Total Portfolio base inventory, including retained free quantity, must remain isolated by asset while aggregating positions across markets.")
   assert.deepEqual(result.data.committedQuoteBalanceBaseline, [{ assetId: usdt.id, amount: "80" }], "Remaining BUY commitments across BTCUSDT and ETHUSDT must aggregate against the shared USDT asset.")
   assert.deepEqual(result.data.committedBaseBalanceBaseline, [
     { assetId: btc.id, amount: "6" },
