@@ -20,7 +20,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Portfolio | Total base quantity conserved by free allocation | `position.test.js` | Partial |
 | Lifecycle | keepQuantity=0 complete workflow | `completes the full Conservative lifecycle with the supported zero keepQuantity` in `conservative-trading-engine.test.js` | Existing — execution pending |
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
-| Fill identity | Same ID with changed financial facts rejects | both identity tests | Existing |
+| Fill identity | Same ID with changed quantity, commission amount or commission asset rejects without mutating either projection | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
 | Order ownership | Multi-market isolation; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` | Existing |
 | Order lifecycle | NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and unknown states map and drive safe engine behavior | `adapt-canonical-order.test.js`, `order-registry.test.js`, `conservative-trading-engine.test.js` | Existing |
@@ -74,4 +74,4 @@ Before D2 can pass:
 
 ## Current verification status
 
-This matrix is evidence only; the canonical specification remains the sole rule authority. The in-scope implementation and regression inventory now covers residual sell-through, exchange-constrained dust and durable dust evidence, exact retained quantity, BUY-during-SELL cancellation/reconciliation/replacement, terminal SELL outcomes, and exact-once completion. The zero-keepQuantity full-cycle regression is included. Test execution and exact-head CI remain pending as a separate verification phase; no test-pass claim is made here. Restart reconciliation remains explicitly deferred in #654.
+This matrix is evidence only; the canonical specification remains the sole rule authority. PR #921 added projection-level commission-conflict regressions: a reused Fill ID with a changed quote-commission amount is rejected by Portfolio, and a changed commission asset is rejected by RecoveryLedger; each test asserts the complete original projection remains unchanged. On exact PR head `c6a8de21cf6f241583ae95ab88d1afb6febc1123`, the full Harvester suite passed 873/873; Harvester coverage was 75.87% lines, 79.13% branches and 74.85% functions. Configured targeted tests, workspace unit tests/coverage, JavaScript syntax and Markdown, Utils tests, production dependency audit and actionlint all passed; the external documentation link check passed. The TESTNET integration probe was skipped. No production code changed. Other rows marked execution pending remain pending and must not be treated as verified by this PR. Restart reconciliation remains explicitly deferred in #654.

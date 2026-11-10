@@ -22,7 +22,7 @@ All test improvements in this initiative must remain deterministic and offline. 
 | Area | Existing test files | Behaviors already protected |
 | --- | --- | --- |
 | Account | `account/account-snapshot.test.js`, `account/reconcile-account-snapshot-deltas.test.js` | Canonical balance snapshots, duplicate/missing/negative balances, quote cash-flow baselines, market-asset coverage, exact per-asset delta reconciliation and invalid snapshot ordering |
-| Fill identity and fees | `fills/fill-fingerprint.test.js`; commission validation is exercised by Portfolio and recovery-accounting tests | Stable fingerprints across commission ordering; changes to canonical execution facts; complete fee data, fee assets, quote valuation and aggregate commission bounds |
+| Fill identity and fees | `fills/fill-fingerprint.test.js`, `portfolio/portfolio.test.js`, `strategies/conservative/recovery-ledger.test.js` | Stable fingerprints across commission ordering; Portfolio rejects same-ID changed commission amounts; RecoveryLedger rejects same-ID changed commission assets; both preserve the complete accepted projection; complete fee data, fee assets, quote valuation and aggregate commission bounds |
 | Market | `market-price.test.js`, `market/is-market-data-fresh.test.js`, `market/validate-market-trading-readiness.test.js` | Positive exact-decimal prices, symbol/timestamp validation, inclusive freshness boundaries, required exchange rules, order-type support, configured quantity and investment constraints |
 | Orders | `orders/allocate-order-commitments.test.js`, `orders/create-pending-canonical-order.test.js`, `orders/order-registry.test.js`, `orders/validate-cancellation-eligibility.test.js`, `orders/validate-order-against-trading-rules.test.js` | Sequential BUY allocation, aggregate SELL limits, shared base/quote commitments, PENDING construction, broker/client identity, duplicate and stale reports, partial/terminal/UNKNOWN transitions, cancellation eligibility and exchange filters |
 | Portfolio | `portfolio/portfolio.test.js`, `portfolio/position.test.js` | Immutable fill application, BUY/SELL accounting, base/quote/third-asset commissions, free inventory isolation, duplicate/conflicting fill identity, market isolation and recovery-basis reset |
@@ -45,6 +45,10 @@ GREEN evidence on PR head `ffb611507b14efc87338f64521766fbdff9434b3`: the full H
 ### High — assertion diagnostics are inconsistent
 
 Many existing domain tests omit the detailed assertion messages required by `ENGINEERING_STANDARDS.md`. New tests and every materially edited test case must include messages that explain the business invariant and scenario. Existing tests will be improved incrementally with their owning test-quality changes; this initiative will not perform a broad mechanical rewrite.
+
+### Medium — projection-level commission identity conflicts now protected
+
+The Portfolio and RecoveryLedger regressions now prove that a reused Fill ID with changed commission amount or asset is rejected and that the complete original projection remains unchanged. The underlying fingerprint and projection guards were already correct; this closes a test-quality gap without production changes.
 
 ### Medium — expected arithmetic must remain independent
 
