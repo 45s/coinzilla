@@ -87,6 +87,11 @@ This section is the authoritative implementation order for current work. It supe
    - **Do:** the Telegram integration through `@coinzilla/notifiers` is already implemented (PR #734). Keep both credentials optional, preserve the explicit event allowlist, bounded serialized delivery and shutdown drain. Do not add automatic retries or a durable outbox without a concrete requirement.
    - **Verify:** retain offline tests for absent/partial credentials, setup failure, queue overflow, transport failure and shutdown. A live smoke test is operator-controlled and is not a CI prerequisite.
 
+9. **[~] Fill identity and commission-conflict regression coverage — PR #921.**
+   - **Why:** a reused Fill ID with a changed commission amount or asset must never be accepted as an identical duplicate by either Portfolio or RecoveryLedger. A rejected conflict must leave the complete immutable projection unchanged.
+   - **Implemented:** Portfolio rejects the same Fill ID with a changed quote-commission amount; RecoveryLedger rejects the same Fill ID with a changed commission asset. Both tests compare the complete immutable projection before and after rejection. No production code changed.
+   - **Verify:** exact PR head `c6a8de21cf6f241583ae95ab88d1afb6febc1123` passed 873/873 Harvester tests, 75.87% line / 79.13% branch / 74.85% function coverage, and all required CI checks. Merge remains pending. No broker, network, or exchange activity.
+
 ### DEFERRED — only after the critical Conservative path is safe
 
 9. **Aggressive strategy:** keep disabled until Conservative restart/recovery and exchange acceptance are proven. Then specify unresolved policy, implement pure intents, reuse the shared engine/accounting/safety gates, and test grid repricing, partial fills, reservations, risk fallback and handover before TESTNET.
