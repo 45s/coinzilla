@@ -297,6 +297,15 @@ export function createUserDataRecoveryHandler({
         reconciledOrders: reconciliation.data?.reconciled ?? 0,
       })
     } catch (error) {
+      if (!isCurrentGeneration()) {
+        logger.warn?.({
+          message: "stale application recovery failure discarded after generation was superseded",
+          generation,
+          currentGeneration: state.recoveryGeneration,
+          error,
+        })
+        return
+      }
       const failure = resolveRecoveryFailure(error?.recoveryFailure)
       if (failure.retryable && !state.accountingFailed) {
         state.retryableRecoveryFailure = { generation, category: failure.category, stage: failure.stage, retryable: true }
