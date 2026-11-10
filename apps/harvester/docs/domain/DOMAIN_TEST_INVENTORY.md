@@ -72,7 +72,7 @@ The readiness policy checks configured quantity after rounding down to the excha
 
 ### Medium — exchange filter equality boundaries need independent proof
 
-[PR #932](https://github.com/45s/coinzilla/pull/932) adds exact inclusive equality for MIN/MAX price, quantity and notional while retaining the existing immediately-outside rejection matrix. [PR #929](https://github.com/45s/coinzilla/pull/929) adds independent numeric combinations so each filter equality is isolated from the other notional boundaries, and strengthens readiness assertions for exact MIN_NOTIONAL, quantity rounded down to MAX_QUANTITY, canonical Market binding and immutable supported-order metadata. The synchronized PR #929 head is under CI verification.
+[PR #932](https://github.com/45s/coinzilla/pull/932) adds exact inclusive equality for MIN/MAX price, quantity and notional while retaining the existing immediately-outside rejection matrix. [PR #929](https://github.com/45s/coinzilla/pull/929) adds independent numeric combinations so each filter equality is isolated from the other notional boundaries, and strengthens readiness assertions for exact MIN_NOTIONAL, quantity rounded down to MAX_QUANTITY, canonical Market binding and immutable supported-order metadata. The synchronized PR #929 head passed all six required checks and merged into `develop`.
 
 ### Medium — lifecycle tests need complete-state assertions
 
@@ -88,14 +88,14 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ### Medium — engine-level multi-market fill identity is not tested with reused trade IDs
 
-The multi-market engine suite tested separate symbols and duplicate replay, but its accounting stub deduplicated on raw `fill.tradeId` rather than canonical market-scoped `fill.id`. RED was confirmed on PR #933 test head `09fa07923b38eb757449d8347e4c6d5b77ef7f99`: the new same-trade-ID DOGEUSDT/SOLUSDT regression failed because only DOGEUSDT reached accounting; the second market's distinct Fill ID was suppressed by the fixture. The harness now deduplicates on `fill.id`, matching the production accounting contract. No production code changed; synchronized-head CI is pending.
+The multi-market engine suite tested separate symbols and duplicate replay, but its accounting stub deduplicated on raw `fill.tradeId` rather than canonical market-scoped `fill.id`. RED was confirmed on PR #933 test head `09fa07923b38eb757449d8347e4c6d5b77ef7f99`: the new same-trade-ID DOGEUSDT/SOLUSDT regression failed because only DOGEUSDT reached accounting; the second market's distinct Fill ID was suppressed by the fixture. The harness now deduplicates on `fill.id`, matching the production accounting contract. No production code changed; the synchronized PR #933 head passed all six required checks and merged into `develop`.
 
 ## Execution order
 
 1. **Strategy decisions:** blocked-recovery-SELL gating, exact investment-cap boundaries and independent strategy fixture arithmetic are merged in PRs #917, #922 and #937.
 2. **Portfolio and accounting:** PR #924's exact multi-market accounting and conflicting-fill no-mutation assertions are merged; continue reviewing independent expected values and commission-identity conflicts.
 3. **Order lifecycle:** PRs #927 and #928 merged complete-state, stale-report and immutable-snapshot assertions.
-4. **Market and configuration:** PRs #930 and #932 merged readiness and exchange-filter boundaries; PR #929 adds isolated equality values and metadata immutability assertions.
+4. **Market and configuration:** PRs #929, #930 and #932 merged isolated equality values, readiness metadata immutability and exchange-filter boundaries.
 5. **Domain failure handling:** PR #931's precise account-snapshot failure classification and no-mutation assertions are merged. Continue with existing retryability/integrity contracts and stale-result isolation; do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
