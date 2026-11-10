@@ -14,8 +14,9 @@
 - [x] Market trading-readiness quantity and minimum-notional boundary matrices merged in [PR #930](https://github.com/45s/coinzilla/pull/930); exact updated PR-head CI passed.
 - [x] Exact inclusive pre-submission exchange-filter boundaries for MIN/MAX price, quantity and notional merged in [PR #932](https://github.com/45s/coinzilla/pull/932); existing immediately-outside rejection matrix retained.
 - [x] Independent Conservative strategy fixture arithmetic merged in [PR #937](https://github.com/45s/coinzilla/pull/937); residual SELL quote totals and MAX_NOTIONAL expectations use independent exact values.
-- [~] Strengthen OrderRegistry accepted, stale, duplicate, rejected and late terminal-to-FILLED transitions with complete canonical state and immutable-snapshot assertions in [PR #928](https://github.com/45s/coinzilla/pull/928); exact-head CI passed 874/874 Harvester tests.
-- [~] Assert precise account-snapshot reconciliation failures, no partial result data and immutable input snapshots in [PR #931](https://github.com/45s/coinzilla/pull/931); exact-head CI passed 872/872 Harvester tests.
+- [x] OrderRegistry complete-state and immutable-snapshot assertions merged in [PR #928](https://github.com/45s/coinzilla/pull/928); exact-head CI passed 874/874 Harvester tests.
+- [x] Precise account-snapshot failure classification, no partial result data and immutable input snapshots merged in [PR #931](https://github.com/45s/coinzilla/pull/931); exact-head CI passed 872/872 Harvester tests.
+- [~] Cover equal broker trade IDs across different markets in the Conservative engine; deduplicate the test harness by canonical Fill ID in [PR #933](https://github.com/45s/coinzilla/pull/933). Synchronized-head CI is pending.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 

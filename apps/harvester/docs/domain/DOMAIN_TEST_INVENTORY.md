@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `429c815531cfaf96cfb9d99a6806681c98e645ea` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `3340d5b36e03ea5d93c1ba5590397cef0da6c8ec` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -72,23 +72,27 @@ The readiness policy checks configured quantity after rounding down to the excha
 
 ### Medium — lifecycle tests need complete-state assertions
 
-The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. [PR #928](https://github.com/45s/coinzilla/pull/928) strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve accepted state and commitment. The exact PR head passed 874/874 Harvester tests; the synchronized head is being verified.
+The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. [PR #928](https://github.com/45s/coinzilla/pull/928) strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve accepted state and commitment. PR #928 merged after the synchronized head passed all six required checks; the exact PR head passed 874/874 Harvester tests.
 
 ### Medium — account snapshot reconciliation failures need precise diagnostics and immutability assertions
 
-[PR #931](https://github.com/45s/coinzilla/pull/931) replaces production-derived fixture totals with exact literals and asserts precise errors, no partial result data, and unchanged opening/closing snapshots for invalid out-of-order, inconsistent, negative and duplicate-asset cases. Exact PR-head CI passed 872/872 Harvester tests; no production code changed.
+[PR #931](https://github.com/45s/coinzilla/pull/931) replaces production-derived fixture totals with exact literals and asserts precise errors, no partial result data, and unchanged opening/closing snapshots for invalid out-of-order, inconsistent, negative and duplicate-asset cases. Exact PR-head CI passed 872/872 Harvester tests; PR #931 merged after all six required checks passed. No production code changed.
 
 ### Explicitly deferred — Aggressive grid behavior
 
 Aggressive is deliberately blocked by unresolved product rules. Its current NO_ACTION contract and inventory gate are tested. Do not invent grid depth, pricing, SELL thresholds, reservations or risk fallback as part of this testing initiative.
 
+### Medium — engine-level multi-market fill identity is not tested with reused trade IDs
+
+The multi-market engine suite tested separate symbols and duplicate replay, but its accounting stub deduplicated on raw `fill.tradeId` rather than canonical market-scoped `fill.id`. RED was confirmed on PR #933 test head `09fa07923b38eb757449d8347e4c6d5b77ef7f99`: the new same-trade-ID DOGEUSDT/SOLUSDT regression failed because only DOGEUSDT reached accounting; the second market's distinct Fill ID was suppressed by the fixture. The harness now deduplicates on `fill.id`, matching the production accounting contract. No production code changed; synchronized-head CI is pending.
+
 ## Execution order
 
 1. **Strategy decisions:** blocked-recovery-SELL gating, exact investment-cap boundaries and independent strategy fixture arithmetic are merged in PRs #917, #922 and #937.
 2. **Portfolio and accounting:** PR #924's exact multi-market accounting and conflicting-fill no-mutation assertions are merged; continue reviewing independent expected values and commission-identity conflicts.
-3. **Order lifecycle:** PR #928 adds complete-state assertions for accepted, stale, duplicate, rejected and terminal transitions; review remaining domain failure contracts next.
+3. **Order lifecycle:** PR #928's complete-state and immutable-snapshot assertions are merged; review remaining domain failure contracts next.
 4. **Market and configuration:** configured quantity/MIN_NOTIONAL boundaries and exact pre-submission exchange-filter equality are merged in PRs #930 and #932.
-5. **Domain failure handling:** PR #931 adds precise account-snapshot failure classification and no-mutation assertions. Continue with existing retryability/integrity contracts and stale-result isolation; do not resume #626 or add runtime recovery behavior.
+5. **Domain failure handling:** PR #931's precise account-snapshot failure classification and no-mutation assertions are merged. Continue with existing retryability/integrity contracts and stale-result isolation; do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
 

@@ -50,7 +50,7 @@ function makeMarketMetadata(market) {
 async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio } = {}) {
   const orders = []
   const pauses = []
-  const accountedTradeIds = new Set()
+  const accountedFillIds = new Set()
   const accountedFills = []
   const portfolio = initialPortfolio ?? new Portfolio()
   const metadataBySymbol = new Map(markets.map((market) => [
@@ -130,10 +130,10 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
       }),
     }),
     updateTradingAccounting: async ({ fill }) => {
-      if (accountedTradeIds.has(fill.tradeId)) {
+      if (accountedFillIds.has(fill.id)) {
         return { ok: true, data: { applied: false, duplicate: true } }
       }
-      accountedTradeIds.add(fill.tradeId)
+      accountedFillIds.add(fill.id)
       accountedFills.push(fill)
       return { ok: true, data: { applied: true, duplicate: false } }
     },
@@ -300,6 +300,57 @@ test("an unowned order in one market pauses only that market and cannot block an
   assert.equal(accepted.data.waitingForFullFill, true)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["doge-execution-1"])
   assert.deepEqual(engine.getPausedMarkets(), ["SOLUSDT"])
+})
+
+test("accounts the same broker trade ID independently for different markets", async () => {
+  const { engine, accountedFills } = await createHarness()
+  await startBothMarkets(engine)
+  const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
+  const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
+  const dogeEvent = makePartialFillEvent({
+    order: dogeOrder,
+    tradeId: "shared-trade-id",
+    quantity: "0.4",
+    quoteQuantity: "39.98",
+  })
+  const solEvent = makePartialFillEvent({
+    order: solOrder,
+    tradeId: "shared-trade-id",
+    quantity: "0.3",
+    quoteQuantity: "29.985",
+  })
+
+  assert.notEqual(
+    dogeEvent.fill.id,
+    solEvent.fill.id,
+    "Canonical Fill identity must include market identity even when two markets reuse the same broker trade ID.",
+  )
+  const dogeResult = await engine.processUserDataEvent({ event: dogeEvent })
+  const solResult = await engine.processUserDataEvent({ event: solEvent })
+
+  assert.equal(
+    dogeResult.ok,
+    true,
+    "The DOGEUSDT execution must be accepted for its own market-scoped Fill identity.",
+  )
+  assert.equal(
+    solResult.ok,
+    true,
+    "The SOLUSDT execution must be accepted independently even though its trade ID matches the DOGEUSDT execution.",
+  )
+  assert.deepEqual(
+    accountedFills.map((fill) => ({ symbol: fill.market.symbol, tradeId: fill.tradeId })),
+    [
+      { symbol: "DOGEUSDT", tradeId: "shared-trade-id" },
+      { symbol: "SOLUSDT", tradeId: "shared-trade-id" },
+    ],
+    "Both executions must reach accounting; deduplication by raw tradeId alone must not suppress the second market's fill.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "Reusing a trade ID across markets is valid and must not pause either market.",
+  )
 })
 
 test("duplicate fills and stale order updates do not double-account across markets", async () => {
