@@ -6,7 +6,7 @@ type: roadmap
 owner: utils
 ---
 
-## Priority execution plan — current develop direction (2026-11-09)
+## Priority execution plan — current develop direction (2026-11-10)
 
 ### COMPLETED — build and runtime provenance (issue #763)
 
@@ -17,7 +17,6 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 - Harvester attaches build/runtime identity and publishes the dedicated `harvester.process_started` Journal lifecycle event while preserving optional Journal startup and mandatory trading durability barriers.
 
 **Verification:** all six required offline CI contexts passed on the exact PR #767 and PR #770 heads; the Harvester process-lock check also passed on PR #770. The read-only TESTNET integration job was skipped; no exchange operations were performed.
-
 
 ### IMPORTANT — protect shared helper correctness and dependency direction
 
@@ -40,17 +39,22 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** preserve BigInt-backed string arithmetic, explicit rounding, scale/precision bounds and rejection of JavaScript Number operands. Add a helper only when at least one real shared consumer needs it.
    - **Verify:** retain algebraic/edge-case regressions and consumer tests across Entities, Harvester and Market Simulator.
 
+5. **Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)).**
+   - **Why:** unknown rule identifiers are currently ignored and non-boolean `isSoft` values are interpreted by truthiness; a typo can silently disable validation.
+   - **Do:** validate every supplied rule against the exported `VR` values, reject malformed rule entries and require a boolean `isSoft` when provided. Review consumers for accidental reliance on the current no-op behavior before enforcing the contract.
+   - **Verify:** add regressions for misspelled/unsupported rules, malformed rule values, non-boolean mode flags, default soft mode, and all valid rule semantics.
+
 ### DEFERRED
 
-5. **Do not introduce new runtime dependencies, broad utility frameworks or speculative logger adapters.**
+6. **Do not introduce new runtime dependencies, broad utility frameworks or speculative logger adapters.**
    - **Why:** Utils is foundational and every dependency/API change increases workspace-wide risk.
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
+> Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete. Validator configuration hardening is tracked in [#892](https://github.com/45s/coinzilla/issues/892); the repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
 
-> Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete; the repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
+**Owner:** `packages/utils/`
 
-**Owner:** `packages/utils/`  
 **Purpose:** provide small, domain-neutral helpers used across the workspace.
 
 Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
