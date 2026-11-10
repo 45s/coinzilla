@@ -11,6 +11,8 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Area | Required case | Current Harvester evidence | Status |
 |---|---|---|---|
 | Portfolio | BUY adds gross quantity less base commission | `position.test.js` | Existing |
+| Market readiness | Configured BUY quantity after step rounding: exact MIN/MAX and immediately outside each boundary | `validate-market-trading-readiness.test.js` — `enforces exchange quantity limits at exact boundaries and immediately outside them` | Existing — PR #930 exact head `17a157c3` passed 874/874 Harvester tests and all required checks |
+| Market readiness | Configured investment exactly at and immediately below MIN_NOTIONAL | `validate-market-trading-readiness.test.js` — `enforces MIN_NOTIONAL at exact equality and immediately below the configured investment` | Existing — PR #930 exact head `c433c345` passed 872/872 Harvester tests and all required checks |
 | Portfolio | Same trade ID in different markets preserves exact per-market quantity, spent basis and quote cash flow | `portfolio.test.js` — `keeps exact fill accounting isolated when different markets reuse the same trade ID` | Existing — PR #924 exact head `9b8d4d8a` passed 872/872 Harvester tests and all required checks |
 | Portfolio | Conflicting fill identity is rejected without changing position accounting or applied fill identities | `portfolio.test.js` — `rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting` | Existing — PR #924 exact head `9b8d4d8a` passed 872/872 Harvester tests and all required checks |
 | Portfolio | BUY quote commission increases quote cash outflow | `position.test.js` | Existing |
