@@ -17,7 +17,7 @@ import { request as httpsRequest } from 'node:https';
  * @param {string} hostname
  * @returns {boolean}
  */
-export function createUnsafeAddressError() {
+function createUnsafeAddressError() {
   const error = new Error('DNS resolution returned a non-public or reserved address; request blocked');
   error.code = 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS';
   return error;
