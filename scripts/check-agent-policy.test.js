@@ -312,6 +312,7 @@ test('detects direct console access in production code while ignoring comments, 
     mkdirSync(join(root, 'apps', 'sample', 'test'), { recursive: true });
     mkdirSync(join(root, 'packages', 'utils', 'src'), { recursive: true });
     mkdirSync(join(root, 'packages', 'notifiers', 'scripts'), { recursive: true });
+    mkdirSync(join(root, 'apps', 'harvester', 'scripts'), { recursive: true });
     const tick = String.fromCharCode(96);
     writeFileSync(join(root, 'apps', 'sample', 'src', 'runtime.js'), [
       '// console.log("comment only")',
@@ -326,6 +327,16 @@ test('detects direct console access in production code while ignoring comments, 
     writeFileSync(join(root, 'apps', 'sample', 'test', 'runtime.test.js'), 'console.error("test stub")');
     writeFileSync(join(root, 'packages', 'utils', 'src', 'logger.js'), 'console.log("approved logger")');
     writeFileSync(join(root, 'packages', 'notifiers', 'scripts', 'telegram-smoke.js'), 'console.info("approved CLI")');
+    for (const name of [
+      'list-testnet-balances.js',
+      'list-testnet-open-orders.js',
+      'list-testnet-order-history.js',
+      'list-testnet-trades.js',
+      'run-targeted-tests.js',
+      'sell-testnet-zro.js',
+    ]) {
+      writeFileSync(join(root, 'apps', 'harvester', 'scripts', name), 'console.log("approved operator CLI")');
+    }
 
     assert.deepEqual(findDirectConsoleUsages(root), [
       'apps/sample/src/runtime.js:5: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
