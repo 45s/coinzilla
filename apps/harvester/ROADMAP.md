@@ -15,11 +15,12 @@
 - [x] Exact inclusive pre-submission exchange-filter boundaries for MIN/MAX price, quantity and notional merged in [PR #932](https://github.com/45s/coinzilla/pull/932); existing immediately-outside rejection matrix retained.
 - [x] Independent Conservative strategy fixture arithmetic merged in [PR #937](https://github.com/45s/coinzilla/pull/937); residual SELL quote totals and MAX_NOTIONAL expectations use independent exact values.
 - [x] OrderRegistry complete-state and immutable-snapshot assertions merged in [PR #928](https://github.com/45s/coinzilla/pull/928); exact-head CI passed 874/874 Harvester tests.
+- [x] Audit application-level Conservative engine coverage: 162 deterministic tests exercise trailing BUY gates, stale/out-of-order events, serialized cancellation/fill races, retryable vs terminal failures and conflicting execution facts. No generation identity exists in the current contract; see Domain Test Inventory.
 - [x] Extend OrderRegistry coverage for decreasing execution and stale timestamps; rejected reports preserve canonical state and commitment. Merged in [PR #927](https://github.com/45s/coinzilla/pull/927).
 - [x] Precise account-snapshot failure classification, no partial result data and immutable input snapshots merged in [PR #931](https://github.com/45s/coinzilla/pull/931); exact-head CI passed 872/872 Harvester tests.
 - [x] Cover equal broker trade IDs across different markets in the Conservative engine; the test harness deduplicates by canonical Fill ID. Merged in [PR #933](https://github.com/45s/coinzilla/pull/933).
 - [x] Isolate exact exchange-filter equality boundaries with independent notionals and verify immutable market-readiness metadata. Merged in [PR #929](https://github.com/45s/coinzilla/pull/929) after all six required checks passed.
-- [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
+- [~] Complete focused open test-quality PRs: [#943 Position invariants](https://github.com/45s/coinzilla/pull/943), [#944 independent recovery SELL expectations](https://github.com/45s/coinzilla/pull/944), [#947 commission aggregation](https://github.com/45s/coinzilla/pull/947), [#948 multi-fill recovery cost mirrors](https://github.com/45s/coinzilla/pull/948), and [#949 third-asset valuation boundaries](https://github.com/45s/coinzilla/pull/949). Re-audit the remaining high-risk domain gaps after their exact-head CI passes.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
 ### Completed — per-session log directory layout (PR #874, 2026-11-10)

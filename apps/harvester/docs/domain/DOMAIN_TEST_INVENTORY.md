@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `610232948c5cd99ac15518e5694df83833f94c1b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `d07a51446ac4116d307896a8559b033a6e62f06b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -31,6 +31,19 @@ All test improvements in this initiative must remain deterministic and offline. 
 | Configuration | `trading-config.test.js` | Strategy/pair configuration validation and explicit TESTNET/LIVE mode selection |
 
 The domain suite is supplemented by application-level engine and use-case tests for serialized lifecycle ordering, multi-market composition, cancellation/fill races and broker interaction. Those tests are not substitutes for pure domain-policy tests, but they provide distinct integration protection.
+
+## Application-level orchestration coverage (supplemental; not included in the 26 domain test files)
+
+`src/use-cases/conservative-trading-engine.test.js` contains **162 deterministic test declarations** at the reviewed baseline. The suite covers:
+- Trailing BUY activation/repricing, active-Position suppression, retained free-inventory exclusion and cancellation/fill races.
+- Partial BUY/SELL execution, duplicate and out-of-order execution reports, broker identity mismatches and REST/stream fact conflicts.
+- Stale market-price handling, serialized concurrent updates and deferred evaluation while cancellation or acknowledgement is pending.
+- Retryable versus terminal fill-history and pending-order lookup failures, unknown order states, and fail-closed integrity outcomes.
+- Recovery SELL completion, residual/dust handling, commitment preservation and shutdown behavior.
+
+### Generation isolation — no current contract
+
+A source and test search found no generation identifier, generation-scoped state or generation transition guard in Harvester. Current asynchronous ordering is based on the serialized transition queue, market-price event identity/sequence, canonical order/fill identities and explicit stale/terminal checks. Therefore generation isolation is **not a currently defined behavior contract** and cannot be meaningfully tested without inventing new product semantics. Do not add generation architecture under this test-quality initiative; revisit only if an explicit generation model is introduced.
 
 ## Quality findings and priorities
 
