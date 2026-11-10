@@ -12,6 +12,7 @@
 - [x] Conservative investment-cap equality and immediately-below boundary matrix merged in [PR #922](https://github.com/45s/coinzilla/pull/922). Exact PR head `8e234e2c18cb98b4b8562c62ef05d9f20f852102` passed 872/872 Harvester tests; coverage was 75.94% lines, 79.26% branches and 74.88% functions. All required CI checks passed.
 - [x] Strengthen Portfolio multi-market isolation and conflicting-fill no-mutation assertions merged in [PR #924](https://github.com/45s/coinzilla/pull/924); exact-head CI passed.
 - [x] Market trading-readiness quantity and minimum-notional boundary matrices merged in [PR #930](https://github.com/45s/coinzilla/pull/930); exact updated PR-head CI passed.
+- [~] Prove third-asset commission quote valuation rejects a wrong quote asset and zero value; preserve the existing missing-valuation and valid-valuation cases. Exact-head CI pending.
 - [x] Exact inclusive pre-submission exchange-filter boundaries for MIN/MAX price, quantity and notional merged in [PR #932](https://github.com/45s/coinzilla/pull/932); existing immediately-outside rejection matrix retained.
 - [x] Independent Conservative strategy fixture arithmetic merged in [PR #937](https://github.com/45s/coinzilla/pull/937); residual SELL quote totals and MAX_NOTIONAL expectations use independent exact values.
 - [x] OrderRegistry complete-state and immutable-snapshot assertions merged in [PR #928](https://github.com/45s/coinzilla/pull/928); exact-head CI passed 874/874 Harvester tests.

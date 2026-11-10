@@ -164,6 +164,32 @@ test("checks aggregated commissions against the executed amount", () => {
   )
 })
 
+test("rejects third-asset quote valuation with a wrong asset or non-positive amount", () => {
+  const wrongAssetFill = makeFill({
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.01", asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0.03", asset: baseAsset }),
+    })],
+  })
+  assert.throws(
+    () => calculateRecoveryFillAccounting({ market, fill: wrongAssetFill }),
+    /Third-asset commission quote value must use the market quote asset/,
+    "A third-asset valuation denominated in the base asset must be rejected instead of being added to quote accounting.",
+  )
+
+  const zeroValueFill = makeFill({
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.01", asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0", asset: quoteAsset }),
+    })],
+  })
+  assert.throws(
+    () => calculateRecoveryFillAccounting({ market, fill: zeroValueFill }),
+    /Third-asset commission quote value must be greater than zero/,
+    "A third-asset commission with a zero quote valuation must fail closed.",
+  )
+})
+
 test("deducts a reliable third-asset quote valuation from SELL proceeds", () => {
   const fill = makeFill({
     side: "SELL",
