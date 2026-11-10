@@ -11,7 +11,11 @@ import { request as httpsRequest } from 'node:https';
  * @typedef {(url: URL, options: object, onResponse: (response: {statusCode?: number, headers?: Record<string, string|string[]>, resume: () => void}) => void) => {on: (event: string, listener: (error: Error) => void) => object, end: () => void}} HttpRequestImplementation
  */
 
-function isLocalHostname(hostname) {
+/**
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+export function isLocalHostname(hostname) {
   return hostname === 'localhost' ||
     hostname === 'localdomain' ||
     hostname.endsWith('.localhost') ||
