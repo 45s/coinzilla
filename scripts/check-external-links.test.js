@@ -268,7 +268,7 @@ test('follows bounded redirects and refuses redirects to local-only hosts', asyn
 
   assert.equal(success.status, 'ok');
   assert.equal(urls.length, 2);
-  assert.equal(blocked.status, 'unverifiable');
+  assert.equal(blocked.status, 'skipped', 'A redirect to a local-only destination must be blocked before a second request.');
   assert.equal(blockedUrls.length, 1);
 });
 
@@ -481,10 +481,10 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
   assert.equal(typeof fetchPinned, 'function', 'Redirect tests require the same pinned transport used by production requests.');
 
   const requestedHosts = [];
-  const result = await checkExternalLink(candidate('https://public.example/start'), {
+  const result = await checkExternalLink(candidate('https://public.example.com/start'), {
     fetchImpl: (url, init) => fetchPinned(url, init, {
       resolveHost: async (hostname) => [{
-        address: hostname === 'public.example' ? '8.8.8.8' : '127.0.0.1',
+        address: hostname === 'public.example.com' ? '8.8.8.8' : '127.0.0.1',
         family: 4,
       }],
       requestImpl: (requestUrl, options, onResponse) => {
@@ -494,7 +494,7 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
         });
         queueMicrotask(() => onResponse({
           statusCode: 302,
-          headers: { location: 'https://private-redirect.example/metadata' },
+          headers: { location: 'https://private-redirect.example.com/metadata' },
           resume() {},
         }));
         return { on() { return this; }, end() {} };
