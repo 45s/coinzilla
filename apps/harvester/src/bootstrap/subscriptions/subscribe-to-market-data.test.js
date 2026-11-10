@@ -4,7 +4,16 @@ import { subscribeToMarketData } from "./subscribe-to-market-data.js"
 
 const test = (name, ...args) => nodeTest("[subscribe-to-market-data.test.js] " + name, ...args)
 
-const createFixture = ({ tradingEnabled = false, pairs = { BTCUSDT: { enabled: true, orderQuantity: 0.01 } }, subscribeForPrices, subscribeForBookTicker, getPrices } = {}) => {
+const createFixture = ({
+  tradingEnabled = false,
+  pairs = { BTCUSDT: { enabled: true, orderQuantity: 0.01 } },
+  subscribeForPrices,
+  subscribeForBookTicker,
+  getPrices,
+  logger = {},
+  onMarketPriceError = () => {},
+  processMarketPrice,
+} = {}) => {
   const calls = []
   const events = []
   const subscriptions = []
@@ -28,14 +37,14 @@ const createFixture = ({ tradingEnabled = false, pairs = { BTCUSDT: { enabled: t
     },
     brokerName: "binance",
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
-    logger: {},
+    logger,
     tradingEnabled,
     pairs,
     settings: {},
-    processMarketPrice: async (input) => {
+    processMarketPrice: processMarketPrice ?? (async (input) => {
       calls.push("process-price:" + input.symbol)
       return { ok: true, data: { decision: { action: "NO_ACTION" } } }
-    },
+    }),
     processMarketBook: async ({ symbol }) => {
       calls.push("process-book:" + symbol)
       return { ok: true }
@@ -43,7 +52,7 @@ const createFixture = ({ tradingEnabled = false, pairs = { BTCUSDT: { enabled: t
     isMarketPriceFresh: (marketPrice) => marketPrice.timestamp === 10_000,
     now,
     isStopped: () => false,
-    onMarketPriceError: () => {},
+    onMarketPriceError,
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
@@ -99,4 +108,60 @@ test("publishes subscription failure evidence and rejects incomplete market inta
   )
   assert.equal(fixture.events.length, 1, "A failed market subscription must publish one lifecycle failure event.")
   assert.equal(fixture.events[0].data.stream, "market-price", "The failure event must identify the market-price stream.")
+})
+
+test("logs an exact post-only rejection as WARN without reporting a generic market-price error", async () => {
+  const warnings = []
+  const errors = []
+  const rejection = Object.assign(
+    new Error("Order would immediately match and take."),
+    { code: "POST_ONLY_WOULD_TAKE" },
+  )
+  const fixture = createFixture({
+    logger: {
+      warn: (entry) => warnings.push(entry),
+      error: (entry) => errors.push(entry),
+    },
+    onMarketPriceError: (details) => errors.push(details),
+    processMarketPrice: async () => ({ ok: false, errors: [rejection] }),
+    subscribeForPrices: async ({ onPrice }) => {
+      await onPrice({ symbol: "BTCUSDT", price: "65000", timestamp: 10_000 })
+      return { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+    },
+  })
+
+  await fixture.result
+
+  assert.deepEqual(warnings, [{
+    message: "Binance rejected a post-only LIMIT_MAKER order",
+    symbol: "BTCUSDT",
+    orderType: "LIMIT_MAKER",
+    reason: "WOULD_IMMEDIATELY_MATCH",
+    brokerMessage: "Order would immediately match and take.",
+  }])
+  assert.equal(errors.length, 0, "Expected post-only rejection must not reach the generic ERROR handler.")
+})
+
+test("keeps unrelated broker failures on the generic ERROR path", async () => {
+  const warnings = []
+  const errors = []
+  const failure = Object.assign(new Error("insufficient balance"), { code: -2010 })
+  const fixture = createFixture({
+    logger: {
+      warn: (entry) => warnings.push(entry),
+      error: (entry) => errors.push(entry),
+    },
+    onMarketPriceError: (details) => errors.push(details),
+    processMarketPrice: async () => ({ ok: false, errors: [failure] }),
+    subscribeForPrices: async ({ onPrice }) => {
+      await onPrice({ symbol: "BTCUSDT", price: "65000", timestamp: 10_000 })
+      return { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+    },
+  })
+
+  await fixture.result
+
+  assert.equal(warnings.length, 0, "An unrelated broker failure must not be downgraded to a warning.")
+  assert.equal(errors.length, 1, "An unrelated broker failure must continue through the generic error handler.")
+  assert.equal(errors[0].errors[0], failure)
 })
