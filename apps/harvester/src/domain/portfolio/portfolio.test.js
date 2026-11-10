@@ -135,16 +135,26 @@ test("does not permit free allocation for an unknown market", () => {
   )
 })
 
-test("rejects a reused Fill ID when execution facts differ", () => {
-  const portfolio = new Portfolio().applyFill({
-    fill: makeFill({ tradeId: "reused-trade", quantity: "1" }),
-  }).portfolio
+test("rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting", () => {
+  const originalFill = makeFill({ tradeId: "reused-trade", quantity: "1" })
+  const portfolio = new Portfolio().applyFill({ fill: originalFill }).portfolio
 
   assert.throws(
     () => portfolio.applyFill({
       fill: makeFill({ tradeId: "reused-trade", quantity: "2" }),
     }),
     /Conflicting execution facts reused Fill ID/,
+    "Reusing one canonical fill identity with different execution facts must be rejected.",
+  )
+
+  const unchangedPosition = portfolio.getPosition({ symbol: "ETHUSDT" })
+  assert.equal(unchangedPosition.baseQuantity.amount, "1", "A conflicting replay must not alter active inventory.")
+  assert.equal(unchangedPosition.spent.amount, "100", "A conflicting replay must not alter the quote recovery basis.")
+  assert.equal(unchangedPosition.quoteNetCashFlow.amount, "-100", "A conflicting replay must not alter quote cash flow.")
+  assert.deepEqual(
+    portfolio.appliedFillIds,
+    [originalFill.id],
+    "A rejected conflicting replay must not append another applied fill identity.",
   )
 })
 
