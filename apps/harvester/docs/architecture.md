@@ -655,8 +655,9 @@ cleared by a transport reconnect or by reclassifying an error.
 A failure from an asynchronous recovery stage may update application failure
 state only while the attempt's captured recovery generation is still current.
 If a disconnect supersedes the attempt while a REST read or durable audit is
-pending, a later rejection from that obsolete operation is discarded as stale:
-it must not set the process-lifetime accounting latch, create a retry marker for
+pending, a later rejection from that obsolete operation is logged with the
+captured/current generations and original error, then discarded as stale. It
+must not set the process-lifetime accounting latch, create a retry marker for
 the current generation, publish subsequent recovery audits, or acknowledge
 the broker. The current generation remains blocked and must complete its own
 single-flight reconciliation and durable audit barriers before readiness can
