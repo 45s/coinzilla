@@ -62,6 +62,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Completion | Fully filled but below minProfit does not allocate | completion test | Existing |
 | Completion | Insufficient active inventory does not allocate | completion test | Existing |
 | Completion | Exact minProfit equality passes and one tick below fails | `recovery-sell-plan-accounting.test.js` | Existing |
+| Recovery completion failure | A failed RecoveryLedger reset leaves both Portfolio and RecoveryLedger unchanged, including active/retained inventory and cost basis | `create-portfolio-workflow.test.js` — failing reset ledger regression | RED pending exact-head CI |
 | Completion | Completion invoked exactly once and ledger reset only once | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
 | Sell-through | After recovery profit is secured, continue selling active inventory above `keepQuantity` at a price that does not violate net-profit, exchange-filter, or post-only constraints | `conservative-strategy.test.js` residual sell-through and price/filter boundary cases | Existing — execution pending |
 | Sell-through | Repeat evaluation after a residual fill without duplicating an active SELL | `does not create a duplicate residual SELL while one is active` and engine active-order suppression | Existing — execution pending |
