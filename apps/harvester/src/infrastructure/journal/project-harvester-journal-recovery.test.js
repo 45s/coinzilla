@@ -613,6 +613,30 @@ test("rejects a commission whose asset code contradicts a known market asset ID"
   assert.match(restored.errors[0].message, /asset code contradicts the market base asset identity/)
 })
 
+test("rejects a non-positive historical quote valuation during projection", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      fill({
+        commissions: [{
+          amount: "0.0001",
+          assetId: "binance:BNB",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0",
+            assetId: "binance:USDT",
+            asset: "USDT",
+          },
+        }],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /must be greater than zero/)
+})
+
 test("rejects a third-asset commission valued in an asset other than the market quote asset", () => {
   const projection = projectHarvesterJournalRecovery({
     records: [
