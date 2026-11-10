@@ -595,6 +595,51 @@ test("marks a PENDING submission UNKNOWN without releasing its order commitment"
   assert.equal(result.data.registry.getActiveOrders({ marketId: market.id }).length, 1)
 })
 
+test("updates the intended UNKNOWN submission by client ID when multiple orders have no broker ID", () => {
+  const firstClientOrderId = "h-unknown-first"
+  const secondClientOrderId = "h-unknown-second"
+  const initialRegistry = OrderRegistry.empty()
+    .registerPending({ order: makeOrder({ clientOrderId: firstClientOrderId }) }).registry
+    .registerPending({ order: makeOrder({ clientOrderId: secondClientOrderId, side: "SELL" }) }).registry
+  const firstUnknownResult = initialRegistry.markUnknown({ clientOrderId: firstClientOrderId })
+  const bothUnknownResult = firstUnknownResult.data.registry.markUnknown({
+    clientOrderId: secondClientOrderId,
+  })
+  const bothUnknownRegistry = bothUnknownResult.data.registry
+  const firstUnknownSnapshot = bothUnknownRegistry.getOrder({
+    clientOrderId: firstClientOrderId,
+  }).value
+  const secondUnknownSnapshot = bothUnknownRegistry.getOrder({
+    clientOrderId: secondClientOrderId,
+  }).value
+
+  const update = bothUnknownRegistry.applyUpdate({
+    order: makeOrder({
+      clientOrderId: secondClientOrderId,
+      side: "SELL",
+      status: "UNKNOWN",
+      updatedAt: 103,
+    }),
+  })
+
+  const updatedFirstOrder = update.registry.getOrder({ clientOrderId: firstClientOrderId })
+  const updatedSecondOrder = update.registry.getOrder({ clientOrderId: secondClientOrderId })
+
+  assert.equal(update.applied, true, "A no-broker-ID UNKNOWN update must resolve to its registered client ID instead of colliding with another unresolved order.")
+  assert.equal(update.duplicate, false, "A newer UNKNOWN snapshot for the selected client ID must be recorded as a state update.")
+  assert.equal(update.unknown, false, "A locally registered UNKNOWN order is owned state, not an unrecognized exchange order.")
+  assert.notEqual(update.registry, bothUnknownRegistry, "Applying the newer UNKNOWN snapshot must produce a new immutable registry.")
+  assert.deepEqual(updatedFirstOrder.value, firstUnknownSnapshot, "The first unresolved order must remain byte-for-byte unchanged when the second order receives an update.")
+  assert.equal(updatedSecondOrder.status, "UNKNOWN", "The selected order must remain unresolved until broker facts arrive.")
+  assert.equal(updatedSecondOrder.updatedAt, 103, "The update timestamp must be applied to the order identified by clientOrderId.")
+  assert.equal(updatedSecondOrder.brokerOrderId, undefined, "A local UNKNOWN update must not invent an exchange-assigned broker order ID.")
+  assert.equal(updatedSecondOrder.remainingQuantity.amount, "100", "The selected UNKNOWN order must retain its full outstanding commitment.")
+  assert.equal(update.registry.getActiveOrders({ marketId: market.id }).length, 2, "Both unresolved submissions must remain active and reserve their original commitments.")
+  assert.equal(update.registry.getTerminalOrders({ marketId: market.id }).length, 0, "An UNKNOWN identity update must not release either order as terminal.")
+  assert.deepEqual(bothUnknownRegistry.getOrder({ clientOrderId: firstClientOrderId }).value, firstUnknownSnapshot, "The prior registry snapshot must retain the first order unchanged after the update.")
+  assert.deepEqual(bothUnknownRegistry.getOrder({ clientOrderId: secondClientOrderId }).value, secondUnknownSnapshot, "The prior registry snapshot must retain the second order unchanged after the update.")
+})
+
 test("marks an acknowledged OPEN order UNKNOWN without losing broker identity or commitment", () => {
   const clientOrderId = "h-unknown-cancel-open"
   const brokerOrderId = "broker-unknown-cancel-open"
