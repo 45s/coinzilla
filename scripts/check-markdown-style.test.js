@@ -4,7 +4,12 @@ import test from "node:test"
 import {
   analyzeMarkdownStyleDocuments,
   parseChangedMarkdownDiff,
+  GIT_DIFF_MAX_BUFFER_BYTES,
 } from "./check-markdown-style.js"
+
+test("allows release-scale Git diffs larger than the child-process default buffer", () => {
+  assert.equal(GIT_DIFF_MAX_BUFFER_BYTES, 64 * 1024 * 1024)
+})
 
 test("parses changed Markdown lines and new files from a unified diff", () => {
   const diff = [
