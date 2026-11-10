@@ -54,9 +54,8 @@ function isStaleOrderUpdate({ current, next }) {
     // response. The cancellation snapshot and fill history remain authoritative.
     return true
   }
-  return current.status !== "PENDING" &&
-    next.status === "OPEN" &&
-    current.status !== "OPEN"
+  return current.status === "PARTIALLY_FILLED" &&
+    next.status === "OPEN"
 }
 
 function validateOrderUpdate({ current, next }) {
