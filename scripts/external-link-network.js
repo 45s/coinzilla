@@ -148,12 +148,33 @@ function createUnsafeAddressError() {
   return error;
 }
 
+
+async function awaitWithAbort(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    throw signal.reason ?? new Error('DNS resolution aborted before completion');
+  }
+
+  let abortListener;
+  const aborted = new Promise((resolve, reject) => {
+    abortListener = () => reject(signal.reason ?? new Error('DNS resolution aborted before completion'));
+    signal.addEventListener('abort', abortListener, { once: true });
+  });
+
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener('abort', abortListener);
+  }
+}
+
 /**
  * Resolve and validate every A/AAAA answer before opening a socket.
  * A mixed public/private answer set is rejected in full.
  * @param {string} hostname
  * @param {object} options
  * @param {DnsResolver} [options.resolveHost] Injectable DNS resolver for deterministic tests.
+ * @param {AbortSignal} [options.signal] Request timeout/cancellation signal.
  * @returns {Promise<Array<{address: string, family: number}>>}
  */
 export async function resolvePublicAddresses(hostname, options = {}) {
@@ -162,7 +183,8 @@ export async function resolvePublicAddresses(hostname, options = {}) {
     throw createUnsafeAddressError();
   }
   const resolver = options.resolveHost ?? dnsLookup;
-  const answers = await resolver(normalizedHostname, { all: true, verbatim: true });
+  const resolution = resolver(normalizedHostname, { all: true, verbatim: true });
+  const answers = await awaitWithAbort(resolution, options.signal);
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('DNS resolution returned no addresses');
   }
@@ -237,7 +259,10 @@ export async function fetchPinned(input, init = {}, options = {}) {
     throw new TypeError('Pinned transport only supports HTTP(S) URLs');
   }
   const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
-  const addresses = await resolvePublicAddresses(hostname, options);
+  const addresses = await resolvePublicAddresses(hostname, {
+    ...options,
+    signal: init.signal ?? options.signal,
+  });
   const transport = options.requestImpl ?? (url.protocol === 'https:' ? httpsRequest : httpRequest);
   const lookup = createPinnedLookup(hostname, addresses);
 
