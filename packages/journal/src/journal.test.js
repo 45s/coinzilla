@@ -1716,6 +1716,66 @@ test("close drains a published event before releasing the session and writer loc
 })
 
 
+test("finishes previously accepted queued writes before reporting a later serialization failure", async () => {
+  const context = await createTestJournal()
+
+  try {
+    const acceptedWrite = context.journal.record({
+      event: {
+        id: "event-accepted-before-serialization-failure",
+        name: "order.created",
+        data: { orderId: "42" },
+      },
+    })
+    const rejectedWrite = context.journal.record({
+      event: {
+        id: "event-rejected-after-accepted-write",
+        name: "order.updated",
+        data: { amount: undefined },
+      },
+    })
+
+    const [acceptedResult, rejectedResult] = await Promise.all([acceptedWrite, rejectedWrite])
+    assert.equal(
+      acceptedResult.ok,
+      true,
+      "A valid record accepted before a later serialization failure must still finish its queued append.",
+    )
+    assert.equal(
+      rejectedResult.ok,
+      false,
+      "The later source event with an undefined nested value must be rejected before it enters the write queue.",
+    )
+
+    const flushResult = await context.journal.flush()
+    assert.equal(
+      flushResult.ok,
+      false,
+      "The session must remain non-durable overall because a later source event was omitted.",
+    )
+
+    const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
+    assert.equal(
+      lines.length,
+      1,
+      "Previously accepted writes must remain in the session even though a later serialization failure poisons new record admission.",
+    )
+    assert.equal(
+      JSON.parse(lines[0]).id,
+      "event-accepted-before-serialization-failure",
+      "The completed queued record must retain its original event identity and append order.",
+    )
+
+    const closeResult = await context.journal.close()
+    assert.equal(closeResult.ok, false, "Close must expose the later serialization failure after draining accepted writes.")
+    assert.equal(closeResult.durable, false, "The session must not report durable closure while an event was omitted.")
+  } finally {
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
 test("does not report durable success when the real EventBus delivers JSON-lossy values", async () => {
   const cyclicData = {}
   cyclicData.self = cyclicData
