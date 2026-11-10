@@ -11,6 +11,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Area | Required case | Current Harvester evidence | Status |
 |---|---|---|---|
 | Portfolio | BUY adds gross quantity less base commission | `position.test.js` | Existing |
+| Portfolio | Same trade ID in different markets preserves exact per-market quantity, spent basis and quote cash flow | `portfolio.test.js` — complete market-isolation assertions | Existing — PR #924 exact-head CI passed; awaiting merge |
 | Portfolio | BUY quote commission increases quote cash outflow | `position.test.js` | Existing |
 | Portfolio | SELL consumes gross quantity plus base commission | `position.test.js` | Existing |
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
@@ -22,6 +23,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
 | Order ownership | Multi-market isolation; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` | Existing |
 | Order lifecycle | NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and unknown states map and drive safe engine behavior | `adapt-canonical-order.test.js`, `order-registry.test.js`, `conservative-trading-engine.test.js` | Existing |
+| Order lifecycle | Late FILLED after partial CANCELED/EXPIRED preserves full canonical state; rejected decreasing-quantity and stale-timestamp updates leave the registry unchanged | `order-registry.test.js` — late terminal FILLED and rejected-update immutability cases | Existing — PR #927 exact-head CI passed; awaiting merge |
 | Cancellation race | A recovery SELL fill returned during cancellation is applied once when its late stream event is replayed | `conservative-trading-engine.test.js` | Existing |
 | Fill identity | Same fill applied to Portfolio and ledger atomically | `update-trading-accounting.test.js` | Existing |
 | Recovery ledger | Multiple BUY fills accumulate actual cost | Actual multi-BUY DOGE/ZRO fixtures in `conservative-strategy.test.js`; full-cycle engine regression | Existing — execution pending |
@@ -39,10 +41,12 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | SELL plan | Quote commission + price tick boundary at minProfit | `recovery-sell-plan-accounting.test.js` | Existing |
 | SELL plan | Already recovered proceeds still require full SELL fill | `conservative-strategy.test.js` residual sell-through cases; engine terminal SELL lifecycle | Existing — execution pending |
 | Strategy | Initial BUY price and quantity boundaries | `conservative-strategy.test.js` | Partial |
+| Market filters | Equality at MIN/MAX price, quantity and notional; readiness at exact MIN_NOTIONAL and rounded MAX_QUANTITY | `validate-order-against-trading-rules.test.js`, `validate-market-trading-readiness.test.js` | Existing — exact boundary matrix added in current PR; CI pending |
+| Strategy test fixtures | Residual SELL quote quantities and MAX_NOTIONAL expected outcomes use independent exact values | `strategy.test.js` — residual fixture and MAX_NOTIONAL cap tests | Existing — PR #926 exact-head CI passed; awaiting merge |
 | Strategy | Initial BUY trailing decision/replacement eligibility | `trailing-buy-repricing.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Strategy | Standing BUY allowed with active recovery SELL | strategy test creates both intents | Existing |
 | Strategy | Recovery SELL acknowledged before next standing BUY | Engine submission-order regression | Existing / reverify |
-| Strategy | Investment cap exact boundary and committed BUY amounts | one investment test | Partial |
+| Strategy | Investment cap exact equality, immediately-below limit, and committed BUY amounts | `strategy.test.js` — exact cap boundary matrix | Existing — PR #922 exact-head CI passed; awaiting merge |
 | Strategy | SELL submission before next BUY | `conservative-strategy.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Completion | Partial/cancelled SELL not complete | `recovery-completion.test.js` | Existing |
 | Completion | Fully filled but below minProfit does not allocate | completion test | Existing |
@@ -72,4 +76,4 @@ Before D2 can pass:
 
 ## Current verification status
 
-This matrix is evidence only; the canonical specification remains the sole rule authority. The in-scope implementation and regression inventory now covers residual sell-through, exchange-constrained dust and durable dust evidence, exact retained quantity, BUY-during-SELL cancellation/reconciliation/replacement, terminal SELL outcomes, and exact-once completion. The zero-keepQuantity full-cycle regression is included. Test execution and exact-head CI remain pending as a separate verification phase; no test-pass claim is made here. Restart reconciliation remains explicitly deferred in #654.
+This matrix is evidence only; the canonical specification remains the sole rule authority. The in-scope implementation and regression inventory covers residual sell-through, exchange-constrained dust and durable dust evidence, exact retained quantity, BUY-during-SELL cancellation/reconciliation/replacement, terminal SELL outcomes, and exact-once completion. The zero-keepQuantity full-cycle regression is included. Exact-head evidence is tracked per focused PR: PR #917 is merged and green; PRs #922, #924, #926 and #927 are open with exact-head CI green; the exchange-filter boundary matrix in the current PR is awaiting CI. No coverage threshold was weakened. Restart reconciliation remains explicitly deferred in #654.
