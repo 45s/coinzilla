@@ -21,7 +21,7 @@ const record = (name, data, lineNumber) => ({
   position: { fileName: "2026-11-05_08-00-00.jsonl", lineNumber },
 })
 
-const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = false } = {}) => {
+const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = false, includeCommissionBaseline = true } = {}) => {
   const balances = [
     { asset: "BTC", free: "0", locked: "0", total: "0" },
     { asset: "USDT", free: "1000", locked: "0", total: "1000" },
@@ -59,7 +59,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       quantity: "0.5",
       status: "FILLED",
     }, 4),
-    ...(thirdAssetCommission ? [record("account.snapshot_captured", {
+    ...(thirdAssetCommission && includeCommissionBaseline ? [record("account.snapshot_captured", {
       phase: "COMMISSION_BASELINE",
       sourceTime: 1000,
       auditStatus: "COMPLETE",
@@ -269,6 +269,23 @@ test("accounts for third-asset commission debits during recovered account reconc
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.balancesChecked, 3)
+})
+
+test("fails closed when a positive third-asset commission has no durable baseline", () => {
+  const { projection, restored } = restoreState({
+    thirdAssetCommission: true,
+    includeCommissionBaseline: false,
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /negative account balance for BNB/)
 })
 
 test("rejects an unexplained third-asset balance movement despite matching market balances", () => {
