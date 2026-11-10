@@ -7,8 +7,8 @@ This index groups substantial historical audit reports and findings registers. T
 - [Audit execution history](AUDIT_EXECUTION_HISTORY.md) — detailed order, fill and session chronology.
 
 Related current authorities:
-- [Conservative domain specification](../../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md)
-- [Harvester roadmap](../../../../ROADMAP.md)
+- [Conservative domain specification](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md)
+- [Harvester roadmap](../../../ROADMAP.md)
 - [Audit process index](../README.md)
 
 Preserve each report's baseline SHA, evidence provenance, limitations and unknowns. Add dated follow-ups rather than silently rewriting historical conclusions.
