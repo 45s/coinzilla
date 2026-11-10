@@ -160,7 +160,7 @@ Use the repository's object-input/object-output function convention and `toResul
 
 The application currently applies canonical fills through paired Portfolio/RecoveryLedger accounting. This section records architecture and code location only; it does not define Conservative accounting or completion rules.
 
-The authoritative Conservative contract, including the quantity/spent model, actual commission valuation, full-cost recovery, exact retained quantity, residual sell-through, dust, cancellation/reconciliation, and completion, is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+The authoritative Conservative contract, including the quantity/spent model, actual commission valuation, full-cost recovery, per-cycle `keepQuantity` retention (which accumulates in the free-inventory bucket across completed cycles), residual sell-through, dust, cancellation/reconciliation, and completion, is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ## Confirmed domain decisions
 
