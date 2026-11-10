@@ -141,7 +141,7 @@ The initial findings and mandatory agent workflow are in [../../docs/engineering
 - [x] Reject JavaScript Number operands to prevent hidden precision loss; accept exact strings and bigint parsing inputs.
 - [x] Add focused tests for signed values, scientific notation bounds, maximum scale/precision, division-by-zero, explicit rounding modes, increment rounding, and deterministic arithmetic identities.
 - [x] Migrate Harvester, Market Simulator, and Entities consumers to the shared API; workspace CI remains the final validation gate.
-- [~] Migrate the standalone Harvester TESTNET sell helper's remaining local BigInt arithmetic to `parseDecimal`, `roundDecimalToIncrement`, `compareDecimal`, and `rescaleDecimal` in [PR #946](https://github.com/45s/coinzilla/pull/946); exchange filter selection and operator-facing quantity policy remain in Harvester.
+- [x] Migrate the standalone Harvester TESTNET sell helper's remaining local BigInt arithmetic to `parseDecimal`, `roundDecimalToIncrement`, `compareDecimal`, and `rescaleDecimal` in merged [PR #946](https://github.com/45s/coinzilla/pull/946); exchange filter selection and operator-facing quantity policy remain in Harvester.
 
 ## Scope guard
 
