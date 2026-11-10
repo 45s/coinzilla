@@ -380,3 +380,130 @@ test('only confirmed broken or invalid destinations trigger the advisory PR fail
   assert.equal(shouldFailOnBroken([{ status: 'broken' }]), true);
   assert.equal(shouldFailOnBroken([{ status: 'invalid' }]), true);
 });
+
+
+import * as externalLinkChecker from './check-external-links.js';
+
+test('classifies public IPv4 and rejects private, shared, reserved, and metadata IPv4 ranges', () => {
+  const isPublicAddress = externalLinkChecker.isPublicAddress;
+  assert.equal(typeof isPublicAddress, 'function', 'The checker must expose its deterministic IP-address policy for focused tests.');
+
+  for (const address of ['8.8.8.8', '1.1.1.1', '93.184.216.34']) {
+    assert.equal(isPublicAddress(address), true, address + ' is a globally routable IPv4 destination.');
+  }
+  for (const address of [
+    '0.0.0.0', '10.0.0.1', '100.64.0.1', '100.100.100.200',
+    '127.0.0.1', '169.254.169.254', '172.16.0.1', '192.0.0.1',
+    '192.0.2.1', '192.168.1.1', '192.88.99.1', '198.18.0.1',
+    '198.51.100.1', '203.0.113.1', '224.0.0.1', '240.0.0.1',
+    '255.255.255.255', '168.63.129.16',
+  ]) {
+    assert.equal(isPublicAddress(address), false, address + ' is private, shared, reserved, multicast, link-local, or metadata-related and must never be requested.');
+  }
+});
+
+test('classifies global IPv6 and rejects loopback, mapped, ULA, link-local, multicast, and reserved IPv6', () => {
+  const isPublicAddress = externalLinkChecker.isPublicAddress;
+  assert.equal(typeof isPublicAddress, 'function', 'The checker must expose IPv6 address classification for deterministic security tests.');
+
+  assert.equal(isPublicAddress('2001:4860:4860::8888'), true, 'A globally routable Google IPv6 address is eligible.');
+  assert.equal(isPublicAddress('2606:4700:4700::1111'), true, 'A globally routable Cloudflare IPv6 address is eligible.');
+  for (const address of [
+    '::', '::1', '::ffff:127.0.0.1', 'fc00::1', 'fd12:3456:789a::1',
+    'fe80::1', 'ff02::1', '100::1', '2001:db8::1', '2001:2::1',
+    '2002:0808:0808::1', '3fff::1', '64:ff9b::a9fe:a9fe',
+  ]) {
+    assert.equal(isPublicAddress(address), false, address + ' is not an eligible globally routable IPv6 destination.');
+  }
+});
+
+test('validates every DNS answer and rejects mixed public/private answer sets', async () => {
+  const resolvePublicAddresses = externalLinkChecker.resolvePublicAddresses;
+  assert.equal(typeof resolvePublicAddresses, 'function', 'DNS validation must be independently testable with an injected resolver.');
+
+  const resolved = await resolvePublicAddresses('docs.example', {
+    resolveHost: async () => [
+      { address: '8.8.8.8', family: 4 },
+      { address: '2606:4700:4700::1111', family: 6 },
+    ],
+  });
+  assert.deepEqual(resolved, [
+    { address: '8.8.8.8', family: 4 },
+    { address: '2606:4700:4700::1111', family: 6 },
+  ], 'Every vetted A/AAAA answer must be retained for connection pinning.');
+
+  await assert.rejects(
+    resolvePublicAddresses('mixed.example', {
+      resolveHost: async () => [
+        { address: '8.8.8.8', family: 4 },
+        { address: '10.0.0.7', family: 4 },
+      ],
+    }),
+    (error) => error.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS',
+    'A single private answer must reject the entire mixed DNS answer set before any connection is attempted.',
+  );
+});
+
+test('pins socket lookup to vetted answers without resolving the hostname again', async () => {
+  const fetchPinned = externalLinkChecker.fetchPinned;
+  assert.equal(typeof fetchPinned, 'function', 'The checker must expose the pinned HTTP transport for deterministic connection tests.');
+
+  let resolverCalls = 0;
+  let connectedAddress;
+  const result = await fetchPinned('https://rebind.example/path', {
+    method: 'HEAD',
+    headers: { 'user-agent': 'test' },
+  }, {
+    resolveHost: async () => {
+      resolverCalls += 1;
+      return [{
+        address: resolverCalls === 1 ? '8.8.8.8' : '127.0.0.1',
+        family: 4,
+      }];
+    },
+    requestImpl: (url, options, onResponse) => {
+      options.lookup(url.hostname, {}, (error, address) => {
+        assert.equal(error, null, 'The vetted DNS answer must be supplied to the socket lookup.');
+        connectedAddress = address;
+      });
+      queueMicrotask(() => onResponse({ statusCode: 200, headers: {}, resume() {} }));
+      return { on() { return this; }, end() {} };
+    },
+  });
+
+  assert.equal(result.status, 200, 'The pinned transport must preserve the HTTP response status.');
+  assert.equal(resolverCalls, 1, 'A single request must not perform a second DNS lookup after validation.');
+  assert.equal(connectedAddress, '8.8.8.8', 'The socket lookup must receive the exact public address that was validated.');
+});
+
+test('revalidates DNS for every redirect and blocks a redirect to a private address', async () => {
+  const fetchPinned = externalLinkChecker.fetchPinned;
+  assert.equal(typeof fetchPinned, 'function', 'Redirect tests require the same pinned transport used by production requests.');
+
+  const requestedHosts = [];
+  const result = await checkExternalLink(candidate('https://public.example/start'), {
+    fetchImpl: (url, init) => fetchPinned(url, init, {
+      resolveHost: async (hostname) => [{
+        address: hostname === 'public.example' ? '8.8.8.8' : '127.0.0.1',
+        family: 4,
+      }],
+      requestImpl: (requestUrl, options, onResponse) => {
+        requestedHosts.push(requestUrl.hostname);
+        options.lookup(requestUrl.hostname, {}, (error) => {
+          assert.equal(error, null, 'Only the already-vetted public redirect source may reach the socket lookup.');
+        });
+        queueMicrotask(() => onResponse({
+          statusCode: 302,
+          headers: { location: 'https://private-redirect.example/metadata' },
+          resume() {},
+        }));
+        return { on() { return this; }, end() {} };
+      },
+    }),
+    sleep: noDelay,
+    minHostIntervalMs: 0,
+  });
+
+  assert.equal(result.status, 'skipped', 'A redirect whose DNS answers include a private address must be classified as safely blocked.');
+  assert.deepEqual(requestedHosts, ['public.example'], 'The private redirect destination must be rejected before opening an HTTP(S) connection.');
+});
