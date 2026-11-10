@@ -1,10 +1,10 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 11 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 12 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `9fd14d12408586467bb50127845b16f0d2600ca6` (`truncated: false`; 53 Harvester Markdown/MDX files)
+- Latest recursive checkpoint: `develop` at `186ac3066ba515ead2eae8dbfcc4dc25d6e594bb` (`truncated: false`; 54 Harvester Markdown/MDX files; zero path additions/removals since `f4fd2ab`)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-10
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -70,9 +70,9 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 | `apps/harvester/docs/testnet-order-tools.md` | 16286 | Operational tool guide | **KEEP** | Current standalone TESTNET command procedures and destructive authorization boundaries are checked against package scripts; PR #808 corrected the history argument example. Current ownership diagnostics are aligned with `create-user-data-event-handler.js` and `OrderRegistry`; dated `666845`/client-ID investigation snapshots now point to `ROADMAP_HISTORY.md` rather than posing as current instructions. The ZROUSDT market-sell helper and ZROUSDT/DOGEUSDT history defaults are explicitly labeled legacy and not authorized by the paused runbook; the interactive menu is documented as a wrapper for order tools plus the exchange-read-only account audit and local Journal audit; the account-wide cancel is explicitly marked as proceeding without interactive confirmation. Inbound links from `apps/harvester/README.md` and `docs/README.md` are preserved. |
 | `apps/harvester/docs/trading-strategies.md` | 20794 | Strategy overview | **KEEP** | Conservative section delegates all behavior to the canonical domain specification; Aggressive is explicitly exploratory/disabled. Current implementation status now reflects merged PR #653, closed audit #645 and paused/unverified TESTNET acceptance. |
 
-## Post-baseline additions — current 53-file checkpoint
+## Post-baseline additions — current 54-file checkpoint
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `9fd14d12408586467bb50127845b16f0d2600ca6` (`truncated: false`) finds **53 tracked Harvester Markdown/MDX files**: 11 additions and zero removals. These additions are maintained indexes, preserved historical evidence, the current error vocabulary, or this inventory; they are recorded separately so the original baseline byte sizes and dispositions remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015` (`truncated: false`) finds **54 tracked Harvester Markdown/MDX files**: 12 additions and zero removals. These additions are maintained indexes, preserved historical evidence, the domain test inventory, the current error vocabulary, or this inventory; they are recorded separately so the original baseline byte sizes and dispositions remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -80,6 +80,7 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/audits/README_HISTORY.md` | Preserved historical README material and navigation. | **KEEP** |
 | `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved historical roadmap material, provenance and compatibility anchors. | **KEEP** |
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. | **KEEP** |
+| `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` | Source-driven behavior-to-test map, regression evidence and prioritized domain test-quality improvements (added in PR #917). | **KEEP** |
 | `apps/harvester/docs/error-vocabulary.md` | Maintained source-verified error vocabulary and recovery classifications. | **KEEP** |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. | **KEEP** |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. | **KEEP** |
