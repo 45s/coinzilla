@@ -38,7 +38,7 @@ test("adds actual quote commission to BUY recovery cost", () => {
   assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
     buyCost: "10.02",
     netSellProceeds: "0",
-  })
+  }, "BUY recovery cost must include the actual quote commission exactly once.")
 })
 
 test("does not convert base BUY commission into quote recovery cost", () => {
@@ -50,7 +50,7 @@ test("does not convert base BUY commission into quote recovery cost", () => {
   assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
     buyCost: "10",
     netSellProceeds: "0",
-  })
+  }, "Base BUY commission changes inventory but must not be converted into quote recovery cost.")
 })
 
 test("credits SELL proceeds net of actual quote commission", () => {
@@ -64,7 +64,7 @@ test("credits SELL proceeds net of actual quote commission", () => {
   assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
     buyCost: "0",
     netSellProceeds: "11.97",
-  })
+  }, "SELL recovery proceeds must subtract the actual quote commission exactly once.")
 })
 
 test("does not deduct base SELL commission from quote recovery proceeds", () => {
@@ -78,7 +78,7 @@ test("does not deduct base SELL commission from quote recovery proceeds", () => 
   assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
     buyCost: "0",
     netSellProceeds: "12",
-  })
+  }, "Base SELL commission must reduce base inventory, not quote recovery proceeds.")
 })
 
 test("rejects incomplete commission data and unvalued third-asset fees", () => {
@@ -88,6 +88,7 @@ test("rejects incomplete commission data and unvalued third-asset fees", () => {
       fill: makeFill({ commissionStatus: "UNKNOWN" }),
     }),
     /complete commission data/,
+    "UNKNOWN commission status must be rejected because its accounting facts are incomplete.",
   )
   assert.throws(
     () => calculateRecoveryFillAccounting({
@@ -99,6 +100,7 @@ test("rejects incomplete commission data and unvalued third-asset fees", () => {
       }),
     }),
     /reliable quote-currency valuation/,
+    "A third-asset commission without a quote-currency valuation must fail closed.",
   )
 })
 
@@ -115,6 +117,7 @@ test("rejects quote commission greater than SELL proceeds", () => {
       }),
     }),
     /exceeds SELL quote proceeds/,
+    "A quote commission greater than actual SELL proceeds must be rejected.",
   )
 })
 
@@ -131,6 +134,7 @@ test("rejects base commission greater than SELL execution quantity", () => {
       }),
     }),
     /base commission exceeds executed base quantity/i,
+    "A base commission greater than executed SELL quantity must be rejected.",
   )
 })
 
@@ -146,6 +150,7 @@ test("rejects quote commission greater than BUY quote notional", () => {
       }),
     }),
     /quote commission exceeds executed quote notional/i,
+    "A quote commission greater than BUY quote notional must be rejected.",
   )
 })
 
@@ -232,5 +237,5 @@ test("deducts a reliable third-asset quote valuation from SELL proceeds", () => 
   assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
     buyCost: "0",
     netSellProceeds: "11.97",
-  })
+  }, "A valid third-asset quote valuation must reduce SELL proceeds by its supplied quote value.")
 })
