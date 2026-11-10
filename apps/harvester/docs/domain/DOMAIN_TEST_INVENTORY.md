@@ -74,6 +74,10 @@ The readiness policy checks configured quantity after rounding down to the excha
 
 The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. [PR #928](https://github.com/45s/coinzilla/pull/928) strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve accepted state and commitment. The exact PR head passed 874/874 Harvester tests; the synchronized head is being verified.
 
+### Medium — account snapshot reconciliation failures need precise diagnostics and immutability assertions
+
+[PR #931](https://github.com/45s/coinzilla/pull/931) replaces production-derived fixture totals with exact literals and asserts precise errors, no partial result data, and unchanged opening/closing snapshots for invalid out-of-order, inconsistent, negative and duplicate-asset cases. Exact PR-head CI passed 872/872 Harvester tests; no production code changed.
+
 ### Explicitly deferred — Aggressive grid behavior
 
 Aggressive is deliberately blocked by unresolved product rules. Its current NO_ACTION contract and inventory gate are tested. Do not invent grid depth, pricing, SELL thresholds, reservations or risk fallback as part of this testing initiative.
@@ -84,7 +88,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 2. **Portfolio and accounting:** PR #924's exact multi-market accounting and conflicting-fill no-mutation assertions are merged; continue reviewing independent expected values and commission-identity conflicts.
 3. **Order lifecycle:** PR #928 adds complete-state assertions for accepted, stale, duplicate, rejected and terminal transitions; review remaining domain failure contracts next.
 4. **Market and configuration:** configured quantity/MIN_NOTIONAL boundaries and exact pre-submission exchange-filter equality are merged in PRs #930 and #932.
-5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
+5. **Domain failure handling:** PR #931 adds precise account-snapshot failure classification and no-mutation assertions. Continue with existing retryability/integrity contracts and stale-result isolation; do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
 
