@@ -565,6 +565,13 @@ function maskJavaScriptNonCode(source) {
         continue;
       }
 
+      const pair = source.slice(index, index + 2);
+      if (['=>', '&&', '||', '??'].includes(pair)) {
+        previousToken = pair;
+        index += 2;
+        continue;
+      }
+
       if (/[A-Za-z_$]/.test(character)) {
         const start = index;
         index += 1;
