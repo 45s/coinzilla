@@ -165,7 +165,7 @@ test("reports the exact unresolved shutdown state and does not claim STOPPED aft
   const state = createState({
     status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
     requiresReconciliation: true,
-    streamUnsafe: true,
+    safetyHaltRequired: true,
     retryableRecoveryFailure: expectedRecoveryFailure,
     recoveryGeneration: 7,
     lastAcknowledgedRecoveryGeneration: 6,
@@ -221,9 +221,9 @@ test("reports the exact unresolved shutdown state and does not claim STOPPED aft
     "Shutdown diagnostics must identify that authoritative user-data reconciliation remained incomplete.",
   )
   assert.equal(
-    shutdownError.shutdownDiagnostics.userData.streamUnsafe,
+    shutdownError.shutdownDiagnostics.userData.safetyHaltRequired,
     true,
-    "Shutdown diagnostics must preserve the unsafe user-data stream state that blocked readiness.",
+    "Shutdown diagnostics must preserve the pending safety halt that blocked readiness.",
   )
   assert.deepEqual(
     shutdownError.shutdownDiagnostics.userData.retryableRecoveryFailure,
