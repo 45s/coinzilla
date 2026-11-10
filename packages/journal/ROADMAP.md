@@ -64,21 +64,21 @@ This section supersedes stale checkboxes below where they conflict with merged w
 
 ### CRITICAL — lossless JSONL serialization and durability propagation (#889)
 
-**Status:** OPEN — Journal-owned follow-up tracked in [issue #889](https://github.com/45s/coinzilla/issues/889). This documentation update does not implement or close the runtime defect.
+**Status:** OPEN — Journal-owned enforcement and integration regressions are implemented in [PR #920](https://github.com/45s/coinzilla/pull/920). The remaining #889 acceptance is the separate Harvester timestamp DTO migration; do not close the issue until that consumer contract is synchronized.
 
-The current serializer calls `JSON.stringify` after checking only the top-level event object, stable ID, reserved metadata, and root-level `toJSON` hook. It does not recursively reject nested values that JSONL cannot preserve. The EventBus subscription logs a failed `record()` result but resolves normally; the failure is not added to `writeErrors`, so `flushLifecycle()` can sync the remaining queue and return `durable: true` despite the omitted event. Lossy values can also be persisted after JSON conversion.
+PR #920 adds recursive source-event validation before object spread or JSON serialization. Unsupported/lossy values now fail with a path-specific `TypeError`; `record()` retains the failure in `writeErrors`, rejects new records, and prevents durable success. Records already accepted into the write queue still drain in order; a later serialization failure must not discard earlier accepted writes. The EventBus subscription may still log and resolve normally, but `flushLifecycle()` sees the retained failure and cannot sync/report `durable: true`; close returns a failed durability result while cleaning up.
 
-**Interim consumer constraint:** until #889 is fixed, Journal-bound EventBus payloads must be acyclic and losslessly JSON-safe: `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain/null-prototype objects with enumerable string-keyed data properties. Exclude undefined values and sparse holes, BigInt, NaN/infinities, cycles, custom serialization hooks, and any values outside that subset. Shared-reference identity is not preserved. Do not change EventBus's broader in-memory contract as a workaround. The audit did not identify a current Harvester DTO that violates this restriction; the Harvester-side consumer rule is documented in its Journal Evidence Contract.
+**Enforced JSONL source-event contract (PR #920):** Journal accepts `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain/null-prototype objects with enumerable own string-keyed data properties. It rejects undefined values and sparse holes, BigInt, NaN/infinities, negative zero, cycles, custom prototypes, symbol keys, functions, accessors, non-enumerable/custom array properties, and custom `toJSON` hooks before append. Shared-reference identity is outside the persisted contract: repeated references become repeated subtrees. Do not change EventBus's broader in-memory contract as a workaround. The Harvester DTO audit found a narrow timestamp migration requirement: `mapOrderUpdatedData` forwards any numeric broker `transactionTime`, including non-finite values, and several timestamp checks admit negative zero. Track this separately in the Harvester domain; do not modify Harvester implementation in the Journal PR.
 
 **Required J-6 work (all remains open):**
 
-- [ ] Define and enforce the exact nested source-event value contract, including array holes, numeric edge cases, custom serialization hooks, cycles, and shared references.
-- [ ] Reject unsupported/lossy values before writing, or introduce a separately reviewed versioned encoding that preserves them losslessly.
-- [ ] Propagate serialization failures into observable `record()`, `flush()`, and `close()` outcomes; never report durable success after a subscribed event was omitted.
-- [ ] Add deterministic integration regressions using the real EventBus and Journal for BigInt, cyclic graphs, undefined object properties, undefined array entries, NaN, infinities, and negative zero.
-- [ ] Define and test whether shared-reference identity is preserved or explicitly outside the persisted contract.
-- [ ] Preserve existing schema-v1 records and historical JSONL bytes; do not rewrite or truncate history.
-- [ ] Review consumers, including Harvester, and document any migration requirement.
+- [x] Define and enforce the exact nested source-event value contract, including array holes, numeric edge cases, custom serialization hooks, cycles, and shared references (PR #920).
+- [x] Reject unsupported/lossy values before writing; no new encoding or schema version is introduced (PR #920).
+- [x] Propagate serialization failures into observable `record()`, `flush()`, and `close()` outcomes; never report durable success after a subscribed event was omitted (PR #920).
+- [x] Add deterministic integration regressions using the real EventBus and Journal for BigInt, cyclic graphs, undefined object properties, undefined array entries, NaN, infinities, and negative zero (PR #920).
+- [x] Define and test shared-reference identity as outside the persisted contract; repeated references recover as independent subtrees (PR #920).
+- [x] Preserve existing schema-v1 records and historical JSONL bytes; no rewrite or truncation is introduced (PR #920).
+- [ ] Complete the separate Harvester-owned timestamp migration: reject non-finite and negative-zero values before publishing Journal-bound DTOs; update the Harvester Journal Evidence Contract after the Journal implementation merges.
 
 **Owner:** `packages/journal/`
 
@@ -344,7 +344,7 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] Verify append/read ordering and behavior after partial write failures.
 - [x] [PR #714](https://github.com/45s/coinzilla/pull/714) merged: a transient file-content sync failure is reported as non-durable; a later flush on the same Journal instance succeeds and durably preserves both the original completed write and the retry record in append order. Journal tests passed 43/43 on exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`; all six required offline CI contexts passed. No source change, deduplication, record rewrite, or deletion.
 - [x] Define and test duplicate/replay handling and stable record identity. Stable IDs are required, duplicates fail recovery, and replay is sequential/idempotency-aware.
-- [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly. The separate nested JSON-safe value and subscription-failure contract remains open under J-6 / #889.
+- [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly. The Journal-owned nested JSON-safe value and subscription-failure contract is implemented in PR #920; the remaining #889 acceptance is the Harvester timestamp consumer migration.
 - [x] Verify recovery behavior after process interruption and malformed records. Restart read/replay, invalid UTF-8, malformed/incomplete data, unsupported versions, and missing-directory failures are covered. No automatic truncation is performed.
 - [x] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery enforces session, record, total-byte, and per-record limits.
 - [x] [PR #741](https://github.com/45s/coinzilla/pull/741) merged: exclusive directory ownership is acquired before session creation, competing/stale locks are preserved, and startup rollback/durable close release the owned lock. Cross-process, stale-lock, and rollback regressions were confirmed RED before implementation; all required CI passed on exact PR head `74ad5a7369aee444940b5d7feb009ee0d17ffc7d`.
@@ -364,13 +364,13 @@ These requirements apply to every implementation slice above. A roadmap item is 
 
 The authoritative current behavior is described in [README](./README.md). In summary:
 
-- `record({ event })` resolves after the JSONL write completes, but does not claim durability.
-- `flush()` waits for EventBus delivery and queued writes, then confirms file-content sync on success for writes that reached the queue. Until J-6 / #889 is fixed, a logged subscription serialization failure can still be absent from the result.
+- `record({ event })` recursively validates the source-event graph before append; successful results mean the JSONL write completed but do not claim durability. Serialization failure returns an error, poisons the writer, and is retained for flush/close.
+- `flush()` waits for EventBus delivery and queued writes, then confirms file-content sync only if no source-event serialization or write failure occurred. EventBus subscriber serialization failures are retained in `writeErrors` and prevent durable success.
 - A transient file sync failure may be retried by a later flush; a write failure poisons the active writer.
-- `close()` drains, syncs, closes the session file, and releases the exclusive directory lock; failure remains visible.
+- `close()` drains, attempts final sync/cleanup, closes the session file, and releases the exclusive directory lock; retained source-event serialization/write failures return `durable: false`. Sync or cleanup failures remain visible and leave `closeDurable` false.
 - `read()` validates all sessions in deterministic filename/line order and applies configured recovery limits.
 - `replay()` validates the full history before sequential handler execution; effects are at-least-once and consumers must be idempotent.
-- Malformed, incomplete, duplicate, unsupported, invalidly encoded, or oversized persisted history fails closed and is never silently rewritten. This read-side guarantee does not close the separate source-event serialization gap in J-6 / #889.
+- Malformed, incomplete, duplicate, unsupported, invalidly encoded, or oversized persisted history fails closed and is never silently rewritten. Source-event serialization is also validated before append; unsupported values fail closed without rewriting historical records.
 - Only one writer may own a journal directory. Existing/stale locks are not automatically removed.
 - Read/replay requires the Journal instance to be stopped and must not overlap another process's writer; no reader lock is currently acquired.
 
