@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-10 15:58 +02:00
-**Last source-verified develop checkpoint:** `d07a51446ac4116d307896a8559b033a6e62f06b` (after PR #945)
+**Last reviewed:** 2026-11-10 16:48 +02:00
+**Last source-verified develop checkpoint:** `bff74398cc64a3842fee7f1c40176a43a2450b89` (after PR #948)
 
 ## CRITICAL — Harvester readiness and recovery
 
