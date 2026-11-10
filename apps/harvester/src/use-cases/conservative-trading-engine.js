@@ -1087,20 +1087,16 @@ export function makeConservativeTradingEngine({
         left: portfolioQuoteCashFlow,
         right: quoteCashFlowBaseline,
       })
-      const activeBaseBalance = allPositions
+      const portfolioBaseBalance = allPositions
         .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
-        .reduce((total, item) => addDecimal({ left: total, right: item.baseQuantity.amount }), "0")
+        .reduce((total, item) => addDecimal({ left: total, right: item.totalBaseQuantity.amount }), "0")
       const allActiveOrders = state.registry.getActiveOrders()
         .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
       const committedQuote = activeOrdersBefore
         .filter((order) => order.side === "BUY")
         .reduce((total, order) => {
-          const remaining = subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          })
           const commitment = multiplyDecimal({
-            left: remaining,
+            left: order.remainingQuantity.amount,
             right: order.limitPrice.amount,
           })
           return addDecimal({ left: total, right: commitment })
@@ -1108,12 +1104,8 @@ export function makeConservativeTradingEngine({
       const committedQuoteBalance = allActiveOrders
         .filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id)
         .reduce((total, order) => {
-          const remaining = subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          })
           const commitment = multiplyDecimal({
-            left: remaining,
+            left: order.remainingQuantity.amount,
             right: order.limitPrice.amount,
           })
           return addDecimal({ left: total, right: commitment })
@@ -1122,19 +1114,13 @@ export function makeConservativeTradingEngine({
         .filter((order) => order.side === "SELL")
         .reduce((total, order) => addDecimal({
           left: total,
-          right: subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          }),
+          right: order.remainingQuantity.amount,
         }), "0")
       const committedBaseBalance = allActiveOrders
         .filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id)
         .reduce((total, order) => addDecimal({
           left: total,
-          right: subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          }),
+          right: order.remainingQuantity.amount,
         }), "0")
       const quoteBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })
       const baseBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })
@@ -1147,7 +1133,8 @@ export function makeConservativeTradingEngine({
         baseFreeBalance: baseBalance.amount,
         quoteCashFlow,
         activeBaseQuantity: position?.baseQuantity.amount ?? "0",
-        activeBaseBalance,
+        portfolioBaseBalance,
+        portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
         outstandingRecoveryAmount: maxDecimal({
           left: "0",
           right: subtractDecimal({
@@ -1157,8 +1144,10 @@ export function makeConservativeTradingEngine({
         }),
         committedQuote,
         committedQuoteBalance,
+        committedQuoteBalanceBaseline: accountSnapshot.getCommittedQuoteBalanceBaseline({ assetId: metadata.market.quoteAsset.id }),
         committedBase,
         committedBaseBalance,
+        committedBaseBalanceBaseline: accountSnapshot.getCommittedBaseBalanceBaseline({ assetId: metadata.market.baseAsset.id }),
         investmentLimit: String(pairs[symbol].investment),
       })
       if (!allocation.ok) {
@@ -1176,11 +1165,14 @@ export function makeConservativeTradingEngine({
         remainingBaseBalance: allocation.data.remainingBaseBalance,
         remainingActiveBase: allocation.data.remainingActiveBase,
         remainingInvestment: allocation.data.remainingInvestment,
-        activeBaseBalance,
+        portfolioBaseBalance,
+        portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
         committedQuote,
         committedQuoteBalance,
+        committedQuoteBalanceBaseline: accountSnapshot.getCommittedQuoteBalanceBaseline({ assetId: metadata.market.quoteAsset.id }),
         committedBase,
         committedBaseBalance,
+        committedBaseBalanceBaseline: accountSnapshot.getCommittedBaseBalanceBaseline({ assetId: metadata.market.baseAsset.id }),
         quoteCashFlow,
         portfolioQuoteCashFlow,
         quoteCashFlowBaseline,
@@ -1211,7 +1203,7 @@ export function makeConservativeTradingEngine({
             activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
             activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
             activeBaseQuantity: position?.baseQuantity.amount ?? "0",
-            activeBaseBalance,
+            portfolioBaseBalance,
             freeQuoteBalance: quoteBalance.amount,
             freeBaseBalance: baseBalance.amount,
             quoteCashFlow,
@@ -1265,7 +1257,7 @@ export function makeConservativeTradingEngine({
         committedQuoteBalance,
         committedBase,
         committedBaseBalance,
-        activeBaseBalance,
+        portfolioBaseBalance,
       })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       logger?.debug?.({
@@ -2673,6 +2665,7 @@ export function makeConservativeTradingEngine({
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,
+    getActiveOrders: () => state.registry.getActiveOrders(),
     getRecoveryIntents: () => Object.freeze({
       pausedMarkets: Object.freeze([...state.paused]),
       replacementIntents: Object.freeze([...state.replacementIntents]),
