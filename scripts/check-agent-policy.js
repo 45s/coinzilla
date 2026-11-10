@@ -53,7 +53,12 @@ export function findMissingRequiredDocuments(root, requiredPaths) {
     .map((path) => `Required documentation file is missing: ${path}`);
 }
 
-function removeCodeExamples(content) {
+/**
+ * Remove fenced and inline code before scanning Markdown destinations.
+ * @param {string} content
+ * @returns {string}
+ */
+export function removeCodeExamples(content) {
   const output = [];
   let activeFence = null;
 
