@@ -52,6 +52,9 @@ jobs:
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
 
+      - name: Test external-link checker
+        run: node --test scripts/check-external-links.test.js
+
       - name: Report Markdown style baseline (report-only)
         run: node --test scripts/markdown-style-baseline.test.js && node scripts/markdown-style-baseline.js
 

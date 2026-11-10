@@ -49,6 +49,15 @@ function matchesAny(path, patterns) {
 }
 
 /**
+ * Whether a document is historical evidence excluded from changed-file enforcement.
+ * @param {string} path Repository-relative path.
+ * @returns {boolean}
+ */
+export function isHistoricalPath(path) {
+  return typeof path === "string" && matchesAny(path, HISTORICAL_PATHS)
+}
+
+/**
  * Parse changed lines and new-file status from a unified Git diff.
  * Context lines are retained so nearby structural changes are checked too.
  *
@@ -142,7 +151,7 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
     changesByPath.has(path),
   )
   const maintainedDocuments = selectedDocuments.filter(
-    ({ path }) => !matchesAny(path, HISTORICAL_PATHS),
+    ({ path }) => !isHistoricalPath(path),
   )
   const baseline = collectMarkdownStyleBaseline(maintainedDocuments)
   const documentsByPath = new Map(
