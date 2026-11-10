@@ -1,6 +1,6 @@
 # Documentation inventory and migration plan — Harvester
 
-- Status: In progress
+- Status: In progress — audit archive relocation is complete in PR #951; remaining content classification and inbound-reference review continue
 - Type: Documentation migration plan
 - Tracking issue: [#795](https://github.com/45s/coinzilla/issues/795)
 - Owner: Harvester
