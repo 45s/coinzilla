@@ -431,6 +431,12 @@ const ignoredJavaScriptDirectories = new Set([
 const approvedConsoleFiles = new Set([
   'packages/utils/src/logger.js',
   'packages/notifiers/scripts/telegram-smoke.js',
+  'apps/harvester/scripts/list-testnet-balances.js',
+  'apps/harvester/scripts/list-testnet-open-orders.js',
+  'apps/harvester/scripts/list-testnet-order-history.js',
+  'apps/harvester/scripts/list-testnet-trades.js',
+  'apps/harvester/scripts/run-targeted-tests.js',
+  'apps/harvester/scripts/sell-testnet-zro.js',
 ]);
 
 /**
