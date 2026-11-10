@@ -23,6 +23,8 @@
 - [x] Isolate exact exchange-filter equality boundaries with independent notionals and verify immutable market-readiness metadata. Merged in [PR #929](https://github.com/45s/coinzilla/pull/929) after all six required checks passed.
 - [x] Complete focused offline test-quality PRs #943, #944, #947, #948 and #949. Exact-head required CI passed for each; see Domain Test Inventory for the 162-case application-level orchestration inventory and the explicit generation-isolation boundary.
 - [~] Fix the confirmed multi-UNKNOWN/no-broker-ID OrderRegistry identity collision in [issue #956](https://github.com/45s/coinzilla/issues/956); RED reproduced on test-first PR #958 head `16e45f09`, minimal client-ID lookup correction committed, exact-head GREEN/CI pending.
+- [x] Fix multiple UNKNOWN orders without broker IDs colliding during `OrderRegistry.applyUpdate()`; RED/GREEN regression and production correction merged in [PR #958](https://github.com/45s/coinzilla/pull/958), exact merged-head required CI passed.
+- [~] Reconcile account free balances with snapshot-relative Portfolio and active-order baselines in [issue #955](https://github.com/45s/coinzilla/issues/955); deterministic RED cases cover pre-snapshot BUY locks, partial BUY fills and base-wallet shortfalls. Production implementation and remaining before/after snapshot cases are in progress.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
 ### Completed — per-session log directory layout (PR #874, 2026-11-10)

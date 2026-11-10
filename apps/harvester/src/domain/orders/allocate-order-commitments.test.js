@@ -147,6 +147,83 @@ test("subtracts shared base-asset reservations from account availability indepen
   assert.match(result.errors[0].message, /available free base balance/)
 })
 
+test("does not subtract a BUY commitment already reflected in the exchange free-balance snapshot", () => {
+  const alreadyLockedBuyCommitment = "100"
+  const snapshotFreeQuoteBalance = "900"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "50", quantity: "1" }],
+    quoteFreeBalance: snapshotFreeQuoteBalance,
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    activeBaseBalance: "0",
+    activeBaseBalanceBaseline: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: alreadyLockedBuyCommitment,
+    committedQuoteBalanceBaseline: alreadyLockedBuyCommitment,
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "An existing BUY reservation already represented by exchange locked balance must not make an otherwise fundable BUY fail allocation.")
+  assert.deepEqual(result.data.executableActions, [{ side: "BUY", price: "50", quantity: "1" }], "The new BUY must be allocated from the actual 900 free quote units without subtracting the pre-snapshot 100-unit lock twice.")
+  assert.equal(result.data.remainingQuoteBalance, "850", "After reserving the new 50-unit BUY, 850 quote units must remain; the existing 100-unit lock is already excluded from snapshot free balance.")
+})
+
+test("reserves only the post-snapshot change in a partially filled BUY commitment", () => {
+  const commitmentAtSnapshot = "100"
+  const remainingCommitmentAfterPartialFill = "60"
+  const quoteSpentByPartialFill = "-40"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "10", quantity: "1" }],
+    quoteFreeBalance: "900",
+    baseFreeBalance: "0",
+    quoteCashFlow: quoteSpentByPartialFill,
+    activeBaseQuantity: "0",
+    activeBaseBalance: "0",
+    activeBaseBalanceBaseline: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: remainingCommitmentAfterPartialFill,
+    committedQuoteBalanceBaseline: commitmentAtSnapshot,
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "A partial fill already represented by quote cash flow and the reduced locked commitment must not be charged again.")
+  assert.deepEqual(result.data.executableActions, [{ side: "BUY", price: "10", quantity: "1" }], "The remaining account quote availability must include the offset between the 40-unit fill and 40-unit commitment reduction.")
+  assert.equal(result.data.remainingQuoteBalance, "890", "After the new 10-unit BUY, quote availability must be 890 because the partial fill's cash-flow debit and released reservation offset exactly.")
+})
+
+test("does not count Portfolio base inventory twice when the exchange snapshot already reflects it", () => {
+  const trackedActiveBaseAtSnapshot = "10"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "1" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "10",
+    activeBaseBalance: trackedActiveBaseAtSnapshot,
+    activeBaseBalanceBaseline: trackedActiveBaseAtSnapshot,
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, false, "A zero exchange-free base balance must not be overridden by adding tracked Portfolio inventory that was already reflected in the account snapshot.")
+  assert.match(result.errors[0].message, /available free base balance/, "The SELL must fail specifically at the account-wide free-base guard when the wallet has no free base.")
+})
+
 test("returns structured failures for invalid action sides and negative balance inputs", () => {
   const common = {
     quoteFreeBalance: "1000",
