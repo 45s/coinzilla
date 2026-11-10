@@ -2059,7 +2059,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
           allocationCount += 1
         }
         currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle()
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit, spent: position.spent })
         resetCount += 1
       }
       return { ok: true, data: result }
@@ -3937,7 +3937,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
           marketId,
           quantity: completion.freeQuantity,
         })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle()
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit: "0.01", spent: position.spent })
       }
       return { ok: true, data: completion }
     },

@@ -155,7 +155,7 @@ test("resets cycle totals while preserving fill identities for deduplication", (
       quoteQuantity: "11",
     }),
   }).ledger
-  const reset = withSell.resetCycle({ minProfit: "0.01" })
+  const reset = withSell.resetCycle({ minProfit: "0.01", spent: new Money({ amount: "10", asset: quoteAsset }) })
 
   assert.equal(reset.buyCost, "0")
   assert.equal(reset.netSellProceeds, "0")
@@ -178,7 +178,7 @@ test("requires an explicit minimum profit before resetting a recovery cycle", ()
   const originalState = ledger.value
 
   assert.throws(
-    () => ledger.resetCycle(),
+    () => ledger.resetCycle({ spent: new Money({ amount: "10", asset: quoteAsset }) }),
     /minProfit/i,
     "A recovery cycle must not be reset without the strategy's explicit minimum-profit threshold.",
   )
@@ -194,7 +194,7 @@ test("does not reset a recovered cycle before the configured minimum profit is r
   const originalState = ledger.value
 
   assert.throws(
-    () => ledger.resetCycle({ minProfit: "0.01" }),
+    () => ledger.resetCycle({ minProfit: "0.01", spent: new Money({ amount: "10", asset: quoteAsset }) }),
     /minimum profit/i,
     "Recovering invested capital is not enough when realized profit is below the configured minimum.",
   )
@@ -215,6 +215,61 @@ test("does not reset a recovery cycle while invested quote capital remains outst
     "A cycle with unrecovered invested capital must never be reset.",
   )
   assert.deepEqual(ledger.value, originalState, "Rejecting an unrecovered cycle reset must preserve the complete ledger.")
+})
+
+
+test("requires authoritative Position.spent in the matching quote asset before reset", () => {
+  const ledger = new RecoveryLedger({
+    market,
+    buyCost: "10",
+    netSellProceeds: "11",
+  })
+  const originalState = ledger.value
+
+  assert.throws(
+    () => ledger.resetCycle({ minProfit: "0.01" }),
+    /Position\.spent/i,
+    "A reset must receive the authoritative Position.spent Money value.",
+  )
+  assert.deepEqual(ledger.value, originalState, "Rejecting a reset without authoritative spent must preserve the complete ledger.")
+})
+
+test("rejects reset when authoritative Position.spent disagrees with the compatibility mirror", () => {
+  const ledger = new RecoveryLedger({
+    market,
+    buyCost: "9",
+    netSellProceeds: "11",
+  })
+  const originalState = ledger.value
+
+  assert.throws(
+    () => ledger.resetCycle({
+      minProfit: "0.01",
+      spent: new Money({ amount: "10", asset: quoteAsset }),
+    }),
+    /compatibility mirror/i,
+    "The reset must detect divergence from authoritative Position.spent instead of calculating profit from the legacy buyCost mirror.",
+  )
+  assert.deepEqual(ledger.value, originalState, "Rejecting a mirror mismatch must preserve the complete ledger.")
+})
+
+test("rejects reset when authoritative Position.spent belongs to a different asset", () => {
+  const ledger = new RecoveryLedger({
+    market,
+    buyCost: "10",
+    netSellProceeds: "11",
+  })
+  const originalState = ledger.value
+
+  assert.throws(
+    () => ledger.resetCycle({
+      minProfit: "0.01",
+      spent: new Money({ amount: "10", asset: baseAsset }),
+    }),
+    /quote asset/i,
+    "Recovery cost basis must be denominated in the market's canonical quote asset.",
+  )
+  assert.deepEqual(ledger.value, originalState, "Rejecting a mismatched spent asset must preserve the complete ledger.")
 })
 
 test("deduplicates equivalent REST and WebSocket fills in either delivery order", () => {
