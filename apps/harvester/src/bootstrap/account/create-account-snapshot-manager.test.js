@@ -420,7 +420,7 @@ test("retains the first recovery account audit publication after a transient flu
       assert.match(error.message, /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/)
       assert.deepEqual(error.recoveryFailure, {
         category: "DURABILITY",
-        stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+        stage: "JOURNAL_FLUSH_FAILURE",
         retryable: true,
       }, "A transient Journal flush failure must be explicitly retryable only after a fresh recovery attempt.")
       return true
