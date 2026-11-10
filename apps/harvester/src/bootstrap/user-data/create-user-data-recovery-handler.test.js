@@ -825,7 +825,36 @@ test("does not publish the open-orders audit after recovery is superseded during
   )
 })
 
-test("repeats the recovery snapshots without publishing stale open orders when an event arrives during the account audit", async () => {
+test("repeats account snapshot baseline capture when a user-data event crosses the REST audit window", async () => {
+  let fixture
+  let snapshotReads = 0
+  const snapshots = [
+    { sourceTime: 100, baselineVersion: "before-user-data-event" },
+    { sourceTime: 101, baselineVersion: "after-user-data-event" },
+  ]
+  const publishedSnapshots = []
+  let accountAuditAttempts = 0
+  fixture = createRecovery({
+    refreshAccountSnapshot: async () => snapshots[snapshotReads++],
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    publishAccountSnapshot: async ({ snapshot }) => {
+      accountAuditAttempts += 1
+      publishedSnapshots.push(snapshot)
+      if (accountAuditAttempts === 1) fixture.state.eventSequence += 1
+    },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(snapshotReads, 2, "A user-data event crossing the account REST/audit window must force the account and its Portfolio/order baselines to be captured again.")
+  assert.equal(accountAuditAttempts, 2, "The first snapshot audit must be discarded when its event sequence becomes stale.")
+  assert.deepEqual(publishedSnapshots, [snapshots[0], snapshots[1]], "Both audit attempts must receive the exact snapshot object captured for that attempt.")
+  assert.equal(publishedSnapshots[1].baselineVersion, "after-user-data-event", "Only the fresh post-event snapshot and its corresponding accounting baselines may authorize recovery.")
+  assert.equal(fixture.calls.orderAudits.length, 1, "Only the open-orders snapshot from the stable post-event recovery window may be published.")
+  assert.equal(fixture.calls.acknowledgements, 1, "Recovery may be acknowledged only after account and order audits share a stable event sequence.")
+})
+
+
   let fixture
   let accountAuditAttempts = 0
   let openOrderReads = 0
