@@ -491,6 +491,7 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
 test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
   const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const feeAsset = new Asset({ id: "asset:BNB", code: "BNB" })
   const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
   const fill = new Fill({
     tradeId: "trade-42",
@@ -503,9 +504,15 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     quoteQuantity: new Money({ amount: "49.97500", asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 123,
-    commissions: [new Commission({
-      amount: new Money({ amount: "0.0005", asset: baseAsset }),
-    })],
+    commissions: [
+      new Commission({
+        amount: new Money({ amount: "0.0005", asset: baseAsset }),
+      }),
+      new Commission({
+        amount: new Money({ amount: "0.0001", asset: feeAsset }),
+        quoteValue: new Money({ amount: "0.123456789012345678", asset: quoteAsset }),
+      }),
+    ],
     commissionStatus: "COMPLETE",
   })
   const result = mapFillAppliedData({
@@ -528,11 +535,23 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       quoteQuantity: "49.975",
       liquidityRole: "MAKER",
       executedAt: 123,
-      commissions: [{
-        amount: "0.0005",
-        assetId: "asset:DOGE",
-        asset: "DOGE",
-      }],
+      commissions: [
+        {
+          amount: "0.0005",
+          assetId: "asset:DOGE",
+          asset: "DOGE",
+        },
+        {
+          amount: "0.0001",
+          assetId: "asset:BNB",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.123456789012345678",
+            assetId: "asset:USDT",
+            asset: "USDT",
+          },
+        },
+      ],
       commissionStatus: "COMPLETE",
     },
   })
