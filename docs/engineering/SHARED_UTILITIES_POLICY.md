@@ -66,7 +66,10 @@ The required `check:agent-policy` command checks production `.js`, `.mjs`, and `
 The current exact-file exceptions are:
 
 - `packages/utils/src/logger.js` — the shared logger's console transport.
-- `packages/notifiers/scripts/telegram-smoke.js` — explicit, manually invoked CLI output.
+- `packages/notifiers/scripts/telegram-smoke.js` — explicit, manually invoked smoke-test CLI output.
+- `apps/harvester/scripts/list-testnet-balances.js`, `list-testnet-open-orders.js`, `list-testnet-order-history.js`, and `list-testnet-trades.js` — read-only TESTNET inspection CLI output.
+- `apps/harvester/scripts/run-targeted-tests.js` — the configured-test runner's CLI output.
+- `apps/harvester/scripts/sell-testnet-zro.js` — interactive operator CLI preview/result output for a separately confirmed exchange-write command; this documentation/CI guard does not execute or authorize that command.
 
 Test files and generated/vendor directories are outside this production-source check. Root `scripts/` are also outside its scope because they are repository-tool CLI entry points. The guard does not authorize routine console logging elsewhere, and it does not replace the separate policy for fatal `process.stderr.write` fallbacks.
 - Prefer injecting a logger into workflows/adapters when it improves testability and makes the side effect explicit. Do not create a wrapper logger in every application.
