@@ -310,6 +310,7 @@ The package `test:coverage` script enforces at least 90% line coverage and 85% b
 Core audit hardening was merged in [PR #381](https://github.com/45s/coinzilla/pull/381) at merge commit `3488b42b0ecbbdf4e5f42b109b5a372c94fceecc`.
 
 The exact PR head passed all required checks:
+
 - Unit tests on Node.js 22.23.4 and Node.js 24.x, including the aggregate required-version job ([run](https://github.com/45s/coinzilla/actions/runs/41288818211)).
 - Workspace coverage, including event-bus 90% line / 85% branch thresholds and both negative threshold self-checks ([run](https://github.com/45s/coinzilla/actions/runs/41288818233)).
 - JavaScript syntax ([run](https://github.com/45s/coinzilla/actions/runs/41288818236)).
