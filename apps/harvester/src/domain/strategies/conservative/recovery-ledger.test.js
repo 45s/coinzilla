@@ -115,6 +115,34 @@ test("rejects a reused Fill ID when recovery execution facts differ", () => {
   )
 })
 
+test("rejects a reused Fill ID when commission asset differs without mutating RecoveryLedger", () => {
+  const acceptedFill = makeFill({
+    tradeId: "commission-asset-conflict",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+    ],
+  })
+  const ledger = RecoveryLedger.empty({ market }).applyFill({ fill: acceptedFill }).ledger
+  const originalState = ledger.value
+  const conflictingFill = makeFill({
+    tradeId: "commission-asset-conflict",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.01", asset: baseAsset }) }),
+    ],
+  })
+
+  assert.throws(
+    () => ledger.applyFill({ fill: conflictingFill }),
+    /Conflicting execution facts reused Fill ID/,
+    "A reused execution identity with a different commission asset must be rejected.",
+  )
+  assert.deepEqual(
+    ledger.value,
+    originalState,
+    "Rejecting conflicting commission facts must leave the complete accepted RecoveryLedger projection unchanged.",
+  )
+})
+
 test("resets cycle totals while preserving fill identities for deduplication", () => {
   const withBuy = RecoveryLedger.empty({ market }).applyFill({
     fill: makeFill({ tradeId: "buy-before-reset" }),
