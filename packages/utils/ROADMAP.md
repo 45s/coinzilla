@@ -39,10 +39,10 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** preserve BigInt-backed string arithmetic, explicit rounding, scale/precision bounds and rejection of JavaScript Number operands. Add a helper only when at least one real shared consumer needs it.
    - **Verify:** retain algebraic/edge-case regressions and consumer tests across Entities, Harvester and Market Simulator.
 
-5. **Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)).**
+5. **Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)) — implementation in [PR #918](https://github.com/45s/coinzilla/pull/918); merge pending.**
    - **Why:** unknown rule identifiers are currently ignored and non-boolean `isSoft` values are interpreted by truthiness; a typo can silently disable validation.
-   - **Do:** validate every supplied rule against the exported `VR` values, reject malformed rule entries and require a boolean `isSoft` when provided. Review consumers for accidental reliance on the current no-op behavior before enforcing the contract.
-   - **Verify:** add regressions for misspelled/unsupported rules, malformed rule values, non-boolean mode flags, default soft mode, and all valid rule semantics.
+   - **Implemented:** prevalidate every tuple and rule against the exported `VR` values; reject malformed rule entries and require a boolean `isSoft` when provided. Repository code search found no production callers of `Validator.validate` or `validateItems`; the existing production predicate-helper consumers are unaffected.
+   - **Verify:** PR #918 adds regressions for misspelled/unsupported rules, malformed rule values, non-boolean mode flags (including explicit `undefined`), default soft mode, and valid rule semantics. The dedicated Utils CI workflow now executes the actual `src/*.test.js` files instead of treating the package directory as one test module.
 
 ### DEFERRED
 
@@ -51,7 +51,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete. Validator configuration hardening is tracked in [#892](https://github.com/45s/coinzilla/issues/892); the repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete. Validator configuration hardening is implemented in [PR #918](https://github.com/45s/coinzilla/pull/918); issue [#892](https://github.com/45s/coinzilla/issues/892) remains open pending merge and exact-head verification. The repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 

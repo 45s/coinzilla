@@ -17,25 +17,50 @@ export const VR = {
   notEmptyArr: 'notEmptyArr',
 }
 
+const supportedRules = new Set(Object.values(VR))
+
 /**
  * Validate declarative [value, rules, fieldName?] tuples without mutating them.
  * Soft mode returns all validation errors; hard mode throws that error array.
  *
- * @param {{ isSoft?: boolean, items: ValidationItem[] }} options
+ * Every rule must be an exported VR value. If supplied, isSoft must be boolean;
+ * omitting it preserves the default soft mode.
+ *
+ * @param {{ isSoft?: boolean, items: ValidationItem[] }} [options]
  * @returns {ValidationError[]|undefined} Errors in soft mode, otherwise undefined when valid.
- * @throws {Error|TypeError|ValidationError[]} For missing/malformed items or failed hard-mode validation.
+ * @throws {Error|TypeError|ValidationError[]} For missing/malformed items, unsupported rules,
+ *   invalid isSoft configuration, or failed hard-mode validation.
  */
-export function validateItems({ isSoft = true, items } = {}) {
+export function validateItems(options = {}) {
+  const { items } = options
   if (!Array.isArray(items)) {
     throw new Error(EM.invalidParameter('items'))
   }
 
-  const errors = []
-  for (const [index, item] of items.entries()) {
+  const hasIsSoft = Object.hasOwn(options, 'isSoft')
+  if (hasIsSoft && typeof options.isSoft !== 'boolean') {
+    throw new TypeError('Validation option "isSoft" must be a boolean when provided')
+  }
+  const isSoft = hasIsSoft ? options.isSoft : true
+
+  // Validate the complete tuple/rule configuration before evaluating any values.
+  for (const [itemIndex, item] of items.entries()) {
     if (!Array.isArray(item) || item.length < 2 || !Array.isArray(item[1])) {
-      throw new TypeError(`Validation item at index ${index} must be [value, rules, fieldName?]`)
+      throw new TypeError(`Validation item at index ${itemIndex} must be [value, rules, fieldName?]`)
     }
 
+    for (const [ruleIndex, rule] of item[1].entries()) {
+      if (!supportedRules.has(rule)) {
+        const ruleDescription = typeof rule === 'string' ? JSON.stringify(rule) : typeof rule
+        throw new TypeError(
+          `Unsupported validation rule ${ruleDescription} at item index ${itemIndex}, rule index ${ruleIndex}; use an exported VR value`,
+        )
+      }
+    }
+  }
+
+  const errors = []
+  for (const item of items) {
     const [value, rules, fieldName] = item
     const messages = []
 

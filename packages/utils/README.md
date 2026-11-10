@@ -216,7 +216,9 @@ Malformed validator tuple structures are rejected with a descriptive `TypeError`
 
 `Validator.isRequiredNumberValid` accepts only finite, non-zero numbers. `Validator.isRequiredNotEmptyString` accepts only strings with non-whitespace content after trimming.
 
-**Known configuration limitation — [issue #892](https://github.com/45s/coinzilla/issues/892):** the current runtime silently ignores unrecognized rule identifiers and treats a non-boolean `isSoft` value by truthiness. Use only the exported `VR` constants and pass a boolean `isSoft` until the Utils-owned hardening request is resolved; do not rely on unknown-rule behavior.
+Every rule entry must exactly match one of the exported `VR` values. Unknown or non-string rule identifiers throw a descriptive `TypeError` that includes the item and rule indexes; the complete tuple/rule configuration is checked before any values are evaluated. A misspelled rule can no longer silently disable a constraint.
+
+When `isSoft` is omitted, soft mode defaults to `true`. If the property is supplied, its value must be a boolean (including rejecting an explicitly supplied `undefined`); non-boolean values throw a `TypeError`. Use `isSoft: false` to throw the collected validation-error array.
 
 Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point. `wait()` rejects invalid timer durations instead of allowing Node.js to silently clamp or reinterpret them.
 

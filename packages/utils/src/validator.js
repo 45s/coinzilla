@@ -16,7 +16,7 @@ export class Validator {
    * Validate declarative [value, rules, fieldName?] tuples.
    * @param {{ items: Array<[unknown, string[], string?]>, isSoft?: boolean }} options
    * @returns {Array<{ value: unknown, msgs: string[], fieldName?: string }> | undefined}
-   * @throws {Error|TypeError|Array} Invalid input throws; hard mode throws the collected errors array.
+   * @throws {Error|TypeError|Array} Invalid input, unsupported rules, or non-boolean isSoft throws; hard mode throws the collected errors array.
    */
   static validate(options = {}) {
     return validateItems(options)
