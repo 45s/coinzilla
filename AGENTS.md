@@ -16,6 +16,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Shared utility search and reuse | [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) |
 | JavaScript and JSDoc | [docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) |
 | Documentation governance, lifecycle, naming, indexes, ADRs and evidence preservation | [docs/DOCUMENTATION_GOVERNANCE.md](docs/DOCUMENTATION_GOVERNANCE.md) |
+| Markdown authoring and CI style rules | [docs/MARKDOWN_STYLE.md](docs/MARKDOWN_STYLE.md) |
 | Repository documentation entry point | [docs/README.md](docs/README.md) |
 | Harvester execution priority | [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md) |
 

@@ -58,6 +58,36 @@ The minimum realized net profit is at least 0.01 units of the pair's quote asset
 
 Sell all exchange-sellable strategy inventory except the exact configured pair-level keepQuantity. This is the only retained-inventory setting name. Do not introduce coinToKeep or keepCoinQuantity.
 
+### Meaning of `keepQuantity` — retained amount per completed recovery cycle
+
+`keepQuantity` is the **minimum base-asset quantity that must remain unsold when one recovery cycle completes**. It is configured per trading pair and applies independently to every completed cycle. It is **not** a cap on the Portfolio's total retained/free inventory, and it is **not** a target that the bot maintains as the account's lifetime balance.
+
+For each recovery cycle:
+
+1. Keep the configured `keepQuantity` out of the recovery SELL.
+2. Sell every other unit of strategy-owned inventory that can legally be sold under the current exchange filters.
+3. Complete the cycle only after the SELL/fill reconciliation and minimum realized-profit conditions below pass.
+4. Transfer that cycle's `keepQuantity` into the Portfolio's retained/free inventory. This amount is no longer working inventory for later recovery cycles.
+5. Start the next cycle with newly acquired strategy inventory. When that cycle completes, retain another `keepQuantity`.
+
+Therefore, retained/free inventory **accumulates by one `keepQuantity` for every successfully completed recovery cycle**. The configured value is a per-cycle amount, not a lifetime maximum.
+
+Example with `keepQuantity = 0.01 LINK` and no exchange-constrained dust:
+
+| Successfully completed recovery cycles | LINK retained by that cycle | Total accumulated retained/free LINK |
+| ---: | ---: | ---: |
+| 1 | 0.01 | 0.01 |
+| 2 | 0.01 | 0.02 |
+| 3 | 0.01 | 0.03 |
+| 4 | 0.01 | 0.04 |
+| 100 | 0.01 | 1.00 |
+
+After four successful cycles, **0.04 LINK is the expected retained/free balance**. After 100 successful cycles, the expected balance is at least 1.00 LINK (assuming no retained dust or other adjustments).
+
+The word **minimum** matters: exactly `keepQuantity` is retained when all excess inventory is sellable. If a positive remainder above `keepQuantity` is proven to be exchange-constrained dust, that dust is retained as a bonus for that cycle. For example, `keepQuantity = 0.01 LINK` plus `0.005 LINK` of validated unsellable dust means that cycle contributes `0.015 LINK` to retained/free inventory. Do not classify ordinary sellable residual inventory as dust or complete the cycle while it remains unsold.
+
+The Portfolio's accumulated retained/free balance must not be subtracted from the next cycle's `keepQuantity`: the next cycle must independently preserve its own configured minimum.
+
 Let:
 
 - A = current strategy-owned position quantity before retained allocation;
