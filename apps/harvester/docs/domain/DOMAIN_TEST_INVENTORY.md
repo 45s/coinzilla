@@ -35,6 +35,7 @@ The domain suite is supplemented by application-level engine and use-case tests 
 ## Application-level orchestration coverage (supplemental; not included in the 26 domain test files)
 
 `src/use-cases/conservative-trading-engine.test.js` contains **162 deterministic test declarations** at the reviewed baseline. The suite covers:
+
 - Trailing BUY activation/repricing, active-Position suppression, retained free-inventory exclusion and cancellation/fill races.
 - Partial BUY/SELL execution, duplicate and out-of-order execution reports, broker identity mismatches and REST/stream fact conflicts.
 - Stale market-price handling, serialized concurrent updates and deferred evaluation while cancellation or acknowledgement is pending.
