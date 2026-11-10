@@ -81,6 +81,47 @@ describe('Validator', () => {
     )
   })
 
+  it('preserves the documented valid edge semantics for every supported rule', () => {
+    const items = [
+      ['   ', [VR.required], 'truthyWhitespace'],
+      [0, [VR.num], 'zeroNumber'],
+      ['', [VR.str], 'emptyString'],
+      [() => {}, [VR.fn], 'callback'],
+      [null, [VR.notUndefined], 'nullableValue'],
+      [[], [VR.arr], 'emptyArray'],
+      [[1], [VR.notEmptyArr], 'nonEmptyArray'],
+      ['value', [VR.notEmptyString], 'nonEmptyString'],
+    ]
+
+    assert.equal(
+      Validator.validate({ items }),
+      undefined,
+      'Every supported VR rule must preserve its documented valid edge cases, including zero, empty strings, null, and empty arrays where allowed',
+    )
+  })
+
+  it('uses JavaScript truthiness for the required rule', () => {
+    const items = [
+      [0, [VR.required], 'zero'],
+      [false, [VR.required], 'false'],
+      ['', [VR.required], 'emptyString'],
+      [null, [VR.required], 'null'],
+      [undefined, [VR.required], 'undefined'],
+    ]
+
+    assert.deepEqual(
+      Validator.validate({ items }),
+      [
+        { value: 0, msgs: [EM.required()], fieldName: 'zero' },
+        { value: false, msgs: [EM.required()], fieldName: 'false' },
+        { value: '', msgs: [EM.required()], fieldName: 'emptyString' },
+        { value: null, msgs: [EM.required()], fieldName: 'null' },
+        { value: undefined, msgs: [EM.required()], fieldName: 'undefined' },
+      ],
+      'VR.required must reject every falsey value while allowing truthy values such as whitespace-only strings',
+    )
+  })
+
   it('rejects non-finite values with the number rule', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.num]]] }), [
