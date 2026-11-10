@@ -416,7 +416,6 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - Changing public APIs as incidental cleanup.
 - Adding speculative generic infrastructure or a dependency-injection framework.
 
-
 ## Enforced dependency direction (PR #704)
 
 The current physical source boundaries are enforceable contracts, not directory naming conventions. Production imports must obey:

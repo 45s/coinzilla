@@ -2,7 +2,6 @@
 
 > **Conservative rule authority:** this document sets task priority only. It is not a Conservative behavior specification. All Conservative rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Older strategy-rule summaries and implementation snapshots in this document are historical/superseded and must not be used as current acceptance criteria.
 
-
 **This document is a mandatory execution-priority rule for every AI agent working on Harvester. It overrides any roadmap ordering, architecture ambition, optional capability, or agent preference that would delay the first working trading workflow.**
 
 ## Work selection
@@ -31,7 +30,6 @@ Journal records are not trading-state authority. Replay and process-restart reco
 ## The mission
 
 **Current runtime decision (2026-11-05): Journal replay and process-restart recovery are disabled.** Every process starts with fresh in-memory trading state. Do not read prior Journal sessions, restore old Portfolio/RecoveryLedger/order state, or require historical trade reconciliation before startup. Keep only the narrowly required durable PREFLIGHT/CLOSING account audit and pre-side-effect order/cancel intent flushes. Existing exchange open orders are still unowned and must not be silently adopted.
-
 
 **FIRST MAKE IT WORK. THEN MAKE IT BETTER.**
 
@@ -152,8 +150,6 @@ At the end of each task, state:
 4. Why any secondary work was necessary to unblock that step.
 5. Exact tests/checks run and their outcomes.
 
-
-
 ### 2026-11-04 exchange trade reconciliation update
 
 The operator-provided DOGEUSDT order-history response contained 102 orders
@@ -192,7 +188,6 @@ The trade-history retrieval is still pending operator execution. Harvester
 remains stopped; no further TESTNET orders are authorized until trade-level
 reconciliation, regression checks, and the incident gate are complete.
 
-
 ### TESTNET commission setting — 2026-11-04
 
 Binance Spot TESTNET account settings previously showed **Commissions: None**. The operator changed the setting to **0.1% maker & taker**; the supplied follow-up screenshot shows that selection. The historical incident trade records still report zero commission and must be reconciled as historical zero-fee executions, not retroactively charged at 0.1%. Before the next controlled TESTNET run, verify the new setting is effective and record the timestamp. For each new execution, use the actual commission amount and asset returned by Binance trade history; never infer the realized fee solely from the UI setting. The setting is account-level and applies across the API keys shown on the page, not only Harvester's key. The new fee configuration changes expected economics and must be included in strategy profit/recovery calculations and regression fixtures before resuming trading.
@@ -204,7 +199,6 @@ PR #513 has merged and its exact-head CI passed. The MIN_NOTIONAL regression now
 Historical fee-policy note: the earlier maker-only assumption is superseded. Current Conservative fee reserves and actual commission accounting are defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/stream and concurrent-market-update matrix is moved to the follow-up PR. The future closed-session opening-balance audit is also follow-up work. Keep Harvester stopped; merge of PR #513 does not authorize TESTNET restart or orders.
-
 
 ### Incident execution handoff — 2026-11-04 (PR #515 follow-up)
 
@@ -247,7 +241,6 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 - TESTNET: stopped; no restart/order submission.
 - Merge: authorized once required CI passes on the exact current PR head; TESTNET restart remains separately gated.
 
-
 ## Mandatory account snapshot audit
 
 Conservative completion, exact keepQuantity, residual sell-through, dust, and basis-reset rules are defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The older residual-suppression wording in this document is superseded.
@@ -263,7 +256,6 @@ After a session has been stopped gracefully, use `pnpm run journal:balance-audit
 ### Post-PR #515 status correction — 2026-11-04
 
 This status supersedes older incident-handoff text in this document that describes PR #515 as pending or its lifecycle/accounting matrix as incomplete. PR #515 is merged; its offline acceptance matrix and exact-head CI are complete. The only remaining critical milestone is the separately authorized joint TESTNET validation and real opening/closing account reconciliation. No TESTNET write has been performed during this documentation preparation.
-
 
 ### Latest ZROUSDT TESTNET reconciliation incident — 2026-11-04
 

@@ -172,11 +172,9 @@ A materially edited test case must comply with these practices throughout that c
 
 Follow the single [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md) for pure-function extraction, module boundaries, and file-size review. This standard is mandatory; do not copy its detailed rules into local agent instructions.
 
-
 ### 7.2 Shared utilities
 
 Follow the single [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_POLICY.md) for search-first reuse, utility ownership, logging, and generic-helper decisions. Do not duplicate that procedure in other policy documents.
-
 
 ### 8. Security and external boundaries
 
@@ -224,7 +222,6 @@ Follow the single [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_PO
 
 The mandatory branch-freshness procedure is defined in [AI_AGENT_WORKFLOW.md — Branch freshness and conflict handling](AI_AGENT_WORKFLOW.md#6-branch-freshness-and-conflict-handling--required-on-every-pr-update). It applies before and after **every PR update**, as well as immediately before merge. Follow that single authoritative procedure for task PRs targeting `develop` and release PRs targeting `main`; do not maintain a separate or weaker synchronization process here.
 
-
 ## Exceptions
 
 A rule may be waived when following it would make the code less correct, less secure, less clear, or materially less efficient. Explain the trade-off in the pull request and, where useful, create a follow-up issue. Do not disable checks globally to get one change through.
@@ -255,11 +252,9 @@ This document describes the intended standard; it does not automatically enforce
 
 The repository's GitHub Actions workflows currently run package tests and test coverage. Configure repository rulesets or branch protection to require the desired status checks; a workflow running on a pull request does not by itself prevent merging.
 
-
 ## AI-agent workflow authority
 
 The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
-
 
 ## JavaScript and JSDoc
 
@@ -276,7 +271,6 @@ Coinzilla's default implementation language is modern JavaScript using the repos
 - A TypeScript consumer reporting `TS7016` is a separate package-interop issue. JSDoc comments alone do not guarantee that TypeScript can resolve declarations. If TypeScript consumers become a supported contract, add and test accurate declarations or an intentional declaration-generation workflow; do not solve it by silently declaring the package as `any`.
 
 See [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for examples and decision guidance.
-
 
 ## CI and repository automation safety
 

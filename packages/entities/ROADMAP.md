@@ -32,8 +32,7 @@ owner: entities
    - **Do:** document the owning bounded context, invariants, compatibility and migration path before adding a public value/entity.
    - **Verify:** add focused domain tests and consumer migration tests; preserve backward compatibility unless a deliberate versioned change is approved.
 
-
-**Owner:** `packages/entities/`  
+**Owner:** `packages/entities/`
 **Purpose:** maintain small, exchange-neutral domain contracts shared by applications and adapters.
 
 Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
@@ -138,7 +137,6 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 ## Completion policy
 
 An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
-
 
 ## Shared utility reuse
 

@@ -39,9 +39,8 @@ No current production defect in this package was established by the repository a
    - **Do:** version migrations, keep repository ports in the domain/application package and add adapters here only for concrete persistence needs.
    - **Verify:** migration-upgrade tests and domain-level contract tests run in CI.
 
-
-**Owner:** Database Infrastructure domain (`packages/db/`)  
-**Package:** `@coinzilla/db`  
+**Owner:** Database Infrastructure domain (`packages/db/`)
+**Package:** `@coinzilla/db`
 **Purpose:** provide reliable embedded SQL persistence while preserving DDD dependency direction.
 
 Read [package instructions](./AGENTS.md) and the [domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).

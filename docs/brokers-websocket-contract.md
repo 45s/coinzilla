@@ -218,8 +218,6 @@ The six tests that instantiate `UserDataSession` directly now live in `src/appli
 
 The former `src/binance/index.js` and all 87 files under `src/binance/broker-websocket/` now live under `src/infrastructure/binance/`. The existing `broker-websocket` internal folder structure and tests are preserved. The root package entry point, broker facade, user-data adapter, canonical mapping helpers, and the two adapter test cross-references update only their relative paths. Coverage now includes the relocated broker implementation through the existing Infrastructure glob and excludes its integration/test-helper files at their new paths. The `test:user-data-integration` and `test:websocket` package scripts now point to the relocated integration suites. Public root exports, broker methods, request/response shapes, decimal fidelity, event semantics, and protocol behavior are unchanged. No WebSocket client redesign or new wrapper layer is part of this slice.
 
-
-
 ## Dependency direction and executable guard
 
 The package dependency rules are now stated as enforceable contracts:

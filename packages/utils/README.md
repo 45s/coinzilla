@@ -8,7 +8,6 @@ Public JavaScript APIs are documented with JSDoc for editor IntelliSense, parame
 
 **Search here before writing a generic helper.** The repository-wide rules and current duplication audit are documented in [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). Consumers should import supported APIs from this package entry point, not private source paths.
 
-
 Import the supported API from the package entry point:
 
 - `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, opt-in structured context, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
@@ -194,7 +193,6 @@ Circular references on the active traversal path are represented as `[Circular]`
 
 The normalized diagnostic shape intentionally allowlists standard Error diagnostics rather than copying arbitrary custom Error properties; it is intended for logs, not for reconstructing executable Error instances.
 
-
 ## Validation and compatibility
 
 Malformed validator tuple structures are rejected with a descriptive `TypeError`. Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point.
@@ -305,7 +303,6 @@ const isProfitable = compareDecimal({
 - These helpers are pure and deterministic. They do not read clocks, environment variables, global state, or perform I/O.
 - Use the public `@coinzilla/utils` entry point. Do not import internal source files from consumers.
 
-
 ## Exact percentage calculations
 
 The percentage helpers build on the exact decimal API and never convert operands through `Number`.
@@ -361,7 +358,6 @@ await Promise.all([
 
 await queue.drain()
 ```
-
 
 ## Generic object-input assertion
 

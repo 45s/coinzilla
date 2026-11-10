@@ -2,7 +2,6 @@
 
 > This is an execution and evidence checklist, not a strategy specification. All Conservative expected behavior is derived from [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). If a checklist statement differs, the canonical specification controls.
 
-
 > **Execution gate: CLOSED / PAUSED.** This document is preparation only. Harvester must remain stopped until the operator and assistant explicitly begin an authorized joint TESTNET session. Offline CI is not exchange readiness. No order submission, cancellation, account-setting change, or other exchange write is authorized by this document.
 >
 > **Regional eligibility pause (2026-11-08):** The prior hosted Binance Spot TESTNET attempt returned HTTP 451 due to regional eligibility restrictions. This is an external environment limitation, not evidence of a Harvester code defect. The operator cannot change location; do not ask them to do so or repeatedly retry the same blocked path. TESTNET exchange acceptance remains UNVERIFIED and PAUSED until an eligible, authorized environment is available. Offline engineering, deterministic tests, and CI may continue independently. This note does not authorize live trading or any exchange write.
@@ -214,7 +213,6 @@ The controlled TESTNET session passes only when:
 
 Until that review, TESTNET validation remains **NOT ACCEPTED**. Harvester remains stopped.
 
-
 ## 12. 2026-11-04 acknowledgement and shutdown-history follow-up
 
 The latest incident involved ZROUSDT orders 698704, 698745, and 698746. Binance `myTrades` fills do not include `clientOrderId`; correlate them to the owned order through exchange order ID, market, and side. An absent fill client ID is expected; a present but conflicting ID is not. Binance `allOrders.orderId` is a lower-bound cursor, so canonical history must be filtered to the exact requested exchange order ID before shutdown reconciliation expects one record. Do not weaken order identity, side, market, order intent, status, or execution-quantity checks.
@@ -225,7 +223,6 @@ The observed SELL 698745 cancellation follows the Conservative BUY-filled path: 
 
 Exact accounting regression baseline: 9939 = 5 ZRO × 1.792 = 8.96 USDT gross, 0.005 ZRO commission; 9940 = 5 ZRO × 1.789 = 8.945 USDT gross, 0.005 ZRO commission. Combined net base 9.990 ZRO, buy cost/recovery 17.905 USDT, sell proceeds 0, realized net profit -17.905 USDT. Reconcile actual Journal records against these values during the next joint session.
 
-
 ### Offline contract checks added during PR #529 review
 
 Canonical `allOrders` history must retain the requested order's exact identity and authoritative status. For the target row, require matching `symbol`, exchange `orderId`, Harvester `clientOrderId`, `side`, supported `type`, recognized non-empty `status`, exact `origQty`, and exact `executedQty` (plus `price` for limit orders). Missing `time`, `updateTime`, and unrelated Binance metadata are optional and must not invalidate an otherwise complete canonical order. A missing or unsupported status must fail closed; it must not silently become an UNKNOWN historical snapshot.
@@ -235,7 +232,6 @@ A cursor page may contain orders after the requested `orderId`; filter to the ex
 The offline regression suite also covers fill-history visibility lag: a FILLED acknowledgement with no currently visible trades remains UNKNOWN with the acknowledged broker order ID and zero reconciled quantity; the pair stays paused. Once exact trade history becomes visible, WebSocket API request/response reconciliation must match the order's cumulative executed quantity, apply each trade once, and leave the pause in place. Conflicting broker order ID, market, side, or a present-but-different client order ID is rejected before accounting.
 
 These are offline tests only. They do not authorize or substitute for the separately controlled TESTNET validation.
-
 
 ## Startup PREFLIGHT account audit (all broker-connected modes)
 
@@ -260,7 +256,6 @@ and stack text must not contain credentials or signed request data.
 
 The logging refactor is observational only. It does not authorize a TESTNET
 session, order submission/cancellation, or any account mutation.
-
 
 ## Recovery failure classification — offline contract
 
