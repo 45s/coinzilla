@@ -62,6 +62,10 @@ The strategy regression now uses a table-driven decision matrix: exact equality 
 
 The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLUSDT but asserted only that two Positions existed. PR #924 now asserts market-scoped Fill IDs and exact independent Position quantity, quote cost basis and quote cash flow for both markets. It also proves a conflicting replay with changed execution facts is rejected without changing the existing Position accounting or applied fill IDs. Existing application-level tests already cover multi-fill Portfolio/RecoveryLedger atomicity and engine multi-market order isolation; those scenarios are not duplicated here. The exact PR head `9b8d4d8a20cd5843c7b0211be0fd8e81cf7636c4` passed 872/872 Harvester tests (75.51% lines, 79.02% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred. PR #924 remains open and unmerged.
 
+### Medium — market trading-readiness boundaries are incomplete
+
+The readiness policy checks configured quantity after rounding down to the exchange quantity increment and checks investment against MIN_NOTIONAL. Existing tests covered values below/above limits and a rounding-down example, but did not explicitly prove inclusive exact MIN_QUANTITY, MAX_QUANTITY and MIN_NOTIONAL boundaries. PR #930 adds deterministic equality/immediately-outside cases: exact MIN_QUANTITY and MAX_QUANTITY are accepted, below/above values are rejected after step rounding, exact MIN_NOTIONAL is accepted and 4.999 is rejected against a 5 minimum. Exact PR head `c433c345010c1cdc3596826eea3d2abd312c426a` passed 872/872 Harvester tests (75.91% lines, 79.06% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred.
+
 ### Medium — lifecycle tests need complete-state assertions
 
 The OrderRegistry suite already covers many important transitions, including UNKNOWN, stale events, identity mismatch and late FILLED reports. Follow-up review should prioritize complete canonical order state, remaining commitment, and immutability after rejected/stale transitions rather than adding duplicate status-only scenarios.
@@ -75,7 +79,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 1. **Strategy decisions:** the blocked-recovery-SELL gap is fixed in merged PR #917 and the exact investment-cap boundary matrix is added in the current PR; next review active-order/market isolation matrices.
 2. **Portfolio and accounting:** PR #924 strengthens exact multi-market accounting and conflicting-fill no-mutation assertions; continue reviewing independent expected values and commission-identity conflicts.
 3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
-4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
+4. **Market and configuration:** PR #930 covers exact configured quantity and MIN_NOTIONAL boundaries; PR #932 covers exact pre-submission exchange-filter boundaries.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
