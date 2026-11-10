@@ -210,7 +210,7 @@ const resolveRestoredOrdersAsFilled = ({ recoveredState }) => ({
   }),
 })
 
-const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", bnbFree, sourceTime = 3000 } = {}) =>
+const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", bnbFree, bnbLocked = "0", sourceTime = 3000 } = {}) =>
   new AccountSnapshot({
     sourceTime,
     balances: [
@@ -224,7 +224,7 @@ const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usd
       }),
       ...(bnbFree === undefined ? [] : [new Balance({
         free: new Quantity({ amount: bnbFree, asset: feeAsset }),
-        locked: new Quantity({ amount: "0", asset: feeAsset }),
+        locked: new Quantity({ amount: bnbLocked, asset: feeAsset }),
       })]),
     ],
   })
@@ -262,7 +262,7 @@ test("accounts for third-asset commission debits during recovered account reconc
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.9999" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
     openOrders: [],
     markets: [market],
   })
@@ -276,7 +276,7 @@ test("rejects an unexplained third-asset balance movement despite matching marke
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "1" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.75", bnbLocked: "0.25" }),
     openOrders: [],
     markets: [market],
   })
