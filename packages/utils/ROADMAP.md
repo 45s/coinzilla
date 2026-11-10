@@ -39,10 +39,10 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** preserve BigInt-backed string arithmetic, explicit rounding, scale/precision bounds and rejection of JavaScript Number operands. Add a helper only when at least one real shared consumer needs it.
    - **Verify:** retain algebraic/edge-case regressions and consumer tests across Entities, Harvester and Market Simulator.
 
-5. **Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)) — implementation in [PR #918](https://github.com/45s/coinzilla/pull/918); merge pending.**
-   - **Why:** unknown rule identifiers are currently ignored and non-boolean `isSoft` values are interpreted by truthiness; a typo can silently disable validation.
-   - **Implemented:** prevalidate every tuple and rule against the exported `VR` values; reject malformed rule entries and require a boolean `isSoft` when provided. Repository code search found no production callers of `Validator.validate` or `validateItems`; the existing production predicate-helper consumers are unaffected.
-   - **Verify:** PR #918 adds regressions for misspelled/unsupported rules, malformed rule values, non-boolean mode flags (including explicit `undefined`), default soft mode, and valid rule semantics. The dedicated Utils CI workflow now executes the actual `src/*.test.js` files instead of treating the package directory as one test module.
+5. **[x] Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)) — completed in merged [PR #918](https://github.com/45s/coinzilla/pull/918).**
+   - **Why:** unknown rule identifiers were ignored and non-boolean `isSoft` values were interpreted by truthiness; a typo could silently disable validation.
+   - **Completed:** prevalidate every tuple and rule against the exported `VR` values; reject malformed rule entries and require a boolean `isSoft` when provided. Repository code search found no production callers of `Validator.validate` or `validateItems`; existing production predicate-helper consumers are unaffected.
+   - **Verify:** 198/198 dedicated Utils tests and 198/198 workspace Utils tests passed. Utils coverage is 98.53% lines, 96.33% branches, and 99.19% functions. All six required exact-head contexts passed; the dedicated Utils workflow now runs `src/*.test.js` rather than treating the package directory as one test module.
 
 ### DEFERRED
 
@@ -51,7 +51,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete. Validator configuration hardening is implemented in [PR #918](https://github.com/45s/coinzilla/pull/918); issue [#892](https://github.com/45s/coinzilla/issues/892) remains open pending merge and exact-head verification. The repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
