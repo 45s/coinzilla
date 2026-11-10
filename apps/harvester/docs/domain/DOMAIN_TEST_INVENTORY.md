@@ -52,7 +52,7 @@ The Portfolio and RecoveryLedger regressions now prove that a reused Fill ID wit
 
 ### Medium — expected arithmetic must remain independent
 
-The strategy test fixtures for profitable residual SELL fills previously calculated quoteQuantity by calling the same production decimal multiplier used by the implementation, and a MAX_NOTIONAL assertion derived its expected result with that helper too. The current PR replaces those coupled expectations with independently calculated literals (98 × 0.11 = 10.78; 98.95 × 0.11 = 10.8845; 0.1 × 0.6 = 0.06). Continue checking other financial test fixtures for similar coupling before declaring this quality area complete.
+The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously reused production `multiplyDecimal` for both setup and expected values. [PR #937](https://github.com/45s/coinzilla/pull/937) replaces those coupled expectations with independent exact values (98 × 0.11 = 10.78; 98.95 × 0.11 = 10.8845; 0.1 × 0.6 = 0.06). The exact updated PR head passed 874/874 Harvester tests and required CI; no production behavior changed.
 
 ### Medium — capital-limit boundary assertions
 
@@ -60,15 +60,19 @@ The strategy regression uses a table-driven decision matrix: exact equality at 1
 
 ### Medium — Portfolio multi-market isolation assertions are incomplete
 
-The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLUSDT but asserted only that two Positions existed. PR #924 now asserts market-scoped Fill IDs and exact independent Position quantity, quote cost basis and quote cash flow for both markets. It also proves a conflicting replay with changed execution facts is rejected without changing the existing Position accounting or applied fill IDs. Existing application-level tests already cover multi-fill Portfolio/RecoveryLedger atomicity and engine multi-market order isolation; those scenarios are not duplicated here. The exact PR head `9b8d4d8a20cd5843c7b0211be0fd8e81cf7636c4` passed 872/872 Harvester tests (75.51% lines, 79.02% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred. PR #924 remains open and unmerged.
+The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLUSDT but asserted only that two Positions existed. PR #924 now asserts market-scoped Fill IDs and exact independent Position quantity, quote cost basis and quote cash flow for both markets. It also proves a conflicting replay with changed execution facts is rejected without changing the existing Position accounting or applied fill IDs. Existing application-level tests already cover multi-fill Portfolio/RecoveryLedger atomicity and engine multi-market order isolation; those scenarios are not duplicated here. The exact PR head `9b8d4d8a20cd5843c7b0211be0fd8e81cf7636c4` passed 872/872 Harvester tests (75.51% lines, 79.02% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred. PR #924 merged into `develop`; the exact PR head passed 872/872 Harvester tests and all required checks.
 
 ### Medium — market trading-readiness boundaries are incomplete
 
-The readiness policy checks configured quantity after rounding down to the exchange quantity increment and checks investment against MIN_NOTIONAL. Existing tests covered values below/above limits and a rounding-down example, but did not explicitly prove inclusive exact MIN_QUANTITY, MAX_QUANTITY and MIN_NOTIONAL boundaries. PR #930 adds deterministic equality/immediately-outside cases: exact MIN_QUANTITY and MAX_QUANTITY are accepted, below/above values are rejected after step rounding, exact MIN_NOTIONAL is accepted and 4.999 is rejected against a 5 minimum. Exact PR head `17a157c338659ba3009fa634fb732bae9ab7b159` passed 874/874 Harvester tests (75.79% lines, 78.93% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred.
+The readiness policy checks configured quantity after rounding down to the exchange quantity increment and checks investment against MIN_NOTIONAL. Existing tests covered values below/above limits and a rounding-down example, but did not explicitly prove inclusive exact MIN_QUANTITY, MAX_QUANTITY and MIN_NOTIONAL boundaries. PR #930 adds deterministic equality/immediately-outside cases: exact MIN_QUANTITY and MAX_QUANTITY are accepted, below/above values are rejected after step rounding, exact MIN_NOTIONAL is accepted and 4.999 is rejected against a 5 minimum. Exact PR head `17a157c338659ba3009fa634fb732bae9ab7b159` passed 874/874 Harvester tests (75.79% lines, 78.93% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred. PR #930 merged into `develop` after its updated head passed all six required checks.
+
+### Medium — exchange filter equality boundaries
+
+[PR #932](https://github.com/45s/coinzilla/pull/932) adds exact inclusive MIN/MAX price, quantity and notional equality cases while retaining the existing immediately-outside rejection tests. The updated PR head passed all six required checks and merged into `develop`.
 
 ### Medium — lifecycle tests need complete-state assertions
 
-The OrderRegistry suite already covers many important transitions, including UNKNOWN, stale events, identity mismatch and late FILLED reports. Follow-up review should prioritize complete canonical order state, remaining commitment, and immutability after rejected/stale transitions rather than adding duplicate status-only scenarios.
+The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. [PR #928](https://github.com/45s/coinzilla/pull/928) strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve accepted state and commitment. The exact PR head passed 874/874 Harvester tests; the synchronized head is being verified.
 
 ### Explicitly deferred — Aggressive grid behavior
 
@@ -76,10 +80,10 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ## Execution order
 
-1. **Strategy decisions:** the blocked-recovery-SELL gap is fixed in merged PR #917 and the exact investment-cap boundary matrix is added in the current PR; next review active-order/market isolation matrices.
-2. **Portfolio and accounting:** PR #924 strengthens exact multi-market accounting and conflicting-fill no-mutation assertions; continue reviewing independent expected values and commission-identity conflicts.
-3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
-4. **Market and configuration:** PR #930 covers configured quantity/MIN_NOTIONAL boundaries; PR #932 covers exact pre-submission exchange-filter equality.
+1. **Strategy decisions:** blocked-recovery-SELL gating, exact investment-cap boundaries and independent strategy fixture arithmetic are merged in PRs #917, #922 and #937.
+2. **Portfolio and accounting:** PR #924's exact multi-market accounting and conflicting-fill no-mutation assertions are merged; continue reviewing independent expected values and commission-identity conflicts.
+3. **Order lifecycle:** PR #928 adds complete-state assertions for accepted, stale, duplicate, rejected and terminal transitions; review remaining domain failure contracts next.
+4. **Market and configuration:** configured quantity/MIN_NOTIONAL boundaries and exact pre-submission exchange-filter equality are merged in PRs #930 and #932.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
