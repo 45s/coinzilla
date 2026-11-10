@@ -144,3 +144,117 @@ test("aggregates intake and broker disconnect errors instead of hiding partial s
   )
   assert.equal(fixture.calls.includes("broker-disconnect"), true, "Broker disconnect must still be attempted after intake cleanup errors.")
 })
+
+
+test("reports the exact unresolved shutdown state and does not claim STOPPED after incomplete reconciliation", async () => {
+  const unresolvedBuyOrder = {
+    clientOrderId: "h-buy-uncertain",
+    brokerOrderId: "616421435",
+    market: { symbol: "LINKFDUSD" },
+    side: "BUY",
+    status: "UNKNOWN",
+    originalQuantity: { amount: "1" },
+    executedQuantity: { amount: "0.2" },
+  }
+  const expectedRecoveryFailure = {
+    generation: 7,
+    category: "REST_RECONCILIATION",
+    stage: "TERMINAL_FILL_HISTORY",
+    retryable: true,
+  }
+  const state = createState({
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    requiresReconciliation: true,
+    safetyHaltRequired: true,
+    retryableRecoveryFailure: expectedRecoveryFailure,
+    recoveryGeneration: 7,
+    lastAcknowledgedRecoveryGeneration: 6,
+  })
+  const fixture = createShutdown({
+    state,
+    tradingEnabled: true,
+    engine: {
+      reconcileOwnedOrders: async () => ({
+        ok: false,
+        errors: [new Error("canonical terminal fill history is incomplete")],
+        failure: expectedRecoveryFailure,
+      }),
+      cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
+      getOrders: () => [
+        unresolvedBuyOrder,
+        {
+          clientOrderId: "h-sell-preserved",
+          brokerOrderId: "616421436",
+          market: { symbol: "LINKFDUSD" },
+          side: "SELL",
+          status: "OPEN",
+          originalQuantity: { amount: "1" },
+          executedQuantity: { amount: "0" },
+        },
+      ],
+    },
+  })
+
+  let shutdownError
+  await assert.rejects(
+    fixture.stop(),
+    (error) => {
+      shutdownError = error
+      return error instanceof AggregateError
+    },
+    "An unresolved owned order and incomplete user-data reconciliation must reject graceful shutdown.",
+  )
+
+  assert.equal(
+    state.status,
+    "SHUTDOWN_INCOMPLETE",
+    "A failed CLOSING reconciliation must not expose the runtime as successfully STOPPED.",
+  )
+  assert.equal(
+    shutdownError.shutdownDiagnostics.previousStatus,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "Shutdown diagnostics must preserve the readiness status that existed before STOPPING replaced it.",
+  )
+  assert.equal(
+    shutdownError.shutdownDiagnostics.userData.requiresReconciliation,
+    true,
+    "Shutdown diagnostics must identify that authoritative user-data reconciliation remained incomplete.",
+  )
+  assert.equal(
+    shutdownError.shutdownDiagnostics.userData.safetyHaltRequired,
+    true,
+    "Shutdown diagnostics must preserve the pending safety halt that blocked readiness.",
+  )
+  assert.deepEqual(
+    shutdownError.shutdownDiagnostics.userData.retryableRecoveryFailure,
+    expectedRecoveryFailure,
+    "Shutdown diagnostics must retain the exact retryable recovery category, stage, and generation.",
+  )
+  assert.deepEqual(
+    shutdownError.shutdownDiagnostics.stageFailures[0].failure,
+    {
+      category: "REST_RECONCILIATION",
+      stage: "TERMINAL_FILL_HISTORY",
+      retryable: true,
+    },
+    "Shutdown diagnostics must retain failure classification from the failed owned-order reconciliation stage.",
+  )
+  assert.equal(
+    shutdownError.shutdownDiagnostics.unresolvedOrders.length,
+    1,
+    "Shutdown diagnostics must list unresolved owned orders but must not classify a deliberately preserved open SELL as unresolved.",
+  )
+  assert.deepEqual(
+    shutdownError.shutdownDiagnostics.unresolvedOrders[0],
+    {
+      symbol: "LINKFDUSD",
+      side: "BUY",
+      clientOrderId: "h-buy-uncertain",
+      brokerOrderId: "616421435",
+      status: "UNKNOWN",
+      executedQuantity: "0.2",
+      originalQuantity: "1",
+    },
+    "The unresolved-order diagnostic must expose exact safe identity and execution quantities without dumping broker payloads.",
+  )
+})

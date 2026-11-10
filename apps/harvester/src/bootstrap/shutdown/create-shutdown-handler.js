@@ -12,6 +12,23 @@ function logSystem(logger, data) {
   logger?.info?.(data)
 }
 
+function summarizeUnresolvedOrder(order) {
+  const symbol = order?.market?.symbol ?? order?.symbol
+  return {
+    ...(typeof symbol === "string" ? { symbol } : {}),
+    ...(typeof order?.side === "string" ? { side: order.side } : {}),
+    ...(typeof order?.clientOrderId === "string" ? { clientOrderId: order.clientOrderId } : {}),
+    ...(typeof order?.brokerOrderId === "string" ? { brokerOrderId: order.brokerOrderId } : {}),
+    ...(typeof order?.status === "string" ? { status: order.status } : {}),
+    ...(order?.executedQuantity?.amount !== undefined
+      ? { executedQuantity: order.executedQuantity.amount }
+      : {}),
+    ...(order?.originalQuantity?.amount !== undefined
+      ? { originalQuantity: order.originalQuantity.amount }
+      : {}),
+  }
+}
+
 /**
  * Create an idempotent Harvester shutdown handler.
  *
@@ -31,6 +48,7 @@ export function createShutdownHandler({
   return function stop() {
     if (shutdownPromise) return shutdownPromise
     if (state.stopped) return Promise.resolve()
+    const shutdownStartedFromStatus = state.status
     state.stopped = true
     state.ready = false
     state.status = "STOPPING"
@@ -41,15 +59,32 @@ export function createShutdownHandler({
 
   const auditReasons = []
   let snapshotError
+  let unresolvedOrders = []
+  const stageFailures = []
   const logShutdownFailure = ({ message, stage, result, error } = {}) => {
     const errors = error
       ? [error]
       : result?.errors?.length
         ? result.errors
         : [new Error(message)]
+    const failure = result?.failure ?? error?.recoveryFailure ??
+      errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
+    const failureMetadata = failure
+      ? {
+        category: failure.category ?? null,
+        stage: failure.stage ?? null,
+        retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
+      }
+      : null
+    const errorDetails = errors.map((entry) => ({
+      name: entry?.name ?? "Error",
+      message: entry?.message ?? String(entry),
+    }))
+    stageFailures.push({ stage: stage ?? "UNKNOWN", failure: failureMetadata, errors: errorDetails })
     logger.error?.({
       message,
       stage,
+      failure: failureMetadata,
       errors: errors.map((entry) => ({
         name: entry?.name,
         message: entry?.message ?? String(entry),
@@ -131,13 +166,13 @@ export function createShutdownHandler({
 
   if (tradingEnabled && tradingEngine) {
     const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
-    const unresolvedOrders = tradingEngine.getOrders().filter((order) => {
+    unresolvedOrders = tradingEngine.getOrders().filter((order) => {
       if (terminalStatuses.has(order.status)) return false
       if (order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)) return false
       return true
     })
     if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
-    if (state.accountingFailed || state.requiresReconciliation) {
+    if (state.accountingFailed || state.requiresReconciliation || state.safetyHaltRequired) {
       auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
     }
   }
@@ -151,10 +186,10 @@ export function createShutdownHandler({
     }
   } catch (error) {
     snapshotError = error
+    auditReasons.push("CLOSING_ACCOUNT_SNAPSHOT_FAILED")
     logger.error?.({ message: "closing account snapshot failed", error })
   }
 
-  state.status = "STOPPED"
   const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
   const cancellationAuditFailed = tradingEnabled && auditReasons.some((reason) =>
     [
@@ -173,9 +208,49 @@ export function createShutdownHandler({
     ...(snapshotError ? [snapshotError] : []),
     ...(auditError ? [auditError] : []),
   ]
+  const shutdownDiagnostics = Object.freeze({
+    previousStatus: shutdownStartedFromStatus ?? null,
+    auditReasons: Object.freeze([...auditReasons]),
+    stageFailures: Object.freeze(stageFailures.map((failure) => Object.freeze({
+      stage: failure.stage,
+      failure: failure.failure ? Object.freeze({ ...failure.failure }) : null,
+      errors: Object.freeze(failure.errors.map((error) => Object.freeze({ ...error }))),
+    }))),
+    cleanupFailures: Object.freeze(cleanupErrors.map((error) => Object.freeze({
+      name: error?.name ?? "Error",
+      message: error?.message ?? String(error),
+    }))),
+    userData: Object.freeze({
+      accountingFailed: state.accountingFailed === true,
+      requiresReconciliation: state.requiresReconciliation === true,
+      safetyHaltRequired: state.safetyHaltRequired === true,
+      retryableRecoveryFailure: state.retryableRecoveryFailure
+        ? Object.freeze({
+          generation: state.retryableRecoveryFailure.generation,
+          category: state.retryableRecoveryFailure.category,
+          stage: state.retryableRecoveryFailure.stage,
+          retryable: state.retryableRecoveryFailure.retryable,
+        })
+        : null,
+      recoveryGeneration: Number.isSafeInteger(state.recoveryGeneration) ? state.recoveryGeneration : null,
+      lastAcknowledgedRecoveryGeneration: Number.isSafeInteger(state.lastAcknowledgedRecoveryGeneration)
+        ? state.lastAcknowledgedRecoveryGeneration
+        : null,
+    }),
+    unresolvedOrders: Object.freeze(unresolvedOrders.map((order) =>
+      Object.freeze(summarizeUnresolvedOrder(order)))),
+  })
   if (cleanupErrors.length > 0) {
-    throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
+    state.status = "SHUTDOWN_INCOMPLETE"
+    logger.error?.({
+      message: "Shutdown incomplete; runtime did not reach STOPPED",
+      ...shutdownDiagnostics,
+    })
+    const shutdownError = new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
+    shutdownError.shutdownDiagnostics = shutdownDiagnostics
+    throw shutdownError
   }
+  state.status = "STOPPED"
   logSystem(logger, { message: "Shutdown completed" })
     })()
     return shutdownPromise

@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-10 17:02 +02:00
-**Last source-verified develop checkpoint:** `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (after PR #968)
+**Last reviewed:** 2026-11-10 23:12 +02:00
+**Last source-verified develop checkpoint:** `2531d0bd2b9c25bd721dfce2e89dbc8386d8a051` (after PR #976)
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -18,6 +18,8 @@
    - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
    - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).
    - **Offline reliability fixes (2026-11-10):** broker canonical placement requests Binance `RESULT` for complete `LIMIT_MAKER` acknowledgements; [PR #961](https://github.com/45s/coinzilla/pull/961) merged at `8e2f795223a4d594947a6577a09bd183f9b48328`. Harvester identity recovery (`UNKNOWN → OPEN`) and accurate `TRADING_MODE` startup messages merged in [PR #964](https://github.com/45s/coinzilla/pull/964) at `ce7b5dfeddaaeed68f67ab8213520427b3777280`, closing [issues #962](https://github.com/45s/coinzilla/issues/962) and [#963](https://github.com/45s/coinzilla/issues/963). All six required workflows passed on synchronized PR head `91d7d34f1b6c11e5a3b0513c91d974ffb93f977c`; the external documentation-links workflow was advisory and still running at merge. No Binance exchange operations were performed.
+
+- **Shutdown diagnostics — PR [#977](https://github.com/45s/coinzilla/pull/977) in progress.** The shutdown handler now distinguishes `SHUTDOWN_INCOMPLETE` from confirmed `STOPPED`, preserves the pre-shutdown readiness state, and exposes exact safe summaries of unresolved owned orders and user-data recovery blockers. Existing process-lock retention is unchanged. Exact-head CI and merge are pending.
 
 2. **Process-restart reconciliation (#654) — forensic phase; runtime implementation not started.**
    - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.
