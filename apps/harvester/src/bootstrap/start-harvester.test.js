@@ -434,6 +434,24 @@ test("defers only the market with a pre-existing external order", async () => {
   })
 
   try {
+    await broker.emitBookTicker("BTCUSDT", {
+      symbol: "BTCUSDT",
+      bestBidPrice: "999",
+      bestBidQuantity: "1",
+      bestAskPrice: "1001",
+      bestAskQuantity: "1",
+      timestamp: 1000,
+    })
+    await broker.emitPrice("BTCUSDT", { symbol: "BTCUSDT", price: "1000", timestamp: 1000 })
+    await broker.emitBookTicker("ETHUSDT", {
+      symbol: "ETHUSDT",
+      bestBidPrice: "999",
+      bestBidQuantity: "1",
+      bestAskPrice: "1001",
+      bestAskQuantity: "1",
+      timestamp: 1000,
+    })
+    await broker.emitPrice("ETHUSDT", { symbol: "ETHUSDT", price: "1000", timestamp: 1000 })
     assert.equal(runtime.userDataReady, true, "A pre-existing external order must not reject global startup readiness.")
     assert.deepEqual(
       submittedSymbols,
@@ -548,6 +566,14 @@ test("rechecks same-symbol external orders after user-data recovery before resum
     )
 
     assert.equal(runtime.userDataReady, true, "The completed recovery audit must restore global readiness.")
+    await broker.emitBookTicker("BTCUSDT", {
+      symbol: "BTCUSDT",
+      bestBidPrice: "999",
+      bestBidQuantity: "1",
+      bestAskPrice: "1001",
+      bestAskQuantity: "1",
+      timestamp: 1000,
+    })
     await broker.emitPrice("BTCUSDT", {
       symbol: "BTCUSDT",
       price: "1000",
