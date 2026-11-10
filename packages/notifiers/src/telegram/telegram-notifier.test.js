@@ -59,18 +59,34 @@ test("rejects invalid text before making a request", async () => {
   assert.equal(calls, 0)
 })
 
-test("reports HTTP failures without exposing token", async () => {
+test("reports HTTP status and Telegram rejection description without exposing token", async () => {
   const notifier = new TelegramNotifier({
     token: "123456:secret-token",
     chatId: "y",
-    fetchImpl: async () => response({}, false, 503),
+    fetchImpl: async () => response({
+      ok: false,
+      description: "Forbidden: bot was blocked by the user",
+    }, false, 403),
   })
 
-  await assert.rejects(notifier.sendMessage("hello"), /status 503/)
   await assert.rejects(
     notifier.sendMessage("hello"),
-    (error) => !error.message.includes("123456:secret-token"),
+    /status 403: Forbidden: bot was blocked by the user/,
   )
+
+  const reflectedToken = new TelegramNotifier({
+    token: "123456:secret-token",
+    chatId: "y",
+    fetchImpl: async () => response({
+      ok: false,
+      description: "request rejected for 123456:secret-token",
+    }, false, 403),
+  })
+  await assert.rejects(reflectedToken.sendMessage("hello"), (error) => {
+    assert.match(error.message, /status 403: request rejected for \[REDACTED\]/)
+    assert.doesNotMatch(error.message, /123456:secret-token/)
+    return true
+  })
 
   const unknownStatus = new TelegramNotifier({
     token: "x",
@@ -78,6 +94,22 @@ test("reports HTTP failures without exposing token", async () => {
     fetchImpl: async () => response({}, false, null),
   })
   await assert.rejects(unknownStatus.sendMessage("hello"), /status unknown/)
+})
+
+test("preserves HTTP status when an error response is not valid JSON", async () => {
+  const notifier = new TelegramNotifier({
+    token: "123456:secret-token",
+    chatId: "y",
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      async json() {
+        throw new Error("upstream returned HTML")
+      },
+    }),
+  })
+
+  await assert.rejects(notifier.sendMessage("hello"), /status 502/)
 })
 
 test("reports Telegram API errors and redacts reflected credentials", async () => {
