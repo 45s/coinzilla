@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `5c1322e136b9f48df67f5da0b3109d19aa634093` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `610232948c5cd99ac15518e5694df83833f94c1b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -70,9 +70,13 @@ The readiness policy checks configured quantity after rounding down to the excha
 
 [PR #932](https://github.com/45s/coinzilla/pull/932) adds exact inclusive MIN/MAX price, quantity and notional equality cases while retaining the existing immediately-outside rejection tests. The updated PR head passed all six required checks and merged into `develop`.
 
+### Medium — exchange filter equality boundaries need independent proof
+
+[PR #932](https://github.com/45s/coinzilla/pull/932) adds exact inclusive equality for MIN/MAX price, quantity and notional while retaining the existing immediately-outside rejection matrix. [PR #929](https://github.com/45s/coinzilla/pull/929) adds independent numeric combinations so each filter equality is isolated from the other notional boundaries, and strengthens readiness assertions for exact MIN_NOTIONAL, quantity rounded down to MAX_QUANTITY, canonical Market binding and immutable supported-order metadata. The synchronized PR #929 head is under CI verification.
+
 ### Medium — lifecycle tests need complete-state assertions
 
-The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. [PR #928](https://github.com/45s/coinzilla/pull/928) strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve accepted state and commitment. PR #928 merged after the synchronized head passed all six required checks; the exact PR head passed 874/874 Harvester tests. [PR #927](https://github.com/45s/coinzilla/pull/927) adds explicit no-mutation assertions after decreasing-execution and stale-timestamp reports, and verifies late FILLED update flags and the complete terminal order value. Synchronized-head CI is pending.
+The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch and late FILLED reports, but principal assertions were status-only or checked only remaining quantity. [PR #928](https://github.com/45s/coinzilla/pull/928) strengthens accepted partial-fill and late CANCELED/EXPIRED-to-FILLED transitions with exact original/executed/remaining quantities, broker/client identity, timestamps and active/terminal classification. It also proves earlier immutable snapshots remain unchanged and stale, duplicate or rejected conflicting updates preserve accepted state and commitment. PR #928 merged after the synchronized head passed all six required checks; the exact PR head passed 874/874 Harvester tests. [PR #927](https://github.com/45s/coinzilla/pull/927) adds explicit no-mutation assertions after decreasing-execution and stale-timestamp reports, and verifies late FILLED update flags and the complete terminal order value. PR #933 merged after the synchronized head passed all six required checks.
 
 ### Medium — account snapshot reconciliation failures need precise diagnostics and immutability assertions
 
@@ -90,8 +94,8 @@ The multi-market engine suite tested separate symbols and duplicate replay, but 
 
 1. **Strategy decisions:** blocked-recovery-SELL gating, exact investment-cap boundaries and independent strategy fixture arithmetic are merged in PRs #917, #922 and #937.
 2. **Portfolio and accounting:** PR #924's exact multi-market accounting and conflicting-fill no-mutation assertions are merged; continue reviewing independent expected values and commission-identity conflicts.
-3. **Order lifecycle:** PR #928's complete-state assertions are merged; PR #927 adds decreasing-execution and stale-timestamp no-mutation coverage.
-4. **Market and configuration:** configured quantity/MIN_NOTIONAL boundaries and exact pre-submission exchange-filter equality are merged in PRs #930 and #932.
+3. **Order lifecycle:** PRs #927 and #928 merged complete-state, stale-report and immutable-snapshot assertions.
+4. **Market and configuration:** PRs #930 and #932 merged readiness and exchange-filter boundaries; PR #929 adds isolated equality values and metadata immutability assertions.
 5. **Domain failure handling:** PR #931's precise account-snapshot failure classification and no-mutation assertions are merged. Continue with existing retryability/integrity contracts and stale-result isolation; do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.

@@ -163,13 +163,39 @@ test("enforces exchange quantity limits at exact boundaries and immediately outs
   }
 })
 
-test("uses exact exchange increments when validating the effective configured BUY quantity", () => {
+test("accepts exact MIN_NOTIONAL equality and a configured quantity that rounds down to MAX_QUANTITY", () => {
+  const metadata = makeMetadata()
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { ...pairConfig, orderQuantity: 1000.9 },
-    marketMetadata: makeMetadata(),
+    pairConfig: { ...pairConfig, orderQuantity: 1000.9, investment: 5 },
+    marketMetadata: metadata,
   })
-  assert.equal(result.market, market)
+
+  assert.equal(
+    result.market,
+    market,
+    "The enabled pair must remain bound to its canonical market when readiness boundaries are exactly satisfied.",
+  )
+  assert.equal(
+    result.orderType,
+    "LIMIT_MAKER",
+    "A zero maker fee must preserve the configured post-only order type at the readiness boundary.",
+  )
+  assert.deepEqual(
+    result.supportedOrderTypes,
+    ["LIMIT", "LIMIT_MAKER"],
+    "Readiness must return the exchange-supported order types unchanged.",
+  )
+  assert.equal(
+    result.tradingRules,
+    metadata.tradingRules,
+    "The validated rules must remain bound to the same canonical Market metadata.",
+  )
+  assert.equal(
+    Object.isFrozen(result.supportedOrderTypes),
+    true,
+    "The returned supported-order-type list must remain immutable.",
+  )
 })
 
 test("enforces MIN_NOTIONAL at exact equality and immediately below the configured investment", () => {
