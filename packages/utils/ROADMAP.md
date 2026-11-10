@@ -119,7 +119,7 @@ Audited current `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`.
 | `scripts/check-syntax.js`, `scripts/check-agent-policy.js` | Reports command progress and actionable failures | Approved repository-tool CLI output |
 | `apps/harvester/src/` | Bootstrap and process entry use injected `defaultLogger` | No direct console calls or app-local logger adapter found |
 
-The shared policy already prohibits direct console calls in business logic and application workflows. No runtime migration was needed. The automated guard remains a separate follow-up; this audit does not claim that a static no-console rule is enforced in CI.
+The shared policy prohibits direct console calls in business logic and application workflows. No runtime migration was needed. The production-source guard is proposed in [PR #942](https://github.com/45s/coinzilla/pull/942): it scans JavaScript under `apps/` and `packages/`, with exact exceptions for the shared logger implementation and the explicit Telegram smoke-test CLI. Tests/generated trees and root repository-tool scripts are outside the scan. Exact-head CI is pending; do not treat the guard as merged until the PR passes and lands.
 
 ## Repository-wide reuse audit
 
