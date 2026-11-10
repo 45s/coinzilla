@@ -20,6 +20,7 @@ Process-restart restoration is not implemented in the current startup compositio
 2. A durable execution-fact contract must be chosen without silently violating the current rule that optional Journal evidence must not block fill accounting.
 3. Account-wide unowned open orders must have an explicit readiness policy; the current `BLOCKED` audit result does not block trading readiness.
 4. Historical order/trade completeness must be provable for every relevant market, or recovery must remain blocked for operator intervention.
+5. Restoring a completed recovery cycle must reset the authoritative `Position.spent` basis and prove exact retained-inventory allocation.
 
 **Safety rule:** unknown, incomplete, contradictory or unprovable trading state must never be converted into READY.
 
@@ -62,6 +63,20 @@ Do not label a duplicate submission as an observed incident. Add a deterministic
 Process-restart safety nevertheless requires execution facts and safety pauses to survive abrupt termination before the application advances as though those facts are recoverable. The current engine applies a canonical fill to in-memory Portfolio/RecoveryLedger state, then publishes `execution.fill_applied` without an immediate durable flush. `pause()` publishes `STRATEGY_PAUSED` without a durable flush. These existing F-028/F-029 gaps mean recent fill and pause facts are not guaranteed to be on disk after process death.
 
 Do not silently extend the optional Journal observer into a trading-state authority or violate the no-blocking-I/O rule. Preferred design to evaluate: an application-owned durable execution-fact port/store with an explicit acknowledgement contract, while the Journal remains a separate observer. The application may gate progression to the next strategy decision/order side effect on that durable acknowledgement; domain objects remain independent of Journal, EventBus and storage. An alternative requires an explicit revision of the current architecture contract and a reviewed trade-off. No implementation choice is accepted by this audit.
+
+### F-038 — Restoring a completed recovery cycle does not reset Position cost basis
+
+**Status:** CONFIRMED latent domain-logic defect in the retained recovery helper; not active in current startup because replay is disabled.
+
+`createPortfolioWorkflow.completeRecoveryCycle()` performs three coordinated transitions on a successful cycle: allocate the exact `freeQuantity`, call `portfolio.resetRecoveryBasis({ marketId })`, and reset the RecoveryLedger. The Conservative specification states that `Position.spent` is the authoritative recovery cost basis.
+
+`restoreHarvesterJournalState()` replays the same `recovery.cycle_completed` event by calling `portfolio.allocateFreeQuantity()` and `recoveryLedger.resetCycle()`, but it never calls `portfolio.resetRecoveryBasis()`. Therefore, after restoring a completed cycle, `Position.spent` still contains the previous cycle's BUY cost while the RecoveryLedger has been reset. The account-balance audit does not detect this because cost basis is not a wallet balance. If replay were re-enabled, subsequent Conservative decisions could calculate recovery against stale prior-cycle cost.
+
+There is a second validation gap in the same transition: restoration rejects only when `position.baseQuantity < freeQuantity`; it accepts `freeQuantity < position.baseQuantity`. The live `evaluateRecoveryCompletion()` can become eligible only when all remaining active inventory is exactly `keepQuantity` or `keepQuantity + classified dust`, and its `freeQuantity` equals that full active quantity. Restoration should reject any non-equal amount rather than leave active inventory behind while resetting the ledger.
+
+**Required RED regression:** create a projection containing BUY/SELL fills followed by a completed-cycle event; assert the restored Position has exact retained free inventory, zero active inventory, and `spent === "0"`, with RecoveryLedger cycle totals reset. Add a contradictory event where `freeQuantity` is smaller than active inventory and assert restoration fails without returning a state. No such direct restore-helper test was found in PR #606's changed-file list; the existing live cycle tests exercise `createPortfolioWorkflow.completeRecoveryCycle()`, not the offline restore path.
+
+Do not wire PR #606 into startup until this parity defect and the session-discovery/readiness blockers are corrected and tested.
 
 ### Existing F-031 — historical market/trade-history completeness remains unresolved
 
