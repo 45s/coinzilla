@@ -107,6 +107,44 @@ test("reports each missing asset only once across markets", () => {
 })
 
 
+test("stores immutable snapshot baselines for Portfolio inventory and active order commitments", () => {
+  const snapshot = new AccountSnapshot({
+    balances: [balance({ asset: btc }), balance({ asset: usdt, free: "900", locked: "100" })],
+    sourceTime: 300,
+    activeBaseQuantityBaseline: [{ assetId: btc.id, amount: "10" }],
+    committedQuoteBalanceBaseline: [{ assetId: usdt.id, amount: "100" }],
+    committedBaseBalanceBaseline: [{ assetId: btc.id, amount: "3" }],
+  })
+
+  assert.equal(snapshot.getActiveBaseQuantityBaseline({ assetId: btc.id }), "10", "The account snapshot must remember tracked base inventory already reflected in exchange balances.")
+  assert.equal(snapshot.getCommittedQuoteBalanceBaseline({ assetId: usdt.id }), "100", "The snapshot must remember BUY quote reservations already represented by exchange locked balances.")
+  assert.equal(snapshot.getCommittedBaseBalanceBaseline({ assetId: btc.id }), "3", "The snapshot must remember SELL base reservations already represented by exchange locked balances.")
+  assert.equal(snapshot.getActiveBaseQuantityBaseline({ assetId: eth.id }), "0", "An asset with no tracked Position at snapshot time must have a zero inventory baseline.")
+  assert.equal(snapshot.getCommittedQuoteBalanceBaseline({ assetId: btc.id }), "0", "An asset without BUY commitments must have a zero quote-commitment baseline.")
+  assert.equal(snapshot.getCommittedBaseBalanceBaseline({ assetId: usdt.id }), "0", "An asset without SELL commitments must have a zero base-commitment baseline.")
+  assert.throws(
+    () => new AccountSnapshot({
+      balances: [],
+      sourceTime: 1,
+      activeBaseQuantityBaseline: [
+        { assetId: btc.id, amount: "1" },
+        { assetId: btc.id, amount: "2" },
+      ],
+    }),
+    /duplicate asset/,
+    "Duplicate asset baselines must be rejected rather than silently overwriting snapshot accounting state.",
+  )
+  assert.throws(
+    () => new AccountSnapshot({
+      balances: [],
+      sourceTime: 1,
+      committedQuoteBalanceBaseline: [{ assetId: usdt.id, amount: "-1" }],
+    }),
+    /non-negative/,
+    "Snapshot order commitments cannot be negative because they represent outstanding exchange reservations.",
+  )
+})
+
 test("tracks Portfolio quote cash flow already reflected in the snapshot", () => {
   const snapshot = new AccountSnapshot({
     balances: [balance({ asset: btc }), balance({ asset: usdt, free: "80" })],
