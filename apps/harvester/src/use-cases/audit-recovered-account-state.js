@@ -75,12 +75,12 @@ export function auditRecoveredAccountState({
     }
     if (!Array.isArray(openOrders)) throw new TypeError("openOrders must be an array")
     if (!Array.isArray(markets)) throw new TypeError("markets must be an array")
-    if (!Array.isArray(recoveredState.journalFills)) {
-      throw new TypeError("auditRecoveredAccountState requires restored Journal fill facts")
-    }
 
     if (!projection.data.requiresExchangeReconciliation) {
       return toResult({ data: Object.freeze({ skipped: true, reason: "NO_PRIOR_TRADING_STATE" }) })
+    }
+    if (!Array.isArray(recoveredState.journalFills)) {
+      throw new TypeError("auditRecoveredAccountState requires restored Journal fill facts")
     }
 
     const baseline = getInitialTradingSnapshot({ projection })
