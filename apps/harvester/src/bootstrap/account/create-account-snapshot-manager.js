@@ -60,8 +60,11 @@ export function createAccountSnapshotManager({
   getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
 } = {}) {
   let accountSnapshot
+  let preflightSourceTime
+  let preflightBalancesByCode = new Map()
+  const commissionBaselineAssetIds = new Map()
 
-  const refreshAccountSnapshot = async () => {
+  const refreshAccountSnapshot = async ({ capturePreflightBaseline = false } = {}) => {
     let result
     try {
       result = await broker.getAccountSnapshot()
@@ -107,10 +110,31 @@ export function createAccountSnapshotManager({
       )
     }
     const accountAuditMarkets = [...marketMetadata.values()].map(({ market }) => market)
+    const configuredAssetCodes = new Set(accountAuditMarkets.flatMap((market) => [
+      market.baseAsset.code,
+      market.quoteAsset.code,
+    ]))
     let nextSnapshot
     try {
+      if (capturePreflightBaseline && preflightSourceTime === undefined) {
+        const sourceSnapshot = new AccountSnapshot({
+          balances: result.data.balances,
+          sourceTime: result.data.sourceTime,
+        })
+        preflightSourceTime = sourceSnapshot.sourceTime
+        preflightBalancesByCode = new Map(sourceSnapshot.balances.map((balance) => [
+          balance.asset.code,
+          balance,
+        ]))
+      }
+      const trackedAssetCodes = new Set([
+        ...configuredAssetCodes,
+        ...commissionBaselineAssetIds.keys(),
+      ])
+      const trackedBalances = result.data.balances.filter((balance) =>
+        trackedAssetCodes.has(balance?.asset?.code))
       nextSnapshot = new AccountSnapshot({
-        balances: result.data.balances,
+        balances: trackedBalances,
         sourceTime: result.data.sourceTime,
         ...baselineResult.data,
       })
@@ -269,11 +293,20 @@ export function createAccountSnapshotManager({
     auditStatus = "COMPLETE",
     auditReasons = [],
     snapshot: suppliedSnapshot,
+    allowedAssetCodes: suppliedAllowedAssetCodes,
   } = {}) => {
-    const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
+    const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot({
+      capturePreflightBaseline: phase === "PREFLIGHT",
+    })
+    const configuredAssetCodes = [...new Set([...marketMetadata.values()]
+      .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
+    const allowedAssetCodes = suppliedAllowedAssetCodes ?? [...new Set([
+      ...configuredAssetCodes,
+      ...commissionBaselineAssetIds.keys(),
+    ])]
     let dataResult
     try {
-      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, auditStatus, auditReasons })
+      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes, auditStatus, auditReasons })
     } catch (error) {
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
     }
@@ -318,10 +351,95 @@ export function createAccountSnapshotManager({
     return snapshot
   }
 
+  const publishCommissionAssetBaseline = async ({ assetId, assetCode } = {}) => {
+    if (typeof assetId !== "string" || !assetId.trim() ||
+        typeof assetCode !== "string" || !assetCode.trim()) {
+      throw withRecoveryFailure(
+        new TypeError("Commission asset baseline requires assetId and assetCode"),
+        "ACCOUNTING_INTEGRITY",
+        "COMMISSION_ASSET_BASELINE_IDENTITY",
+        false,
+      )
+    }
+
+    const configuredAssets = [...marketMetadata.values()].flatMap(({ market }) => [
+      market.baseAsset,
+      market.quoteAsset,
+    ])
+    const configuredAsset = configuredAssets.find((asset) =>
+      asset.id === assetId || asset.code === assetCode)
+    if (configuredAsset) {
+      if (configuredAsset.id !== assetId || configuredAsset.code !== assetCode) {
+        throw withRecoveryFailure(
+          new Error("Commission asset identity contradicts configured market metadata for " + assetCode),
+          "ACCOUNTING_INTEGRITY",
+          "COMMISSION_ASSET_BASELINE_IDENTITY",
+          false,
+        )
+      }
+      return { ok: true, data: Object.freeze({ skipped: true, reason: "CONFIGURED_MARKET_ASSET" }) }
+    }
+
+    const knownAssetId = commissionBaselineAssetIds.get(assetCode)
+    if (knownAssetId !== undefined) {
+      if (knownAssetId !== assetId) {
+        throw withRecoveryFailure(
+          new Error("Commission asset code maps to contradictory asset IDs for " + assetCode),
+          "ACCOUNTING_INTEGRITY",
+          "COMMISSION_ASSET_BASELINE_IDENTITY",
+          false,
+        )
+      }
+      return { ok: true, data: Object.freeze({ skipped: true, reason: "BASELINE_ALREADY_CAPTURED" }) }
+    }
+
+    if (preflightSourceTime === undefined) {
+      throw withRecoveryFailure(
+        new Error("Commission asset baseline cannot be captured before the durable PREFLIGHT snapshot"),
+        "ACCOUNTING_INTEGRITY",
+        "COMMISSION_ASSET_PREFLIGHT_MISSING",
+        false,
+      )
+    }
+    const balance = preflightBalancesByCode.get(assetCode)
+    if (!balance) {
+      throw withRecoveryFailure(
+        new Error("PREFLIGHT account snapshot is missing commission asset " + assetCode),
+        "ACCOUNTING_INTEGRITY",
+        "COMMISSION_ASSET_PREFLIGHT_BALANCE_MISSING",
+        false,
+      )
+    }
+    if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
+      throw withRecoveryFailure(
+        new Error("PREFLIGHT commission asset balance identity contradicts the applied fill for " + assetCode),
+        "ACCOUNTING_INTEGRITY",
+        "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
+        false,
+      )
+    }
+
+    const baselineSnapshot = new AccountSnapshot({
+      sourceTime: preflightSourceTime,
+      balances: [balance],
+    })
+    await publishAccountSnapshot({
+      phase: "PREFLIGHT",
+      snapshot: baselineSnapshot,
+      allowedAssetCodes: [assetCode],
+    })
+    commissionBaselineAssetIds.set(assetCode, assetId)
+    return {
+      ok: true,
+      data: Object.freeze({ assetId, assetCode, sourceTime: preflightSourceTime }),
+    }
+  }
+
   return Object.freeze({
     getAccountSnapshot: () => accountSnapshot,
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
     publishAccountSnapshot,
+    publishCommissionAssetBaseline,
   })
 }
