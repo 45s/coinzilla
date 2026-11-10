@@ -4,9 +4,9 @@ import { CanonicalOrder } from "@coinzilla/entities"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-function createBroker({ orderResponse, exchangeInfo } = {}) {
+function createBroker({ orderResponse, orderHandler, exchangeInfo } = {}) {
   const rpc = createFakeRpcClient({
-    "order.place": () => orderResponse,
+    "order.place": orderHandler ?? (() => orderResponse),
     exchangeInfo: () => exchangeInfo ?? { symbols: [{
       symbol: "BTCUSDT",
       baseAsset: "BTC",
@@ -119,14 +119,13 @@ test("requests RESULT details when placing LIMIT_MAKER instead of accepting Bina
   }
   let receivedOrderParameters
   const { broker, rpc } = createBroker({
-    orderResponse: minimalAcknowledgement,
+    orderHandler: (parameters) => {
+      receivedOrderParameters = parameters
+      return parameters.newOrderRespType === "RESULT"
+        ? completeResult
+        : minimalAcknowledgement
+    },
   })
-  rpc.handlers["order.place"] = (parameters) => {
-    receivedOrderParameters = parameters
-    return parameters.newOrderRespType === "RESULT"
-      ? completeResult
-      : minimalAcknowledgement
-  }
 
   const result = await broker.createCanonicalOrder({
     symbol: "BTCUSDT",
