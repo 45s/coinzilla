@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalAnchors, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps, findUnbalancedMarkdownFences } from './check-agent-policy.js';
+import { findInstructionDirectories, findMarkdownDocuments, findMissingLocalAnchors, findMissingLocalLinks, findMissingRequiredDocuments, findMissingRoadmaps, findOwnershipGaps, findUnbalancedMarkdownFences, findDirectConsoleUsages, findJavaScriptFiles } from './check-agent-policy.js';
 
 const ownershipRow = (path) => `| Domain | \`${path}/\` | Responsibility |\n`;
 
@@ -302,4 +302,49 @@ test('does not allow a mismatched fence character to close a block', () => {
   }]), [
     'docs/mismatch.md has an unclosed ~~~ fence opened at line 1',
   ]);
+});
+
+
+test('detects direct console access in production code while ignoring comments, strings, regexes, and template text', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-console-policy-'));
+  try {
+    mkdirSync(join(root, 'apps', 'sample', 'src'), { recursive: true });
+    mkdirSync(join(root, 'apps', 'sample', 'test'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'utils', 'src'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'notifiers', 'scripts'), { recursive: true });
+    const tick = String.fromCharCode(96);
+    writeFileSync(join(root, 'apps', 'sample', 'src', 'runtime.js'), [
+      '// console.log("comment only")',
+      'const message = "console.warn(\\"string only\\")";',
+      'const pattern = /console\\\\.error\\\\(/;',
+      'const example = ' + tick + 'console.info("template text only")' + tick + ';',
+      'const actual = ' + tick + 'template ' + '$' + '{console.error("interpolation")} ' + tick + ';',
+      'console["warn"]("computed access");',
+    ].join('\n'));
+    writeFileSync(join(root, 'apps', 'sample', 'test', 'runtime.test.js'), 'console.error("test stub")');
+    writeFileSync(join(root, 'packages', 'utils', 'src', 'logger.js'), 'console.log("approved logger")');
+    writeFileSync(join(root, 'packages', 'notifiers', 'scripts', 'telegram-smoke.js'), 'console.info("approved CLI")');
+
+    assert.deepEqual(findDirectConsoleUsages(root), [
+      'apps/sample/src/runtime.js:5: direct console access is not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      'apps/sample/src/runtime.js:6: direct console access is not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('discovers application and package production JavaScript but excludes tests and generated directories', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-console-files-'));
+  try {
+    mkdirSync(join(root, 'apps', 'sample', 'src'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'sample', 'test'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'sample', 'dist'), { recursive: true });
+    writeFileSync(join(root, 'apps', 'sample', 'src', 'main.mjs'), 'export const value = 1');
+    writeFileSync(join(root, 'packages', 'sample', 'test', 'main.test.js'), 'console.log("test")');
+    writeFileSync(join(root, 'packages', 'sample', 'dist', 'main.js'), 'console.log("generated")');
+    assert.deepEqual(findJavaScriptFiles(root), ['apps/sample/src/main.mjs']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
