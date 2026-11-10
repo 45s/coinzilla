@@ -48,7 +48,7 @@ Many existing domain tests omit the detailed assertion messages required by `ENG
 
 ### Medium — expected arithmetic must remain independent
 
-The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously used production `multiplyDecimal` both to construct quoteQuantity and to calculate the expected capped notional. This allowed a shared arithmetic defect to affect setup and expected output. The current PR replaces the fixture's quoteQuantity values with exact literals (10.78 and 10.8845) and asserts the expected 0.1 price / 0.6 quantity directly. No production behavior changes; exact-head CI verification is pending.
+The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously used production `multiplyDecimal` both to construct quoteQuantity and to calculate the expected capped notional. This allowed a shared arithmetic defect to affect setup and expected output. [PR #926](https://github.com/45s/coinzilla/pull/926) replaces fixture quote quantities with exact literals (10.78 and 10.8845) and asserts the expected 0.1 price / 0.6 quantity directly. No production behavior changed. Exact PR head `23db2e6513497cf21f96f8ca622cce0be76054b4` passed 872/872 Harvester tests; coverage was 75.80% lines, 79.12% branches and 74.88% functions. Workspace unit tests and coverage, configured Harvester targeted tests, Utils tests, JavaScript syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links all passed. PR #926 remains open and unmerged.
 
 ### Medium — capital-limit boundaries need stronger decision assertions
 

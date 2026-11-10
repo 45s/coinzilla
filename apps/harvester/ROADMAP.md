@@ -11,7 +11,7 @@
 - [x] Conservative BUY-gating regression and correction merged in PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact merged-head CI passed 872/872 Harvester tests and all required checks.
 - [~] Conservative investment-cap boundary matrix added in [PR #922](https://github.com/45s/coinzilla/pull/922); exact-head CI passed, but PR remains open and unmerged.
 - [~] Portfolio multi-market isolation assertions added in [PR #924](https://github.com/45s/coinzilla/pull/924); exact-head CI passed, but PR remains open and unmerged.
-- [~] Remove shared production arithmetic from Conservative test fixtures and expected-value assertions in the current focused PR.
+- [~] Remove shared production arithmetic from Conservative test fixtures and expected-value assertions in [PR #926](https://github.com/45s/coinzilla/pull/926). Exact PR-head CI passed 872/872 Harvester tests and all required checks; awaiting merge.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
