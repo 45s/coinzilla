@@ -230,6 +230,15 @@ test("reports the exact unresolved shutdown state and does not claim STOPPED aft
     expectedRecoveryFailure,
     "Shutdown diagnostics must retain the exact retryable recovery category, stage, and generation.",
   )
+  assert.deepEqual(
+    shutdownError.shutdownDiagnostics.stageFailures[0].failure,
+    {
+      category: "REST_RECONCILIATION",
+      stage: "TERMINAL_FILL_HISTORY",
+      retryable: true,
+    },
+    "Shutdown diagnostics must retain failure classification from the failed owned-order reconciliation stage.",
+  )
   assert.equal(
     shutdownError.shutdownDiagnostics.unresolvedOrders.length,
     1,
