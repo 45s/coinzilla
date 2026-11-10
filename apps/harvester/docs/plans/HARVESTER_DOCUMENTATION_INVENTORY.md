@@ -4,7 +4,7 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `f98c4e02be5707c550bde5c63e223b0f160bb406` (`truncated: false`; 54 Harvester Markdown/MDX files; zero path additions/removals since `f4fd2ab`)
+- Latest recursive checkpoint: `develop` at `d07a51446ac4116d307896a8559b033a6e62f06b` (`truncated: false`; 54 Harvester Markdown/MDX files before this archive relocation)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-10
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -13,14 +13,14 @@
 
 The GitHub recursive Git tree endpoint returned a complete tree (`truncated: false`) for the baseline commit. This inventory includes every tracked Markdown file under `apps/harvester/` at that baseline: **42 files**. File sizes are bytes from the Git tree.
 
-Each document was fetched for a first-pass title, heading, date, link and purpose review. The file list and byte sizes remain the original recursive-tree baseline; content dispositions are updated as review progresses. **KEEP does not mean every statement is currently verified**; it means preserve the file at its current path and maintain its stated authority. REVIEW means no move, merge, split or archive is authorized until the stated questions and inbound references are resolved.
+Each document was fetched for a first-pass title, heading, date, link and purpose review. The file list and byte sizes remain the original recursive-tree baseline; content dispositions are updated as review progresses. **KEEP does not mean every statement is currently verified**; it means preserve the file and maintain its stated authority. MOVE means relocate without changing substantive evidence, update inbound/outbound links and preserve history. REVIEW means no move, merge, split or archive is authorized until the stated questions and inbound references are resolved.
 
 ## Disposition rules
 
 - **KEEP** — preserve current location and content for now; maintain its index and authority boundaries.
 - **SUPERSEDE** — retain the prior document and its provenance, but clearly identify the successor and stop treating the old plan/guidance as current.
 - **REVIEW** — investigate content, status and references before deciding whether to keep, merge, split, supersede or archive.
-- No file is deleted or moved by this inventory.
+- No file is deleted. Moves preserve substantive content and provenance; the current path is recorded in the inventory and navigation indexes.
 - Historical reports, exchange exports, logs, evidence and completed AI task briefs are preserved.
 
 ## File-by-file inventory
@@ -28,15 +28,15 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 | Path | Size (bytes) | Category | Current disposition | Rationale / next review |
 | --- | ---: | --- | --- | --- |
 | `apps/harvester/AGENTS.md` | 6404 | Governance | **KEEP** | Mandatory domain instructions; link to root governance and local index. |
-| `apps/harvester/AUDIT.md` | 121678 | Historical evidence | **KEEP** | Primary Conservative audit record; preserve its baseline, findings and provenance. |
-| `apps/harvester/AUDIT_DOGE_TRADES_2026-11-06.md` | 10187 | Historical evidence | **KEEP** | Exchange trade export snapshot; preserve raw rows and source references. |
-| `apps/harvester/AUDIT_EXECUTION_HISTORY.md` | 48396 | Historical evidence | **KEEP** | Detailed order/fill chronology; distinct from findings register and audit narrative. |
-| `apps/harvester/AUDIT_FINDINGS.md` | 129985 | Historical evidence | **KEEP** | Findings register with individual evidence status; do not merge by filename similarity. |
-| `apps/harvester/AUDIT_LOG_EVIDENCE_2026-11-06.md` | 9832 | Historical evidence | **KEEP** | Integrity and log evidence addendum. |
-| `apps/harvester/AUDIT_SESSION_2026-11-08.md` | 65234 | Historical evidence | **KEEP** | Reconnect incident/session audit snapshot. |
-| `apps/harvester/AUDIT_SESSION_2026-11-08_16-33-33.md` | 32983 | Historical evidence | **KEEP** | Separate afternoon session snapshot; not a duplicate of the earlier 2026-11-08 report. |
-| `apps/harvester/AUDIT_SESSION_2026-11-09_11-33-00.md` | 25236 | Historical evidence | **KEEP** | Recovery forensic session; filename uses local clock while title records UTC; assess naming only after inbound-link review. |
-| `apps/harvester/AUDIT_ZRO_TRADES_2026-11-06.md` | 9500 | Historical evidence | **KEEP** | Exchange trade export snapshot; preserve raw rows and source references. |
+| `apps/harvester/docs/audits/reports/AUDIT.md` | 121678 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT.md`; Primary Conservative audit narrative; content/provenance preserved; indexed under reports. |
+| `apps/harvester/docs/audits/evidence/AUDIT_DOGE_TRADES_2026-11-06.md` | 10187 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_DOGE_TRADES_2026-11-06.md`; Exchange trade export snapshot; raw rows/source references preserved in evidence archive. |
+| `apps/harvester/docs/audits/reports/AUDIT_EXECUTION_HISTORY.md` | 48396 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_EXECUTION_HISTORY.md`; Detailed order/fill/session chronology; remains distinct from findings register and audit narrative. |
+| `apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md` | 129985 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_FINDINGS.md`; Finding-by-finding evidence register; content/provenance preserved in reports archive. |
+| `apps/harvester/docs/audits/evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md` | 9832 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_LOG_EVIDENCE_2026-11-06.md`; Integrity and log evidence addendum; hashes and parsed evidence preserved. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-08.md` | 65234 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_SESSION_2026-11-08.md`; Reconnect incident/session audit snapshot; retained separately. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-08_16-33-33.md` | 32983 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_SESSION_2026-11-08_16-33-33.md`; Distinct afternoon session snapshot; not merged with reconnect audit. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-09_11-33-00.md` | 25236 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_SESSION_2026-11-09_11-33-00.md`; Recovery forensic session; original timestamp/name retained pending provenance-safe naming review. |
+| `apps/harvester/docs/audits/evidence/AUDIT_ZRO_TRADES_2026-11-06.md` | 9500 | Historical evidence | **MOVE** | Moved from `apps/harvester/AUDIT_ZRO_TRADES_2026-11-06.md`; Exchange trade export snapshot; raw rows/source references preserved in evidence archive. |
 | `apps/harvester/README.md` | 56063 | Entry point | **SPLIT** | Reworked into a 14 KB navigation/setup entry point; detailed procedures link to canonical architecture, Journal, logging and TESTNET guides; historical 2026-11-04 README notes preserved in `docs/audits/README_HISTORY.md`. Current default pair is ZROFDUSD only (PR #836); the illustrative ZROUSDT example is explicitly distinguished from live config and the runbook hold; the interactive menu and its read-only audit/destructive action boundaries are linked to their canonical guides. |
 | `apps/harvester/ROADMAP.md` | 274026 | Roadmap | **SPLIT** | Historical sections moved to `apps/harvester/docs/audits/ROADMAP_HISTORY.md`; 157 original headings remain as compatibility anchors. Active roadmap reduced from 273,540 to 101,170 characters. Current TESTNET blockers now include the PR #836 pair-scope mismatch; the earlier pair statement is explicitly historical. Further concision review remains. |
 | `apps/harvester/docs/AUDIT_WORKING_RULES.md` | 653 | Agent/audit guidance | **KEEP** | Short pointer to repository-wide workflow; do not duplicate global policy. |
