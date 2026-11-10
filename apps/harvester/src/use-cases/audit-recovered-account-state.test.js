@@ -271,6 +271,33 @@ test("accounts for third-asset commission debits during recovered account reconc
   assert.equal(result.data.balancesChecked, 3)
 })
 
+test("fails closed when the third-asset baseline is journaled after the applied fill", () => {
+  const { projection, restored } = restoreState({ thirdAssetCommission: true })
+  const fill = restored.journalFills.find(({ commissions }) =>
+    commissions.some(({ asset }) => asset === "BNB"))
+  const lateBaselineProjection = {
+    ...projection,
+    data: {
+      ...projection.data,
+      accountSnapshots: projection.data.accountSnapshots.map((snapshot) =>
+        snapshot.phase === "COMMISSION_BASELINE"
+          ? { ...snapshot, sequence: fill.sequence + 1 }
+          : snapshot
+      ),
+    },
+  }
+  const result = auditRecoveredAccountState({
+    projection: lateBaselineProjection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /must be durably recorded before its applied fill/)
+})
+
 test("fails closed when a positive third-asset commission has no durable baseline", () => {
   const { projection, restored } = restoreState({
     thirdAssetCommission: true,
