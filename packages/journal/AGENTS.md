@@ -25,7 +25,7 @@ Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch 
 
 ## Required package check
 
-- Run `pnpm --filter @coinzilla/journal test` after verifying the script exists, then applicable workspace checks.
+- Run `pnpm --filter @coinzilla/journal test` and `pnpm --filter @coinzilla/journal test:coverage` after verifying both scripts exist, then applicable workspace checks. The coverage command enforces 85% line and 80% branch coverage over Journal-owned source files.
 
 
 
