@@ -45,6 +45,9 @@ function restoreFill({ data, market }) {
           item.quoteValue.asset !== market.quoteAsset.code) {
         throw new Error("Recovered commission quote valuation does not match the market quote asset for " + market.symbol)
       }
+      if (compareDecimal({ left: item.quoteValue.amount, right: "0" }) <= 0) {
+        throw new Error("Recovered third-asset commission quote valuation must be greater than zero for " + market.symbol)
+      }
       quoteValue = new Money({ amount: item.quoteValue.amount, asset: market.quoteAsset })
     }
     return new Commission({
