@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `631e82c4630f7b57d47fd6fd43adfdbb8656bd95` (2026-11-10). The domain tree contained 28 production JavaScript files and 26 domain test files. The branch contained no Harvester domain-source changes after the PR #909 baseline; the four intervening commits changed roadmap/documentation and Markdown tooling only.
+Reviewed baseline: `develop` at `429c815531cfaf96cfb9d99a6806681c98e645ea` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -54,9 +54,9 @@ The Portfolio and RecoveryLedger regressions now prove that a reused Fill ID wit
 
 Some scenario fixtures calculate expected fill quote quantities by calling the same production decimal helper used by the implementation. Where practical, fixtures should use independently calculated exact decimal literals, so a shared arithmetic defect cannot make both setup and implementation agree incorrectly.
 
-### Medium — capital-limit boundaries need stronger decision assertions
+### Medium — capital-limit boundary assertions
 
-The existing Conservative strategy suite tests a BUY blocked when outstanding recovery plus the next BUY exceeds the configured investment. It does not yet establish both exact-cap equality and the immediately-over-cap outcome as a decision matrix, including the resulting SELL/BUY intents.
+The strategy regression now uses a table-driven decision matrix: exact equality at 19.900 quote units (10.00 outstanding recovery + 9.90 next BUY notional) permits both the recovery SELL and next BUY; a limit of 19.899 blocks only the BUY; a materially lower limit of 15.00 also blocks only the BUY. The test compares the complete ordered action list and resulting `PLACE_ORDERS` decision, so the capital guard cannot accidentally suppress the recovery SELL. Added in [PR #922](https://github.com/45s/coinzilla/pull/922). The initial PR head passed all 872 Harvester unit tests, configured targeted tests, and Harvester coverage (75.83% lines, 79.07% branches, 74.88% functions). The changed-file Markdown check identified one repeated blank line in this inventory; the whitespace-only correction passed on final exact PR head `25b3a3162fac9f3aa8453b45fb4b727abbacf481`. On that head, Harvester unit tests passed 872/872 and coverage was 75.58% lines, 78.94% branches and 74.88% functions. Workspace unit tests and coverage, configured Harvester targeted tests, Utils tests, JavaScript syntax/agent policy/Markdown, actionlint, production dependency audit and the advisory external documentation link check all passed. The Harvester-specific threshold-enforcement step is not configured and was skipped; no coverage threshold was changed or weakened.
 
 ### Medium — lifecycle tests need complete-state assertions
 
@@ -68,7 +68,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ## Execution order
 
-1. **Strategy decisions:** close the blocked-recovery-SELL decision gap; then add exact investment-cap boundary cases and review active-order/market isolation matrices.
+1. **Strategy decisions:** the blocked-recovery-SELL gap is fixed in merged PR #917 and the exact investment-cap boundary matrix is added in the current PR; next review active-order/market isolation matrices.
 2. **Portfolio and accounting:** strengthen independent expected values, commission-identity conflicts and multi-fill sequence invariants.
 3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
 4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
@@ -78,6 +78,6 @@ After each logical area, record exact test/CI evidence and remaining gaps here a
 
 ## Verification baseline
 
-The latest recorded Harvester verification is from PR [#909](https://github.com/45s/coinzilla/pull/909): 871/871 unit tests passed; coverage was 75.98% lines, 79.32% branches and 74.85% functions on the recorded exact PR head. This is historical baseline evidence, not a claim that the current `develop` head was re-run.
+The latest merged Harvester verification is PR [#917](https://github.com/45s/coinzilla/pull/917) exact head `85fc8e9080a45f1ab8509e26ce517380d9f11de2`: 872/872 unit tests passed; coverage was 75.94% lines, 79.34% branches and 74.86% functions. PR #917 merged into `develop` at `0c0e40c271e6a68b90ca7f7ce8753a295f974ffa`. The PR #909 figures above remain historical evidence only.
 
 The active `develop` ruleset requires six contexts: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies and actionlint. The Harvester coverage workflow measures coverage but does not enforce a Harvester-specific percentage threshold. Preserve all existing checks and thresholds; do not add a threshold without a measured baseline and meaningful enforcement design.

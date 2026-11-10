@@ -6,9 +6,10 @@
 
 ### In progress — domain logic test quality initiative
 
-- [~] Establish and maintain the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md).
+- [x] Establish the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) — added and merged in PR #917.
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
-- [~] Conservative BUY-gating regression and correction are implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact PR-head CI passed 872/872 Harvester tests and all required checks; merge remains pending.
+- [x] Conservative BUY-gating regression and correction merged in PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact merged-head CI passed 872/872 Harvester tests and all required checks.
+- [~] Add the Conservative investment-cap equality and immediately-below boundary matrix in [PR #922](https://github.com/45s/coinzilla/pull/922); assert the complete decision so the recovery SELL remains eligible while the next BUY is gated. Exact PR head `25b3a3162fac9f3aa8453b45fb4b727abbacf481` passed 872/872 Harvester tests and all required CI; awaiting merge.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
