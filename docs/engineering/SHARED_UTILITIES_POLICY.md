@@ -143,7 +143,6 @@ The shared API accepts decimal strings (and bigint for parsing) and intentionall
 
 The audit is complete only when every identified candidate has a recorded disposition and the migration status is supported by tests and merged PRs.
 
-
 ## Repository-wide audit disposition (implementation pass)
 
 The source-tree audit covers the applications and workspace packages present in the repository. The classification below is based on module responsibilities and observed imports; it does not claim that every line of every module has been formally reviewed.
@@ -171,7 +170,6 @@ The source-tree audit covers the applications and workspace packages present in 
 - [ ] Continue to classify new generic candidates when they appear; do not move single-domain helpers without a stable domain-neutral contract.
 - [ ] Complete consumer migration verification through workspace CI and remove any stale imports or unused duplicate tests.
 
-
 ### Helper inventory: intentionally domain-local
 
 The following helper groups were inspected and retained because their behavior belongs to a domain or protocol rather than to general-purpose utilities:
@@ -186,7 +184,6 @@ The following helper groups were inspected and retained because their behavior b
 | `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
 | `apps/harvester/scripts/testnet-sell-utils.js` | Binance `MARKET_LOT_SIZE`/`LOT_SIZE` selection, minimum/maximum enforcement, and operator-facing errors | Keep exchange-filter and CLI policy local; reuse shared exact-decimal parsing/rounding/comparison/rescaling (PR #946 pending). |
 | `packages/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
-
 
 The shared package already contained and continues to own the general-purpose logger, result normalization, validators, UUID generation, date/time formatting and differences, waits, feature flags, event emitter, file append helper, log formatting/redaction, string capitalization, and Number-based convenience helpers. The new decimal, percentage, keyed queue, and object-input modules extend that existing public utility set.
 
