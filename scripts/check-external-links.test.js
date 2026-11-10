@@ -79,6 +79,11 @@ test('ignores non-HTTP protocols and skips local or IP-literal hosts', () => {
   assert.equal(parseExternalUrl('http://[::1]/').status, 'skipped');
 });
 
+test('preserves meaningful query delimiters and skips localhost with a trailing dot', () => {
+  assert.equal(parseExternalUrl('https://query.example/path?').url, 'https://query.example/path?');
+  assert.equal(parseExternalUrl('http://localhost./path').status, 'skipped');
+});
+
 test('marks malformed HTTP URLs and credential-bearing URLs invalid without exposing credentials', () => {
   assert.equal(parseExternalUrl('http://[').status, 'invalid');
   const credentialUrl = parseExternalUrl('https://user:secret@example.com/');
