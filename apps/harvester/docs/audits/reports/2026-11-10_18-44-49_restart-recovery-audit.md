@@ -26,7 +26,7 @@ Process-restart restoration is not implemented in the current startup compositio
 
 ## Existing foundations
 
-- PR #606 is merged. The repository retains `projectHarvesterJournalRecovery()`, `restoreHarvesterJournalState()`, `fetchAccountTradeHistory()`, `auditRecoveredTradeHistory()` and `auditRecoveredAccountState()` with focused offline tests.
+- PR #606 is merged. The repository retains `projectHarvesterJournalRecovery()`, `restoreHarvesterJournalState()`, `fetchAccountTradeHistory()`, `auditRecoveredTradeHistory()` and `auditRecoveredAccountState()`. Projection, fetch and audit helpers have focused offline tests; no direct restore-helper test or replayed-cycle completion test was found in PR #606's changed-file list or the current Harvester bootstrap test suites.
 - The projection/restore helpers cover order intents and acknowledgements, fill identities/fingerprints, Portfolio and RecoveryLedger reconstruction, order registry state, pauses/recovery intents, recovery-cycle events and account snapshots.
 - The broker exposes canonical order lookup and symbol-scoped trade/fill history. Existing order-intent and cancellation-intent paths have durable Journal flush barriers before broker side effects.
 - Same-process reconnect recovery is substantially more complete than process-death recovery. It must not be mistaken for restart recovery.
