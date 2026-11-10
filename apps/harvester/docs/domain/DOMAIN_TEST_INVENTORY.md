@@ -38,6 +38,8 @@ The domain suite is supplemented by application-level engine and use-case tests 
 
 The existing Position tests separately cover BUY/SELL commissions, free allocation and retained-inventory SELL exclusion. The new `position.test.js` regression combines those transitions in one immutable sequence and independently asserts exact active, free and total base quantities plus spent cost and quote cash flow after each step. It uses literal expected values; it does not call production decimal helpers for its expectations. No production code changes. Exact PR-head verification is pending.
 
+The same suite now table-drives failed SELL overdraw, excessive base commission, excessive quote commission and incomplete commission data against a funded Position. Each failure is followed by a deep comparison of the complete `Position.value` snapshot to prove failed operations do not mutate accepted accounting state.
+
 ### High — blocked recovery SELL must not be bypassed by a new BUY
 
 Two decision-path defects are confirmed in `strategies/conservative/strategy.js`: (1) after recording `PRICE_FILTER_BLOCKED` for a required recovery SELL, the function continued into standing-BUY planning; and (2) an active recovery SELL in `PENDING` or `UNKNOWN` state suppressed duplicate SELL intent but still permitted a new BUY. The canonical specification permits the next standing BUY alongside an acknowledged OPEN/PARTIALLY_FILLED recovery SELL, not an unacknowledged or unresolved SELL.

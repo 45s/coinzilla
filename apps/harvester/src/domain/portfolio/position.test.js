@@ -98,13 +98,80 @@ test("rejects incomplete commissions and unvalued third-asset fees but accepts r
   assert.equal(valuedPosition.quoteNetCashFlow.amount, "-200.02")
 })
 
-test("rejects SELL fills that exceed available active inventory", () => {
-  assert.throws(
-    () => Position.empty({ market }).applyFill({
-      fill: makeFill({ side: "SELL", tradeId: "sell-first" }),
+test("failed fill transitions preserve the complete Position snapshot", () => {
+  const funded = Position.empty({ market }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1",
+      price: "0.1",
+      tradeId: "funding-fill",
     }),
-    /base quantity negative/,
-  )
+  })
+  const originalValue = funded.value
+  const failureCases = [
+    {
+      name: "SELL overdraw",
+      fill: makeFill({
+        side: "SELL",
+        quantity: "11",
+        quoteQuantity: "1.1",
+        price: "0.1",
+        tradeId: "sell-overdraw",
+      }),
+      error: /base quantity negative/,
+    },
+    {
+      name: "base commission overdraw",
+      fill: makeFill({
+        side: "SELL",
+        quantity: "2",
+        quoteQuantity: "0.2",
+        price: "0.1",
+        tradeId: "base-fee-overdraw",
+        commissions: [
+          new Commission({ amount: new Money({ amount: "2.1", asset: baseAsset }) }),
+        ],
+      }),
+      error: /base commission exceeds executed base quantity/i,
+    },
+    {
+      name: "quote commission overdraw",
+      fill: makeFill({
+        quantity: "1",
+        quoteQuantity: "0.1",
+        price: "0.1",
+        tradeId: "quote-fee-overdraw",
+        commissions: [
+          new Commission({ amount: new Money({ amount: "0.11", asset: quoteAsset }) }),
+        ],
+      }),
+      error: /quote commission exceeds executed quote notional/i,
+    },
+    {
+      name: "incomplete commission data",
+      fill: makeFill({
+        quantity: "1",
+        quoteQuantity: "0.1",
+        price: "0.1",
+        tradeId: "incomplete-commission",
+        commissionStatus: "UNKNOWN",
+      }),
+      error: /complete commission data/,
+    },
+  ]
+
+  for (const { name, fill, error } of failureCases) {
+    assert.throws(
+      () => funded.applyFill({ fill }),
+      error,
+      `The ${name} failure must be rejected before changing Position state.`,
+    )
+    assert.deepEqual(
+      funded.value,
+      originalValue,
+      `The ${name} failure must preserve every Position field and the accepted accounting snapshot.`,
+    )
+  }
 })
 
 test("allocates exactly keepQuantity into a separate permanent free-inventory bucket", () => {
