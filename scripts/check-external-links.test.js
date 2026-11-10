@@ -528,3 +528,25 @@ test('blocks an initial public-looking hostname when any DNS answer is private b
   assert.equal(result.status, 'skipped', 'A mixed public/private DNS answer set must be reported as safely blocked.');
   assert.equal(openedConnections, 0, 'No HTTP(S) connection may be opened when even one DNS answer is private.');
 });
+
+
+test('honors the request timeout while DNS resolution is still pending', async () => {
+  const controller = new AbortController();
+  let resolverStarted = false;
+  const resolution = resolvePublicAddresses('slow-dns.example.com', {
+    signal: controller.signal,
+    resolveHost: async () => {
+      resolverStarted = true;
+      return new Promise(() => {});
+    },
+  });
+
+  assert.equal(resolverStarted, true, 'The injected DNS resolver must be invoked before the abort is requested.');
+  controller.abort(new Error('DNS resolution aborted by the request timeout'));
+  const outcome = await Promise.race([
+    resolution.then(() => 'resolved', () => 'rejected'),
+    new Promise((resolve) => setImmediate(() => resolve('pending'))),
+  ]);
+
+  assert.equal(outcome, 'rejected', 'The checker must stop waiting for DNS when the per-request abort signal fires.');
+});
