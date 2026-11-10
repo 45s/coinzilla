@@ -42,6 +42,7 @@ Before implementing a shared helper or cross-cutting capability, follow the sing
 | `docs/<task>` | Short-lived documentation task | Responsible agent into `develop` |
 
 Examples:
+
 - `feature/entities/fr-009-money-quantity`
 - `fix/brokers/order-reconciliation`
 - `feature/event-bus/bounded-delivery`
@@ -140,6 +141,7 @@ For broker changes, keep live/network integration tests separate from default un
 The purpose of `develop` is to accumulate independently implemented, automatically validated work. Do not ask the user to review every task PR.
 
 When the user-approved milestone is ready:
+
 1. Ensure all intended domain work is merged into `develop`.
 2. Synchronize and validate `develop` against the latest `main`.
 3. Run the full release validation and inspect the complete `develop` → `main` diff.
@@ -153,6 +155,7 @@ Do not turn every small commit into a separate human decision. Keep the final PR
 Documentation is not enforcement. Configure GitHub rulesets/branch protection as follows:
 
 ### `develop`
+
 - Require pull requests; disallow direct pushes.
 - Require **all** CI checks: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
 - Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
@@ -163,6 +166,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Do not configure bypass actors or admin bypass for these gates.
 
 ### `main`
+
 - Require pull requests.
 - Require the release CI status checks and up-to-date branch.
 - Require at least one approving review so the final release approval is technically enforced, not merely documented.
@@ -182,6 +186,7 @@ If the workflow cannot be followed because a branch, rule, permission, check, or
 Task branches are disposable working references, not permanent history. **After a task PR is merged into `develop`, its work is closed, and no other open PR or active task depends on the branch, the responsible agent MUST delete that source branch.**
 
 Required closeout sequence:
+
 1. Confirm the PR is merged into `develop` (not merely closed without merge).
 2. Confirm the task is complete and no other open PR or active task uses the branch.
 3. Delete the source/head branch immediately after merge.
@@ -189,6 +194,7 @@ Required closeout sequence:
 5. Include branch deletion in the PR closeout summary.
 
 Safety rules:
+
 - Never delete `main`, `develop`, release branches, or a branch still used by another open PR or active task.
 - Do not delete a branch when the PR was closed without merging; inspect the reason and preserve the work until its disposition is clear.
 - Merged commits and PR history remain available in `develop` and GitHub after the source branch is deleted. Do not retain merged task branches merely as backups.
