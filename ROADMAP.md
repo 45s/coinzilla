@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-10 03:35 +02:00
-**Develop checkpoint:** `661c06412bd1548ef8fb92342522745efac804b3`
+**Develop checkpoint:** `40cb4c89b7d71d331e07957d6f53fa7177dfcdb0`
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -13,6 +13,7 @@
    - **Why:** transport reconnection alone does not prove that account, orders and fills are reconciled or that readiness can safely reopen.
    - **Completed offline follow-up:** recovery failure classification #769 was implemented test-first and merged in [PR #794](https://github.com/45s/coinzilla/pull/794) on 2026-11-09; exact-head offline CI passed. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [closeout PR #807](https://github.com/45s/coinzilla/pull/807).
    - **Offline follow-up implemented and verified in PR #906:** Harvester F-033 classifies permanent Journal write failures as terminal, preserves explicitly retryable healthy-writer flush failures, and fails closed when Journal health is unclassified. Exact implementation head `9d6283de604ddcaefe9cd9faabce29489fb896ea` passed all unit-test and coverage workflows; no Journal package API or TESTNET scope change.
+   - **Offline follow-up — F-034 in [PR #909](https://github.com/45s/coinzilla/pull/909):** log and discard failures from asynchronous recovery stages when their captured generation has been superseded, without mutating the current generation or its terminal accounting latch. Implementation head `59f05f2f8565b694c972cb693747b109f38531a7` passed Harvester unit tests (871/871), Harvester coverage, workspace unit tests and coverage, targeted regression tests, JavaScript syntax/policy/Markdown, external documentation links, dependency audit, actionlint and Utils tests. TESTNET remains PAUSED / UNVERIFIED; the read-only integration job and Harvester endpoint probe were skipped.
    - **Remaining:** keep #626 open for final acceptance traceability and a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
    - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
    - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).

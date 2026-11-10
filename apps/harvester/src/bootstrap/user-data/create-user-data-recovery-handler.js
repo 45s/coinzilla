@@ -297,16 +297,6 @@ export function createUserDataRecoveryHandler({
         reconciledOrders: reconciliation.data?.reconciled ?? 0,
       })
     } catch (error) {
-      const failure = resolveRecoveryFailure(error?.recoveryFailure)
-      if (failure.retryable && !state.accountingFailed) {
-        state.retryableRecoveryFailure = { generation, category: failure.category, stage: failure.stage, retryable: true }
-      } else {
-        state.accountingFailed = true
-        state.retryableRecoveryFailure = null
-      }
-      state.ready = false
-      state.requiresReconciliation = true
-      state.status = state.accountingFailed ? "EXECUTION_ACCOUNTING_FAILED" : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
       const cause = error?.cause
       let errorMessage
       if (typeof error?.message === "string" && error.message) {
@@ -322,6 +312,37 @@ export function createUserDataRecoveryHandler({
       } else if (cause !== undefined) {
         causeMessage = String(cause)
       }
+
+      if (!isCurrentGeneration()) {
+        logger.error?.({
+          message: "application recovery failed; trading remains blocked",
+          generation,
+          currentGeneration: state.recoveryGeneration,
+          staleGeneration: true,
+          failureCategory: error?.recoveryFailure?.category,
+          failureStage: error?.recoveryFailure?.stage,
+          error,
+          errorName: error?.name ?? "Error",
+          errorMessage,
+          errorStack: error?.stack,
+          cause,
+          causeName: cause instanceof Error ? cause.name : undefined,
+          causeMessage,
+          causeStack: cause instanceof Error ? cause.stack : undefined,
+        })
+        return
+      }
+
+      const failure = resolveRecoveryFailure(error?.recoveryFailure)
+      if (failure.retryable && !state.accountingFailed) {
+        state.retryableRecoveryFailure = { generation, category: failure.category, stage: failure.stage, retryable: true }
+      } else {
+        state.accountingFailed = true
+        state.retryableRecoveryFailure = null
+      }
+      state.ready = false
+      state.requiresReconciliation = true
+      state.status = state.accountingFailed ? "EXECUTION_ACCOUNTING_FAILED" : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
       logger.error?.({
         message: "application recovery failed; trading remains blocked",
         generation,

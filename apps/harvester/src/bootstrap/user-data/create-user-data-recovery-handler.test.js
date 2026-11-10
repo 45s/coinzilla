@@ -1411,3 +1411,98 @@ test("does not retry application recovery after a permanent Journal write failur
   assert.equal(fixture.calls.accountAudits.length, 1, "Later reminders must not republish futile recovery audits.")
   assert.equal(fixture.calls.acknowledgements, 0, "Later reminders must never acknowledge the unresolved recovery.")
 })
+
+
+test("does not let a terminal account-snapshot failure from a superseded recovery generation poison the current generation", async () => {
+  let rejectFirstSnapshot
+  let markFirstSnapshotStarted
+  const firstSnapshotStarted = new Promise((resolve) => {
+    markFirstSnapshotStarted = resolve
+  })
+  const firstSnapshot = new Promise((_resolve, reject) => {
+    rejectFirstSnapshot = reject
+  })
+  let snapshotReads = 0
+  const fixture = createRecovery({
+    refreshAccountSnapshot: async () => {
+      snapshotReads += 1
+      if (snapshotReads === 1) {
+        markFirstSnapshotStarted()
+        return firstSnapshot
+      }
+      return { sourceTime: 101 }
+    },
+  })
+
+  fixture.start()
+  const staleAttempt = fixture.state.recoveryTask
+  await firstSnapshotStarted
+  fixture.state.recoveryGeneration = 2
+  fixture.state.recoveryBrokerGeneration = 43
+  rejectFirstSnapshot(Object.assign(
+    new Error("stale account snapshot validation failed"),
+    {
+      recoveryFailure: {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "ACCOUNT_SNAPSHOT_VALIDATION",
+        retryable: false,
+      },
+    },
+  ))
+  await staleAttempt
+
+  assert.equal(
+    fixture.state.accountingFailed,
+    false,
+    "A terminal account-snapshot failure returned after its recovery generation was superseded must not poison accounting for the newer generation.",
+  )
+  assert.equal(
+    fixture.state.retryableRecoveryFailure,
+    null,
+    "A stale terminal account-snapshot failure must not leave retry metadata attached to the current recovery state.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "A superseded account-snapshot failure must preserve the current generation's reconciliation-required status.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A stale account-snapshot failure must leave the newer recovery generation blocked until its own reconciliation succeeds.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "An obsolete recovery generation must never acknowledge the broker after its account-snapshot failure.",
+  )
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    snapshotReads,
+    2,
+    "The current recovery generation must be allowed to fetch its own authoritative account snapshot after stale work exits.",
+  )
+  assert.equal(
+    fixture.state.accountingFailed,
+    false,
+    "Successful recovery of the current generation must not inherit a terminal account-snapshot failure from obsolete work.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    false,
+    "The current generation may clear its gate only after its own reconciliation and durable audits succeed.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    2,
+    "Only the successfully reconciled current application generation may be recorded as acknowledged.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "The broker must receive exactly one acknowledgement after the current generation completes its required audits.",
+  )
+})
