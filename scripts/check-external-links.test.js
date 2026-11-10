@@ -46,6 +46,7 @@ test('extracts inline, reference, autolink and bare HTTP(S) destinations outside
       '[fenced](https://fenced.example/)',
       tick.repeat(3),
       tick + '[inline code](https://inline-code.example/)' + tick,
+      '<!-- [comment](https://comment.example/) -->',
     ].join('\n'),
   }];
 
@@ -228,6 +229,55 @@ test('follows bounded redirects and refuses redirects to local-only hosts', asyn
   assert.equal(urls.length, 2);
   assert.equal(blocked.status, 'unverifiable');
   assert.equal(blockedUrls.length, 1);
+});
+
+test('treats repeated rate limiting as unverifiable after bounded retries', async () => {
+  let attempts = 0;
+  const delays = [];
+  const result = await checkExternalLink(candidate('https://always-limited.example/'), {
+    fetchImpl: async () => {
+      attempts += 1;
+      return response(429);
+    },
+    sleep: async (ms) => delays.push(ms),
+    minHostIntervalMs: 0,
+  });
+
+  assert.equal(result.status, 'unverifiable');
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [500, 1000]);
+});
+
+test('stops after the configured redirect limit', async () => {
+  let attempts = 0;
+  const result = await checkExternalLink(candidate('https://redirect-loop.example/'), {
+    fetchImpl: async () => {
+      attempts += 1;
+      return response(302, { location: '/again' });
+    },
+    sleep: noDelay,
+    minHostIntervalMs: 0,
+    maxRedirects: 2,
+  });
+
+  assert.equal(result.status, 'unverifiable');
+  assert.match(result.reason, /Redirect limit exceeded/);
+  assert.equal(attempts, 3);
+});
+
+test('does not request invalid or local-only destinations', async () => {
+  let requests = 0;
+  const invalid = parseExternalUrl('https://user:secret@example.com/');
+  const skipped = parseExternalUrl('http://localhost/');
+  const results = await checkExternalLinks([invalid, skipped], {
+    fetchImpl: async () => {
+      requests += 1;
+      return response(200);
+    },
+  });
+
+  assert.equal(requests, 0);
+  assert.deepEqual(results.map((result) => result.status).sort(), ['invalid', 'skipped']);
 });
 
 test('serializes requests per host and enforces the configured minimum gap', async () => {
