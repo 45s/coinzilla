@@ -4,15 +4,15 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 ## Workflow overview
 
-| Workflow file | Triggers | Purpose and principal checks | `develop-core` requirement |
+| Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
-| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts. |
-| `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix. Pull requests also run a credential-free Brokers endpoint diagnostic; manual `develop` dispatch can opt into read-only Binance TESTNET integration. | `Run package tests`. |
-| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage`. |
-| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests`. |
-| `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies`. |
-| `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not one of the six `develop-core` required contexts. |
-| `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not one of the six `develop-core` required contexts. |
+| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
+| `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix. Pull requests also run a credential-free Brokers endpoint diagnostic; manual `develop` dispatch can opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
+| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage` in both active rulesets. |
+| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests` in both active rulesets. |
+| `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies` in both active rulesets. |
+| `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not required by either active ruleset. |
+| `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
 | `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX; weekly/manual full-tree scans include historical docs and are report-only. DNS answers are validated and connections pinned before requests; redirects are independently revalidated. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
 
 ## Required status contexts on `develop`
@@ -50,6 +50,19 @@ The networked **External Documentation Links** workflow is an advisory check for
 The `unit-tests.yml` workflow exposes an opt-in `run_broker_testnet_read_only` dispatch input on `develop`. The TESTNET job uses repository secrets only in its final integration step; checkout, tool setup, and dependency installation do not receive exchange credentials. It rejects missing or case-insensitive placeholder credentials before running the read-only broker integration suite. Order mutations and externally triggered user-data event waiting are fixed to `0`; the job does not upload integration artifacts.
 
 The Brokers pull-request endpoint probe is a separate credential-free diagnostic and is configured not to fail the package-test job. It is not the read-only TESTNET integration. Ordinary package tests remain offline and credential-free.
+
+## Active repository rulesets
+
+Live GitHub rulesets were verified on 2026-11-10:
+
+| Ruleset | Target branch | Required status contexts |
+| --- | --- | --- |
+| `core` | `main` | `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, `actionlint` |
+| `develop-core` | `develop` | The same six contexts. |
+
+Both rulesets are active, require status checks to be up to date with the target branch, and require review threads to be resolved. Neither currently requires an approving review count. Both disallow non-fast-forward updates and branch deletion.
+
+**External Documentation Links is deliberately not a required context.** It performs DNS-pinned network requests against changed maintained Markdown/MDX and scheduled/manual full-tree scans. Required CI remains network-free; an advisory network failure must not be treated as a branch-protection bypass or a reason to weaken the six required contexts.
 
 ## Local equivalents
 
