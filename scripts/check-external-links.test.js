@@ -384,7 +384,6 @@ test('only confirmed broken or invalid destinations trigger the advisory PR fail
 });
 
 test('classifies public IPv4 and rejects private, shared, reserved, and metadata IPv4 ranges', () => {
-  const isPublicAddress = isPublicAddress;
   assert.equal(typeof isPublicAddress, 'function', 'The checker must expose its deterministic IP-address policy for focused tests.');
 
   for (const address of ['8.8.8.8', '1.1.1.1', '93.184.216.34']) {
@@ -417,7 +416,6 @@ test('classifies global IPv6 and rejects loopback, mapped, ULA, link-local, mult
 });
 
 test('validates every DNS answer and rejects mixed public/private answer sets', async () => {
-  const resolvePublicAddresses = resolvePublicAddresses;
   assert.equal(typeof resolvePublicAddresses, 'function', 'DNS validation must be independently testable with an injected resolver.');
 
   const resolved = await resolvePublicAddresses('docs.example.com', {
@@ -444,7 +442,6 @@ test('validates every DNS answer and rejects mixed public/private answer sets', 
 });
 
 test('pins socket lookup to vetted answers without resolving the hostname again', async () => {
-  const fetchPinned = fetchPinned;
   assert.equal(typeof fetchPinned, 'function', 'The checker must expose the pinned HTTP transport for deterministic connection tests.');
 
   let resolverCalls = 0;
