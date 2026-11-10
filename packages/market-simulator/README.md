@@ -51,6 +51,7 @@ Use `HistoricalMarketBroker` when you only need market data and do not need to p
 import { HistoricalMarketBroker } from "@coinzilla/market-simulator"
 
 const broker = new HistoricalMarketBroker({
+  historyFile: "./data/dogeusdt-1m.json", // caller-provided; no history fixture is bundled
   speed: 60, // 60x real-time; one-minute candles are emitted about once per second
 })
 
@@ -81,7 +82,7 @@ try {
 }
 ```
 
-Provide a history source explicitly through `historyFile` or the in-memory `history` option. The simulator does not bundle market-history fixtures.
+The example path is a placeholder for a caller-owned JSON history file; create a valid history file before running it. The simulator does not bundle market-history fixtures. A custom repository implementing `load()` may be injected instead of `historyFile` or `history`.
 
 ### 2. Run a strategy with simulated MARKET orders
 
@@ -98,6 +99,7 @@ import {
 const symbol = "DOGEUSDT"
 
 const broker = new SimulatedExecutionBroker({
+  historyFile: "./data/dogeusdt-1m.json", // caller-provided; no history fixture is bundled
   markets: {
     [symbol]: {
       baseAsset: "DOGE",
@@ -253,8 +255,9 @@ A balance contains `asset`, `free`, `locked`, and `total`. Order history include
 
 | Option | Description | Default |
 |---|---|---|
-| `historyFile` | JSON candle history file path | Required unless `history` is supplied |
+| `historyFile` | Caller-owned JSON candle history file path | Required unless `history` or `repository` is supplied |
 | `history` | In-memory history object; when supplied, it is used instead of `historyFile` | Not set |
+| `repository` | Optional custom history repository implementing `load()`; when supplied, it takes precedence over `historyFile` and `history` | `JsonMarketHistoryRepository` |
 | `speed` | Playback speed multiplier; must be a positive finite number | `60` |
 | `scheduler` | Injected scheduler implementation for playback | Internal timeout scheduler |
 | `setTimeoutFn` / `clearTimeoutFn` | Timer functions used when no scheduler is supplied | Node.js timers |
