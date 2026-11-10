@@ -28,7 +28,7 @@ Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch 
 
 ## Required package check
 
-- Run `pnpm --filter @coinzilla/utils test` (verify the package script exists before relying on it), followed by applicable workspace checks.
+- Run `pnpm --filter @coinzilla/utils test` and `pnpm --filter @coinzilla/utils test:coverage` (verify both scripts exist before relying on them), followed by applicable workspace checks. The coverage command enforces 90% line and 85% branch coverage.
 
 ## Domain-specific constraints
 
