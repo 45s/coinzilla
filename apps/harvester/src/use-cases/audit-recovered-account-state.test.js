@@ -145,6 +145,7 @@ test("replays recovery completion with a reset Position basis and preserved resi
   assert.equal(position.baseQuantity.amount, "0.0896", "Active residual inventory above keepQuantity must remain available for Free-Roll selling.")
   assert.equal(position.freeBaseQuantity.amount, "0.01", "The exact retained keepQuantity must remain in the separate free bucket.")
   assert.equal(position.spent.amount, "0", "A replayed completed cycle must reset the authoritative Position recovery basis just like live completion.")
+  assert.equal(position.quoteNetCashFlow.amount, "0.25", "Resetting recovery basis must preserve cumulative realized quote cash flow.")
   assert.equal(ledger.buyCost, "0", "The RecoveryLedger cycle cost mirror must be reset with the Portfolio basis.")
   assert.equal(ledger.netSellProceeds, "0", "The completed cycle's proceeds must be cleared.")
   assert.deepEqual(ledger.appliedFillIds, restored.portfolio.appliedFillIds, "Fill identities must survive the cycle reset for duplicate protection.")

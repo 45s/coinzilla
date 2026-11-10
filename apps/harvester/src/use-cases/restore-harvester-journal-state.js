@@ -158,10 +158,12 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       }) < 0) {
         throw new Error("Recovery-cycle free quantity exceeds replayed active inventory for " + item.symbol)
       }
-      const nextPortfolio = portfolio.allocateFreeQuantity({
-        marketId: market.id,
-        quantity: item.freeQuantity,
-      })
+      const nextPortfolio = portfolio
+        .allocateFreeQuantity({
+          marketId: market.id,
+          quantity: item.freeQuantity,
+        })
+        .resetRecoveryBasis({ marketId: market.id })
       const resetLedger = recoveryLedger.resetCycle({
         minProfit: item.realizedNetProfit,
         spent: position.spent,
