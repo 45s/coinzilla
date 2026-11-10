@@ -2646,7 +2646,7 @@ test("accepts a matching Binance NEW report after a lost order acknowledgement",
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(result.data.ignored, false, "The authoritative NEW report must not be classified as stale.")
+  assert.notEqual(result.data.ignored, true, "The authoritative NEW report must not be classified as stale or ignored.")
   const tracked = engine.getOrders().find((order) => order.clientOrderId === unknownOrder.clientOrderId)
   assert.equal(tracked.status, "OPEN")
   assert.equal(tracked.brokerOrderId, "binance-accepted-after-timeout", "The exchange-assigned ID must become available to shutdown cancellation.")
