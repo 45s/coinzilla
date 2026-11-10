@@ -93,12 +93,12 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 ### Phase 3 — Historical evidence organization
 
-- [~] Relocate the nine root-level audit reports, session reports and supporting evidence into indexed `docs/audits/reports/`, `sessions/` and `evidence/` directories in [PR #951](https://github.com/45s/coinzilla/pull/951); preserve content, filenames, provenance and distinct session boundaries.
+- [x] Relocate the nine root-level audit reports, session reports and supporting evidence into indexed `docs/audits/reports/`, `sessions/` and `evidence/` directories in [merged PR #951](https://github.com/45s/coinzilla/pull/951); preserve content, filenames, provenance and distinct session boundaries.
 - [ ] Complete the remaining audit/evidence classification across all Harvester documentation and verify every inbound reference.
 - [ ] Preserve original timestamps, source commit SHAs, evidence identifiers, limitations and unknowns.
 - [ ] Introduce UTC timestamped filenames for newly created snapshots.
 - [ ] Add dated addenda or successor assessments rather than rewriting historical conclusions.
-- [~] Archive the root-level records only after destination indexes existed and known inbound/outbound references were updated; exact recursive link CI remains the final verification gate in [PR #951](https://github.com/45s/coinzilla/pull/951).
+- [x] Archive the root-level records only after destination indexes existed and known inbound/outbound references were updated; recursive agent-policy link/anchor validation, changed-maintained-document Markdown style checks, and the advisory external documentation-link check all passed on the exact PR #951 head.
 - [ ] Review any additional historical records still outside `docs/audits/` and move only when ownership and references are verified.
 
 ### Phase 4 — Repository-wide adoption
@@ -132,6 +132,8 @@ No file may be deleted solely because it is old, large, similarly named or appar
 - Harvester runtime, tests, configuration and trading behavior remain unchanged by this documentation-only initiative.
 
 ## Current status and remaining boundaries
+
+The root-level Harvester audit cleanup is complete in merged [PR #951](https://github.com/45s/coinzilla/pull/951) at `752f0a7a6f2f4acaa0be461980f4853220805f3b`. The recursive `develop` tree now contains 57 Harvester Markdown/MDX files (42 frozen baseline plus 15 additions), with only `README.md`, `AGENTS.md`, and `ROADMAP.md` at the application root. Nine historical records are grouped under `docs/audits/reports/`, `sessions/`, and `evidence/`; their contents and original filenames are preserved.
 
 A source-based documentation consistency review also found and corrected a material process-lock discrepancy: the README incorrectly said stale locks are never reclaimed, while the source and tests permit narrowly guarded same-host dead-PID reclamation; Journal Operations described only the directory lock and omitted the broker-wide host lock. Both documents are now aligned with `acquire-harvester-process-lock.js`, `acquire-harvester-process-locks.js` and their deterministic tests. The Journal integration roadmap's Step 8 branch status was also refreshed against merged PR #473; Step 8 remains open rather than being falsely marked complete.
 
