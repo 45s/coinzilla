@@ -4,8 +4,9 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-10 15:58 +02:00
-**Last source-verified develop checkpoint:** `d07a51446ac4116d307896a8559b033a6e62f06b` (after PR #945)
+**Last reviewed:** 2026-11-10 16:55 +02:00
+**Last source-verified develop checkpoint:** `752f0a7a6f2f4acaa0be461980f4853220805f3b` (after PR #951)
+**Recent verified merges:** PRs #943, #944, #946, #947, #948, #949 and #951; all required CI checks passed. TESTNET integration probes were skipped for these offline changes.
 
 ## CRITICAL — Harvester readiness and recovery
 

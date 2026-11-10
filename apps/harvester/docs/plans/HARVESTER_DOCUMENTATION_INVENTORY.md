@@ -1,10 +1,10 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 12 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 15 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `f98c4e02be5707c550bde5c63e223b0f160bb406` (`truncated: false`; 54 Harvester Markdown/MDX files; zero path additions/removals since `f4fd2ab`)
+- Latest recursive checkpoint: `develop` at `752f0a7a6f2f4acaa0be461980f4853220805f3b` (`truncated: false`; 57 Harvester Markdown/MDX files after PR #951 added three archive indexes and relocated nine historical records)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-10
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -20,7 +20,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 - **KEEP** — preserve current location and content for now; maintain its index and authority boundaries.
 - **SUPERSEDE** — retain the prior document and its provenance, but clearly identify the successor and stop treating the old plan/guidance as current.
 - **REVIEW** — investigate content, status and references before deciding whether to keep, merge, split, supersede or archive.
-- No file is deleted or moved by this inventory.
+- No evidence file is deleted. PR #951 relocates nine historical records into indexed archive directories while preserving content, provenance and distinct session boundaries.
 - Historical reports, exchange exports, logs, evidence and completed AI task briefs are preserved.
 
 ## File-by-file inventory
@@ -70,9 +70,9 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 | `apps/harvester/docs/testnet-order-tools.md` | 16286 | Operational tool guide | **KEEP** | Current standalone TESTNET command procedures and destructive authorization boundaries are checked against package scripts; PR #808 corrected the history argument example. Current ownership diagnostics are aligned with `create-user-data-event-handler.js` and `OrderRegistry`; dated `666845`/client-ID investigation snapshots now point to `ROADMAP_HISTORY.md` rather than posing as current instructions. The ZROUSDT market-sell helper and ZROUSDT/DOGEUSDT history defaults are explicitly labeled legacy and not authorized by the paused runbook; the interactive menu is documented as a wrapper for order tools plus the exchange-read-only account audit and local Journal audit; the account-wide cancel is explicitly marked as proceeding without interactive confirmation. Inbound links from `apps/harvester/README.md` and `docs/README.md` are preserved. |
 | `apps/harvester/docs/trading-strategies.md` | 20794 | Strategy overview | **KEEP** | Conservative section delegates all behavior to the canonical domain specification; Aggressive is explicitly exploratory/disabled. Current implementation status now reflects merged PR #653, closed audit #645 and paused/unverified TESTNET acceptance. |
 
-## Post-baseline additions — current 54-file checkpoint
+## Post-baseline additions — current 57-file checkpoint
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015` (`truncated: false`) finds **54 tracked Harvester Markdown/MDX files**: 12 additions and zero removals. These additions are maintained indexes, preserved historical evidence, the domain test inventory, the current error vocabulary, or this inventory; they are recorded separately so the original baseline byte sizes and dispositions remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015` (`truncated: false`) finds **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the frozen 42-file baseline. PR #951 adds three archive indexes and relocates nine existing historical records; no evidence content is deleted. Additions and current archive paths are recorded separately so the original baseline byte sizes and dispositions remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -88,6 +88,27 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md` | This file; detailed Harvester documentation inventory and disposition record. | **KEEP** |
 | `apps/harvester/docs/plans/README.md` | Local index for Harvester plans and migration tracking. | **KEEP** |
 | `apps/harvester/docs/tasks/README.md` | Local index for Harvester task records and historical handoffs. | **KEEP** |
+| `apps/harvester/docs/audits/evidence/README.md` | Index for preserved exchange exports and integrity evidence. | **KEEP** |
+| `apps/harvester/docs/audits/reports/README.md` | Index for historical audit narratives, findings and execution history. | **KEEP** |
+| `apps/harvester/docs/audits/sessions/README.md` | Index for distinct dated session audits. | **KEEP** |
+
+## Historical audit archive moves — PR #951
+
+The frozen 42-file table above preserves original baseline paths. Current locations for the nine relocated records are:
+
+| Baseline path | Current path |
+| --- | --- |
+| `apps/harvester/AUDIT.md` | `apps/harvester/docs/audits/reports/AUDIT.md` |
+| `apps/harvester/AUDIT_FINDINGS.md` | `apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md` |
+| `apps/harvester/AUDIT_EXECUTION_HISTORY.md` | `apps/harvester/docs/audits/reports/AUDIT_EXECUTION_HISTORY.md` |
+| `apps/harvester/AUDIT_SESSION_2026-11-08.md` | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-08.md` |
+| `apps/harvester/AUDIT_SESSION_2026-11-08_16-33-33.md` | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-08_16-33-33.md` |
+| `apps/harvester/AUDIT_SESSION_2026-11-09_11-33-00.md` | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-09_11-33-00.md` |
+| `apps/harvester/AUDIT_DOGE_TRADES_2026-11-06.md` | `apps/harvester/docs/audits/evidence/AUDIT_DOGE_TRADES_2026-11-06.md` |
+| `apps/harvester/AUDIT_LOG_EVIDENCE_2026-11-06.md` | `apps/harvester/docs/audits/evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md` |
+| `apps/harvester/AUDIT_ZRO_TRADES_2026-11-06.md` | `apps/harvester/docs/audits/evidence/AUDIT_ZRO_TRADES_2026-11-06.md` |
+
+PR #951 also added `docs/audits/reports/README.md`, `docs/audits/sessions/README.md` and `docs/audits/evidence/README.md` as category indexes.
 
 ## Content-based findings
 
