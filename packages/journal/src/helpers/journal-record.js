@@ -15,6 +15,10 @@ function createJournalError({ code, message, details = {} }) {
 /**
  * Serialize a stable source event with additive versioned journal metadata.
  * Source events must not provide Journal's reserved metadata or a root toJSON hook.
+ * @remarks Uses JSON.stringify and currently validates only the top-level record envelope.
+ * Callers must provide acyclic, losslessly JSON-safe plain data; nested undefined,
+ * non-finite numbers, and negative zero may be omitted or coerced, while BigInt and
+ * cycles throw. Shared-reference identity is not preserved. See Journal issue #889.
  * @param {{ event: object }} input
  * @returns {string}
  * @throws {TypeError} If the event shape, stable identity, or reserved-field contract is invalid.

@@ -8,14 +8,29 @@ Journal stores the events it receives; it does not decide what those events mean
 
 - **Domain event:** a business fact named and owned by the domain that produces it (for example, an order being filled). Journal does not infer domain meaning from an event name or payload.
 - **EventBus message / source event:** the event delivered to Journal by the injected EventBus subscription. Journal consumes the event object as supplied; it does not reclassify it as a domain or integration event.
-- **Persisted Journal record:** the source event's fields retained at the JSONL top level, plus Journal-owned schema and identity metadata under the reserved `__coinzillaJournal` key.
+- **Persisted Journal record:** the JSON-representable source-event fields retained at the JSONL top level, plus Journal-owned schema and identity metadata under the reserved `__coinzillaJournal` key. This is subject to the [current JSONL serialization limitation](#known-jsonl-serialization-and-durability-limitation--issue-889).
 - **Recovered record:** the read/replay representation derived from a persisted line. It separates Journal identity and schema from the event payload and adds the source file and 1-based line position.
 
 A source event is an object with a non-empty string `id`. That stable ID becomes the Journal record identity; Journal does not generate a replacement ID or deduplicate records by business meaning. The reserved `__coinzillaJournal` metadata key cannot be supplied by the source event. A source event must not define an own enumerable callable `toJSON` method: object spread copies that hook onto the persisted record, where JSON serialization could use it to replace the complete Journal envelope. Journal rejects this root-level serialization hook; non-enumerable or inherited methods are not copied into the record.
 
-A current schema-v1 JSONL line preserves all source event fields at the top level and adds `__coinzillaJournal: { schemaVersion: 1, id: event.id }`. Reading returns `{ id, schemaVersion, payload, position }`: `payload` contains the original event fields without the reserved metadata, and `position` contains `{ fileName, lineNumber }` with a 1-based line number.
+For source events that satisfy the temporary JSONL-safe value constraint below, a current schema-v1 JSONL line retains the source event fields at the top level and adds `__coinzillaJournal: { schemaVersion: 1, id: event.id }`. Reading returns `{ id, schemaVersion, payload, position }`: `payload` contains the persisted event fields without the reserved metadata, and `position` contains `{ fileName, lineNumber }` with a 1-based line number.
 
 Legacy JSONL lines written before the metadata field existed remain readable as schema-v1 records: their top-level object is the payload, and its non-empty `id` supplies record identity. Unknown schema versions and malformed identities fail closed.
+
+### Known JSONL serialization and durability limitation — issue #889
+
+EventBus's in-memory payload contract is broader than the values JSONL can represent losslessly. Journal currently uses `JSON.stringify` after validating the top-level event identity and reserved metadata; it does not recursively validate nested values for lossless JSON representation. Until [Journal issue #889](https://github.com/45s/coinzilla/issues/889) is resolved, every EventBus message that must be persisted by Journal must use only acyclic, losslessly JSON-safe data:
+
+- Allowed values: `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain or null-prototype objects with enumerable string-keyed data properties.
+- Do not include `undefined` at any depth (including sparse-array holes), `bigint`, `NaN`, positive or negative infinity, cycles, symbols, functions, mutable built-ins, class instances, accessors, non-enumerable properties, symbol-keyed properties, or custom array properties.
+- Shared references may be accepted by EventBus, but JSONL writes them as repeated subtrees; reference identity is not preserved. Do not rely on alias identity after recovery.
+- Do not use nested custom `toJSON` hooks. Journal rejects an own enumerable root-level `toJSON` function, but it does not recursively validate serialization hooks.
+
+The current `JSON.stringify` behavior is lossy for unsupported values: undefined object properties are omitted; undefined array entries and sparse holes become `null`; non-finite numbers become `null`; negative zero becomes `0`; and BigInt or cyclic graphs throw. These are not supported Journal encodings.
+
+There is also a durability-result propagation gap. A direct `record({ event })` call returns a failure when serialization throws. For an EventBus-subscribed message, the subscription currently logs that failed result and resolves normally; the failure is not added to `writeErrors`. Therefore `flush()` or `close()` can still report `durable: true` after a delivered event was not written, and lossy conversions can be persisted with altered values. A successful durability result currently confirms that writes which reached the Journal queue were synced; it does not prove that every EventBus-delivered message was persisted losslessly.
+
+The repository audit did not establish a current Harvester DTO that violates this temporary constraint; it is a package-contract and future-consumer risk. Harvester's consumer-side requirement is documented in [Journal Evidence Contract](../../apps/harvester/docs/JOURNAL_EVIDENCE_CONTRACT.md#safety-and-delivery). Do not narrow EventBus's in-memory contract as a workaround.
 
 Replay passes each recovered record to the consumer as `{ record }`, in session/line order, only after the complete snapshot has been validated. The consumer owns interpretation, application restoration, and idempotent handling. Replay is at-least-once; it is not a command dispatcher or an exactly-once side-effect mechanism.
 
@@ -31,9 +46,9 @@ Journal uses only the EventBus operations `subscribeAll({ handler })` and `flush
 | Method | Observable contract |
 | --- | --- |
 | `start()` | Creates the directory if needed, acquires exclusive writer ownership, creates a session, and subscribes to EventBus messages. A second active writer for the same directory is rejected. |
-| `record({ event })` | Appends one validated source event in queue order. A successful result means the write completed and reports `durable: false`; it does not confirm file-content sync. |
-| `flush()` | Flushes EventBus delivery, waits for queued writes, and syncs the active session file. Success reports `durable: true`; failure does not claim durability. |
-| `close()` | Cancels and waits for an in-progress startup to finish rolling back its owned resources, or unsubscribes an active writer, drains queued writes, syncs and closes the session, and releases the lock owned by this instance. A failed close remains a failed durability outcome on repeated calls. |
+| `record({ event })` | Checks top-level event identity/reserved metadata and attempts JSONL serialization before queueing the write. A successful result means the write completed and reports `durable: false`; it does not confirm file-content sync. Nested JSON-lossy values are not recursively rejected yet; see issue #889. |
+| `flush()` | Flushes EventBus delivery, waits for queued writes, and syncs the active session file. Success reports `durable: true` for writes that reached the queue. Until issue #889 is fixed, serialization failures logged by the EventBus subscription are not included in that result. |
+| `close()` | Cancels and waits for an in-progress startup to finish rolling back its owned resources, or unsubscribes an active writer, drains queued writes, syncs and closes the session, and releases the lock owned by this instance. A failed close remains a failed durability outcome on repeated calls; the issue #889 subscription-serialization caveat also applies. |
 | `read(options)` | Reads and validates a complete bounded snapshot while this Journal instance is stopped. It does not acquire a cross-process reader lock. |
 | `replay(options)` | Validates the complete snapshot, then awaits the handler sequentially for each recovered record. A handler failure stops replay and reports completed progress. |
 
@@ -131,7 +146,7 @@ if (!closed.ok) throw closed.errors[0]
 
 A transient file-content sync failure after queued writes have completed does not poison the active Journal writer: a later `flush()` on the same instance can retry the sync and make those earlier writes durable. If a caller republishes the same logical audit after an unconfirmed flush, Journal stores that publication as a new record; a later successful sync can make both records durable. Journal does not deduplicate records by business meaning. This is at-least-once publication, so consumers must use stable record IDs and idempotent processing rather than deleting, overwriting, or deduplicating historical evidence. A `writeFile()` failure is different: it poisons the active Journal instance, and later writes/flushes continue failing until operator-level recovery or process restart.
 
-New records retain the original event fields at the JSONL top level and add a reserved `__coinzillaJournal` metadata field containing schema version 1 and the stable record ID. This additive shape preserves compatibility with existing consumers that read event fields directly. Existing raw event JSONL records without metadata are supported as legacy schema-v1 records.
+For source events that satisfy the temporary JSONL-safe constraint above, new records retain the source event fields at the JSONL top level and add a reserved `__coinzillaJournal` metadata field containing schema version 1 and the stable record ID. This additive shape preserves compatibility with existing consumers that read JSON-representable event fields directly. Existing raw event JSONL records without metadata are supported as legacy schema-v1 records.
 
 
 If `close()` is called while `start()` is still acquiring the writer lock or creating the session, close marks startup for cancellation and does not resolve until that startup attempt has completed cleanup of every resource it acquired. The startup promise reports cancellation; the close promise reports whether the resulting stopped state was reached safely. If resource cleanup itself fails, close returns those cleanup errors and does not claim durable closure. The timestamped session file created before cancellation is retained as an empty JSONL file; its handle is closed and its lock is released rather than deleting or rewriting session history.
