@@ -56,7 +56,7 @@ The CLOSING event correctly recorded `auditStatus=INCOMPLETE` and `UNRESOLVED_OW
 
 ## F-006 — Historical Conservative documentation conflict (superseded 2026-11-06)
 
-**Status:** The earlier multi-document conflict is superseded by the owner-approved canonical contract. The sole current rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old maker-only fee, residual-suppression, portfolio completion, and zero-value statements preserved in historical records must not be used as current policy.
+**Status:** The earlier multi-document conflict is superseded by the owner-approved canonical contract. The sole current rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old maker-only fee, residual-suppression, portfolio completion, and zero-value statements preserved in historical records must not be used as current policy.
 
 All owner decisions are closed and recorded in the canonical specification; no further product decisions are pending.
 
@@ -78,7 +78,7 @@ The original attachments were read-only inspected and independently hashed:
 - `harvester.log`: 16,878,030 bytes; 4,880 physical lines; SHA-256 `5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d`.
 - `harvester-trace.log`: 17,021,746 bytes; 5,739 physical lines; SHA-256 `4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3`.
 
-Both files end with a newline and their checksums match #645. The logs were parsed; key source-line ranges and derived findings are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). The ZRO Portfolio/RecoveryLedger transition is directly observed. DOGE order 1276698 is OPEN/zero-executed at the final runtime evaluations and absent from the 12 shutdown execution records, which favors open/unfilled, but exchange order history separately reports FILLED. Therefore log integrity/parsing passes while DOGE terminal-state and complete CLOSING-order reconciliation remain unresolved.
+Both files end with a newline and their checksums match #645. The logs were parsed; key source-line ranges and derived findings are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md). The ZRO Portfolio/RecoveryLedger transition is directly observed. DOGE order 1276698 is OPEN/zero-executed at the final runtime evaluations and absent from the 12 shutdown execution records, which favors open/unfilled, but exchange order history separately reports FILLED. Therefore log integrity/parsing passes while DOGE terminal-state and complete CLOSING-order reconciliation remain unresolved.
 
 ## F-009 — Exact-once full-cycle recovery coverage is a concrete test gap
 
@@ -131,7 +131,7 @@ Closure: both orders and reservations identified and reconciled, else remain INC
 
 ### F-006 — fee/config contract (#646; historical, superseded)
 
-Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### F-007 — full-cycle exact-once and lifecycle regression (#648)
 
@@ -217,7 +217,7 @@ Closure: both orders and reservations identified and reconciled, else remain INC
 
 **Status: PASS for the observed in-memory accounting transition.**
 
-Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied exactly once, Portfolio active quantity 0.05 ZRO and quote cash flow +0.01136454 USDT, RecoveryLedger proceeds 64.03136454 USDT and outstanding 0, followed by eligible completion allocating 0.01 ZRO free, retaining 0.04 active residual, and resetting cycle totals. The following evaluation retains active 0.04/free 0.01/total 0.05. This directly establishes the runtime state previously inferred from Journal and arithmetic. It does not establish full account settlement or TESTNET acceptance. Full detail: [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md).
+Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied exactly once, Portfolio active quantity 0.05 ZRO and quote cash flow +0.01136454 USDT, RecoveryLedger proceeds 64.03136454 USDT and outstanding 0, followed by eligible completion allocating 0.01 ZRO free, retaining 0.04 active residual, and resetting cycle totals. The following evaluation retains active 0.04/free 0.01/total 0.05. This directly establishes the runtime state previously inferred from Journal and arithmetic. It does not establish full account settlement or TESTNET acceptance. Full detail: [log evidence addendum](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md).
 
 
 ## F-010 — post-CLOSING exchange fills are not reflected in the stopped runtime snapshot
@@ -519,7 +519,7 @@ Current source and regression inventory:
 
 - **Severity:** High — trading availability and order-lifecycle safety.
 - **Verdict:** RESOLVED by [PR #673](https://github.com/45s/coinzilla/pull/673), merged 2026-11-08; final PR head `24c2b9fdc67cf7ce64fc586141ea0dd60fe9c83d` passed all six required offline CI workflows. TESTNET acceptance remains separately PAUSED / UNVERIFIED.
-- **Evidence:** 2026-11-08 Journal events #266, #269–270, #285, #288–289, and #397–399; DEBUG lines 9307, 9351, 9362, 9398–9400, 9470, 9699–9703; TRACE lines 10942–10943, 11005–11006, 11024–11026, 11080–11084, 11186–11187, 11489–11498. Original artifact hashes and full parsed evidence are in [AUDIT_SESSION_2026-11-08.md](./AUDIT_SESSION_2026-11-08.md).
+- **Evidence:** 2026-11-08 Journal events #266, #269–270, #285, #288–289, and #397–399; DEBUG lines 9307, 9351, 9362, 9398–9400, 9470, 9699–9703; TRACE lines 10942–10943, 11005–11006, 11024–11026, 11080–11084, 11186–11187, 11489–11498. Original artifact hashes and full parsed evidence are in [AUDIT_SESSION_2026-11-08.md](../sessions/AUDIT_SESSION_2026-11-08.md).
 - **Expected contract:** no order submission, cancellation, replacement, or retry while authoritative user-data recovery is unresolved; queued execution facts may be reconciled, and any required strategy evaluation must be retained until the broker recovery acknowledgement reopens readiness.
 - **Observed:** after transport reported `recovered`, DOGE BUY trade 231208 and ZRO BUY trade 12374 were applied exactly once. Their subsequent duplicate/replayed execution events were processed through the normal engine path. That path requested cancellation of owned recovery SELLs 1323350 (797 DOGE) and 749343 (24.94 ZRO) while the broker still rejected order changes because the user-data stream was unavailable. Both cancellations became UNKNOWN/UNCONFIRMED, both markets paused, and application recovery failed at 03:23:00.631Z.
 - **Root cause 1:** bootstrap did not pass the engine's existing `recoveryMode` option to queued user-data order-event processing.
