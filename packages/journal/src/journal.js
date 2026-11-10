@@ -43,6 +43,7 @@ export class Journal {
     this.closed = false
     this.writeErrors = []
     this.writeFailed = false
+    this.appendFailed = false
     this.closeDurable = false
   }
 
@@ -178,10 +179,9 @@ export class Journal {
   /**
    * Append one source event to the active JSONL session.
    *
-   * @remarks Top-level identity and reserved metadata are checked, but nested
-   * values are not recursively validated for lossless JSON serialization. For
-   * EventBus-subscribed messages, a failed record result is logged but is not
-   * currently included in flush/close durability results; see issue #889.
+   * @remarks Source-event values are recursively validated before serialization.
+   * A serialization failure poisons the active writer and is retained in
+   * writeErrors so flush/close cannot report durable success after an omitted event.
    */
   async record({ event } = {}) {
     if (!this.started || this.closing || this.closed || !this.filePath) {
@@ -191,7 +191,7 @@ export class Journal {
     }
     if (this.writeFailed) {
       return toResult({
-        error: new Error("Journal session is failed after a previous write error"),
+        error: new Error("Journal session is failed after a previous write error or serialization error"),
       })
     }
 
@@ -199,13 +199,15 @@ export class Journal {
     try {
       line = serializeJournalRecord({ event })
     } catch (error) {
+      this.writeFailed = true
+      this.writeErrors.push(error)
       return toResult({ error })
     }
 
     const task = this.writeQueue.then(async () => {
-      if (this.writeFailed) {
+      if (this.appendFailed) {
         return toResult({
-          error: new Error("Journal session is failed after a previous write error"),
+          error: new Error("Journal session is failed after a previous append error"),
         })
       }
       try {
@@ -213,6 +215,7 @@ export class Journal {
         return toResult({ written: true, durable: false, recordId: event.id })
       } catch (error) {
         this.writeFailed = true
+        this.appendFailed = true
         this.writeErrors.push(error)
         return toResult({ error })
       }
@@ -447,7 +450,9 @@ export class Journal {
         filePath: this.filePath,
       })
 
-      return toResult({ errors })
+      const closeResult = { errors }
+      if (this.writeFailed) closeResult.durable = false
+      return toResult(closeResult)
     }
 
     this.closeDurable = true
