@@ -491,66 +491,26 @@ function maskJavaScriptNonCode(source) {
   }
 
   function scanTemplate(index) {
-    const start = index - 1;
+    let segmentStart = index - 1;
+    blank(segmentStart, index);
     while (index < source.length) {
       if (source[index] === '\\') {
         index += 2;
         continue;
       }
       if (source[index] === String.fromCharCode(96)) {
-        index += 1;
-        blank(start, index);
-        return index;
+        blank(segmentStart, index + 1);
+        return index + 1;
       }
-      if (source[index] === '
-  const directories = findInstructionDirectories(repositoryRoot);
-  const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
-  const requiredDocumentationPaths = [
-    'AGENTS.md',
-    'AI_AGENT_WORKFLOW.md',
-    'ENGINEERING_STANDARDS.md',
-    'docs/DOCUMENTATION_GOVERNANCE.md',
-    'docs/README.md',
-    'apps/harvester/AGENTS.md',
-    'apps/harvester/README.md',
-    'apps/harvester/docs/README.md',
-  ];
-  const markdownDocuments = findMarkdownDocuments(repositoryRoot);
-  const anchorGaps = findMissingLocalAnchors(repositoryRoot, markdownDocuments);
-  console.log(
-    'Markdown heading-anchor baseline (report-only): ' + anchorGaps.length +
-    ' unresolved local anchors across ' + markdownDocuments.length + ' Markdown/MDX files.',
-  );
-  for (const gap of anchorGaps) console.log('- ' + gap);
-
-  const gaps = [...new Set([
-    ...findOwnershipGaps(directories, ownershipDocument),
-    ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
-    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
-    ...findUnbalancedMarkdownFences(markdownDocuments),
-    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
-    ...findDirectConsoleUsages(repositoryRoot),
-  ])];
-
-  if (gaps.length > 0) {
-    console.error('Agent policy ownership check failed:');
-    for (const gap of gaps) console.error(`- ${gap}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).`);
-}
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
- && source[index + 1] === '{') {
-        blank(start, index + 2);
+      if (source[index] === '$' && source[index + 1] === '{') {
+        blank(segmentStart, index + 2);
         index = scanCode(index + 2, true);
-        return scanTemplate(index);
+        segmentStart = index;
+        continue;
       }
       index += 1;
     }
-    blank(start, index);
+    blank(segmentStart, index);
     return index;
   }
 
