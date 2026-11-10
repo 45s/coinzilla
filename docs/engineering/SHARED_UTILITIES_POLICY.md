@@ -107,7 +107,7 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 | Area | Existing implementations observed | Initial disposition |
 | --- | --- | --- |
 | Shared logger | packages/utils/src/logger.js, exported as Logger and defaultLogger | Reuse this public API; inspect application adapters and direct console usage during the audit. |
-| Exact decimal arithmetic | Previously duplicated across trading and shared packages | [x] Consolidated in `packages/utils/src/decimal.js`; consumers now import the shared API. Domain-level accounting, trading rules, and market validation remain local. |
+| Exact decimal arithmetic | Previously duplicated across trading and shared packages; a remaining Harvester TESTNET sell CLI implementation is under migration | [~] Core arithmetic is consolidated in `packages/utils/src/decimal.js`; PR #946 migrates the CLI's local BigInt parser/step-rounding/formatter to shared parse/round/compare/rescale primitives while retaining Binance filter and quantity policy locally. |
 | Decimal normalization | Previously implemented in packages/entities/src/values/normalize-decimal-string.js | [x] Generic canonicalization now lives in `@coinzilla/utils`; Entities retains its result-envelope adapter and domain-facing validation contract. |
 | Percentage arithmetic | Previously implemented in application-local percentage helpers | [x] Exact percentage-rate, percentage-of, percentage-change, and apply-change functions now live in `@coinzilla/utils`. |
 | Keyed async queue | Previously implemented in application-local lifecycle helpers | [x] Generic per-key serial task queue now lives in `@coinzilla/utils`; subscription disconnection remains app-local. |
@@ -128,14 +128,15 @@ The original three application decimal modules were not interchangeable as-is:
 - Market Simulator had positional arguments and rejected negative subtraction results; its market/order rules remain domain-owned.
 - Entities had independent canonicalization and subtraction implementations; both now delegate to shared primitives while preserving the existing `toResult` contract.
 
-The shared API accepts decimal strings (and bigint for parsing) and intentionally rejects JavaScript Number operands. It defines bounded precision, explicit division/rescaling rounding, and exact string outputs. The migration removes duplicate arithmetic implementations without changing domain-level trading/accounting decisions.
+The shared API accepts decimal strings (and bigint for parsing) and intentionally rejects JavaScript Number operands. It defines bounded precision, explicit division/rescaling rounding, and exact string outputs. The migration removes duplicate arithmetic implementations without changing domain-level trading/accounting decisions. The standalone Harvester TESTNET sell helper is the remaining identified consumer candidate; its shared-primitive migration is pending PR #946.
 
 ## Audit and migration plan
 
 - [~] Inventory application and package helper/utility modules and classify candidates. The source-tree/helper inventory and current dispositions are recorded below; routine console-use verification and any future candidates remain.
 - [~] Review direct console use and application logger adapters; Harvester's default logger was migrated and existing shared logger consumers were confirmed. A repository-wide automated guard remains.
 - [x] Design and test the shared exact decimal API with explicit bounds and rounding behavior.
-- [x] Migrate Harvester, Market Simulator, application-local, Entities, and EventBus consumers while keeping business-specific rules local.
+- [x] Migrate Harvester domain, Market Simulator, application-local, Entities, and EventBus consumers while keeping business-specific rules local.
+- [~] Migrate the standalone Harvester TESTNET sell helper from local BigInt arithmetic to shared decimal primitives in [PR #946](https://github.com/45s/coinzilla/pull/946); preserve CLI validation, filter selection, min/max rules, and output precision.
 - [x] Identify and extract additional generic helpers (percentage calculations, keyed task queue, object-input assertion); classify remaining package helpers by domain ownership.
 - [x] Update package READMEs, exports, consumer tests, and domain roadmaps for the extracted capabilities.
 - [ ] Add automated checks where reliable (for example, detecting direct console usage outside approved infrastructure/CLI paths).
@@ -151,6 +152,7 @@ The source-tree audit covers the applications and workspace packages present in 
 | --- | --- |
 | application-local exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in application-local. |
 | Harvester portfolio arithmetic | [x] Removed app-local decimal engine and its duplicate unit suite; position accounting imports shared arithmetic. Position and fill invariants remain in Harvester/Entities. |
+| Harvester TESTNET sell quantity | [~] Replace the remaining local BigInt decimal implementation in `apps/harvester/scripts/testnet-sell-utils.js` with shared parsing, increment rounding, comparison, and precision restoration in PR #946; exchange filter selection and quantity policy remain local. |
 | Market Simulator arithmetic | [x] Removed app-local arithmetic engine; order matching uses shared comparison and a thin object-input facade delegates arithmetic while preserving the simulator's non-negative subtraction invariant. Candle validation and fill semantics remain local. |
 | Entities decimal values | [x] Canonical decimal normalization and subtraction delegate to shared primitives; `toResult` and entity validation behavior remain in Entities. |
 | Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from application-local; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
@@ -182,6 +184,7 @@ The following helper groups were inspected and retained because their behavior b
 | `packages/notifiers/src/telegram` | Telegram request/message validation and token-aware safe error formatting | These depend on Telegram API behavior and token handling. |
 | Application-local trading helpers | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on application-local strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
 | `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
+| `apps/harvester/scripts/testnet-sell-utils.js` | Binance `MARKET_LOT_SIZE`/`LOT_SIZE` selection, minimum/maximum enforcement, and operator-facing errors | Keep exchange-filter and CLI policy local; reuse shared exact-decimal parsing/rounding/comparison/rescaling (PR #946 pending). |
 | `packages/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
 
 
