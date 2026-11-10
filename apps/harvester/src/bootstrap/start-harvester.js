@@ -60,7 +60,14 @@ export async function startHarvester({
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, tradingConfig: suppliedTradingConfig, loadConfig, env, eventPublisher, logger })
 
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
+  let accountSnapshotManager
+  const onCommissionAsset = ({ assetId, assetCode } = {}) => {
+    if (!accountSnapshotManager) {
+      throw new Error("Commission asset baseline manager is not ready")
+    }
+    return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
+  }
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
@@ -85,7 +92,6 @@ export async function startHarvester({
   const getRecoveryLedger = (...args) => portfolioWorkflow.getRecoveryLedger(...args)
   const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
   const marketMetadata = new Map()
-  let accountSnapshotManager
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
   const getAccountSnapshot = () => accountSnapshotManager?.getAccountSnapshot()
   let tradingEngine
@@ -245,7 +251,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
 
     userDataSubscription = await subscribeToUserData({
       broker,
