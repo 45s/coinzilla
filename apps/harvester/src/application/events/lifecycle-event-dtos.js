@@ -341,7 +341,8 @@ const mapStrategyDecisionInputs = (inputs) => {
       mapped[field] = null
       continue
     }
-    const decimal = typeof value === "number" && Number.isFinite(value) ? String(value) : value
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) continue
+    const decimal = typeof value === "number" ? String(value) : value
     if (typeof decimal !== "string") continue
     try {
       assertDecimalString({ value: decimal, field: "inputs." + field })

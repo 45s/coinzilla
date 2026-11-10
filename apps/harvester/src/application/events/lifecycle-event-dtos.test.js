@@ -1103,6 +1103,7 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
     reason: "INITIAL_BUY",
     inputs: {
       activeOrderCount: -0,
+      activeBaseQuantity: -0,
       activeBuyCount: 0,
       activeSellCount: 0,
       freeQuoteBalance: "1000",
@@ -1114,6 +1115,11 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
     Object.hasOwn(decision.data.inputs, "activeOrderCount"),
     false,
     "A negative-zero optional count must be omitted instead of reaching the Journal.",
+  )
+  assert.equal(
+    Object.hasOwn(decision.data.inputs, "activeBaseQuantity"),
+    false,
+    "A negative-zero optional decimal input must be omitted instead of being coerced to the string zero.",
   )
   assert.equal(
     decision.data.inputs.activeBuyCount,

@@ -214,7 +214,7 @@ Trading safety requirements remain in force: the operator selects TESTNET or LIV
 
 ## Journal evidence workstream
 
-- [ ] **#923 — Journal DTO compatibility:** reject non-finite/negative-zero numeric values at the Harvester DTO boundary and report best-effort mapper failures. Journal serializer enforcement merged in PR #920; test-first regressions are in PR #925. Keep #889 open until this consumer follow-up is merged and documented.
+- [ ] **#923 — Journal DTO compatibility:** reject non-finite/negative-zero numeric values at the Harvester DTO boundary and report best-effort mapper failures. Journal serializer enforcement merged in PR #920; test-first regressions and production enforcement are implemented in PR #925; exact-head CI is pending. Keep #889 open until this consumer follow-up is merged and documented.
 
 Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
 
