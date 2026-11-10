@@ -124,6 +124,7 @@ function requireFill({ data }) {
         amount: requireDecimal({
           value: commission.quoteValue?.amount,
           field: "commissions[" + index + "].quoteValue.amount",
+          positive: true,
         }),
         assetId: requireString({
           value: commission.quoteValue?.assetId,
