@@ -58,6 +58,10 @@ The existing Conservative strategy suite tests a BUY blocked when outstanding re
 
 The OrderRegistry suite already covers many important transitions, including UNKNOWN, stale events, identity mismatch and late FILLED reports. Follow-up review should prioritize complete canonical order state, remaining commitment, and immutability after rejected/stale transitions rather than adding duplicate status-only scenarios.
 
+### Medium — market trading-readiness boundaries are incomplete
+
+The readiness policy checks configured quantity after rounding down to the exchange quantity increment and checks the investment against MIN_NOTIONAL. Existing tests cover values below/above limits and a rounding-down example, but did not explicitly prove inclusive exact MIN_QUANTITY, MAX_QUANTITY and MIN_NOTIONAL boundaries. The current PR adds deterministic equality/immediately-outside cases. The independent market-data freshness helper already covers inclusive age/future-skew boundaries and invalid timestamps; no duplicate freshness tests are needed.
+
 ### Explicitly deferred — Aggressive grid behavior
 
 Aggressive is deliberately blocked by unresolved product rules. Its current NO_ACTION contract and inventory gate are tested. Do not invent grid depth, pricing, SELL thresholds, reservations or risk fallback as part of this testing initiative.
@@ -67,7 +71,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 1. **Strategy decisions:** close the blocked-recovery-SELL decision gap; then add exact investment-cap boundary cases and review active-order/market isolation matrices.
 2. **Portfolio and accounting:** strengthen independent expected values, commission-identity conflicts and multi-fill sequence invariants.
 3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
-4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
+4. **Market and configuration:** exact quantity and MIN_NOTIONAL equality/immediately-outside cases are in the current PR; review price-tick and configured fee boundaries next.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.

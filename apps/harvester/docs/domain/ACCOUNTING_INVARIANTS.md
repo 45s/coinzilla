@@ -42,6 +42,8 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Strategy | Initial BUY trailing decision/replacement eligibility | `trailing-buy-repricing.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Strategy | Standing BUY allowed with active recovery SELL | strategy test creates both intents | Existing |
 | Strategy | Recovery SELL acknowledged before next standing BUY | Engine submission-order regression | Existing / reverify |
+| Market readiness | Configured BUY quantity after step rounding: exact MIN/MAX and immediately outside each boundary | `validate-market-trading-readiness.test.js` — `enforces exchange quantity limits at exact boundaries and immediately outside them` | Existing — boundary matrix added in current PR; CI pending |
+| Market readiness | Configured investment exactly at and immediately below MIN_NOTIONAL | `validate-market-trading-readiness.test.js` — `enforces MIN_NOTIONAL at exact equality and immediately below the configured investment` | Existing — boundary assertions added in current PR; CI pending |
 | Strategy | Investment cap exact boundary and committed BUY amounts | one investment test | Partial |
 | Strategy | SELL submission before next BUY | `conservative-strategy.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Completion | Partial/cancelled SELL not complete | `recovery-completion.test.js` | Existing |
