@@ -51,16 +51,60 @@ test('recursively discovers nested domain instruction files', () => {
 });
 
 
-test('detects missing local Markdown links and ignores external links and anchors', () => {
+test('checks inline and reference-style local links while ignoring external links, code and HTML comments', () => {
   const root = mkdtempSync(join(tmpdir(), 'coinzilla-agent-links-'));
   try {
-    mkdirSync(join(root, 'docs'), { recursive: true });
+    mkdirSync(join(root, 'docs', 'audits'), { recursive: true });
     writeFileSync(join(root, 'docs', 'existing.md'), '# Existing');
+    writeFileSync(join(root, 'docs', 'with space.md'), '# Spaced');
+    const inlineCode = String.fromCharCode(96) + '[inline example](missing-inline.md)' + String.fromCharCode(96);
+    const gaps = findMissingLocalLinks(root, [
+      {
+        path: 'docs/policy.md',
+        content: [
+          '[valid](existing.md) [angle path](<with space.md>) [broken](missing.md)',
+          '[external](https://example.com) [anchor](#section)',
+          '[valid reference][good] [missing reference][bad]',
+          '[good]: existing.md',
+          '[bad]: missing-reference.md',
+          '[angle reference]: <missing path.md>',
+          '[external reference]: https://example.com/docs',
+          '[^footnote]: footnote text, not a link destination',
+          '<!-- [comment](missing-comment.md) -->',
+          '~~~md',
+          '[code example](missing-in-code.md)',
+          '~~~',
+          inlineCode,
+        ].join('\n'),
+      },
+      {
+        path: 'docs/audits/old.md',
+        content: '[historical reference]: missing-historical.md',
+      },
+    ]);
+
+    assert.deepEqual(gaps, [
+      'docs/audits/old.md links to missing path missing-historical.md',
+      'docs/policy.md links to missing path missing.md',
+      'docs/policy.md links to missing path missing-reference.md',
+      'docs/policy.md links to missing path missing path.md',
+    ], 'reference definitions and historical documents remain covered; code/comments do not');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('reports malformed percent-encoded local paths without throwing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-agent-malformed-path-'));
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true });
     const gaps = findMissingLocalLinks(root, [{
       path: 'docs/policy.md',
-      content: '[valid](existing.md) [broken](missing.md) [external](https://example.com) [anchor](#section)\n\n```md\n[code example](missing-in-code.md)\n```\n\n`[inline example](missing-inline.md)`',
+      content: '[malformed](bad%ZZ.md)',
     }]);
-    assert.deepEqual(gaps, ['docs/policy.md links to missing path missing.md']);
+    assert.deepEqual(gaps, [
+      'docs/policy.md has malformed URL-encoded local link path "bad%ZZ.md"',
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -104,6 +148,51 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
       'docs/source.md links to missing heading anchor "#absent" in docs/target.md',
       'docs/source.md links to missing heading anchor "#missing" in docs/source.md',
     ], 'only unresolved local Markdown fragments should be reported in stable sorted order');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validates reference-style heading fragments and ignores HTML-comment references', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-reference-heading-'));
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'target.md'), '## Present');
+    const gaps = findMissingLocalAnchors(root, [
+      {
+        path: 'docs/source.md',
+        content: [
+          '[valid reference][present]',
+          '[missing reference][absent]',
+          '[present]: target.md#present',
+          '[absent]: target.md#missing',
+          '<!-- [comment]: target.md#comment -->',
+        ].join('\n'),
+      },
+      {
+        path: 'docs/target.md',
+        content: '## Present',
+      },
+    ]);
+
+    assert.deepEqual(gaps, [
+      'docs/source.md links to missing heading anchor "#missing" in docs/target.md',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('reports malformed percent-encoded local paths during anchor validation without throwing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-heading-path-encoding-'));
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    assert.deepEqual(findMissingLocalAnchors(root, [{
+      path: 'docs/source.md',
+      content: '[malformed](bad%ZZ.md#section)',
+    }]), [
+      'docs/source.md has malformed URL-encoded local link path "bad%ZZ.md"',
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

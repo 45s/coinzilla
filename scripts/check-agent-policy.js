@@ -80,6 +80,28 @@ export function removeCodeExamples(content) {
 
   return output.join('\n').replace(/(`+)[\s\S]*?\1/g, '');
 }
+/**
+ * Extract destinations from Markdown inline links and reference definitions.
+ * Code examples and HTML comments are excluded.
+ * @param {string} content Markdown source.
+ * @returns {string[]} Link destinations in source order.
+ */
+function extractMarkdownLinkDestinations(content) {
+  const source = removeCodeExamples(content).replace(/<!--[\s\S]*?-->/g, '');
+  const destinations = [];
+  const inlineLinks = /!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))/g;
+  const referenceDefinitions = /^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*(?:<([^>]+)>|([^\s]+))/gm;
+
+  for (const match of source.matchAll(inlineLinks)) {
+    destinations.push(match[1] || match[2]);
+  }
+  for (const match of source.matchAll(referenceDefinitions)) {
+    destinations.push(match[1] || match[2]);
+  }
+
+  return destinations;
+}
+
 export function findInstructionDirectories(root) {
   const directories = [];
 
@@ -136,23 +158,36 @@ export function findOwnershipGaps(directories, ownershipDocument) {
  * @param {{ path: string, content: string }[]} documents Documents to inspect.
  * @returns {string[]} Human-readable link errors.
  */
+/**
+ * Find broken relative Markdown links in all discovered repository Markdown/MDX documents.
+ * Inline links and reference definitions are checked; code examples and HTML comments are ignored.
+ * External URLs, mail links, and same-document anchors are intentionally ignored.
+ *
+ * @param {string} root Repository root.
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable link errors.
+ */
 export function findMissingLocalLinks(root, documents) {
   const gaps = [];
 
   for (const document of documents) {
-    const content = removeCodeExamples(document.content);
-    const links = content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
-
-    for (const match of links) {
-      const target = match[1];
+    for (const target of extractMarkdownLinkDestinations(document.content)) {
       if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(target)) continue;
 
-      const relativeTarget = decodeURIComponent(target.split(/[?#]/, 1)[0]);
-      if (!relativeTarget) continue;
+      const rawPath = target.split(/[?#]/, 1)[0];
+      if (!rawPath) continue;
+
+      let relativeTarget;
+      try {
+        relativeTarget = decodeURIComponent(rawPath);
+      } catch {
+        gaps.push(document.path + ' has malformed URL-encoded local link path "' + rawPath + '"');
+        continue;
+      }
 
       const absoluteTarget = resolve(root, dirname(document.path), relativeTarget);
       if (!existsSync(absoluteTarget)) {
-        gaps.push(`${document.path} links to missing path ${target}`);
+        gaps.push(document.path + ' links to missing path ' + target);
       }
     }
   }
@@ -291,11 +326,7 @@ export function findMissingLocalAnchors(root, documents) {
   const anchorCache = new Map();
 
   for (const document of documents) {
-    const content = removeCodeExamples(document.content);
-    const links = content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
-
-    for (const match of links) {
-      const target = match[1];
+    for (const target of extractMarkdownLinkDestinations(document.content)) {
       if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) continue;
 
       const hashIndex = target.indexOf('#');
@@ -305,14 +336,16 @@ export function findMissingLocalAnchors(root, documents) {
 
       const pathAndQuery = target.slice(0, hashIndex);
       const rawPath = pathAndQuery.split('?', 1)[0];
-      let absoluteTarget;
+      let decodedPath;
       try {
-        absoluteTarget = rawPath
-          ? resolve(root, dirname(document.path), decodeURIComponent(rawPath))
-          : resolve(root, document.path);
+        decodedPath = decodeURIComponent(rawPath);
       } catch {
+        gaps.push(document.path + ' has malformed URL-encoded local link path "' + rawPath + '"');
         continue;
       }
+      const absoluteTarget = decodedPath
+        ? resolve(root, dirname(document.path), decodedPath)
+        : resolve(root, document.path);
 
       if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) continue;
       const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
@@ -338,65 +371,6 @@ export function findMissingLocalAnchors(root, documents) {
   return gaps.sort();
 }
 
-/**
- * Find unclosed fenced code blocks in repository Markdown/MDX documents.
- *
- * Fences may use backticks or tildes, with a closing fence of the same
- * character and at least the opening fence length.
- *
- * @param {{ path: string, content: string }[]} documents Documents to inspect.
- * @returns {string[]} Human-readable Markdown structure errors.
- */
-export function findUnbalancedMarkdownFences(documents) {
-  const gaps = [];
-
-  for (const document of documents) {
-    let activeFence = null;
-    const lines = document.content.split(/\r?\n/);
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-      if (!match) continue;
-
-      if (!activeFence) {
-        activeFence = {
-          character: match[1][0],
-          length: match[1].length,
-          line: index + 1,
-        };
-        continue;
-      }
-
-      const isClosingFence = match[1][0] === activeFence.character &&
-        match[1].length >= activeFence.length &&
-        /^[ \t]*$/.test(match[2]);
-
-      if (isClosingFence) activeFence = null;
-    }
-
-    if (activeFence) {
-      gaps.push(
-        `${document.path} has an unclosed ${activeFence.character.repeat(activeFence.length)} fence opened at line ${activeFence.line}`,
-      );
-    }
-  }
-
-  return gaps.sort();
-}
-
-/**
- * Ensure every top-level domain in the ownership map has its own roadmap.
- *
- * @param {string} root Repository root.
- * @param {string} ownershipDocument Domain ownership Markdown.
- * @returns {string[]} Missing roadmap errors.
- */
-export function findMissingRoadmaps(root, ownershipDocument) {
-  return extractMappedPaths(ownershipDocument, '/')
-    .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
-    .map((directory) => `${directory} is missing ROADMAP.md`);
-}
-
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
@@ -418,13 +392,13 @@ function main() {
   );
   for (const gap of anchorGaps) console.log('- ' + gap);
 
-  const gaps = [
+  const gaps = [...new Set([
     ...findOwnershipGaps(directories, ownershipDocument),
     ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
     ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
     ...findUnbalancedMarkdownFences(markdownDocuments),
     ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
-  ];
+  ])];
 
   if (gaps.length > 0) {
     console.error('Agent policy ownership check failed:');
@@ -433,7 +407,7 @@ function main() {
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and local paths are valid; heading anchors are report-only).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and inline/reference-style local paths are valid; heading anchors are report-only).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
