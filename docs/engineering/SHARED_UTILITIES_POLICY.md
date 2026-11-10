@@ -62,6 +62,20 @@ Shared low-level primitives may support these packages, but packages/utils must 
 - Use structured context and stable fields. Never log secrets, credentials, access tokens, private keys, or sensitive payloads. Do not log the same failure redundantly.
 - If the current logger lacks a required generic capability, improve packages/utils first rather than creating an application-specific logger.
 
+### Automated source guard
+
+The required `check:agent-policy` command checks production `.js`, `.mjs`, and `.cjs` files recursively under `apps/` and `packages/`. It reports global `console` identifier references (including member, computed, destructured, and `globalThis.console` access) with a repository-relative path and line number. Comments, string literals, regular-expression literals, and template text are ignored; executable template interpolations are inspected.
+
+The current exact-file exceptions are:
+
+- `packages/utils/src/logger.js` — the shared logger's console transport.
+- `packages/notifiers/scripts/telegram-smoke.js` — explicit, manually invoked smoke-test CLI output.
+- `apps/harvester/scripts/list-testnet-balances.js`, `list-testnet-open-orders.js`, `list-testnet-order-history.js`, and `list-testnet-trades.js` — read-only TESTNET inspection CLI output.
+- `apps/harvester/scripts/run-targeted-tests.js` — the configured-test runner's CLI output.
+- `apps/harvester/scripts/sell-testnet-zro.js` — interactive operator CLI preview/result output for a separately confirmed exchange-write command; this documentation/CI guard does not execute or authorize that command.
+
+Test files and generated/vendor directories are outside this production-source check. Root `scripts/` are also outside its scope because they are repository-tool CLI entry points. The guard does not authorize routine console logging elsewhere, and it does not replace the separate policy for fatal `process.stderr.write` fallbacks.
+
 Example:
 
     import { defaultLogger } from "@coinzilla/utils"
@@ -151,7 +165,7 @@ The source-tree audit covers the applications and workspace packages present in 
 ### Remaining audit work
 
 - [ ] Complete a repository-wide direct console/stderr scan and document the exact approved runtime/CLI exceptions.
-- [ ] Add an automated repository check for routine direct console usage outside approved files, after the allowlist is agreed.
+- [~] Add an automated repository check for routine direct console usage outside approved files. The source guard and deterministic tests are proposed in [PR #942](https://github.com/45s/coinzilla/pull/942); exact-head CI is pending.
 - [ ] Continue to classify new generic candidates when they appear; do not move single-domain helpers without a stable domain-neutral contract.
 - [ ] Complete consumer migration verification through workspace CI and remove any stale imports or unused duplicate tests.
 

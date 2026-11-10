@@ -422,6 +422,239 @@ export function findMissingRoadmaps(root, ownershipDocument) {
     .map((directory) => `${directory} is missing ROADMAP.md`);
 }
 
+
+const ignoredJavaScriptDirectories = new Set([
+  ...ignoredMarkdownDirectories,
+  'test', 'tests', 'test-helpers',
+]);
+
+const approvedConsoleFiles = new Set([
+  'packages/utils/src/logger.js',
+  'packages/notifiers/scripts/telegram-smoke.js',
+  'apps/harvester/scripts/list-testnet-balances.js',
+  'apps/harvester/scripts/list-testnet-open-orders.js',
+  'apps/harvester/scripts/list-testnet-order-history.js',
+  'apps/harvester/scripts/list-testnet-trades.js',
+  'apps/harvester/scripts/run-targeted-tests.js',
+  'apps/harvester/scripts/sell-testnet-zro.js',
+]);
+
+/**
+ * Mask JavaScript comments, strings, template text, and regular-expression
+ * literals while preserving code in template interpolations and line numbers.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+function maskJavaScriptNonCode(source) {
+  const output = source.split('');
+  const blank = (start, end) => {
+    for (let index = start; index < end; index += 1) {
+      if (output[index] !== '\n' && output[index] !== '\r') output[index] = ' ';
+    }
+  };
+
+  function skipQuoted(index, quote) {
+    const start = index;
+    index += 1;
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (source[index] === quote) {
+        index += 1;
+        break;
+      }
+      index += 1;
+    }
+    blank(start, index);
+    return index;
+  }
+
+  function skipRegex(index) {
+    const start = index;
+    index += 1;
+    let inCharacterClass = false;
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (source[index] === '[') inCharacterClass = true;
+      else if (source[index] === ']') inCharacterClass = false;
+      else if (source[index] === '/' && !inCharacterClass) {
+        index += 1;
+        while (/[a-z]/i.test(source[index] ?? '')) index += 1;
+        break;
+      } else if (source[index] === '\n') {
+        break;
+      }
+      index += 1;
+    }
+    blank(start, index);
+    return index;
+  }
+
+  function scanTemplate(index) {
+    let segmentStart = index - 1;
+    blank(segmentStart, index);
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (source[index] === String.fromCharCode(96)) {
+        blank(segmentStart, index + 1);
+        return index + 1;
+      }
+      if (source[index] === '$' && source[index + 1] === '{') {
+        blank(segmentStart, index + 2);
+        index = scanCode(index + 2, true);
+        segmentStart = index;
+        continue;
+      }
+      index += 1;
+    }
+    blank(segmentStart, index);
+    return index;
+  }
+
+  function scanCode(index, stopAtTemplateBrace = false) {
+    let nestedBraces = 0;
+    let previousToken = '';
+    while (index < source.length) {
+      const character = source[index];
+      const next = source[index + 1];
+
+      if (stopAtTemplateBrace && character === '}') {
+        if (nestedBraces === 0) {
+          blank(index, index + 1);
+          return index + 1;
+        }
+        nestedBraces -= 1;
+      } else if (stopAtTemplateBrace && character === '{') {
+        nestedBraces += 1;
+      }
+
+      if (character === "'" || character === '"') {
+        index = skipQuoted(index, character);
+        previousToken = 'value';
+        continue;
+      }
+      if (character === String.fromCharCode(96)) {
+        index = scanTemplate(index + 1);
+        previousToken = 'value';
+        continue;
+      }
+      if (character === '/' && next === '/') {
+        const start = index;
+        while (index < source.length && source[index] !== '\n') index += 1;
+        blank(start, index);
+        continue;
+      }
+      if (character === '/' && next === '*') {
+        const start = index;
+        index += 2;
+        while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) index += 1;
+        index = Math.min(source.length, index + 2);
+        blank(start, index);
+        continue;
+      }
+      if (
+        character === '/' &&
+        (previousToken === '' ||
+          ['=', '(', '[', '{', ',', ':', ';', '!', '?', '&&', '||', '??', 'return', 'throw', 'case', '=>'].includes(previousToken))
+      ) {
+        index = skipRegex(index);
+        previousToken = 'value';
+        continue;
+      }
+
+      const pair = source.slice(index, index + 2);
+      if (['=>', '&&', '||', '??'].includes(pair)) {
+        previousToken = pair;
+        index += 2;
+        continue;
+      }
+
+      if (/[A-Za-z_$]/.test(character)) {
+        const start = index;
+        index += 1;
+        while (/[A-Za-z0-9_$]/.test(source[index] ?? '')) index += 1;
+        previousToken = source.slice(start, index);
+        continue;
+      }
+
+      if (!/\s/.test(character)) previousToken = character;
+      index += 1;
+    }
+    return index;
+  }
+
+  scanCode(0);
+  return output.join('');
+}
+
+/**
+ * Discover production JavaScript files in application/package domains.
+ * Tests and generated/vendor directories are excluded; explicit CLI and
+ * logger-boundary exceptions are handled by findDirectConsoleUsages.
+ *
+ * @param {string} root
+ * @returns {string[]}
+ */
+export function findJavaScriptFiles(root) {
+  const files = [];
+
+  function visit(directory, relativeDirectory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (ignoredJavaScriptDirectories.has(entry.name)) continue;
+        visit(
+          join(directory, entry.name),
+          relativeDirectory ? relativeDirectory + '/' + entry.name : entry.name,
+        );
+        continue;
+      }
+      if (!entry.isFile() || !/\.(?:js|mjs|cjs)$/i.test(entry.name)) continue;
+      if (/\.(?:test|spec)\.(?:js|mjs|cjs)$/i.test(entry.name)) continue;
+      const path = relativeDirectory ? relativeDirectory + '/' + entry.name : entry.name;
+      files.push(path);
+    }
+  }
+
+  for (const area of domainAreas) {
+    const directory = join(root, area);
+    if (existsSync(directory)) visit(directory, area);
+  }
+  return files.sort();
+}
+
+/**
+ * Reject direct global console access from application/package production code.
+ *
+ * @param {string} root
+ * @returns {string[]} Actionable source-location errors.
+ */
+export function findDirectConsoleUsages(root) {
+  const gaps = [];
+  const expression = /\bconsole\b/g;
+
+  for (const path of findJavaScriptFiles(root)) {
+    if (approvedConsoleFiles.has(path)) continue;
+    const source = readFileSync(join(root, path), 'utf8');
+    const code = maskJavaScriptNonCode(source);
+    for (const match of code.matchAll(expression)) {
+      const line = code.slice(0, match.index).split('\n').length;
+      gaps.push(
+        path + ':' + line + ': direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      );
+    }
+  }
+  return gaps.sort();
+}
+
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
@@ -449,16 +682,17 @@ function main() {
     ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
     ...findUnbalancedMarkdownFences(markdownDocuments),
     ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
+    ...findDirectConsoleUsages(repositoryRoot),
   ])];
 
   if (gaps.length > 0) {
-    console.error('Agent policy ownership check failed:');
+    console.error('Agent policy check failed:');
     for (const gap of gaps) console.error(`- ${gap}`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and inline/reference-style local paths are valid; heading anchors are report-only).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
