@@ -916,7 +916,6 @@ Before PR #824, the handler's bounded-log deduplication key included the outer e
 - **Safety:** no Journal package API or persistence semantics change; no Journal replay, process-restart recovery, TESTNET/live trading, or exchange action.
 - **F-018 follow-up:** the transient sync retry behavior remains intact; the separate permanent-writer futile-retry gap is resolved by this F-033 change.
 
-
 ## F-035 — Per-process Journal layout is not discoverable through the current Journal reader path
 
 **Status:** CONFIRMED integration blocker. See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
