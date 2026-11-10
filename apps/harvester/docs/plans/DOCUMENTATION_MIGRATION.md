@@ -19,7 +19,7 @@ The initial review of `develop` identified:
 
 - Application entry point and operational overview at `apps/harvester/README.md`.
 - Domain roadmap at `apps/harvester/ROADMAP.md`.
-- Large audit/evidence records at `apps/harvester/AUDIT.md`, `AUDIT_FINDINGS.md` and `AUDIT_EXECUTION_HISTORY.md`.
+- Historical audit/evidence records formerly mixed into `apps/harvester/` root; these are now grouped under `apps/harvester/docs/audits/{reports,sessions,evidence}/`.
 - Application-specific agent instructions at `apps/harvester/AGENTS.md`.
 - A nested `apps/harvester/docs/` tree containing architecture, domain, infrastructure, operational, strategy and audit-related material.
 - Documentation links embedded throughout READMEs, roadmaps, specifications, tests, issues and PRs.
@@ -93,11 +93,13 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 ### Phase 3 — Historical evidence organization
 
-- [ ] Classify audits, findings registers, session reports, execution histories, logs and snapshots.
+- [x] Classify and relocate the nine root-level audit reports, session reports and supporting evidence into indexed `docs/audits/reports/`, `sessions/` and `evidence/` directories; preserve content, filenames, provenance and distinct session boundaries.
+- [ ] Complete the remaining audit/evidence classification across all Harvester documentation and verify every inbound reference.
 - [ ] Preserve original timestamps, source commit SHAs, evidence identifiers, limitations and unknowns.
 - [ ] Introduce UTC timestamped filenames for newly created snapshots.
 - [ ] Add dated addenda or successor assessments rather than rewriting historical conclusions.
-- [ ] Archive only after a successor/index entry exists and all inbound references are updated.
+- [x] Archive the root-level records only after destination indexes existed and known inbound/outbound references were updated; exact recursive link CI remains the final verification gate.
+- [ ] Review any additional historical records still outside `docs/audits/` and move only when ownership and references are verified.
 
 ### Phase 4 — Repository-wide adoption
 
