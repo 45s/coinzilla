@@ -265,9 +265,10 @@ export function auditRecoveredAccountState({
         if (compareDecimal({ left: amount, right: "0" }) === 0) continue
 
         const baselineSequence = baselineSequenceByAsset.get(asset)
-        if (!Number.isSafeInteger(baselineSequence) ||
-            !Number.isSafeInteger(fill.sequence) ||
-            baselineSequence >= fill.sequence) {
+        if (!baselineByAsset.has(asset) || !Number.isSafeInteger(baselineSequence)) {
+          throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
+        }
+        if (!Number.isSafeInteger(fill.sequence) || baselineSequence >= fill.sequence) {
           throw new Error("Third-asset commission baseline must be durably recorded before its applied fill for " + asset)
         }
         const quoteValue = commission.quoteValue
