@@ -363,6 +363,12 @@ export function findMissingLocalAnchors(root, documents) {
   return gaps.sort();
 }
 
+export function findMissingRoadmaps(root, ownershipDocument) {
+  return extractMappedPaths(ownershipDocument, '/')
+    .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
+    .map((directory) => `${directory} is missing ROADMAP.md`);
+}
+
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
