@@ -123,6 +123,47 @@ const createAcknowledgedOrder = ({ order }) => new CanonicalOrder({
   acknowledgedAt: 2,
   updatedAt: 2,
 })
+const trackBrokerSubmissions = ({ broker, submittedSymbols, cancelledSymbols }) => {
+  const acknowledgedOrders = new Map()
+  const getOpenOrders = broker.getOpenOrders
+  broker.getOpenOrders = async (input = {}) => {
+    const result = await getOpenOrders(input)
+    const acknowledgedOpenOrders = [...acknowledgedOrders.values()]
+      .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+      .filter((order) => !input.symbol || order.market.symbol === input.symbol)
+      .map((order) => createOpenOrderSnapshot({ order }))
+    return { ...result, data: [...(result.data ?? []), ...acknowledgedOpenOrders] }
+  }
+  const getCanonicalOrderHistory = broker.getCanonicalOrderHistory
+  broker.getCanonicalOrderHistory = async (input = {}) => {
+    const result = await getCanonicalOrderHistory(input)
+    const submittedHistory = [...acknowledgedOrders.values()]
+      .filter((order) => !input.orderId || order.brokerOrderId === String(input.orderId))
+      .filter((order) => !input.symbol || order.market.symbol === input.symbol)
+    return { ...result, data: [...(result.data ?? []), ...submittedHistory] }
+  }
+  const getCanonicalOrder = broker.getCanonicalOrder
+  broker.getCanonicalOrder = async ({ clientOrderId }) => {
+    const submittedOrder = [...acknowledgedOrders.values()]
+      .find((order) => order.clientOrderId === clientOrderId)
+    return submittedOrder
+      ? { ok: true, data: submittedOrder }
+      : getCanonicalOrder({ clientOrderId })
+  }
+  const cancelOrder = broker.cancelOrder
+  broker.cancelOrder = async ({ order }) => {
+    cancelledSymbols.push(order.market.symbol)
+    const result = await cancelOrder({ order })
+    if (result.ok) acknowledgedOrders.delete(order.brokerOrderId)
+    return result
+  }
+  broker.placeOrder = async ({ order }) => {
+    submittedSymbols.push(order.market.symbol)
+    const acknowledgedOrder = createAcknowledgedOrder({ order })
+    acknowledgedOrders.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
+    return { ok: true, data: acknowledgedOrder }
+  }
+}
 const createBroker = (calls = [], {
   subscribeResult,
   subscribeResultBySymbol = {},
@@ -400,15 +441,7 @@ test("defers only the market with a pre-existing external order", async () => {
   const submittedSymbols = []
   const cancelledSymbols = []
   broker.getPrices = async ({ symbol }) => ({ ok: true, data: { symbol, price: "1000" } })
-  broker.placeOrder = async ({ order }) => {
-    submittedSymbols.push(order.market.symbol)
-    return { ok: true, data: createAcknowledgedOrder({ order }) }
-  }
-  const cancelOrder = broker.cancelOrder
-  broker.cancelOrder = async ({ order }) => {
-    cancelledSymbols.push(order.market.symbol)
-    return cancelOrder({ order })
-  }
+  trackBrokerSubmissions({ broker, submittedSymbols, cancelledSymbols })
   const config = {
     ...tradingConfig,
     strategies: {
@@ -475,6 +508,7 @@ test("rechecks same-symbol external orders after user-data recovery before resum
   const broker = createBroker(calls, { externalOpenOrders })
   const submittedSymbols = []
   const cancelledSymbols = []
+  trackBrokerSubmissions({ broker, submittedSymbols, cancelledSymbols })
   const originalGetAccountSnapshot = broker.getAccountSnapshot
   let freeUsdt = "0"
   let lockedUsdt = "0"
@@ -490,15 +524,6 @@ test("rechecks same-symbol external orders after user-data recovery before resum
     return { ...result, data: { ...result.data, balances } }
   }
   broker.getPrices = async ({ symbol }) => ({ ok: true, data: { symbol, price: "1000" } })
-  broker.placeOrder = async ({ order }) => {
-    submittedSymbols.push(order.market.symbol)
-    return { ok: true, data: createAcknowledgedOrder({ order }) }
-  }
-  const cancelOrder = broker.cancelOrder
-  broker.cancelOrder = async ({ order }) => {
-    cancelledSymbols.push(order.market.symbol)
-    return cancelOrder({ order })
-  }
 
   let resolveAcknowledgement
   const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
