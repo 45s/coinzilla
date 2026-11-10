@@ -527,7 +527,8 @@ export const mapFillAppliedData = (input = {}) =>
           throw new TypeError("Commission asset ID and code do not match the market asset identity")
         }
         const isThirdAsset = !isBaseAsset && !isQuoteAsset
-        if (isThirdAsset && commission.quoteValue === undefined) {
+        const hasPositiveCommission = compareDecimal({ left: amount, right: "0" }) > 0
+        if (isThirdAsset && hasPositiveCommission && commission.quoteValue === undefined) {
           throw new TypeError("Third-asset commission requires historical quote valuation")
         }
         let quoteValue
@@ -547,8 +548,9 @@ export const mapFillAppliedData = (input = {}) =>
           if (quoteAssetId !== fill.market.quoteAsset?.id || quoteAsset !== fill.market.quoteAsset?.code) {
             throw new TypeError("Commission quote valuation must use the market quote asset")
           }
-          if (compareDecimal({ left: quoteAmount, right: "0" }) <= 0) {
-            throw new RangeError("Commission quote valuation must be greater than zero")
+          if (compareDecimal({ left: quoteAmount, right: "0" }) < 0 ||
+              (isThirdAsset && hasPositiveCommission && compareDecimal({ left: quoteAmount, right: "0" }) === 0)) {
+            throw new RangeError("Commission quote valuation must be positive for a non-zero third-asset fee")
           }
           quoteValue = { amount: quoteAmount, assetId: quoteAssetId, asset: quoteAsset }
         }
