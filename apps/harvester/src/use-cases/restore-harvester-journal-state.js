@@ -142,8 +142,12 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (!recoveryLedger || !position) {
         throw new Error("Recovery-cycle completion has no replayed Position and RecoveryLedger for " + item.symbol)
       }
+      const realizedNetProfit = subtractDecimal({
+        left: recoveryLedger.netSellProceeds,
+        right: position.spent.amount,
+      })
       if (compareDecimal({
-        left: recoveryLedger.realizedNetProfit,
+        left: realizedNetProfit,
         right: item.realizedNetProfit,
       }) !== 0) {
         throw new Error("Recovery-cycle realized profit conflicts with replayed fills for " + item.symbol)
@@ -154,11 +158,16 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       }) < 0) {
         throw new Error("Recovery-cycle free quantity exceeds replayed active inventory for " + item.symbol)
       }
-      portfolio = portfolio.allocateFreeQuantity({
+      const nextPortfolio = portfolio.allocateFreeQuantity({
         marketId: market.id,
         quantity: item.freeQuantity,
       })
-      recoveryLedgers.set(market.id, recoveryLedger.resetCycle())
+      const resetLedger = recoveryLedger.resetCycle({
+        minProfit: item.realizedNetProfit,
+        spent: position.spent,
+      })
+      portfolio = nextPortfolio
+      recoveryLedgers.set(market.id, resetLedger)
       completedOrderClientIds.add(item.completedOrderClientId)
       completedCycleSequenceBySymbol.set(item.symbol, event.sequence)
     }

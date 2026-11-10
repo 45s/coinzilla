@@ -1,5 +1,5 @@
 import { addDecimal, assertDecimalString, compareDecimal, maxDecimal, subtractDecimal } from "@coinzilla/utils"
-import { Fill, Market } from "@coinzilla/entities"
+import { Fill, Market, Money } from "@coinzilla/entities"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import { calculateRecoveryFillAccounting } from "./recovery-fill-accounting.js"
 
@@ -135,16 +135,36 @@ export class RecoveryLedger {
   }
 
   /**
-   * Start a new recovery cycle only after the configured minimum profit is realized. Execution identity
+   * Start a new recovery cycle only after the configured minimum profit is realized against authoritative Position.spent. Execution identity
    * survives so late duplicate events remain safe. Actual commissions are
    * already included in cycle totals and are not converted into fee history.
    */
-  resetCycle({ minProfit } = {}) {
+  resetCycle({ minProfit, spent } = {}) {
     assertDecimalString({ value: minProfit, field: "minProfit" })
     if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
       throw new RangeError("RecoveryLedger.resetCycle minProfit must be at least 0.01")
     }
-    if (compareDecimal({ left: this.realizedNetProfit, right: minProfit }) < 0) {
+    if (!(spent instanceof Money)) {
+      throw new TypeError("RecoveryLedger.resetCycle requires authoritative Position.spent as Money")
+    }
+    if (
+      spent.asset.id !== this.#market.quoteAsset.id ||
+      spent.asset.code !== this.#market.quoteAsset.code
+    ) {
+      throw new TypeError("RecoveryLedger.resetCycle Position.spent must use the market quote asset")
+    }
+    if (compareDecimal({ left: spent.amount, right: "0" }) < 0) {
+      throw new RangeError("RecoveryLedger.resetCycle Position.spent must be non-negative")
+    }
+    if (compareDecimal({ left: spent.amount, right: this.#buyCost }) !== 0) {
+      throw new Error("RecoveryLedger buyCost compatibility mirror does not match authoritative Position.spent")
+    }
+
+    const realizedNetProfit = subtractDecimal({
+      left: this.#netSellProceeds,
+      right: spent.amount,
+    })
+    if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
       throw new RangeError("RecoveryLedger cannot reset before the configured minimum profit is reached")
     }
 
