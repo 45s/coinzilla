@@ -223,6 +223,57 @@ test("accounts base and quote commissions atomically across Portfolio and Recove
   assert.equal(sold.data.recoveryLedger.netSellProceeds, "5.98")
 })
 
+test("aggregates multiple base and quote commission entries across both accounting projections", () => {
+  const bought = updateTradingAccounting({
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market }),
+    fill: makeFill({
+      tradeId: "multi-commission-buy",
+      quantity: "1",
+      quoteQuantity: "0.1",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.2", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      ],
+    }),
+  })
+
+  assert.equal(bought.ok, true, "The BUY with multiple base and quote commission entries must apply to both projections.")
+  const boughtPosition = bought.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(boughtPosition.baseQuantity.amount, "0.7", "Position must subtract both base commissions (0.1 + 0.2) from the 1 base BUY.")
+  assert.equal(boughtPosition.spent.amount, "0.13", "Position recovery cost must add both quote commissions (0.01 + 0.02) to 0.1 quote notional.")
+  assert.equal(boughtPosition.quoteNetCashFlow.amount, "-0.13", "BUY quote cash flow must include both quote commission entries.")
+  assert.equal(bought.data.recoveryLedger.buyCost, "0.13", "RecoveryLedger BUY cost must aggregate the same quote commission entries as Position.")
+
+  const sold = updateTradingAccounting({
+    portfolio: bought.data.portfolio,
+    recoveryLedger: bought.data.recoveryLedger,
+    fill: makeFill({
+      tradeId: "multi-commission-sell",
+      side: "SELL",
+      quantity: "0.5",
+      quoteQuantity: "0.12",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      ],
+    }),
+  })
+
+  assert.equal(sold.ok, true, "The SELL with multiple base and quote commission entries must apply to both projections.")
+  const soldPosition = sold.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(soldPosition.baseQuantity.amount, "0.1", "SELL must subtract gross quantity 0.5 and both base commissions (0.05 + 0.05) from active inventory.")
+  assert.equal(soldPosition.spent.amount, "0.13", "SELL must preserve the accumulated BUY recovery cost basis.")
+  assert.equal(soldPosition.quoteNetCashFlow.amount, "-0.04", "Net quote cash flow must equal -0.13 BUY outflow plus 0.09 SELL proceeds after both quote fees.")
+  assert.equal(sold.data.recoveryLedger.buyCost, "0.13", "SELL must not rewrite the RecoveryLedger BUY cost.")
+  assert.equal(sold.data.recoveryLedger.netSellProceeds, "0.09", "RecoveryLedger SELL proceeds must subtract both quote commission entries from 0.12.")
+  assert.equal(sold.data.recoveryLedger.outstandingRecoveryAmount, "0.04", "Outstanding recovery must equal 0.13 BUY cost less 0.09 net SELL proceeds.")
+})
+
 test("reconciles multiple commission-bearing fills exactly across Portfolio and RecoveryLedger", () => {
   const fills = [
     makeFill({
