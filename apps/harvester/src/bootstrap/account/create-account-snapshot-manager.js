@@ -424,7 +424,7 @@ export function createAccountSnapshotManager({
       balances: [balance],
     })
     await publishAccountSnapshot({
-      phase: "PREFLIGHT",
+      phase: "COMMISSION_BASELINE",
       snapshot: baselineSnapshot,
       allowedAssetCodes: [assetCode],
     })
