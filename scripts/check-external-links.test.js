@@ -207,7 +207,7 @@ test('classifies repeated network errors as unverifiable after the configured re
 
 test('follows bounded redirects and refuses redirects to local-only hosts', async () => {
   const urls = [];
-  const success = await checkExternalLink(candidate('https://redirect.example/start'), {
+  const success = await checkExternalLink(candidate('https://redirect.example.com/start'), {
     fetchImpl: async (url) => {
       urls.push(url);
       return urls.length === 1 ? response(302, { location: '/final' }) : response(200);
@@ -250,7 +250,7 @@ test('treats repeated rate limiting as unverifiable after bounded retries', asyn
 
 test('stops after the configured redirect limit', async () => {
   let attempts = 0;
-  const result = await checkExternalLink(candidate('https://redirect-loop.example/'), {
+  const result = await checkExternalLink(candidate('https://redirect-loop.example.com/'), {
     fetchImpl: async () => {
       attempts += 1;
       return response(302, { location: '/again' });
