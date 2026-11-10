@@ -83,7 +83,7 @@ test("reports HTTP status and Telegram rejection description without exposing to
     }, false, 403),
   })
   await assert.rejects(reflectedToken.sendMessage("hello"), (error) => {
-    assert.match(error.message, /status 403: request rejected for \\[REDACTED\\]/)
+    assert.match(error.message, /status 403: request rejected for \[REDACTED\]/)
     assert.doesNotMatch(error.message, /123456:secret-token/)
     return true
   })
