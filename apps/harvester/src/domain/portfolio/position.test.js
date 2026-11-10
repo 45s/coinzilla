@@ -39,7 +39,7 @@ test("calculates BUY accounting with base and quote commissions as a pure functi
       ],
     }),
   })
-  assert.deepEqual(result, { baseQuantity: "1.99", quoteNetCashFlow: "-200.2", spent: "200.2" })
+  assert.deepEqual(result, { baseQuantity: "1.99", quoteNetCashFlow: "-200.2", spent: "200.2" }, "BUY accounting must deduct the base commission and add the quote commission to spent cost and cash flow.")
 })
 
 test("applies BUY fills and base/quote commissions exactly", () => {
@@ -51,11 +51,11 @@ test("applies BUY fills and base/quote commissions exactly", () => {
       ],
     }),
   })
-  assert.equal(position.quantity.amount, "1.99")
-  assert.equal(position.baseQuantity.amount, "1.99")
-  assert.equal(position.spent.amount, "200.2")
-  assert.equal(position.quoteNetCashFlow.amount, "-200.2")
-  assert.equal(position.freeBaseQuantity.amount, "0")
+  assert.equal(position.quantity.amount, "1.99", "The compatibility quantity must expose active inventory net of base commission.")
+  assert.equal(position.baseQuantity.amount, "1.99", "Active base inventory must equal executed BUY quantity less base commission.")
+  assert.equal(position.spent.amount, "200.2", "Spent recovery cost must include the quote commission.")
+  assert.equal(position.quoteNetCashFlow.amount, "-200.2", "BUY quote cash flow must include gross notional and quote commission.")
+  assert.equal(position.freeBaseQuantity.amount, "0", "A normal BUY must not create retained free inventory.")
 })
 
 test("applies SELL fills and base/quote commissions to net holdings", () => {
@@ -72,21 +72,22 @@ test("applies SELL fills and base/quote commissions to net holdings", () => {
       ],
     }),
   })
-  assert.equal(sold.baseQuantity.amount, "0.99")
-  assert.equal(sold.spent.amount, "200")
-  assert.equal(sold.quoteNetCashFlow.amount, "-80.1")
+  assert.equal(sold.baseQuantity.amount, "0.99", "SELL quantity and base commission must both reduce active inventory.")
+  assert.equal(sold.spent.amount, "200", "A SELL must preserve the accumulated BUY cost basis.")
+  assert.equal(sold.quoteNetCashFlow.amount, "-80.1", "SELL proceeds must update quote cash flow net of quote commission.")
 })
 
 test("rejects incomplete commissions and unvalued third-asset fees but accepts reliable quote valuation", () => {
   assert.throws(
     () => Position.empty({ market }).applyFill({ fill: makeFill({ commissionStatus: "UNKNOWN" }) }),
     /complete commission data/,
+    "An incomplete commission report must be rejected before Position accounting is accepted.",
   )
   const thirdAsset = new Asset({ id: "asset:BNB", code: "BNB" })
   const thirdAssetFill = makeFill({
     commissions: [new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }) })],
   })
-  assert.throws(() => Position.empty({ market }).applyFill({ fill: thirdAssetFill }), /requires reliable quote-currency valuation/)
+  assert.throws(() => Position.empty({ market }).applyFill({ fill: thirdAssetFill }), /requires reliable quote-currency valuation/, "A third-asset fee without quote valuation must fail closed.")
   const valuedThirdAssetFill = makeFill({
     commissions: [new Commission({
       amount: new Money({ amount: "0.01", asset: thirdAsset }),
@@ -94,8 +95,8 @@ test("rejects incomplete commissions and unvalued third-asset fees but accepts r
     })],
   })
   const valuedPosition = Position.empty({ market }).applyFill({ fill: valuedThirdAssetFill })
-  assert.equal(valuedPosition.spent.amount, "200.02")
-  assert.equal(valuedPosition.quoteNetCashFlow.amount, "-200.02")
+  assert.equal(valuedPosition.spent.amount, "200.02", "A reliably valued third-asset fee must be included in spent quote cost.")
+  assert.equal(valuedPosition.quoteNetCashFlow.amount, "-200.02", "A reliably valued third-asset fee must be included in BUY quote cash flow.")
 })
 
 test("failed fill transitions preserve the complete Position snapshot", () => {
@@ -180,9 +181,9 @@ test("allocates exactly keepQuantity into a separate permanent free-inventory bu
   })
   const retained = position.allocateFreeQuantity({ quantity: "1" })
 
-  assert.equal(retained.baseQuantity.amount, "99")
-  assert.equal(retained.freeBaseQuantity.amount, "1")
-  assert.equal(retained.totalBaseQuantity.amount, "100")
+  assert.equal(retained.baseQuantity.amount, "99", "Free allocation must subtract exactly keepQuantity from active inventory.")
+  assert.equal(retained.freeBaseQuantity.amount, "1", "Free allocation must retain exactly the configured quantity.")
+  assert.equal(retained.totalBaseQuantity.amount, "100", "Free allocation must conserve total base holdings.")
 })
 
 test("future BUY fills increase active inventory without reusing free inventory", () => {
@@ -197,9 +198,9 @@ test("future BUY fills increase active inventory without reusing free inventory"
       }),
     })
 
-  assert.equal(position.baseQuantity.amount, "199")
-  assert.equal(position.freeBaseQuantity.amount, "1")
-  assert.equal(position.totalBaseQuantity.amount, "200")
+  assert.equal(position.baseQuantity.amount, "199", "A later BUY must add to active inventory without subtracting retained inventory.")
+  assert.equal(position.freeBaseQuantity.amount, "1", "A later BUY must preserve the previously retained free quantity.")
+  assert.equal(position.totalBaseQuantity.amount, "200", "Total holdings must include both active and retained inventory.")
 })
 
 test("rejects allocating more free inventory than active inventory", () => {
@@ -207,6 +208,7 @@ test("rejects allocating more free inventory than active inventory", () => {
   assert.throws(
     () => position.allocateFreeQuantity({ quantity: "1" }),
     /exceeds active strategy inventory/,
+    "Free allocation must not exceed active strategy inventory.",
   )
 })
 
@@ -214,8 +216,8 @@ test("rejects zero or invalid free-inventory allocations", () => {
   const position = Position.empty({ market }).applyFill({
     fill: makeFill({ quantity: "2", quoteQuantity: "200" }),
   })
-  assert.throws(() => position.allocateFreeQuantity({ quantity: "0" }), /greater than zero/)
-  assert.throws(() => position.allocateFreeQuantity({ quantity: "nope" }))
+  assert.throws(() => position.allocateFreeQuantity({ quantity: "0" }), /greater than zero/, "Zero free-inventory allocation must be rejected.")
+  assert.throws(() => position.allocateFreeQuantity({ quantity: "nope" }), undefined, "Malformed free-inventory quantity must be rejected before a Position transition.")
 })
 
 test("SELL fills cannot consume previously allocated free inventory", () => {
@@ -234,9 +236,9 @@ test("SELL fills cannot consume previously allocated free inventory", () => {
     }),
   })
 
-  assert.equal(sold.baseQuantity.amount, "0")
-  assert.equal(sold.freeBaseQuantity.amount, "1")
-  assert.equal(sold.totalBaseQuantity.amount, "1")
+  assert.equal(sold.baseQuantity.amount, "0", "The SELL must consume all active inventory above keepQuantity.")
+  assert.equal(sold.freeBaseQuantity.amount, "1", "The SELL must not consume retained free inventory.")
+  assert.equal(sold.totalBaseQuantity.amount, "1", "After selling active inventory, total holdings must equal retained free inventory.")
 })
 
 
@@ -254,7 +256,7 @@ test("rejects base commission greater than SELL execution quantity", () => {
     ],
   })
 
-  assert.throws(() => funded.applyFill({ fill: sell }), /base commission exceeds executed base quantity/i)
+  assert.throws(() => funded.applyFill({ fill: sell }), /base commission exceeds executed base quantity/i, "Base commission greater than executed SELL quantity must be rejected.")
 })
 
 test("rejects quote commission greater than BUY quote notional", () => {
@@ -266,7 +268,7 @@ test("rejects quote commission greater than BUY quote notional", () => {
     ],
   })
 
-  assert.throws(() => Position.empty({ market }).applyFill({ fill }), /quote commission exceeds executed quote notional/i)
+  assert.throws(() => Position.empty({ market }).applyFill({ fill }), /quote commission exceeds executed quote notional/i, "Quote commission greater than BUY notional must be rejected.")
 })
 
 test("resets only the completed recovery cost basis after exact retained allocation", () => {
@@ -275,10 +277,10 @@ test("resets only the completed recovery cost basis after exact retained allocat
     .allocateFreeQuantity({ quantity: "1" })
     .resetRecoveryBasis()
 
-  assert.equal(position.quantity.amount, "99")
-  assert.equal(position.freeBaseQuantity.amount, "1")
-  assert.equal(position.spent.amount, "0")
-  assert.equal(position.quoteNetCashFlow.amount, "-10")
+  assert.equal(position.quantity.amount, "99", "Recovery-basis reset must preserve active strategy quantity.")
+  assert.equal(position.freeBaseQuantity.amount, "1", "Recovery-basis reset must preserve retained free inventory.")
+  assert.equal(position.spent.amount, "0", "Only the completed recovery cost basis must reset to zero.")
+  assert.equal(position.quoteNetCashFlow.amount, "-10", "Resetting recovery basis must preserve historical quote cash flow.")
 })
 
 

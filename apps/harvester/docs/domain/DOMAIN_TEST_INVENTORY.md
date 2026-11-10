@@ -38,7 +38,7 @@ The domain suite is supplemented by application-level engine and use-case tests 
 
 The existing Position tests separately cover BUY/SELL commissions, free allocation and retained-inventory SELL exclusion. The new `position.test.js` regression combines those transitions in one immutable sequence and independently asserts exact active, free and total base quantities plus spent cost and quote cash flow after each step. It uses literal expected values; it does not call production decimal helpers for its expectations. No production code changes. Exact PR-head verification is pending.
 
-The same suite now table-drives failed SELL overdraw, excessive base commission, excessive quote commission and incomplete commission data against a funded Position. Each failure is followed by a deep comparison of the complete `Position.value` snapshot to prove failed operations do not mutate accepted accounting state.
+The same suite now table-drives failed SELL overdraw, excessive base commission, excessive quote commission and incomplete commission data against a funded Position. Each failure is followed by a deep comparison of the complete `Position.value` snapshot to prove failed operations do not mutate accepted accounting state. The Position suite also now gives each assertion a specific business-facing diagnostic, improving failure localization without weakening any check.
 
 ### High — blocked recovery SELL must not be bypassed by a new BUY
 
