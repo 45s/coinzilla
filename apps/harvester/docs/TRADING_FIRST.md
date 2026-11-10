@@ -71,6 +71,7 @@ The expected product workflow is the Conservative lifecycle defined in [Trading 
 - Check the specific free quote/base balance and in-process commitments required for the order being submitted. Refresh account/order state when there is a concrete reason (startup facts needed by the current implementation, reconnect, or unknown outcome), not as a ritual after every fill.
 - If an evaluation is temporarily deferred while an event is processed, retain and resume it automatically after that transition. Do not wait for a new price event.
 - PENDING means the broker submission has not yet been acknowledged. Track it; do not cancel it or call cancellation with a missing broker order ID. After acknowledgement, validate the ID, cancel, reconcile fills that raced with cancellation, and only then replace.
+- UNKNOWN after an ambiguous submission is not a rejection and must never trigger a duplicate placement. A matching authoritative Binance execution report for the same Harvester `clientOrderId` may resolve the submission and attach its exchange `brokerOrderId`; mismatched identities remain rejected. A recovered OPEN BUY then becomes eligible for the existing owned-BUY shutdown cancellation path.
 - Never classify a local readiness deferral as a Binance rejection. Keep definite rejection, unknown network outcome, expected deferral, and invariant failure distinct.
 - Before adding any mechanism, identify the concrete failure in Harvester's current workflow that it prevents.
 
