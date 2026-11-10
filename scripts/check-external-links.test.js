@@ -268,10 +268,10 @@ test('follows bounded redirects and refuses redirects to local-only hosts', asyn
     minHostIntervalMs: 0,
   });
 
-  assert.equal(success.status, 'ok');
-  assert.equal(urls.length, 2);
+  assert.equal(success.status, 'ok', 'A public redirect chain ending in a successful response must remain valid.');
+  assert.equal(urls.length, 2, 'Each public redirect hop must result in exactly one HEAD request.');
   assert.equal(blocked.status, 'skipped', 'A redirect to a local-only destination must be blocked before a second request.');
-  assert.equal(blockedUrls.length, 1);
+  assert.equal(blockedUrls.length, 1, 'The local-only redirect target must never receive an HTTP request.');
 });
 
 test('treats repeated rate limiting as unverifiable after bounded retries', async () => {
@@ -444,22 +444,24 @@ test('pins socket lookup to vetted answers without resolving the hostname again'
   assert.equal(typeof fetchPinned, 'function', 'The checker must expose the pinned HTTP transport for deterministic connection tests.');
 
   let resolverCalls = 0;
-  let connectedAddress;
+  let connectedAddresses;
   const result = await fetchPinned('https://rebind.example.com/path', {
     method: 'HEAD',
     headers: { 'user-agent': 'test' },
   }, {
     resolveHost: async () => {
       resolverCalls += 1;
-      return [{
-        address: resolverCalls === 1 ? '8.8.8.8' : '127.0.0.1',
-        family: 4,
-      }];
+      return resolverCalls === 1
+        ? [
+          { address: '8.8.8.8', family: 4 },
+          { address: '2606:4700:4700::1111', family: 6 },
+        ]
+        : [{ address: '127.0.0.1', family: 4 }];
     },
     requestImpl: (url, options, onResponse) => {
-      options.lookup(url.hostname, {}, (error, address) => {
-        assert.equal(error, null, 'The vetted DNS answer must be supplied to the socket lookup.');
-        connectedAddress = address;
+      options.lookup(url.hostname, { all: true }, (error, addresses) => {
+        assert.equal(error, null, 'The socket lookup must return only addresses that passed DNS validation.');
+        connectedAddresses = addresses;
       });
       queueMicrotask(() => onResponse({ statusCode: 200, headers: {}, resume() {} }));
       return { on() { return this; }, end() {} };
@@ -468,7 +470,10 @@ test('pins socket lookup to vetted answers without resolving the hostname again'
 
   assert.equal(result.status, 200, 'The pinned transport must preserve the HTTP response status.');
   assert.equal(resolverCalls, 1, 'A single request must not perform a second DNS lookup after validation.');
-  assert.equal(connectedAddress, '8.8.8.8', 'The socket lookup must receive the exact public address that was validated.');
+  assert.deepEqual(connectedAddresses, [
+    { address: '8.8.8.8', family: 4 },
+    { address: '2606:4700:4700::1111', family: 6 },
+  ], 'The socket lookup must receive the complete vetted A/AAAA set and never the later private rebinding answer.');
 });
 
 test('revalidates DNS for every redirect and blocks a redirect to a private address', async () => {
@@ -500,4 +505,26 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
 
   assert.equal(result.status, 'skipped', 'A redirect whose DNS answers include a private address must be classified as safely blocked.');
   assert.deepEqual(requestedHosts, ['public.example.com'], 'The private redirect destination must be rejected before opening an HTTP(S) connection.');
+});
+
+
+test('blocks an initial public-looking hostname when any DNS answer is private before opening a socket', async () => {
+  let openedConnections = 0;
+  const result = await checkExternalLink(candidate('https://mixed-answer.example.com/start'), {
+    fetchImpl: (url, init) => fetchPinned(url, init, {
+      resolveHost: async () => [
+        { address: '8.8.8.8', family: 4 },
+        { address: '10.0.0.7', family: 4 },
+      ],
+      requestImpl: () => {
+        openedConnections += 1;
+        throw new Error('An unsafe DNS answer must be rejected before the request implementation is called.');
+      },
+    }),
+    sleep: noDelay,
+    minHostIntervalMs: 0,
+  });
+
+  assert.equal(result.status, 'skipped', 'A mixed public/private DNS answer set must be reported as safely blocked.');
+  assert.equal(openedConnections, 0, 'No HTTP(S) connection may be opened when even one DNS answer is private.');
 });
