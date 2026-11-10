@@ -106,7 +106,7 @@ RED was confirmed on the exact test-only PR #971 head `74a1a9e22161a924d3f380f68
 
 ### High — recovery-cycle completion can partially commit Portfolio before ledger reset succeeds
 
-The workflow currently assigns a new Portfolio after moving active inventory into retained free inventory and clearing the recovery basis, then calls `recoveryLedger.resetCycle()`. If that later transition fails, `completeRecoveryCycle()` returns an error while the Portfolio has already changed and the RecoveryLedger still contains the previous cycle totals. The deterministic regression constructs a valid completed cycle, injects a RecoveryLedger whose reset fails, and requires both complete projections to remain unchanged. RED is pending exact-head CI.
+The workflow currently assigns a new Portfolio after moving active inventory into retained free inventory and clearing the recovery basis, then calls `recoveryLedger.resetCycle()`. If that later transition fails, `completeRecoveryCycle()` returns an error while the Portfolio has already changed and the RecoveryLedger still contains the previous cycle totals. The deterministic regression constructs a valid completed cycle, injects a RecoveryLedger whose reset fails, and requires both complete projections to remain unchanged. RED was confirmed on exact test-only PR #972 head `9b57ae42cb52f72003d95b50dc39715046d4da55`: 920 Harvester tests passed and the new regression failed at the Portfolio immutability assertion after the injected ledger reset error. The production workflow now stages the next Portfolio and next ledger map before committing either reference; GREEN is pending exact-head CI.
 
 ### Medium — lifecycle tests need complete-state assertions
 

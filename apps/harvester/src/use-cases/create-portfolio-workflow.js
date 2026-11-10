@@ -15,7 +15,7 @@ import {
 /**
  * Create the in-memory Portfolio and RecoveryLedger workflow used by Harvester.
  *
- * Owns serialized canonical-fill accounting and recovery-cycle completion.
+ * Owns serialized canonical-fill accounting and atomic recovery-cycle completion.
  * Bootstrap composes this stateful workflow with broker and process lifecycle
  * resources; the domain transitions remain in Portfolio and RecoveryLedger.
  *
@@ -34,7 +34,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     throw new TypeError("initialRecoveryLedgers must be a Map")
   }
   let portfolio = initialPortfolio ?? new Portfolio()
-  const recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
+  let recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
   let updateQueue = Promise.resolve()
 
   const tracedEvaluateStrategy = (input = {}) => {
@@ -245,22 +245,31 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         if (completion.eligible) {
           const previousPortfolio = portfolio
           const previousLedger = recoveryLedger
+
+          // Stage both immutable accounting projections before committing either reference.
+          let nextPortfolio = previousPortfolio
           if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
-            portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+            nextPortfolio = nextPortfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
           }
-          portfolio = portfolio.resetRecoveryBasis({ marketId })
-          const resetLedger = recoveryLedger.resetCycle()
-          recoveryLedgers.set(marketId, resetLedger)
+          nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId })
+          const resetLedger = previousLedger.resetCycle()
+          const nextRecoveryLedgers = new Map(recoveryLedgers)
+          nextRecoveryLedgers.set(marketId, resetLedger)
+          const nextPosition = nextPortfolio.getPosition({ marketId })
+
           logger.debug?.({
             message: "Recovery cycle completed",
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
             previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
-            nextPosition: createPositionLogSummary({ position: portfolio.getPosition({ marketId }) }),
+            nextPosition: createPositionLogSummary({ position: nextPosition }),
             previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
             nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
           })
+
+          portfolio = nextPortfolio
+          recoveryLedgers = nextRecoveryLedgers
         } else {
           logger.debug?.({
             message: "recovery cycle not completed",
