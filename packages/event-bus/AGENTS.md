@@ -13,5 +13,3 @@ Before making any change anywhere in this package:
 9. Update ROADMAP.md when implementation status, guarantees, test coverage, or architectural decisions change.
 
 Do not create GitHub issues as a substitute for tracking this package's work. Keep the roadmap and focused pull requests as the source of truth.
-
-

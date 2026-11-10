@@ -29,7 +29,6 @@ owner: event-bus
    - **Do:** require a concrete consumer requirement and a written compatibility contract before implementing any of these capabilities.
    - **Verify:** define ordering/idempotency and shutdown behavior first, then add focused tests and benchmarks. Preserve the default delivery contract.
 
-
 > Status: core hardening complete; optional enhancements remain demand-driven
 > Package: `@coinzilla/event-bus`
 > Primary objective: make the package bug-resistant, predictable under failure, fully tested, and easy for humans and AI agents to change safely.
@@ -328,7 +327,6 @@ Remaining unchecked roadmap items are intentionally deferred: sequential subscri
 - Correctness and bug resistance take precedence over feature count and micro-optimizations.
 - Do not create GitHub issues as a substitute for this roadmap; track progress here and in focused pull requests.
 - Update this file whenever a guarantee, phase, or acceptance criterion changes.
-
 
 ## AI-agent ownership and workflow
 

@@ -33,5 +33,3 @@ Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch 
 ## Domain-specific constraints
 
 Keep contracts exchange-neutral and independent of Binance SDK types. Preserve compatibility of existing Coin, Order, and ExecutedOrder unless a migration is explicitly designed. Prefer immutable snapshots and exact decimal representations for financial values.
-
-
