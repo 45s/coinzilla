@@ -32,7 +32,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Cancellation race | A recovery SELL fill returned during cancellation is applied once when its late stream event is replayed | `conservative-trading-engine.test.js` | Existing |
 | Fill identity | Same fill applied to Portfolio and ledger atomically | `update-trading-accounting.test.js` | Existing |
 | Strategy test fixtures | Residual SELL quote quantities and MAX_NOTIONAL expected outcomes use independent exact values | `strategies/conservative/strategy.test.js` — residual fixture and MAX_NOTIONAL cap tests | Existing — PR #937 merged; exact updated-head CI passed |
-| Recovery ledger | Multiple BUY fills accumulate actual cost and RecoveryLedger mirrors Position cost | `conservative-strategy.test.js` — three DOGE BUY fills (`85.836`) and eight ZRO BUY fills (`64.02`) | Added on focused PR branch; exact-head CI pending |
+| Recovery ledger | Multiple BUY fills accumulate actual cost and RecoveryLedger mirrors Position cost | `conservative-strategy.test.js` — three DOGE BUY fills (`85.836`) and eight ZRO BUY fills (`64.02`) | Added in open PR #948; test head `a345706` passed 880/880; documentation-only follow-up CI pending |
 | Recovery ledger | Partial SELL fills accumulate net proceeds across replacement | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Base commissions do not alter quote ledger | `recovery-fill-accounting.test.js` | Existing |
 | Recovery ledger | Multiple base/quote commission entries aggregate correctly | `recovery-fill-accounting.test.js` aggregated commission validation and per-asset accounting cases | Existing — execution pending |
