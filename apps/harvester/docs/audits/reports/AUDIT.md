@@ -1,6 +1,6 @@
 # Harvester Conservative Strategy Audit
 
-> This is a historical evidence report, not a strategy-rule authority. The sole current Conservative contract is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old rule summaries and status tables below are historical unless explicitly updated; they must not override the canonical specification.
+> This is a historical evidence report, not a strategy-rule authority. The sole current Conservative contract is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old rule summaries and status tables below are historical unless explicitly updated; they must not override the canonical specification.
 
 
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
@@ -17,7 +17,7 @@ ZRO's pre-CLOSING recovery SELL and DOGE's post-CLOSING SELL reconcile at the tr
 
 ## Current closure decision — 2026-11-07
 
-**The in-scope Conservative Strategy implementation/documentation audit is CLOSED.** The code and regression inventory have been reviewed against the sole authority, [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This closure does not mean tests or CI passed, and it does not grant TESTNET or live-trading acceptance.
+**The in-scope Conservative Strategy implementation/documentation audit is CLOSED.** The code and regression inventory have been reviewed against the sole authority, [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This closure does not mean tests or CI passed, and it does not grant TESTNET or live-trading acceptance.
 
 Implemented and represented by focused regression coverage on this branch:
 
@@ -34,7 +34,7 @@ Historical evidence disposition:
 - Historical exact exchange-filter values were not preserved in runtime logs. Actual exchange acceptance and trade arithmetic are known, but candidate historical filter assumptions are not promoted to facts.
 - Process-restart reconstruction remains explicitly deferred to [#654](https://github.com/45s/coinzilla/issues/654) and is outside this audit.
 
-**Verification boundary:** regression tests are present and mapped in [ACCOUNTING_INVARIANTS.md](./docs/domain/ACCOUNTING_INVARIANTS.md), but have not yet been executed on this exact head. The next phase is to run the focused Harvester tests, full Harvester suite, and required CI, then fix any failures. Do not describe this audit closure as test, CI, or TESTNET acceptance.
+**Verification boundary:** regression tests are present and mapped in [ACCOUNTING_INVARIANTS.md](../../domain/ACCOUNTING_INVARIANTS.md), but have not yet been executed on this exact head. The next phase is to run the focused Harvester tests, full Harvester suite, and required CI, then fix any failures. Do not describe this audit closure as test, CI, or TESTNET acceptance.
 
 ## Evidence and provenance
 
@@ -241,7 +241,7 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 
 ### 3. Recovery SELL calculation and completion contract
 
-The expected Conservative behavior is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This evidence report does not repeat SELL formulas, commission reserves, retained-inventory rules, residual handling, terminal outcomes, or recovery-completion criteria.
+The expected Conservative behavior is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This evidence report does not repeat SELL formulas, commission reserves, retained-inventory rules, residual handling, terminal outcomes, or recovery-completion criteria.
 
 Historical source observations in the original audit baseline are superseded by the current canonical contract and current source. Implementation conformance remains unaccepted until focused regressions and exact-head CI pass.
 
