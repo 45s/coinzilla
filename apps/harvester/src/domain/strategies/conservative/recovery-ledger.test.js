@@ -210,7 +210,7 @@ test("does not reset a recovery cycle while invested quote capital remains outst
   const originalState = ledger.value
 
   assert.throws(
-    () => ledger.resetCycle({ minProfit: "0.01" }),
+    () => ledger.resetCycle({ minProfit: "0.01", spent: new Money({ amount: "10", asset: quoteAsset }) }),
     /minimum profit/i,
     "A cycle with unrecovered invested capital must never be reset.",
   )
