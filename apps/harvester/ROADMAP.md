@@ -9,6 +9,13 @@
 - [~] Establish and maintain the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md).
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
 - [~] Conservative BUY-gating regression and correction are implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact PR-head CI passed 872/872 Harvester tests and all required checks; merge remains pending.
+- [~] Conservative investment-cap boundary matrix added in [PR #922](https://github.com/45s/coinzilla/pull/922); exact-head CI passed, but PR remains open and unmerged.
+- [~] Portfolio multi-market isolation assertions added in [PR #924](https://github.com/45s/coinzilla/pull/924); exact-head CI passed, but PR remains open and unmerged.
+- [~] Independent Conservative accounting fixture arithmetic added in [PR #926](https://github.com/45s/coinzilla/pull/926); exact-head CI passed, but PR remains open and unmerged.
+- [~] OrderRegistry complete-state and rejected-update immutability assertions added in [PR #927](https://github.com/45s/coinzilla/pull/927); exact-head CI passed, but PR remains open and unmerged.
+- [~] Exchange filter equality boundaries added in [PR #929](https://github.com/45s/coinzilla/pull/929); exact-head CI passed, but PR remains open and unmerged.
+- [~] Account snapshot failure diagnostics and input immutability added in [PR #931](https://github.com/45s/coinzilla/pull/931); exact-head CI passed, but PR remains open and unmerged.
+- [~] Add engine-level same-trade-ID multi-market execution regression; RED should expose the test harness's unscoped deduplication key before correcting it to canonical Fill identity.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
