@@ -2,6 +2,77 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Process-restart recovery — small-step delivery plan (#654)
+
+**Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+
+**Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
+
+### Delivery sequence
+
+1. **[ ] Step 1 — Freeze the recovery contract (docs/design only).**
+   - Define exactly which state must survive restart: canonical owned orders and client IDs, every applied fill and fee valuation, Position/RecoveryLedger (including active/free inventory and cost basis), reservations/commitments, strategy control, sticky safety blockers, and the configuration/schema version.
+   - Define the startup rule: recovery is a separate gate; trading stays paused until local history is proven complete and exchange balances, open orders, and available order/trade history reconcile.
+   - Record external-order policy accurately: external orders may exist and remain unowned; never adopt, cancel, or modify them. Prove same-symbol interactions cannot cause duplicate commitments. A real unowned execution remains a safety blocker. Do not introduce a blanket startup rejection merely because an external order exists.
+   - Choose the smallest application-owned durable-fact contract. Keep domain code independent of Journal/EventBus; decide explicitly whether Journal remains observer-only.
+
+2. **[ ] Step 2 — Build a deterministic recovery test harness (tests only).**
+   - Create representative multi-session fixtures from real DTO shapes, without changing production behavior.
+   - Add crash-point scenarios around order intent, broker acknowledgement, partial/final fill, accounting application, cycle completion, and pause/blocker publication.
+   - Make every scenario assert the complete restored state, not only total wallet quantity.
+
+3. **[ ] Step 3 — Make session discovery and ordering deterministic (F-035, F-040).**
+   - Discover nested session directories and preserve legacy flat-file compatibility.
+   - Establish chronological order from explicit durable metadata, not random session IDs or second-resolution filenames.
+   - Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history.
+
+4. **[ ] Step 4 — Make replay understand every relevant fact (F-043, F-044).**
+   - Classify known events as state facts, sticky safety blockers, or explicitly ignorable diagnostics; unknown stateful/safety events fail closed.
+   - Accept and correctly order valid `RECOVERY` account/open-order snapshots emitted by normal reconnect handling.
+   - Add DTO → projection → restore parity tests for every recovery-relevant event.
+
+5. **[ ] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041).**
+   - Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation.
+   - Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconcile the related asset balance.
+   - Represent cycle completion explicitly. A full SELL without a proven completed/not-completed cycle outcome is unresolved and must not silently restore stale basis or re-sell retained inventory.
+
+6. **[ ] Step 6 — Add verifiable durable-fact integrity (F-037, F-042).**
+   - Implement the smallest durable store/port needed by the agreed contract, with explicit durability acknowledgement before dependent state transitions proceed.
+   - Detect missing/reordered/duplicated records using a monotonic sequence and a simple integrity mechanism (for example, a previous-record digest or committed manifest).
+   - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
+
+7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps).**
+   - Reconcile owned order identity/status, complete execution history, all relevant asset balances (including fee assets), locked funds, and current open orders.
+   - Keep external orders unowned and untouched; detect and block only actual unsafe conflicts or unowned executions according to the agreed policy.
+   - Treat incomplete exchange history, missing assets, mismatched quantities, unknown outcomes, and unexplained commitments as unresolved—not as zero.
+
+8. **[ ] Step 8 — Restore behind a closed readiness gate.**
+   - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
+   - Compare candidate state with authoritative exchange state. Publish READY only after every required reconciliation and safety check succeeds.
+   - On any ambiguity, keep trading paused and provide actionable operator diagnostics. Never auto-adopt or auto-cancel external orders.
+
+9. **[ ] Step 9 — Prove crash/restart behavior, then consider controlled TESTNET validation.**
+   - Run the full crash-point matrix, duplicate/reordered event tests, missing-record/session tests, legacy-session tests, and restart-twice idempotency tests.
+   - Verify no duplicate order, fill, reservation, cost-basis reset, or retained-inventory sale.
+   - Review evidence and approve a separate small, bounded TESTNET plan before any exchange-connected validation. Live trading remains out of scope.
+
+### Finding-to-step map
+
+- F-035 → Step 3 (session discovery)
+- F-036 → Steps 1 and 7 (external-order policy and reconciliation; not a blanket startup gate)
+- F-037 → Steps 1 and 6 (durability contract)
+- F-038 → Step 5 (atomic accounting restore)
+- F-039 → Steps 5 and 7 (third-asset fee valuation and balance reconciliation)
+- F-040 → Step 3 (chronological session ordering)
+- F-041 → Step 5 (explicit cycle outcome)
+- F-042 → Step 6 (record completeness/integrity)
+- F-043 → Step 4 (event classification and sticky blockers)
+- F-044 → Step 4 (RECOVERY snapshot parity)
+
+**Implementation rule:** complete one numbered step, review its diff, run its focused RED/GREEN tests and required CI, update this checklist, then start the next step. No broad recovery rewrite, no speculative framework, and no enabling restart restoration until Step 9 is accepted.
+
+---
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### Critical runtime reliability — order acknowledgement and shutdown ownership (2026-11-10)
