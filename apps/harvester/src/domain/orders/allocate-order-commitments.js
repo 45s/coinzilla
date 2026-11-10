@@ -20,11 +20,14 @@ export function allocateOrderCommitments({
   quoteCashFlow,
   activeBaseQuantity,
   activeBaseBalance,
+  activeBaseBalanceBaseline = "0",
   outstandingRecoveryAmount,
   committedQuote,
   committedQuoteBalance,
+  committedQuoteBalanceBaseline = "0",
   committedBase,
   committedBaseBalance,
+  committedBaseBalanceBaseline = "0",
   investmentLimit,
 } = {}) {
   try {
@@ -37,11 +40,14 @@ export function allocateOrderCommitments({
       baseFreeBalance,
       activeBaseQuantity,
       activeBaseBalance: accountActiveBaseQuantity,
+      activeBaseBalanceBaseline,
       outstandingRecoveryAmount,
       committedQuote,
       committedQuoteBalance: accountCommittedQuote,
+      committedQuoteBalanceBaseline,
       committedBase,
       committedBaseBalance: accountCommittedBase,
+      committedBaseBalanceBaseline,
       investmentLimit,
     })) {
       assertNonNegativeDecimal({ value, field })
@@ -50,11 +56,14 @@ export function allocateOrderCommitments({
 
     let remainingQuoteBalance = subtractDecimal({
       left: addDecimal({ left: quoteFreeBalance, right: quoteCashFlow }),
-      right: accountCommittedQuote,
+      right: subtractDecimal({ left: accountCommittedQuote, right: committedQuoteBalanceBaseline }),
     })
     let remainingBaseBalance = subtractDecimal({
-      left: addDecimal({ left: baseFreeBalance, right: accountActiveBaseQuantity }),
-      right: accountCommittedBase,
+      left: addDecimal({
+        left: baseFreeBalance,
+        right: subtractDecimal({ left: accountActiveBaseQuantity, right: activeBaseBalanceBaseline }),
+      }),
+      right: subtractDecimal({ left: accountCommittedBase, right: committedBaseBalanceBaseline }),
     })
     let remainingActiveBase = subtractDecimal({
       left: activeBaseQuantity,

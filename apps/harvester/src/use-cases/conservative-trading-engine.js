@@ -1148,6 +1148,7 @@ export function makeConservativeTradingEngine({
         quoteCashFlow,
         activeBaseQuantity: position?.baseQuantity.amount ?? "0",
         activeBaseBalance,
+        activeBaseBalanceBaseline: accountSnapshot.getActiveBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
         outstandingRecoveryAmount: maxDecimal({
           left: "0",
           right: subtractDecimal({
@@ -1157,8 +1158,10 @@ export function makeConservativeTradingEngine({
         }),
         committedQuote,
         committedQuoteBalance,
+        committedQuoteBalanceBaseline: accountSnapshot.getCommittedQuoteBalanceBaseline({ assetId: metadata.market.quoteAsset.id }),
         committedBase,
         committedBaseBalance,
+        committedBaseBalanceBaseline: accountSnapshot.getCommittedBaseBalanceBaseline({ assetId: metadata.market.baseAsset.id }),
         investmentLimit: String(pairs[symbol].investment),
       })
       if (!allocation.ok) {
@@ -2673,6 +2676,7 @@ export function makeConservativeTradingEngine({
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,
+    getActiveOrders: () => state.registry.getActiveOrders(),
     getRecoveryIntents: () => Object.freeze({
       pausedMarkets: Object.freeze([...state.paused]),
       replacementIntents: Object.freeze([...state.replacementIntents]),
