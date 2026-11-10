@@ -556,6 +556,25 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     },
   })
   assert.equal(mapFillAppliedData({ fill: {} }).ok, false)
+
+  const missingThirdAssetValuation = mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-43",
+      brokerOrderId: "broker-order-43",
+      clientOrderId: "harvester-order-43",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 124,
+      commissions: [new Commission({ amount: new Money({ amount: "0.0001", asset: feeAsset }) })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(missingThirdAssetValuation.ok, false)
+  assert.match(missingThirdAssetValuation.errors[0].message, /requires historical quote valuation/)
 })
 
 
