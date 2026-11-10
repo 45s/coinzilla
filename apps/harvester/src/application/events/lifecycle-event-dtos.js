@@ -755,7 +755,9 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData(input, "Account-snapshot-captured event mapping", ({
     phase, snapshot, allowedAssetCodes, auditStatus = "COMPLETE", auditReasons = [],
   }) => {
-    if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, or RECOVERY")
+    if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(phase)) {
+      throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, RECOVERY, or COMMISSION_BASELINE")
+    }
     if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
     if (!snapshot || !Array.isArray(snapshot.balances)) {
       throw new TypeError("snapshot must contain sourceTime and canonical balances")
