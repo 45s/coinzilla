@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { createAccountSnapshotManager } from "./create-account-snapshot-manager.js"
 
@@ -87,36 +87,36 @@ test("captures configured-asset balances and durably publishes the account audit
 
 test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
   const fixtureMarket = createFixture().market
-  const portfolioFill = new (await import("@coinzilla/entities")).Fill({
+  const portfolioFill = new Fill({
     tradeId: "snapshot-baseline-buy-fill",
     brokerOrderId: "snapshot-baseline-buy-order",
     market: fixtureMarket,
     side: "BUY",
-    price: new (await import("@coinzilla/entities")).Money({ amount: "10", asset: fixtureMarket.quoteAsset }),
+    price: new Money({ amount: "10", asset: fixtureMarket.quoteAsset }),
     quantity: new Quantity({ amount: "10", asset: fixtureMarket.baseAsset }),
-    quoteQuantity: new (await import("@coinzilla/entities")).Money({ amount: "100", asset: fixtureMarket.quoteAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: fixtureMarket.quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
   const portfolio = new Portfolio().applyFill({ fill: portfolioFill }).portfolio
-  const activeBuyOrder = new (await import("@coinzilla/entities")).CanonicalOrder({
+  const activeBuyOrder = new CanonicalOrder({
     clientOrderId: "snapshot-baseline-active-buy",
     brokerOrderId: "snapshot-baseline-active-buy-broker",
     market: fixtureMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new (await import("@coinzilla/entities")).Money({ amount: "50", asset: fixtureMarket.quoteAsset }),
+    limitPrice: new Money({ amount: "50", asset: fixtureMarket.quoteAsset }),
     originalQuantity: new Quantity({ amount: "3", asset: fixtureMarket.baseAsset }),
     executedQuantity: new Quantity({ amount: "1", asset: fixtureMarket.baseAsset }),
     status: "PARTIALLY_FILLED",
   })
-  const activeSellOrder = new (await import("@coinzilla/entities")).CanonicalOrder({
+  const activeSellOrder = new CanonicalOrder({
     clientOrderId: "snapshot-baseline-active-sell",
     brokerOrderId: "snapshot-baseline-active-sell-broker",
     market: fixtureMarket,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new (await import("@coinzilla/entities")).Money({ amount: "11", asset: fixtureMarket.quoteAsset }),
+    limitPrice: new Money({ amount: "11", asset: fixtureMarket.quoteAsset }),
     originalQuantity: new Quantity({ amount: "5", asset: fixtureMarket.baseAsset }),
     executedQuantity: new Quantity({ amount: "2", asset: fixtureMarket.baseAsset }),
     status: "PARTIALLY_FILLED",
