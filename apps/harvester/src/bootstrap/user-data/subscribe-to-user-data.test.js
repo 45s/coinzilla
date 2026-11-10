@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -32,6 +32,7 @@ const createFixture = ({ tradingEnabled = false, state = createState(), subscrib
     eventPublisher,
     logger,
     state,
+    tradingMode,
     tradingEnabled,
     enabledSymbols: ["BTCUSDT"],
     onEvent: () => {},
@@ -113,6 +114,7 @@ test("exposes the live subscription to bootstrap before PREFLIGHT audit work can
       eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
       logger: {},
       state: createState(),
+      tradingMode: "testnet",
       tradingEnabled: false,
       enabledSymbols: ["BTCUSDT"],
       onEvent: () => {},
@@ -149,4 +151,37 @@ test("logs the user-data stream connection only after the subscription is establ
     false,
     "The startup log must use the agreed user-data stream wording instead of the old verbose message.",
   )
+})
+
+
+test("LIVE startup logs LIVE status from the resolved trading mode", async () => {
+  const systemLogs = []
+  const fixture = createFixture({
+    tradingEnabled: true,
+    tradingMode: "live",
+    logger: { system: (entry) => systemLogs.push(entry) },
+  })
+
+  await fixture.result
+
+  assert.equal(systemLogs.some((entry) => entry.message === "Conservative LIVE startup checks passed; current account audit is complete"), true, "LIVE mode must be explicit in the successful PREFLIGHT status.")
+  assert.equal(systemLogs.some((entry) => entry.message === "Conservative LIVE trading engine activated"), true, "LIVE mode must be explicit when the trading engine is activated.")
+  assert.equal(systemLogs.some((entry) => entry.message.includes("TESTNET")), false, "Startup must not mislabel a LIVE process as TESTNET.")
+})
+
+test("LIVE startup failures report LIVE instead of hard-coded TESTNET", async () => {
+  const systemLogs = []
+  const fixture = createFixture({
+    tradingEnabled: true,
+    tradingMode: "live",
+    state: createState({ requiresReconciliation: true }),
+    logger: { system: (entry) => systemLogs.push(entry) },
+  })
+
+  await assert.rejects(
+    fixture.result,
+    /Conservative LIVE startup blocked: user-data stream reconciliation is required/,
+    "A blocked LIVE startup must identify the resolved exchange mode.",
+  )
+  assert.equal(systemLogs.some((entry) => entry.message.includes("TESTNET")), false, "A LIVE startup failure must never claim TESTNET.")
 })

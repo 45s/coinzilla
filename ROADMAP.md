@@ -17,6 +17,7 @@
    - **Remaining:** keep #626 open for final acceptance traceability and a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
    - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
    - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).
+   - **Offline reliability fixes (2026-11-10):** broker canonical placement requests Binance `RESULT` for complete `LIMIT_MAKER` acknowledgements; [PR #961](https://github.com/45s/coinzilla/pull/961) is merged. Harvester order-identity recovery (`UNKNOWN → OPEN`) and accurate `TRADING_MODE` startup messages are implemented in [PR #964](https://github.com/45s/coinzilla/pull/964), covering [issues #962](https://github.com/45s/coinzilla/issues/962) and [#963](https://github.com/45s/coinzilla/issues/963). All seven GitHub Actions workflows passed on exact PR head `36f9a182a2b333f1714149b744e11f626e4a8e39`; merge is pending final synchronization and review. No Binance exchange operations were performed.
 
 2. **Process-restart reconciliation (#654) — forensic phase; runtime implementation not started.**
    - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.

@@ -35,6 +35,7 @@ export async function subscribeToUserData({
   eventPublisher,
   logger,
   state,
+  tradingMode,
   tradingEnabled,
   enabledSymbols,
   onEvent,
@@ -45,6 +46,7 @@ export async function subscribeToUserData({
   getAccountSnapshot,
   resumeDeferredStrategyEvaluations,
 } = {}) {
+  const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
   logSystem(logger, { message: "Subscribing to Binance user-data events" })
 
   let userDataResult
@@ -114,13 +116,13 @@ export async function subscribeToUserData({
       if (queuedEvents === state.eventQueue) break
     }
     if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
-      throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state")
+      throw new Error("Conservative " + tradingModeLabel + " startup blocked: user-data stream is not in a safe state")
     }
     if (state.requiresReconciliation) {
-      throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
+      throw new Error("Conservative " + tradingModeLabel + " startup blocked: user-data stream reconciliation is required")
     }
     logSystem(logger, {
-      message: "Conservative TESTNET startup checks passed; current account audit is complete",
+      message: "Conservative " + tradingModeLabel + " startup checks passed; current account audit is complete",
       enabledSymbols,
       accountSnapshotSourceTime: getAccountSnapshot().sourceTime,
     })
@@ -128,7 +130,7 @@ export async function subscribeToUserData({
     state.ready = true
     state.status = "READY"
     resumeDeferredStrategyEvaluations()
-    logSystem(logger, { message: "Conservative TESTNET trading engine activated" })
+    logSystem(logger, { message: "Conservative " + tradingModeLabel + " trading engine activated" })
   }
 
   return userDataSubscription
