@@ -120,7 +120,7 @@ test("publishes only the actual third-asset commission baseline and excludes unr
 
   assert.equal(baseline.ok, true)
   assert.equal(fixture.publishedEvents.length, 2)
-  assert.equal(fixture.publishedEvents[1].data.phase, "PREFLIGHT")
+  assert.equal(fixture.publishedEvents[1].data.phase, "COMMISSION_BASELINE")
   assert.equal(fixture.publishedEvents[1].data.sourceTime, 100)
   assert.deepEqual(fixture.publishedEvents[1].data.balances, [{
     asset: "BNB",
