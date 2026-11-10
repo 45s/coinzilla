@@ -19,7 +19,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Portfolio | SELL consumes gross quantity plus base commission | `position.test.js` | Existing |
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
 | Portfolio | SELL cannot consume active + free quantity by dipping into free | `position.test.js` | Existing |
-| Portfolio | Total base quantity conserved by free allocation | `position.test.js` | Partial |
+| Portfolio | Total base quantity is conserved across fee-adjusted BUYs, free allocation, a subsequent BUY and SELL base commissions; retained inventory remains untouched | `position.test.js` — `conserves total base inventory across BUY fills, free allocation, and SELL fees` | Added on focused PR branch; exact-head CI pending |
 | Lifecycle | keepQuantity=0 complete workflow | `completes the full Conservative lifecycle with the supported zero keepQuantity` in `conservative-trading-engine.test.js` | Existing — execution pending |
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Same ID with changed quantity, commission amount or commission asset rejects without mutating either projection | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
@@ -63,6 +63,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Sell-through | Base-asset SELL commission leaves exactly the configured retained quantity when exchange rules permit | `recovery-sell-plan-accounting.test.js` exact keepQuantity boundary; actual commission fill fixtures | Existing — execution pending |
 | Sell-through | Retained `keepQuantity` is never sold; no extra sellable inventory is intentionally retained | Recovery completion predicate, exact fee-reserved planner test, and residual sell-through regressions | Existing — execution pending |
 | Ordering | Out-of-order fills with deterministic execution-time policy | Excluded as a separate accounting-order requirement: Portfolio/RecoveryLedger deltas are additive and idempotent by stable fill ID; completed-BUY VWAP uses aggregate executed quote/base totals. Stale/out-of-order order reports are covered by engine lifecycle tests. | Excluded — rationale documented |
+| Failure | Failed Position fills preserve complete state after SELL overdraw, base/quote commission overdraw and incomplete commission data | `position.test.js` — `failed fill transitions preserve the complete Position snapshot` | Added in open PR #943; exact-head CI passed; merge pending |
 | Failure | Invalid fill quantity/notional/commission, unsupported asset, wrong market | several focused tests | Partial |
 | Failure | Cross-projection partial failure leaves neither projection committed | `update-trading-accounting.test.js` | Existing |
 | Lifecycle | Full BUY → partial fills → SELL partial/cancel-fill replacement → completion → next BUY | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
