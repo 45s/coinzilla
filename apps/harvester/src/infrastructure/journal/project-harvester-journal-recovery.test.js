@@ -583,6 +583,34 @@ test("fails closed when a restored third-asset commission has no historical quot
   assert.match(restored.errors[0].message, /missing its historical quote valuation/)
 })
 
+test("restores a zero third-asset commission without inventing a quote valuation", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      fill({
+        commissions: [{
+          amount: "0",
+          assetId: "binance:BNB",
+          asset: "BNB",
+        }],
+      }),
+    ],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
+  const restoredFill = restored.data.fills[0]
+  assert.equal(restoredFill.commissions[0].amount.amount, "0")
+  assert.equal(restoredFill.commissions[0].amount.asset.id, "binance:BNB")
+  assert.equal(restoredFill.commissions[0].quoteValue, undefined)
+})
+
 test("rejects a commission whose asset code contradicts a known market asset ID", () => {
   const projection = projectHarvesterJournalRecovery({
     records: [
