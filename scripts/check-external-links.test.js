@@ -401,7 +401,6 @@ test('classifies public IPv4 and rejects private, shared, reserved, and metadata
 });
 
 test('classifies global IPv6 and rejects loopback, mapped, ULA, link-local, multicast, and reserved IPv6', () => {
-  const isPublicAddress = isPublicAddress;
   assert.equal(typeof isPublicAddress, 'function', 'The checker must expose IPv6 address classification for deterministic security tests.');
 
   assert.equal(isPublicAddress('2001:4860:4860::8888'), true, 'A globally routable Google IPv6 address is eligible.');
@@ -473,7 +472,6 @@ test('pins socket lookup to vetted answers without resolving the hostname again'
 });
 
 test('revalidates DNS for every redirect and blocks a redirect to a private address', async () => {
-  const fetchPinned = fetchPinned;
   assert.equal(typeof fetchPinned, 'function', 'Redirect tests require the same pinned transport used by production requests.');
 
   const requestedHosts = [];
