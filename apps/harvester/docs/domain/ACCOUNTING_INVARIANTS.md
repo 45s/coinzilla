@@ -20,7 +20,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Same ID with changed financial facts rejects | both identity tests | Existing |
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
-| Order ownership | Multi-market isolation; equal trade IDs across symbols remain distinct canonical fills; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` — same-trade-ID cross-market regression | Existing — RED test added in current PR; harness correction pending |
+| Order ownership | Multi-market isolation; equal trade IDs across symbols remain distinct canonical fills; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` — same-trade-ID cross-market regression | Existing — RED confirmed; test harness corrected to use canonical Fill ID in PR #933; CI pending |
 | Order lifecycle | NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and unknown states map and drive safe engine behavior | `adapt-canonical-order.test.js`, `order-registry.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Cancellation race | A recovery SELL fill returned during cancellation is applied once when its late stream event is replayed | `conservative-trading-engine.test.js` | Existing |
 | Fill identity | Same fill applied to Portfolio and ledger atomically | `update-trading-accounting.test.js` | Existing |

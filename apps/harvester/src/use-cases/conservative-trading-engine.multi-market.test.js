@@ -50,7 +50,7 @@ function makeMarketMetadata(market) {
 async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio } = {}) {
   const orders = []
   const pauses = []
-  const accountedTradeIds = new Set()
+  const accountedFillIds = new Set()
   const accountedFills = []
   const portfolio = initialPortfolio ?? new Portfolio()
   const metadataBySymbol = new Map(markets.map((market) => [
@@ -130,10 +130,10 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
       }),
     }),
     updateTradingAccounting: async ({ fill }) => {
-      if (accountedTradeIds.has(fill.tradeId)) {
+      if (accountedFillIds.has(fill.id)) {
         return { ok: true, data: { applied: false, duplicate: true } }
       }
-      accountedTradeIds.add(fill.tradeId)
+      accountedFillIds.add(fill.id)
       accountedFills.push(fill)
       return { ok: true, data: { applied: true, duplicate: false } }
     },

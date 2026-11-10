@@ -76,7 +76,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ### Medium — engine-level multi-market fill identity is not tested with reused trade IDs
 
-The multi-market engine suite tests separate symbols and duplicate replay, but its accounting stub deduplicates on raw `fill.tradeId` rather than canonical market-scoped `fill.id`. That fixture cannot model two symbols receiving the same venue trade ID and would falsely treat the second market's execution as a duplicate. The current RED regression submits equal trade IDs for DOGEUSDT and SOLUSDT and expects both distinct Fill IDs to reach accounting. The test-only failure will establish the fixture defect before the harness key is corrected.
+The multi-market engine suite tests separate symbols and duplicate replay, but its accounting stub previously deduplicated on raw `fill.tradeId` rather than canonical market-scoped `fill.id`. RED was confirmed on PR #933 test head `09fa07923b38eb757449d8347e4c6d5b77ef7f99`: the new same-trade-ID DOGEUSDT/SOLUSDT test failed because only DOGEUSDT reached accounting; the second market's distinct Fill ID was suppressed by the fixture. The test harness now deduplicates on `fill.id`, matching the production accounting contract. No production code changed; exact-head CI verification is pending.
 
 ## Execution order
 

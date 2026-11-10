@@ -15,7 +15,7 @@
 - [~] OrderRegistry complete-state and rejected-update immutability assertions added in [PR #927](https://github.com/45s/coinzilla/pull/927); exact-head CI passed, but PR remains open and unmerged.
 - [~] Exchange filter equality boundaries added in [PR #929](https://github.com/45s/coinzilla/pull/929); exact-head CI passed, but PR remains open and unmerged.
 - [~] Account snapshot failure diagnostics and input immutability added in [PR #931](https://github.com/45s/coinzilla/pull/931); exact-head CI passed, but PR remains open and unmerged.
-- [~] Add engine-level same-trade-ID multi-market execution regression; RED should expose the test harness's unscoped deduplication key before correcting it to canonical Fill identity.
+- [~] Engine-level same-trade-ID multi-market regression in [PR #933](https://github.com/45s/coinzilla/pull/933): RED confirmed the test harness deduplicated by raw tradeId and suppressed SOLUSDT; the harness now deduplicates by canonical market-scoped Fill ID. Exact-head CI verification is pending.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
