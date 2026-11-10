@@ -518,6 +518,22 @@ export const mapFillAppliedData = (input = {}) =>
           value: commission.amount?.asset?.code,
           field: "commissions[" + index + "].asset",
         }),
+        ...(commission.quoteValue === undefined ? {} : {
+          quoteValue: {
+            amount: requireDecimalString({
+              value: commission.quoteValue?.amount,
+              field: "commissions[" + index + "].quoteValue.amount",
+            }),
+            assetId: requireString({
+              value: commission.quoteValue?.asset?.id,
+              field: "commissions[" + index + "].quoteValue.assetId",
+            }),
+            asset: requireString({
+              value: commission.quoteValue?.asset?.code,
+              field: "commissions[" + index + "].quoteValue.asset",
+            }),
+          },
+        }),
       })),
       commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
     }
