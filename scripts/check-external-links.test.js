@@ -550,3 +550,23 @@ test('honors the request timeout while DNS resolution is still pending', async (
 
   assert.equal(outcome, 'rejected', 'The checker must stop waiting for DNS when the per-request abort signal fires.');
 });
+
+
+test('does not start DNS resolution after the request signal has already expired', async () => {
+  const controller = new AbortController();
+  controller.abort(new Error('request timeout already elapsed'));
+  let resolverCalls = 0;
+
+  await assert.rejects(
+    resolvePublicAddresses('expired-dns.example.com', {
+      signal: controller.signal,
+      resolveHost: async () => {
+        resolverCalls += 1;
+        return [{ address: '8.8.8.8', family: 4 }];
+      },
+    }),
+    (error) => error.message === 'request timeout already elapsed',
+    'An already-aborted request must fail with its original cancellation reason.',
+  );
+  assert.equal(resolverCalls, 0, 'The checker must not start a DNS query after the request timeout has elapsed.');
+});
