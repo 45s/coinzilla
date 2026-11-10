@@ -51,7 +51,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
@@ -105,11 +105,25 @@ The exact final PR head passed:
 
 **Historical PR #383 closeout note (not the current remaining-work summary):** no runtime dependencies were added and no consumer package source files were changed in that PR. At that time, remaining work was described as reviewing duplicate generic helpers when a concrete use case justified consolidation. That snapshot is not the current remaining-work summary; use the priority plan and Repository-wide reuse audit below for current remaining work. No speculative API changes are planned.
 
+### Direct console and logger-boundary audit — 2026-11-10
+
+Audited current `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`.
+
+| Location | Observed use | Disposition |
+| --- | --- | --- |
+| `packages/utils/src/logger.js` | Built-in console transport plus last-resort transport-error reporting | Approved shared logging boundary; the README documents the fallback |
+| `packages/utils/src/logger.test.js` | Replaces/restores `console.log` and `console.error` | Test-only stubbing |
+| `packages/notifiers/scripts/telegram-smoke.js` | Reports the result of an explicitly invoked smoke-test CLI | Approved CLI output |
+| `scripts/check-syntax.js`, `scripts/check-agent-policy.js` | Reports command progress and actionable failures | Approved repository-tool CLI output |
+| `apps/harvester/src/` | Bootstrap and process entry use injected `defaultLogger` | No direct console calls or app-local logger adapter found |
+
+The shared policy already prohibits direct console calls in business logic and application workflows. No runtime migration was needed. The automated guard remains a separate follow-up; this audit does not claim that a static no-console rule is enforced in CI.
+
 ## Repository-wide reuse audit
 
 - [~] Audit every application/package helper and utility for domain-neutral functionality that should be reused from @coinzilla/utils.
 - [x] Consolidate exact decimal-string arithmetic shared by Harvester, Market Simulator, and Entities; shared API and consumer migrations are merged and covered by workspace tests.
-- [ ] Audit direct console usage and app-local logger adapters; standardize diagnostics on the shared Logger / defaultLogger API.
+- [x] Audit direct console usage and app-local logger adapters. Current `apps/harvester/src/` uses the shared `defaultLogger`; no application/domain direct console calls or app-local logger adapters were found. Direct console use is confined to `packages/utils/src/logger.js` (the shared console transport and transport-error fallback), `packages/notifiers/scripts/telegram-smoke.js` (explicit CLI output), root `scripts/check-syntax.js` / `scripts/check-agent-policy.js` (CLI diagnostics), and `packages/utils/src/logger.test.js` (test stubs).
 - [ ] Record a disposition for every candidate: reuse existing utility, extend shared utility, keep domain-local, or intentionally duplicate with justification.
 - [ ] Add consumer migration tests and update each owning domain's docs/roadmap as shared capabilities are adopted.
 
