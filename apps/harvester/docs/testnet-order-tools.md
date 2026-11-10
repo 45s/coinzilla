@@ -120,9 +120,12 @@ exact phrase `SELL ALL FREE ZRO ON TESTNET` when prompted.
 Before submission it reads the current free ZRO balance, loads the symbol's
 market quantity filters, rounds the quantity down using exact decimal
 arithmetic (preserving the maximum precision supplied by the balance and
-exchange filters), and displays the quantity that will be sold. It refuses to
-continue when the market is not trading, the available quantity is below
-the market minimum, or open orders exist for `ZROUSDT`. After confirmation
+exchange filters), and displays the quantity that will be sold. Exact decimal
+parsing, step rounding, comparison, and output-scale restoration use the shared
+`@coinzilla/utils` API; Binance filter selection and minimum/maximum policy stay
+in Harvester. A zero `LOT_SIZE` fallback step is rejected. It refuses to continue
+when the market is not trading, the available quantity is below the market
+minimum, or open orders exist for `ZROUSDT`. After confirmation
 it refreshes the balance and open orders; if the sellable quantity changed,
 it aborts and requires a new preview/confirmation.
 
