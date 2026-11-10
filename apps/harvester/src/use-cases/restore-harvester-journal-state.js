@@ -28,6 +28,7 @@ function requireMarket({ marketMetadata, symbol }) {
 
 function restoreFill({ data, market }) {
   const commissions = data.commissions.map((item) => {
+    const isThirdAsset = item.assetId !== market.baseAsset.id && item.assetId !== market.quoteAsset.id
     let asset
     if (item.assetId === market.baseAsset.id) {
       if (item.asset !== market.baseAsset.code) {
@@ -54,7 +55,7 @@ function restoreFill({ data, market }) {
           item.quoteValue.asset !== market.quoteAsset.code) {
         throw new Error("Recovered commission quote valuation does not match the market quote asset for " + market.symbol)
       }
-      if (compareDecimal({ left: item.amount, right: "0" }) > 0 &&
+      if (isThirdAsset && compareDecimal({ left: item.amount, right: "0" }) > 0 &&
           compareDecimal({ left: item.quoteValue.amount, right: "0" }) <= 0) {
         throw new Error("Recovered third-asset commission quote valuation must be greater than zero for " + market.symbol)
       }
