@@ -60,7 +60,13 @@ function requireRecoveryDust({ value }) {
     MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"],
     QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"],
   }[dust.reason]
-  for (const field of fields) mapped[field] = requireDecimal({ value: dust[field], field: "dust." + field })
+  for (const field of fields) {
+    mapped[field] = requireDecimal({ value: dust[field], field: "dust." + field })
+    if (["minimumQuantity", "minimumNotional", "quantityStepSize"].includes(field) &&
+        compareDecimal({ left: mapped[field], right: "0" }) <= 0) {
+      throw new RangeError("dust." + field + " must be positive")
+    }
+  }
   if (dust.reason === "MIN_QUANTITY" &&
       compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
     throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
@@ -627,7 +633,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (name === EVENT.RECOVERY_COMPLETED) {
         const symbol = requireString({ value: data.symbol, field: "symbol" })
         const marketId = requireString({ value: data.marketId, field: "marketId" })
-        const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity", positive: true })
+        const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity" })
         const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
         const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
         const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
