@@ -92,7 +92,7 @@ These are recommendations only. Each phase requires a separate implementation au
 8. **Test every crash boundary offline.** Cover crash after intent flush/before broker call; broker acceptance/before acknowledgement; partial/full fill/before durable fact; after durable fact/before projection; after projection/before next intent; cancel/fill races; recovery-cycle completion; pause persistence; duplicate replay; truncated/missing sessions; missing/delisted markets; history limits; manual same-symbol and shared-asset orders; and account mismatch. Assert no duplicate order, no double/missed fill application, no lost reservation and no READY under uncertainty.
 9. **Only then run controlled TESTNET validation.** Keep all default tests offline. Require a separate explicit TESTNET authorization and a clean, known account state. LIVE restart acceptance is a separate release decision.
 
-~~~mermaid
+```mermaid
 flowchart TD
   A[Process starts] --> B[Discover all prior Journal and durable-fact sessions]
   B --> C{All records complete and valid?}
@@ -104,7 +104,7 @@ flowchart TD
   G -- No --> X
   G -- Yes --> H[Durability and ownership checks complete]
   H --> I[Enable strategy evaluation and trading]
-~~~
+```
 
 The diagram is a proposed safety gate, not a description of current runtime behavior or an accepted architecture decision.
 
