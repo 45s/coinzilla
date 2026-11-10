@@ -42,7 +42,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Strategy | Initial BUY trailing decision/replacement eligibility | `trailing-buy-repricing.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Strategy | Standing BUY allowed with active recovery SELL | strategy test creates both intents | Existing |
 | Strategy | Recovery SELL acknowledged before next standing BUY | Engine submission-order regression | Existing / reverify |
-| Strategy | Investment cap exact equality, immediately-below limit, and committed BUY amounts | `strategy.test.js` — `respects exact investment-cap equality and blocks the next BUY immediately below it` | Existing — PR #922 exact-head CI passed; awaiting merge |
+| Strategy | Investment cap exact equality, immediately-below limit, and committed BUY amounts | `strategy.test.js` — `respects exact investment-cap equality and blocks the next BUY immediately below it` | Existing — PR #922 merged; 872/872 Harvester tests and required CI passed |
 | Strategy | SELL submission before next BUY | `conservative-strategy.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Completion | Partial/cancelled SELL not complete | `recovery-completion.test.js` | Existing |
 | Completion | Fully filled but below minProfit does not allocate | completion test | Existing |
