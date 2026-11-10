@@ -1,6 +1,8 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
 
 const createMarket = () => {
@@ -16,12 +18,12 @@ const createMarket = () => {
 
 const market = createMarket()
 
-const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY" }) => new Fill({
+const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY", price = "65000" }) => new Fill({
   tradeId,
   brokerOrderId: "broker-order-" + tradeId,
   market,
   side,
-  price: new Money({ amount: "65000", asset: market.quoteAsset }),
+  price: new Money({ amount: price, asset: market.quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: market.baseAsset }),
   quoteQuantity: new Money({ amount: quoteQuantity, asset: market.quoteAsset }),
   commissions: [],
@@ -92,6 +94,69 @@ test("rejects non-canonical fill input without mutating Portfolio state", async 
   )
 })
 
+
+
+test("leaves both accounting projections unchanged when recovery ledger reset fails", () => {
+  const buyFill = createFill({
+    tradeId: "recovery-reset-buy",
+    quantity: "2",
+    quoteQuantity: "130000",
+  })
+  const sellFill = createFill({
+    tradeId: "recovery-reset-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const baseLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+
+  class FailingResetRecoveryLedger extends RecoveryLedger {
+    resetCycle() {
+      throw new Error("recovery ledger reset failed")
+    }
+  }
+
+  const failingLedger = new FailingResetRecoveryLedger({
+    market,
+    buyCost: baseLedger.buyCost,
+    netSellProceeds: baseLedger.netSellProceeds,
+    appliedFillIds: baseLedger.appliedFillIds,
+    appliedFillFingerprints: baseLedger.appliedFillFingerprints,
+  })
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, failingLedger]]),
+  })
+  const initialPortfolioValue = initialPortfolio.value
+  const initialLedgerValue = failingLedger.value
+
+  const result = workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "1",
+    minProfit: "5",
+  })
+
+  assert.equal(result.ok, false, "A failed RecoveryLedger reset must reject recovery-cycle completion.")
+  assert.match(result.errors[0].message, /recovery ledger reset failed/, "The result must preserve the actual failed transition.")
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "A failed ledger reset must not commit the staged free-inventory allocation or cost-basis reset.")
+  assert.deepEqual(workflow.getPortfolio().value, initialPortfolioValue, "The complete Portfolio projection must remain unchanged after failed cycle completion.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), failingLedger, "A failed cycle reset must preserve the original RecoveryLedger projection.")
+  assert.deepEqual(workflow.getRecoveryLedger({ marketId: market.id }).value, initialLedgerValue, "The complete RecoveryLedger projection must remain unchanged after failed cycle completion.")
+
+  const unchangedPosition = workflow.getPortfolio().getPosition({ marketId: market.id })
+  assert.equal(unchangedPosition.baseQuantity.amount, "1", "The active base inventory must remain available after a failed cycle reset.")
+  assert.equal(unchangedPosition.freeBaseQuantity.amount, "0", "Retained inventory must not be allocated when the paired ledger reset fails.")
+  assert.equal(unchangedPosition.spent.amount, "130000", "The original recovery cost basis must not be cleared when the paired ledger reset fails.")
+})
 
 test("logs Portfolio Stats for each applied BUY or SELL fill that changes inventory quantity", async () => {
   const infoLogs = []
