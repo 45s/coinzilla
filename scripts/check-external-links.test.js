@@ -3,7 +3,6 @@ import test from 'node:test';
 
 import { isPublicAddress } from './external-link-address-policy.js';
 import { fetchPinned, resolvePublicAddresses } from './external-link-network.js';
-
 import {
   checkExternalLink,
   checkExternalLinks,
