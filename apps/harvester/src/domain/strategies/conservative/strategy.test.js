@@ -822,7 +822,8 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
 
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
   assert.equal(position.quantity.amount, "2.8")
-  assert.equal(position.spent.amount, "85.836")
+  assert.equal(position.spent.amount, "85.836", "The three DOGE BUY fills must accumulate their exact quote notional in Position cost basis.")
+  assert.equal(recoveryLedger.buyCost, "85.836", "RecoveryLedger must mirror the accumulated quote cost of all three DOGE BUY fills.")
   assert.equal(recoveryLedger.netSellProceeds, "85.8466674")
 
   const completion = evaluateRecoveryCompletion({
@@ -928,7 +929,8 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
 
   const position = portfolio.getPosition({ symbol: "ZROUSDT" })
   assert.equal(position.quantity.amount, "0.05")
-  assert.equal(position.spent.amount, "64.02")
+  assert.equal(position.spent.amount, "64.02", "The eight ZRO BUY fills must accumulate their exact quote notional in Position cost basis.")
+  assert.equal(recoveryLedger.buyCost, "64.02", "RecoveryLedger must mirror the accumulated quote cost of all eight ZRO BUY fills.")
   assert.equal(recoveryLedger.netSellProceeds, "64.03136454")
 
   const completion = evaluateRecoveryCompletion({

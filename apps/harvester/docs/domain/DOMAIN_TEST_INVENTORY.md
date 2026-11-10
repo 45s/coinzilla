@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `610232948c5cd99ac15518e5694df83833f94c1b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `d07a51446ac4116d307896a8559b033a6e62f06b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -61,6 +61,10 @@ The strategy regression uses a table-driven decision matrix: exact equality at 1
 ### Medium — Portfolio multi-market isolation assertions are incomplete
 
 The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLUSDT but asserted only that two Positions existed. PR #924 now asserts market-scoped Fill IDs and exact independent Position quantity, quote cost basis and quote cash flow for both markets. It also proves a conflicting replay with changed execution facts is rejected without changing the existing Position accounting or applied fill IDs. Existing application-level tests already cover multi-fill Portfolio/RecoveryLedger atomicity and engine multi-market order isolation; those scenarios are not duplicated here. The exact PR head `9b8d4d8a20cd5843c7b0211be0fd8e81cf7636c4` passed 872/872 Harvester tests (75.51% lines, 79.02% branches, 74.88% functions), workspace tests and coverage, targeted tests, Utils tests, syntax/agent policy/Markdown, actionlint, dependency audit and external documentation links. TESTNET probe skipped; no exchange activity occurred. PR #924 merged into `develop`; the exact PR head passed 872/872 Harvester tests and all required checks.
+
+### Medium — multi-BUY RecoveryLedger cost mirror is not asserted in actual execution sequences
+
+The existing DOGE and ZRO fixtures apply three and eight separate BUY fills respectively and assert exact `Position.spent`, but did not assert the corresponding `RecoveryLedger.buyCost`. Add exact mirror assertions (`85.836` DOGE and `64.02` ZRO) so a regression that updates Portfolio but omits or miscalculates the recovery cost projection cannot pass. This is a test-only assertion gap; no production defect is claimed. Exact PR-head CI is pending.
 
 ### Medium — market trading-readiness boundaries are incomplete
 
