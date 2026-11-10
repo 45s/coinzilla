@@ -525,6 +525,130 @@ const canonicalMarket = new Market({
   quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
 })
 
+test("projects exact third-asset commission amount and historical quote valuation", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      fill({
+        commissions: [{
+          amount: "0.0001",
+          assetId: "binance:BNB",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.123456789012345678",
+            assetId: "binance:USDT",
+            asset: "USDT",
+          },
+        }],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(result.data.fills[0].commissions[0], {
+    amount: "0.0001",
+    assetId: "binance:BNB",
+    asset: "BNB",
+    quoteValue: {
+      amount: "0.123456789012345678",
+      assetId: "binance:USDT",
+      asset: "USDT",
+    },
+  })
+})
+
+test("fails closed when a restored third-asset commission has no historical quote valuation", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      fill({
+        commissions: [{
+          amount: "0.0001",
+          assetId: "binance:BNB",
+          asset: "BNB",
+        }],
+      }),
+    ],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors[0].message, /missing its historical quote valuation/)
+})
+
+test("rejects a third-asset commission valued in an asset other than the market quote asset", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      fill({
+        commissions: [{
+          amount: "0.0001",
+          assetId: "binance:BNB",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.123",
+            assetId: "binance:USDC",
+            asset: "USDC",
+          },
+        }],
+      }),
+    ],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors[0].message, /does not match the market quote asset/)
+})
+
+test("restores third-asset commission facts and historical quote valuation into both accounting projections", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      fill({
+        commissions: [{
+          amount: "0.0001",
+          assetId: "binance:BNB",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.123456789012345678",
+            assetId: "binance:USDT",
+            asset: "USDT",
+          },
+        }],
+      }),
+    ],
+  })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
+  const position = restored.data.portfolio.getPosition({ symbol: "BTCUSDT" })
+  const ledger = restored.data.recoveryLedgers.get(canonicalMarket.id)
+  assert.equal(position.baseQuantity.amount, "0.4")
+  assert.equal(position.spent.amount, "40.123456789012345678")
+  assert.equal(position.quoteNetCashFlow.amount, "-40.123456789012345678")
+  assert.equal(ledger.buyCost, "40.123456789012345678")
+  assert.equal(ledger.netSellProceeds, "0")
+})
+
 const completedCycleRecords = () => [
   record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-buy-1",
