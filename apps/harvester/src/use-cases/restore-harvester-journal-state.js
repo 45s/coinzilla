@@ -29,11 +29,20 @@ function requireMarket({ marketMetadata, symbol }) {
 function restoreFill({ data, market }) {
   const commissions = data.commissions.map((item) => {
     let asset
-    if (item.assetId === market.baseAsset.id && item.asset === market.baseAsset.code) {
+    if (item.assetId === market.baseAsset.id) {
+      if (item.asset !== market.baseAsset.code) {
+        throw new Error("Recovered commission asset code contradicts the market base asset identity for " + market.symbol)
+      }
       asset = market.baseAsset
-    } else if (item.assetId === market.quoteAsset.id && item.asset === market.quoteAsset.code) {
+    } else if (item.assetId === market.quoteAsset.id) {
+      if (item.asset !== market.quoteAsset.code) {
+        throw new Error("Recovered commission asset code contradicts the market quote asset identity for " + market.symbol)
+      }
       asset = market.quoteAsset
     } else {
+      if (item.asset === market.baseAsset.code || item.asset === market.quoteAsset.code) {
+        throw new Error("Recovered commission asset ID contradicts a market asset code for " + market.symbol)
+      }
       asset = new Asset({ id: item.assetId, code: item.asset })
       if (item.quoteValue === undefined) {
         throw new Error("Recovered third-asset commission is missing its historical quote valuation for " + market.symbol)
