@@ -11,6 +11,7 @@ test("allocates BUY actions sequentially against remaining pair investment", () 
     baseFreeBalance: "0",
     quoteCashFlow: "0",
     activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
     outstandingRecoveryAmount: "0",
     committedQuote: "0",
     committedBase: "0",
@@ -33,6 +34,7 @@ test("rejects SELL batches that collectively exceed Harvester-owned active inven
     baseFreeBalance: "10",
     quoteCashFlow: "0",
     activeBaseQuantity: "1",
+    portfolioBaseBalance: "1",
     outstandingRecoveryAmount: "100",
     committedQuote: "0",
     committedBase: "0",
@@ -53,6 +55,7 @@ test("accounts for existing active-order commitments before allocating new BUY a
     baseFreeBalance: "0",
     quoteCashFlow: "-10",
     activeBaseQuantity: "1",
+    portfolioBaseBalance: "1",
     outstandingRecoveryAmount: "20",
     committedQuote: "30",
     committedBase: "0.2",
@@ -77,6 +80,7 @@ test("defers BUY actions when existing commitments exhaust free quote balance", 
     baseFreeBalance: "0",
     quoteCashFlow: "0",
     activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
     outstandingRecoveryAmount: "0",
     committedQuote: "500",
     committedBase: "0",
@@ -95,6 +99,7 @@ test("rejects SELL quantities that exceed exchange-available base after existing
     baseFreeBalance: "0",
     quoteCashFlow: "0",
     activeBaseQuantity: "1",
+    portfolioBaseBalance: "1",
     outstandingRecoveryAmount: "0",
     committedQuote: "0",
     committedBase: "0.5",
@@ -358,7 +363,7 @@ test("retained free allocation does not reduce account-wide free-base availabili
     baseFreeBalance: "10",
     quoteCashFlow: "0",
     activeBaseQuantity: "90",
-    portfolioBaseBalance: "90",
+    portfolioBaseBalance: "100",
     portfolioBaseBalanceBaseline: "100",
     outstandingRecoveryAmount: "0",
     committedQuote: "0",
@@ -381,6 +386,7 @@ test("returns structured failures for invalid action sides and negative balance 
     baseFreeBalance: "0",
     quoteCashFlow: "0",
     activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
     outstandingRecoveryAmount: "0",
     committedQuote: "0",
     committedBase: "0",
@@ -396,10 +402,10 @@ test("returns structured failures for invalid action sides and negative balance 
     actions: [],
   })
 
-  assert.equal(invalidSide.ok, false)
-  assert.match(invalidSide.errors[0].message, /side must be BUY or SELL/)
-  assert.equal(negativeBalance.ok, false)
-  assert.match(negativeBalance.errors[0].message, /must be non-negative/)
+  assert.equal(invalidSide.ok, false, "An unsupported strategy side must be rejected before any allocation is produced.")
+  assert.match(invalidSide.errors[0].message, /side must be BUY or SELL/, "The invalid-side failure must identify the supported action contract.")
+  assert.equal(negativeBalance.ok, false, "Negative exchange free balances must fail closed.")
+  assert.match(negativeBalance.errors[0].message, /must be non-negative/, "The negative-balance failure must identify the violated non-negative balance invariant.")
 })
 
 test("rejects malformed commitment inputs without throwing", () => {
@@ -408,6 +414,7 @@ test("rejects malformed commitment inputs without throwing", () => {
     baseFreeBalance: "0",
     quoteCashFlow: "0",
     activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
     outstandingRecoveryAmount: "0",
     committedQuote: "0",
     committedBase: "0",
@@ -420,13 +427,14 @@ test("rejects malformed commitment inputs without throwing", () => {
     { actions: [{ side: "BUY", price: "0", quantity: "1" }] },
     { actions: [{ side: "BUY", price: "10", quantity: "1" }], quoteCashFlow: "not-a-decimal" },
     { actions: [], portfolioBaseBalance: "-1" },
+    { actions: [], portfolioBaseBalance: undefined },
     { actions: [], committedQuoteBalance: "-1" },
     { actions: [], committedBaseBalance: "-1" },
   ]
 
   for (const invalidCase of invalidCases) {
     const result = allocateOrderCommitments({ ...common, actions: [], ...invalidCase })
-    assert.equal(result.ok, false)
-    assert.ok(result.errors.length > 0)
+    assert.equal(result.ok, false, "Malformed or incomplete allocation inputs must return a structured failure.")
+    assert.ok(result.errors.length > 0, "Every rejected allocation input must include a diagnostic error.")
   }
 })

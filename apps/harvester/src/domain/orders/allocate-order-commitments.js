@@ -34,7 +34,7 @@ export function allocateOrderCommitments({
 } = {}) {
   try {
     if (!Array.isArray(actions)) throw new TypeError("actions must be an array")
-    const accountPortfolioBaseBalance = portfolioBaseBalance ?? activeBaseQuantity
+    const accountPortfolioBaseBalance = portfolioBaseBalance
     const accountCommittedQuote = committedQuoteBalance ?? committedQuote
     const accountCommittedBase = committedBaseBalance ?? committedBase
     for (const [field, value] of Object.entries({
