@@ -218,8 +218,14 @@ test("treats identical order updates as idempotent", () => {
   const first = registry.applyUpdate({ order: update })
   const duplicate = first.registry.applyUpdate({ order: update })
 
-  assert.equal(duplicate.duplicate, true)
-  assert.equal(duplicate.registry, first.registry)
+  const tracked = first.registry.getOrder({ clientOrderId: "harvester-1" })
+  assert.equal(duplicate.duplicate, true, "An identical exchange report must be recognized as a replay.")
+  assert.equal(duplicate.applied, false, "A replay must not be applied a second time.")
+  assert.equal(duplicate.registry, first.registry, "An identical replay must preserve the exact registry snapshot.")
+  assert.equal(tracked.status, "OPEN", "The acknowledged order must remain OPEN after an identical replay.")
+  assert.equal(tracked.brokerOrderId, "9001", "The exchange order identity must remain attached.")
+  assert.equal(tracked.executedQuantity.amount, "0", "A duplicate acknowledgement must not invent execution.")
+  assert.equal(tracked.remainingQuantity.amount, "100", "The original commitment must remain unchanged.")
 })
 
 test("rejects decreasing executed quantity and stale update timestamps", () => {
@@ -272,6 +278,7 @@ test("rejects immutable order intent changes and invalid status transitions", ()
     }),
   }).registry
 
+  const originalOrder = open.getOrder({ clientOrderId: "harvester-1" })
   assert.throws(() => open.applyUpdate({
     order: makeOrder({
       brokerOrderId: "9001",
@@ -292,6 +299,13 @@ test("rejects immutable order intent changes and invalid status transitions", ()
       updatedAt: 102,
     }),
   }), /Rejected orders cannot have changing executed quantity/)
+
+  assert.equal(open.getOrder({ clientOrderId: "harvester-1" }), originalOrder, "Rejected updates must not replace the canonical order in the immutable registry.")
+  assert.equal(originalOrder.status, "OPEN", "A rejected conflicting report must not alter the accepted status.")
+  assert.equal(originalOrder.executedQuantity.amount, "0", "A rejected report must not mutate executed quantity.")
+  assert.equal(originalOrder.remainingQuantity.amount, "100", "A rejected report must not release or consume order commitment.")
+  assert.equal(open.getActiveOrders({ marketId: market.id }).length, 1, "The previously accepted order must remain active.")
+  assert.equal(open.getTerminalOrders({ marketId: market.id }).length, 0, "A rejected report must not terminalize the order.")
 })
 
 test("allows a late terminal FILLED update after partial CANCELED or EXPIRED races", () => {
@@ -374,10 +388,20 @@ test("ignores a stale OPEN acknowledgement that arrives after a newer fill event
     }),
   })
 
-  assert.equal(staleAcknowledgement.stale, true)
-  assert.equal(staleAcknowledgement.applied, false)
-  assert.equal(staleAcknowledgement.registry, partial)
-  assert.equal(partial.getOrder({ clientOrderId: "harvester-1" }).status, "PARTIALLY_FILLED")
+  const tracked = partial.getOrder({ clientOrderId: "harvester-1" })
+
+  assert.equal(staleAcknowledgement.stale, true, "The older OPEN acknowledgement must be classified as stale.")
+  assert.equal(staleAcknowledgement.applied, false, "A stale acknowledgement must not be applied.")
+  assert.equal(staleAcknowledgement.unknown, false, "A stale known order report is not an unknown order.")
+  assert.equal(staleAcknowledgement.registry, partial, "A stale report must return the exact unchanged registry snapshot.")
+  assert.equal(tracked.status, "PARTIALLY_FILLED", "The latest accepted partial-fill state must remain authoritative.")
+  assert.equal(tracked.brokerOrderId, "9001", "The known exchange order identity must be preserved.")
+  assert.equal(tracked.originalQuantity.amount, "100", "The original order commitment must be preserved.")
+  assert.equal(tracked.executedQuantity.amount, "40", "The accepted cumulative execution must not move backwards.")
+  assert.equal(tracked.remainingQuantity.amount, "60", "The active remaining commitment must be unchanged.")
+  assert.equal(tracked.updatedAt, 102, "The accepted newer timestamp must not be replaced by the stale acknowledgement.")
+  assert.equal(partial.getActiveOrders({ marketId: market.id }).length, 1, "The unresolved partial order must remain active.")
+  assert.equal(partial.getTerminalOrders({ marketId: market.id }).length, 0, "A stale OPEN report must not terminalize the order.")
 })
 
 

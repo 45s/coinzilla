@@ -56,7 +56,7 @@ The existing Conservative strategy suite tests a BUY blocked when outstanding re
 
 ### Medium — lifecycle tests need complete-state assertions
 
-The OrderRegistry suite already covers UNKNOWN, stale events, identity mismatch and late FILLED reports. PR #925 strengthens the accepted partial-fill and terminal-to-FILLED paths with exact original/executed/remaining quantities, broker/client identity, timestamps, active/terminal classification and proof that earlier immutable registry snapshots remain unchanged. Rejected/stale transition immutability remains a follow-up gap.
+The OrderRegistry suite already covers UNKNOWN, stale events, identity mismatch and late FILLED reports. PR #928 strengthens accepted partial-fill and terminal-to-FILLED paths with exact original/executed/remaining quantities, broker/client identity, timestamps, active/terminal classification and proof that earlier immutable registry snapshots remain unchanged. Its follow-up commit also asserts full-state preservation after stale acknowledgements, identical duplicate reports and rejected conflicting/invalid transitions. No production code changes.
 
 ### Explicitly deferred — Aggressive grid behavior
 
@@ -66,7 +66,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 1. **Strategy decisions:** close the blocked-recovery-SELL decision gap; then add exact investment-cap boundary cases and review active-order/market isolation matrices.
 2. **Portfolio and accounting:** strengthen independent expected values, commission-identity conflicts and multi-fill sequence invariants.
-3. **Order lifecycle:** accepted partial-fill and late terminal-to-FILLED complete-state assertions are in PR #925; next improve stale, duplicate and rejected transition immutability.
+3. **Order lifecycle:** accepted, stale, duplicate, rejected and late terminal-to-FILLED complete-state assertions are in PR #928; exact-head CI verification is recorded there.
 4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
