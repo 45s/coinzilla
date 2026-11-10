@@ -185,12 +185,16 @@ The audit also identified these risks:
 
 These are audit observations to verify against the current implementation before each fix; do not blindly apply stale line numbers or assumptions.
 
+### Cross-domain persistence constraint — Journal issue #889
+
+EventBus is an in-memory dispatcher and intentionally accepts `bigint`, `undefined`, all JavaScript numbers, cycles, and shared references as payload values. Journal currently writes EventBus messages with JSONL/`JSON.stringify`: BigInt and cycles throw; undefined object properties are omitted; undefined array entries and non-finite numbers become `null`; negative zero becomes `0`; and shared references are serialized as repeated subtrees without preserving identity. The Journal subscription also does not currently surface a serialization rejection through its durability result. This is a Journal-owned persistence contract issue, tracked in [#889](https://github.com/45s/coinzilla/issues/889). Do not narrow EventBus's in-memory payload contract as a workaround. Until Journal resolves the request, consumers that require Journal persistence must publish acyclic JSON-safe payloads and must not rely on shared-reference identity. Revisit this note when the Journal owner merges a tested fix.
+
 ## 5. Roadmap and acceptance criteria
 
 ### Phase 0 — Contract and baseline
 
 - [x] Document publish, delivery, ordering, error, unsubscribe, flush, and close semantics in `README.md`; keep this contract synchronized with tests and implementation.
-- [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and primitive values only; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
+- [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and `null`/`undefined`/string/boolean/number (including non-finite and negative-zero values)/BigInt primitive values; symbols and functions are rejected; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
 - [x] Inspect all in-repository consumers for compatibility constraints.
 - [x] Capture baseline test results and package coverage. CI on PR #294: 77 package tests passed; source coverage was 99.54% lines and 98.63% branches (Node.js 22; [Unit Tests run](https://github.com/45s/coinzilla/actions/runs/41194370503), [Test Coverage run](https://github.com/45s/coinzilla/actions/runs/41194370511)).
 
