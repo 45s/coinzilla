@@ -275,6 +275,82 @@ test("does not count Portfolio base inventory twice when the exchange snapshot a
   assert.match(result.errors[0].message, /available free base balance/, "The SELL must fail specifically at the account-wide free-base guard when the wallet has no free base.")
 })
 
+test("does not subtract a SELL lock already reflected in the account snapshot", () => {
+  const sellCommitmentAtSnapshot = "100"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "1" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "900",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "100",
+    activeBaseBalance: "100",
+    activeBaseBalanceBaseline: "100",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: sellCommitmentAtSnapshot,
+    committedBaseBalanceBaseline: sellCommitmentAtSnapshot,
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "A SELL commitment already represented by exchange locked base must not reduce free base a second time.")
+  assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "1" }], "The account-wide free-base balance must remain at the exchange-reported 900 units after applying a zero commitment delta.")
+  assert.equal(result.data.remainingBaseBalance, "899", "The new one-unit SELL must leave exactly 899 account-free base units.")
+})
+
+test("subtracts only a new SELL lock created after the account snapshot", () => {
+  const currentSellCommitment = "100"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "1" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "1000",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "200",
+    activeBaseBalance: "100",
+    activeBaseBalanceBaseline: "100",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: currentSellCommitment,
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "A new 100-unit SELL lock after the snapshot must reduce exchange free base by exactly 100 units.")
+  assert.equal(result.data.remainingBaseBalance, "899", "After the new one-unit SELL action, 899 base units must remain from 1,000 free less the 100-unit post-snapshot lock.")
+})
+
+test("offsets a partial SELL fill against the released SELL commitment", () => {
+  const commitmentAtSnapshot = "100"
+  const currentCommitment = "60"
+  const activePositionAtSnapshot = "100"
+  const currentActivePosition = "60"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "1" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "900",
+    quoteCashFlow: "40",
+    activeBaseQuantity: "60",
+    activeBaseBalance: currentActivePosition,
+    activeBaseBalanceBaseline: activePositionAtSnapshot,
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: currentCommitment,
+    committedBaseBalanceBaseline: commitmentAtSnapshot,
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "A 40-unit SELL fill must reduce Portfolio inventory and its outstanding lock by the same amount without changing exchange free base.")
+  assert.equal(result.data.remainingBaseBalance, "899", "After one additional SELL action, account-free base must be 899 because the partial fill and released lock offset exactly.")
+})
+
 test("returns structured failures for invalid action sides and negative balance inputs", () => {
   const common = {
     quoteFreeBalance: "1000",

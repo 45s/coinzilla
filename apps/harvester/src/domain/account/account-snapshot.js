@@ -37,7 +37,14 @@ export class AccountSnapshot {
   #committedQuoteBalanceBaselineByAssetId
   #committedBaseBalanceBaselineByAssetId
 
-  constructor({ balances, sourceTime, quoteCashFlowBaseline = [] } = {}) {
+  constructor({
+    balances,
+    sourceTime,
+    quoteCashFlowBaseline = [],
+    activeBaseQuantityBaseline = [],
+    committedQuoteBalanceBaseline = [],
+    committedBaseBalanceBaseline = [],
+  } = {}) {
     if (!Array.isArray(balances) || balances.some((balance) => !(balance instanceof Balance))) {
       throw new TypeError("AccountSnapshot.balances must contain canonical Balance values")
     }
@@ -105,10 +112,7 @@ export class AccountSnapshot {
     return this.getBalance({ assetId })?.locked
   }
 
-  /**
-   * Portfolio quote cash flow already reflected in this point-in-time exchange
-   * snapshot. The trading engine adds only cash flow accrued after this baseline.
-   */
+  /** Return active Portfolio base quantity already represented by this snapshot. */
   getActiveBaseQuantityBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getActiveBaseQuantityBaseline requires assetId")
@@ -130,6 +134,7 @@ export class AccountSnapshot {
     return this.#committedBaseBalanceBaselineByAssetId.get(assetId) ?? "0"
   }
 
+  /** Return Portfolio quote cash flow already reflected by this snapshot. */
   getQuoteCashFlowBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getQuoteCashFlowBaseline requires assetId")
