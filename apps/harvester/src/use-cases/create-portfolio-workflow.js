@@ -129,10 +129,10 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         fill,
       })
       if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
-        if (typeof onCommissionAsset !== "function") {
-          return toResult({ error: new Error("Third-asset commission accounting requires a durable PREFLIGHT asset baseline") })
-        }
         try {
+          if (typeof onCommissionAsset !== "function") {
+            throw new Error("Third-asset commission baseline capture is unavailable")
+          }
           for (const [assetId, assetCode] of thirdAssetCommissions) {
             const baselineResult = await onCommissionAsset({ assetId, assetCode })
             if (baselineResult?.ok !== true) {
@@ -140,14 +140,13 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             }
           }
         } catch (error) {
-          logger.error?.({
-            message: "commission asset baseline capture failed",
+          logger.warning?.({
+            message: "third-asset commission baseline was not persisted; account reconciliation will fail closed",
             executionId: fill.id,
             tradeId: fill.tradeId,
             symbol: fill.market.symbol,
             errors: [{ name: error?.name, message: error?.message ?? String(error) }],
           })
-          return toResult({ error })
         }
       }
       if (result.ok) {
