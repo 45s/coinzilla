@@ -28,9 +28,10 @@ This standard applies to maintained repository-authored `.md` and `.mdx` files. 
 ### Paragraphs and lists
 
 - Prefer concise paragraphs focused on one idea.
-- Use `-` for unordered lists consistently within a document.
+- Use `-` for every unordered-list marker; do not use `*` or `+` as list markers.
 - Use ordered lists for sequences, procedures and ranked steps.
-- Indent nested list content consistently by two spaces per level.
+- Indent nested list items and continuation content by exactly two spaces per level; do not use tabs.
+- Separate list blocks from adjacent paragraphs, headings, tables and fenced code blocks with one blank line. Blank lines inside a loose list are allowed.
 - Keep list items grammatically parallel where practical.
 - Use task-list checkboxes only for actionable work with a clear owner or completion condition; do not use them as decoration.
 - Avoid manual line wrapping in prose. Wrap only where it improves source review, such as long command examples or structured data.
@@ -46,7 +47,9 @@ This standard applies to maintained repository-authored `.md` and `.mdx` files. 
 ### Tables
 
 - Use tables for compact comparisons or genuinely tabular data, not for long prose or nested procedures.
-- Include a header row and delimiter row.
+- Include a header row and delimiter row; every delimiter cell must contain at least three hyphens, with optional leading/trailing colons for alignment.
+- Keep the same number of cells in the header, delimiter and every data row.
+- Separate table blocks from adjacent paragraphs, headings, lists and fenced code blocks with one blank line.
 - Keep column order and alignment consistent within a document.
 - Keep cell content concise; move detailed explanations into prose or linked documents.
 - Do not force wide tables into a single line at the expense of source readability.
@@ -80,7 +83,7 @@ Before merging a meaningful Markdown change, verify:
 
 ## Tooling status
 
-The required JavaScript Syntax workflow enforces balanced fenced-code delimiters and recursive local-path link validation through the agent-policy check. It also runs a **report-only** local heading-anchor baseline for same-file and cross-file Markdown/MDX fragments, including GitHub-style duplicate slugs, Setext headings and explicit HTML anchors. Historical documents remain included; external URLs, non-Markdown targets, code examples and text fragments are excluded. Unresolved anchors are reported but do not fail CI. The workflow also runs `scripts/markdown-style-baseline.js` as a **report-only** formatting measurement; neither report fails on existing findings or rewrites files.
+The required JavaScript Syntax workflow enforces balanced fenced-code delimiters and recursive local-path link validation through the agent-policy check. It also runs a **report-only** local heading-anchor baseline for same-file and cross-file Markdown/MDX fragments, including GitHub-style duplicate slugs, Setext headings and explicit HTML anchors. Historical documents remain included; external URLs, non-Markdown targets, code examples and text fragments are excluded. Unresolved anchors are reported but do not fail CI. The workflow also runs `scripts/markdown-style-baseline.js` as a **report-only** formatting measurement; neither report fails on existing findings or rewrites files. The formatting baseline measures whitespace, heading structure, fenced-code labels, unordered-list markers, nested-list indentation, list-block spacing, table delimiters, table column counts, and table-block spacing. The six list/table findings are report-only while the full-tree baseline and false-positive scope are reviewed; they are not yet part of changed-file enforcement.
 
 For pull requests, the same required workflow runs the [changed-file style checker](../scripts/check-markdown-style.js) and its [tests](../scripts/check-markdown-style.test.js) against changed maintained Markdown/MDX. On existing files, line-level findings are enforced only in changed hunks and two lines of context; missing final newlines and CRLF are checked at file level. Newly added files are checked in full. This prevents unrelated pre-existing formatting or historical sections elsewhere in an edited file from forcing a mass reformat. Known historical evidence paths are explicitly excluded, and GitHub issue/PR templates are exempt from heading-only rules; both exceptions are covered by tests. The full-tree baseline remains informational, and this changed-line guard is not a full-repository Markdown linter.
 
