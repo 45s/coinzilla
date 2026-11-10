@@ -46,6 +46,10 @@ The domain suite is supplemented by application-level engine and use-case tests 
 
 A source and test search found no generation identifier, generation-scoped state or generation transition guard in Harvester. Current asynchronous ordering is based on the serialized transition queue, market-price event identity/sequence, canonical order/fill identities and explicit stale/terminal checks. Therefore generation isolation is **not a currently defined behavior contract** and cannot be meaningfully tested without inventing new product semantics. Do not add generation architecture under this test-quality initiative; revisit only if an explicit generation model is introduced.
 
+## Runtime shutdown orchestration coverage
+
+The shutdown handler regression suite verifies safety-critical ordering, shared-promise idempotency, aggregate cleanup failures, and incomplete-shutdown diagnostics. The incomplete case asserts that the pre-shutdown readiness status and retryable recovery category/stage/generation survive the transition to STOPPING, unresolved owned BUY identity and exact execution quantities are exposed, deliberately preserved open SELL orders are excluded, and the runtime ends in `SHUTDOWN_INCOMPLETE` rather than falsely reporting `STOPPED`. Process-level lock-retention behavior remains covered separately in `src/index.test.js`.
+
 ## Quality findings and priorities
 
 ### High — blocked recovery SELL must not be bypassed by a new BUY
