@@ -669,16 +669,17 @@ function main() {
     ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
     ...findUnbalancedMarkdownFences(markdownDocuments),
     ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
+    ...findDirectConsoleUsages(repositoryRoot),
   ])];
 
   if (gaps.length > 0) {
-    console.error('Agent policy ownership check failed:');
+    console.error('Agent policy check failed:');
     for (const gap of gaps) console.error(`- ${gap}`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences and inline/reference-style local paths are valid; heading anchors are report-only).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
