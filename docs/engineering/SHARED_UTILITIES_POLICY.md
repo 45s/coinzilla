@@ -164,8 +164,8 @@ The source-tree audit covers the applications and workspace packages present in 
 
 ### Remaining audit work
 
-- [ ] Complete a repository-wide direct console/stderr scan and document the exact approved runtime/CLI exceptions.
-- [~] Add an automated repository check for routine direct console usage outside approved files. The source guard and deterministic tests are proposed in [PR #942](https://github.com/45s/coinzilla/pull/942); exact-head CI is pending.
+- [~] Complete the repository-wide direct console/stderr audit. Global `console` references in production JavaScript under `apps/` and `packages/` are now checked by the required policy workflow; the separate fatal `process.stderr.write` inventory remains open.
+- [x] Add an automated repository check for routine direct console usage outside approved files. The source guard and deterministic tests merged in [PR #942](https://github.com/45s/coinzilla/pull/942) at `2db7d6f15a0660adea8584fa8f27827dead28902`; all six required `develop-core` contexts passed.
 - [ ] Continue to classify new generic candidates when they appear; do not move single-domain helpers without a stable domain-neutral contract.
 - [ ] Complete consumer migration verification through workspace CI and remove any stale imports or unused duplicate tests.
 
