@@ -33,6 +33,15 @@ const FILE_LEVEL_FINDINGS = new Set([
   "crlfLineEndings",
 ])
 
+const REPORT_ONLY_FINDINGS = new Set([
+  "unorderedListMarkers",
+  "nestedListIndentation",
+  "listSpacing",
+  "malformedTableDelimiters",
+  "tableColumnMismatches",
+  "tableSpacing",
+])
+
 const FINDING_LABELS = Object.freeze({
   trailingWhitespace: "trailing whitespace",
   missingFinalNewline: "missing final newline",
@@ -162,6 +171,7 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
   )
 
   for (const [name, entries] of Object.entries(baseline.findings)) {
+    if (REPORT_ONLY_FINDINGS.has(name)) continue
     for (const entry of entries) {
       const change = changesByPath.get(entry.path)
       const document = documentsByPath.get(entry.path)
