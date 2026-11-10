@@ -8,7 +8,7 @@
 
 - [~] Establish and maintain the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md).
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
-- [~] RED confirmed and policy correction implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL now prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. The full Harvester suite passed 872/872 and coverage passed; the changed-file Markdown style check is being rerun after this whitespace-only cleanup.
+- [~] Conservative BUY-gating regression and correction are implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact PR-head CI passed 872/872 Harvester tests and all required checks; merge remains pending.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
