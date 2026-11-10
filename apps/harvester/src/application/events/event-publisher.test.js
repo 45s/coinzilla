@@ -68,3 +68,22 @@ test("normalizes a thrown flush failure without throwing across the publisher bo
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /disk unavailable/)
 })
+
+
+test("exposes structured failure reporting for lifecycle DTO mapping errors", () => {
+  const logs = []
+  const publisher = makeEventPublisher({
+    eventBus: {
+      publish: () => ({ ok: true }),
+    },
+    flush: async () => ({ ok: true, durable: true }),
+    logger: { error: (entry) => logs.push(entry) },
+  })
+  const error = new TypeError("broker transactionTime must be a non-negative safe integer")
+
+  publisher.reportFailure({ event: { name: "order.updated" }, error })
+
+  assert.equal(logs.length, 1, "A mapper failure must be sent through the event publisher's structured logger.")
+  assert.equal(logs[0].eventName, "order.updated", "The diagnostic must identify the lifecycle event that could not be mapped.")
+  assert.equal(logs[0].error, error, "The diagnostic must retain the original mapper error.")
+})

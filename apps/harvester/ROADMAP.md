@@ -9,7 +9,7 @@
 - [x] Establish the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) — added and merged in PR #917.
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
 - [x] Conservative BUY-gating regression and correction merged in PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact merged-head CI passed 872/872 Harvester tests and all required checks.
-- [~] Add the Conservative investment-cap equality and immediately-below boundary matrix in [PR #922](https://github.com/45s/coinzilla/pull/922); assert the complete decision so the recovery SELL remains eligible while the next BUY is gated. Exact PR head `25b3a3162fac9f3aa8453b45fb4b727abbacf481` passed 872/872 Harvester tests and all required CI; awaiting merge.
+- [x] Conservative investment-cap equality and immediately-below boundary matrix merged in [PR #922](https://github.com/45s/coinzilla/pull/922). Exact PR head `8e234e2c18cb98b4b8562c62ef05d9f20f852102` passed 872/872 Harvester tests; coverage was 75.94% lines, 79.26% branches and 74.88% functions. All required CI checks passed.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
@@ -87,10 +87,10 @@ This section is the authoritative implementation order for current work. It supe
    - **Do:** the Telegram integration through `@coinzilla/notifiers` is already implemented (PR #734). Keep both credentials optional, preserve the explicit event allowlist, bounded serialized delivery and shutdown drain. Do not add automatic retries or a durable outbox without a concrete requirement.
    - **Verify:** retain offline tests for absent/partial credentials, setup failure, queue overflow, transport failure and shutdown. A live smoke test is operator-controlled and is not a CI prerequisite.
 
-9. **[~] Fill identity and commission-conflict regression coverage — PR #921.**
+9. **[x] Fill identity and commission-conflict regression coverage — merged in PR #921.**
    - **Why:** a reused Fill ID with a changed commission amount or asset must never be accepted as an identical duplicate by either Portfolio or RecoveryLedger. A rejected conflict must leave the complete immutable projection unchanged.
    - **Implemented:** Portfolio rejects the same Fill ID with a changed quote-commission amount; RecoveryLedger rejects the same Fill ID with a changed commission asset. Both tests compare the complete immutable projection before and after rejection. No production code changed.
-   - **Verify:** exact PR head `c6a8de21cf6f241583ae95ab88d1afb6febc1123` passed 873/873 Harvester tests, 75.87% line / 79.13% branch / 74.85% function coverage, and all required CI checks. Merge remains pending. No broker, network, or exchange activity.
+   - **Verified:** exact PR-head CI passed 873/873 Harvester tests, 75.87% line / 79.13% branch / 74.85% function coverage, and all required checks. PR #921 merged into `develop` at `6c4b1d421aac46b391f2de894153947545879ba9`. No broker, network, or exchange activity.
 
 ### DEFERRED — only after the critical Conservative path is safe
 
@@ -219,6 +219,8 @@ Trading safety requirements remain in force: the operator selects TESTNET or LIV
 - [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together — completed in [PR #839](https://github.com/45s/coinzilla/pull/839).
 
 ## Journal evidence workstream
+
+- [ ] **#923 — Journal DTO compatibility:** validate Journal-bound timestamps and numeric diagnostics, report best-effort mapper failures, and prevent invalid DTO publication. Production changes and regression tests are in [PR #925](https://github.com/45s/coinzilla/pull/925); exact-head CI passed on `29dc9c4440e794a4426765dc7c810e2e103d3a2b` (875/875 Harvester tests), with fresh verification required after this develop sync.
 
 Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
 
