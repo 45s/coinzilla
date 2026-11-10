@@ -351,6 +351,30 @@ test("offsets a partial SELL fill against the released SELL commitment", () => {
   assert.equal(result.data.remainingBaseBalance, "899", "After one additional SELL action, account-free base must be 899 because the partial fill and released lock offset exactly.")
 })
 
+test("retained free allocation does not reduce account-wide free-base availability", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "5" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "10",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "90",
+    activeBaseBalance: "90",
+    activeBaseBalanceBaseline: "100",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "Moving ten base units from active inventory to retained keepQuantity must not change the account-wide free balance already reported by the exchange.")
+  assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "5" }], "The account still has ten free base units and the strategy still has ninety active units, so a five-unit SELL must be admissible.")
+  assert.equal(result.data.remainingBaseBalance, "5", "After a five-unit SELL, exactly five account-free base units must remain.")
+})
+
 test("returns structured failures for invalid action sides and negative balance inputs", () => {
   const common = {
     quoteFreeBalance: "1000",
