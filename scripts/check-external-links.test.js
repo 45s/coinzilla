@@ -92,6 +92,47 @@ test('marks malformed HTTP URLs and credential-bearing URLs invalid without expo
   assert.equal(credentialUrl.url.includes('secret'), false);
 });
 
+test('rejects and redacts credential-like query parameters without requesting them', async () => {
+  const secrets = [
+    'https://docs.example/path?access_token=secret-access',
+    'https://docs.example/path?api_key=secret-api',
+    'https://docs.example/path?X-Amz-Signature=secret-signature',
+  ];
+  const links = secrets.map((url) => parseExternalUrl(url));
+
+  assert.ok(links.every((link) => link.status === 'invalid'));
+  assert.doesNotMatch(JSON.stringify(links), /secret-(?:access|api|signature)/);
+
+  const extracted = extractExternalLinks(secrets.map((url, index) => ({
+    path: 'docs/' + index + '.md',
+    content: '[credential](<' + url + '>)',
+  })));
+  assert.ok(extracted.every((link) => link.status === 'invalid'));
+  assert.doesNotMatch(JSON.stringify(extracted), /secret-(?:access|api|signature)/);
+
+  let requests = 0;
+  await checkExternalLinks(extracted, {
+    fetchImpl: async () => {
+      requests += 1;
+      return response(200);
+    },
+  });
+  assert.equal(requests, 0);
+});
+
+test('keeps GET 404/410 unverifiable when HEAD first reports access control', async () => {
+  for (const headStatus of [401, 403]) {
+    const result = await checkExternalLink(candidate('https://access-controlled.example/'), {
+      fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? headStatus : 404),
+      sleep: noDelay,
+      minHostIntervalMs: 0,
+    });
+
+    assert.equal(result.status, 'unverifiable');
+    assert.match(result.reason, /after HEAD returned an access-control response/);
+  }
+});
+
 test('HEAD success is sufficient and avoids a GET request', async () => {
   const methods = [];
   const result = await checkExternalLink(candidate('https://ok.example/'), {
