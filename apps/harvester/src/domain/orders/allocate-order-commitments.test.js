@@ -478,6 +478,34 @@ test("rejects aggregate SELL commitments greater than total Portfolio base inven
   assert.match(result.errors[0].message, /committedBaseBalance cannot exceed portfolioBaseBalance/, "The allocator must identify account-wide SELL reservations that exceed tracked total base inventory.")
 })
 
+
+test("credits only net base from a partial BUY fill received after the account snapshot", () => {
+  // A 0.4 base BUY fill less a 0.004 base commission leaves 0.396 tracked base.
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "0.396" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "0",
+    quoteCashFlow: "-40",
+    activeBaseQuantity: "0.396",
+    portfolioBaseBalance: "0.396",
+    portfolioBaseBalanceBaseline: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, true, "The net base quantity added by a post-snapshot partial BUY fill must become available to the same pair's recovery SELL.")
+  assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "0.396" }], "The recovery SELL may use exactly the 0.396 base units remaining after the 0.004 base commission.")
+  assert.equal(result.data.remainingBaseBalance, "0", "The post-snapshot base credit must be applied exactly once and fully consumed by the SELL.")
+  assert.equal(result.data.remainingActiveBase, "0", "The pair active inventory cap must reach zero after selling the complete net fill quantity.")
+  assert.equal(result.data.remainingQuoteBalance, "60", "The 40-unit BUY quote cash flow must be applied once to the 100-unit snapshot free quote balance.")
+})
+
 test("returns structured failures for invalid action sides and negative balance inputs", () => {
   const common = {
     quoteFreeBalance: "1000",
