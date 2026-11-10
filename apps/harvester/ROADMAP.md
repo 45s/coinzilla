@@ -416,6 +416,11 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Reconnect and complete the existing PR #606 recovery helper pipeline in a separate DDD/TDD implementation phase after this forensic investigation; this is not implementation authorization for the current phase.
 - [ ] Persist execution facts before acknowledging successful processing/recovery.
 - [ ] On startup/reconnect, reconcile persisted state against exchange balances, open orders, and available order/trade history before READY.
+- [ ] **History discovery:** enumerate all nested `logs/sessions/<process-session>/` directories and legacy flat Journal sessions. The current Journal reader scans only direct files in its configured directory; the new process-specific directory cannot discover prior sibling sessions.
+- [ ] **Open-order readiness:** define and test the policy for unowned account-wide orders. Current PREFLIGHT can record `BLOCKED` while `subscribeToUserData()` still sets READY; same-symbol overlap must be tested with a market tick.
+- [ ] **Durable fact contract:** resolve the conflict between crash-safe fill/pause persistence and the current rule that additional Journal evidence must not block fill accounting. Evaluate a separate application-owned durable-fact port before changing Journal's role.
+- [ ] **History completeness:** do not override `marketUniverseComplete: false`; establish a provable owned-market/history scope and retention boundary, otherwise require operator reconciliation.
+- [ ] **Recovery-cycle restoration:** replay must reproduce the live atomic completion transition: require exact `freeQuantity === activeQuantity`, allocate the complete retained inventory, reset `Position.spent`, and reset RecoveryLedger together. Current restore helper omits the Position cost-basis reset (F-038).
 - [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.
 - [ ] Test crash/restart at each order/fill transition and ensure no duplicate order or fill application.
 - [ ] Do not claim exactly-once delivery; guarantee idempotent accounting through durable execution identity and reconciliation.
@@ -453,7 +458,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 
 ## P2 — Operational hardening and improvements
 
-- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). It can proceed independently of trading/TESTNET work; implement exactly one small PR per step. Journal must never block application startup, broker connectivity, or trading.
+- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). Optional operational evidence must not add blocking I/O to strategy evaluation, market processing, broker-event handling or fill accounting. Preserve the existing required broker-connected PREFLIGHT and pre-order/cancel durability barriers. Process-restart recovery is separate under [#654](https://github.com/45s/coinzilla/issues/654); do not silently extend the Journal observer into trading-state authority or add a new fill-persistence barrier without an explicit architecture decision.
 - [ ] Add actionable health/status reporting for process and each pair without exposing credentials or raw exchange payloads.
 - [ ] Add bounded reconnect/backoff, timeouts, stream liveness/staleness detection, and resource cleanup tests.
 - [ ] Add operator controls for pause/resume/stop and safe behavior when a pair is disabled while orders or inventory exist.
@@ -481,7 +486,8 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [x] Conservative owner decisions are closed and recorded in the canonical specification. No additional Conservative product decisions are pending.
 - [ ] Finalize shared application reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders; do not duplicate Conservative strategy policy.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
-- [ ] Implement optional operational journaling as a separate observability task; no successful TESTNET cycle is required. Separately decide whether Journal read/replay should later participate in durable Harvester state/restart recovery. The staged operational event-journal plan does not implement replay or restart recovery.
+- [x] Optional operational Journal evidence integration is implemented; it remains an observer and does not itself restore trading state. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) and [Journal Evidence Contract](./docs/JOURNAL_EVIDENCE_CONTRACT.md).
+- [ ] Resolve the durable execution-fact source and fill/pause persistence contract for #654 without silently changing the Journal observer contract.
 - [ ] Decide whether strategy-specific P/L attribution is required.
 - [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
 

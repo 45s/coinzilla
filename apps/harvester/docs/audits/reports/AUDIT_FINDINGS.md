@@ -915,3 +915,33 @@ Before PR #824, the handler's bounded-log deduplication key included the outer e
 - **TDD GREEN:** implementation head `9d6283de604ddcaefe9cd9faabce29489fb896ea` passed all 870 Harvester tests (870 passed, 0 failed), all workspace unit-test jobs, all workspace coverage jobs, JavaScript Syntax, Dependency Audit, Harvester Targeted Tests, and Harvester Process Lock. Harvester coverage: 75.92% lines, 79.26% branches, 74.85% functions. The final PR head adds only this documentation closeout.
 - **Safety:** no Journal package API or persistence semantics change; no Journal replay, process-restart recovery, TESTNET/live trading, or exchange action.
 - **F-018 follow-up:** the transient sync retry behavior remains intact; the separate permanent-writer futile-retry gap is resolved by this F-033 change.
+
+## F-035 — Per-process Journal layout is not discoverable through the current Journal reader path
+
+**Status:** CONFIRMED integration blocker. See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
+
+Harvester writes each process Journal under `logs/sessions/<timestamp>-<runtime-session-id>/`, and `prepareOptionalJournal()` passes the new process's session directory to the Journal. `Journal.read()` and `FileSystemJournalStore.listSessions()` enumerate direct files only; they do not recurse into sibling process-session directories. A restart-recovery reader must explicitly enumerate nested process sessions and legacy flat files, validate the complete set, and fail closed on missing or corrupt history. The older PR #606 read path predates the PR #874/#880 directory layout.
+
+## F-036 — BLOCKED account-wide open-order audit does not gate trading readiness
+
+**Status:** CONFIRMED readiness gap; duplicate same-symbol order consequence strongly indicated but not reproduced. See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
+
+`createAccountSnapshotManager()` marks unmatched account-wide open orders as `BLOCKED`, but `subscribeToUserData()` does not inspect that readiness value before setting `state.ready = true`. The existing startup test explicitly permits runtime startup with an unowned open order and emits no market tick. The engine's duplicate-order guard sees only the in-memory OrderRegistry. Add a deterministic same-symbol market-tick regression and define the scope of the unowned-order trading gate. Never adopt, cancel or modify manual orders.
+
+## F-037 — Crash-safe fill persistence conflicts with the current non-blocking Journal evidence contract
+
+**Status:** CONFIRMED requirements conflict; design decision required before implementation. See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
+
+Harvester agent/trading/Journaling contracts say optional Journal evidence must not add blocking I/O to fill accounting or broker-event handling and that Journal is not trading-state authority. Process-restart safety requires durable execution facts and safety pauses before the application can safely progress. Evaluate a separate application-owned durable-fact port/store while retaining Journal as an observer, or explicitly revise the architecture contract. Do not silently change either side.
+
+## Documentation correction — Journal serialization failure propagation
+
+`JOURNAL_OPERATIONS.md` contained a stale description that Journal serialization failures were only logged and omitted from flush results. Journal issue #889 was fixed in PR #920: lossy payloads are rejected before append, failures are retained in writer state, and flush/close surface the failure without claiming durable success. The 2026-11-10 documentation update corrects that statement.
+
+## F-038 — Restoring a completed recovery cycle does not reset Position cost basis
+
+**Status:** CONFIRMED latent domain-logic defect in the retained recovery helper; current runtime replay is disabled. See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
+
+`createPortfolioWorkflow.completeRecoveryCycle()` allocates the exact retained quantity, calls `portfolio.resetRecoveryBasis({ marketId })`, and resets the RecoveryLedger. `restoreHarvesterJournalState()` replays the same cycle event but only allocates `freeQuantity` and resets the RecoveryLedger. It does not reset `Position.spent`, which is the authoritative Conservative recovery basis. A restored completed cycle therefore retains the prior cycle's cost basis while the RecoveryLedger is reset; the account-balance audit cannot detect this because cost basis is not a wallet balance.
+
+The restore helper also accepts `freeQuantity < position.baseQuantity`; it only rejects an allocation larger than active inventory. The live completion rule requires the entire remaining active quantity to equal `keepQuantity` plus any classified dust and transfers that exact amount to free inventory. Restoration must reject a mismatch and must reproduce the live basis reset. Add a direct RED/GREEN restore-helper regression for both conditions before re-enabling replay.
