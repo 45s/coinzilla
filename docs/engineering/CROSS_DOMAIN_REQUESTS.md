@@ -6,6 +6,7 @@ Use this process whenever an application/package needs a bug fix, missing capabi
 
 ### Bug report
 Include:
+
 - Owning domain and affected package/path.
 - Actual behavior and expected behavior.
 - Minimal deterministic reproduction, failing test, logs, or other evidence.
@@ -14,6 +15,7 @@ Include:
 
 ### Capability request
 Include:
+
 - Consumer use case and why the current public API is insufficient.
 - Required observable behavior and expected inputs/outputs.
 - Failure/unknown-state behavior and safety constraints.
@@ -22,6 +24,7 @@ Include:
 
 ### Contract change
 Include:
+
 - Current contract and proposed observable change.
 - Why compatibility cannot be preserved.
 - All known consumers and migration plan.
