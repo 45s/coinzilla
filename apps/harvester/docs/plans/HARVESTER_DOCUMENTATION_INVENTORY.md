@@ -72,7 +72,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 
 ## Post-baseline additions — current 57-file checkpoint
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `752f0a7a6f2f4acaa0be461980f4853220805f3b` (`truncated: false`) finds **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `210648d62026bb212f9ed88b6d2257e2d1b3fc72` (`truncated: false`) finds **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PR #964 subsequently updated living roadmap and operations guidance without adding or removing Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -105,6 +105,7 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 9. `JOURNAL_INTEGRATION_ROADMAP.md` remains a useful active implementation plan because Step 8 is still open; its original Step 1–4 status notes were stale and have been reconciled with merged PRs and current operational documentation.
 10. `testnet-order-tools.md` remains the canonical TESTNET operator guide. Historical ownership findings are preserved in `ROADMAP_HISTORY.md`; current diagnostics now document the source-confirmed `OWNERSHIP_INTEGRITY` fields and broker-order-ID-first registry behavior. No further split is justified because command procedures and current troubleshooting form one operational subject.
 11. The TESTNET order-history example was corrected in [PR #808](https://github.com/45s/coinzilla/pull/808); the runbook's account-wide cancellation and ZRO-sale authorization boundaries were checked against current scripts.
+12. PR #964 updated the living roadmap, Journal Operations and Trading First guidance for authoritative recovery of ambiguous order identity and shutdown ownership. The `UNKNOWN → OPEN` transition requires a matching owned client order ID and assigned broker order ID; duplicates are idempotent, conflicts remain rejected, and uncertain placement is never retried. Startup status uses validated `TRADING_MODE`, not `NODE_ENV`.
 
 ## Remaining review work
 
