@@ -1,4 +1,5 @@
 import {
+  Asset,
   CanonicalOrder,
   Commission,
   Fill,
@@ -27,16 +28,42 @@ function requireMarket({ marketMetadata, symbol }) {
 
 function restoreFill({ data, market }) {
   const commissions = data.commissions.map((item) => {
+    const isThirdAsset = item.assetId !== market.baseAsset.id && item.assetId !== market.quoteAsset.id
     let asset
-    if (item.assetId === market.baseAsset.id && item.asset === market.baseAsset.code) {
+    if (item.assetId === market.baseAsset.id) {
+      if (item.asset !== market.baseAsset.code) {
+        throw new Error("Recovered commission asset code contradicts the market base asset identity for " + market.symbol)
+      }
       asset = market.baseAsset
-    } else if (item.assetId === market.quoteAsset.id && item.asset === market.quoteAsset.code) {
+    } else if (item.assetId === market.quoteAsset.id) {
+      if (item.asset !== market.quoteAsset.code) {
+        throw new Error("Recovered commission asset code contradicts the market quote asset identity for " + market.symbol)
+      }
       asset = market.quoteAsset
     } else {
-      throw new Error("Recovered fill contains an unsupported third-asset or contradictory commission for " + market.symbol)
+      if (item.asset === market.baseAsset.code || item.asset === market.quoteAsset.code) {
+        throw new Error("Recovered commission asset ID contradicts a market asset code for " + market.symbol)
+      }
+      asset = new Asset({ id: item.assetId, code: item.asset })
+      if (item.quoteValue === undefined && compareDecimal({ left: item.amount, right: "0" }) > 0) {
+        throw new Error("Recovered third-asset commission is missing its historical quote valuation for " + market.symbol)
+      }
+    }
+    let quoteValue
+    if (item.quoteValue !== undefined) {
+      if (item.quoteValue.assetId !== market.quoteAsset.id ||
+          item.quoteValue.asset !== market.quoteAsset.code) {
+        throw new Error("Recovered commission quote valuation does not match the market quote asset for " + market.symbol)
+      }
+      if (isThirdAsset && compareDecimal({ left: item.amount, right: "0" }) > 0 &&
+          compareDecimal({ left: item.quoteValue.amount, right: "0" }) <= 0) {
+        throw new Error("Recovered third-asset commission quote valuation must be greater than zero for " + market.symbol)
+      }
+      quoteValue = new Money({ amount: item.quoteValue.amount, asset: market.quoteAsset })
     }
     return new Commission({
       amount: new Money({ amount: item.amount, asset }),
+      ...(quoteValue === undefined ? {} : { quoteValue }),
     })
   })
   const fill = new Fill({
