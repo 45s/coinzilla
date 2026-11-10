@@ -77,7 +77,7 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       symbol: "BTCUSDT",
       side: "SELL",
       type: "LIMIT",
-      price: "100",
+      price: "102.757352941176470588",
       quantity: "0.4896",
       status: "PENDING",
     }, 6),
