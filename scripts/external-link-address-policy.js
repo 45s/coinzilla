@@ -1,6 +1,6 @@
 import { isIP } from 'node:net';
 
-function isLocalHostname(hostname) {
+export function isLocalHostname(hostname) {
   return hostname === 'localhost' ||
     hostname === 'localdomain' ||
     hostname.endsWith('.localhost') ||
