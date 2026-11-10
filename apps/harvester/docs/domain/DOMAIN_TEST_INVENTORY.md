@@ -52,8 +52,7 @@ Some scenario fixtures calculate expected fill quote quantities by calling the s
 
 ### Medium — capital-limit boundary assertions
 
-The strategy regression now uses a table-driven decision matrix: exact equality at 19.900 quote units (10.00 outstanding recovery + 9.90 next BUY notional) permits both the recovery SELL and next BUY; a limit of 19.899 blocks only the BUY; a materially lower limit of 15.00 also blocks only the BUY. The test compares the complete ordered action list and resulting `PLACE_ORDERS` decision, so the capital guard cannot accidentally suppress the recovery SELL. Added in the current focused PR; exact-head CI verification is pending.
-
+The strategy regression now uses a table-driven decision matrix: exact equality at 19.900 quote units (10.00 outstanding recovery + 9.90 next BUY notional) permits both the recovery SELL and next BUY; a limit of 19.899 blocks only the BUY; a materially lower limit of 15.00 also blocks only the BUY. The test compares the complete ordered action list and resulting `PLACE_ORDERS` decision, so the capital guard cannot accidentally suppress the recovery SELL. Added in [PR #922](https://github.com/45s/coinzilla/pull/922). The initial PR head passed all 872 Harvester unit tests, configured targeted tests, and Harvester coverage (75.83% lines, 79.07% branches, 74.88% functions). The changed-file Markdown check identified one repeated blank line in this inventory; this whitespace-only correction is being verified on the resulting exact head.
 
 ### Medium — lifecycle tests need complete-state assertions
 
