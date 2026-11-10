@@ -52,6 +52,8 @@ There is no automatic file rotation, retention, compression, or deletion. Sessio
 
 All events use source `harvester`. Payloads are created by Harvester-owned allowlist mappers; fields not listed below are not copied into the event DTO.
 
+Every mapper must follow the temporary payload constraint in [Journal Evidence Contract — Safety and delivery](./JOURNAL_EVIDENCE_CONTRACT.md#safety-and-delivery). EventBus's accepted in-memory graph is wider than JSONL's lossless representation; until [Journal issue #889](https://github.com/45s/coinzilla/issues/889) is resolved, payloads reaching Journal must be acyclic and JSON-safe. This is a consumer-side restriction only: do not change EventBus behavior or Harvester's existing mandatory durability gates as a workaround.
+
 | Event | Allowlisted payload facts |
 |---|---|
 | `harvester.process_started` | `application`, `version`, `runtimeSessionId`, `processId`, original `startedAt`, and allowlisted Git `source` metadata (branch, full/short commit, subject/date, working-tree state, metadata source) |
