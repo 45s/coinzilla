@@ -70,7 +70,7 @@ PR #920 adds recursive source-event validation before object spread or JSON seri
 
 **Enforced JSONL source-event contract (PR #920):** Journal accepts `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain/null-prototype objects with enumerable own string-keyed data properties. It rejects undefined values and sparse holes, BigInt, NaN/infinities, negative zero, cycles, custom prototypes, symbol keys, functions, accessors, non-enumerable/custom array properties, and custom `toJSON` hooks before append. Shared-reference identity is outside the persisted contract: repeated references become repeated subtrees. Do not change EventBus's broader in-memory contract as a workaround. The Harvester DTO audit found a narrow timestamp migration requirement: `mapOrderUpdatedData` forwards any numeric broker `transactionTime`, including non-finite values, and several timestamp checks admit negative zero. Track this separately in the Harvester domain; do not modify Harvester implementation in the Journal PR.
 
-**Required J-6 work (all remains open):**
+**Required J-6 work:**
 
 - [x] Define and enforce the exact nested source-event value contract, including array holes, numeric edge cases, custom serialization hooks, cycles, and shared references (PR #920).
 - [x] Reject unsupported/lossy values before writing; no new encoding or schema version is introduced (PR #920).
