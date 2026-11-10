@@ -14,20 +14,20 @@ Import the supported API from the package entry point:
 - `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, opt-in structured context, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
 - `captureBuildMetadata`: one-time, allowlisted application build provenance capture from Git, with explicit `COINZILLA_BUILD_*` environment fallback.
 - `EM`: shared error-message factories.
-- `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft })` accepts `[value, rules, fieldName?]` tuples; soft mode returns structured errors and hard mode throws them.
+- `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft = true })` accepts `[value, rules, fieldName?]` tuples; default soft mode returns structured errors and `isSoft: false` throws the collected error array. See [validation rules and compatibility](#validation-and-compatibility) for exact rule semantics and a current configuration limitation.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
-- `calculateTimeDiff`: date difference in seconds, minutes, or hours; omitted `end` defaults to the current time.
+- `calculateTimeDiff`: signed, fractional difference between `Date` instances in seconds, minutes, or hours (default: hours); omitted `end` defaults to the current time, and an earlier end produces a negative result.
 - `formatTimeRelatively`: English relative-time formatting via `Intl.RelativeTimeFormat` (default unit: hours; callers may select another supported unit).
 - `wait`: promise-based delay; accepts a finite duration from 0 through 2,147,483,647 milliseconds.
 - `generateUUID`: UUID v4 generation.
 - `capitalize`: trims and uppercases a string.
-- `toResult`: normalizes success and error result objects.
+- `toResult`: normalizes result objects; an explicit non-null `errors` property takes precedence over `error`, non-array errors are wrapped in an array, `ok` is recomputed from the normalized errors, and other input properties are preserved.
 - `createKeyedQueue`: creates independent serialized promise queues per key; tasks sharing a key run in enqueue order, different keys run concurrently, and `drain()` waits for tasks pending when it is called. An optional `onError({ key, error })` reports task failures without poisoning later tasks for that key.
 - `assertObjectInput`: validates that an operation received a non-null, non-array object. It checks only the input shape and deliberately does not read its properties; callers own property access and its error boundary.
 - `checkIfFeatureEnable`: enables a feature only when its environment variable is exactly `1`; warning diagnostics never include the variable's value.
-- `addTextToFile`: append text to a UTF-8 file.
+- `addTextToFile`: append a string or `Uint8Array` to a file path supplied as a string or `URL`; the file is created when it does not exist.
 - `handleErr`: report structured error context.
-- `EVENTS`, `eventEmitter`: shared event names and emitter.
+- `EVENTS`, `eventEmitter`: shared Node.js event names and singleton emitter; `EVENTS.PRICE_UPDATE` is the current event, and consumers should remove listeners during lifecycle cleanup.
 - `isDevMode`, `isProdMode`, `isTestingMode`: environment-mode constants evaluated when the module is loaded.
 
 ## Shared logging
@@ -197,7 +197,28 @@ The normalized diagnostic shape intentionally allowlists standard Error diagnost
 
 ## Validation and compatibility
 
-Malformed validator tuples are rejected with a descriptive `TypeError`. Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point. `wait()` rejects invalid timer durations instead of allowing Node.js to silently clamp or reinterpret them.
+Malformed validator tuple structures are rejected with a descriptive `TypeError`. Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point.
+
+### Validator rule contract
+
+`Validator.validate({ items, isSoft = true })` accepts tuples of `[value, rules, fieldName?]`. When every tuple passes, it returns `undefined`. In the default soft mode, invalid tuples are returned as an array of `{ value, msgs, fieldName? }` records. With `isSoft: false`, the same collected array is thrown.
+
+| Rule | Behavior |
+| --- | --- |
+| `VR.required` | JavaScript truthiness check; rejects `0`, `false`, `""`, `null`, and `undefined`. Whitespace-only strings are truthy and pass this rule. |
+| `VR.notEmptyString` | Requires a string whose trimmed content is non-empty. |
+| `VR.num` | Requires a finite JavaScript number; zero is valid, `NaN` and infinities are not. |
+| `VR.str` | Requires a string; the empty string is allowed. |
+| `VR.fn` | Requires a function. |
+| `VR.notUndefined` | Rejects only `undefined`; `null` passes. |
+| `VR.arr` | Requires an array. |
+| `VR.notEmptyArr` | Requires an array with at least one element. |
+
+`Validator.isRequiredNumberValid` accepts only finite, non-zero numbers. `Validator.isRequiredNotEmptyString` accepts only strings with non-whitespace content after trimming.
+
+**Known configuration limitation — [issue #892](https://github.com/45s/coinzilla/issues/892):** the current runtime silently ignores unrecognized rule identifiers and treats a non-boolean `isSoft` value by truthiness. Use only the exported `VR` constants and pass a boolean `isSoft` until the Utils-owned hardening request is resolved; do not rely on unknown-rule behavior.
+
+Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point. `wait()` rejects invalid timer durations instead of allowing Node.js to silently clamp or reinterpret them.
 
 Filesystem and console effects remain at their respective boundaries. Pure numeric, validation, log-formatting, and wait-duration logic lives in independently testable internal modules.
 
