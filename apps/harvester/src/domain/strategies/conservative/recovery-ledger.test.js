@@ -155,7 +155,7 @@ test("resets cycle totals while preserving fill identities for deduplication", (
       quoteQuantity: "11",
     }),
   }).ledger
-  const reset = withSell.resetCycle()
+  const reset = withSell.resetCycle({ minProfit: "0.01" })
 
   assert.equal(reset.buyCost, "0")
   assert.equal(reset.netSellProceeds, "0")
@@ -167,6 +167,55 @@ test("resets cycle totals while preserving fill identities for deduplication", (
   )
 })
 
+
+
+test("requires an explicit minimum profit before resetting a recovery cycle", () => {
+  const ledger = new RecoveryLedger({
+    market,
+    buyCost: "10",
+    netSellProceeds: "11",
+  })
+  const originalState = ledger.value
+
+  assert.throws(
+    () => ledger.resetCycle(),
+    /minProfit/i,
+    "A recovery cycle must not be reset without the strategy's explicit minimum-profit threshold.",
+  )
+  assert.deepEqual(ledger.value, originalState, "Rejecting a reset without its completion threshold must preserve the complete ledger.")
+})
+
+test("does not reset a recovered cycle before the configured minimum profit is reached", () => {
+  const ledger = new RecoveryLedger({
+    market,
+    buyCost: "10",
+    netSellProceeds: "10.005",
+  })
+  const originalState = ledger.value
+
+  assert.throws(
+    () => ledger.resetCycle({ minProfit: "0.01" }),
+    /minimum profit/i,
+    "Recovering invested capital is not enough when realized profit is below the configured minimum.",
+  )
+  assert.deepEqual(ledger.value, originalState, "Rejecting a below-threshold reset must preserve cycle cost and proceeds.")
+})
+
+test("does not reset a recovery cycle while invested quote capital remains outstanding", () => {
+  const ledger = new RecoveryLedger({
+    market,
+    buyCost: "10",
+    netSellProceeds: "9",
+  })
+  const originalState = ledger.value
+
+  assert.throws(
+    () => ledger.resetCycle({ minProfit: "0.01" }),
+    /minimum profit/i,
+    "A cycle with unrecovered invested capital must never be reset.",
+  )
+  assert.deepEqual(ledger.value, originalState, "Rejecting an unrecovered cycle reset must preserve the complete ledger.")
+})
 
 test("deduplicates equivalent REST and WebSocket fills in either delivery order", () => {
   const restDelivery = makeFill({
