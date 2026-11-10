@@ -85,9 +85,9 @@ test('checks inline and reference-style local links while ignoring external link
 
     assert.deepEqual(gaps, [
       'docs/audits/old.md links to missing path missing-historical.md',
-      'docs/policy.md links to missing path missing.md',
-      'docs/policy.md links to missing path missing-reference.md',
       'docs/policy.md links to missing path missing path.md',
+      'docs/policy.md links to missing path missing-reference.md',
+      'docs/policy.md links to missing path missing.md',
     ], 'reference definitions and historical documents remain covered; code/comments do not');
   } finally {
     rmSync(root, { recursive: true, force: true });
