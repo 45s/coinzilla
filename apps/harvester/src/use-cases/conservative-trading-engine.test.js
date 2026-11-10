@@ -2619,7 +2619,13 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
 })
 
 test("accepts a matching Binance NEW report after a lost order acknowledgement", async () => {
-  const { engine, cancellationIds } = await createHarness({ placeOrderThrow: true })
+  const { engine, cancellationIds } = await createHarness({
+    placeOrderThrow: true,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
   const submission = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
