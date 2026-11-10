@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `610232948c5cd99ac15518e5694df83833f94c1b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `d07a51446ac4116d307896a8559b033a6e62f06b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -51,6 +51,8 @@ Many existing domain tests omit the detailed assertion messages required by `ENG
 The Portfolio and RecoveryLedger regressions now prove that a reused Fill ID with changed commission amount or asset is rejected and that the complete original projection remains unchanged. The underlying fingerprint and projection guards were already correct; this closes a test-quality gap without production changes.
 
 ### Medium — expected arithmetic must remain independent
+
+The recovery SELL planner tests still calculated fee-reserved base debits and the next-step boundary with production `addDecimal`, `multiplyDecimal`, and `compareDecimal`. The SELL accounting integration fixtures also derived canonical `quoteQuantity`, quote commission, and one-tick-lower price using production decimal helpers. These independent broker facts and expected arithmetic now use exact literals in `recovery-sell-plan.test.js` and `recovery-sell-plan-accounting.test.js`. No production code changes. Exact PR-head verification is pending.
 
 The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously reused production `multiplyDecimal` for both setup and expected values. [PR #937](https://github.com/45s/coinzilla/pull/937) replaces those coupled expectations with independent exact values (98 × 0.11 = 10.78; 98.95 × 0.11 = 10.8845; 0.1 × 0.6 = 0.06). The exact updated PR head passed 874/874 Harvester tests and required CI; no production behavior changed.
 

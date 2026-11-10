@@ -1,7 +1,6 @@
 import nodeTest from "node:test"
 const test = (name, ...args) => nodeTest("[recovery-sell-plan.test.js] " + name, ...args)
 import assert from "node:assert/strict"
-import { addDecimal, compareDecimal, multiplyDecimal } from "@coinzilla/utils"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 
 const basePlan = {
@@ -118,16 +117,10 @@ test("reserves base-asset SELL commission without crossing the retained inventor
     feeRate: "0.001",
     quantityStepSize: "0.1",
   })
-  const reservedBaseFee = multiplyDecimal({ left: plan.quantity, right: "0.001" })
-  const totalBaseDebit = addDecimal({ left: plan.quantity, right: reservedBaseFee })
-  const nextQuantity = addDecimal({ left: plan.quantity, right: "0.1" })
-  const nextBaseFee = multiplyDecimal({ left: nextQuantity, right: "0.001" })
-  const nextTotalBaseDebit = addDecimal({ left: nextQuantity, right: nextBaseFee })
 
-  assert.equal(plan.quantity, "98.9")
-  assert.equal(reservedBaseFee, "0.0989")
-  assert.equal(totalBaseDebit, "98.9989")
-  assert.equal(compareDecimal({ left: totalBaseDebit, right: "99" }) <= 0, true)
-  assert.equal(nextTotalBaseDebit, "99.099")
-  assert.equal(compareDecimal({ left: nextTotalBaseDebit, right: "99" }) > 0, true)
+  // Independent arithmetic: 98.9 × 1.001 = 98.9989; the next step, 99 × 1.001 = 99.099.
+  assert.equal(plan.quantity, "98.9", "The fee reserve and quantity-step rounding must keep the SELL quantity at 98.9.")
+  assert.equal(plan.price, "0.102", "The minimum recovery price must remain rounded up to the configured price tick.")
+  assert.equal((Number(plan.quantity) * 1.001).toFixed(4), "98.9989", "The fee-adjusted SELL debit must remain below the 99 units available above keepQuantity.")
+  assert.equal((99 * 1.001).toFixed(3), "99.099", "The next 0.1 quantity step would debit 99.099 and exceed the 99 units available.")
 })
