@@ -43,6 +43,7 @@ The following items are intentionally deferred; they are not current release blo
 
 - **Package path:** `packages/market-simulator`
 - **Package:** `@coinzilla/market-simulator`
+
 **Target branch:** `develop`
 
 ## Mission
@@ -82,10 +83,12 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 ## Phases
 
 ### MS-001 — Workspace scaffold
+
 - [x] Private ESM workspace package, local instructions, README and roadmap.
 - [x] Workspace package map and lockfile registration.
 
 ### MS-002 — Historical market-data broker
+
 - [x] Load and validate caller-supplied historical market data. No bundled 10,080-candle fixture is present in the current package; tests must supply deterministic data explicitly.
 - [x] Validate candle structure and ascending timestamps.
 - [x] Implement CoreBroker-compatible connect/disconnect, getPrice(s), and subscribeForPrices.
@@ -93,6 +96,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 - [x] Configurable playback speed and automatic timer cleanup.
 
 ### MS-003 — Clean Architecture foundation
+
 - [x] Extract pure domain validation.
 - [x] Introduce application use cases for history loading and price streaming.
 - [x] Define repository and scheduler ports through application-facing contracts.
@@ -101,6 +105,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 - [x] Add independent domain/application/infrastructure tests.
 
 ### MS-004 — Strategy simulation harness
+
 - [x] Add lifecycle-based strategy runner with onStart/onPrice/onStop hooks.
 - [x] Serialize asynchronous strategy callbacks.
 - [x] Support deterministic max-candle termination.
@@ -108,6 +113,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 - [x] Test runner without real time or exchange access.
 
 ### MS-005 — Simulated spot execution
+
 - [x] Implement in-memory MARKET, LIMIT and LIMIT_MAKER orders.
 - [x] Match resting limits against candle high/low using documented deterministic rules.
 - [x] Track open orders, order history, fills and balances.

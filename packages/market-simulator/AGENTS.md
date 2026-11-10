@@ -31,6 +31,7 @@ Read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md` be
 ## Workflow
 
 Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
+
 - Run `pnpm --filter @coinzilla/market-simulator test` and `pnpm --filter @coinzilla/market-simulator test:coverage` before applicable workspace CI. The coverage command reports coverage but currently defines no package threshold; do not claim an enforced percentage.
 - Keep README and roadmap aligned with implemented behavior.
 - Do not claim checks passed unless they were executed.
