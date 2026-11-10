@@ -139,3 +139,90 @@ test("accepts a clean changed document", () => {
   assert.equal(result.scannedFiles, 1)
   assert.deepEqual(Object.values(result.violations).flat(), [])
 })
+
+
+test("enforces every existing style rule for new maintained documents", () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const documents = [
+    { path: "docs/trailing.md", content: "# Title\nText  \n" },
+    { path: "docs/final-newline.md", content: "# Title" },
+    { path: "docs/crlf.md", content: "# Title\r\n" },
+    { path: "docs/repeated-blank.md", content: "# Title\n\n\nText\n" },
+    { path: "docs/missing-h1.md", content: "## Section\n" },
+    { path: "docs/multiple-h1.md", content: "# First\n# Second\n" },
+    { path: "docs/heading-skip.md", content: "# First\n### Third\n" },
+    { path: "docs/unlabelled-fence.md", content: "# Code\n\n" + fence + "\ncode\n" + fence + "\n" },
+    { path: "docs/code-only.md", content: "# Code\n\n" + fence + "md\nText  \n\n\n### Not a heading\n# Not another H1\n" + fence + "\n" },
+  ]
+  const changes = new Map(documents.map(({ path, content }) => [
+    path,
+    { lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)), isNewFile: true },
+  ]))
+  const result = analyzeMarkdownStyleDocuments(documents, changes)
+
+  const expected = {
+    trailingWhitespace: "docs/trailing.md",
+    missingFinalNewline: "docs/final-newline.md",
+    crlfLineEndings: "docs/crlf.md",
+    repeatedBlankLines: "docs/repeated-blank.md",
+    missingH1: "docs/missing-h1.md",
+    multipleH1: "docs/multiple-h1.md",
+    headingLevelSkips: "docs/heading-skip.md",
+    unlabelledCodeFences: "docs/unlabelled-fence.md",
+  }
+  for (const [rule, path] of Object.entries(expected)) {
+    assert.ok(result.violations[rule].some((entry) => entry.path === path), rule + " must be enforced")
+  }
+  for (const rule of Object.keys(expected)) {
+    assert.equal(result.violations[rule].some((entry) => entry.path === "docs/code-only.md"), false, rule + " must ignore fenced content")
+  }
+})
+
+test("keeps list and table structure metrics report-only until their baseline is reviewed", () => {
+  const content = [
+    "# Title",
+    "Paragraph",
+    "* item",
+    "   - nested",
+    "After list",
+    "| A | B |",
+    "| -- | --- |",
+    "| one | two | extra |",
+    "After table",
+    "",
+  ].join("\n")
+  const result = analyzeMarkdownStyleDocuments(
+    [{ path: "docs/new-list-table.md", content }],
+    new Map([["docs/new-list-table.md", {
+      lines: new Set(content.split("\n").map((line, index) => index + 1)),
+      isNewFile: true,
+    }]]),
+  )
+
+  for (const rule of [
+    "unorderedListMarkers",
+    "nestedListIndentation",
+    "listSpacing",
+    "malformedTableDelimiters",
+    "tableColumnMismatches",
+    "tableSpacing",
+  ]) {
+    assert.deepEqual(result.violations[rule], [], rule + " remains report-only")
+  }
+})
+
+test("excludes historical documents from every changed-file style rule", () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const content = "# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n" + fence + "\ncode\n" + fence
+  const result = analyzeMarkdownStyleDocuments(
+    [{ path: "apps/harvester/docs/audits/legacy-style.md", content }],
+    new Map([["apps/harvester/docs/audits/legacy-style.md", {
+      lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)),
+      isNewFile: true,
+    }]]),
+  )
+
+  assert.equal(result.scannedFiles, 0)
+  assert.equal(result.skippedHistorical, 1)
+  assert.deepEqual(Object.values(result.violations).flat(), [])
+})
