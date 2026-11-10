@@ -125,7 +125,7 @@ The diagram is a proposed safety gate, not a description of current runtime beha
 
 ## Evidence reviewed
 
-- Current `develop` source at `71624bcabf1c37ae643dde23d448b8753266024b`: `apps/harvester/src/index.js`, `bootstrap/start-harvester.js`, `bootstrap/user-data/subscribe-to-user-data.js`, `bootstrap/account/create-account-snapshot-manager.js`, `infrastructure/journal/prepare-optional-journal.js`, `infrastructure/logging/create-harvester-log-session-paths.js`, `use-cases/conservative-trading-engine.js`, and retained recovery helpers.
+- Current `develop` source at `71624bcabf1c37ae643dde23d448b8753266024b`: `apps/harvester/src/index.js`, `bootstrap/start-harvester.js`, `bootstrap/user-data/subscribe-to-user-data.js`, `bootstrap/account/create-account-snapshot-manager.js`, `infrastructure/journal/prepare-optional-journal.js`, `infrastructure/logging/create-harvester-log-session-paths.js`, `use-cases/conservative-trading-engine.js`, `use-cases/create-portfolio-workflow.js`, `use-cases/restore-harvester-journal-state.js`, `domain/portfolio/portfolio.js`, `domain/portfolio/position.js`, `domain/strategies/conservative/recovery-ledger.js`, and `docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md`.
 - Journal reader/writer: `packages/journal/src/journal.js`, `read-journal-records.js`, `adapters/filesystem-journal-store.js`.
 - Tests inspected: `apps/harvester/src/bootstrap/start-harvester.test.js` and recovery-helper tests; Journal read/replay implementation and package contract.
 - Historical integration: PR #606; per-process layout: PRs #874/#880; Journal durability correction: issue #889 / PR #920; Harvester DTO correction: issue #923 / PR #925.
