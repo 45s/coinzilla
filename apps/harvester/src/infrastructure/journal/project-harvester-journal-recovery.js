@@ -43,6 +43,39 @@ function requireDecimal({ value, field, positive = false }) {
   return value
 }
 
+function requireRecoveryDust({ value }) {
+  if (value === undefined) return undefined
+  const dust = requireObject({ value, field: "dust" })
+  if (dust.status !== "EXCHANGE_CONSTRAINED_DUST") throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")
+  if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) {
+    throw new TypeError("dust.reason must identify the limiting exchange filter")
+  }
+  const mapped = {
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: requireDecimal({ value: dust.quantity, field: "dust.quantity", positive: true }),
+    reason: dust.reason,
+  }
+  const fields = {
+    MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"],
+    MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"],
+    QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"],
+  }[dust.reason]
+  for (const field of fields) mapped[field] = requireDecimal({ value: dust[field], field: "dust." + field })
+  if (dust.reason === "MIN_QUANTITY" &&
+      compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
+    throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
+  }
+  if (dust.reason === "MIN_NOTIONAL" &&
+      (compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) < 0 ||
+       compareDecimal({ left: mapped.evaluatedNotional, right: mapped.minimumNotional }) >= 0)) {
+    throw new RangeError("dust MIN_NOTIONAL evidence does not prove the notional is below the minimum")
+  }
+  if (dust.reason === "QUANTITY_INCREMENT" && mapped.evaluatedQuantity !== "0") {
+    throw new RangeError("dust QUANTITY_INCREMENT evidence must record a zero rounded candidate")
+  }
+  return mapped
+}
+
 function requireOrderIntent({ data }) {
   const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
   const symbol = requireString({ value: data.symbol, field: "symbol" })
@@ -595,7 +628,20 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const symbol = requireString({ value: data.symbol, field: "symbol" })
         const marketId = requireString({ value: data.marketId, field: "marketId" })
         const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity", positive: true })
+        const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
+        const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
         const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+          throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
+        }
+        if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+          throw new RangeError("Recovery-cycle realizedNetProfit does not meet minProfit")
+        }
+        const dust = requireRecoveryDust({ value: data.dust })
+        const expectedFreeQuantity = addDecimal({ left: keepQuantity, right: dust?.quantity ?? "0" })
+        if (compareDecimal({ left: freeQuantity, right: expectedFreeQuantity }) !== 0) {
+          throw new Error("Recovery-cycle freeQuantity must equal keepQuantity plus validated dust")
+        }
         const completedSellOrder = lastFullyFilledSellBySymbol.get(symbol)
         if (!completedSellOrder) {
           throw new Error("Recovery-cycle completion has no preceding fully filled Harvester SELL order for " + symbol)
@@ -604,7 +650,10 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           symbol,
           marketId,
           freeQuantity,
+          keepQuantity,
+          minProfit,
           realizedNetProfit,
+          ...(dust === undefined ? {} : { dust }),
           completedOrderClientId: completedSellOrder.clientOrderId,
           completedOrderBrokerOrderId: completedSellOrder.brokerOrderId,
           sequence: currentSequence,
