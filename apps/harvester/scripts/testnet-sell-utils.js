@@ -1,7 +1,6 @@
 import {
   compareDecimal,
   parseDecimal,
-  rescaleDecimal,
   roundDecimalToIncrement,
 } from "@coinzilla/utils"
 
@@ -20,6 +19,17 @@ const parseNonNegativeDecimal = ({ value, name }) => {
 
 const isPositiveDecimal = ({ value, name }) =>
   parseNonNegativeDecimal({ value, name }).coefficient > 0n
+
+const formatDecimalAtScale = ({ value, scale }) => {
+  const decimal = parseDecimal({ value })
+  const digits = (
+    decimal.coefficient * 10n ** BigInt(scale - decimal.scale)
+  ).toString().padStart(scale + 1, "0")
+
+  return scale === 0
+    ? digits
+    : digits.slice(0, -scale) + "." + digits.slice(-scale)
+}
 
 export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
   if (!symbolInfo || !Array.isArray(symbolInfo.filters)) {
@@ -85,11 +95,7 @@ export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
   }
 
   return {
-    quantity: rescaleDecimal({
-      value: quantity,
-      scale,
-      rounding: "toward-zero",
-    }),
+    quantity: formatDecimalAtScale({ value: quantity, scale }),
     stepSize: step.value,
   }
 }
