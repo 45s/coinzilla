@@ -7,7 +7,7 @@ import { defaultLogger, toResult } from "@coinzilla/utils"
  * (including Journal) to persist all accepted events.
  *
  * @param {{ eventBus: { publish: (event: object) => object }, flush?: () => Promise<object>, logger?: { error?: (entry: object) => void } }} input
- * @returns {{ publish: (event: object) => object, flush: () => Promise<object> }}
+ * @returns {{ publish: (event: object) => object, flush: () => Promise<object>, reportFailure: (input: { event?: object, error: Error }) => void }}
  */
 export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defaultLogger } = {}) {
   const reportFailure = ({ event, error }) => {
@@ -80,5 +80,5 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
     }
   }
 
-  return Object.freeze({ publish, flush })
+  return Object.freeze({ publish, flush, reportFailure })
 }
