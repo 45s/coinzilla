@@ -11,6 +11,7 @@ const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quo
 
 function makeFill({
   side = "BUY",
+  quantity = "100",
   quoteQuantity = "10",
   commissions = [],
   commissionStatus = "COMPLETE",
@@ -21,7 +22,7 @@ function makeFill({
     market,
     side,
     price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
     commissions,
     commissionStatus,
@@ -161,6 +162,61 @@ test("checks aggregated commissions against the executed amount", () => {
       }),
     }),
     /quote commission exceeds executed quote notional/i,
+    "Two individually valid 0.6 quote commissions must be aggregated and rejected when their 1.2 total exceeds the 1 quote notional.",
+  )
+})
+
+test("aggregates multiple base and quote commission entries for BUY cost and SELL proceeds", () => {
+  const commissions = [
+    new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.2", asset: baseAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+  ]
+  const buyFill = makeFill({ quantity: "1", quoteQuantity: "0.1", commissions })
+  const sellFill = makeFill({ side: "SELL", quantity: "1", quoteQuantity: "0.2", commissions })
+
+  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill: buyFill }), {
+    buyCost: "0.13",
+    netSellProceeds: "0",
+  }, "BUY recovery cost must add both quote commission entries (0.01 + 0.02) while excluding base commissions from quote cost.")
+  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill: sellFill }), {
+    buyCost: "0",
+    netSellProceeds: "0.17",
+  }, "SELL recovery proceeds must subtract both quote commission entries (0.01 + 0.02) while base commissions remain inventory-only.")
+})
+
+test("rejects base commission entries whose aggregate exceeds executed quantity", () => {
+  const fill = makeFill({
+    quantity: "1",
+    quoteQuantity: "0.1",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.6", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.6", asset: baseAsset }) }),
+    ],
+  })
+
+  assert.throws(
+    () => calculateRecoveryFillAccounting({ market, fill }),
+    /base commission exceeds executed base quantity/i,
+    "Two individually valid 0.6 base commissions must be aggregated and rejected when their 1.2 total exceeds the 1 base execution.",
+  )
+})
+
+test("rejects negative commission amounts before accounting", () => {
+  const fill = {
+    market,
+    side: "BUY",
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "0.1", asset: quoteAsset }),
+    commissionStatus: "COMPLETE",
+    commissions: [{ amount: { amount: "-0.01", asset: quoteAsset } }],
+  }
+
+  assert.throws(
+    () => calculateRecoveryFillAccounting({ market, fill }),
+    /Commission amount must be non-negative/,
+    "Negative commission facts must be rejected before they can change recovery accounting.",
   )
 })
 

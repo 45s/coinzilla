@@ -35,8 +35,8 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Recovery ledger | Multiple BUY fills accumulate actual cost | Actual multi-BUY DOGE/ZRO fixtures in `conservative-strategy.test.js`; full-cycle engine regression | Existing — execution pending |
 | Recovery ledger | Partial SELL fills accumulate net proceeds across replacement | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Base commissions do not alter quote ledger | `recovery-fill-accounting.test.js` | Existing |
-| Recovery ledger | Multiple base/quote commission entries aggregate correctly | `recovery-fill-accounting.test.js` aggregated commission validation and per-asset accounting cases | Existing — execution pending |
-| Recovery ledger | Third-asset/incomplete/negative commission reject | recovery accounting tests | Partial |
+| Recovery ledger | Multiple base/quote commission entries aggregate correctly | `recovery-fill-accounting.test.js` — valid BUY/SELL per-asset aggregation plus aggregate base and quote overdraw boundaries | Added on focused PR branch; exact-head CI pending |
+| Recovery ledger | Third-asset/incomplete/negative commission reject | recovery accounting tests; negative commission rejection added in focused PR branch | Partial — third-asset and incomplete-valuation combinations remain partial |
 | Recovery ledger | Reset clears cycle amounts but preserves IDs | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Late duplicate after reset stays duplicate | reset test | Existing |
 | Fee reserve | Configured maker/taker maximum (zero, maker-higher, taker-higher, equal, invalid) | `sell-fee-rate.test.js`; actual per-fill commission accounting is covered separately by `recovery-fill-accounting.test.js` | Existing |

@@ -13,7 +13,7 @@ last_verified: 2026-11-10
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `610232948c5cd99ac15518e5694df83833f94c1b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `d07a51446ac4116d307896a8559b033a6e62f06b` (2026-11-10). The domain tree contains 28 production JavaScript files and 26 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -57,6 +57,10 @@ The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously reu
 ### Medium — capital-limit boundary assertions
 
 The strategy regression uses a table-driven decision matrix: exact equality at 19.900 quote units (10.00 outstanding recovery + 9.90 next BUY notional) permits both the recovery SELL and next BUY; a limit of 19.899 blocks only the BUY; a materially lower limit of 15.00 also blocks only the BUY. The test compares the complete ordered action list and resulting `PLACE_ORDERS` decision, so the capital guard cannot accidentally suppress the recovery SELL. Added in [PR #922](https://github.com/45s/coinzilla/pull/922), merged to `develop` at `0d7112c92478cb3b3e1eca309a663b28d9687c7f`. Exact PR head `8e234e2c18cb98b4b8562c62ef05d9f20f852102` passed 872/872 Harvester tests, configured targeted tests, workspace unit tests and coverage, JavaScript syntax/agent policy/Markdown, actionlint, Utils tests, dependency audit, and advisory external-link checks. Harvester coverage was 75.94% lines, 79.26% branches, and 74.88% functions. The Harvester-specific threshold-enforcement step is not configured and was skipped; no threshold was changed.
+
+### Medium — commission aggregation needs direct per-asset assertions
+
+The commission validator sums base, quote and third-asset quote values by asset before applying limits. Existing recovery accounting tests rejected aggregated quote commission over notional, but did not prove valid multiple base and quote entries are aggregated for both BUY cost and SELL proceeds, nor that multiple individually valid base entries are rejected when their sum exceeds executed quantity. The new `recovery-fill-accounting.test.js` cases assert exact independent totals (`0.13` BUY cost and `0.17` SELL proceeds), aggregate base overdraw rejection, and negative commission rejection. This is test-only; no production defect or production change is claimed. Exact PR-head CI is pending.
 
 ### Medium — Portfolio multi-market isolation assertions are incomplete
 

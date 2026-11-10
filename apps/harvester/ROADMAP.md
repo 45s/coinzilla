@@ -13,6 +13,7 @@
 - [x] Strengthen Portfolio multi-market isolation and conflicting-fill no-mutation assertions merged in [PR #924](https://github.com/45s/coinzilla/pull/924); exact-head CI passed.
 - [x] Market trading-readiness quantity and minimum-notional boundary matrices merged in [PR #930](https://github.com/45s/coinzilla/pull/930); exact updated PR-head CI passed.
 - [x] Exact inclusive pre-submission exchange-filter boundaries for MIN/MAX price, quantity and notional merged in [PR #932](https://github.com/45s/coinzilla/pull/932); existing immediately-outside rejection matrix retained.
+- [~] Prove per-asset aggregation of multiple base and quote commission entries, reject aggregate overdraw and negative commission facts in deterministic recovery accounting tests. Exact-head CI pending.
 - [x] Independent Conservative strategy fixture arithmetic merged in [PR #937](https://github.com/45s/coinzilla/pull/937); residual SELL quote totals and MAX_NOTIONAL expectations use independent exact values.
 - [x] OrderRegistry complete-state and immutable-snapshot assertions merged in [PR #928](https://github.com/45s/coinzilla/pull/928); exact-head CI passed 874/874 Harvester tests.
 - [x] Extend OrderRegistry coverage for decreasing execution and stale timestamps; rejected reports preserve canonical state and commitment. Merged in [PR #927](https://github.com/45s/coinzilla/pull/927).
