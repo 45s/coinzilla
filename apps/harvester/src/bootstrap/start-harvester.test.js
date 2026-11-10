@@ -349,6 +349,7 @@ test("keeps external open orders audit-blocked but does not block startup or can
   try {
     assert.equal(runtime.userDataReady, true, "An external order must not block the user-data readiness gate.")
     assert.equal(runtime.userDataStatus, "READY")
+    assert.equal(runtime.recoveredState.orderRegistry.orders.length, 0, "The external order must not be adopted into Harvester ownership.")
     const audit = logs.find((entry) =>
       entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
     assert.ok(audit, "The audit log must explicitly identify external orders as unowned and untouched.")
@@ -358,10 +359,10 @@ test("keeps external open orders audit-blocked but does not block startup or can
     assert.ok(logs.some((entry) =>
       entry.message === "Conservative TESTNET trading engine activated"))
     assert.equal(externalOpenOrder.clientOrderId, "manual-client-order")
-    assert.deepEqual(cancellationRequests, [], "Startup must never cancel a manually placed external order.")
   } finally {
     await runtime.stop()
   }
+  assert.deepEqual(cancellationRequests, [], "Startup and shutdown must never cancel a manually placed external order.")
 })
 
 test("subscribes every enabled market before waiting for the first market's REST ticker seed", async () => {
