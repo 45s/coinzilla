@@ -114,11 +114,13 @@ Migration functions must be synchronous. Applied versions must remain in the mig
 
 The source is organized by dependency direction:
 
-- `domain/entities/database.js` (`Database`): owns the provider-independent lifecycle state, transaction tracking, and shutdown invariants.
-- `domain/entities/migration.js` (`Migration`): immutable schema-change identity (positive version) and its synchronous operation.
-- `domain/services/migration-history.js`: pure policy that detects removed or renamed applied migrations and identifies pending work.
-- `application/ports/database-provider.js` (`DatabaseProvider`): the provider contract required by the lifecycle aggregate.
-- `application/use-cases/create-database.js`: constructs the lifecycle aggregate through that port.
+The Domain contracts are represented by factory functions and frozen plain objects, not exported `Database` or `Migration` classes.
+
+- `domain/entities/database.js` (`createDatabaseEntity`): factory for the provider-independent lifecycle aggregate; returns a frozen facade with lifecycle state, active-transaction tracking, and close-time draining.
+- `domain/entities/migration.js` (`createMigration`): validates and returns a frozen migration definition; the positive integer version is its stable identity and `up` must be synchronous. This is a factory-produced value, not an exported `Migration` class.
+- `domain/services/migration-history.js` (`findPendingMigrations`): pure policy that detects removed or renamed applied migrations and identifies pending work.
+- `application/ports/database-provider.js` (`DatabaseProvider`): JSDoc typedef for the provider methods required by the lifecycle aggregate; it has no runtime class or export.
+- `application/use-cases/create-database.js` (`createDatabase`): validates the provider/adapter and composes the lifecycle aggregate.
 - `infrastructure/sqlite/`: owns `node:sqlite`, SQL execution, transaction mechanics, and the persistent migration-history table.
 
 Dependency direction is inward: SQLite infrastructure implements the application-facing provider contract; it does not leak SQLite types into the database domain model. The public `createDatabase({ adapter })` and `createSqliteDatabase(...)` entry points remain compatible.
