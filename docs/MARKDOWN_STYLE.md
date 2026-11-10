@@ -87,7 +87,7 @@ The required JavaScript Syntax workflow enforces balanced fenced-code delimiters
 
 For pull requests, the same required workflow runs the [changed-file style checker](../scripts/check-markdown-style.js) and its [tests](../scripts/check-markdown-style.test.js) against changed maintained Markdown/MDX. On existing files, line-level findings are enforced only in changed hunks and two lines of context; missing final newlines and CRLF are checked at file level. Newly added files are checked in full. This prevents unrelated pre-existing formatting or historical sections elsewhere in an edited file from forcing a mass reformat. Known historical evidence paths are explicitly excluded, and GitHub issue/PR templates are exempt from heading-only rules; both exceptions are covered by tests. The full-tree baseline remains informational, and this changed-line guard is not a full-repository Markdown linter.
 
-The current 2026-11-10 baseline was measured on PR #913 head `baaf2762e22d50537e3b778bfb29016aaefd33ed` across 113 tracked Markdown/MDX files. It reports:
+The historical 2026-11-10 full-tree baseline measurement was recorded on PR #913 head `baaf2762e22d50537e3b778bfb29016aaefd33ed` across 113 tracked Markdown/MDX files. The current complete inventory is 114 files at the latest source-verified develop checkpoint; see [the repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md). The PR #913 measurement reports:
 
 - Trailing whitespace: 22 files / 112 occurrences; missing final newline: 0; CRLF line endings: 0.
 - Repeated blank lines: 44 files / 371 occurrences; missing H1: 2 files; multiple H1: 1 file / 11 headings; skipped heading levels: 4 files / 5 occurrences; unlabeled fenced-code blocks: 0.
