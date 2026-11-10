@@ -7,7 +7,7 @@
  * application checks succeed.
  */
 const retryableRecoveryFailureCategories = new Set(["ORDER_TRANSITION", "REST_RECONCILIATION", "DURABILITY"])
-const terminalRecoveryFailureCategories = new Set(["OWNERSHIP_INTEGRITY", "ACCOUNTING_INTEGRITY"])
+const terminalRecoveryFailureCategories = new Set(["OWNERSHIP_INTEGRITY", "ACCOUNTING_INTEGRITY", "DURABILITY"])
 
 function resolveRecoveryFailure(failure) {
   const validStage = typeof failure?.stage === "string" && failure.stage.trim().length > 0

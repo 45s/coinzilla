@@ -1368,3 +1368,46 @@ test("keeps recovery blocked and retries the same generation after a transient a
     "The successful retry must release the in-flight recovery task slot after acknowledgement.",
   )
 })
+
+
+test("does not retry application recovery after a permanent Journal write failure", async () => {
+  let reconciliationCalls = 0
+  const permanentWriteFailure = Object.assign(
+    new Error("Journal session is failed after a previous write error"),
+    {
+      recoveryFailure: {
+        category: "DURABILITY",
+        stage: "JOURNAL_WRITE_FAILURE",
+        retryable: false,
+      },
+    },
+  )
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      return { ok: true, data: { reconciled: 2 } }
+    },
+    publishAccountSnapshot: async () => { throw permanentWriteFailure },
+  })
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.ready, false, "A permanent Journal write failure must keep trading readiness closed.")
+  assert.equal(fixture.state.requiresReconciliation, true, "The unresolved recovery requirement must remain set.")
+  assert.equal(fixture.state.accountingFailed, true, "A poisoned Journal writer must latch a terminal recovery failure.")
+  assert.equal(fixture.state.retryableRecoveryFailure, null, "A permanent write failure must not be recorded as retryable.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after a failed durable audit.")
+  assert.equal(fixture.calls.accountAudits.length, 1, "The failed recovery audit must be attempted only once.")
+  assert.equal(reconciliationCalls, 1, "The first attempt must perform one authoritative reconciliation.")
+  assert.deepEqual(
+    fixture.logs.error[0]?.error?.recoveryFailure,
+    { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false },
+    "The terminal Journal write-failure classification must survive recovery error handling.",
+  )
+
+  fixture.start()
+  assert.equal(reconciliationCalls, 1, "Later reminders must not repeat REST reconciliation against a poisoned Journal writer.")
+  assert.equal(fixture.calls.accountAudits.length, 1, "Later reminders must not republish futile recovery audits.")
+  assert.equal(fixture.calls.acknowledgements, 0, "Later reminders must never acknowledge the unresolved recovery.")
+})
