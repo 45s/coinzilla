@@ -178,10 +178,9 @@ export class Journal {
   /**
    * Append one source event to the active JSONL session.
    *
-   * @remarks Top-level identity and reserved metadata are checked, but nested
-   * values are not recursively validated for lossless JSON serialization. For
-   * EventBus-subscribed messages, a failed record result is logged but is not
-   * currently included in flush/close durability results; see issue #889.
+   * @remarks Source-event values are recursively validated before serialization.
+   * A serialization failure poisons the active writer and is retained in
+   * writeErrors so flush/close cannot report durable success after an omitted event.
    */
   async record({ event } = {}) {
     if (!this.started || this.closing || this.closed || !this.filePath) {
@@ -199,6 +198,8 @@ export class Journal {
     try {
       line = serializeJournalRecord({ event })
     } catch (error) {
+      this.writeFailed = true
+      this.writeErrors.push(error)
       return toResult({ error })
     }
 
