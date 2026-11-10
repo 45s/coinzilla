@@ -106,9 +106,15 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
     if (item.indent.includes("\t") || indentWidth % 2 !== 0) {
       nestedListIndentation.push(lineNumber)
     }
+  }
 
-    if (item.indent !== "") continue
+  for (let index = 0; index < lines.length; index += 1) {
+    if (codeLineIndexes.has(index)) continue
 
+    const item = parseListItem(lines[index])
+    if (!item || item.indent !== "") continue
+
+    const lineNumber = index + 1
     let end = index
     let cursor = index + 1
 
