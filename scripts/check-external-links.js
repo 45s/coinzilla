@@ -213,6 +213,9 @@ function createUnsafeAddressError() {
  * @returns {Promise<Array<{address: string, family: number}>>}
  */
 export async function resolvePublicAddresses(hostname, options = {}) {
+  if (isIP(hostname) || isLocalHostname(hostname)) {
+    throw createUnsafeAddressError();
+  }
   const resolver = options.resolveHost ?? dnsLookup;
   const answers = await resolver(hostname, { all: true, verbatim: true });
   if (!Array.isArray(answers) || answers.length === 0) {
@@ -322,8 +325,8 @@ export async function fetchPinned(input, init = {}, options = {}) {
 
 /**
  * Parse an HTTP(S) destination and classify URLs that must not be requested.
- * IP-literal and local-only hosts are skipped. DNS answers are not pinned yet;
- * do not run this checker against untrusted Markdown until issue #901 is complete.
+ * IP-literal and local-only hosts are skipped. Candidate hostnames are resolved,
+ * all answers are validated, and each HTTP(S) connection is pinned to that vetted set.
  * @param {string} raw
  * @returns {{status: 'candidate'|'skipped'|'invalid', url: string, host?: string, reason?: string}|null}
  */
@@ -553,7 +556,7 @@ async function fetchFollowingRedirects(startUrl, method, options) {
 
     const parsed = parseExternalUrl(nextUrl.href);
     if (!parsed || parsed.status !== 'candidate') {
-      return { reason: 'Redirect target is not an eligible public HTTP(S) hostname' };
+      return { blocked: true, reason: 'Redirect target is not an eligible public HTTP(S) hostname' };
     }
     currentUrl = parsed.url;
   }
