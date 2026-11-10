@@ -109,7 +109,11 @@ const createOpenOrderSnapshot = ({ order }) => {
   openOrder.status = order.status === "OPEN" ? "NEW" : "PARTIALLY_FILLED"
   return openOrder
 }
-const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
+const createBroker = (calls = [], {
+  subscribeResult,
+  subscribeResultBySymbol = {},
+  externalOpenOrders = [],
+} = {}) => {
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
   const fillHistoryByOrder = new Map()
@@ -141,10 +145,13 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     },
     getOpenOrders: async ({ symbol } = {}) => ({
       ok: true,
-      data: [...canonicalOrdersByBrokerId.values()]
-        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-        .filter((order) => !symbol || order.market.symbol === symbol)
-        .map((order) => createOpenOrderSnapshot({ order })),
+      data: [
+        ...externalOpenOrders.filter((order) => !symbol || order.symbol === symbol),
+        ...[...canonicalOrdersByBrokerId.values()]
+          .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+          .filter((order) => !symbol || order.market.symbol === symbol)
+          .map((order) => createOpenOrderSnapshot({ order })),
+      ],
     }),
     getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }),
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
@@ -301,6 +308,61 @@ test("subscribes only enabled pairs for Binance trading", async () => {
     "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT",
     "unsubscribe:user-data", "account:snapshot", "disconnect",
   ])
+})
+
+test("keeps external open orders audit-blocked but does not block startup or cancel them", async () => {
+  const market = createMarketMetadata("BTCUSDT").market
+  const externalCanonicalOrder = new CanonicalOrder({
+    clientOrderId: "manual-client-order",
+    brokerOrderId: "manual-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "64000", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const externalOpenOrder = createOpenOrderSnapshot({ order: externalCanonicalOrder })
+  const broker = createBroker([], { externalOpenOrders: [externalOpenOrder] })
+  const cancellationRequests = []
+  const cancelOrder = broker.cancelOrder
+  broker.cancelOrder = async (input) => {
+    cancellationRequests.push(input)
+    return cancelOrder(input)
+  }
+  const logs = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {
+      info: (entry) => logs.push(entry),
+      error: (entry) => logs.push(entry),
+    },
+  })
+
+  try {
+    assert.equal(runtime.userDataReady, true, "An external order must not block the user-data readiness gate.")
+    assert.equal(runtime.userDataStatus, "READY")
+    assert.equal(runtime.recoveredState.orderRegistry.orders.length, 0, "The external order must not be adopted into Harvester ownership.")
+    const audit = logs.find((entry) =>
+      entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
+    assert.ok(audit, "The audit log must explicitly identify external orders as unowned and untouched.")
+    assert.equal(audit.readiness, "BLOCKED", "BLOCKED is the account-audit status, not trading-engine readiness.")
+    assert.ok(logs.some((entry) =>
+      entry.message === "Conservative TESTNET startup checks passed; current account audit is complete"))
+    assert.ok(logs.some((entry) =>
+      entry.message === "Conservative TESTNET trading engine activated"))
+    assert.equal(externalOpenOrder.clientOrderId, "manual-client-order")
+  } finally {
+    await runtime.stop()
+  }
+  assert.deepEqual(cancellationRequests, [], "Startup and shutdown must never cancel a manually placed external order.")
 })
 
 test("subscribes every enabled market before waiting for the first market's REST ticker seed", async () => {
