@@ -1,4 +1,5 @@
 import {
+  Asset,
   CanonicalOrder,
   Commission,
   Fill,
@@ -33,10 +34,25 @@ function restoreFill({ data, market }) {
     } else if (item.assetId === market.quoteAsset.id && item.asset === market.quoteAsset.code) {
       asset = market.quoteAsset
     } else {
-      throw new Error("Recovered fill contains an unsupported third-asset or contradictory commission for " + market.symbol)
+      asset = new Asset({ id: item.assetId, code: item.asset })
+      if (item.quoteValue === undefined) {
+        throw new Error("Recovered third-asset commission is missing its historical quote valuation for " + market.symbol)
+      }
+    }
+    let quoteValue
+    if (item.quoteValue !== undefined) {
+      if (item.quoteValue.assetId !== market.quoteAsset.id ||
+          item.quoteValue.asset !== market.quoteAsset.code) {
+        throw new Error("Recovered commission quote valuation does not match the market quote asset for " + market.symbol)
+      }
+      if (compareDecimal({ left: item.quoteValue.amount, right: "0" }) <= 0) {
+        throw new Error("Recovered third-asset commission quote valuation must be greater than zero for " + market.symbol)
+      }
+      quoteValue = new Money({ amount: item.quoteValue.amount, asset: market.quoteAsset })
     }
     return new Commission({
       amount: new Money({ amount: item.amount, asset }),
+      ...(quoteValue === undefined ? {} : { quoteValue }),
     })
   })
   const fill = new Fill({
