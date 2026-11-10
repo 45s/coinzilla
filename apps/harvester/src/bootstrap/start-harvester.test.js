@@ -109,6 +109,20 @@ const createOpenOrderSnapshot = ({ order }) => {
   openOrder.status = order.status === "OPEN" ? "NEW" : "PARTIALLY_FILLED"
   return openOrder
 }
+const createAcknowledgedOrder = ({ order }) => new CanonicalOrder({
+  clientOrderId: order.clientOrderId,
+  brokerOrderId: "broker-" + order.clientOrderId,
+  market: order.market,
+  side: order.side,
+  type: order.type,
+  limitPrice: order.limitPrice,
+  originalQuantity: order.originalQuantity,
+  executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+  status: "OPEN",
+  createdAt: order.createdAt,
+  acknowledgedAt: 2,
+  updatedAt: 2,
+})
 const createBroker = (calls = [], {
   subscribeResult,
   subscribeResultBySymbol = {},
@@ -363,6 +377,195 @@ test("keeps external open orders audit-blocked but does not block startup or can
     await runtime.stop()
   }
   assert.deepEqual(cancellationRequests, [], "Startup and shutdown must never cancel a manually placed external order.")
+})
+
+test("defers only the market with a pre-existing external order", async () => {
+  const market = createMarketMetadata("BTCUSDT").market
+  const externalCanonicalOrder = new CanonicalOrder({
+    clientOrderId: "manual-client-order",
+    brokerOrderId: "manual-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "999.50", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const externalOpenOrder = createOpenOrderSnapshot({ order: externalCanonicalOrder })
+  const broker = createBroker([], { externalOpenOrders: [externalOpenOrder] })
+  const submittedSymbols = []
+  const cancelledSymbols = []
+  broker.getPrices = async ({ symbol }) => ({ ok: true, data: { symbol, price: "1000" } })
+  broker.placeOrder = async ({ order }) => {
+    submittedSymbols.push(order.market.symbol)
+    return { ok: true, data: createAcknowledgedOrder({ order }) }
+  }
+  const cancelOrder = broker.cancelOrder
+  broker.cancelOrder = async ({ order }) => {
+    cancelledSymbols.push(order.market.symbol)
+    return cancelOrder({ order })
+  }
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          ETHUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.ETHUSDT,
+            enabled: true,
+          },
+        },
+      },
+    },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    now: () => 1000,
+    logger: { info() {}, error() {} },
+  })
+
+  try {
+    assert.equal(runtime.userDataReady, true, "A pre-existing external order must not reject global startup readiness.")
+    assert.deepEqual(
+      submittedSymbols,
+      ["ETHUSDT"],
+      "The external BTCUSDT order must defer BTCUSDT strategy activity without blocking the unrelated enabled ETHUSDT market.",
+    )
+    assert.equal(externalOpenOrder.clientOrderId, "manual-client-order", "The external order must retain its original identity.")
+  } finally {
+    await runtime.stop()
+  }
+
+  assert.ok(
+    !cancelledSymbols.includes("BTCUSDT"),
+    "Shutdown must never cancel or modify the external BTCUSDT order.",
+  )
+})
+
+test("rechecks same-symbol external orders after user-data recovery before resuming strategy activity", async () => {
+  const calls = []
+  const externalOpenOrders = []
+  const broker = createBroker(calls, { externalOpenOrders })
+  const submittedSymbols = []
+  const cancelledSymbols = []
+  const originalGetAccountSnapshot = broker.getAccountSnapshot
+  let freeUsdt = "0"
+  let lockedUsdt = "0"
+  broker.getAccountSnapshot = async () => {
+    const result = await originalGetAccountSnapshot()
+    const balances = result.data.balances.map((balance) => {
+      if (balance.free.asset.code !== "USDT") return balance
+      return new Balance({
+        free: new Quantity({ amount: freeUsdt, asset: balance.free.asset }),
+        locked: new Quantity({ amount: lockedUsdt, asset: balance.locked.asset }),
+      })
+    })
+    return { ...result, data: { ...result.data, balances } }
+  }
+  broker.getPrices = async ({ symbol }) => ({ ok: true, data: { symbol, price: "1000" } })
+  broker.placeOrder = async ({ order }) => {
+    submittedSymbols.push(order.market.symbol)
+    return { ok: true, data: createAcknowledgedOrder({ order }) }
+  }
+  const cancelOrder = broker.cancelOrder
+  broker.cancelOrder = async ({ order }) => {
+    cancelledSymbols.push(order.market.symbol)
+    return cancelOrder({ order })
+  }
+
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          handlers.onStatus({
+            type: "reconciled",
+            subscriptionId: 17,
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
+
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    now: () => 1000,
+    logger: { info() {}, error() {} },
+  })
+
+  try {
+    assert.deepEqual(submittedSymbols, [], "The initial zero-free-quote snapshot must prevent an initial BUY before recovery.")
+    const market = createMarketMetadata("BTCUSDT").market
+    const externalCanonicalOrder = new CanonicalOrder({
+      clientOrderId: "manual-reconnect-client-order",
+      brokerOrderId: "manual-reconnect-broker-order",
+      market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({ amount: "999.50", asset: market.quoteAsset }),
+      originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    })
+    externalOpenOrders.push(createOpenOrderSnapshot({ order: externalCanonicalOrder }))
+    freeUsdt = "990.005"
+    lockedUsdt = "9.995"
+
+    broker.emitUserDataStatus({
+      type: "recovered",
+      subscriptionId: 17,
+      recoveryRequired: true,
+      reconciliationRequired: true,
+    })
+    await waitForTestSignal(
+      acknowledged,
+      "recovery acknowledgement after external-order snapshot",
+      () => ({ submittedSymbols, userDataReady: runtime.userDataReady }),
+      2_000,
+    )
+
+    assert.equal(runtime.userDataReady, true, "The completed recovery audit must restore global readiness.")
+    await broker.emitPrice("BTCUSDT", {
+      symbol: "BTCUSDT",
+      price: "1000",
+      timestamp: 1000,
+    })
+    assert.deepEqual(
+      submittedSymbols,
+      [],
+      "A same-symbol external order discovered during reconnect reconciliation must block a new BUY after readiness returns.",
+    )
+    assert.deepEqual(
+      cancelledSymbols,
+      [],
+      "Reconnect reconciliation must never cancel or modify the external order.",
+    )
+  } finally {
+    await runtime.stop()
+  }
 })
 
 test("subscribes every enabled market before waiting for the first market's REST ticker seed", async () => {
