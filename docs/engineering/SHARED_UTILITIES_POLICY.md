@@ -58,6 +58,9 @@ Shared low-level primitives may support these packages, but packages/utils must 
 - Use Logger or defaultLogger from the public @coinzilla/utils API for application and package diagnostics.
 - Do not introduce direct console.log, console.info, console.warn, or console.error calls in business logic or application workflows.
 - Direct console access is permitted only inside the logger implementation or deliberate CLI output where stdout/stderr is the product interface. A synchronous `process.stderr.write` fallback is also permitted for fatal startup/shutdown diagnostics only when the shared logger is unavailable or has failed; it must not become routine application logging. Explain any other exception.
+- Prefer injecting a logger into workflows/adapters when it improves testability and makes the side effect explicit. Do not create a wrapper logger in every application.
+- Use structured context and stable fields. Never log secrets, credentials, access tokens, private keys, or sensitive payloads. Do not log the same failure redundantly.
+- If the current logger lacks a required generic capability, improve packages/utils first rather than creating an application-specific logger.
 
 ### Automated source guard
 
@@ -72,9 +75,6 @@ The current exact-file exceptions are:
 - `apps/harvester/scripts/sell-testnet-zro.js` — interactive operator CLI preview/result output for a separately confirmed exchange-write command; this documentation/CI guard does not execute or authorize that command.
 
 Test files and generated/vendor directories are outside this production-source check. Root `scripts/` are also outside its scope because they are repository-tool CLI entry points. The guard does not authorize routine console logging elsewhere, and it does not replace the separate policy for fatal `process.stderr.write` fallbacks.
-- Prefer injecting a logger into workflows/adapters when it improves testability and makes the side effect explicit. Do not create a wrapper logger in every application.
-- Use structured context and stable fields. Never log secrets, credentials, access tokens, private keys, or sensitive payloads. Do not log the same failure redundantly.
-- If the current logger lacks a required generic capability, improve packages/utils first rather than creating an application-specific logger.
 
 Example:
 
