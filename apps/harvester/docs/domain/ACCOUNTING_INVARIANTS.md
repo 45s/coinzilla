@@ -46,6 +46,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | SELL plan | Base commission + quantity step edge | `recovery-sell-plan-accounting.test.js` | Existing |
 | SELL plan | Fee-reserved base debit and next quantity-step boundary use independent exact expected values | `recovery-sell-plan.test.js` — `reserves base-asset SELL commission without crossing the retained inventory boundary` | Added on focused PR branch; exact-head CI pending |
 | SELL fill fixtures | Canonical quote quantities, quote commissions and one-tick-lower price are independent literal broker facts | `recovery-sell-plan-accounting.test.js` | Added on focused PR branch; exact-head CI pending |
+| Recovery completion | Exchange-constrained quantity-step dust is retained with keepQuantity using an independent exact total | `use-cases/conservative-trading-engine.test.js` — `keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL` | Added on focused PR branch; exact-head CI pending |
 | SELL plan | Quote commission + price tick boundary at minProfit | `recovery-sell-plan-accounting.test.js` | Existing |
 | SELL plan | Already recovered proceeds still require full SELL fill | `conservative-strategy.test.js` residual sell-through cases; engine terminal SELL lifecycle | Existing — execution pending |
 | Strategy | Initial BUY price and quantity boundaries | `conservative-strategy.test.js` | Partial |
