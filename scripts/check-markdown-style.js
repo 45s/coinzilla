@@ -6,6 +6,9 @@ import { collectMarkdownStyleBaseline } from "./markdown-style-baseline.js"
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url))
 
+// Large release-branch diffs can exceed Node's 1 MiB execFileSync default.
+export const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024
+
 const HISTORICAL_PATHS = [
   /^apps\/harvester\/AUDIT(?:_|\.|$)/,
   /^apps\/harvester\/docs\/audits\//,
@@ -251,7 +254,7 @@ export function checkChangedMarkdownStyle(baseSha) {
       "*.md",
       "*.mdx",
     ],
-    { cwd: repositoryRoot, encoding: "utf8" },
+    { cwd: repositoryRoot, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES },
   )
   const changesByPath = parseChangedMarkdownDiff(diffText)
   const discoveredDocuments = findMarkdownDocuments(repositoryRoot)
