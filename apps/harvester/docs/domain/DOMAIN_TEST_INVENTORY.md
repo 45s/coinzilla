@@ -102,7 +102,7 @@ At the audited baseline, [issue #954, finding F-002](https://github.com/45s/coin
 
 The source review found that `allocateOrderCommitments()` validates each decimal independently but does not validate the relationships that make those values a coherent account/market projection. Its current API can return success for an empty action list even when pair active inventory exceeds total Portfolio base, existing SELL reservations exceed pair active inventory, pair-level commitments exceed their account-wide aggregates, or aggregate SELL reservations exceed total tracked base. The existing post-snapshot SELL-lock test also supplied an impossible active-versus-total quantity pair; its fixture is corrected here without changing the independently expected allocation result.
 
-Test-first regressions now express these invariants. RED is pending exact-head GitHub Actions execution; no production behavior has changed in this test-only commit.
+RED was confirmed on the exact test-only PR #971 head `74a1a9e22161a924d3f380f6842ee361f502ecae`: the Harvester suite reported 914 passed / 5 failed (919 total). Every new failure was an expected `ok: true` versus `ok: false` mismatch for one of the five inconsistent input combinations; the existing post-snapshot SELL-lock test passed after its fixture was corrected to activeBaseQuantity 200 / total Portfolio base 200. The production allocator now rejects these relationships before processing actions, including an empty action batch. GREEN and exact-head CI are pending.
 
 ### Medium — lifecycle tests need complete-state assertions
 

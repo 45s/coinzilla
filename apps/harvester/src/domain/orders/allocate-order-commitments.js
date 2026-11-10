@@ -58,6 +58,22 @@ export function allocateOrderCommitments({
     }
     assertDecimalString({ value: quoteCashFlow, field: "quoteCashFlow" })
 
+    if (compareDecimal({ left: activeBaseQuantity, right: accountPortfolioBaseBalance }) > 0) {
+      throw new RangeError("activeBaseQuantity cannot exceed portfolioBaseBalance")
+    }
+    if (compareDecimal({ left: accountCommittedBase, right: accountPortfolioBaseBalance }) > 0) {
+      throw new RangeError("committedBaseBalance cannot exceed portfolioBaseBalance")
+    }
+    if (compareDecimal({ left: committedBase, right: activeBaseQuantity }) > 0) {
+      throw new RangeError("committedBase cannot exceed activeBaseQuantity")
+    }
+    if (compareDecimal({ left: committedQuote, right: accountCommittedQuote }) > 0) {
+      throw new RangeError("committedQuote cannot exceed committedQuoteBalance")
+    }
+    if (compareDecimal({ left: committedBase, right: accountCommittedBase }) > 0) {
+      throw new RangeError("committedBase cannot exceed committedBaseBalance")
+    }
+
     let remainingQuoteBalance = subtractDecimal({
       left: addDecimal({ left: quoteFreeBalance, right: quoteCashFlow }),
       right: subtractDecimal({ left: accountCommittedQuote, right: committedQuoteBalanceBaseline }),
