@@ -4,7 +4,7 @@
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
 
-The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. Journal replay is not used to reconstruct trading state. There is no database, outbox, exactly-once delivery, or per-market-price capture.
+The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. The offline `projectHarvesterJournalRecovery()` and `restoreHarvesterJournalState()` helpers can validate and rehydrate a candidate state for controlled offline use, but runtime startup does not invoke them or resume trading from Journal data. Journal replay is not yet wired as runtime trading-state authority. There is no database, outbox, exactly-once delivery, or per-market-price capture.
 
 ## Configuration
 
@@ -349,7 +349,7 @@ Both Harvester process locks are local to one OS user's home directory; they do 
 
 ## Additional restart-recovery limitations — 2026-11-10
 
-- **Third-asset commission valuation (F-039):** PR #989 preserves exact commission amount/asset identity and historical quoteValue through the applied-fill DTO, journal projection and offline restoration. Legacy records without quoteValue fail closed; no current-price reconstruction is permitted. Wallet reconciliation for unconfigured commission assets remains outstanding. See [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+- **Third-asset commission valuation (F-039):** PR #990 preserves exact commission amount/asset identity and historical quoteValue through the applied-fill DTO, journal projection and offline restoration. Legacy records without quoteValue fail closed; no current-price reconstruction is permitted. Wallet reconciliation for unconfigured commission assets remains outstanding. See [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 - **Same-second session chronology:** process start times have millisecond precision, but session paths and Journal filenames retain only seconds. The reader breaks same-second ties by random session ID, not chronological start time. See F-040 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 - **Recovery-cycle outcome durability:** the engine resets in-memory recovery basis before best-effort publication of `recovery.cycle_completed`. The projection does not reject an unmatched fully filled SELL at end-of-input, so a missing completion event can restore stale cost basis without a wallet-balance mismatch. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 
