@@ -64,15 +64,15 @@ This section supersedes stale checkboxes below where they conflict with merged w
 
 ### CRITICAL — lossless JSONL serialization and durability propagation (#889)
 
-**Status:** OPEN — Journal-owned follow-up tracked in [issue #889](https://github.com/45s/coinzilla/issues/889). This documentation update does not implement or close the runtime defect.
+**Status:** OPEN — test-first regression coverage and the proposed lossless value contract are in [PR #920](https://github.com/45s/coinzilla/pull/920); production implementation and exact-head verification are pending.
 
 The current serializer calls `JSON.stringify` after checking only the top-level event object, stable ID, reserved metadata, and root-level `toJSON` hook. It does not recursively reject nested values that JSONL cannot preserve. The EventBus subscription logs a failed `record()` result but resolves normally; the failure is not added to `writeErrors`, so `flushLifecycle()` can sync the remaining queue and return `durable: true` despite the omitted event. Lossy values can also be persisted after JSON conversion.
 
-**Interim consumer constraint:** until #889 is fixed, Journal-bound EventBus payloads must be acyclic and losslessly JSON-safe: `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain/null-prototype objects with enumerable string-keyed data properties. Exclude undefined values and sparse holes, BigInt, NaN/infinities, cycles, custom serialization hooks, and any values outside that subset. Shared-reference identity is not preserved. Do not change EventBus's broader in-memory contract as a workaround. The audit did not identify a current Harvester DTO that violates this restriction; the Harvester-side consumer rule is documented in its Journal Evidence Contract.
+**Interim consumer constraint (enforcement pending PR #920):** Journal-bound EventBus payloads must be acyclic and losslessly JSON-safe: `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain/null-prototype objects with enumerable string-keyed data properties. Exclude undefined values and sparse holes, BigInt, NaN/infinities, cycles, custom serialization hooks, and any values outside that subset. Shared-reference identity is not preserved. Do not change EventBus's broader in-memory contract as a workaround. The Harvester DTO audit found a narrow timestamp migration requirement: `mapOrderUpdatedData` forwards any numeric broker `transactionTime`, including non-finite values, and several timestamp checks admit negative zero. Track this separately in the Harvester domain; do not modify Harvester implementation in the Journal PR.
 
 **Required J-6 work (all remains open):**
 
-- [ ] Define and enforce the exact nested source-event value contract, including array holes, numeric edge cases, custom serialization hooks, cycles, and shared references.
+- [ ] Define and enforce the exact nested source-event value contract, including array holes, numeric edge cases, custom serialization hooks, cycles, and shared references (RED regressions added in PR #920).
 - [ ] Reject unsupported/lossy values before writing, or introduce a separately reviewed versioned encoding that preserves them losslessly.
 - [ ] Propagate serialization failures into observable `record()`, `flush()`, and `close()` outcomes; never report durable success after a subscribed event was omitted.
 - [ ] Add deterministic integration regressions using the real EventBus and Journal for BigInt, cyclic graphs, undefined object properties, undefined array entries, NaN, infinities, and negative zero.

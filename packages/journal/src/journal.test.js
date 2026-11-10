@@ -410,23 +410,37 @@ test("logs journal startup and shutdown", async () => {
 })
 
 
-test("rejects invalid records without writing them", async () => {
+test("rejects invalid records and makes serialization failure visible to flush and close", async () => {
   const context = await createTestJournal()
 
   try {
-    for (const event of [undefined, null, "event", 123, []]) {
-      const result = await context.journal.record({ event })
-      assert.equal(result.ok, false)
-    }
+    const result = await context.journal.record({
+      event: {
+        id: "event-invalid-nested-value",
+        name: "journal.invalid_value",
+        data: { nested: { value: undefined } },
+      },
+    })
 
-    const circular = {}
-    circular.self = circular
-    const result = await context.journal.record({ event: circular })
-    assert.equal(result.ok, false)
+    assert.equal(result.ok, false, "record() must reject a source event containing a nested undefined value.")
+    assert.equal(context.journal.writeFailed, true, "A serialization failure must poison the active writer so later events cannot silently follow an omitted event.")
+    assert.equal(context.journal.writeErrors.length, 1, "The original serialization failure must be retained for lifecycle durability results.")
+
+    const subsequentResult = await context.journal.record({
+      event: { id: "event-after-invalid", name: "journal.valid", data: { value: "valid" } },
+    })
+    assert.equal(subsequentResult.ok, false, "The writer must reject later records after a source event could not be serialized losslessly.")
 
     const flushResult = await context.journal.flush()
-    assert.equal(flushResult.ok, true)
-    assert.equal(await readFile(context.filePath, "utf8"), "")
+    assert.equal(flushResult.ok, false, "flush() must not report durable success after a source event was omitted.")
+    assert.match(flushResult.errors[0].message, /undefined/, "flush() must expose the original nested serialization failure.")
+
+    assert.equal(await readFile(context.filePath, "utf8"), "", "A rejected source event must not append a lossy or partial JSONL line.")
+
+    const closeResult = await context.journal.close()
+    assert.equal(closeResult.ok, false, "close() must retain the failed durability outcome after serialization failure.")
+    assert.equal(closeResult.durable, false, "close() must never claim durable closure after a source event was omitted.")
+    assert.equal(context.journal.closeDurable, false, "The Journal's observable closeDurable state must remain false after serialization failure.")
   } finally {
     await context.journal.close()
     await context.eventBus.close()
@@ -1696,6 +1710,135 @@ test("close drains a published event before releasing the session and writer loc
   } finally {
     releaseAppend()
     await Promise.allSettled([closePromise].filter(Boolean))
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+
+test("does not report durable success when the real EventBus delivers JSON-lossy values", async () => {
+  const cyclicData = {}
+  cyclicData.self = cyclicData
+
+  const sparseArray = []
+  sparseArray.length = 2
+  sparseArray[1] = "present"
+
+  const invalidPayloads = [
+    { label: "BigInt", data: { amount: 1n } },
+    { label: "cyclic graph", data: { nested: cyclicData } },
+    { label: "undefined object property", data: { nested: { amount: undefined } } },
+    { label: "undefined array entry", data: { amounts: [1, undefined] } },
+    { label: "sparse array hole", data: { amounts: sparseArray } },
+    { label: "NaN", data: { amount: NaN } },
+    { label: "positive infinity", data: { amount: Infinity } },
+    { label: "negative infinity", data: { amount: -Infinity } },
+    { label: "negative zero", data: { amount: -0 } },
+  ]
+
+  for (const invalidPayload of invalidPayloads) {
+    const context = await createTestJournal()
+
+    try {
+      const published = context.eventBus.publish({
+        name: "journal.lossy_payload",
+        source: "journal-integration-test",
+        data: invalidPayload.data,
+      })
+
+      assert.equal(
+        published.ok,
+        true,
+        `The broader EventBus in-memory contract must accept the ${invalidPayload.label} fixture so the real Journal subscriber path is exercised.`,
+      )
+
+      const busFlush = await context.eventBus.flush()
+      assert.equal(
+        busFlush.ok,
+        true,
+        `EventBus delivery should settle normally for ${invalidPayload.label}; Journal owns the stricter persistence contract.`,
+      )
+
+      const journalFlush = await context.journal.flush()
+      assert.equal(
+        journalFlush.ok,
+        false,
+        `Journal flush must fail when a delivered ${invalidPayload.label} cannot be persisted losslessly.`,
+      )
+      assert.equal(
+        context.journal.writeFailed,
+        true,
+        `A delivered ${invalidPayload.label} that cannot be serialized must poison the Journal writer.`,
+      )
+      assert.equal(
+        context.journal.writeErrors.length,
+        1,
+        `Journal must retain the original ${invalidPayload.label} serialization failure for flush and close.`,
+      )
+
+      const closeResult = await context.journal.close()
+      assert.equal(
+        closeResult.ok,
+        false,
+        `Journal close must remain failed after the subscriber rejects a ${invalidPayload.label} event.`,
+      )
+      assert.equal(
+        closeResult.durable,
+        false,
+        `Journal close must not claim durable closure after omitting a ${invalidPayload.label} event.`,
+      )
+      assert.equal(
+        context.journal.closeDurable,
+        false,
+        `Journal closeDurable must remain false after a ${invalidPayload.label} serialization failure.`,
+      )
+      assert.equal(
+        await readFile(context.filePath, "utf8"),
+        "",
+        `The ${invalidPayload.label} source event must be rejected before any JSONL bytes are appended.`,
+      )
+    } finally {
+      await context.journal.close()
+      await context.eventBus.close()
+      await rm(context.directory, { recursive: true, force: true })
+    }
+  }
+})
+
+test("persists shared EventBus references as repeated values without preserving identity", async () => {
+  const context = await createTestJournal()
+  const shared = { orderId: "shared-order-42" }
+
+  try {
+    const published = context.eventBus.publish({
+      name: "journal.shared_reference",
+      source: "journal-integration-test",
+      data: { first: shared, second: shared },
+    })
+
+    assert.equal(published.ok, true, "EventBus must accept a shared reference as part of its in-memory payload graph.")
+
+    const flushResult = await context.journal.flush()
+    assert.equal(flushResult.ok, true, "Journal must accept repeated shared references when each repeated subtree is losslessly JSON-safe.")
+
+    const closeResult = await context.journal.close()
+    assert.equal(closeResult.ok, true, "A session containing a JSON-safe shared reference must close durably.")
+    assert.equal(closeResult.durable, true, "Shared-reference aliasing must not prevent durable JSONL persistence.")
+
+    const readResult = await context.journal.read()
+    assert.equal(readResult.ok, true, "The persisted shared-reference record must remain readable after close.")
+    assert.deepEqual(
+      readResult.records[0].payload.data,
+      { first: { orderId: "shared-order-42" }, second: { orderId: "shared-order-42" } },
+      "The recovered payload must retain the value of both references.",
+    )
+    assert.notStrictEqual(
+      readResult.records[0].payload.data.first,
+      readResult.records[0].payload.data.second,
+      "JSONL persistence must explicitly exclude shared object-identity preservation.",
+    )
+  } finally {
+    await context.journal.close()
     await context.eventBus.close()
     await rm(context.directory, { recursive: true, force: true })
   }
