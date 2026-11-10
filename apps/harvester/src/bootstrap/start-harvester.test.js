@@ -120,8 +120,8 @@ const createAcknowledgedOrder = ({ order }) => new CanonicalOrder({
   executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
   status: "OPEN",
   createdAt: order.createdAt,
-  acknowledgedAt: Date.now(),
-  updatedAt: Date.now(),
+  acknowledgedAt: 2,
+  updatedAt: 2,
 })
 const createBroker = (calls = [], {
   subscribeResult,
@@ -429,6 +429,7 @@ test("defers only the market with a pre-existing external order", async () => {
     loadConfig: async () => config,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
+    now: () => 1000,
     logger: { info() {}, error() {} },
   })
 
@@ -508,6 +509,7 @@ test("rechecks same-symbol external orders after user-data recovery before resum
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
+    now: () => 1000,
     logger: { info() {}, error() {} },
   })
 
@@ -549,7 +551,7 @@ test("rechecks same-symbol external orders after user-data recovery before resum
     await broker.emitPrice("BTCUSDT", {
       symbol: "BTCUSDT",
       price: "1000",
-      timestamp: Date.now(),
+      timestamp: 1000,
     })
     assert.deepEqual(
       submittedSymbols,
