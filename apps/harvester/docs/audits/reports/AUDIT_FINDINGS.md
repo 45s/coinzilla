@@ -938,3 +938,11 @@ Harvester agent/trading/Journaling contracts say optional Journal evidence must 
 ## Documentation correction — Journal serialization failure propagation
 
 `JOURNAL_OPERATIONS.md` contained a stale description that Journal serialization failures were only logged and omitted from flush results. Journal issue #889 was fixed in PR #920: lossy payloads are rejected before append, failures are retained in writer state, and flush/close surface the failure without claiming durable success. The 2026-11-10 documentation update corrects that statement.
+
+## F-038 — Restoring a completed recovery cycle does not reset Position cost basis
+
+**Status:** CONFIRMED latent domain-logic defect in the retained recovery helper; current runtime replay is disabled. See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
+
+`createPortfolioWorkflow.completeRecoveryCycle()` allocates the exact retained quantity, calls `portfolio.resetRecoveryBasis({ marketId })`, and resets the RecoveryLedger. `restoreHarvesterJournalState()` replays the same cycle event but only allocates `freeQuantity` and resets the RecoveryLedger. It does not reset `Position.spent`, which is the authoritative Conservative recovery basis. A restored completed cycle therefore retains the prior cycle's cost basis while the RecoveryLedger is reset; the account-balance audit cannot detect this because cost basis is not a wallet balance.
+
+The restore helper also accepts `freeQuantity < position.baseQuantity`; it only rejects an allocation larger than active inventory. The live completion rule requires the entire remaining active quantity to equal `keepQuantity` plus any classified dust and transfers that exact amount to free inventory. Restoration must reject a mismatch and must reproduce the live basis reset. Add a direct RED/GREEN restore-helper regression for both conditions before re-enabling replay.
