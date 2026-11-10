@@ -165,7 +165,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         })
         .resetRecoveryBasis({ marketId: market.id })
       const resetLedger = recoveryLedger.resetCycle({
-        minProfit: item.realizedNetProfit,
+        minProfit: item.minProfit,
         spent: position.spent,
       })
       portfolio = nextPortfolio
