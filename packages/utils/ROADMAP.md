@@ -18,7 +18,6 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 
 **Verification:** all six required offline CI contexts passed on the exact PR #767 and PR #770 heads; the Harvester process-lock check also passed on PR #770. The read-only TESTNET integration job was skipped; no exchange operations were performed.
 
-
 ### IMPORTANT — protect shared helper correctness and dependency direction
 
 1. **Complete the repository-wide utility reuse inventory.**
@@ -52,10 +51,10 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-
 > Status: core shared-helper hardening and build-provenance/Logger consumer rollout are complete. Validator configuration hardening is tracked in [#892](https://github.com/45s/coinzilla/issues/892); the repository-wide reuse inventory, direct console/stderr audit, and automated guard remain open. Optional consolidation remains demand-driven.
 
-**Owner:** `packages/utils/`  
+**Owner:** `packages/utils/`
+
 **Purpose:** provide small, domain-neutral helpers used across the workspace.
 
 Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
