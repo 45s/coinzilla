@@ -43,6 +43,7 @@ export class Journal {
     this.closed = false
     this.writeErrors = []
     this.writeFailed = false
+    this.appendFailed = false
     this.closeDurable = false
   }
 
@@ -190,7 +191,7 @@ export class Journal {
     }
     if (this.writeFailed) {
       return toResult({
-        error: new Error("Journal session is failed after a previous write error"),
+        error: new Error("Journal session is failed after a previous serialization or append error"),
       })
     }
 
@@ -204,9 +205,9 @@ export class Journal {
     }
 
     const task = this.writeQueue.then(async () => {
-      if (this.writeFailed) {
+      if (this.appendFailed) {
         return toResult({
-          error: new Error("Journal session is failed after a previous write error"),
+          error: new Error("Journal session is failed after a previous append error"),
         })
       }
       try {
@@ -214,6 +215,7 @@ export class Journal {
         return toResult({ written: true, durable: false, recordId: event.id })
       } catch (error) {
         this.writeFailed = true
+        this.appendFailed = true
         this.writeErrors.push(error)
         return toResult({ error })
       }
@@ -448,7 +450,7 @@ export class Journal {
         filePath: this.filePath,
       })
 
-      return toResult({ errors })
+      return toResult({ errors, closed: true, durable: false })
     }
 
     this.closeDurable = true
