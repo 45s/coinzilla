@@ -618,10 +618,26 @@ test("maps quantity-step dust with its rounded candidate", () => {
 
 test("rejects a durable dust record without limiting-filter values", () => {
   const result = mapRecoveryCycleCompletedData({
-    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.8", realizedNetProfit: "0.01",
+    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.8", keepQuantity: "1", minProfit: "0.01", realizedNetProfit: "0.01",
     dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL" },
   })
   assert.equal(result.ok, false)
+})
+
+test("rejects completion events when retained quantity or profit proof is inconsistent", () => {
+  const base = {
+    symbol: "DOGEUSDT",
+    marketId: "market:binance:DOGEUSDT",
+    freeQuantity: "1.04",
+    keepQuantity: "1",
+    minProfit: "0.02",
+    realizedNetProfit: "0.02",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.04", reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1", evaluatedQuantity: "0" },
+  }
+  assert.equal(mapRecoveryCycleCompletedData({ ...base, freeQuantity: "1.03" }).ok, false)
+  assert.equal(mapRecoveryCycleCompletedData({ ...base, realizedNetProfit: "0.019" }).ok, false)
+  assert.equal(mapRecoveryCycleCompletedData({ ...base, minProfit: "0.009" }).ok, false)
 })
 
 test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
