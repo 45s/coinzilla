@@ -1645,6 +1645,8 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
     symbol: "DOGEUSDT",
     marketId: market.id,
     freeQuantity: "0.1",
+    keepQuantity: "0.1",
+    minProfit: "0.01",
     realizedNetProfit: "1.5",
   })
 })
@@ -2059,7 +2061,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
           allocationCount += 1
         }
         currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle()
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit, spent: position.spent })
         resetCount += 1
       }
       return { ok: true, data: result }
@@ -3937,7 +3939,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
           marketId,
           quantity: completion.freeQuantity,
         })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle()
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit: "0.01", spent: position.spent })
       }
       return { ok: true, data: completion }
     },

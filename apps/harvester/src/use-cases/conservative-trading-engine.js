@@ -1057,7 +1057,8 @@ export function makeConservativeTradingEngine({
         if (completion.data?.eligible) {
           publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
             dataResult: mapRecoveryCycleCompletedData({ symbol, marketId: metadata.market.id,
-              freeQuantity: completion.data.freeQuantity, realizedNetProfit: completion.data.realizedNetProfit,
+              freeQuantity: completion.data.freeQuantity, keepQuantity: String(pairs[symbol].keepQuantity),
+              minProfit: String(settings.minProfit), realizedNetProfit: completion.data.realizedNetProfit,
               dust: completion.data.dust }) })
           state.completedRecoverySellSymbols.delete(symbol)
           state.trailingBuy.set(symbol, true)
@@ -1889,6 +1890,8 @@ export function makeConservativeTradingEngine({
             symbol,
             marketId: order.market.id,
             freeQuantity: completion.data.freeQuantity,
+            keepQuantity: String(pairs[symbol].keepQuantity),
+            minProfit: String(settings.minProfit),
             realizedNetProfit: completion.data.realizedNetProfit,
             ...(completion.data.dust === undefined ? {} : { dust: completion.data.dust }),
           }),
