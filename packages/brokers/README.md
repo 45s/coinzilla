@@ -20,6 +20,14 @@ The `@coinzilla/brokers` entry point exports:
 
 Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
+## Canonical order placement response
+
+The canonical `createCanonicalOrder()` contract requires the complete exchange order facts (exchange order ID, client order ID, type, side, original/executed quantities, price and status) to construct a `CanonicalOrder`. Binance Spot defaults `LIMIT` and `MARKET` to `FULL`, but defaults other order types such as `LIMIT_MAKER` to the minimal `ACK` response. ACK contains identifiers and transaction time only; it is not sufficient for canonical ownership tracking.
+
+Canonical placement therefore explicitly sends `newOrderRespType: "RESULT"`. RESULT returns the order facts required by the canonical adapter without requesting the additional `fills` array. This applies to canonical placement regardless of order type; the ordinary `createOrder()` compatibility method retains its existing response contract.
+
+Do not infer a successful canonical order from a minimal ACK, synthesize missing order facts, or automatically retry a state-changing placement after an uncertain response. If the request outcome is ambiguous, Harvester must resolve the original client order ID through authoritative user-data or broker reconciliation before any further order action.
+
 ## JavaScript editor types
 
 The public broker methods, configuration options, Binance adapters, RPC/Streams clients, and user-data boundaries use JSDoc to describe their inputs, outputs, callbacks, and important value constraints. VS Code and other JavaScript language servers read these annotations for hover information, parameter hints, and IntelliSense without a TypeScript build step.

@@ -508,11 +508,16 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new TypeError("createCanonicalOrder requires clientOrderId")
       }
 
-      const params = adaptOrderRequestParams({
-        input,
-        clientOrderId,
-        requireClientOrderId: true,
-      })
+      const params = {
+        ...adaptOrderRequestParams({
+          input,
+          clientOrderId,
+          requireClientOrderId: true,
+        }),
+        // Binance defaults LIMIT_MAKER to ACK, which omits the canonical
+        // order facts required to safely track an accepted submission.
+        newOrderRespType: "RESULT",
+      }
 
       const response = await this.tradingConnection.request(
         "order.place",
