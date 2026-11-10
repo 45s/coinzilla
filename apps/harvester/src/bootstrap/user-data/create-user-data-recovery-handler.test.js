@@ -847,7 +847,7 @@ test("repeats account snapshot baseline capture when a user-data event crosses t
   await fixture.state.recoveryTask
 
   assert.equal(snapshotReads, 2, "A user-data event crossing the account REST/audit window must force the account and its Portfolio/order baselines to be captured again.")
-  assert.equal(accountAuditAttempts, 2, "The first snapshot audit must be discarded when its event sequence becomes stale.")
+  assert.equal(accountAuditAttempts, 2, "The first snapshot audit must not authorize recovery after its event sequence becomes stale; a fresh audit is required.")
   assert.deepEqual(publishedSnapshots, [snapshots[0], snapshots[1]], "Both audit attempts must receive the exact snapshot object captured for that attempt.")
   assert.equal(publishedSnapshots[1].baselineVersion, "after-user-data-event", "Only the fresh post-event snapshot and its corresponding accounting baselines may authorize recovery.")
   assert.equal(fixture.calls.orderAudits.length, 1, "Only the open-orders snapshot from the stable post-event recovery window may be published.")

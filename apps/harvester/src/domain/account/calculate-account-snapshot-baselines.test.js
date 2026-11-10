@@ -71,6 +71,26 @@ test("aggregates Portfolio and active-order baselines by shared exchange asset",
   ], "Remaining SELL commitments must aggregate independently for each shared base asset.")
 })
 
+test("rejects terminal orders from the active commitment baseline", () => {
+  const result = calculateAccountSnapshotBaselines({
+    portfolio: new Portfolio(),
+    activeOrders: [
+      makeOrder({
+        market: btcMarket,
+        clientOrderId: "canceled-buy",
+        side: "BUY",
+        originalQuantity: "1",
+        executedQuantity: "0",
+        limitPrice: "50",
+        status: "CANCELED",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false, "A terminal order must not be silently counted as an active account reservation.")
+  assert.match(result.errors[0].message, /only active orders/, "The baseline must reject terminal order state instead of including released commitment.")
+})
+
 test("fails closed when an active MARKET BUY has no canonical quote commitment", () => {
   const result = calculateAccountSnapshotBaselines({
     portfolio: new Portfolio(),

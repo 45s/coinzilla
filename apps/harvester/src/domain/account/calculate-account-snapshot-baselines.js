@@ -51,6 +51,9 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
     }
 
     for (const order of activeOrders) {
+      if (!["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status)) {
+        throw new TypeError("calculateAccountSnapshotBaselines activeOrders must contain only active orders")
+      }
       if (order.side === "BUY") {
         if (!order.limitPrice) {
           throw new Error("Cannot capture an active BUY commitment without a canonical limit price: " + order.clientOrderId)
