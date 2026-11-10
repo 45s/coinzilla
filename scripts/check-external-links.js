@@ -3,7 +3,8 @@ import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchPinned, isLocalHostname } from './external-link-network.js';
+import { isLocalHostname } from './external-link-address-policy.js';
+import { fetchPinned } from './external-link-network.js';
 
 import { findMarkdownDocuments, removeCodeExamples } from './check-agent-policy.js';
 import { isHistoricalPath } from './check-markdown-style.js';
