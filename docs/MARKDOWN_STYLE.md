@@ -30,7 +30,7 @@ This standard applies to maintained repository-authored `.md` and `.mdx` files. 
 - Prefer concise paragraphs focused on one idea.
 - Use `-` for every unordered-list marker; do not use `*` or `+` as list markers.
 - Use ordered lists for sequences, procedures and ranked steps.
-- Indent nested list items and continuation content by exactly two spaces per level; do not use tabs.
+- Indent nested list items to the parent item's content column. A one-digit ordered marker such as `1.` typically needs three spaces; an unordered marker such as `-` typically needs two. Apply the same alignment rule at deeper levels and do not use tabs.
 - Separate list blocks from adjacent paragraphs, headings, tables and fenced code blocks with one blank line. Blank lines inside a loose list are allowed.
 - Keep list items grammatically parallel where practical.
 - Use task-list checkboxes only for actionable work with a clear owner or completion condition; do not use them as decoration.
