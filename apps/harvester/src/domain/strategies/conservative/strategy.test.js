@@ -670,8 +670,7 @@ test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-t
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(sell.quantity, "0.6")
   assert.equal(sell.price, "0.1", "The exchange-filter constrained residual SELL must retain its exact admissible price.")
-  assert.equal(sell.quantity, "0.6", "The MAX_NOTIONAL boundary must cap the residual SELL at six tenths of a DOGE.")
-  assert.equal(0.1 * 0.6, 0.06, "Independent arithmetic: 0.1 × 0.6 = 0.06 USDT.")
+  assert.equal(sell.quantity, "0.6", "At the exact 0.06 USDT MAX_NOTIONAL boundary and a 0.1 USDT price, the residual SELL must be capped at 0.6 DOGE.")
 })
 
 test("blocks the next BUY when the required recovery SELL exceeds MAX_PRICE", () => {
