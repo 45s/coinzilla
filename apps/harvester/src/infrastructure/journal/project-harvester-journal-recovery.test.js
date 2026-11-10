@@ -632,6 +632,37 @@ test("rejects a journal completion whose realized profit misses its recorded con
   assert.match(result.errors?.[0]?.message ?? "", /does not meet minProfit/)
 })
 
+test("replays exchange-constrained dust as a bonus above keepQuantity", () => {
+  const records = completedCycleRecords()
+  records[6] = record("recovery.cycle_completed", {
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    freeQuantity: "0.01",
+    keepQuantity: "0.005",
+    minProfit: "0.01",
+    realizedNetProfit: "0.25",
+    dust: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.005",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.01",
+      evaluatedQuantity: "0",
+    },
+  })
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+  assert.equal(projection.data.recoveryCycles[0].dust.quantity, "0.005")
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+  assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
+  const position = restored.data.portfolio.getPosition({ symbol: "BTCUSDT" })
+  assert.equal(position.baseQuantity.amount, "0")
+  assert.equal(position.freeBaseQuantity.amount, "0.01")
+})
+
 test("restores Portfolio, RecoveryLedger, free inventory, and order ownership from replayed fills", () => {
   const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords() })
   assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
