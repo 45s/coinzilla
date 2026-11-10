@@ -602,6 +602,36 @@ const completedCycleRecords = () => [
   }),
 ]
 
+test("rejects a journal completion whose free quantity is not keepQuantity plus dust", () => {
+  const records = completedCycleRecords()
+  records[6] = record("recovery.cycle_completed", {
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    freeQuantity: "0.01",
+    keepQuantity: "0.02",
+    minProfit: "0.01",
+    realizedNetProfit: "0.25",
+  })
+  const result = projectHarvesterJournalRecovery({ records })
+  assert.equal(result.ok, false)
+  assert.match(result.errors?.[0]?.message ?? "", /freeQuantity must equal keepQuantity/)
+})
+
+test("rejects a journal completion whose realized profit misses its recorded configured threshold", () => {
+  const records = completedCycleRecords()
+  records[6] = record("recovery.cycle_completed", {
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    freeQuantity: "0.01",
+    keepQuantity: "0.01",
+    minProfit: "0.3",
+    realizedNetProfit: "0.25",
+  })
+  const result = projectHarvesterJournalRecovery({ records })
+  assert.equal(result.ok, false)
+  assert.match(result.errors?.[0]?.message ?? "", /does not meet minProfit/)
+})
+
 test("restores Portfolio, RecoveryLedger, free inventory, and order ownership from replayed fills", () => {
   const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords() })
   assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
