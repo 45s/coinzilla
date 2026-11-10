@@ -4,6 +4,15 @@
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
+### In progress — domain logic test quality initiative
+
+- [~] Establish and maintain the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md).
+- [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
+- [~] RED confirmed on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING recovery SELL both incorrectly allowed a next BUY. Minimal policy correction and GREEN verification are in progress.
+- [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
+- **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
+
+
 ### Completed — per-session log directory layout (PR #874, 2026-11-10)
 
 - [x] Group each process's DEBUG, TRACE, development terminal capture and Journal JSONL file under one UTC/session-ID directory.
