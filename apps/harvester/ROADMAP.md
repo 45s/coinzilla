@@ -420,6 +420,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] **Open-order readiness:** define and test the policy for unowned account-wide orders. Current PREFLIGHT can record `BLOCKED` while `subscribeToUserData()` still sets READY; same-symbol overlap must be tested with a market tick.
 - [ ] **Durable fact contract:** resolve the conflict between crash-safe fill/pause persistence and the current rule that additional Journal evidence must not block fill accounting. Evaluate a separate application-owned durable-fact port before changing Journal's role.
 - [ ] **History completeness:** do not override `marketUniverseComplete: false`; establish a provable owned-market/history scope and retention boundary, otherwise require operator reconciliation.
+- [ ] **Recovery-cycle restoration:** replay must reproduce the live atomic completion transition: require exact `freeQuantity === activeQuantity`, allocate the complete retained inventory, reset `Position.spent`, and reset RecoveryLedger together. Current restore helper omits the Position cost-basis reset (F-038).
 - [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.
 - [ ] Test crash/restart at each order/fill transition and ensure no duplicate order or fill application.
 - [ ] Do not claim exactly-once delivery; guarantee idempotent accounting through durable execution identity and reconciliation.
