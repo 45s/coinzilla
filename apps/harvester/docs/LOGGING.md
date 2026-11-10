@@ -102,6 +102,7 @@ message. Include only fields that help identify or diagnose the event, such as
 ### INFO versus DEBUG
 
 INFO is the operator-facing event stream. Use it for:
+
 - Startup readiness, connection/subscription completion, and shutdown outcomes.
 - Order submissions, acknowledgements, fills, cancellations, and rejects.
 - Trading decisions that produce an action, a pause, or another meaningful
@@ -114,6 +115,7 @@ DEBUG (or TRACE when they include detailed internal state). A quiet market
 should not flood the operator-facing console.
 
 ### Avoid duplicate and low-value messages
+
 - Emit one record for one meaningful event. Do not log the same event once as
   "received" and again as "processed" unless the two records describe distinct,
   actionable stages and the distinction is useful.

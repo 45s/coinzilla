@@ -19,6 +19,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 The following are cross-domain and must be treated as shared ownership: root package manifests and lockfile, CI workflows, GitHub rules, root engineering documentation, workspace scripts, and dependency policy.
 
 An agent changing shared infrastructure must:
+
 - Explain why the change is needed and which domains it affects.
 - Check all affected package/app consumers.
 - Add or update integration-level tests where appropriate.

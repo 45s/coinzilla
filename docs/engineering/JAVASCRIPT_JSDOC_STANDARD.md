@@ -17,6 +17,7 @@ This policy does not prevent a future, deliberate TypeScript interoperability re
 JSDoc comments are useful when they make a contract easier to understand or improve editor IntelliSense. They are not a requirement to narrate every line of code.
 
 Use JSDoc for:
+
 - Exported functions and classes whose parameter or return contract is not obvious.
 - Options objects, nested data shapes, callback signatures, and event payloads.
 - Non-obvious units, ranges, defaults, nullability, and invariants.
@@ -24,6 +25,7 @@ Use JSDoc for:
 - Shared typedefs that are reused within a cohesive domain.
 
 Skip JSDoc when:
+
 - A local variable's type is obvious from its initializer.
 - A tiny private helper has a self-explanatory name and simple signature.
 - A comment would merely repeat what the code already says.
@@ -107,6 +109,7 @@ Do not enable `checkJs` globally or add `// @ts-check` across the repository by 
 JSDoc improves JavaScript editor support but does not automatically satisfy every TypeScript consumer. In particular, a TypeScript diagnostic such as `TS7016` means the consumer cannot find declarations for the imported JavaScript module.
 
 If a TypeScript consumer becomes a supported package contract:
+
 1. Identify the actual consumer(s) and the package entry points they import.
 2. Decide whether to maintain accurate `.d.ts` declarations or generate them from a documented source workflow.
 3. Keep declarations aligned with the runtime exports and test package resolution from a TypeScript consumer.
@@ -117,6 +120,7 @@ Do not add declarations just to satisfy an editor diagnostic in a JavaScript-onl
 ## 7. Review checklist
 
 When reviewing a JavaScript change:
+
 - [ ] Is the implementation still JavaScript and consistent with the package's module conventions?
 - [ ] Are JSDoc comments present where they clarify a public or non-obvious contract?
 - [ ] Are the types, defaults, units, nullability, and error conditions accurate?

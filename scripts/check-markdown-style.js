@@ -36,7 +36,6 @@ const FILE_LEVEL_FINDINGS = new Set([
 const REPORT_ONLY_FINDINGS = new Set([
   "unorderedListMarkers",
   "nestedListIndentation",
-  "listSpacing",
   "malformedTableDelimiters",
   "tableColumnMismatches",
   "tableSpacing",
@@ -51,6 +50,7 @@ const FINDING_LABELS = Object.freeze({
   multipleH1: "multiple H1 headings",
   headingLevelSkips: "skipped heading levels",
   unlabelledCodeFences: "unlabeled fenced-code blocks",
+  listSpacing: "list blocks without blank-line separation",
 })
 
 function matchesAny(path, patterns) {
