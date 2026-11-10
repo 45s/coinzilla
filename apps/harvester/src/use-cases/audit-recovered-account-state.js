@@ -264,6 +264,7 @@ export function auditRecoveredAccountState({
         commissionAssetCodeById.set(assetId, asset)
         if (compareDecimal({ left: amount, right: "0" }) === 0) continue
 
+        // A later snapshot cannot retroactively explain a fee debit that already occurred.
         const baselineSequence = baselineSequenceByAsset.get(asset)
         if (!baselineByAsset.has(asset) || !Number.isSafeInteger(baselineSequence)) {
           throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
