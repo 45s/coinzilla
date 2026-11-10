@@ -93,12 +93,12 @@ No file may be deleted solely because it is old, large, similarly named or appar
 
 ### Phase 3 — Historical evidence organization
 
-- [x] Classify and relocate the nine root-level audit reports, session reports and supporting evidence into indexed `docs/audits/reports/`, `sessions/` and `evidence/` directories; preserve content, filenames, provenance and distinct session boundaries.
+- [~] Relocate the nine root-level audit reports, session reports and supporting evidence into indexed `docs/audits/reports/`, `sessions/` and `evidence/` directories in [PR #951](https://github.com/45s/coinzilla/pull/951); preserve content, filenames, provenance and distinct session boundaries.
 - [ ] Complete the remaining audit/evidence classification across all Harvester documentation and verify every inbound reference.
 - [ ] Preserve original timestamps, source commit SHAs, evidence identifiers, limitations and unknowns.
 - [ ] Introduce UTC timestamped filenames for newly created snapshots.
 - [ ] Add dated addenda or successor assessments rather than rewriting historical conclusions.
-- [x] Archive the root-level records only after destination indexes existed and known inbound/outbound references were updated; exact recursive link CI remains the final verification gate.
+- [~] Archive the root-level records only after destination indexes existed and known inbound/outbound references were updated; exact recursive link CI remains the final verification gate in [PR #951](https://github.com/45s/coinzilla/pull/951).
 - [ ] Review any additional historical records still outside `docs/audits/` and move only when ownership and references are verified.
 
 ### Phase 4 — Repository-wide adoption
