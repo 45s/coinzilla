@@ -75,7 +75,7 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 1. **Strategy decisions:** the blocked-recovery-SELL gap is fixed in merged PR #917 and the exact investment-cap boundary matrix is added in the current PR; next review active-order/market isolation matrices.
 2. **Portfolio and accounting:** PR #924 strengthens exact multi-market accounting and conflicting-fill no-mutation assertions; continue reviewing independent expected values and commission-identity conflicts.
 3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
-4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
+4. **Market and configuration:** PR #930 covers configured quantity/MIN_NOTIONAL boundaries; PR #932 covers exact pre-submission exchange-filter equality.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
 
 After each logical area, record exact test/CI evidence and remaining gaps here and in the Harvester roadmap. Mark work complete only after it is merged into `develop` and required checks pass.
