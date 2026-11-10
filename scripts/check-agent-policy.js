@@ -152,14 +152,6 @@ export function findOwnershipGaps(directories, ownershipDocument) {
 
 /**
  * Find broken relative Markdown links in all discovered repository Markdown/MDX documents.
- * External URLs, mail links, and same-document anchors are intentionally ignored.
- *
- * @param {string} root Repository root.
- * @param {{ path: string, content: string }[]} documents Documents to inspect.
- * @returns {string[]} Human-readable link errors.
- */
-/**
- * Find broken relative Markdown links in all discovered repository Markdown/MDX documents.
  * Inline links and reference definitions are checked; code examples and HTML comments are ignored.
  * External URLs, mail links, and same-document anchors are intentionally ignored.
  *
