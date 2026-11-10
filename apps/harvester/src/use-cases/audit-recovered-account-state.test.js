@@ -20,7 +20,7 @@ const record = (name, data, lineNumber) => ({
   position: { fileName: "2026-11-05_08-00-00.jsonl", lineNumber },
 })
 
-const recoveryProjection = () => {
+const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
   const balances = [
     { asset: "BTC", free: "0", locked: "0", total: "0" },
     { asset: "USDT", free: "1000", locked: "0", total: "1000" },
@@ -78,7 +78,7 @@ const recoveryProjection = () => {
       side: "SELL",
       type: "LIMIT",
       price: "100",
-      quantity: "0.4",
+      quantity: "0.4896",
       status: "PENDING",
     }, 6),
     record("order.submitted", {
@@ -87,8 +87,8 @@ const recoveryProjection = () => {
       symbol: "BTCUSDT",
       side: "SELL",
       type: "LIMIT",
-      price: "100",
-      quantity: "0.4",
+      price: "102.757352941176470588",
+      quantity: "0.4896",
       status: "FILLED",
     }, 7),
     record("execution.fill_applied", {
@@ -98,8 +98,8 @@ const recoveryProjection = () => {
       clientOrderId: "h-BTCUSDT-sell-1",
       symbol: "BTCUSDT",
       side: "SELL",
-      price: "125.625",
-      quantity: "0.4",
+      price: "102.757352941176470588",
+      quantity: "0.4896",
       quoteQuantity: "50.25",
       liquidityRole: "MAKER",
       commissions: [],
@@ -108,7 +108,7 @@ const recoveryProjection = () => {
     record("recovery.cycle_completed", {
       symbol: "BTCUSDT",
       marketId: "binance:BTCUSDT",
-      freeQuantity: "0.01",
+      freeQuantity,
       realizedNetProfit: "0.25",
     }, 9),
     record("account.snapshot_captured", {
@@ -116,7 +116,7 @@ const recoveryProjection = () => {
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
-        { asset: "BTC", free: "0.0996", locked: "0", total: "0.0996" },
+        { asset: "BTC", free: "0.01", locked: "0", total: "0.01" },
         { asset: "USDT", free: "1000.25", locked: "0", total: "1000.25" },
       ],
       auditReasons: [],
@@ -137,18 +137,31 @@ const restoreState = () => {
   return { projection, restored: restored.data }
 }
 
-test("replays recovery completion with a reset Position basis and preserved residual inventory", () => {
+test("replays recovery completion only after all sellable inventory is sold and keepQuantity is retained", () => {
   const { restored } = restoreState()
   const position = restored.portfolio.getPosition({ marketId: market.id })
   const ledger = restored.recoveryLedgers.get(market.id)
 
-  assert.equal(position.baseQuantity.amount, "0.0896", "Active residual inventory above keepQuantity must remain available for Free-Roll selling.")
-  assert.equal(position.freeBaseQuantity.amount, "0.01", "The exact retained keepQuantity must remain in the separate free bucket.")
+  assert.equal(position.baseQuantity.amount, "0", "A completed cycle must not leave sellable active inventory behind.")
+  assert.equal(position.freeBaseQuantity.amount, "0.01", "The configured keepQuantity must be transferred into the free inventory bucket.")
   assert.equal(position.spent.amount, "0", "A replayed completed cycle must reset the authoritative Position recovery basis just like live completion.")
   assert.equal(position.quoteNetCashFlow.amount, "0.25", "Resetting recovery basis must preserve cumulative realized quote cash flow.")
   assert.equal(ledger.buyCost, "0", "The RecoveryLedger cycle cost mirror must be reset with the Portfolio basis.")
   assert.equal(ledger.netSellProceeds, "0", "The completed cycle's proceeds must be cleared.")
   assert.deepEqual(ledger.appliedFillIds, restored.portfolio.appliedFillIds, "Fill identities must survive the cycle reset for duplicate protection.")
+})
+
+test("rejects a journal completion that leaves active sellable inventory unallocated", () => {
+  const projection = recoveryProjection({ freeQuantity: "0.009" })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", market]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors?.[0]?.message ?? "", /must allocate all replayed active inventory/)
 })
 
 const resolveRestoredOrdersAsFilled = ({ recoveredState }) => ({
