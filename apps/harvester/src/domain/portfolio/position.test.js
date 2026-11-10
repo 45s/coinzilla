@@ -14,12 +14,13 @@ const makeFill = ({
   commissions = [],
   commissionStatus = "COMPLETE",
   tradeId = "trade-1",
+  price = "100",
 } = {}) => new Fill({
   tradeId,
   brokerOrderId: "order-1",
   market,
   side,
-  price: new Money({ amount: "100", asset: quoteAsset }),
+  price: new Money({ amount: price, asset: quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: baseAsset }),
   quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
   commissions,
@@ -211,4 +212,74 @@ test("resets only the completed recovery cost basis after exact retained allocat
   assert.equal(position.freeBaseQuantity.amount, "1")
   assert.equal(position.spent.amount, "0")
   assert.equal(position.quoteNetCashFlow.amount, "-10")
+})
+
+
+test("conserves total base inventory across BUY fills, free allocation, and SELL fees", () => {
+  const firstBuy = Position.empty({ market }).applyFill({
+    fill: makeFill({
+      tradeId: "buy-1",
+      price: "0.1",
+      quantity: "100",
+      quoteQuantity: "10",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.25", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      ],
+    }),
+  })
+
+  const afterAllocation = firstBuy.allocateFreeQuantity({ quantity: "1.25" })
+  const afterSecondBuy = afterAllocation.applyFill({
+    fill: makeFill({
+      tradeId: "buy-2",
+      price: "0.1",
+      quantity: "20",
+      quoteQuantity: "2",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+  })
+  const afterSell = afterSecondBuy.applyFill({
+    fill: makeFill({
+      side: "SELL",
+      tradeId: "sell-1",
+      price: "0.2",
+      quantity: "118.4",
+      quoteQuantity: "23.68",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.03", asset: quoteAsset }) }),
+      ],
+    }),
+  })
+
+  assert.equal(firstBuy.baseQuantity.amount, "99.75", "The first BUY must add executed base less its 0.25 base commission.")
+  assert.equal(firstBuy.freeBaseQuantity.amount, "0", "A BUY must not allocate any quantity to retained inventory.")
+  assert.equal(firstBuy.totalBaseQuantity.amount, "99.75", "Total holdings after the first BUY must equal its fee-adjusted executed quantity.")
+  assert.equal(firstBuy.spent.amount, "10.02", "The first BUY recovery cost must include its 0.02 quote commission.")
+  assert.equal(firstBuy.quoteNetCashFlow.amount, "-10.02", "The first BUY quote cash flow must include its quote commission.")
+
+  assert.equal(afterAllocation.baseQuantity.amount, "98.5", "Free allocation must subtract exactly 1.25 from active inventory.")
+  assert.equal(afterAllocation.freeBaseQuantity.amount, "1.25", "Free allocation must add exactly 1.25 to retained inventory.")
+  assert.equal(afterAllocation.totalBaseQuantity.amount, "99.75", "Moving inventory to the free bucket must conserve total base holdings.")
+  assert.equal(afterAllocation.spent.amount, "10.02", "Free allocation must not change the completed BUY cost basis.")
+  assert.equal(afterAllocation.quoteNetCashFlow.amount, "-10.02", "Free allocation must not create quote cash flow.")
+
+  assert.equal(afterSecondBuy.baseQuantity.amount, "118.45", "The second BUY must add 19.95 net base while preserving the previously retained inventory.")
+  assert.equal(afterSecondBuy.freeBaseQuantity.amount, "1.25", "A later BUY must not consume or change previously retained free inventory.")
+  assert.equal(afterSecondBuy.totalBaseQuantity.amount, "119.7", "Total holdings must include both active and retained inventory after the second BUY.")
+  assert.equal(afterSecondBuy.spent.amount, "12.03", "Accumulated BUY cost must include both quote commissions exactly once.")
+  assert.equal(afterSecondBuy.quoteNetCashFlow.amount, "-12.03", "Accumulated BUY quote cash flow must equal the two gross costs plus quote commissions.")
+
+  assert.equal(afterSell.baseQuantity.amount, "0", "The SELL must consume the entire active quantity including its 0.05 base commission.")
+  assert.equal(afterSell.freeBaseQuantity.amount, "1.25", "The SELL must leave all retained free inventory untouched.")
+  assert.equal(afterSell.totalBaseQuantity.amount, "1.25", "After selling active inventory, total holdings must equal the retained free quantity.")
+  assert.equal(afterSell.spent.amount, "12.03", "A SELL must not rewrite the accumulated BUY recovery cost basis.")
+  assert.equal(afterSell.quoteNetCashFlow.amount, "11.62", "SELL quote proceeds less its 0.03 quote commission must update cumulative quote cash flow exactly.")
+
+  assert.equal(firstBuy.totalBaseQuantity.amount, "99.75", "Later immutable Position transitions must not change the original post-BUY snapshot.")
+  assert.equal(afterAllocation.totalBaseQuantity.amount, "99.75", "Later fills must not mutate the immutable post-allocation snapshot.")
 })

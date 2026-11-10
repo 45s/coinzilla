@@ -19,7 +19,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Portfolio | SELL consumes gross quantity plus base commission | `position.test.js` | Existing |
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
 | Portfolio | SELL cannot consume active + free quantity by dipping into free | `position.test.js` | Existing |
-| Portfolio | Total base quantity conserved by free allocation | `position.test.js` | Partial |
+| Portfolio | Total base quantity is conserved across fee-adjusted BUYs, free allocation, a subsequent BUY and SELL base commissions; retained inventory remains untouched | `position.test.js` — `conserves total base inventory across BUY fills, free allocation, and SELL fees` | Added on focused PR branch; exact-head CI pending |
 | Lifecycle | keepQuantity=0 complete workflow | `completes the full Conservative lifecycle with the supported zero keepQuantity` in `conservative-trading-engine.test.js` | Existing — execution pending |
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Same ID with changed quantity, commission amount or commission asset rejects without mutating either projection | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
