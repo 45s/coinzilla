@@ -365,12 +365,34 @@ test("classifies a permanent Journal write failure as terminal during the recove
         recoveryFailure,
         "A poisoned Journal writer must not be downgraded to a retryable sync failure.",
       )
+      assert.equal(error.cause, writeError, "The original Journal write error must remain in the cause chain.")
       return true
     },
   )
 
   assert.equal(fixture.publishedEvents.length, 1, "The uncertain recovery audit publication must remain intact.")
   assert.equal(fixture.getFlushCount(), 1, "A permanent write failure must not trigger an internal flush retry.")
+})
+
+test("treats a failed flush with unclassified Journal health as terminal", async () => {
+  const market = createFixture().market
+  const writeError = new Error("Journal flush failed without writer-health metadata")
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    flushResults: [{ ok: false, durable: false, errors: [writeError] }],
+  })
+  await assert.rejects(
+    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    (error) => {
+      assert.deepEqual(error.recoveryFailure, {
+        category: "DURABILITY",
+        stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED",
+        retryable: false,
+      })
+      assert.equal(error.cause, writeError)
+      return true
+    },
+  )
 })
 
 test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
@@ -382,7 +404,12 @@ test("retains the first recovery account audit publication after a transient flu
       createAccountSnapshot({ market, sourceTime: 101 }),
     ],
     flushResults: [
-      { ok: false, durable: false, errors: [syncFailure] },
+      {
+        ok: false,
+        durable: false,
+        errors: [syncFailure],
+        recoveryFailure: { category: "DURABILITY", stage: "JOURNAL_FLUSH_FAILURE", retryable: true },
+      },
       { ok: true, durable: true },
     ],
   })

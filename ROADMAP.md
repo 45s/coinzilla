@@ -12,7 +12,7 @@
 1. **Harvester user-data recovery acceptance (#626) — implementation hardening substantially complete; final acceptance remains PAUSED / UNVERIFIED.**
    - **Why:** transport reconnection alone does not prove that account, orders and fills are reconciled or that readiness can safely reopen.
    - **Completed offline follow-up:** recovery failure classification #769 was implemented test-first and merged in [PR #794](https://github.com/45s/coinzilla/pull/794) on 2026-11-09; exact-head offline CI passed. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [closeout PR #807](https://github.com/45s/coinzilla/pull/807).
-   - **Offline follow-up in progress:** Harvester F-033 is adding terminal classification for permanent Journal write failures while preserving retryable fsync recovery. This is a narrow offline correction; it does not change Journal's package contract or TESTNET scope.
+   - **Offline follow-up implemented in PR #906; exact-head CI pending:** Harvester F-033 classifies permanent Journal write failures as terminal, preserves explicitly retryable healthy-writer flush failures, and fails closed when Journal health is unclassified. No Journal package API or TESTNET scope change.
    - **Remaining:** keep #626 open for final acceptance traceability and a successful read-only TESTNET recovery run in an eligible, authorized environment. Preserve generation fencing, durable RECOVERY audit barriers and fail-closed readiness.
    - **Blocker:** the hosted Spot TESTNET API path returned HTTP 451 for regional eligibility. Do not repeat the same blocked attempt, change location, or claim exchange acceptance.
    - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md) and [Brokers roadmap](packages/brokers/ROADMAP.md).
