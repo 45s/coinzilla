@@ -291,6 +291,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         }
         const snapshot = Object.freeze({
           fileName,
+          sequence: currentSequence,
           phase: data.phase,
           sourceTime: data.sourceTime,
           auditStatus: data.auditStatus,
