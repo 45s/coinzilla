@@ -138,7 +138,7 @@ High-volume events such as order.execution_report are intentionally excluded. Th
 - **Transport isolation:** Telegram is an event-bus side effect. It must never control trading state, order placement, reconciliation, or strategy decisions.
 - **No secret leakage:** the Telegram bot token is redacted from thrown transport errors. The formatter includes only explicitly selected fields; free-form `message`/`reason` strings remain caller-supplied text, so consuming applications must sanitize and bound them before publishing. Never forward raw errors, stack traces, credentials, API keys, raw exchange payloads, or arbitrary event fields.
 - **Bounded input:** event fields are normalized, control characters are removed, and each dynamic field is length-limited before formatting.
-- **Response validation:** HTTP response shape, Telegram's `ok` flag, and the returned `message_id` are validated. Array-shaped or otherwise malformed success responses are failures, not false positives.
+- **Response validation:** HTTP response shape, Telegram's `ok` flag, and the returned `message_id` are validated. Non-2xx responses include Telegram's bounded, token-redacted `description` when available; malformed error bodies retain the HTTP status. Array-shaped or otherwise malformed success responses are failures, not false positives.
 - **Validation isolation:** configuration validation, message validation, and bounded credential-redacting error sanitization are pure functions in focused modules, independently testable without network access.
 - **Timeout:** requests use AbortSignal.timeout(); the default is 10 seconds. The timeout is configurable and validated.
 - **Serialized sends:** at most one Telegram HTTP request is in flight per subscriber. maxPending defaults to 1,000 and limits queued plus active deliveries. Overflow is reported and rejected/dropped according to the configured logger/event-bus error path; it does not create an unbounded local queue.
@@ -157,7 +157,7 @@ The subscriber's maxPending is an additional local admission limit. Consumers sh
 | --- | --- | --- |
 | No notifications appear | Both Telegram variables are unset, or the bot cannot post to the chat | Verify `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; confirm the bot has been started or added to the group with posting permission |
 | Setup fails immediately | Only one credential is configured, or a value is invalid | Configure both values together; keep credentials in the deployment secret manager |
-| Delivery failures are logged | Telegram rejected the request, the network failed, or the request timed out | Inspect the structured error and verify bot token, chat ID, network egress, and chat permissions; never paste the token into an issue or log |
+| Delivery failures are logged | Telegram rejected the request, the network failed, or the request timed out | Inspect the error's HTTP status and Telegram description (for example, `Forbidden: bot was blocked by the user` or `chat not found`); verify the specific credential or chat permission named by Telegram. Descriptions are bounded and bot-token-redacted; never paste the token into an issue or log |
 | Queue overflow is reported | Telegram is slower than the incoming event rate, or the process is under load | Inspect `getDiagnostics()`; tune `maxPending` only after measuring event rate and memory pressure |
 | Shutdown takes time | Accepted sends are being drained | Stop event publishers, await eventBus.flush(), then await notifications.close() |
 
