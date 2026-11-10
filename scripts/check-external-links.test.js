@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { fetchPinned, isPublicAddress, resolvePublicAddresses } from './external-link-network.js';
+import { isPublicAddress } from './external-link-address-policy.js';
+import { fetchPinned, resolvePublicAddresses } from './external-link-network.js';
 
 import {
   checkExternalLink,
