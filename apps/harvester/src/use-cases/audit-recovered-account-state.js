@@ -273,6 +273,11 @@ export function auditRecoveredAccountState({
       }
     }
 
+    for (const asset of thirdAssetCommissionCodes) {
+      if (!baselineByAsset.has(asset)) {
+        throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
+      }
+    }
     const marketAssetCodes = new Set(markets.flatMap((market) => [
       market.baseAsset.code,
       market.quoteAsset.code,
