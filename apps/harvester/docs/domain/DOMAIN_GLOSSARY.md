@@ -1,7 +1,9 @@
 # Harvester Conservative Domain Glossary
 
-**Phase:** D0 discovery specification  
-**Authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole rule source.  
+**Phase:** D0 discovery specification
+
+**Authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole rule source.
+
 **Status:** Vocabulary/reference only; this glossary does not define strategy behavior.
 
 ## Purpose and scope

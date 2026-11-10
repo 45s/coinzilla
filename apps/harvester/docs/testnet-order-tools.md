@@ -75,7 +75,6 @@ The command does not sell, transfer, or otherwise change asset balances. Canceli
 
 All files for these tools live under `apps/harvester/scripts/`; none are imported by `src/` or composed into the trading runtime. The shared request helper fixes the API host to Spot TESTNET and signs requests locally. Unit tests cover deterministic request signing; the default test suite does not make network calls or require credentials.
 
-
 ## List non-zero account balances (read-only)
 
 Run from the repository root:
@@ -100,7 +99,6 @@ identified and understood that inventory.
 The script is under `scripts/`, outside the trading runtime. Its filtering
 logic is a plain pure function with deterministic offline tests. The API call
 reuses the shared TESTNET request helper and remains fixed to the TESTNET host.
-
 
 ## Sell all free ZRO at market (destructive)
 
@@ -142,7 +140,6 @@ quantity validation and step-size rounding live in the pure
 `scripts/testnet-sell-utils.test.js`. It reuses the shared signed TESTNET
 request helper. No live trading host or production mode is configurable.
 
-
 ### Exchange metadata request behavior
 
 The ZRO sell preview reads `GET /api/v3/exchangeInfo` using the public
@@ -152,7 +149,6 @@ as `timestamp`, `recvWindow`, or `signature`. Account, open-order, and order
 submission endpoints continue to use signed requests. The shared helper keeps
 these two request types separate and tests that public query construction
 does not add authentication parameters.
-
 
 ## List recent order history (read-only)
 
@@ -206,7 +202,6 @@ normalization/sorting are plain pure functions in
 It reuses the existing signed TESTNET request helper and does not add
 dependencies or connect to the trading runtime.
 
-
 ## Diagnosing an unowned execution report
 
 When a user-data order event fails with the `OWNERSHIP_INTEGRITY` category, the event handler logs **"rejected an unowned or invalid order event"** and keeps trading readiness closed. Preserve the complete structured log entry, including:
@@ -217,7 +212,6 @@ When a user-data order event fails with the `OWNERSHIP_INTEGRITY` category, the 
 - the structured `errors` array, including native Error and cause details.
 
 Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Compare the captured identifiers with same-time order history and submission/acknowledgement Journal entries. A client-ID match with a different exchange order ID is not proof that the event is owned. Unknown broker order IDs must remain unowned and must not be adopted to restore readiness.
-
 
 ### Historical ownership investigation
 

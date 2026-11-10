@@ -4,7 +4,7 @@
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
 
-The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. Journal replay is not used to reconstruct trading state. There is no database, outbox, exactly-once delivery, or per-market-price capture.
+The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. The offline `projectHarvesterJournalRecovery()` and `restoreHarvesterJournalState()` helpers can validate and rehydrate a candidate state for controlled offline use, but runtime startup does not invoke them or resume trading from Journal data. Journal replay is not yet wired as runtime trading-state authority. There is no database, outbox, exactly-once delivery, or per-market-price capture.
 
 ## Configuration
 
@@ -75,7 +75,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `order.cancel_requested` | full owned order intent, broker order ID, executed quantity, current status, cancellation reason; durably flushed before the broker cancellation call |
 | `order.cancelled` | order facts, broker order ID, executed quantity, canceled status |
 | `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, current order status (including UNKNOWN), outcome, optional sanitized error |
-| `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, commission status |
+| `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, optional exact historical `quoteValue` (amount plus quote-asset ID/code) for third-asset commissions, commission status |
 | `execution.unowned_order` | client/broker order IDs, symbol, side, order status, reason |
 | `execution.invalid_fill` | order facts, reason, optional Fill identity facts, sanitized error |
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
@@ -91,6 +91,8 @@ The process event, structured DEBUG/TRACE session filenames, and logger context 
 A `strategy.decision` event is emitted only when the strategy produces at least one actionable order. NO_ACTION evaluations are not journaled. No event is emitted for every market-price update.
 
 The broker status `recovered` means the remote user-data subscription has returned; it does not mean Harvester has reconciled account state or reopened order placement.
+
+For `account.open_orders_captured`, `readiness: BLOCKED` with `UNOWNED_OPEN_ORDERS` is an ownership-attribution result, not a global trading-startup rejection. The owner-confirmed policy allows pre-existing external orders: Harvester records them, leaves them unowned, and never adopts, cancels, or modifies them. Global trading readiness is decided separately by durable account auditing and user-data/accounting safety checks. An actual unowned execution event triggers the fail-closed accounting safety halt; a transport reconnect alone does not clear that latch. See [issue #667](https://github.com/45s/coinzilla/issues/667#issuecomment-6717086777).
 
 A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no contradictory reconciliation flag is diagnostic-only and does not itself invalidate the application recovery generation. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status, including code `1006`, starts recovery; that abnormal close code does not identify the underlying network cause.
 
@@ -205,9 +207,14 @@ sequenceDiagram
         end
     end
 
-    Stop->>Stop: status=STOPPED
     Stop->>Broker: disconnect()
     Broker-->>Stop: disconnect result
+    alt All shutdown and audit stages confirmed
+        Stop->>Stop: status=STOPPED
+    else Any shutdown or audit blocker remains
+        Stop->>Stop: status=SHUTDOWN_INCOMPLETE
+        Stop->>Stop: log and attach shutdownDiagnostics
+    end
     Stop-->>Main: resolve or reject runtime.stop()
     Main->>Bus: publish harvester.stopped; flush accepted events
     opt Telegram notifications enabled
@@ -233,7 +240,7 @@ This identity recovery is important to shutdown: the initial `reconcileOwnedOrde
 
 ### Ordering and safety invariants
 
-- The handler marks the runtime stopped and not ready before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
+- The handler marks shutdown in progress (`stopped=true`, `ready=false`, `status=STOPPING`) before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
 - For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
 - User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final WebSocket API/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
 - Shutdown never cancels SELL orders. An owned SELL in OPEN or PARTIALLY_FILLED state is explicitly excluded from the unresolved-order check and remains resting at the broker. Other non-terminal/unknown owned-order states are unresolved.
@@ -242,7 +249,7 @@ This identity recovery is important to shutdown: the initial `reconcileOwnedOrde
 
 ### Failure and process-lock behavior
 
-For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed.
+For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed. When shutdown is incomplete, the runtime status is `SHUTDOWN_INCOMPLETE`, never `STOPPED`. The thrown `AggregateError` exposes a `shutdownDiagnostics` object and the structured error log includes the same safe summary: the status before shutdown, all CLOSING audit reasons, stage-specific reconciliation failures with category/stage/retryability and error messages, cleanup failure names/messages, accounting/reconciliation/safety-halt flags, retryable recovery category/stage/generation, current and last-acknowledged recovery generations, and exact unresolved owned-order symbol, side, client/broker IDs, status, executed quantity and original quantity. Deliberately preserved OPEN/PARTIALLY_FILLED SELLs are excluded from the unresolved-order list. Broker-disconnect and other post-snapshot cleanup failures are reported as cleanup failures, not retroactively added to the already-published CLOSING audit reasons. The diagnostics contain normalized identity/accounting facts rather than raw broker payloads. A successful shutdown sets `STOPPED` only after broker disconnect and all cleanup checks succeed.
 
 The process owns two Harvester locks: a broker-wide host lock and an
 application process lock. Both live under
@@ -282,7 +289,7 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 ## Security
 
-Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each actual commission as an exact decimal amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. This preserves the fee facts needed for a future deterministic recovery projection, but does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
+Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each commission's exact amount and asset ID/code; third-asset commissions also persist their exact historical quote valuation as a separate quote-asset amount and identity. DTO mapping rejects a third-asset commission without that valuation and rejects a valuation in an asset other than the market quote asset. The recovery projector validates and retains the same fields, and offline restoration rebuilds the canonical Commission with both the original fee asset/amount and historical quoteValue. It never derives a historical value from a current price. Legacy journal fills that contain a third-asset commission but no quoteValue remain unrestorable and fail closed. This DTO/projection/restore path does not wire automatic process-restart recovery or reconcile the fee-asset wallet balance; those remain separate F-039/#654 work. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
 
 ## Safety-pause state is process-local
 
@@ -292,7 +299,7 @@ The per-market strategy pause/recovery-intent sets are not guaranteed to survive
 
 ## Applied-fill Journal durability boundary
 
-The Harvester engine publishes `execution.fill_applied` after applying the canonical fill to in-memory accounting. The current applied-fill path does not invoke the durable Journal flush barrier. Publication is synchronous admission only; EventBus subscriber delivery is asynchronous. Journal append reports `durable: false`; explicit `flush()` waits for pending EventBus deliveries and Journal writes, then performs filesystem sync/fsync.
+The Harvester engine applies the canonical fill to in-memory accounting and then calls the best-effort `publishLifecycleEvent()` for `execution.fill_applied`. `processExecutionFillTransition()` ignores the publication result and does not invoke the durable Journal flush barrier. Publication is synchronous admission only; EventBus subscriber delivery is asynchronous. Journal append reports `durable: false`; explicit `flush()` waits for pending EventBus deliveries and Journal writes, then performs filesystem sync/fsync. A mapping/publication failure or missing publisher can therefore leave an applied fill with no corresponding Journal event while the engine returns success.
 
 The engine's durable flush barrier protects order submission/cancellation intent before the exchange side effect. It does not immediately protect the post-fill accounting event. Graceful Journal close drains and syncs accepted events; unexpected process termination or power loss has no equivalent guarantee.
 
@@ -311,10 +318,10 @@ Current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not cal
 Current source behavior:
 
 - `prepareOptionalJournal()` starts the Journal writer and exposes readiness, flush and close. It does not read or replay prior sessions.
-- The Journal reader scans direct session files in its configured directory; it does not recursively discover nested process-session directories. Current Harvester composition points the writer at a new `logs/sessions/<timestamp>-<runtime-session-id>/` directory. A restart reader must explicitly enumerate prior process-session directories and legacy flat root-level sessions; calling `Journal.read()` on the new process directory is not prior-session recovery. See the [2026-11-10 restart-recovery audit](audits/reports/2026-11-10_18-44-49_restart-recovery-audit.md) and #654.
+- The Journal reader scans direct session files in its configured directory; it does not recursively discover nested process-session directories. Current Harvester composition points the writer at a new `logs/sessions/<timestamp>-<runtime-session-id>/` directory. A restart reader must explicitly enumerate prior process-session directories and legacy flat root-level sessions; calling `Journal.read()` on the new process directory is not prior-session recovery. Calling it on the `logs/sessions` parent is not sufficient either: the flat reader skips directory entries and can return successful empty history while ignoring every child session directory. Same-second session filenames are also ordered by random session-ID suffix, not actual millisecond start time; see F-040. See the [2026-11-10 restart-recovery audit](audits/reports/2026-11-10_18-44-49_restart-recovery-audit.md) and #654.
 - `src/index.js` passes an event publisher into `startHarvester()`; it does not pass restored Portfolio, RecoveryLedger, OrderRegistry or fill projection state.
 - `start-harvester.js` creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state and explicitly disables Journal replay.
-- PREFLIGHT captures and durably records account balances and account-wide open orders. An unmatched order is classified as unowned and is not adopted. The current startup test explicitly permits runtime startup with an unowned open order; the `BLOCKED` audit classification is not itself a trading-readiness gate.
+- PREFLIGHT captures and durably records account balances and account-wide open orders. An unmatched order is classified as unowned and is not adopted. The current startup test explicitly permits runtime startup with an unowned open order; the `BLOCKED` audit classification is not itself a trading-readiness gate. The same-process recovery handler also ignores the BLOCKED classification before acknowledging broker recovery, so this is not limited to first startup.
 
 The engine's active-order and commitment guards read only the in-memory `OrderRegistry`; they do not include unowned account-wide open orders. With an empty registry, the Conservative policy can emit an `INITIAL_BUY`, and if free quote remains the order allocator can permit another same-symbol order while the prior exchange order is still open. The submission guard checks pause/readiness, price freshness and post-only crossing, not the unowned order. This is strongly indicated by source, not reproduced: the existing startup test does not emit a market-price tick. See F-031 in [AUDIT.md](audits/reports/AUDIT.md) and #654.
 
@@ -339,6 +346,20 @@ The host lock is acquired first, then the application lock. If application-lock 
 Each lock records PID, hostname, start time and a random ownership token. A stale lock is automatically reclaimed only when its recorded hostname matches the current host, its PID is confirmed absent, and an immediate reread confirms the PID, hostname and ownership token are unchanged. A different-host lock, live or ambiguous PID, unreadable metadata, permission-denied process inspection or changed ownership token fails closed. The process check treats permission-denied inspection as potentially alive; it does not guess that the owner is dead. Verify the recorded owner before any manual removal.
 
 Both Harvester process locks are local to one OS user's home directory; they do not coordinate different machines or different OS users. The Journal package's hidden writer lock remains scoped to the active session directory and protects that directory's JSONL writer.
+
+## Additional restart-recovery limitations — 2026-11-10
+
+- **Third-asset commission valuation (F-039):** PR #990 preserves exact commission amount/asset identity and historical quoteValue through the applied-fill DTO, journal projection and offline restoration. Legacy records without quoteValue fail closed; no current-price reconstruction is permitted. Wallet reconciliation for unconfigured commission assets remains outstanding. See [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+- **Same-second session chronology:** process start times have millisecond precision, but session paths and Journal filenames retain only seconds. The reader breaks same-second ties by random session ID, not chronological start time. See F-040 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+- **Recovery-cycle outcome durability:** the engine resets in-memory recovery basis before best-effort publication of `recovery.cycle_completed`. The projection does not reject an unmatched fully filled SELL at end-of-input, so a missing completion event can restore stale cost basis without a wallet-balance mismatch. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+
+**Record completeness:** current Journal events carry random IDs and timestamps but no monotonic sequence or integrity chain. The reader can detect malformed/truncated lines and duplicate IDs, but a whole valid middle line can disappear without a structural error. Do not treat successful JSONL parsing as proof of a complete event history. See F-042 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md).
+
+**Safety-event coverage:** the recovery projector currently skips several recorded Harvester events, including unowned-order, invalid-fill and accounting-failure evidence. Do not treat a successful projection as proof that all recorded safety failures were restored. See F-043 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md).
+
+**Reconnect snapshot compatibility:** same-process recovery publishes account and open-order snapshots with phase `RECOVERY`, but the retained process-restart projector rejects that phase. Any normal reconnect can therefore make the session unprojectable. See F-044 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md).
+
+These are confirmed defects/limitations in the retained offline recovery path. Current startup does not invoke replay. Keep unattended restarts disabled until the record contract and ordering are corrected and tested.
 
 ## Same-process recovery failure classification
 
@@ -376,4 +397,3 @@ broker generation.
 
 This is same-process recovery only. It does not enable Journal replay or
 process-restart recovery. TESTNET acceptance remains PAUSED / UNVERIFIED.
-

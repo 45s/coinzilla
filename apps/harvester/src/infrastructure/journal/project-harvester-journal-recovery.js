@@ -119,6 +119,22 @@ function requireFill({ data }) {
     amount: requireDecimal({ value: commission?.amount, field: "commissions[" + index + "].amount" }),
     assetId: requireString({ value: commission?.assetId, field: "commissions[" + index + "].assetId" }),
     asset: requireString({ value: commission?.asset, field: "commissions[" + index + "].asset" }),
+    ...(commission?.quoteValue === undefined ? {} : {
+      quoteValue: {
+        amount: requireDecimal({
+          value: commission.quoteValue?.amount,
+          field: "commissions[" + index + "].quoteValue.amount",
+        }),
+        assetId: requireString({
+          value: commission.quoteValue?.assetId,
+          field: "commissions[" + index + "].quoteValue.assetId",
+        }),
+        asset: requireString({
+          value: commission.quoteValue?.asset,
+          field: "commissions[" + index + "].quoteValue.asset",
+        }),
+      },
+    }),
   }))
   if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
     throw new TypeError("fill duplicate marker must be a boolean")

@@ -64,12 +64,11 @@ This section is authoritative for next work and orders the broker package by ris
 6. **Additional exchanges/transports:** do not add another venue or generic transport abstraction until a real consumer and protocol acceptance matrix exist.
 7. **Performance work:** add benchmarks only when production evidence identifies throughput, memory or latency limits; preserve bounded queues and deterministic cleanup first.
 
-
 > **Agent entry point:** When asked to implement, improve, audit, or maintain `/packages/brokers`, read this file first and follow it as the package-level source of truth. Start with **Current status and next action**, then complete the mandatory pre-work checks before changing code. Do not rely on chat history or assume earlier findings are still current.
 
-**Package:** `@coinzilla/brokers`  
-**Repository:** `45s/coinzilla`  
-**Shared integration branch:** `develop` (use short-lived broker task branches; see the repository-root `AI_AGENT_WORKFLOW.md`)  
+**Package:** `@coinzilla/brokers`
+**Repository:** `45s/coinzilla`
+**Shared integration branch:** `develop` (use short-lived broker task branches; see the repository-root `AI_AGENT_WORKFLOW.md`)
 **Scope:** broker package, broker tests, required root dependency metadata/lockfile changes, and broker documentation.
 
 This roadmap is intentionally detailed. It contains the architecture, verified decisions, compatibility contract, phased implementation plan, test requirements, branch synchronization policy, and agent working rules for the broker package. Update it whenever implementation evidence changes a decision or phase status.
@@ -135,7 +134,6 @@ The repository owner approved the compatibility-preserving per-subscriber acknow
 - [x] Propagate the broker token through Harvester and require it to match the locally acknowledged recovery generation and active subscription ID before readiness opens. The legacy no-argument boolean method remains callable for compatibility; it cannot provide stale-work fencing because it carries no generation token.
 
 **DDD/TDD execution:** the Brokers Application user-data session owns the subscription-handle use case and result contract; the Domain recovery policy remains authoritative for the all-active-subscriber completion invariant; Infrastructure/ Binance adapters remain unchanged. Add deterministic application-session tests first (RED), implement the smallest additive application change (GREEN), then update README and consumer tests. Preserve the existing Broker API for current consumers. No TESTNET/live exchange action is required.
-
 
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 merged into `migration/binance-native-ws`.
@@ -350,7 +348,6 @@ The active public streaming methods are `subscribeForPrices` (aggregate trades) 
 - Preserve `onEvent({ event })`, optional status notifications, and explicit recovery acknowledgement semantics.
 - Treat state-changing RPC timeouts/disconnects as unknown outcomes. Never blindly replay order placement or cancellation.
 - Keep all default tests offline; TESTNET integration remains opt-in and TESTNET-only.
-
 
 ## 4. Architecture decisions and non-negotiable protocol rules
 
@@ -770,7 +767,6 @@ Re-check these official sources during implementation because Binance protocol d
 
 The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the sources reviewed and the findings at that audit date. Official docs remain authoritative if they change.
 
-
 ## 12. Cross-domain contract adoption
 
 ### Exact account balances (request #310)
@@ -805,7 +801,6 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
 - Canonical fill API implementation is present on `develop`; consumer migration remains separately owned by the consuming application domains.
 
-
 ## Accepted cross-domain capability — Harvester book ticker (#506)
 
 - [x] Expose Binance `bookTicker` through the additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method while preserving the aggregate-trade `subscribeForPrices` contract. Broker API, immutable exact-string adapter, deterministic adapter/subscription tests, and README documentation merged in PRs #507 and #510; Harvester's fresh best-bid/best-ask POST-ONLY crossing validation and shutdown coverage merged in PRs #508 and #509.
@@ -828,7 +823,6 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 **Important distinction:** WebSocket protocol/lifecycle hardening and DDD architecture migration are separate tracks. Preserve completed reliability work and its coverage. The goal is the correct Domain → Application/Ports → Infrastructure ownership, not adding more WebSocket layers.
 
-
 The DDD modernization is an internal refactor of a working package. **Do not rebuild or replace the working broker.** Preserve public contracts, runtime behavior, exchange integrations, result/event semantics, exact decimal handling, and consumer compatibility while improving internal boundaries.
 
 - Work only in `packages/brokers/**` unless a separately authorized repository-level metadata change or cross-domain request requires otherwise.
@@ -839,8 +833,6 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - After merge, verify the merge, update task status here, delete the source branch when no longer needed, and start the next incomplete DDD slice from the latest `develop`. Repeat until the refactor scope is complete.
 - A task is not complete merely because code or a PR exists. Every slice must be well tested, documented, CI-verified, and merged. A green CI badge does not excuse a behavior or compatibility regression.
 - If a genuine blocker prevents safe merge, state the exact blocker and evidence; fix it where possible and continue with independent safe tasks. Never claim tests were run when they were not.
-
-
 
 ### Phase 9 implementation slice 10 — executable dependency-direction enforcement (PR #704)
 
@@ -857,7 +849,6 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 
 **Closeout:** PR #704 merged into `develop` at `216f7c8397d83837c4e6d3202778469c2a4e85bf`. Its final head `f611175838f99cf1861ab7a0a9b0e9fee849723c` passed Brokers unit tests (411/411), Brokers coverage (98.73% lines / 93.62% branches / 94.94% functions), workspace tests and coverage, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. TESTNET was intentionally skipped. GitHub automatically removed the merged task branch (verified absent from branch search). Phase 9 is complete; Phase 8 remains pending its manual read-only TESTNET run and controlled soak validation.
 
-
 ## 2026-11-08 — read-only TESTNET handshake failure
 
 - Workflow: [Unit Tests run #42483880274](https://github.com/45s/coinzilla/actions/runs/42483880274), manual dispatch on `develop`.
@@ -868,7 +859,6 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - Safety: `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0` and `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`; order placement/cancellation and externally generated user-data event tests remained skipped. Do not enable either flag as a diagnostic shortcut.
 - Interpretation: this run does not establish that credentials or account permissions are invalid. The observable failure is at WebSocket handshake time, before read-only broker operations. The missing `.env.development` message is informational in CI; the workflow injects credentials through GitHub Actions secrets.
 - Next: inspect safe handshake diagnostics (HTTP upgrade status when available, close code/reason, and underlying error cause) without logging credentials or signing material; verify TESTNET endpoint reachability and Node.js 24/Undici behavior from the runner; add a deterministic transport regression for the observed failure shape if reproducible. Re-run only the read-only workflow after a focused fix. Keep reconciliation fail-closed and order mutation disabled. A successful read-only run is still required before controlled live recovery/soak.
-
 
 ## 2026-11-08 — native WebSocket handshake diagnostics (PR #721)
 
@@ -882,7 +872,6 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - PR #721: [diagnose native TESTNET WebSocket handshake failures](https://github.com/45s/coinzilla/pull/721), merged to `develop` as `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. Exact head `ad48ae4bb71d81d0318a031f101f582a67cca083` passed JavaScript Syntax/actionlint, Dependency Audit, Utils Unit Tests, Harvester Targeted Tests, all nine workspace package-test jobs, and all package plus workspace coverage jobs. Brokers: 414/414 tests passed; coverage 98.72% statements, 93.39% branches, 94.98% functions. The read-only TESTNET integration job was skipped because the PR event is not the manual workflow dispatch.
 - Safety remains unchanged: `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0`, `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`, and no changes to order safety, reconciliation, or recovery acknowledgement gates. Phase 8 remains incomplete pending successful read-only account/recovery validation and a controlled live recovery/soak.
 
-
 ## 2026-11-08 — established-socket Undici diagnostic correlation characterization
 
 Cross-domain request [#680](https://github.com/45s/coinzilla/issues/680) asks whether the native Node.js WebSocket runtime exposes an underlying socket error that can be safely attributed to the affected WebSocket client.
@@ -894,8 +883,6 @@ Cross-domain request [#680](https://github.com/45s/coinzilla/issues/680) asks wh
 - This is characterization only: no global diagnostics subscriber, socket monkey-patch, timing heuristic, production transport behavior, public broker contract, or dependency was added.
 - **Verified and merged:** PR #725 merged into `develop` as `bf9e51e298535cf14f113343a5216f4b8a1ec80f`; exact tested head `b50d453d8846e82a2918b5d4752dfc8d81412ceb`. Brokers tests passed 415/415, Brokers coverage passed, and all six required offline CI workflows passed. The corrected test confirms the silent `socket_error` channel on the reproduced post-connect 1006 reset.
 - **Disposition:** established-socket diagnostic characterization is complete as a documented Node/Undici limitation for this failure shape. No safe per-client error correlation is exposed by the tested runtime. Do not add timing-based attribution or a global monkey-patch. Cross-domain issue #680 may be closed as investigated/documented; revisit only if a supported runtime exposes a reliable per-WebSocket socket-error correlation.
-
-
 
 ## 2026-11-08 — multi-subscriber terminal recovery notification count
 

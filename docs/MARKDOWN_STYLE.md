@@ -68,6 +68,22 @@ This standard applies to maintained repository-authored `.md` and `.mdx` files. 
 - Use Mermaid or another established text-based diagram format for diagrams where it improves understanding, and keep diagrams synchronized with the described behavior.
 - Provide a text explanation or equivalent where a diagram alone would hide important decisions or constraints.
 
+## Authoring workflow
+
+Use this workflow for every new or edited maintained Markdown/MDX document:
+
+1. **Read this standard before writing.** Also read [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) and the owning domain's instructions.
+2. **Write plain Markdown.** Prefer paragraphs and lists over manual visual spacing. Do not add trailing spaces to create a line break; use a paragraph break or a separate list item instead.
+3. **Keep source formatting clean.** Every line must end at its final visible character. Do not leave spaces or tabs after prose, links, list markers, table cells, headings or code-fence delimiters. Avoid repeated blank lines.
+4. **Structure headings deliberately.** Use one H1 for the document title, then move down one level at a time. Do not use headings merely to make text look larger.
+5. **Separate blocks.** Put exactly one blank line between paragraphs and surrounding headings, lists, tables, blockquotes and fenced code blocks. Keep nested list indentation aligned with the parent item's text.
+6. **Validate before pushing.** Run the same changed-file checker CI uses, against the PR target branch:
+   `node scripts/check-markdown-style.js <target-base-sha>`
+   The argument must be the exact 40-character base commit SHA (for example, the current `develop` SHA for a PR targeting `develop`). Also run `node --test scripts/check-markdown-style.test.js` when changing the checker or its rules. Do not replace the base SHA with a guessed branch name.
+7. **Inspect the diff.** Review every changed Markdown line for trailing whitespace, accidental blank lines, broken links, malformed tables and unintended content changes. A local pass does not replace the exact-head GitHub Actions result.
+
+Common CI failure to avoid: a single invisible space at the end of a changed line is enough to fail the required `Check JavaScript syntax` job, even when no JavaScript source changed. That workflow also validates changed Markdown/MDX.
+
 ## Review checklist
 
 Before merging a meaningful Markdown change, verify:
