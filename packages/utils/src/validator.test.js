@@ -61,6 +61,26 @@ describe('Validator', () => {
     )
   })
 
+  it('rejects non-boolean isSoft values when the option is explicitly supplied', () => {
+    const invalidModes = ['false', 'true', 0, 1, null, undefined]
+
+    for (const isSoft of invalidModes) {
+      assert.throws(
+        () => Validator.validate({ isSoft, items: [['not-a-number', [VR.num]]] }),
+        { name: 'TypeError' },
+        `Validator must reject the explicitly supplied ${String(isSoft)} isSoft value instead of interpreting it by truthiness`,
+      )
+    }
+  })
+
+  it('defaults to soft mode when isSoft is omitted', () => {
+    assert.deepEqual(
+      Validator.validate({ items: [['not-a-number', [VR.num]]] }),
+      [{ value: 'not-a-number', msgs: [EM.notNumber()] }],
+      'Omitting isSoft must preserve the documented default soft mode and return validation errors',
+    )
+  })
+
   it('rejects non-finite values with the number rule', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.num]]] }), [
