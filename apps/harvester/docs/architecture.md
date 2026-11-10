@@ -433,7 +433,7 @@ The Journal is not trading-state authority and ordinary event delivery remains a
 - EventBus subscriber delivery and ordinary Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted; only the explicit barriers above establish durability.
 - Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
 - Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
-- On normal shutdown, stop market-price/book intake first and prevent new strategy decisions. Keep user-data intake active while the existing engine cancels only acknowledged, strategy-owned BUY orders and reconciles cancellation-racing fills. Preserve all SELL orders. Drain accepted user-data events, reconcile owned orders, make a final BUY-cancellation pass for orders that became acknowledged during reconciliation, then stop user-data intake and drain again before the CLOSING audit and resource cleanup. Known open SELL orders are intentional and do not make CLOSING incomplete; unresolved BUYs or unknown order states do. For trading-enabled runs, unresolved cancellation, owned-order reconciliation, or user-data/accounting state fails shutdown and retains the trading-process lock. Other incomplete CLOSING audits remain recorded. A failed Journal close must not skip broker/resource cleanup.
+- On normal shutdown, stop market-price/book intake first and prevent new strategy decisions. Keep user-data intake active while the existing engine cancels only acknowledged, strategy-owned BUY orders and reconciles cancellation-racing fills. Preserve all SELL orders. Drain accepted user-data events, perform final owned-order reconciliation as verification only (without another BUY-cancellation pass), then stop user-data intake and drain again before the CLOSING audit and resource cleanup. Known open SELL orders are intentional and do not make CLOSING incomplete; unresolved BUYs or unknown order states do. For trading-enabled runs, unresolved cancellation, owned-order reconciliation, or user-data/accounting state fails shutdown and retains the trading-process lock. Other incomplete CLOSING audits remain recorded. A failed Journal close must not skip broker/resource cleanup.
 - Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
 
 Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. Broker-connected startup intentionally fails closed when Journal readiness or the durable PREFLIGHT audit is unavailable; order and cancellation intents likewise require a durable pre-write barrier.
@@ -652,6 +652,13 @@ order/fill reconciliation, queued-event drain, account/open-order snapshots,
 and both durable audit flushes. The process-lifetime accounting latch is never
 cleared by a transport reconnect or by reclassifying an error.
 
+```mermaid
+flowchart TD
+    A[Owned user-data event] --> B[Conservative engine transition]
+    B --> C{Typed failure}
+    C -->|Ownership or accounting integrity| D[accountingFailed = true]
+    C -->|Order, broker request/response, or durability retryable| E[requiresReconciliation = true]
+
 A failure from an asynchronous recovery stage may update application failure
 state only while the attempt's captured recovery generation is still current.
 If a disconnect supersedes the attempt while a REST read or durable audit is
@@ -661,14 +668,7 @@ must not set the process-lifetime accounting latch, create a retry marker for
 the current generation, publish subsequent recovery audits, or acknowledge
 the broker. The current generation remains blocked and must complete its own
 single-flight reconciliation and durable audit barriers before readiness can
-advance.
 
-```mermaid
-flowchart TD
-    A[Owned user-data event] --> B[Conservative engine transition]
-    B --> C{Typed failure}
-    C -->|Ownership or accounting integrity| D[accountingFailed = true]
-    C -->|Order, broker request/response, or durability retryable| E[requiresReconciliation = true]
     D --> F[Readiness closed; no broker acknowledgement]
     E --> G[Generation-scoped retryable failure marker]
     G --> H[Abort current recovery before acknowledgement]
