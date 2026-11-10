@@ -641,8 +641,8 @@ test("rejects a commission whose asset code contradicts a known market asset ID"
   assert.match(restored.errors[0].message, /asset code contradicts the market base asset identity/)
 })
 
-test("rejects a non-positive historical quote valuation during projection", () => {
-  const result = projectHarvesterJournalRecovery({
+test("fails closed when a positive third-asset commission has a zero historical quote valuation", () => {
+  const projection = projectHarvesterJournalRecovery({
     records: [
       submissionRequested(),
       submitted(),
@@ -660,9 +660,15 @@ test("rejects a non-positive historical quote valuation during projection", () =
       }),
     ],
   })
+  assert.equal(projection.ok, true)
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /must be positive/)
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors[0].message, /must be greater than zero/)
 })
 
 test("rejects a third-asset commission valued in an asset other than the market quote asset", () => {
