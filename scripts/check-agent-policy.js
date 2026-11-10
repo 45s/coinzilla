@@ -633,7 +633,7 @@ export function findJavaScriptFiles(root) {
  */
 export function findDirectConsoleUsages(root) {
   const gaps = [];
-  const expression = /\bconsole\s*(?:\?\.|\.)\s*[A-Za-z_$][\w$]*|\bconsole\s*\[[^\]]*\]/g;
+  const expression = /\bconsole\b/g;
 
   for (const path of findJavaScriptFiles(root)) {
     if (approvedConsoleFiles.has(path)) continue;
@@ -642,7 +642,7 @@ export function findDirectConsoleUsages(root) {
     for (const match of code.matchAll(expression)) {
       const line = code.slice(0, match.index).split('\n').length;
       gaps.push(
-        path + ':' + line + ': direct console access is not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+        path + ':' + line + ': direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
       );
     }
   }
