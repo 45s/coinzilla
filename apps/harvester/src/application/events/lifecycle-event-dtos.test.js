@@ -907,7 +907,7 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
     originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
     executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    status: "NEW",
+    status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt,
@@ -961,18 +961,20 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
   )
 
   for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
-    const result = mapBrokerExecutionReportData({
-      evidence: {
-        schemaVersion: 1,
-        source: "binance.spot.userData.executionReport",
-        [field]: -0,
-      },
-    })
-    assert.equal(
-      result.ok,
-      false,
-      `Broker execution-report ${field} must reject negative zero before publication.`,
-    )
+    for (const value of invalidTransactionTimes) {
+      const result = mapBrokerExecutionReportData({
+        evidence: {
+          schemaVersion: 1,
+          source: "binance.spot.userData.executionReport",
+          [field]: value,
+        },
+      })
+      assert.equal(
+        result.ok,
+        false,
+        `Broker execution-report ${field} must reject ${String(value)} before publication.`,
+      )
+    }
   }
 
   assert.equal(
@@ -991,16 +993,26 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     false,
     "Account snapshot sourceTime must reject negative timestamps.",
   )
-  assert.equal(
-    mapAccountOpenOrdersCapturedData({
-      phase: "OPENING",
-      observedAt: -0,
-      orders: [],
-      readiness: "READY",
-    }).ok,
-    false,
-    "Account open-orders observedAt must reject negative zero.",
-  )
+  for (const invalidTimestamp of invalidTransactionTimes) {
+    assert.equal(
+      mapAccountSnapshotCapturedData({
+        phase: "OPENING",
+        snapshot: { sourceTime: invalidTimestamp, balances: [] },
+      }).ok,
+      false,
+      `Account snapshot sourceTime must reject ${String(invalidTimestamp)}.`,
+    )
+    assert.equal(
+      mapAccountOpenOrdersCapturedData({
+        phase: "OPENING",
+        observedAt: invalidTimestamp,
+        orders: [],
+        readiness: "READY",
+      }).ok,
+      false,
+      `Account open-orders observedAt must reject ${String(invalidTimestamp)}.`,
+    )
+  }
 })
 
 test("preserves valid zero timestamps and omits negative-zero optional diagnostics", () => {
@@ -1016,7 +1028,7 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
     limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
     originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
     executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    status: "NEW",
+    status: "OPEN",
     createdAt: 0,
     acknowledgedAt: 0,
     updatedAt: 0,
