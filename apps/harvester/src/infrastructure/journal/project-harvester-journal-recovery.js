@@ -253,7 +253,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.ACCOUNT_SNAPSHOT) {
-        if (!["PREFLIGHT", "OPENING", "CLOSING"].includes(data.phase)) throw new TypeError("Account snapshot phase is invalid")
+        if (!["PREFLIGHT", "OPENING", "CLOSING", "COMMISSION_BASELINE"].includes(data.phase)) {
+          throw new TypeError("Account snapshot phase is invalid")
+        }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
         }
