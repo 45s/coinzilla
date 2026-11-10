@@ -634,7 +634,7 @@ test("rejects a non-positive historical quote valuation during projection", () =
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /must be greater than zero/)
+  assert.match(result.errors[0].message, /must be positive/)
 })
 
 test("rejects a third-asset commission valued in an asset other than the market quote asset", () => {
