@@ -52,6 +52,8 @@ The Portfolio and RecoveryLedger regressions now prove that a reused Fill ID wit
 
 ### Medium — expected arithmetic must remain independent
 
+The recovery SELL planner tests still calculated fee-reserved base debits and the next-step boundary with production `addDecimal`, `multiplyDecimal`, and `compareDecimal`. The SELL accounting integration fixtures also derived canonical `quoteQuantity`, quote commission, and one-tick-lower price using production decimal helpers. These independent broker facts and expected arithmetic now use exact literals in `recovery-sell-plan.test.js` and `recovery-sell-plan-accounting.test.js`. No production code changes. Exact PR-head verification is pending.
+
 The Conservative residual-fill fixture and MAX_NOTIONAL assertion previously reused production `multiplyDecimal` for both setup and expected values. [PR #937](https://github.com/45s/coinzilla/pull/937) replaces those coupled expectations with independent exact values (98 × 0.11 = 10.78; 98.95 × 0.11 = 10.8845; 0.1 × 0.6 = 0.06). The exact updated PR head passed 874/874 Harvester tests and required CI; no production behavior changed.
 
 ### Medium — capital-limit boundary assertions
