@@ -36,24 +36,77 @@ test("deduplicates a fill by canonical market-scoped identity", () => {
   assert.equal(duplicate.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "1")
 })
 
-test("keeps positions isolated by canonical market identity", () => {
-  const otherBase = new Asset({ id: "asset:SOL", code: "SOL" })
-  const otherMarket = new Market({ venue: "binance", symbol: "SOLUSDT", baseAsset: otherBase, quoteAsset })
-  const otherFill = new Fill({
-    tradeId: "trade-1",
-    brokerOrderId: "order-2",
-    market: otherMarket,
+test("keeps exact fill accounting isolated when different markets reuse the same trade ID", () => {
+  const ethFill = makeFill({ tradeId: "shared-trade-id", quantity: "1" })
+  const solBaseAsset = new Asset({ id: "asset:SOL", code: "SOL" })
+  const solMarket = new Market({
+    venue: "binance",
+    symbol: "SOLUSDT",
+    baseAsset: solBaseAsset,
+    quoteAsset,
+  })
+  const solFill = new Fill({
+    tradeId: "shared-trade-id",
+    brokerOrderId: "sol-order",
+    market: solMarket,
     side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "2", asset: otherBase }),
+    quantity: new Quantity({ amount: "2", asset: solBaseAsset }),
     quoteQuantity: new Money({ amount: "200", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
   const portfolio = new Portfolio()
-    .applyFill({ fill: makeFill() }).portfolio
-    .applyFill({ fill: otherFill }).portfolio
-  assert.equal(portfolio.positions.length, 2)
+    .applyFill({ fill: ethFill }).portfolio
+    .applyFill({ fill: solFill }).portfolio
+  const ethPosition = portfolio.getPosition({ symbol: "ETHUSDT" })
+  const solPosition = portfolio.getPosition({ symbol: "SOLUSDT" })
+
+  assert.equal(
+    portfolio.positions.length,
+    2,
+    "The same broker trade ID in two markets must create two independent market Positions.",
+  )
+  assert.notEqual(
+    ethFill.id,
+    solFill.id,
+    "Canonical fill identity must include market identity so equal trade IDs from ETHUSDT and SOLUSDT cannot collide.",
+  )
+  assert.equal(
+    ethPosition.baseQuantity.amount,
+    "1",
+    "The ETHUSDT Position must contain only the one ETH executed by its own fill.",
+  )
+  assert.equal(
+    ethPosition.spent.amount,
+    "100",
+    "The ETHUSDT recovery basis must include only its 100 USDT BUY execution.",
+  )
+  assert.equal(
+    ethPosition.quoteNetCashFlow.amount,
+    "-100",
+    "The ETHUSDT quote cash flow must exclude the independent SOLUSDT execution.",
+  )
+  assert.equal(
+    solPosition.baseQuantity.amount,
+    "2",
+    "The SOLUSDT Position must contain only the two SOL executed by its own fill.",
+  )
+  assert.equal(
+    solPosition.spent.amount,
+    "200",
+    "The SOLUSDT recovery basis must include only its 200 USDT BUY execution.",
+  )
+  assert.equal(
+    solPosition.quoteNetCashFlow.amount,
+    "-200",
+    "The SOLUSDT quote cash flow must exclude the independent ETHUSDT execution.",
+  )
+  assert.deepEqual(
+    portfolio.appliedFillIds,
+    [ethFill.id, solFill.id],
+    "Portfolio must retain both market-scoped execution identities in the order they were applied.",
+  )
 })
 
 test("allocates free inventory through the matching shared Position only", () => {

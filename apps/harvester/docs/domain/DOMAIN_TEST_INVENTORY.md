@@ -52,7 +52,11 @@ Some scenario fixtures calculate expected fill quote quantities by calling the s
 
 ### Medium — capital-limit boundaries need stronger decision assertions
 
-The existing Conservative strategy suite tests a BUY blocked when outstanding recovery plus the next BUY exceeds the configured investment. It does not yet establish both exact-cap equality and the immediately-over-cap outcome as a decision matrix, including the resulting SELL/BUY intents.
+The exact-cap decision matrix is added in open [PR #922](https://github.com/45s/coinzilla/pull/922): exact equality at 19.900 quote units (10.00 outstanding recovery + 9.90 next BUY notional) permits both the recovery SELL and next BUY; a limit of 19.899 blocks only the BUY; a materially lower limit of 15.00 also blocks only the BUY. Exact PR-head CI passed 872/872 Harvester tests and all required checks. PR #922 remains open and unmerged, so the matrix is pending integration into `develop`.
+
+### Medium — Portfolio multi-market isolation assertions are incomplete
+
+The existing Portfolio test used the same trade ID for ETHUSDT and SOLUSDT but asserted only that two Positions existed. That did not prove each Position retained its own executed quantity, quote cost basis, quote cash flow, or canonical market-scoped fill identity. The current regression now asserts all of those exact values and confirms that equal trade IDs in different markets produce distinct Fill IDs. Existing application-level tests already cover multi-fill Portfolio/RecoveryLedger accounting and atomicity; this change deliberately does not duplicate those scenarios. Added in the current focused PR; exact-head CI verification is pending.
 
 ### Medium — lifecycle tests need complete-state assertions
 
@@ -64,8 +68,8 @@ Aggressive is deliberately blocked by unresolved product rules. Its current NO_A
 
 ## Execution order
 
-1. **Strategy decisions:** close the blocked-recovery-SELL decision gap; then add exact investment-cap boundary cases and review active-order/market isolation matrices.
-2. **Portfolio and accounting:** strengthen independent expected values, commission-identity conflicts and multi-fill sequence invariants.
+1. **Strategy decisions:** the blocked-recovery-SELL gap is fixed in merged PR #917; the exact investment-cap boundary matrix is green in open PR #922 and awaits merge. Next review active-order isolation matrices.
+2. **Portfolio and accounting:** strengthen exact multi-market isolation in the current PR; then review independent expected values and commission-identity conflicts. Existing application-level multi-fill sequence/atomicity tests are already present and should not be duplicated.
 3. **Order lifecycle:** improve complete-state assertions for accepted, stale, duplicate, conflicting and terminal transitions.
 4. **Market and configuration:** review price/quantity/notional boundaries and missing/unsupported rule combinations.
 5. **Domain failure handling:** cover existing retryability/integrity contracts, stale-result isolation and no mutation after rejected operations. Do not resume #626 or add runtime recovery behavior.
