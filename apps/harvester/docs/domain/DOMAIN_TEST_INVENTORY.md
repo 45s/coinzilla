@@ -52,7 +52,7 @@ The Portfolio and RecoveryLedger regressions now prove that a reused Fill ID wit
 
 ### Medium — expected arithmetic must remain independent
 
-Some scenario fixtures calculate expected fill quote quantities by calling the same production decimal helper used by the implementation. Where practical, fixtures should use independently calculated exact decimal literals, so a shared arithmetic defect cannot make both setup and implementation agree incorrectly.
+The strategy test fixtures for profitable residual SELL fills previously calculated quoteQuantity by calling the same production decimal multiplier used by the implementation, and a MAX_NOTIONAL assertion derived its expected result with that helper too. The current PR replaces those coupled expectations with independently calculated literals (98 × 0.11 = 10.78; 98.95 × 0.11 = 10.8845; 0.1 × 0.6 = 0.06). Continue checking other financial test fixtures for similar coupling before declaring this quality area complete.
 
 ### Medium — capital-limit boundary assertions
 
