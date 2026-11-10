@@ -96,6 +96,7 @@
 **Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js) (decision/order-intent gates); [create-account-snapshot-manager.js](./src/bootstrap/account/create-account-snapshot-manager.js) (authoritative account/open-order snapshot); [subscribe-to-user-data.js](./src/bootstrap/user-data/subscribe-to-user-data.js) (updates/reconnect). Inspect current tests before adding coverage.
 
 **Steps:**
+
 1. [ ] **RED — Reproduce conflict:** unowned open BUY/SELL on symbol A, no owned order in OrderRegistry, otherwise-valid strategy decision. Assert no competing strategy order. Control: symbol B remains eligible.
 2. [ ] **GREEN — Add narrow symbol gate:** use a current authoritative account-wide open-order view; defer only the affected symbol while a conflicting unowned order is open. Never adopt, cancel, modify or claim ownership of it.
 3. [ ] **RED/GREEN — Snapshot lifecycle:** startup snapshot, order update/terminal event, reconnect refresh, stale/missing snapshot and snapshot-read failure. Unknown/stale state must not mean “no open orders”.
@@ -114,6 +115,7 @@
 **Relevant code:** [position-accounting.js](./src/domain/portfolio/position-accounting.js) (Position cost/proceeds); [recovery-fill-accounting.js](./src/domain/strategies/conservative/recovery-fill-accounting.js); [lifecycle-event-dtos.js](./src/application/events/lifecycle-event-dtos.js) (safe DTO); [create-portfolio-workflow.js](./src/use-cases/create-portfolio-workflow.js) (live apply/restore); [create-account-snapshot-manager.js](./src/bootstrap/account/create-account-snapshot-manager.js) (fee-asset reconciliation).
 
 **Steps:**
+
 1. [ ] **RED — Third-asset DTO round-trip:** canonical fill has commission asset different from base and quote, exact commission amount and historical quoteValue. Assert serialization/deserialization preserves every field exactly; expose current quoteValue loss.
 2. [ ] **GREEN — Preserve valuation in safe DTO:** extend only the relevant DTO schema/mapping/validation. Keep decimal representation exact; never substitute current market price for historical valuation.
 3. [ ] **RED — Live BUY/SELL accounting:** assert quote-denominated cost/proceeds for base-, quote- and third-asset fees; include multiple and partial fills. Verify fee amount, asset and valuation.
@@ -136,6 +138,7 @@
 **Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); [recovery-completion.js](./src/domain/strategies/conservative/recovery-completion.js); [recovery-ledger.js](./src/domain/strategies/conservative/recovery-ledger.js); [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [position-accounting.js](./src/domain/portfolio/position-accounting.js); recovery projector/Journal replay paths under #654.
 
 **Steps:**
+
 1. [ ] **RED — Status is not completion:** SUBMITTED, NEW/OPEN, PARTIALLY_FILLED, canceled with residual, REJECTED and UNKNOWN must not reset Position basis or RecoveryLedger.
 2. [ ] **GREEN — Fill-driven completion:** allow completion only after authoritative execution reconciliation and all domain preconditions pass.
 3. [ ] **RED — Cancel/fill interleavings:** execution before/during/after cancel response; duplicate/delayed report; UNKNOWN cancel; stale terminal report. Each canonical fill once; replacement never overdraws.
@@ -158,6 +161,7 @@
 **Relevant code:** [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); confirm current order-filter validator path before editing. Existing boundary work: [PR #929](https://github.com/45s/coinzilla/pull/929), [#930](https://github.com/45s/coinzilla/pull/930), [#932](https://github.com/45s/coinzilla/pull/932).
 
 **Steps:**
+
 1. [ ] **RED — Residual below MIN_NOTIONAL:** valid SELL partially fills, remainder is immediately below current minimum. Assert no invalid replacement is emitted.
 2. [ ] **GREEN — Classify residual first:** retain it as explicitly classified inventory/dust or unresolved safety state under the existing contract; never discard or call it recovered.
 3. [ ] **RED/GREEN — Exact boundaries:** below/equal/above min quantity and notional; max quantity/notional; step/tick rounding for BUY and SELL.
