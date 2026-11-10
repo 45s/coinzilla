@@ -64,6 +64,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 ## 10. D2 exit criteria
 
 Before D2 can pass:
+
 - All **Gap** rows are covered or explicitly excluded with rationale.
 - Financial equality boundaries are tested using exact decimal strings.
 - Fee-reserve calculations are tested against actual post-fill inventory and net proceeds.
