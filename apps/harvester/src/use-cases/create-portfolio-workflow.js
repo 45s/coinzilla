@@ -128,7 +128,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedger: currentLedger,
         fill,
       })
-      if (result.ok && thirdAssetCommissions.size > 0) {
+      if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
         if (typeof onCommissionAsset !== "function") {
           return toResult({ error: new Error("Third-asset commission accounting requires a durable PREFLIGHT asset baseline") })
         }
