@@ -155,8 +155,8 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (compareDecimal({
         left: position.baseQuantity.amount,
         right: item.freeQuantity,
-      }) < 0) {
-        throw new Error("Recovery-cycle free quantity exceeds replayed active inventory for " + item.symbol)
+      }) !== 0) {
+        throw new Error("Recovery-cycle completion must allocate all replayed active inventory (keepQuantity plus validated dust) for " + item.symbol)
       }
       const nextPortfolio = portfolio
         .allocateFreeQuantity({
