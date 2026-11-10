@@ -6,7 +6,7 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { compareDecimal, toResult } from "@coinzilla/utils"
+import { compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
