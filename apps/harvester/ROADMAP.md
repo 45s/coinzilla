@@ -78,6 +78,11 @@ This section is the authoritative implementation order for current work. It supe
    - **Do:** the Telegram integration through `@coinzilla/notifiers` is already implemented (PR #734). Keep both credentials optional, preserve the explicit event allowlist, bounded serialized delivery and shutdown drain. Do not add automatic retries or a durable outbox without a concrete requirement.
    - **Verify:** retain offline tests for absent/partial credentials, setup failure, queue overflow, transport failure and shutdown. A live smoke test is operator-controlled and is not a CI prerequisite.
 
+9. **Fill identity and commission-conflict regression coverage.**
+   - **Why:** a reused Fill ID with a changed commission amount or asset must never be accepted as an identical duplicate by either Portfolio or RecoveryLedger. A rejected conflict must leave the complete immutable projection unchanged.
+   - **Do:** add offline deterministic projection-level tests using exact commission amounts and assets; assert both the conflict and the unchanged full state. Do not change production code unless a reproducible defect is exposed.
+   - **Verify:** run the focused Portfolio/RecoveryLedger tests and full Harvester suite; compare complete `Portfolio.value` and `RecoveryLedger.value` snapshots before and after rejection. No broker, network, or exchange activity.
+
 ### DEFERRED — only after the critical Conservative path is safe
 
 9. **Aggressive strategy:** keep disabled until Conservative restart/recovery and exchange acceptance are proven. Then specify unresolved policy, implement pure intents, reuse the shared engine/accounting/safety gates, and test grid repricing, partial fills, reservations, risk fallback and handover before TESTNET.
@@ -90,7 +95,6 @@ This section is the authoritative implementation order for current work. It supe
 - #650 evidence work is complete in PR #652; additional evidence changes require a newly demonstrated gap.
 - #654 is an active forensic/release-readiness investigation; runtime implementation remains a separate DDD/TDD workstream and a blocker for unattended process restarts.
 - Remove obsolete references to the deleted legacy application; no extraction or migration work remains for it.
-
 
 ## Current blockers and work selection — 2026-11-09
 
@@ -139,7 +143,6 @@ This section is the current operational status and supersedes older statements b
 - **Legacy application removal:** complete. No extraction, migration or maintenance work remains; keep its former implementation and terminology out of current Harvester documentation.
 
 > **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
-
 
 **CURRENT DIRECTION — 2026-11-09: FORENSIC RESTART-RECOVERY PHASE.** The active task is to establish source/test evidence for #654, validate the retained PR #606 recovery helpers, document why current runtime wiring is absent, and resolve market-universe completeness and crash-consistency requirements. No application implementation or test changes are allowed in this phase.
 >
@@ -259,7 +262,6 @@ TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
 > The default-pair statement in this snapshot records the earlier DOGEUSDT/ZROUSDT configuration. The committed config now enables only ZROFDUSD. This historical text is retained as evidence, not current operator guidance or TESTNET authorization.
 
-
 At the time of this snapshot, the task branch had progressed beyond the initial `develop` audit described
 below. The following first-cycle components were implemented and composed
 when `TRADING_MODE=testnet` was selected:
@@ -288,8 +290,6 @@ MIN_NOTIONAL intent. Reservations and the safe repeatable TESTNET acceptance cyc
 milestone complete until the incident fixes, reconciliation, and required CI
 checks pass.
 
-
-
 ## Automated TESTNET startup account audit
 
 - [x] On every trading-enabled startup, fetch the full exchange account balance snapshot and durably journal the OPENING account event before the trading engine is activated.
@@ -298,8 +298,6 @@ checks pass.
 - [x] Add DTO and bootstrap regressions for full order facts, empty-account READY, pre-existing-order BLOCKED, and no market subscription/order activation after a block.
 - [ ] Verify Harvester tests and repository CI on the feature branch.
 - [ ] After merge, the user only needs to start Harvester; no repeated manual balances/orders output is required. Inspect the Journal automatically for account baseline and open-order audit results.
-
-
 
 ## Standalone read-only TESTNET account preflight
 
@@ -472,8 +470,6 @@ pnpm 12 lockfile document invalid YAML and blocked dependency installation,
 unit tests, coverage, and audit. The root importer has been restored to the
 empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
-
-
 
 ## Historical records archive
 
@@ -1113,8 +1109,6 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - Added recovery-coordinator regressions proving a queued retryable transition failure blocks acknowledgement until a later authoritative retry, while a permanent accounting-integrity mismatch remains terminal.
 - These test-first changes belong to [#769](https://github.com/45s/coinzilla/issues/769) under recovery umbrella [#626](https://github.com/45s/coinzilla/issues/626). Production behavior is unchanged in this commit.
 
-
-
 ## 2026-11-09 — F-023 failure-classification implementation
 
 - Ported the test-first recovery classification work onto a branch based on current `develop`, including the newer Journal publish/close changes; the stale PR #788 branch remains untouched.
@@ -1130,8 +1124,6 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - Engine snapshot collection distinguishes explicit broker REST read failures from malformed successful payloads and ownership/accounting contradictions. Unknown snapshot errors default terminal, not retryable.
 - Account snapshot and account-wide open-order reads, both RECOVERY durability barriers, and broker-generation acknowledgement have explicit failure stages.
 - No TESTNET or live exchange operations. Exact-head CI and review remain required.
-
-
 
 ## 2026-11-09 recovery failure-classification closeout — PR #794 merged
 

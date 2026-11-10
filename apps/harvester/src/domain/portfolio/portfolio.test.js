@@ -1,12 +1,12 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "./portfolio.js"
 
 const baseAsset = new Asset({ id: "asset:ETH", code: "ETH" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const market = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset, quoteAsset })
-const makeFill = ({ tradeId = "trade-1", quantity = "1" } = {}) => new Fill({
+const makeFill = ({ tradeId = "trade-1", quantity = "1", commissions = [] } = {}) => new Fill({
   tradeId,
   brokerOrderId: "order-1",
   market,
@@ -14,7 +14,7 @@ const makeFill = ({ tradeId = "trade-1", quantity = "1" } = {}) => new Fill({
   price: new Money({ amount: "100", asset: quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: baseAsset }),
   quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
-  commissions: [],
+  commissions,
   commissionStatus: "COMPLETE",
 })
 
@@ -95,6 +95,34 @@ test("rejects a reused Fill ID when execution facts differ", () => {
   )
 })
 
+
+test("rejects a reused Fill ID when commission amount differs without mutating Portfolio", () => {
+  const acceptedFill = makeFill({
+    tradeId: "commission-conflict",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+    ],
+  })
+  const portfolio = new Portfolio().applyFill({ fill: acceptedFill }).portfolio
+  const originalState = portfolio.value
+  const conflictingFill = makeFill({
+    tradeId: "commission-conflict",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+    ],
+  })
+
+  assert.throws(
+    () => portfolio.applyFill({ fill: conflictingFill }),
+    /Conflicting execution facts reused Fill ID/,
+    "A reused execution identity with a different actual quote commission must be rejected.",
+  )
+  assert.deepEqual(
+    portfolio.value,
+    originalState,
+    "Rejecting conflicting commission facts must leave the complete accepted Portfolio projection unchanged.",
+  )
+})
 
 test("deduplicates equivalent history-response and user-data stream fills in either delivery order", () => {
   const historyResponseDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })

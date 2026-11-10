@@ -18,7 +18,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Portfolio | Total base quantity conserved by free allocation | `position.test.js` | Partial |
 | Lifecycle | keepQuantity=0 complete workflow | `completes the full Conservative lifecycle with the supported zero keepQuantity` in `conservative-trading-engine.test.js` | Existing — execution pending |
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
-| Fill identity | Same ID with changed financial facts rejects | both identity tests | Existing |
+| Fill identity | Same ID with changed quantity, commission amount or commission asset rejects without mutating either projection | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
 | Order ownership | Multi-market isolation; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` | Existing |
 | Order lifecycle | NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and unknown states map and drive safe engine behavior | `adapt-canonical-order.test.js`, `order-registry.test.js`, `conservative-trading-engine.test.js` | Existing |
