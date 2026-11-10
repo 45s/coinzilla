@@ -128,7 +128,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
         amount: assetId === quoteAsset.id ? quoteFreeBalance : "10000",
         asset: assetsById.get(assetId),
       }),
-      getActiveBaseQuantityBaseline: () => "0",
+      getPortfolioBaseQuantityBaseline: () => "0",
       getCommittedQuoteBalanceBaseline: () => "0",
       getCommittedBaseBalanceBaseline: () => "0",
     }),

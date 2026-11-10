@@ -1087,9 +1087,9 @@ export function makeConservativeTradingEngine({
         left: portfolioQuoteCashFlow,
         right: quoteCashFlowBaseline,
       })
-      const activeBaseBalance = allPositions
+      const portfolioBaseBalance = allPositions
         .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
-        .reduce((total, item) => addDecimal({ left: total, right: item.baseQuantity.amount }), "0")
+        .reduce((total, item) => addDecimal({ left: total, right: item.totalBaseQuantity.amount }), "0")
       const allActiveOrders = state.registry.getActiveOrders()
         .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
       const committedQuote = activeOrdersBefore
@@ -1147,8 +1147,8 @@ export function makeConservativeTradingEngine({
         baseFreeBalance: baseBalance.amount,
         quoteCashFlow,
         activeBaseQuantity: position?.baseQuantity.amount ?? "0",
-        activeBaseBalance,
-        activeBaseBalanceBaseline: accountSnapshot.getActiveBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
+        portfolioBaseBalance,
+        portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
         outstandingRecoveryAmount: maxDecimal({
           left: "0",
           right: subtractDecimal({
@@ -1179,8 +1179,8 @@ export function makeConservativeTradingEngine({
         remainingBaseBalance: allocation.data.remainingBaseBalance,
         remainingActiveBase: allocation.data.remainingActiveBase,
         remainingInvestment: allocation.data.remainingInvestment,
-        activeBaseBalance,
-        activeBaseBalanceBaseline: accountSnapshot.getActiveBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
+        portfolioBaseBalance,
+        portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
         committedQuote,
         committedQuoteBalance,
         committedQuoteBalanceBaseline: accountSnapshot.getCommittedQuoteBalanceBaseline({ assetId: metadata.market.quoteAsset.id }),
@@ -1217,7 +1217,7 @@ export function makeConservativeTradingEngine({
             activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
             activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
             activeBaseQuantity: position?.baseQuantity.amount ?? "0",
-            activeBaseBalance,
+            portfolioBaseBalance,
             freeQuoteBalance: quoteBalance.amount,
             freeBaseBalance: baseBalance.amount,
             quoteCashFlow,
@@ -1271,7 +1271,7 @@ export function makeConservativeTradingEngine({
         committedQuoteBalance,
         committedBase,
         committedBaseBalance,
-        activeBaseBalance,
+        portfolioBaseBalance,
       })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       logger?.debug?.({

@@ -21,8 +21,8 @@ export function allocateOrderCommitments({
   baseFreeBalance,
   quoteCashFlow,
   activeBaseQuantity,
-  activeBaseBalance,
-  activeBaseBalanceBaseline = "0",
+  portfolioBaseBalance,
+  portfolioBaseBalanceBaseline = "0",
   outstandingRecoveryAmount,
   committedQuote,
   committedQuoteBalance,
@@ -34,15 +34,15 @@ export function allocateOrderCommitments({
 } = {}) {
   try {
     if (!Array.isArray(actions)) throw new TypeError("actions must be an array")
-    const accountActiveBaseQuantity = activeBaseBalance ?? activeBaseQuantity
+    const accountPortfolioBaseBalance = portfolioBaseBalance ?? activeBaseQuantity
     const accountCommittedQuote = committedQuoteBalance ?? committedQuote
     const accountCommittedBase = committedBaseBalance ?? committedBase
     for (const [field, value] of Object.entries({
       quoteFreeBalance,
       baseFreeBalance,
       activeBaseQuantity,
-      activeBaseBalance: accountActiveBaseQuantity,
-      activeBaseBalanceBaseline,
+      portfolioBaseBalance: accountPortfolioBaseBalance,
+      portfolioBaseBalanceBaseline,
       outstandingRecoveryAmount,
       committedQuote,
       committedQuoteBalance: accountCommittedQuote,
@@ -63,7 +63,7 @@ export function allocateOrderCommitments({
     let remainingBaseBalance = subtractDecimal({
       left: addDecimal({
         left: baseFreeBalance,
-        right: subtractDecimal({ left: accountActiveBaseQuantity, right: activeBaseBalanceBaseline }),
+        right: subtractDecimal({ left: accountPortfolioBaseBalance, right: portfolioBaseBalanceBaseline }),
       }),
       right: subtractDecimal({ left: accountCommittedBase, right: committedBaseBalanceBaseline }),
     })
