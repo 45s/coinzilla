@@ -56,7 +56,7 @@ The CLOSING event correctly recorded `auditStatus=INCOMPLETE` and `UNRESOLVED_OW
 
 ## F-006 — Historical Conservative documentation conflict (superseded 2026-11-06)
 
-**Status:** The earlier multi-document conflict is superseded by the owner-approved canonical contract. The sole current rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old maker-only fee, residual-suppression, portfolio completion, and zero-value statements preserved in historical records must not be used as current policy.
+**Status:** The earlier multi-document conflict is superseded by the owner-approved canonical contract. The sole current rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old maker-only fee, residual-suppression, portfolio completion, and zero-value statements preserved in historical records must not be used as current policy.
 
 All owner decisions are closed and recorded in the canonical specification; no further product decisions are pending.
 
@@ -131,7 +131,7 @@ Closure: both orders and reservations identified and reconciled, else remain INC
 
 ### F-006 — fee/config contract (#646; historical, superseded)
 
-Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### F-007 — full-cycle exact-once and lifecycle regression (#648)
 
