@@ -148,7 +148,6 @@ A transient file-content sync failure after queued writes have completed does no
 
 For source events that satisfy the temporary JSONL-safe constraint above, new records retain the source event fields at the JSONL top level and add a reserved `__coinzillaJournal` metadata field containing schema version 1 and the stable record ID. This additive shape preserves compatibility with existing consumers that read JSON-representable event fields directly. Existing raw event JSONL records without metadata are supported as legacy schema-v1 records.
 
-
 If `close()` is called while `start()` is still acquiring the writer lock or creating the session, close marks startup for cancellation and does not resolve until that startup attempt has completed cleanup of every resource it acquired. The startup promise reports cancellation; the close promise reports whether the resulting stopped state was reached safely. If resource cleanup itself fails, close returns those cleanup errors and does not claim durable closure. The timestamped session file created before cancellation is retained as an empty JSONL file; its handle is closed and its lock is released rather than deleting or rewriting session history.
 
 ## Directory ownership
@@ -208,11 +207,9 @@ A process crash can leave a stale lock. Journal never removes an existing lock a
 
 Read/replay is available while the Journal instance is stopped (before `start()` or after `close()`); it is rejected while that instance is writing. Read/replay does not acquire a separate lock, so callers must ensure no other process is writing while they read. A concurrent read can observe an incomplete tail and will fail closed rather than return a partial history. The directory must already exist for read/replay: a missing directory returns `JOURNAL_DIRECTORY_NOT_FOUND` instead of being treated as an empty history.
 
-
 ## Harvester startup account preflight records
 
 Harvester emits two durable lifecycle records on every connected startup, whether trading is enabled or not: `account.snapshot_captured` with `data.phase = "PREFLIGHT"` contains all balances with exact decimal free, locked, and total quantities plus exchange source time; `account.open_orders_captured` with the same phase contains account-wide open orders and their broker/client identifiers, symbol, side, type, price, original/executed quantities, and status. Open-order readiness is `READY` only for an empty result; otherwise it is `BLOCKED` with explicit reasons. Each event is followed by a successful `Journal.flush()` before Harvester proceeds to market subscriptions or engine activation. Existing orders remain externally owned; these records are observations, not adoption instructions.
-
 
 ## Backup and restore
 

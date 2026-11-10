@@ -80,7 +80,8 @@ The current serializer calls `JSON.stringify` after checking only the top-level 
 - [ ] Preserve existing schema-v1 records and historical JSONL bytes; do not rewrite or truncate history.
 - [ ] Review consumers, including Harvester, and document any migration requirement.
 
-**Owner:** `packages/journal/`  
+**Owner:** `packages/journal/`
+
 **Purpose:** provide reliable, auditable journal records and persistence behavior for application and operational history.
 
 Read [the journal agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
@@ -149,7 +150,8 @@ Each numbered slice below is a separate task PR targeting `develop`, with one pr
 
 ### J-1 — Define the record vocabulary and contract
 
-**Status:** [x] complete — source-event, persisted-record, and recovered-record vocabulary and public contracts are documented and tested in PR #746.  
+**Status:** [x] complete — source-event, persisted-record, and recovered-record vocabulary and public contracts are documented and tested in PR #746.
+
 **Intent:** make the existing contract explicit before changing its structure.
 
 Scope:
@@ -172,8 +174,10 @@ Tests and verification:
 
 ### J-2 — Establish a lightweight JournalRecord domain contract
 
-**Status:** [x] complete — the lightweight schema-v1 record contract, identity validation, serialization boundary, and compatibility tests were delivered in PR #747.  
-**Depends on:** J-1  
+**Status:** [x] complete — the lightweight schema-v1 record contract, identity validation, serialization boundary, and compatibility tests were delivered in PR #747.
+
+**Depends on:** J-1
+
 **Intent:** give record identity and schema rules one explicit owner without introducing a heavyweight domain model.
 
 Scope:
@@ -207,8 +211,10 @@ TDD and documentation:
 
 ### J-3 — Isolate filesystem persistence behind an internal adapter
 
-**Status:** [x] complete — the package-private filesystem adapter and resource-ownership tests were delivered in PR #748.  
-**Depends on:** J-2  
+**Status:** [x] complete — the package-private filesystem adapter and resource-ownership tests were delivered in PR #748.
+
+**Depends on:** J-2
+
 **Intent:** separate Journal lifecycle/orchestration from Node filesystem mechanics and provide deterministic control of I/O in service tests.
 
 Scope:
@@ -246,8 +252,10 @@ TDD and documentation:
 
 ### J-4 — Make orchestration state ownership explicit
 
-**Status:** [x] complete — lifecycle matrix is covered, including the deterministic publish-before-close drain regression added with the final Journal acceptance PR.  
-**Depends on:** J-3 (merged in PR #748)  
+**Status:** [x] complete — lifecycle matrix is covered, including the deterministic publish-before-close drain regression added with the final Journal acceptance PR.
+
+**Depends on:** J-3 (merged in PR #748)
+
 **Intent:** ensure the Journal service owns lifecycle policy while the adapter owns resource mechanics.
 
 Scope:
@@ -283,8 +291,10 @@ TDD and documentation:
 
 ### J-5 — Contract conformance and operational documentation
 
-**Status:** [x] complete — the README now documents the public contracts, recovery limits, locking, durability boundaries, errors, backup/restore, and maintainer verification commands.  
-**Depends on:** J-2 through J-4  
+**Status:** [x] complete — the README now documents the public contracts, recovery limits, locking, durability boundaries, errors, backup/restore, and maintainer verification commands.
+
+**Depends on:** J-2 through J-4
+
 **Intent:** make the final architecture easy for package consumers and maintainers to use correctly.
 
 Scope:
