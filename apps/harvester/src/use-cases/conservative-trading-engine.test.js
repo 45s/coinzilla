@@ -288,10 +288,11 @@ test("subtracts only shared BUY commitments created after the account snapshot",
     side: "BUY",
     type: "LIMIT",
     limitPrice: new Money({ amount: "50", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "2", asset: ethAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: ethAsset }),
-    status: "OPEN",
+    originalQuantity: new Quantity({ amount: "3", asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: ethAsset }),
+    status: "PARTIALLY_FILLED",
   })
+  assert.equal(otherMarketBuy.remainingQuantity.amount, "2", "The partially filled ETHUSDT BUY must expose its exact two-unit remaining commitment.")
   const harness = await createHarness({
     quoteFreeBalance: "100",
     committedQuoteBalanceBaseline: "100",
@@ -303,7 +304,7 @@ test("subtracts only shared BUY commitments created after the account snapshot",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
-  assert.equal(result.ok, true, "A BUY on DOGEUSDT must remain fundable when the shared USDT snapshot already excludes an ETHUSDT BUY lock.")
+  assert.equal(result.ok, true, "A BUY on DOGEUSDT must remain fundable when the shared USDT snapshot already excludes a partially filled ETHUSDT BUY lock.")
   assert.equal(harness.orders.length, 1, "The current DOGEUSDT decision must submit exactly one BUY after accounting for only post-snapshot shared-quote commitment changes.")
   assert.equal(harness.orders[0].side, "BUY", "The submitted action must remain the strategy's BUY, not an unrelated order from the other market.")
 })
