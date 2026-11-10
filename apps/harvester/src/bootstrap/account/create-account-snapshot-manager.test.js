@@ -139,6 +139,23 @@ test("publishes only the actual third-asset commission baseline and excludes unr
   assert.equal(fixture.getFlushCount(), 2)
 })
 
+test("fails closed when an actual commission asset has no PREFLIGHT balance", async () => {
+  const market = createFixture().market
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+  })
+  await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  await assert.rejects(
+    fixture.manager.publishCommissionAssetBaseline({
+      assetId: "asset:BNB",
+      assetCode: "BNB",
+    }),
+    /PREFLIGHT account snapshot is missing commission asset BNB/,
+  )
+  assert.equal(fixture.publishedEvents.length, 1)
+})
+
 test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
   const fixtureMarket = createFixture().market
   const portfolioFill = new Fill({
