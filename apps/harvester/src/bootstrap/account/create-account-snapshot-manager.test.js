@@ -52,7 +52,7 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
   }
 }
 
-const createAccountSnapshot = ({ market, sourceTime }) => ({
+const createAccountSnapshot = ({ market, sourceTime, extraBalances = [] }) => ({
   ok: true,
   data: {
     sourceTime,
@@ -65,6 +65,7 @@ const createAccountSnapshot = ({ market, sourceTime }) => ({
         free: new Quantity({ amount: "500", asset: market.quoteAsset }),
         locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
       }),
+      ...extraBalances,
     ],
   },
 })
@@ -83,6 +84,26 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
   assert.equal(fixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
+})
+
+test("retains an unconfigured commission asset in the account snapshot and durable audit", async () => {
+  const market = createFixture().market
+  const bnb = new Asset({ id: "asset:BNB", code: "BNB" })
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100,
+      extraBalances: [new Balance({
+        free: new Quantity({ amount: "1", asset: bnb }),
+        locked: new Quantity({ amount: "0", asset: bnb }),
+      })],
+    })],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(snapshot.getFreeBalance({ assetId: bnb.id }).amount, "1")
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "BNB"), true)
 })
 
 test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
