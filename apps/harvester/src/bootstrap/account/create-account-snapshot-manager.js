@@ -63,6 +63,7 @@ export function createAccountSnapshotManager({
   let preflightSourceTime
   let preflightBalancesByCode = new Map()
   const commissionBaselineAssetIds = new Map()
+  const commissionBaselineAssetCodesById = new Map()
 
   const refreshAccountSnapshot = async ({ capturePreflightBaseline = false } = {}) => {
     let result
@@ -381,10 +382,11 @@ export function createAccountSnapshotManager({
     }
 
     const knownAssetId = commissionBaselineAssetIds.get(assetCode)
-    if (knownAssetId !== undefined) {
-      if (knownAssetId !== assetId) {
+    const knownAssetCode = commissionBaselineAssetCodesById.get(assetId)
+    if (knownAssetId !== undefined || knownAssetCode !== undefined) {
+      if (knownAssetId !== assetId || knownAssetCode !== assetCode) {
         throw withRecoveryFailure(
-          new Error("Commission asset code maps to contradictory asset IDs for " + assetCode),
+          new Error("Commission asset ID/code mapping is contradictory for " + assetCode),
           "ACCOUNTING_INTEGRITY",
           "COMMISSION_ASSET_BASELINE_IDENTITY",
           false,
@@ -429,6 +431,7 @@ export function createAccountSnapshotManager({
       allowedAssetCodes: [assetCode],
     })
     commissionBaselineAssetIds.set(assetCode, assetId)
+    commissionBaselineAssetCodesById.set(assetId, assetCode)
     return {
       ok: true,
       data: Object.freeze({ assetId, assetCode, sourceTime: preflightSourceTime }),
