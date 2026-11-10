@@ -421,7 +421,7 @@ test('validates every DNS answer and rejects mixed public/private answer sets', 
   const resolvePublicAddresses = externalLinkChecker.resolvePublicAddresses;
   assert.equal(typeof resolvePublicAddresses, 'function', 'DNS validation must be independently testable with an injected resolver.');
 
-  const resolved = await resolvePublicAddresses('docs.example', {
+  const resolved = await resolvePublicAddresses('docs.example.com', {
     resolveHost: async () => [
       { address: '8.8.8.8', family: 4 },
       { address: '2606:4700:4700::1111', family: 6 },
@@ -433,7 +433,7 @@ test('validates every DNS answer and rejects mixed public/private answer sets', 
   ], 'Every vetted A/AAAA answer must be retained for connection pinning.');
 
   await assert.rejects(
-    resolvePublicAddresses('mixed.example', {
+    resolvePublicAddresses('mixed.example.com', {
       resolveHost: async () => [
         { address: '8.8.8.8', family: 4 },
         { address: '10.0.0.7', family: 4 },
@@ -450,7 +450,7 @@ test('pins socket lookup to vetted answers without resolving the hostname again'
 
   let resolverCalls = 0;
   let connectedAddress;
-  const result = await fetchPinned('https://rebind.example/path', {
+  const result = await fetchPinned('https://rebind.example.com/path', {
     method: 'HEAD',
     headers: { 'user-agent': 'test' },
   }, {
