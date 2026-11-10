@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { isPublicAddress } from './external-link-address-policy.js';
+import { fetchPinned, resolvePublicAddresses } from './external-link-network.js';
 import {
   checkExternalLink,
   checkExternalLinks,
@@ -266,10 +268,10 @@ test('follows bounded redirects and refuses redirects to local-only hosts', asyn
     minHostIntervalMs: 0,
   });
 
-  assert.equal(success.status, 'ok');
-  assert.equal(urls.length, 2);
-  assert.equal(blocked.status, 'unverifiable');
-  assert.equal(blockedUrls.length, 1);
+  assert.equal(success.status, 'ok', 'A public redirect chain ending in a successful response must remain valid.');
+  assert.equal(urls.length, 2, 'Each public redirect hop must result in exactly one HEAD request.');
+  assert.equal(blocked.status, 'skipped', 'A redirect to a local-only destination must be blocked before a second request.');
+  assert.equal(blockedUrls.length, 1, 'The local-only redirect target must never receive an HTTP request.');
 });
 
 test('treats repeated rate limiting as unverifiable after bounded retries', async () => {
@@ -379,4 +381,193 @@ test('only confirmed broken or invalid destinations trigger the advisory PR fail
   assert.equal(shouldFailOnBroken([{ status: 'ok' }, { status: 'unverifiable' }, { status: 'skipped' }]), false);
   assert.equal(shouldFailOnBroken([{ status: 'broken' }]), true);
   assert.equal(shouldFailOnBroken([{ status: 'invalid' }]), true);
+});
+
+test('classifies public IPv4 and rejects private, shared, reserved, and metadata IPv4 ranges', () => {
+  assert.equal(typeof isPublicAddress, 'function', 'The checker must expose its deterministic IP-address policy for focused tests.');
+
+  for (const address of ['8.8.8.8', '1.1.1.1', '93.184.216.34', '192.31.196.1', '192.52.193.1', '192.175.48.1']) {
+    assert.equal(isPublicAddress(address), true, address + ' is a globally routable IPv4 destination.');
+  }
+  for (const address of [
+    '0.0.0.0', '10.0.0.1', '100.64.0.1', '100.100.100.200',
+    '127.0.0.1', '169.254.169.254', '172.16.0.1', '192.0.0.1', '192.0.0.9', '192.0.0.10',
+    '192.0.2.1', '192.168.1.1', '192.88.99.1', '198.18.0.1',
+    '198.51.100.1', '203.0.113.1', '224.0.0.1', '240.0.0.1',
+    '255.255.255.255', '168.63.129.16',
+  ]) {
+    assert.equal(isPublicAddress(address), false, address + ' is private, shared, reserved, multicast, link-local, or metadata-related and must never be requested.');
+  }
+});
+
+test('classifies global IPv6 and rejects loopback, mapped, ULA, link-local, multicast, and reserved IPv6', () => {
+  assert.equal(typeof isPublicAddress, 'function', 'The checker must expose IPv6 address classification for deterministic security tests.');
+
+  assert.equal(isPublicAddress('2001:4860:4860::8888'), true, 'A globally routable Google IPv6 address is eligible.');
+  assert.equal(isPublicAddress('2606:4700:4700::1111'), true, 'A globally routable Cloudflare IPv6 address is eligible.');
+  assert.equal(isPublicAddress('2620:4f:8000::1'), true, 'A globally reachable AS112 IPv6 address outside blocked special-purpose prefixes remains eligible.');
+  for (const address of [
+    '::', '::1', '::ffff:127.0.0.1', 'fc00::1', 'fd12:3456:789a::1',
+    'fe80::1', 'ff02::1', '100::1', '100:0:0:1::1', '2001:1::1', '2001:2::1', '2001:3::1', '2001:4:112::1', '2001:20::1', '2001:30::1', '2001:db8::1',
+    '2002:0808:0808::1', '3fff::1', '5f00::1', '64:ff9b::a9fe:a9fe',
+  ]) {
+    assert.equal(isPublicAddress(address), false, address + ' is not an eligible globally routable IPv6 destination.');
+  }
+});
+
+test('validates every DNS answer and rejects mixed public/private answer sets', async () => {
+  assert.equal(typeof resolvePublicAddresses, 'function', 'DNS validation must be independently testable with an injected resolver.');
+
+  const resolved = await resolvePublicAddresses('docs.example.com', {
+    resolveHost: async () => [
+      { address: '8.8.8.8', family: 4 },
+      { address: '2606:4700:4700::1111', family: 6 },
+    ],
+  });
+  assert.deepEqual(resolved, [
+    { address: '8.8.8.8', family: 4 },
+    { address: '2606:4700:4700::1111', family: 6 },
+  ], 'Every vetted A/AAAA answer must be retained for connection pinning.');
+
+  await assert.rejects(
+    resolvePublicAddresses('mixed.example.com', {
+      resolveHost: async () => [
+        { address: '8.8.8.8', family: 4 },
+        { address: '10.0.0.7', family: 4 },
+      ],
+    }),
+    (error) => error.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS',
+    'A single private answer must reject the entire mixed DNS answer set before any connection is attempted.',
+  );
+});
+
+test('pins socket lookup to vetted answers without resolving the hostname again', async () => {
+  assert.equal(typeof fetchPinned, 'function', 'The checker must expose the pinned HTTP transport for deterministic connection tests.');
+
+  let resolverCalls = 0;
+  let connectedAddresses;
+  const result = await fetchPinned('https://rebind.example.com/path', {
+    method: 'HEAD',
+    headers: { 'user-agent': 'test' },
+  }, {
+    resolveHost: async () => {
+      resolverCalls += 1;
+      return resolverCalls === 1
+        ? [
+          { address: '8.8.8.8', family: 4 },
+          { address: '2606:4700:4700::1111', family: 6 },
+        ]
+        : [{ address: '127.0.0.1', family: 4 }];
+    },
+    requestImpl: (url, options, onResponse) => {
+      options.lookup(url.hostname, { all: true }, (error, addresses) => {
+        assert.equal(error, null, 'The socket lookup must return only addresses that passed DNS validation.');
+        connectedAddresses = addresses;
+      });
+      queueMicrotask(() => onResponse({ statusCode: 200, headers: {}, resume() {} }));
+      return { on() { return this; }, end() {} };
+    },
+  });
+
+  assert.equal(result.status, 200, 'The pinned transport must preserve the HTTP response status.');
+  assert.equal(resolverCalls, 1, 'A single request must not perform a second DNS lookup after validation.');
+  assert.deepEqual(connectedAddresses, [
+    { address: '8.8.8.8', family: 4 },
+    { address: '2606:4700:4700::1111', family: 6 },
+  ], 'The socket lookup must receive the complete vetted A/AAAA set and never the later private rebinding answer.');
+});
+
+test('revalidates DNS for every redirect and blocks a redirect to a private address', async () => {
+  assert.equal(typeof fetchPinned, 'function', 'Redirect tests require the same pinned transport used by production requests.');
+
+  const requestedHosts = [];
+  const result = await checkExternalLink(candidate('https://public.example.com/start'), {
+    fetchImpl: (url, init) => fetchPinned(url, init, {
+      resolveHost: async (hostname) => [{
+        address: hostname === 'public.example.com' ? '8.8.8.8' : '127.0.0.1',
+        family: 4,
+      }],
+      requestImpl: (requestUrl, options, onResponse) => {
+        requestedHosts.push(requestUrl.hostname);
+        options.lookup(requestUrl.hostname, {}, (error) => {
+          assert.equal(error, null, 'Only the already-vetted public redirect source may reach the socket lookup.');
+        });
+        queueMicrotask(() => onResponse({
+          statusCode: 302,
+          headers: { location: 'https://private-redirect.example.com/metadata' },
+          resume() {},
+        }));
+        return { on() { return this; }, end() {} };
+      },
+    }),
+    sleep: noDelay,
+    minHostIntervalMs: 0,
+  });
+
+  assert.equal(result.status, 'skipped', 'A redirect whose DNS answers include a private address must be classified as safely blocked.');
+  assert.deepEqual(requestedHosts, ['public.example.com'], 'The private redirect destination must be rejected before opening an HTTP(S) connection.');
+});
+
+
+test('blocks an initial public-looking hostname when any DNS answer is private before opening a socket', async () => {
+  let openedConnections = 0;
+  const result = await checkExternalLink(candidate('https://mixed-answer.example.com/start'), {
+    fetchImpl: (url, init) => fetchPinned(url, init, {
+      resolveHost: async () => [
+        { address: '8.8.8.8', family: 4 },
+        { address: '10.0.0.7', family: 4 },
+      ],
+      requestImpl: () => {
+        openedConnections += 1;
+        throw new Error('An unsafe DNS answer must be rejected before the request implementation is called.');
+      },
+    }),
+    sleep: noDelay,
+    minHostIntervalMs: 0,
+  });
+
+  assert.equal(result.status, 'skipped', 'A mixed public/private DNS answer set must be reported as safely blocked.');
+  assert.equal(openedConnections, 0, 'No HTTP(S) connection may be opened when even one DNS answer is private.');
+});
+
+
+test('honors the request timeout while DNS resolution is still pending', async () => {
+  const controller = new AbortController();
+  let resolverStarted = false;
+  const resolution = resolvePublicAddresses('slow-dns.example.com', {
+    signal: controller.signal,
+    resolveHost: async () => {
+      resolverStarted = true;
+      return new Promise(() => {});
+    },
+  });
+
+  assert.equal(resolverStarted, true, 'The injected DNS resolver must be invoked before the abort is requested.');
+  controller.abort(new Error('DNS resolution aborted by the request timeout'));
+  const outcome = await Promise.race([
+    resolution.then(() => 'resolved', () => 'rejected'),
+    new Promise((resolve) => setImmediate(() => resolve('pending'))),
+  ]);
+
+  assert.equal(outcome, 'rejected', 'The checker must stop waiting for DNS when the per-request abort signal fires.');
+});
+
+
+test('does not start DNS resolution after the request signal has already expired', async () => {
+  const controller = new AbortController();
+  controller.abort(new Error('request timeout already elapsed'));
+  let resolverCalls = 0;
+
+  await assert.rejects(
+    resolvePublicAddresses('expired-dns.example.com', {
+      signal: controller.signal,
+      resolveHost: async () => {
+        resolverCalls += 1;
+        return [{ address: '8.8.8.8', family: 4 }];
+      },
+    }),
+    (error) => error.message === 'request timeout already elapsed',
+    'An already-aborted request must fail with its original cancellation reason.',
+  );
+  assert.equal(resolverCalls, 0, 'The checker must not start a DNS query after the request timeout has elapsed.');
 });

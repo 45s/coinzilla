@@ -3,6 +3,8 @@ import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { isLocalHostname } from './external-link-address-policy.js';
+import { fetchPinned } from './external-link-network.js';
 import { findMarkdownDocuments, removeCodeExamples } from './check-agent-policy.js';
 import { isHistoricalPath } from './check-markdown-style.js';
 
@@ -69,26 +71,10 @@ function redactCredentials(value) {
   }
 }
 
-function isLocalHostname(hostname) {
-  return hostname === 'localhost' ||
-    hostname === 'localdomain' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal') ||
-    hostname.endsWith('.test') ||
-    hostname.endsWith('.invalid') ||
-    hostname.endsWith('.example') ||
-    hostname.endsWith('.home.arpa') ||
-    hostname.endsWith('.lan') ||
-    hostname.endsWith('.corp') ||
-    hostname.endsWith('.intranet') ||
-    hostname.endsWith('.private');
-}
-
 /**
  * Parse an HTTP(S) destination and classify URLs that must not be requested.
- * IP-literal and local-only hosts are skipped. DNS answers are not pinned yet;
- * do not run this checker against untrusted Markdown until issue #901 is complete.
+ * IP-literal and local-only hosts are skipped. Candidate hostnames are resolved,
+ * all answers are validated, and each HTTP(S) connection is pinned to that vetted set.
  * @param {string} raw
  * @returns {{status: 'candidate'|'skipped'|'invalid', url: string, host?: string, reason?: string}|null}
  */
@@ -254,7 +240,7 @@ async function fetchWithRetries(url, method, options) {
   const maxRetryAfterMs = options.maxRetryAfterMs ?? 30_000;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? ((target, init) => fetchPinned(target, init, options));
   const hostLimiter = options.hostLimiter;
   let lastError;
 
@@ -282,6 +268,7 @@ async function fetchWithRetries(url, method, options) {
       await sleep(retryAfter ?? backoff);
     } catch (error) {
       lastError = error;
+      if (error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS') return { error: lastError };
       if (attempt === maxRetries) return { error: lastError };
       await sleep(Math.min(maxRetryAfterMs, baseDelayMs * (2 ** attempt)));
     }
@@ -296,6 +283,9 @@ async function fetchFollowingRedirects(startUrl, method, options) {
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
     const result = await fetchWithRetries(currentUrl, method, options);
+    if (result.error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS') {
+      return { blocked: true, reason: result.error.message };
+    }
     if (result.error) return { reason: 'Network request failed after retries: ' + result.error.message };
 
     const response = result.response;
@@ -314,7 +304,7 @@ async function fetchFollowingRedirects(startUrl, method, options) {
 
     const parsed = parseExternalUrl(nextUrl.href);
     if (!parsed || parsed.status !== 'candidate') {
-      return { reason: 'Redirect target is not an eligible public HTTP(S) hostname' };
+      return { blocked: true, reason: 'Redirect target is not an eligible public HTTP(S) hostname' };
     }
     currentUrl = parsed.url;
   }
@@ -350,6 +340,9 @@ export async function checkExternalLink(link, options = {}) {
   const requestOptions = { ...options, sleep, now, hostLimiter };
   const head = await fetchFollowingRedirects(link.url, 'HEAD', requestOptions);
 
+  if (head.blocked) {
+    return { ...link, status: 'skipped', reason: head.reason };
+  }
   if (head.reason) {
     return { ...link, status: 'unverifiable', reason: head.reason };
   }
@@ -361,6 +354,9 @@ export async function checkExternalLink(link, options = {}) {
   }
 
   const get = await fetchFollowingRedirects(link.url, 'GET', requestOptions);
+  if (get.blocked) {
+    return { ...link, status: 'skipped', reason: get.reason };
+  }
   if (get.reason) {
     return { ...link, status: 'unverifiable', reason: get.reason };
   }
