@@ -8,7 +8,7 @@
 
 - [~] Establish and maintain the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md).
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
-- [~] Conservative BUY-gating regression and correction are implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact PR-head CI passed 872/872 Harvester tests and all required checks; merge remains pending.
+- [~] Conservative BUY-gating regression and correction are implemented on PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. PR #917 merged to `develop` on 2026-11-10 after exact PR-head CI passed 872/872 Harvester tests and all required checks.
 - [ ] Continue through Portfolio/accounting, OrderRegistry lifecycle, multi-market isolation, and existing domain failure contracts in focused offline PRs.
 - **Scope boundary:** deterministic domain/application tests only. No Binance TESTNET/LIVE activity, no configuration changes, and no resumption or implementation changes for paused issue #626.
 
@@ -213,6 +213,8 @@ Trading safety requirements remain in force: the operator selects TESTNET or LIV
 - [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together — completed in [PR #839](https://github.com/45s/coinzilla/pull/839).
 
 ## Journal evidence workstream
+
+- [ ] **#923 — Journal DTO compatibility:** reject non-finite/negative-zero numeric values at the Harvester DTO boundary and report best-effort mapper failures. Journal serializer enforcement merged in PR #920; test-first regressions are in PR #921. Keep #889 open until this consumer follow-up is merged and documented.
 
 Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
 

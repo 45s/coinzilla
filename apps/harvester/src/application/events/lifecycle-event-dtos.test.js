@@ -892,3 +892,243 @@ test("keeps missing build provenance explicit and rejects malformed process iden
   assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, commit: "not-a-sha" } }).ok, false, "Git commit identities must be validated before Journal publication")
   assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, metadataSource: "guessed" } }).ok, false, "provenance source must use one of the documented capture outcomes")
 })
+
+
+test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const makeOrder = (updatedAt) => new CanonicalOrder({
+    clientOrderId: "harvester-client-timestamp",
+    brokerOrderId: "broker-order-timestamp",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "NEW",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt,
+  })
+  const makeFill = (executedAt) => new Fill({
+    tradeId: "trade-timestamp",
+    brokerOrderId: "broker-order-timestamp",
+    clientOrderId: "harvester-client-timestamp",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "99.95", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+
+  const invalidTransactionTimes = [
+    NaN,
+    Infinity,
+    -Infinity,
+    -0,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]
+
+  for (const transactionTime of invalidTransactionTimes) {
+    const result = mapOrderUpdatedData({
+      order: makeOrder(0),
+      evidence: { transactionTime },
+    })
+    assert.equal(
+      result.ok,
+      false,
+      `broker transactionTime ${String(transactionTime)} must not be emitted as a Journal-bound numeric field.`,
+    )
+  }
+
+  assert.equal(
+    mapOrderUpdatedData({ order: makeOrder(-0) }).ok,
+    false,
+    "Canonical order updatedAt must reject negative zero even when the shared entity constructor accepts it.",
+  )
+  assert.equal(
+    mapFillAppliedData({ fill: makeFill(-0) }).ok,
+    false,
+    "Canonical fill executedAt must reject negative zero before the fill DTO is published.",
+  )
+
+  for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
+    const result = mapBrokerExecutionReportData({
+      evidence: {
+        schemaVersion: 1,
+        source: "binance.spot.userData.executionReport",
+        [field]: -0,
+      },
+    })
+    assert.equal(
+      result.ok,
+      false,
+      `Broker execution-report ${field} must reject negative zero before publication.`,
+    )
+  }
+
+  assert.equal(
+    mapAccountSnapshotCapturedData({
+      phase: "OPENING",
+      snapshot: { sourceTime: -0, balances: [] },
+    }).ok,
+    false,
+    "Account snapshot sourceTime must reject negative zero.",
+  )
+  assert.equal(
+    mapAccountSnapshotCapturedData({
+      phase: "OPENING",
+      snapshot: { sourceTime: -1, balances: [] },
+    }).ok,
+    false,
+    "Account snapshot sourceTime must reject negative timestamps.",
+  )
+  assert.equal(
+    mapAccountOpenOrdersCapturedData({
+      phase: "OPENING",
+      observedAt: -0,
+      orders: [],
+      readiness: "READY",
+    }).ok,
+    false,
+    "Account open-orders observedAt must reject negative zero.",
+  )
+})
+
+test("preserves valid zero timestamps and omits negative-zero optional diagnostics", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const order = new CanonicalOrder({
+    clientOrderId: "harvester-client-zero",
+    brokerOrderId: "broker-order-zero",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "NEW",
+    createdAt: 0,
+    acknowledgedAt: 0,
+    updatedAt: 0,
+  })
+  const orderResult = mapOrderUpdatedData({
+    order,
+    evidence: { transactionTime: 0 },
+  })
+  assert.equal(orderResult.ok, true, "Positive zero is a valid non-negative safe-integer timestamp.")
+  assert.equal(orderResult.data.updatedAt, 0, "The valid order timestamp must remain zero.")
+  assert.equal(orderResult.data.brokerTransactionTime, 0, "The valid broker transaction timestamp must remain zero.")
+
+  assert.equal(
+    mapAccountSnapshotCapturedData({
+      phase: "OPENING",
+      snapshot: { sourceTime: 0, balances: [] },
+    }).ok,
+    true,
+    "Account snapshot sourceTime zero must remain valid.",
+  )
+  assert.equal(
+    mapAccountOpenOrdersCapturedData({
+      phase: "OPENING",
+      observedAt: 0,
+      orders: [],
+      readiness: "READY",
+    }).ok,
+    true,
+    "Account open-orders observedAt zero must remain valid.",
+  )
+  assert.equal(
+    mapBrokerExecutionReportData({
+      evidence: {
+        schemaVersion: 1,
+        source: "binance.spot.userData.executionReport",
+        eventTime: 0,
+        transactionTime: 0,
+        orderCreationTime: 0,
+        workingTime: 0,
+      },
+    }).ok,
+    true,
+    "Broker execution-report timestamps at zero must remain valid.",
+  )
+  assert.equal(
+    mapBrokerStatusChangedData({
+      broker: "binance",
+      stream: "user-data",
+      status: "CONNECTED",
+      recoveryRequired: false,
+      attempt: 0,
+      code: 0,
+    }).ok,
+    true,
+    "Valid zero attempt and status-code values must remain valid.",
+  )
+  const connectionFailure = mapBrokerConnectionFailedData({
+    broker: "binance",
+    error: Object.assign(new Error("offline"), { code: -0 }),
+  })
+  assert.equal(connectionFailure.ok, true, "An optional negative-zero error code must not invalidate the safe error DTO.")
+  assert.equal(
+    Object.hasOwn(connectionFailure.data.error, "code"),
+    false,
+    "A negative-zero optional error code must be omitted rather than serialized lossily.",
+  )
+
+  const decision = mapStrategyDecisionData({
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
+    reason: "INITIAL_BUY",
+    inputs: {
+      activeOrderCount: -0,
+      activeBuyCount: 0,
+      activeSellCount: 0,
+      freeQuoteBalance: "1000",
+    },
+    actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
+  })
+  assert.equal(decision.ok, true, "An optional negative-zero count must not invalidate the decision event.")
+  assert.equal(
+    Object.hasOwn(decision.data.inputs, "activeOrderCount"),
+    false,
+    "A negative-zero optional count must be omitted instead of reaching the Journal.",
+  )
+  assert.equal(
+    decision.data.inputs.activeBuyCount,
+    0,
+    "A valid zero count must remain present in the decision DTO.",
+  )
+
+  assert.equal(
+    mapBrokerStatusChangedData({
+      broker: "binance",
+      stream: "user-data",
+      status: "CONNECTED",
+      recoveryRequired: false,
+      attempt: -0,
+    }).ok,
+    false,
+    "A negative-zero attempt count must be rejected.",
+  )
+  assert.equal(
+    mapBrokerStatusChangedData({
+      broker: "binance",
+      stream: "user-data",
+      status: "CONNECTED",
+      recoveryRequired: false,
+      code: -0,
+    }).ok,
+    false,
+    "A negative-zero numeric status code must be rejected.",
+  )
+})
