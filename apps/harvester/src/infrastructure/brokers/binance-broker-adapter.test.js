@@ -40,6 +40,27 @@ test("adapts Harvester placeOrder to Binance createOrder without changing the re
   assert.deepEqual(calls, [["createOrder", order]])
 })
 
+test("normalizes only definite immediate-match rejections for LIMIT_MAKER orders", async () => {
+  const { client } = createClient()
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })
+  client.createOrder = async () => ({ ok: false, errors: [rejection] })
+
+  const maker = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(maker.errors[0].code, "POST_ONLY_WOULD_TAKE")
+
+  const limit = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  assert.equal(limit.errors[0], rejection, "A regular LIMIT failure must not be mislabeled as a post-only rejection.")
+
+  const unknown = Object.assign(new Error("Order would immediately match and take."), {
+    code: -2010,
+    outcomeUnknown: true,
+  })
+  client.createOrder = async () => ({ ok: false, errors: [unknown] })
+  const uncertain = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(uncertain.errors[0], unknown, "An unknown submission outcome must never be downgraded to a definite rejection.")
+})
+
 test("maps object-shaped application inputs to the broker package methods", async () => {
   const { calls, client, result } = createClient()
   client.getSymbolFilters = async (input) => {
