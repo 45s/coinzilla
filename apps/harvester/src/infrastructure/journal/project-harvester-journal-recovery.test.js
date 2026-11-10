@@ -606,8 +606,8 @@ test("restores a zero third-asset commission without inventing a quote valuation
 
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
   const restoredFill = restored.data.journalFills[0]
-  assert.equal(restoredFill.commissions[0].amount.amount, "0")
-  assert.equal(restoredFill.commissions[0].amount.asset.id, "binance:BNB")
+  assert.equal(restoredFill.commissions[0].amount, "0")
+  assert.equal(restoredFill.commissions[0].assetId, "binance:BNB")
   assert.equal(restoredFill.commissions[0].quoteValue, undefined)
 })
 
