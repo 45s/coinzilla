@@ -148,6 +148,17 @@ export function auditRecoveredAccountState({
       total: balance.total,
       locked: balance.locked,
     }]))
+    const baselineSequenceByAsset = new Map()
+    for (const snapshot of projection.data.accountSnapshots) {
+      if (snapshot.fileName !== baseline.fileName ||
+          !["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)) continue
+      for (const balance of snapshot.balances) {
+        const previousSequence = baselineSequenceByAsset.get(balance.asset)
+        if (previousSequence === undefined || snapshot.sequence < previousSequence) {
+          baselineSequenceByAsset.set(balance.asset, snapshot.sequence)
+        }
+      }
+    }
     const currentByAsset = new Map()
     for (const balance of currentAccountSnapshot.balances) {
       const code = balance.asset.code
@@ -253,6 +264,12 @@ export function auditRecoveredAccountState({
         commissionAssetCodeById.set(assetId, asset)
         if (compareDecimal({ left: amount, right: "0" }) === 0) continue
 
+        const baselineSequence = baselineSequenceByAsset.get(asset)
+        if (!Number.isSafeInteger(baselineSequence) ||
+            !Number.isSafeInteger(fill.sequence) ||
+            baselineSequence >= fill.sequence) {
+          throw new Error("Third-asset commission baseline must be durably recorded before its applied fill for " + asset)
+        }
         const quoteValue = commission.quoteValue
         if (!quoteValue ||
             quoteValue.assetId !== market.quoteAsset.id ||
