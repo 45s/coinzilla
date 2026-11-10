@@ -25,7 +25,6 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
   const balances = [
     { asset: "BTC", free: "0", locked: "0", total: "0" },
     { asset: "USDT", free: "1000", locked: "0", total: "1000" },
-    ...(thirdAssetCommission ? [{ asset: "BNB", free: "1", locked: "0", total: "1" }] : []),
   ]
   const records = [
     record("account.snapshot_captured", {
@@ -60,6 +59,13 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       quantity: "0.5",
       status: "FILLED",
     }, 4),
+    ...(thirdAssetCommission ? [record("account.snapshot_captured", {
+      phase: "PREFLIGHT",
+      sourceTime: 1000,
+      auditStatus: "COMPLETE",
+      balances: [{ asset: "BNB", free: "1", locked: "0", total: "1" }],
+      auditReasons: [],
+    }, 5)] : []),
     record("execution.fill_applied", {
       fillId: "binance:BTCUSDT:trade-1",
       tradeId: "trade-1",
@@ -81,7 +87,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
         }] : []),
       ],
       commissionStatus: "COMPLETE",
-    }, 5),
+    }, thirdAssetCommission ? 6 : 5),
     record("order.submission_requested", {
       clientOrderId: "h-BTCUSDT-sell-1",
       symbol: "BTCUSDT",
@@ -90,7 +96,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       price: "102.757352941176470588",
       quantity: "0.4896",
       status: "PENDING",
-    }, 6),
+    }, thirdAssetCommission ? 7 : 6),
     record("order.submitted", {
       clientOrderId: "h-BTCUSDT-sell-1",
       brokerOrderId: "9002",
@@ -100,7 +106,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       price: "102.757352941176470588",
       quantity: "0.4896",
       status: "FILLED",
-    }, 7),
+    }, thirdAssetCommission ? 8 : 7),
     record("execution.fill_applied", {
       fillId: "binance:BTCUSDT:trade-2",
       tradeId: "trade-2",
@@ -114,7 +120,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       liquidityRole: "MAKER",
       commissions: [],
       commissionStatus: "COMPLETE",
-    }, 8),
+    }, thirdAssetCommission ? 9 : 8),
     record("recovery.cycle_completed", {
       symbol: "BTCUSDT",
       marketId: "binance:BTCUSDT",
@@ -122,7 +128,7 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       keepQuantity: "0.01",
       minProfit: "0.01",
       realizedNetProfit: thirdAssetCommission ? "0.24" : "0.25",
-    }, 9),
+    }, thirdAssetCommission ? 10 : 9),
     record("account.snapshot_captured", {
       phase: "CLOSING",
       sourceTime: 2000,
@@ -133,8 +139,8 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
         ...(thirdAssetCommission ? [{ asset: "BNB", free: "0.9999", locked: "0", total: "0.9999" }] : []),
       ],
       auditReasons: [],
-    }, 10),
-    record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }, 11),
+    }, thirdAssetCommission ? 11 : 10),
+    record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }, thirdAssetCommission ? 12 : 11),
   ]
   return projectHarvesterJournalRecovery({ records })
 }
