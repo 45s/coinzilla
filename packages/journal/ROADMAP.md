@@ -62,8 +62,6 @@ This section supersedes stale checkboxes below where they conflict with merged w
    - **Do:** keep mandatory flush failures fail-closed at their existing boundaries; keep extra event evidence asynchronous/best-effort and visibly report gaps. Never claim Journal records override broker facts.
    - **Verify:** Harvester tests prove no corresponding broker side effect occurs when a required flush fails, and optional evidence failures do not change Portfolio, RecoveryLedger, order execution or readiness.
 
-
-
 ### CRITICAL — lossless JSONL serialization and durability propagation (#889)
 
 **Status:** OPEN — Journal-owned follow-up tracked in [issue #889](https://github.com/45s/coinzilla/issues/889). This documentation update does not implement or close the runtime defect.

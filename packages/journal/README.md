@@ -8,7 +8,7 @@ Journal stores the events it receives; it does not decide what those events mean
 
 - **Domain event:** a business fact named and owned by the domain that produces it (for example, an order being filled). Journal does not infer domain meaning from an event name or payload.
 - **EventBus message / source event:** the event delivered to Journal by the injected EventBus subscription. Journal consumes the event object as supplied; it does not reclassify it as a domain or integration event.
-- **Persisted Journal record:** the JSON-representable source-event fields retained at the JSONL top level, plus Journal-owned schema and identity metadata under the reserved `__coinzillaJournal` key. This is subject to the [current JSONL serialization limitation](#known-jsonl-serialization-and-durability-limitation--issue-889).
+- **Persisted Journal record:** the JSON-representable source-event fields retained at the JSONL top level, plus Journal-owned schema and identity metadata under the reserved `__coinzillaJournal` key. This is subject to the [current JSONL serialization limitation](#known-jsonl-serialization-and-durability-limitation-issue-889).
 - **Recovered record:** the read/replay representation derived from a persisted line. It separates Journal identity and schema from the event payload and adds the source file and 1-based line position.
 
 A source event is an object with a non-empty string `id`. That stable ID becomes the Journal record identity; Journal does not generate a replacement ID or deduplicate records by business meaning. The reserved `__coinzillaJournal` metadata key cannot be supplied by the source event. A source event must not define an own enumerable callable `toJSON` method: object spread copies that hook onto the persisted record, where JSON serialization could use it to replace the complete Journal envelope. Journal rejects this root-level serialization hook; non-enumerable or inherited methods are not copied into the record.
@@ -17,7 +17,7 @@ For source events that satisfy the temporary JSONL-safe value constraint below, 
 
 Legacy JSONL lines written before the metadata field existed remain readable as schema-v1 records: their top-level object is the payload, and its non-empty `id` supplies record identity. Unknown schema versions and malformed identities fail closed.
 
-### Known JSONL serialization and durability limitation — issue #889
+### Known JSONL serialization and durability limitation (issue #889)
 
 EventBus's in-memory payload contract is broader than the values JSONL can represent losslessly. Journal currently uses `JSON.stringify` after validating the top-level event identity and reserved metadata; it does not recursively validate nested values for lossless JSON representation. Until [Journal issue #889](https://github.com/45s/coinzilla/issues/889) is resolved, every EventBus message that must be persisted by Journal must use only acyclic, losslessly JSON-safe data:
 
