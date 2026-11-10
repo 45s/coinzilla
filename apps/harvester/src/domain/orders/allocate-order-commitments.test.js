@@ -200,6 +200,57 @@ test("reserves only the post-snapshot change in a partially filled BUY commitmen
   assert.equal(result.data.remainingQuoteBalance, "890", "After the new 10-unit BUY, quote availability must be 890 because the partial fill's cash-flow debit and released reservation offset exactly.")
 })
 
+test("releases a pre-snapshot BUY lock when the order is no longer active", () => {
+  const commitmentAtSnapshot = "100"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "950", quantity: "1" }],
+    quoteFreeBalance: "900",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    activeBaseBalance: "0",
+    activeBaseBalanceBaseline: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: commitmentAtSnapshot,
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "A BUY reservation canceled after the snapshot must release the 100 quote units that were locked when the snapshot was captured.")
+  assert.deepEqual(result.data.executableActions, [{ side: "BUY", price: "950", quantity: "1" }], "The released pre-snapshot reservation must restore 1,000 quote units for the new BUY allocation.")
+  assert.equal(result.data.remainingQuoteBalance, "50", "The 950-unit replacement BUY must leave exactly 50 quote units after the old 100-unit lock is released.")
+})
+
+test("subtracts only a new BUY commitment created after the account snapshot", () => {
+  const commitmentAtSnapshot = "100"
+  const currentBuyCommitment = "150"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "850", quantity: "1" }],
+    quoteFreeBalance: "900",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    activeBaseBalance: "0",
+    activeBaseBalanceBaseline: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: currentBuyCommitment,
+    committedQuoteBalanceBaseline: commitmentAtSnapshot,
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true, "A new 50-unit BUY reservation after the snapshot must reduce free quote by only 50, not by the full 150-unit current commitment.")
+  assert.deepEqual(result.data.executableActions, [{ side: "BUY", price: "850", quantity: "1" }], "The new BUY must be accepted at exact equality with the 850 quote units remaining after the post-snapshot reservation.")
+  assert.equal(result.data.remainingQuoteBalance, "0", "The exact 850-unit BUY must consume the remaining free quote budget after reserving only the 50-unit post-snapshot commitment delta.")
+})
+
 test("does not count Portfolio base inventory twice when the exchange snapshot already reflects it", () => {
   const trackedActiveBaseAtSnapshot = "10"
   const result = allocateOrderCommitments({
