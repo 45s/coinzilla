@@ -2583,11 +2583,11 @@ test("does not submit the next standing BUY when recovery SELL submission fails"
 })
 
 
-function makeOrderStatusUpdate({ order, status, executedQuantity = "0", updatedAt = 2 }) {
+function makeOrderStatusUpdate({ order, brokerOrderId = order.brokerOrderId, status, executedQuantity = "0", updatedAt = 2 }) {
   const terminal = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(status)
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
+    brokerOrderId,
     market: order.market,
     side: order.side,
     type: order.type,
@@ -2616,6 +2616,34 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
   assert.equal(result.data.waitingForTerminalState, true)
   assert.equal(engine.getOrders().find((order) => order.clientOrderId === buyOrder.clientOrderId).status, "UNKNOWN")
   assert.deepEqual(pauses, [])
+})
+
+test("accepts a matching Binance NEW report after a lost order acknowledgement", async () => {
+  const { engine } = await createHarness({ placeOrderThrow: true })
+  const submission = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(submission.ok, false)
+  const unknownOrder = engine.getOrders().find((order) => order.side === "BUY")
+  assert.equal(unknownOrder.status, "UNKNOWN")
+  assert.equal(unknownOrder.brokerOrderId, undefined)
+
+  const exchangeNew = makeOrderStatusUpdate({
+    order: unknownOrder,
+    brokerOrderId: "binance-accepted-after-timeout",
+    status: "OPEN",
+    updatedAt: 3,
+  })
+  const result = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "NEW", executedOrder: exchangeNew },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.ignored, false, "The authoritative NEW report must not be classified as stale.")
+  const tracked = engine.getOrders().find((order) => order.clientOrderId === unknownOrder.clientOrderId)
+  assert.equal(tracked.status, "OPEN")
+  assert.equal(tracked.brokerOrderId, "binance-accepted-after-timeout", "The exchange-assigned ID must become available to shutdown cancellation.")
 })
 
 test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
