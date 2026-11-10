@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 import { isLocalHostname } from './external-link-address-policy.js';
 import { fetchPinned } from './external-link-network.js';
-
 import { findMarkdownDocuments, removeCodeExamples } from './check-agent-policy.js';
 import { isHistoricalPath } from './check-markdown-style.js';
 
