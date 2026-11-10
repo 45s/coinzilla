@@ -1,0 +1,55 @@
+name: External Documentation Links
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '*.md'
+      - '*.mdx'
+      - 'scripts/check-external-links.js'
+      - 'scripts/check-external-links.test.js'
+      - 'scripts/check-agent-policy.js'
+      - 'scripts/check-markdown-style.js'
+      - 'package.json'
+      - '.github/workflows/external-links.yml'
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-doc-links-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-links:
+    name: Check external documentation links
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout PR merge ref or develop
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || 'develop' }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+
+      - name: Check changed maintained Markdown/MDX
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-external-links.js --changed "$BASE_SHA" --fail-on-broken
+
+      - name: Report full documentation tree
+        if: github.event_name != 'pull_request'
+        run: node scripts/check-external-links.js --all --report-only
