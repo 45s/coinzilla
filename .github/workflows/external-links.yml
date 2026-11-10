@@ -10,6 +10,7 @@ on:
       - '*.md'
       - '*.mdx'
       - 'scripts/check-external-links.js'
+      - 'scripts/external-link-address-policy.js'
       - 'scripts/external-link-network.js'
       - 'scripts/check-external-links.test.js'
       - 'scripts/check-agent-policy.js'
