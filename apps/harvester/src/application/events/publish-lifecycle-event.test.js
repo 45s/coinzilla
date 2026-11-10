@@ -18,20 +18,31 @@ test("publishes the mapped DTO synchronously with the Harvester source", () => {
   }])
 })
 
-test("does not publish invalid DTO mappings or when no publisher is injected", () => {
+test("reports mapper errors without publishing invalid DTOs or when no publisher is injected", () => {
   let calls = 0
-  const eventPublisher = { publish: () => { calls += 1; return { ok: true } } }
+  const reportedFailures = []
+  const mapperError = new Error("invalid event timestamp")
+  const eventPublisher = {
+    publish: () => { calls += 1; return { ok: true } },
+    reportFailure: (failure) => reportedFailures.push(failure),
+  }
 
-  assert.equal(publishLifecycleEvent({
+  const result = publishLifecycleEvent({
     eventPublisher,
     eventName: "harvester.started",
-    dataResult: { ok: false, errors: [new Error("invalid")] },
-  }).ok, false)
+    dataResult: { ok: false, errors: [mapperError] },
+  })
+  assert.equal(result.ok, false, "A failed DTO mapping must remain a failed publication result.")
+  assert.equal(calls, 0, "EventBus must never receive a DTO that failed mapping.")
+  assert.equal(reportedFailures.length, 1, "The event publisher must report the mapping failure even for best-effort callers.")
+  assert.equal(reportedFailures[0].event.name, "harvester.started", "The diagnostic must identify the rejected event name.")
+  assert.equal(reportedFailures[0].error, mapperError, "The diagnostic must preserve the original mapper error.")
+
   assert.equal(publishLifecycleEvent({
     eventName: "harvester.started",
     dataResult: { ok: true, data: {} },
-  }).skipped, true)
-  assert.equal(calls, 0)
+  }).skipped, true, "A valid DTO without an injected publisher must remain an explicit skip.")
+  assert.equal(calls, 0, "A skipped publication must not invoke EventBus.")
 })
 
 test("contains a synchronous publisher exception", () => {
