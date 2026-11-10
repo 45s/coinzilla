@@ -225,6 +225,12 @@ sequenceDiagram
     Main->>Main: close logger transports
 ```
 
+### Ambiguous order acknowledgements during shutdown
+
+A placement request can have an uncertain local outcome even when Binance accepted the order. Harvester must retain the original client order ID and keep the order UNKNOWN; it must not retry placement. An authoritative user-data `executionReport` with the matching owned `clientOrderId` and exchange-assigned `brokerOrderId` resolves the identity. The first matching `NEW` report advances the registry from UNKNOWN to OPEN; duplicate reports are idempotent, and conflicting client/broker identities remain rejected.
+
+This identity recovery is important to shutdown: the initial `reconcileOwnedOrders()` can now see the exchange identity and the existing cancellation selector can cancel the acknowledged owned BUY. If identity reconciliation remains incomplete, shutdown must not guess an order ID or cancel an external order; it records an incomplete CLOSING audit, rejects shutdown, and the process entrypoint retains its locks. Open owned SELLs remain intentionally preserved. The broker requests Binance `newOrderRespType: "RESULT"` for canonical placement so `LIMIT_MAKER` acknowledgements contain the order facts required by the canonical adapter instead of Binance's minimal default ACK.
+
 ### Ordering and safety invariants
 
 - The handler marks the runtime stopped and not ready before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
