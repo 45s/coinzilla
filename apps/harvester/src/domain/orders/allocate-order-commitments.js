@@ -12,7 +12,9 @@ function assertNonNegativeDecimal({ value, field } = {}) {
  * Exchange free balances are point-in-time values, so only current-minus-snapshot
  * deltas for Portfolio inventory and active-order commitments adjust them. This
  * prevents pre-snapshot locks from being subtracted twice while reserving orders
- * created after the snapshot. Each accepted action consumes the remaining budget.
+ * created after the snapshot. `portfolioBaseBalance` is total tracked base (active
+ * plus retained free); `activeBaseQuantity` remains the pair-level SELLable amount.
+ * Each accepted action consumes the remaining budget.
  * SELL overcommitment rejects the whole decision before any broker submission.
  */
 export function allocateOrderCommitments({

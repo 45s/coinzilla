@@ -1095,12 +1095,8 @@ export function makeConservativeTradingEngine({
       const committedQuote = activeOrdersBefore
         .filter((order) => order.side === "BUY")
         .reduce((total, order) => {
-          const remaining = subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          })
           const commitment = multiplyDecimal({
-            left: remaining,
+            left: order.remainingQuantity.amount,
             right: order.limitPrice.amount,
           })
           return addDecimal({ left: total, right: commitment })
@@ -1108,12 +1104,8 @@ export function makeConservativeTradingEngine({
       const committedQuoteBalance = allActiveOrders
         .filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id)
         .reduce((total, order) => {
-          const remaining = subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          })
           const commitment = multiplyDecimal({
-            left: remaining,
+            left: order.remainingQuantity.amount,
             right: order.limitPrice.amount,
           })
           return addDecimal({ left: total, right: commitment })
@@ -1122,19 +1114,13 @@ export function makeConservativeTradingEngine({
         .filter((order) => order.side === "SELL")
         .reduce((total, order) => addDecimal({
           left: total,
-          right: subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          }),
+          right: order.remainingQuantity.amount,
         }), "0")
       const committedBaseBalance = allActiveOrders
         .filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id)
         .reduce((total, order) => addDecimal({
           left: total,
-          right: subtractDecimal({
-            left: order.originalQuantity.amount,
-            right: order.executedQuantity.amount,
-          }),
+          right: order.remainingQuantity.amount,
         }), "0")
       const quoteBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })
       const baseBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })
