@@ -452,7 +452,7 @@ test("classifies residual quantity below MIN_NOTIONAL instead of submitting an i
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false, "The DOGE residual below MIN_NOTIONAL must not produce another SELL order.")
   assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST", "The DOGE residual must be classified as exchange-constrained dust.")
   assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL", "The DOGE dust blocker must identify the minimum-notional filter.")
   assert.equal(decision.inventoryDisposition.quantity, "1")
@@ -483,7 +483,7 @@ test("does not create a duplicate residual SELL while one is active", () => {
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false, "The ZRO residual below MIN_NOTIONAL must not produce another SELL order.")
 })
 
 test("fails closed when active inventory has no positive recovery cost basis", () => {
@@ -854,8 +854,8 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
     lastBuyPrice: "0.07153",
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
-  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST", "The DOGE residual must be classified as exchange-constrained dust.")
+  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL", "The DOGE dust blocker must identify the minimum-notional filter.")
   assert.equal(decision.inventoryDisposition.quantity, "1.8", "The full DOGE residual quantity must be retained in the dust disposition.")
   assert.equal(decision.inventoryDisposition.evaluatedQuantity, "1", "The DOGE quantity evaluated for the exchange filter must remain independently exact.")
   assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.07185", "The DOGE evaluated notional must match the exact residual quantity and current price.")
@@ -941,9 +941,9 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
     keepQuantity: "0.01",
     minProfit: "0.01",
   })
-  assert.equal(completion.eligible, false)
+  assert.equal(completion.eligible, false, "Recovery must remain incomplete while exchange-constrained ZRO inventory still requires sell-through.")
   assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "The ZRO residual must be classified for sell-through rather than retained as free inventory.")
-  assert.equal(completion.freeQuantity, "0")
+  assert.equal(completion.freeQuantity, "0", "No ZRO quantity may be allocated to free inventory before sell-through completes.")
 
   const decision = evaluateConservativeStrategy({
     marketPrice: { symbol: "ZROUSDT", price: "1.606", timestamp: 100 },
@@ -961,8 +961,8 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
     activeOrders: [{ market: zroMarket, side: "BUY", status: "OPEN" }],
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
-  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST", "The ZRO residual must be classified as exchange-constrained dust.")
+  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL", "The ZRO dust blocker must identify the minimum-notional filter.")
   assert.equal(decision.inventoryDisposition.quantity, "0.04", "The full ZRO residual quantity must be retained in the dust disposition.")
   assert.equal(decision.inventoryDisposition.evaluatedQuantity, "0.03", "The ZRO quantity evaluated for the exchange filter must remain independently exact.")
   assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.04818", "The ZRO evaluated notional must match the exact residual quantity and current price.")
