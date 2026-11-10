@@ -36,9 +36,9 @@ The domain suite is supplemented by application-level engine and use-case tests 
 
 ### High — blocked recovery SELL must not be bypassed by a new BUY
 
-Source review found two decision-path gaps in `strategies/conservative/strategy.js`: (1) after recording `PRICE_FILTER_BLOCKED` for a required recovery SELL, the function continues into standing-BUY planning; and (2) an active recovery SELL in `PENDING` or `UNKNOWN` state suppresses duplicate SELL intent but still permits a new BUY. The canonical specification permits the next standing BUY alongside an acknowledged OPEN/PARTIALLY_FILLED recovery SELL, not an unacknowledged or unresolved SELL.
+Two decision-path defects are confirmed in `strategies/conservative/strategy.js`: (1) after recording `PRICE_FILTER_BLOCKED` for a required recovery SELL, the function continued into standing-BUY planning; and (2) an active recovery SELL in `PENDING` or `UNKNOWN` state suppressed duplicate SELL intent but still permitted a new BUY. The canonical specification permits the next standing BUY alongside an acknowledged OPEN/PARTIALLY_FILLED recovery SELL, not an unacknowledged or unresolved SELL.
 
-The MAX_PRICE regression was executed on PR #917 head `9c34968997e61e5c781a8b2c95067c761635a60e`: Harvester tests reported 870 passed / 1 failed. The failure was the intended assertion: actual actions contained a `NEXT_STANDING_BUY` at `0.099` for quantity `100`, while expected actions were empty. A second deterministic status-matrix regression now covers PENDING and UNKNOWN; its RED result is pending CI. No production defect is claimed for that second path until execution confirms it.
+RED evidence: PR #917 head `59003fc8ae6fafe6dc5f7528f3356adf03372cdc` ran the full Harvester suite with 870 passed / 2 failed (872 total). The MAX_PRICE failure showed an unexpected `NEXT_STANDING_BUY` at `0.099` for quantity `100`; the PENDING failure showed the same unexpected BUY. The PENDING/UNKNOWN regression is table-driven; its first PENDING assertion fails before the UNKNOWN row executes. The implementation change below is limited to suppressing BUY intents for these two unsafe states. The OPEN/PARTIALLY_FILLED matrix explicitly protects the approved coexistence behavior.
 
 ### High — assertion diagnostics are inconsistent
 
