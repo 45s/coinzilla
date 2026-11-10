@@ -2619,7 +2619,7 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
 })
 
 test("accepts a matching Binance NEW report after a lost order acknowledgement", async () => {
-  const { engine } = await createHarness({ placeOrderThrow: true })
+  const { engine, cancellationIds } = await createHarness({ placeOrderThrow: true })
   const submission = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -2644,6 +2644,11 @@ test("accepts a matching Binance NEW report after a lost order acknowledgement",
   const tracked = engine.getOrders().find((order) => order.clientOrderId === unknownOrder.clientOrderId)
   assert.equal(tracked.status, "OPEN")
   assert.equal(tracked.brokerOrderId, "binance-accepted-after-timeout", "The exchange-assigned ID must become available to shutdown cancellation.")
+
+  const shutdown = await engine.cancelOwnedBuyOrdersForShutdown()
+  assert.equal(shutdown.ok, true, shutdown.errors?.[0]?.message)
+  assert.deepEqual(cancellationIds, ["binance-accepted-after-timeout"], "Shutdown must cancel the recovered owned BUY by its exchange-assigned ID, never by a guessed or missing ID.")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === unknownOrder.clientOrderId).status, "CANCELED")
 })
 
 test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
