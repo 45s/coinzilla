@@ -7,6 +7,21 @@ const SECRET_ASSIGNMENT = /\b(api[\s_-]?key|api[\s_-]?secret|client[\s_-]?secret
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi
 const URL_CREDENTIALS = /(https?:\/\/)[^/@\s:]+:[^/@\s]+@/gi
 
+const isSafeInteger = (value) => Number.isSafeInteger(value) && !Object.is(value, -0)
+const isNonNegativeSafeInteger = (value) => isSafeInteger(value) && value >= 0
+
+const requireSafeInteger = ({ value, field }) => {
+  if (!isSafeInteger(value)) throw new TypeError(field + " must be a safe integer other than negative zero")
+  return value
+}
+
+const requireNonNegativeSafeInteger = ({ value, field }) => {
+  if (!isNonNegativeSafeInteger(value)) {
+    throw new TypeError(field + " must be a non-negative safe integer other than negative zero")
+  }
+  return value
+}
+
 const requireString = ({ value, field }) => {
   if (typeof value !== "string" || value.trim() === "") {
     throw new TypeError(field + " must be a non-empty string")
@@ -54,7 +69,7 @@ const safeError = ({ error }) => {
     .replace(BEARER_TOKEN, "Bearer [REDACTED]")
     .replace(URL_CREDENTIALS, "$1[REDACTED]@")
     .slice(0, 240)
-  const code = typeof error.code === "string" || Number.isSafeInteger(error.code)
+  const code = typeof error.code === "string" || isSafeInteger(error.code)
     ? { code: typeof error.code === "string" ? error.code.slice(0, 80) : error.code }
     : {}
   return { name, message, ...code }
@@ -270,12 +285,8 @@ export const mapBrokerStatusChangedData = (input = {}) =>
     if (typeof recoveryRequired !== "boolean") {
       throw new TypeError("recoveryRequired must be a boolean")
     }
-    if (attempt !== undefined && (!Number.isSafeInteger(attempt) || attempt < 0)) {
-      throw new TypeError("attempt must be a non-negative safe integer")
-    }
-    if (code !== undefined && code !== null && !Number.isSafeInteger(code)) {
-      throw new TypeError("code must be a safe integer")
-    }
+    if (attempt !== undefined) requireNonNegativeSafeInteger({ value: attempt, field: "attempt" })
+    if (code !== undefined && code !== null) requireSafeInteger({ value: code, field: "code" })
     return {
       broker: requireString({ value: broker, field: "broker" }),
       stream: normalizedStream,
@@ -310,10 +321,7 @@ const requireOrderFacts = ({ order }) => {
   }
 }
 
-const requireCount = ({ value, field }) => {
-  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(field + " must be a non-negative safe integer")
-  return value
-}
+const requireCount = ({ value, field }) => requireNonNegativeSafeInteger({ value, field })
 
 const mapStrategyDecisionInputs = (inputs) => {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
@@ -333,7 +341,8 @@ const mapStrategyDecisionInputs = (inputs) => {
       mapped[field] = null
       continue
     }
-    const decimal = typeof value === "number" && Number.isFinite(value) ? String(value) : value
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) continue
+    const decimal = typeof value === "number" ? String(value) : value
     if (typeof decimal !== "string") continue
     try {
       assertDecimalString({ value: decimal, field: "inputs." + field })
@@ -344,7 +353,7 @@ const mapStrategyDecisionInputs = (inputs) => {
   }
   for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
     const value = inputs[field]
-    if (Number.isSafeInteger(value) && value >= 0) mapped[field] = value
+    if (isNonNegativeSafeInteger(value)) mapped[field] = value
   }
   return mapped
 }
@@ -493,7 +502,9 @@ export const mapFillAppliedData = (input = {}) =>
       quantity: requireDecimalString({ value: fill.quantity?.amount, field: "quantity" }),
       quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount, field: "quoteQuantity" }),
       liquidityRole: requireString({ value: fill.liquidityRole, field: "liquidityRole" }),
-      ...(fill.executedAt === undefined ? {} : { executedAt: fill.executedAt }),
+      ...(fill.executedAt === undefined ? {} : {
+        executedAt: requireNonNegativeSafeInteger({ value: fill.executedAt, field: "fill.executedAt" }),
+      }),
       commissions: fill.commissions.map((commission, index) => ({
         amount: requireDecimalString({
           value: commission.amount?.amount,
@@ -604,9 +615,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     phase, observedAt, orders, readiness, blockReasons = [],
   }) => {
     if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
-    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
-      throw new TypeError("observedAt must be a non-negative safe integer")
-    }
+    const normalizedObservedAt = requireNonNegativeSafeInteger({ value: observedAt, field: "observedAt" })
     if (!Array.isArray(orders)) throw new TypeError("orders must be an array")
     if (!["READY", "RECONCILED", "BLOCKED"].includes(readiness)) {
       throw new TypeError("readiness must be READY or BLOCKED")
@@ -662,7 +671,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     }
     return {
       phase,
-      observedAt,
+      observedAt: normalizedObservedAt,
       readiness,
       orderCount: mappedOrders.length,
       orders: mappedOrders,
@@ -677,9 +686,10 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
   }) => {
     if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, or RECOVERY")
     if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
-    if (!snapshot || !Array.isArray(snapshot.balances) || !Number.isSafeInteger(snapshot.sourceTime)) {
+    if (!snapshot || !Array.isArray(snapshot.balances)) {
       throw new TypeError("snapshot must contain sourceTime and canonical balances")
     }
+    const sourceTime = requireNonNegativeSafeInteger({ value: snapshot.sourceTime, field: "snapshot.sourceTime" })
     if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
       throw new TypeError("auditReasons must contain non-empty strings")
     }
@@ -706,7 +716,7 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     }
     if (auditStatus === "COMPLETE" && auditReasons.length > 0) throw new TypeError("COMPLETE snapshot cannot contain auditReasons")
     if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) throw new TypeError("INCOMPLETE snapshot requires auditReasons")
-    return { phase, auditStatus, sourceTime: snapshot.sourceTime, assetCount: balances.length, balances, auditReasons: [...auditReasons] }
+    return { phase, auditStatus, sourceTime, assetCount: balances.length, balances, auditReasons: [...auditReasons] }
   })
 
 
@@ -736,8 +746,7 @@ export const mapBrokerExecutionReportData = (input = {}) =>
     }
     for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
       if (evidence[field] !== undefined) {
-        if (!Number.isSafeInteger(evidence[field]) || evidence[field] < 0) throw new TypeError("evidence." + field + " must be a non-negative safe integer")
-        data[field] = evidence[field]
+        data[field] = requireNonNegativeSafeInteger({ value: evidence[field], field: "evidence." + field })
       }
     }
     for (const field of ["isMaker", "working"]) {
@@ -755,10 +764,17 @@ export const mapOrderUpdatedData = (input = {}) =>
       originalQuantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "originalQuantity" }),
       executedQuantity: requireDecimalString({ value: order.executedQuantity?.amount, field: "executedQuantity" }),
       ...(order.limitPrice === undefined ? {} : { price: requireDecimalString({ value: order.limitPrice.amount, field: "price" }) }),
-      ...(order.updatedAt === undefined ? {} : { updatedAt: order.updatedAt }),
+      ...(order.updatedAt === undefined ? {} : {
+        updatedAt: requireNonNegativeSafeInteger({ value: order.updatedAt, field: "order.updatedAt" }),
+      }),
       ...(executionType === undefined ? {} : { executionType: requireString({ value: executionType, field: "executionType" }) }),
       ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? { cumulativeQuoteQuantity: requireDecimalString({ value: evidence.cumulativeQuoteQuantity, field: "cumulativeQuoteQuantity" }) } : {}),
-      ...(typeof evidence?.transactionTime === "number" ? { brokerTransactionTime: evidence.transactionTime } : {}),
+      ...(evidence?.transactionTime === undefined ? {} : {
+        brokerTransactionTime: requireNonNegativeSafeInteger({
+          value: evidence.transactionTime,
+          field: "evidence.transactionTime",
+        }),
+      }),
     }
   })
 

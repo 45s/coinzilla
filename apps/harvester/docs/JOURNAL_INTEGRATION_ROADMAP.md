@@ -357,6 +357,12 @@ A separate Harvester P0 recovery track may consume the Journal as validated reco
 - Refactoring working strategy/order/accounting code solely to make instrumentation cleaner.
 - Changes to shared Journal/EventBus packages without a separately justified defect.
 
+## Current cross-domain serialization status
+
+- Journal-owned recursive serialization and durability propagation merged in [PR #920](https://github.com/45s/coinzilla/pull/920).
+- Harvester consumer hardening is tracked in [issue #923](https://github.com/45s/coinzilla/issues/923); test-first regressions and production validation/mapper-failure diagnostics passed exact-head CI on `29dc9c4440e794a4426765dc7c810e2e103d3a2b` (875/875 Harvester tests); fresh verification is required after this develop sync.
+- Keep [#889](https://github.com/45s/coinzilla/issues/889) open until the Harvester DTO boundary and mapper-failure diagnostics are corrected and verified.
+
 ## Status
 
 - [x] Read-only source audit completed.
