@@ -983,9 +983,9 @@ persistence, exchange operations, or broader observability projects.
 
 ## Historical Conservative strategy evidence audit — 2026-11-06 (evidence snapshot; contract superseded)
 
-**Audit:** [AUDIT.md](../../AUDIT.md)  
-**Findings register:** [AUDIT_FINDINGS.md](../../AUDIT_FINDINGS.md)  
-**Execution ledger:** [AUDIT_EXECUTION_HISTORY.md](../../AUDIT_EXECUTION_HISTORY.md)  
+**Audit:** [AUDIT.md](reports/AUDIT.md)  
+**Findings register:** [AUDIT_FINDINGS.md](reports/AUDIT_FINDINGS.md)  
+**Execution ledger:** [AUDIT_EXECUTION_HISTORY.md](reports/AUDIT_EXECUTION_HISTORY.md)  
 **Parent evidence:** [#645](https://github.com/45s/coinzilla/issues/645)  
 **Specification follow-up:** [#646](https://github.com/45s/coinzilla/issues/646)  
 **Baseline:** `develop` `4af3434f788b87139513921f220294ae90daf4d5`
@@ -994,20 +994,20 @@ The 2026-11-06 Journal (114 records) and the 100-row DOGEUSDT and ZROUSDT order-
 
 DOGE remains **CONFLICT**: order history reports SELL 1276698 / client suffix -11 FILLED for 1,196 DOGE, while the Journal has no applied DOGE SELL fill and retains the order acknowledgement as OPEN; the CLOSING snapshot has 1,196 DOGE locked. The DOGE total balance delta exactly matches the three net BUY fills, not the reported SELL. The CLOSING account audit is INCOMPLETE with two unresolved owned orders. No cause or realized DOGE SELL PnL is asserted.
 
-The original `harvester.log` and `harvester-trace.log` attachments have now been read-only integrity-verified and parsed; see [AUDIT_LOG_EVIDENCE_2026-11-06.md](../../AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO Portfolio/RecoveryLedger runtime accounting is directly observed and reconciles. DOGE order 1276698 is OPEN with zero executed at the final runtime evaluations and absent from the 12 shutdown execution records, strongly favoring open/unfilled, but the separate exchange order-history row reports FILLED. DOGE remains CONFLICT; CLOSING remains INCOMPLETE with two unresolved orders, and the second order identity is not proven. No source fix is justified by current evidence; no TESTNET orders, cancellations, or restarts were performed.
+The original `harvester.log` and `harvester-trace.log` attachments have now been read-only integrity-verified and parsed; see [AUDIT_LOG_EVIDENCE_2026-11-06.md](evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO Portfolio/RecoveryLedger runtime accounting is directly observed and reconciles. DOGE order 1276698 is OPEN with zero executed at the final runtime evaluations and absent from the 12 shutdown execution records, strongly favoring open/unfilled, but the separate exchange order-history row reports FILLED. DOGE remains CONFLICT; CLOSING remains INCOMPLETE with two unresolved orders, and the second order identity is not proven. No source fix is justified by current evidence; no TESTNET orders, cancellations, or restarts were performed.
 
 The specification/config-boundary drift in fee-reserve policy, residual-inventory behavior, Portfolio recovery allocation, and zero-value input acceptance is tracked in [#646](https://github.com/45s/coinzilla/issues/646). The exact-once completion and full partial-fill/replacement lifecycle test gaps identified in `ACCOUNTING_INVARIANTS.md` are tracked in [#648](https://github.com/45s/coinzilla/issues/648). Keep the TESTNET gate closed until the DOGE order lifecycle and CLOSING account state are correlated against the original logs and any resulting defect is reproduced with deterministic offline regression coverage.
 
 
 ## Conservative audit closure sequence — 2026-11-06
 
-**Status:** overall PARTIAL; DOGE SELL CONFLICT; ZRO arithmetic PASS; CLOSING audit INCOMPLETE; TESTNET acceptance NOT ACCEPTED. See [AUDIT.md](../../AUDIT.md), [AUDIT_FINDINGS.md](../../AUDIT_FINDINGS.md), [AUDIT_EXECUTION_HISTORY.md](../../AUDIT_EXECUTION_HISTORY.md), and parent [#645](https://github.com/45s/coinzilla/issues/645).
+**Status:** overall PARTIAL; DOGE SELL CONFLICT; ZRO arithmetic PASS; CLOSING audit INCOMPLETE; TESTNET acceptance NOT ACCEPTED. See [AUDIT.md](reports/AUDIT.md), [AUDIT_FINDINGS.md](reports/AUDIT_FINDINGS.md), [AUDIT_EXECUTION_HISTORY.md](reports/AUDIT_EXECUTION_HISTORY.md), and parent [#645](https://github.com/45s/coinzilla/issues/645).
 
 ### Gate 0 — evidence integrity
 
 - [x] Obtain original harvester.log and harvester-trace.log read-only; preserve original attachments unchanged.
 - [x] Independently verify SHA-256 against #645: harvester.log 5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d; harvester-trace.log 4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3.
-- [x] Record exact bytes, physical line counts, newline termination, timestamps, and key source-line ranges in [AUDIT_LOG_EVIDENCE_2026-11-06.md](../../AUDIT_LOG_EVIDENCE_2026-11-06.md).
+- [x] Record exact bytes, physical line counts, newline termination, timestamps, and key source-line ranges in [AUDIT_LOG_EVIDENCE_2026-11-06.md](evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md).
 - [ ] Obtain the full CLOSING snapshot/open-order payload including both unresolved order identities, reservations, free/locked balances, source timestamps, and reconciliation diagnostics.
 - [ ] Preserve full DOGE/ZRO order and trade history with commission asset/amount, redacted runtime config, and timestamped exchange filters.
 
@@ -1049,7 +1049,7 @@ Owner decisions are closed and recorded in the canonical specification. This his
 ### Gate 5 — user-data recovery (#626)
 
 - [x] Re-read original #626 acceptance criteria; #627/#629 merges are not acceptance evidence.
-- [x] Map each criterion to source, deterministic regression, failure mode, and exact CI head in [AUDIT_SESSION_2026-11-08.md §12](../../AUDIT_SESSION_2026-11-08.md).
+- [x] Map each criterion to source, deterministic regression, failure mode, and exact CI head in [AUDIT_SESSION_2026-11-08.md §12](sessions/AUDIT_SESSION_2026-11-08.md).
 - [x] Bound unchanged `recovered` lifecycle/INFO diagnostics to once per application recovery generation while preserving reminder-driven retries; merged [PR #674](https://github.com/45s/coinzilla/pull/674).
 - [x] Add fail-closed regressions for broker acknowledgement rejection/exception, startup-only pending-recovery semantics, owned-order reconciliation failure, account-wide open-orders REST failure, account snapshot read failure, and durable open-orders audit failure; merged PRs [#675](https://github.com/45s/coinzilla/pull/675)–[#678](https://github.com/45s/coinzilla/pull/678).
 - [x] Cover reconnect/resubscribe, lost/late/duplicate/reordered fills, unknown submission outcomes, and order-mutation gates with deterministic broker/engine tests; exact-head CI recorded in the acceptance matrix.
@@ -1071,13 +1071,13 @@ Owner decisions are closed and recorded in the canonical specification. This his
 
 ## 2026-11-06 original-log verification update
 
-The previous statement that the application logs were inaccessible is superseded. Both original attachments have been parsed and checksum-verified; the durable derived evidence is in [AUDIT_LOG_EVIDENCE_2026-11-06.md](../../AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO in-memory Portfolio and RecoveryLedger state is now a direct PASS. DOGE SELL 1276698 remains CONFLICT: runtime shows OPEN/zero executed and the shutdown execution inventory has no DOGE SELL, while exchange order history reports FILLED. The 1,196 DOGE locked and CLOSING `UNRESOLVED_OWNED_ORDERS:2` still require full closing open-orders and canonical trade/order facts. The ZRO BUY 727905 is one confirmed unresolved order; the identity of the second is not proven. Keep TESTNET acceptance NOT ACCEPTED and do not submit/cancel orders or restart Harvester to investigate.
+The previous statement that the application logs were inaccessible is superseded. Both original attachments have been parsed and checksum-verified; the durable derived evidence is in [AUDIT_LOG_EVIDENCE_2026-11-06.md](evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO in-memory Portfolio and RecoveryLedger state is now a direct PASS. DOGE SELL 1276698 remains CONFLICT: runtime shows OPEN/zero executed and the shutdown execution inventory has no DOGE SELL, while exchange order history reports FILLED. The 1,196 DOGE locked and CLOSING `UNRESOLVED_OWNED_ORDERS:2` still require full closing open-orders and canonical trade/order facts. The ZRO BUY 727905 is one confirmed unresolved order; the identity of the second is not proven. Keep TESTNET acceptance NOT ACCEPTED and do not submit/cancel orders or restart Harvester to investigate.
 
 
 ## Conservative audit — 2026-11-06 post-CLOSING trade-history update
 
-- [x] Preserve the operator-supplied 50-row DOGEUSDT actual-trade export, including all commission fields: [AUDIT_DOGE_TRADES_2026-11-06.md](../../AUDIT_DOGE_TRADES_2026-11-06.md).
-- [x] Preserve the operator-supplied 50-row ZROUSDT actual-trade export, including all commission fields: [AUDIT_ZRO_TRADES_2026-11-06.md](../../AUDIT_ZRO_TRADES_2026-11-06.md).
+- [x] Preserve the operator-supplied 50-row DOGEUSDT actual-trade export, including all commission fields: [AUDIT_DOGE_TRADES_2026-11-06.md](evidence/AUDIT_DOGE_TRADES_2026-11-06.md).
+- [x] Preserve the operator-supplied 50-row ZROUSDT actual-trade export, including all commission fields: [AUDIT_ZRO_TRADES_2026-11-06.md](evidence/AUDIT_ZRO_TRADES_2026-11-06.md).
 - [x] Reconcile DOGE order 1276698 from two SELL fills: 1,196 DOGE; 85.93260000 USDT gross; 0.08593260 USDT fee; 85.84666740 USDT net. Both fills occurred after the ~07:58 CLOSING snapshot.
 - [x] Reconcile ZRO order 727905 from trade 12182: 5 ZRO gross BUY; 0.005 ZRO commission; 4.995 ZRO net; 7.98 USDT quote debit. Fill occurred after the ~07:58 CLOSING snapshot.
 - [x] Reconfirm ZRO recovery SELL 727904: 39.91 ZRO; 64.09546 USDT gross; 0.06409546 fee; 64.03136454 net; +0.01136454 USDT versus 64.02 USDT BUY cost.
@@ -1261,7 +1261,7 @@ The RecoveryLedger's legacy `buyCost` remains a compatibility projection for his
 
 ## Conservative Strategy — actual DOGE/ZRO outcome conformance (2026-11-06)
 
-**New active priority: reconcile observed exchange outcomes against the canonical Conservative contract, then fix every proven mismatch.** The actual DOGEUSDT and ZROUSDT trade exports are not merely incident background; they are concrete acceptance evidence. The raw exports remain immutable in [AUDIT_DOGE_TRADES_2026-11-06.md](../../AUDIT_DOGE_TRADES_2026-11-06.md) and [AUDIT_ZRO_TRADES_2026-11-06.md](../../AUDIT_ZRO_TRADES_2026-11-06.md). The sole expected-behavior authority remains [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+**New active priority: reconcile observed exchange outcomes against the canonical Conservative contract, then fix every proven mismatch.** The actual DOGEUSDT and ZROUSDT trade exports are not merely incident background; they are concrete acceptance evidence. The raw exports remain immutable in [AUDIT_DOGE_TRADES_2026-11-06.md](evidence/AUDIT_DOGE_TRADES_2026-11-06.md) and [AUDIT_ZRO_TRADES_2026-11-06.md](evidence/AUDIT_ZRO_TRADES_2026-11-06.md). The sole expected-behavior authority remains [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### Execution order
 
@@ -1401,7 +1401,7 @@ The active audit scope is now implemented and represented by offline regressions
 - Reconcile CANCELED, EXPIRED, and REJECTED recovery SELL outcomes before reevaluation; missing/conflicting history fails closed.
 - Cover exact-once accounting/completion and the full partial-fill/cancel/replace lifecycle. The engine lifecycle regression now runs for both positive `keepQuantity` and supported `keepQuantity = 0`.
 
-The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](../domain/ACCOUNTING_INVARIANTS.md). The audit findings and historical evidence limitations are recorded in [AUDIT.md](../../AUDIT.md) and [AUDIT_FINDINGS.md](../../AUDIT_FINDINGS.md).
+The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](../domain/ACCOUNTING_INVARIANTS.md). The audit findings and historical evidence limitations are recorded in [AUDIT.md](reports/AUDIT.md) and [AUDIT_FINDINGS.md](reports/AUDIT_FINDINGS.md).
 
 **Explicitly outside this closure:** workstation process-restart reconstruction remains deferred to [#654](https://github.com/45s/coinzilla/issues/654). The historical CLOSING open-order payload and post-fill account snapshot were not preserved; those historical facts remain UNVERIFIED and non-blocking. Exact historical DOGE/ZRO exchange filters were not captured, so no candidate filter assumptions are represented as historical facts. No TESTNET acceptance is claimed.
 
@@ -1520,7 +1520,7 @@ PRs #698 and #699 remain closed as superseded; no work from those branches is to
  
 ## 2026-11-09 forensic follow-up — November 8 evening session
 
-The separate 2026-11-08 16:33:33–22:42:05 UTC session has been fully parsed and its evidence inventory, hashes, event counts, accounting reconciliation, and unresolved findings are recorded in [AUDIT_SESSION_2026-11-08_16-33-33.md](../../AUDIT_SESSION_2026-11-08_16-33-33.md).
+The separate 2026-11-08 16:33:33–22:42:05 UTC session has been fully parsed and its evidence inventory, hashes, event counts, accounting reconciliation, and unresolved findings are recorded in [AUDIT_SESSION_2026-11-08_16-33-33.md](sessions/AUDIT_SESSION_2026-11-08_16-33-33.md).
 
 - [x] Parse all three supplied artifacts completely: 859 Journal records, 18,671 main-log lines, and 21,458 TRACE-log lines; zero malformed JSONL records. Original filenames, exact byte sizes, time coverage, SHA-256 hashes, and relevant line ranges are preserved in the report.
 - [x] Reconstruct the afternoon runtime separately from the earlier 03:20 UTC recovery incident. No global process freeze is demonstrated in the afternoon session; market processing and trading continued and shutdown completed successfully.
@@ -1566,7 +1566,7 @@ The current runtime does not execute this restoration/reconciliation matrix beca
 
 **F-028:** applied-fill and strategy-pause events are published asynchronously without an immediate durable flush; Journal append is not fsync acknowledgement. **F-029:** per-market pause/recovery-intent sets can be reconstructed by the offline restore helper, but current runtime does not invoke it. **F-031:** startup wiring and completeness remain the primary integration gap.
 
-See [AUDIT.md](../../AUDIT.md), [AUDIT_FINDINGS.md](../../AUDIT_FINDINGS.md), [JOURNAL_OPERATIONS.md](../JOURNAL_OPERATIONS.md), and [#654](https://github.com/45s/coinzilla/issues/654). No implementation or test changes are authorized in this phase.
+See [AUDIT.md](reports/AUDIT.md), [AUDIT_FINDINGS.md](reports/AUDIT_FINDINGS.md), [JOURNAL_OPERATIONS.md](../JOURNAL_OPERATIONS.md), and [#654](https://github.com/45s/coinzilla/issues/654). No implementation or test changes are authorized in this phase.
 
 ## 2026-11-09 forensic restart-recovery status
 
