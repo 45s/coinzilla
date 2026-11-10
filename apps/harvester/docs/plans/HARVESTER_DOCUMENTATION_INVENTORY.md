@@ -72,7 +72,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 
 ## Post-baseline additions — current 57-file checkpoint
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `210648d62026bb212f9ed88b6d2257e2d1b3fc72` (`truncated: false`) finds **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PR #964 subsequently updated living roadmap and operations guidance without adding or removing Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) finds **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 subsequently updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -106,6 +106,7 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 10. `testnet-order-tools.md` remains the canonical TESTNET operator guide. Historical ownership findings are preserved in `ROADMAP_HISTORY.md`; current diagnostics now document the source-confirmed `OWNERSHIP_INTEGRITY` fields and broker-order-ID-first registry behavior. No further split is justified because command procedures and current troubleshooting form one operational subject.
 11. The TESTNET order-history example was corrected in [PR #808](https://github.com/45s/coinzilla/pull/808); the runbook's account-wide cancellation and ZRO-sale authorization boundaries were checked against current scripts.
 12. PR #964 updated the living roadmap, Journal Operations and Trading First guidance for authoritative recovery of ambiguous order identity and shutdown ownership. The `UNKNOWN → OPEN` transition requires a matching owned client order ID and assigned broker order ID; duplicates are idempotent, conflicts remain rejected, and uncertain placement is never retried. Startup status uses validated `TRADING_MODE`, not `NODE_ENV`.
+13. PR #968 updated the living roadmap, Accounting Invariants, Domain Test Inventory and Portfolio domain guidance for snapshot-relative account allocation. Each account snapshot captures quote cash flow, total Portfolio base (active plus retained free), and active BUY/SELL commitments by asset ID; allocation applies only post-snapshot deltas while pair-specific investment and active SELL inventory remain separate. The eight required scenario families and recovery event-sequence recapture are covered; exact PR #968 head passed 914/914 offline Harvester tests and all seven workflows. No TESTNET/account operation was performed.
 
 ## Remaining review work
 
