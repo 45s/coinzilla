@@ -107,16 +107,10 @@ export function createAccountSnapshotManager({
       )
     }
     const accountAuditMarkets = [...marketMetadata.values()].map(({ market }) => market)
-    const configuredAssetCodes = new Set(accountAuditMarkets.flatMap((market) => [
-      market.baseAsset.code,
-      market.quoteAsset.code,
-    ]))
-    const configuredBalances = result.data.balances.filter((balance) =>
-      configuredAssetCodes.has(balance?.asset?.code))
     let nextSnapshot
     try {
       nextSnapshot = new AccountSnapshot({
-        balances: configuredBalances,
+        balances: result.data.balances,
         sourceTime: result.data.sourceTime,
         ...baselineResult.data,
       })
@@ -277,11 +271,9 @@ export function createAccountSnapshotManager({
     snapshot: suppliedSnapshot,
   } = {}) => {
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
-    const configuredAssetCodes = [...new Set([...marketMetadata.values()]
-      .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
     let dataResult
     try {
-      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes: configuredAssetCodes, auditStatus, auditReasons })
+      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, auditStatus, auditReasons })
     } catch (error) {
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
     }
@@ -321,7 +313,7 @@ export function createAccountSnapshotManager({
     }
     logSystem(logger, {
       message: "Account snapshot captured and durably journaled",
-      phase, auditStatus, assetCount: configuredAssetCodes.length, sourceAssetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
+      phase, auditStatus, assetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
     })
     return snapshot
   }
