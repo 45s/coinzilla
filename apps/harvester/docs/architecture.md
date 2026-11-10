@@ -69,6 +69,7 @@ Harvester uses two complementary styles. Choose based on responsibility, not per
 **Calculations and decisions MUST be plain pure functions.** A pure function receives all required facts through arguments, derives its result only from those arguments, and has no observable side effects. The same inputs must produce the same output.
 
 Use plain pure functions for:
+
 - price, quantity, fee, and profit calculations;
 - trading-policy and strategy decisions;
 - validation and predicates;

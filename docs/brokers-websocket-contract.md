@@ -78,6 +78,7 @@ The lifecycle implementation and its direct unit tests live together in `src/app
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
 The package entry point currently exports exactly `BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`. Current workspace consumers are:
+
 - `apps/harvester`, which wraps `BinanceWebSocketBroker` in its own infrastructure adapter and implements Harvester's application-owned `BrokerPort`.
 - `packages/market-simulator`, whose `HistoricalMarketBroker` extends `CoreBroker` and whose `SimulatedExecutionBroker` extends the historical broker.
 
@@ -132,6 +133,7 @@ Each refactoring slice follows RED → GREEN → REFACTOR → VERIFY:
 5. Update the architecture map and decision record to match actual code.
 
 Required test responsibilities:
+
 - Domain: deterministic and pure; no Binance clients, sockets, network, or credentials.
 - Application: use-case tests with fake ports; cover success, invalid states, failures, retries, timeouts, and uncertain outcomes.
 - Port/adapter contract: verify Binance infrastructure satisfies application-facing interfaces.

@@ -49,6 +49,7 @@ Infrastructure  --->  Application  --->  Domain
 ```
 
 More precisely:
+
 - **Domain** has no dependency on application workflows, infrastructure, Binance protocol modules, sockets, environment variables, clocks, or network clients.
 - **Application** depends on domain behavior and application-owned ports. It coordinates broker use cases but does not know Binance request/response schemas.
 - **Infrastructure** implements application ports and translates Binance protocol messages into application/domain contracts. It may depend inward, never the reverse.
@@ -88,6 +89,7 @@ Folder and module names must follow actual domain language discovered during the
 ### Domain
 
 Owns broker-domain concepts and deterministic rules that are meaningful independently of Binance:
+
 - normalized order, fill, balance, market, account, and broker-event facts where the package genuinely owns their semantics;
 - validation and invariants for broker-facing canonical values;
 - deterministic parsing/normalization/mapping that is not protocol-specific;
@@ -100,6 +102,7 @@ Use classes only when an object owns state and protects lifecycle invariants. Pr
 ### Application
 
 Owns the broker capabilities as seen by callers and the workflows that coordinate them:
+
 - narrow application-owned ports/contracts for required external capabilities;
 - focused injected use cases for meaningful broker operations or workflows;
 - orchestration, sequencing, and application-level error/result semantics.
@@ -113,6 +116,7 @@ A use case is justified when it represents an application goal and coordinates c
 The Application layer is justified where the package owns a genuine workflow across capabilities or lifecycle boundaries. The existing user-data session is such a case: it coordinates multiple local subscribers, one remote subscription, reconnect/recovery, and acknowledgements across an injected client port.
 
 Consequently:
+
 - Do not create `application/use-cases/` wrappers for every `get*`, `createOrder`, or `cancelOrder` method.
 - Do not create `domain/orders/`, `domain/market/`, or `domain/account/` just because those folders appear in the illustrative tree. First establish a Brokers-owned invariant or policy that is not already owned by `@coinzilla/entities` or the consuming application.
 - Keep simple Binance request construction, response mapping, and protocol validation in infrastructure adapters.
@@ -121,6 +125,7 @@ Consequently:
 ### Infrastructure
 
 Owns all Binance-specific and technical details:
+
 - Binance WebSocket API request/response protocol, signing, endpoint configuration, and API error translation;
 - public WebSocket Streams protocol, subscription commands, batching, pacing, reconnect and rotation;
 - socket transport and low-level lifecycle;
@@ -325,6 +330,7 @@ Every architectural change follows a small, reviewable RED → GREEN → REFACTO
 5. Update this architecture document and `ROADMAP.md` when ownership, decisions, or phase status changes.
 
 Tests should be selected by architectural risk:
+
 - Domain: pure invariant, value construction, validation, and deterministic transformation tests.
 - Application: use-case behavior with injected fake ports; verify decisions, calls, sequencing, and propagated errors.
 - Infrastructure: Binance protocol translation, RPC/Streams/transport/session lifecycle, malformed responses, reconnect, cleanup, and uncertain outcomes.
@@ -337,6 +343,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 **Status reconciliation (2026-11-10):** This A–F breakdown is the original work breakdown for the broker architecture migration. Its accepted offline DDD/TDD scope is complete and merged through Phase 9 / PR #704. The checklist below records that completed scope; it is not a second active roadmap. The conditional live TESTNET item remains separate Phase 8 operational acceptance in `ROADMAP.md` and is PAUSED / UNVERIFIED. It does not reopen the completed Phase 9 architecture work.
 
 ### Phase A — Architecture discovery and baseline
+
 - [x] Inventory all source modules, exports, import edges, side effects, state ownership, and consumers.
 - [x] Map each responsibility to Domain, Application, Infrastructure, Bootstrap, or compatibility surface.
 - [x] Identify existing canonical Entities contracts and avoid parallel models.
@@ -345,6 +352,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - **Exit:** reviewed responsibility map and dependency graph; completed before the next extraction slice.
 
 ### Phase B — Characterization and test preparation
+
 - [x] Identify public behaviors and safety-critical edge cases not already characterized.
 - [x] Add direct Application unit tests for `UserDataSession` through its injected `UserDataClientPort`; keep broker-composition and opt-in exchange integration tests in the infrastructure test suite.
 - [x] Add only missing characterization tests; do not inflate test count for its own sake.
@@ -353,6 +361,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - **Exit:** a trustworthy offline safety net exists for the first extraction slice.
 
 ### Phase C — Domain extraction
+
 - [x] Extract the demonstrated broker-owned recovery-completion invariant into `domain/user-data-recovery-policy.js`; no separate Order / Market / Account model was justified.
 - [x] Reuse existing `@coinzilla/entities` contracts; do not fork canonical domain types.
 - [x] Keep Binance protocol field mapping in Infrastructure.
@@ -360,6 +369,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - **Exit:** extracted domain modules have no application/infrastructure imports and are tested independently.
 
 ### Phase D — Application boundary and use cases
+
 - [x] Identify the real package-owned workflow: user-data subscription and recovery coordination.
 - [x] Define the narrow `UserDataClientPort` under `application/ports/` for that workflow.
 - [x] Extract `UserDataSession` as an injected Application coordinator; keep simple one-RPC broker methods in Infrastructure.
@@ -367,6 +377,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - **Exit:** application workflows can be tested with fake ports and do not instantiate Binance clients.
 
 ### Phase E — Infrastructure adapters and composition
+
 - [x] Group all Binance-specific runtime, API/Streams, transport, sessions, signing/configuration, and response adapters under `src/infrastructure/binance/`, preserving the existing `broker-websocket` internal structure.
 - [x] Implement application ports through the Binance infrastructure adapters without changing the public facade.
 - [x] Evaluate a dedicated bootstrap factory: keep composition in the concrete infrastructure broker facade because no separate bootstrap currently removes a demonstrated coupling or improves ownership. Keep public exports thin.
@@ -374,6 +385,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - **Exit:** concrete Binance dependencies are constructed only at infrastructure/composition boundaries; a separate bootstrap module exists only if it provides a demonstrated benefit.
 
 ### Phase F — Dependency and compatibility verification
+
 - [x] Verify dependency direction with the executable production-import architecture test (PR #704).
 - [x] Run the exact public export contract test and existing broker operation/adapter contract suites.
 - [x] Run full package tests and coverage plus required workspace quality gates on the exact PR #704 head.
