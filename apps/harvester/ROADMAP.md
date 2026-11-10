@@ -73,6 +73,126 @@
 
 ---
 
+## Conservative strategy correctness — prioritized fix plan (2026-11-11)
+
+> **Status: PLANNED — findings require implementation and exact-head verification.** Scope: `apps/harvester`, Conservative strategy only. Financial correctness takes priority over trading availability. One behavior/invariant per PR; RED regression first, minimal GREEN correction second; focused tests and required CI on the exact final PR head. No Binance connection or TESTNET/LIVE operation is part of these steps. Do not enable unattended restart/resumption before its separate recovery gate is complete.
+
+### Implementation order
+
+1. **P0 — Prevent competing same-symbol orders when an external order is open** — [#985](https://github.com/45s/coinzilla/issues/985).
+2. **P0 — Preserve exact fill accounting and commission valuation**, especially third-asset commissions and live/DTO/replay parity — [#654](https://github.com/45s/coinzilla/issues/654), finding F-039.
+3. **P0 — Prove recovery SELL lifecycle and cycle completion** under partial fills, cancel/fill races, UNKNOWN outcomes and missing durable completion facts — [#654](https://github.com/45s/coinzilla/issues/654), finding F-041.
+4. **P1 — Close residual quantity/notional/dust boundaries** and prevent unchanged invalid-order retry loops.
+5. **P0 before unattended restart — Complete durable restore and exchange reconciliation** — [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626). This is a separate release gate; it does not authorize early resumption.
+
+---
+
+### P0.1 — Block new strategy orders when an unowned external order is open on the same symbol
+
+**Problem:** the owned OrderRegistry is not the account-wide open-order set. A manually placed or otherwise unowned order can already be working while the strategy sees no owned order and submits a competing order. External orders must remain unowned and untouched, but must be considered by the strategy's safety gate. This is a symbol-level conflict, not a reason to disable unrelated markets.
+
+**Tracking:** [issue #985](https://github.com/45s/coinzilla/issues/985).
+
+**Relevant code:** [conservative-trading-engine.js](../src/use-cases/conservative-trading-engine.js) (decision/order-intent gates); [create-account-snapshot-manager.js](../src/bootstrap/account/create-account-snapshot-manager.js) (authoritative account/open-order snapshot); [subscribe-to-user-data.js](../src/bootstrap/user-data/subscribe-to-user-data.js) (updates/reconnect). Inspect current tests before adding coverage.
+
+**Steps:**
+1. [ ] **RED — Reproduce conflict:** unowned open BUY/SELL on symbol A, no owned order in OrderRegistry, otherwise-valid strategy decision. Assert no competing strategy order. Control: symbol B remains eligible.
+2. [ ] **GREEN — Add narrow symbol gate:** use a current authoritative account-wide open-order view; defer only the affected symbol while a conflicting unowned order is open. Never adopt, cancel, modify or claim ownership of it.
+3. [ ] **RED/GREEN — Snapshot lifecycle:** startup snapshot, order update/terminal event, reconnect refresh, stale/missing snapshot and snapshot-read failure. Unknown/stale state must not mean “no open orders”.
+4. [ ] **Regression — Isolation/diagnostics:** no duplicate intent; external order unchanged; unrelated symbols unaffected; actionable blocked-symbol reason.
+
+**Acceptance:** no conflicting same-symbol order can be submitted while an unowned order is open; external orders stay untouched/unowned; unrelated symbols remain independent; inability to establish current open-order state fails closed for that decision.
+
+---
+
+### P0.2 — Preserve exact commission facts and quote valuation through fill accounting
+
+**Problem:** live commission validation supports third-asset commissions when historical quote valuation is supplied, but the lifecycle fill DTO drops `quoteValue` and the restore helper rejects third-asset commissions. The configured-market-only account snapshot filter can omit the commission asset. A fill accepted live must remain reconstructable and reconcilable. Missing valuation must never silently become a zero fee or be recomputed from today's price.
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), forensic finding F-039. Keep live-accounting correction and durable-recovery integration as separate PRs if their contracts differ.
+
+**Relevant code:** [position-accounting.js](../src/domain/portfolio/position-accounting.js) (Position cost/proceeds); [recovery-fill-accounting.js](../src/domain/strategies/conservative/recovery-fill-accounting.js); [lifecycle-event-dtos.js](../src/application/events/lifecycle-event-dtos.js) (safe DTO); [create-portfolio-workflow.js](../src/use-cases/create-portfolio-workflow.js) (live apply/restore); [create-account-snapshot-manager.js](../src/bootstrap/account/create-account-snapshot-manager.js) (fee-asset reconciliation).
+
+**Steps:**
+1. [ ] **RED — Third-asset DTO round-trip:** canonical fill has commission asset different from base and quote, exact commission amount and historical quoteValue. Assert serialization/deserialization preserves every field exactly; expose current quoteValue loss.
+2. [ ] **GREEN — Preserve valuation in safe DTO:** extend only the relevant DTO schema/mapping/validation. Keep decimal representation exact; never substitute current market price for historical valuation.
+3. [ ] **RED — Live BUY/SELL accounting:** assert quote-denominated cost/proceeds for base-, quote- and third-asset fees; include multiple and partial fills. Verify fee amount, asset and valuation.
+4. [ ] **GREEN — One canonical accounting path:** use existing domain accounting; no parallel fee calculator. Missing, malformed, negative or contradictory valuation fails closed, without treating fee as zero.
+5. [ ] **RED — Fee-asset balance:** commission asset is not a configured trading pair. Assert it is included in reconciliation inputs and unexplained balance delta/shortfall is detected.
+6. [ ] **GREEN — Include required fee assets:** extend asset selection only for assets required by actual owned fills/commission facts; do not classify the entire wallet as strategy-owned.
+7. [ ] **Parity — Live versus DTO/projection/restore:** apply identical fills through each supported path and compare complete Position and RecoveryLedger state, including all three commission-asset cases.
+8. [ ] **Atomicity — Invalid fee evidence:** incomplete/contradictory commission facts leave complete pre-fill Position, ledger and portfolio snapshots unchanged.
+
+**Acceptance:** every accepted fill retains exact commission asset, amount and historical quote valuation through supported lifecycle representations; live and replay results match; fee assets reconcile; unavailable valuation is an explicit unresolved safety condition, never zero.
+
+---
+
+### P0.3 — Prove recovery SELL accounting and cycle completion use reconciled fills
+
+**Problem:** order status is not proof of financial recovery. Submitted, acknowledged, partial, canceled or UNKNOWN SELLs cannot complete a cycle. Cancellation can race with fills. A full SELL whose durable cycle outcome is missing can leave replay with stale cost basis or incorrect retained-inventory allocation. Preserve existing serialized transitions, fill reconciliation, minimum-profit checks, dust evidence and atomic Portfolio/RecoveryLedger completion; extend rather than replace them.
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), finding F-041. Check the current [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) before adding duplicate tests.
+
+**Relevant code:** [conservative-trading-engine.js](../src/use-cases/conservative-trading-engine.js); [recovery-completion.js](../src/domain/strategies/conservative/recovery-completion.js); [recovery-ledger.js](../src/domain/strategies/conservative/recovery-ledger.js); [recovery-sell-plan.js](../src/domain/strategies/conservative/recovery-sell-plan.js); [position-accounting.js](../src/domain/portfolio/position-accounting.js); recovery projector/Journal replay paths under #654.
+
+**Steps:**
+1. [ ] **RED — Status is not completion:** SUBMITTED, NEW/OPEN, PARTIALLY_FILLED, canceled with residual, REJECTED and UNKNOWN must not reset Position basis or RecoveryLedger.
+2. [ ] **GREEN — Fill-driven completion:** allow completion only after authoritative execution reconciliation and all domain preconditions pass.
+3. [ ] **RED — Cancel/fill interleavings:** execution before/during/after cancel response; duplicate/delayed report; UNKNOWN cancel; stale terminal report. Each canonical fill once; replacement never overdraws.
+4. [ ] **GREEN — Reconcile before replace/complete:** use existing serialized transition and authoritative reconciliation; never infer final remaining quantity from cancel response alone.
+5. [ ] **RED — BUY during recovery SELL:** partial BUY while SELL is open, cancel race and replacement. Assert no conflicting commitments, oversell or premature cycle reset.
+6. [ ] **GREEN — Preserve approved lifecycle policy:** make only the smallest correction supported by failing behavior; no blanket prohibition without evidence.
+7. [ ] **RED — Missing cycle outcome:** replay a full SELL without explicit durable completed/not-completed outcome. Restore must not guess, reset basis or re-sell retained inventory.
+8. [ ] **GREEN — Explicit outcome in projection:** persist/project the minimum cycle outcome required; unresolved full SELL fails closed. Preserve legitimate residual sell-through.
+9. [ ] **RED/GREEN — Profit/inventory matrix:** exact minimum-profit equality and immediately below; keepQuantity zero/nonzero; fee-adjusted proceeds; retained quantity plus validated dust; residual sellable quantity; consecutive cycles.
+10. [ ] **Atomicity regression:** Portfolio and RecoveryLedger either both complete the cycle or neither changes.
+
+**Acceptance:** completion requires reconciled canonical fills, sufficient net recovery/profit and exact active/free/dust allocation. Unresolved orders or missing cycle outcome block the next cycle. Retained inventory cannot be sold accidentally.
+
+---
+
+### P1 — Prevent invalid residual orders and minimum-notional retry loops
+
+**Problem:** after partial execution or filter changes, remaining quantity may fall below MIN_QTY/MIN_NOTIONAL although the original order was valid. Rebuilding the same invalid trailing BUY or recovery SELL repeatedly creates noise and can hide a lifecycle/accounting defect. Expected post-only rejection is not a fill and is not success.
+
+**Relevant code:** [recovery-sell-plan.js](../src/domain/strategies/conservative/recovery-sell-plan.js); [conservative-trading-engine.js](../src/use-cases/conservative-trading-engine.js); confirm current order-filter validator path before editing. Existing boundary work: [PR #929](https://github.com/45s/coinzilla/pull/929), [#930](https://github.com/45s/coinzilla/pull/930), [#932](https://github.com/45s/coinzilla/pull/932).
+
+**Steps:**
+1. [ ] **RED — Residual below MIN_NOTIONAL:** valid SELL partially fills, remainder is immediately below current minimum. Assert no invalid replacement is emitted.
+2. [ ] **GREEN — Classify residual first:** retain it as explicitly classified inventory/dust or unresolved safety state under the existing contract; never discard or call it recovered.
+3. [ ] **RED/GREEN — Exact boundaries:** below/equal/above min quantity and notional; max quantity/notional; step/tick rounding for BUY and SELL.
+4. [ ] **RED/GREEN — No unchanged retry loop:** repeated identical market updates with unchanged price/rules/inventory do not repeatedly submit the same invalid order. Retry only after a relevant input changes and the new plan validates.
+5. [ ] **RED/GREEN — Rejection classification:** post-only/LIMIT_MAKER rejection is distinct from unexpected broker failure; it creates no fill, does not clear unresolved intent/reset recovery, and is never logged as successful execution.
+6. [ ] **Regression — Quantity conservation:** active, retained and dust quantities remain accounted for after every skipped/invalid replacement decision.
+
+**Acceptance:** no invalid exchange order, no repeated identical invalid retry, residual inventory remains explicitly accounted for, and expected rejection never mutates fill/accounting state.
+
+---
+
+### P0 release gate — Complete restart restore and exchange reconciliation before unattended resumption
+
+**Problem:** runtime startup currently creates fresh in-memory Position, RecoveryLedger and OrderRegistry; the offline restore path is not wired into runtime. Historical fills, fee valuations, unresolved intents and sticky blockers are not yet proven to survive restart. A fresh process with empty memory is not evidence of an empty exchange position.
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626).
+
+**Detailed nine-step plan:** see “Process-restart recovery — small-step delivery plan (#654)” at the top of this roadmap. Its Step 5 and Step 7 depend on the commission work above: preserve third-asset valuation and reconcile its asset balance. Keep domain pure and Journal observer-only unless a deliberate contract decision changes that boundary.
+
+**Acceptance before enabling restore:** complete chronological durable facts; exact DTO → projection → restore parity; explicit cycle outcomes; sticky blockers; all relevant balances/fees and owned orders reconciled; external orders remain unowned/untouched; ambiguous or missing history keeps readiness closed; crash/restart matrix and restart-twice idempotency pass. No exchange-connected validation without a separately approved bounded plan.
+
+### Cross-step review checklist
+
+- [ ] Confirm exact source path and existing test coverage before editing; roadmap paths are navigation aids, not proof.
+- [ ] Identify authoritative domain fact/owner before adding state or abstractions.
+- [ ] Add one narrowly scoped failing regression; record RED on exact test-only head.
+- [ ] Implement minimal correction; record GREEN on exact final head.
+- [ ] Assert complete immutable snapshots on failure paths, not just return values/logs.
+- [ ] Run focused tests, full Harvester suite, required repository CI and relevant package coverage.
+- [ ] Inspect final diff for unrelated refactors, config changes and unintended behavior.
+- [ ] Update roadmap and linked issue with merged PR, exact merge SHA and verified test/CI evidence.
+- [ ] Keep exchange-connected operations out of scope unless separately and explicitly authorized.
+
+---
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### Critical runtime reliability — order acknowledgement and shutdown ownership (2026-11-10)
