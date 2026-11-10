@@ -135,11 +135,19 @@ export class RecoveryLedger {
   }
 
   /**
-   * Start a new recovery cycle after successful completion. Execution identity
+   * Start a new recovery cycle only after the configured minimum profit is realized. Execution identity
    * survives so late duplicate events remain safe. Actual commissions are
    * already included in cycle totals and are not converted into fee history.
    */
-  resetCycle() {
+  resetCycle({ minProfit } = {}) {
+    assertDecimalString({ value: minProfit, field: "minProfit" })
+    if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+      throw new RangeError("RecoveryLedger.resetCycle minProfit must be at least 0.01")
+    }
+    if (compareDecimal({ left: this.realizedNetProfit, right: minProfit }) < 0) {
+      throw new RangeError("RecoveryLedger cannot reset before the configured minimum profit is reached")
+    }
+
     return new RecoveryLedger({
       market: this.#market,
       appliedFillIds: this.#appliedFillIds,

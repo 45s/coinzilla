@@ -252,7 +252,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             nextPortfolio = nextPortfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
           }
           nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId })
-          const resetLedger = previousLedger.resetCycle()
+          const resetLedger = previousLedger.resetCycle({ minProfit })
           const nextRecoveryLedgers = new Map(recoveryLedgers)
           nextRecoveryLedgers.set(marketId, resetLedger)
           const nextPosition = nextPortfolio.getPosition({ marketId })
