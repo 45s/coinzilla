@@ -192,6 +192,18 @@ export function auditRecoveredAccountState({
 
     const commissionAssetIdByCode = new Map()
     const commissionAssetCodeById = new Map()
+    for (const market of markets) {
+      for (const asset of [market.baseAsset, market.quoteAsset]) {
+        const knownId = commissionAssetIdByCode.get(asset.code)
+        const knownCode = commissionAssetCodeById.get(asset.id)
+        if ((knownId !== undefined && knownId !== asset.id) ||
+            (knownCode !== undefined && knownCode !== asset.code)) {
+          throw new Error("Canonical Market metadata contains contradictory asset identity for " + asset.code)
+        }
+        commissionAssetIdByCode.set(asset.code, asset.id)
+        commissionAssetCodeById.set(asset.id, asset.code)
+      }
+    }
     for (const fill of recoveredState.journalFills) {
       if (typeof fill?.symbol !== "string" || !Array.isArray(fill.commissions)) {
         throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
