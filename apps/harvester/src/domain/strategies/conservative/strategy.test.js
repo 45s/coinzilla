@@ -575,7 +575,7 @@ test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-t
   assert.equal(multiplyDecimal({ left: sell.price, right: sell.quantity }), "0.06")
 })
 
-test("defers a recovery SELL when its profit-preserving price exceeds MAX_PRICE", () => {
+test("blocks the next BUY when the required recovery SELL exceeds MAX_PRICE", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -595,9 +595,27 @@ test("defers a recovery SELL when its profit-preserving price exceeds MAX_PRICE"
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.inventoryDisposition.status, "PRICE_FILTER_BLOCKED")
-  assert.equal(decision.inventoryDisposition.reason, "MAX_PRICE")
+  assert.deepEqual(
+    decision.actions,
+    [],
+    "A MAX_PRICE-blocked recovery SELL must prevent the next standing BUY from being submitted.",
+  )
+  assert.equal(
+    decision.action,
+    "NO_ACTION",
+    "The strategy must fail closed instead of returning an executable BUY while recovery SELL pricing is blocked.",
+  )
+  assert.deepEqual(
+    decision.inventoryDisposition,
+    {
+      status: "PRICE_FILTER_BLOCKED",
+      quantity: "99",
+      reason: "MAX_PRICE",
+      requiredPrice: "0.102",
+      maximumPrice: "0.101",
+    },
+    "The decision must preserve the exact blocked recovery inventory and exchange price-filter evidence.",
+  )
 })
 
 test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL", () => {

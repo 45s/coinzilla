@@ -2,6 +2,7 @@
 
 - [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) — **sole authoritative Conservative behavior contract**.
 - [Accounting invariants](ACCOUNTING_INVARIANTS.md) — implementation/regression verification matrix and current verification boundary.
+- [Domain test inventory](DOMAIN_TEST_INVENTORY.md) — source-driven behavior-to-test map, test-quality findings and prioritized improvements.
 - [Domain glossary](DOMAIN_GLOSSARY.md) — domain terms and ownership boundaries.
 - [Portfolio domain](portfolio.md) — Portfolio concepts, fill application and domain boundaries.
 - [Conservative behavior baseline](CONSERVATIVE_BEHAVIOR_BASELINE.md) — superseded historical pointer only; never use as current rules.
