@@ -89,29 +89,6 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         }
         thirdAssetCommissions.set(amount.asset.id, amount.asset.code)
       }
-      if (thirdAssetCommissions.size > 0) {
-        if (typeof onCommissionAsset !== "function") {
-          return toResult({ error: new Error("Third-asset commission accounting requires a durable PREFLIGHT asset baseline") })
-        }
-        try {
-          for (const [assetId, assetCode] of thirdAssetCommissions) {
-            const baselineResult = await onCommissionAsset({ assetId, assetCode })
-            if (baselineResult?.ok !== true) {
-              throw baselineResult?.errors?.[0] ?? new Error("Unable to persist the third-asset commission baseline for " + assetCode)
-            }
-          }
-        } catch (error) {
-          logger.error?.({
-            message: "commission asset baseline capture failed",
-            executionId: fill.id,
-            tradeId: fill.tradeId,
-            symbol: fill.market.symbol,
-            errors: [{ name: error?.name, message: error?.message ?? String(error) }],
-          })
-          return toResult({ error })
-        }
-      }
-
       const previousPortfolio = portfolio
       const currentLedger = recoveryLedgers.get(fill.market.id) ??
         RecoveryLedger.empty({ market: fill.market })
@@ -151,6 +128,28 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedger: currentLedger,
         fill,
       })
+      if (result.ok && thirdAssetCommissions.size > 0) {
+        if (typeof onCommissionAsset !== "function") {
+          return toResult({ error: new Error("Third-asset commission accounting requires a durable PREFLIGHT asset baseline") })
+        }
+        try {
+          for (const [assetId, assetCode] of thirdAssetCommissions) {
+            const baselineResult = await onCommissionAsset({ assetId, assetCode })
+            if (baselineResult?.ok !== true) {
+              throw baselineResult?.errors?.[0] ?? new Error("Unable to persist the third-asset commission baseline for " + assetCode)
+            }
+          }
+        } catch (error) {
+          logger.error?.({
+            message: "commission asset baseline capture failed",
+            executionId: fill.id,
+            tradeId: fill.tradeId,
+            symbol: fill.market.symbol,
+            errors: [{ name: error?.name, message: error?.message ?? String(error) }],
+          })
+          return toResult({ error })
+        }
+      }
       if (result.ok) {
         portfolio = result.data.portfolio
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
