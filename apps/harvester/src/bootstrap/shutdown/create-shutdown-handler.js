@@ -60,15 +60,31 @@ export function createShutdownHandler({
   const auditReasons = []
   let snapshotError
   let unresolvedOrders = []
+  const stageFailures = []
   const logShutdownFailure = ({ message, stage, result, error } = {}) => {
     const errors = error
       ? [error]
       : result?.errors?.length
         ? result.errors
         : [new Error(message)]
+    const failure = result?.failure ?? error?.recoveryFailure ??
+      errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
+    const failureMetadata = failure
+      ? {
+        category: failure.category ?? null,
+        stage: failure.stage ?? null,
+        retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
+      }
+      : null
+    const errorDetails = errors.map((entry) => ({
+      name: entry?.name ?? "Error",
+      message: entry?.message ?? String(entry),
+    }))
+    stageFailures.push({ stage: stage ?? "UNKNOWN", failure: failureMetadata, errors: errorDetails })
     logger.error?.({
       message,
       stage,
+      failure: failureMetadata,
       errors: errors.map((entry) => ({
         name: entry?.name,
         message: entry?.message ?? String(entry),
@@ -175,7 +191,6 @@ export function createShutdownHandler({
   }
 
   const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-  if (disconnectErrors.length > 0) auditReasons.push("BROKER_DISCONNECT_FAILED")
   const cancellationAuditFailed = tradingEnabled && auditReasons.some((reason) =>
     [
       "OWNED_BUY_CANCELLATION_FAILED",
@@ -196,6 +211,15 @@ export function createShutdownHandler({
   const shutdownDiagnostics = Object.freeze({
     previousStatus: shutdownStartedFromStatus ?? null,
     auditReasons: Object.freeze([...auditReasons]),
+    stageFailures: Object.freeze(stageFailures.map((failure) => Object.freeze({
+      stage: failure.stage,
+      failure: failure.failure ? Object.freeze({ ...failure.failure }) : null,
+      errors: Object.freeze(failure.errors.map((error) => Object.freeze({ ...error }))),
+    }))),
+    cleanupFailures: Object.freeze(cleanupErrors.map((error) => Object.freeze({
+      name: error?.name ?? "Error",
+      message: error?.message ?? String(error),
+    }))),
     userData: Object.freeze({
       accountingFailed: state.accountingFailed === true,
       requiresReconciliation: state.requiresReconciliation === true,
