@@ -204,3 +204,100 @@ test("recovers legacy raw event lines with the same stable record shape", () => 
     "Legacy raw event lines must recover into the same identity, schema, payload, and position contract as current records.",
   )
 })
+
+
+test("rejects nested values that JSONL would omit, coerce, or execute", () => {
+  const sparseArray = []
+  sparseArray.length = 2
+  sparseArray[1] = "present"
+
+  const arrayWithCustomProperty = []
+  arrayWithCustomProperty.extra = "not part of the JSON array contract"
+
+  const symbolKeyedData = { visible: "value" }
+  symbolKeyedData[Symbol("hidden")] = "not JSON-representable"
+
+  const nonEnumerableData = {}
+  Object.defineProperty(nonEnumerableData, "hidden", {
+    value: "not JSON-representable",
+    enumerable: false,
+  })
+
+  let getterCalls = 0
+  const accessorData = {}
+  Object.defineProperty(accessorData, "value", {
+    enumerable: true,
+    get() {
+      getterCalls += 1
+      return "must not be invoked"
+    },
+  })
+
+  const customPrototypeData = Object.create({ inherited: "value" })
+  customPrototypeData.own = "value"
+
+  const cyclicData = {}
+  cyclicData.self = cyclicData
+
+  const invalidValues = [
+    { label: "undefined object property", data: { nested: { value: undefined } } },
+    { label: "undefined array entry", data: { values: [undefined] } },
+    { label: "sparse array hole", data: { values: sparseArray } },
+    { label: "BigInt", data: { amount: 1n } },
+    { label: "NaN", data: { amount: NaN } },
+    { label: "positive infinity", data: { amount: Infinity } },
+    { label: "negative infinity", data: { amount: -Infinity } },
+    { label: "negative zero", data: { amount: -0 } },
+    { label: "cyclic graph", data: cyclicData },
+    { label: "nested toJSON hook", data: { nested: { toJSON() { return { rewritten: true } } } } },
+    { label: "symbol-keyed property", data: symbolKeyedData },
+    { label: "accessor property", data: accessorData },
+    { label: "non-enumerable property", data: nonEnumerableData },
+    { label: "custom array property", data: { values: arrayWithCustomProperty } },
+    { label: "custom prototype", data: customPrototypeData },
+  ]
+
+  for (const [index, invalid] of invalidValues.entries()) {
+    assert.throws(
+      () => serializeJournalRecord({
+        event: { id: "event-invalid-" + index, name: "journal.invalid_value", data: invalid.data },
+      }),
+      { name: "TypeError" },
+      `Journal must reject ${invalid.label} before JSON.stringify can omit, coerce, or execute it.`,
+    )
+  }
+
+  assert.equal(
+    getterCalls,
+    0,
+    "Journal validation must inspect property descriptors and reject accessors without invoking user getters.",
+  )
+})
+
+test("accepts shared references as repeated JSON subtrees without preserving alias identity", () => {
+  const shared = Object.create(null)
+  shared.orderId = "42"
+  const event = {
+    id: "event-shared-reference",
+    name: "order.filled",
+    data: { first: shared, second: shared },
+  }
+
+  const serialized = serializeJournalRecord({ event })
+  const [recovered] = parseJournalSession({
+    content: serialized,
+    fileName: FILE_NAME,
+    maxRecordBytes: 1024,
+  })
+
+  assert.deepEqual(
+    recovered.payload.data,
+    { first: { orderId: "42" }, second: { orderId: "42" } },
+    "Shared source references must persist as equivalent repeated JSON subtrees.",
+  )
+  assert.notStrictEqual(
+    recovered.payload.data.first,
+    recovered.payload.data.second,
+    "The persisted JSONL contract must explicitly exclude source object-identity preservation.",
+  )
+})
