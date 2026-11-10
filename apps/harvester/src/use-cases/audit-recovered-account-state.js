@@ -75,6 +75,9 @@ export function auditRecoveredAccountState({
     }
     if (!Array.isArray(openOrders)) throw new TypeError("openOrders must be an array")
     if (!Array.isArray(markets)) throw new TypeError("markets must be an array")
+    if (!Array.isArray(recoveredState.journalFills)) {
+      throw new TypeError("auditRecoveredAccountState requires restored Journal fill facts")
+    }
 
     if (!projection.data.requiresExchangeReconciliation) {
       return toResult({ data: Object.freeze({ skipped: true, reason: "NO_PRIOR_TRADING_STATE" }) })
@@ -121,6 +124,7 @@ export function auditRecoveredAccountState({
 
     const expectedDeltas = new Map()
     const marketsById = new Map()
+    const marketsBySymbol = new Map()
     for (const position of recoveredState.portfolio.value.positions) {
       if (!markets.some((market) => market.id === position.market.id)) {
         throw new Error("Canonical Market metadata is missing for restored Position " + position.market.symbol)
@@ -136,7 +140,9 @@ export function auditRecoveredAccountState({
         throw new TypeError("markets must contain canonical Market values")
       }
       if (marketsById.has(market.id)) throw new Error("Duplicate canonical Market metadata for " + market.id)
+      if (marketsBySymbol.has(market.symbol)) throw new Error("Duplicate canonical Market symbol " + market.symbol)
       marketsById.set(market.id, market)
+      marketsBySymbol.set(market.symbol, market)
       const position = recoveredState.portfolio.getPosition({ marketId: market.id })
       if (!position) continue
       addAmount({
@@ -151,9 +157,74 @@ export function auditRecoveredAccountState({
       })
     }
 
+    const commissionAssetIdByCode = new Map()
+    const commissionAssetCodeById = new Map()
+    for (const fill of recoveredState.journalFills) {
+      if (typeof fill?.symbol !== "string" || !Array.isArray(fill.commissions)) {
+        throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
+      }
+      const market = marketsBySymbol.get(fill.symbol)
+      if (!market) throw new Error("Canonical Market metadata is missing for recovered fill " + fill.symbol)
+      for (const commission of fill.commissions) {
+        const amount = requireAmount({
+          value: commission?.amount,
+          field: fill.symbol + ".commission.amount",
+        })
+        if (compareDecimal({ left: amount, right: "0" }) < 0) {
+          throw new Error("Recovered commission amount cannot be negative for " + fill.symbol)
+        }
+        const assetId = commission?.assetId
+        const asset = commission?.asset
+        if (typeof assetId !== "string" || !assetId.trim() ||
+            typeof asset !== "string" || !asset.trim()) {
+          throw new TypeError("Recovered commission requires exact asset ID and code for " + fill.symbol)
+        }
+        if (assetId === market.baseAsset.id) {
+          if (asset !== market.baseAsset.code) {
+            throw new Error("Recovered commission asset code contradicts market base asset identity for " + fill.symbol)
+          }
+          continue
+        }
+        if (assetId === market.quoteAsset.id) {
+          if (asset !== market.quoteAsset.code) {
+            throw new Error("Recovered commission asset code contradicts market quote asset identity for " + fill.symbol)
+          }
+          continue
+        }
+        if (asset === market.baseAsset.code || asset === market.quoteAsset.code) {
+          throw new Error("Recovered commission asset ID contradicts a market asset code for " + fill.symbol)
+        }
+        const knownId = commissionAssetIdByCode.get(asset)
+        const knownCode = commissionAssetCodeById.get(assetId)
+        if ((knownId !== undefined && knownId !== assetId) ||
+            (knownCode !== undefined && knownCode !== asset)) {
+          throw new Error("Recovered third-asset commission identity is contradictory for " + asset)
+        }
+        commissionAssetIdByCode.set(asset, assetId)
+        commissionAssetCodeById.set(assetId, asset)
+        if (compareDecimal({ left: amount, right: "0" }) === 0) continue
+
+        const quoteValue = commission.quoteValue
+        if (!quoteValue ||
+            quoteValue.assetId !== market.quoteAsset.id ||
+            quoteValue.asset !== market.quoteAsset.code ||
+            typeof quoteValue.amount !== "string" ||
+            compareDecimal({ left: requireAmount({
+              value: quoteValue.amount,
+              field: fill.symbol + ".commission.quoteValue.amount",
+            }), right: "0" }) <= 0) {
+          throw new Error("Recovered third-asset commission has no valid historical quote valuation for " + fill.symbol)
+        }
+        addAmount({
+          amounts: expectedDeltas,
+          asset,
+          amount: subtractDecimal({ left: "0", right: amount }),
+        })
+      }
+    }
+
     const assetCodes = new Set([
-      ...baselineByAsset.keys(),
-      ...currentByAsset.keys(),
+      ...markets.flatMap((market) => [market.baseAsset.code, market.quoteAsset.code]),
       ...expectedDeltas.keys(),
     ])
     for (const asset of assetCodes) {
