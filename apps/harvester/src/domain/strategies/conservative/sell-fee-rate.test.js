@@ -1,91 +1,63 @@
-import test from "node:test"
+import nodeTest from "node:test"
+const test = (name, ...args) => nodeTest("[sell-fee-rate.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
 
-test("does not reserve configured fees before any actual commission is observed", () => {
+test("reserves zero when both configured execution fees are zero", () => {
   assert.deepEqual(
-    calculateSellFeeRate({
-      makerPercent: "0.075",
-      takerPercent: "0.1",
-    }),
-    { feeRate: "0" },
+    calculateSellFeeRate({ makerPercent: "0", takerPercent: "0" }),
+    { feeRate: "0", reservedPercent: "0", reservedRole: "MAKER" },
   )
 })
 
-test("zero maker rate keeps the reserve at zero when no fill paid a fee", () => {
+test("reserves the higher taker fee when taker is more expensive", () => {
   assert.deepEqual(
-    calculateSellFeeRate({
-      makerPercent: "0",
-      takerPercent: "0.1",
-      observedCommissionRates: ["0", "0"],
-    }),
-    { feeRate: "0" },
+    calculateSellFeeRate({ makerPercent: "0.075", takerPercent: "0.1" }),
+    { feeRate: "0.001", reservedPercent: "0.1", reservedRole: "TAKER" },
   )
 })
 
-test("zero maker rate uses actual observed commission without a taker-rate reserve", () => {
+test("reserves the higher maker fee when maker is more expensive", () => {
   assert.deepEqual(
-    calculateSellFeeRate({
-      makerPercent: "0",
-      takerPercent: "0.1",
-      observedCommissionRates: ["0.00075"],
-    }),
-    { feeRate: "0.00075" },
+    calculateSellFeeRate({ makerPercent: "0.2", takerPercent: "0.1" }),
+    { feeRate: "0.002", reservedPercent: "0.2", reservedRole: "MAKER" },
   )
 })
 
-test("non-zero maker rate activates the higher configured ceiling after a fee is observed", () => {
+test("reserves equal maker and taker fees", () => {
   assert.deepEqual(
-    calculateSellFeeRate({
-      makerPercent: "0.075",
-      takerPercent: "0.1",
-      observedCommissionRates: ["0.0005"],
-    }),
-    { feeRate: "0.001" },
+    calculateSellFeeRate({ makerPercent: "0.1", takerPercent: "0.1" }),
+    { feeRate: "0.001", reservedPercent: "0.1", reservedRole: "MAKER" },
   )
 })
 
-test("actual commission above the configured ceiling takes precedence", () => {
-  assert.deepEqual(
-    calculateSellFeeRate({
-      makerPercent: "0.075",
-      takerPercent: "0.1",
-      observedCommissionRates: ["0.0012"],
-    }),
-    { feeRate: "0.0012" },
-  )
-})
-
-test("a later actual SELL fee can raise the reserve used by subsequent plans", () => {
+test("uses maker fee for LIMIT_MAKER even when taker fee is higher", () => {
   assert.deepEqual(
     calculateSellFeeRate({
       makerPercent: "0",
-      takerPercent: "0.1",
-      observedCommissionRates: ["0.0005", "0.0011"],
+      takerPercent: "0.075",
+      orderType: "LIMIT_MAKER",
     }),
-    { feeRate: "0.0011" },
+    { feeRate: "0", reservedPercent: "0", reservedRole: "MAKER" },
   )
 })
 
-test("rejects invalid configured rates and observed values", () => {
-  assert.throws(
-    () => calculateSellFeeRate({ makerPercent: "-0.1", takerPercent: "0" }),
-    /percentages/,
-  )
-  assert.throws(
-    () => calculateSellFeeRate({
+test("continues to reserve the higher possible fee for ordinary LIMIT orders", () => {
+  assert.deepEqual(
+    calculateSellFeeRate({
       makerPercent: "0",
-      takerPercent: "0",
-      observedCommissionRates: ["-0.001"],
+      takerPercent: "0.075",
+      orderType: "LIMIT",
     }),
-    /non-negative/,
+    { feeRate: "0.00075", reservedPercent: "0.075", reservedRole: "TAKER" },
   )
-  assert.throws(
-    () => calculateSellFeeRate({
-      makerPercent: "0",
-      takerPercent: "0",
-      observedCommissionRates: "0.001",
-    }),
-    /array/,
-  )
+})
+
+test("rejects invalid maker or taker percentages", () => {
+  for (const makerPercent of ["-0.1", "100", "not-a-number", undefined]) {
+    assert.throws(() => calculateSellFeeRate({ makerPercent, takerPercent: "0.1" }))
+  }
+  for (const takerPercent of ["-0.1", "100", "not-a-number", undefined]) {
+    assert.throws(() => calculateSellFeeRate({ makerPercent: "0.1", takerPercent }))
+  }
 })

@@ -1,19 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { main } from '../src/index.js';
+import { main as startMain } from '../src/index.js';
 
-test('reports successful configuration startup without claiming a workflow ran', async () => {
+const disabledJournalService = () => ({
+  ready: Promise.resolve({ ok: true, disabled: true }),
+  status: { state: 'disabled', enabled: false },
+  flush: async () => ({ ok: true, durable: true }),
+  close: async () => ({ ok: true, closed: true, disabled: true }),
+});
+
+const runMain = (options = {}) => {
+  const { env = {}, ...rest } = options;
+  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), ...rest, env: { TRADING_MODE: 'testnet', ...env } });
+};
+
+test('reports successful Binance TESTNET startup without claiming a workflow ran', async () => {
   const messages = [];
   const logger = {
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
+    system: (message) => messages.push(['system', message]),
   };
 
-  await main({ start: async () => ({}), logger });
+  await runMain({ createJournalService: disabledJournalService, start: async () => ({ connected: true, brokerName: 'binance', tradingEnabled: true, strategyMode: 'conservative', subscriptions: [] }), logger });
 
   assert.deepEqual(messages, [[
-    'info',
-    'Harvester configuration validated; broker connection and market data are disabled.',
+    'system',
+    'Connected; subscribed to 0 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.',
   ]]);
 });
 
@@ -24,6 +37,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   const logger = {
     info: (message) => messages.push(['info', message]),
     error: (...args) => messages.push(['error', ...args]),
+    system() {},
   };
 
   t.after(() => {
@@ -31,7 +45,8 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   process.exitCode = 0;
-  await main({
+  await runMain({
+    createJournalService: disabledJournalService,
     start: async () => {
       throw startupError;
     },
@@ -39,10 +54,11 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   assert.equal(process.exitCode, 1);
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0][0], 'error');
-  assert.deepEqual(messages[0][1], {
-    message: 'Harvester startup failed.',
-    error: startupError,
-  });
+  const startupLog = messages.find(([, entry]) => entry?.message === 'startup failed.');
+  assert.ok(startupLog);
+  assert.equal(startupLog[0], 'error');
+  assert.equal(startupLog[1].error, startupError);
+  assert.equal(startupLog[1].errorDetails.name, 'Error');
+  assert.equal(startupLog[1].errorDetails.message, 'Invalid trading config');
+  assert.match(startupLog[1].errorDetails.stack, /Invalid trading config/);
 });

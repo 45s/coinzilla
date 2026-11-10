@@ -55,12 +55,15 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Cancel order | `cancelOrder({ symbol, orderId })` |
 | Read open orders | `getOpenOrders({ symbol })` |
 | Read fills | `getFills(input)` |
+| Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
 | Account snapshot | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
 | User-data subscription | `subscribeForUserData({ onEvent, onStatus })` |
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
+
+`getOpenOrders({ symbol })` currently returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
 
 ## Implemented infrastructure adapter
 
@@ -83,8 +86,10 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
+    getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
+    getExchangeMarkets: () => client.getExchangeMarkets(),
     subscribeForPrices: ({ symbol, onPrice }) => client.subscribeForPrices({ symbol, onPrice }),
     subscribeForUserData: ({ onEvent, onStatus }) => client.subscribeForUserData({ onEvent, onStatus }),
   })
@@ -92,6 +97,8 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
 ```
 
 The package-specific `createOrder` name stays inside the adapter. A simulator or another exchange adapter can implement the same Harvester-facing port without changing use cases. Do not invent request-field transformations; use the canonical shared contracts.
+
+**Trading-rule freshness:** each Harvester `getSymbolFilters({ symbol })` call fetches current exchange metadata; the adapter does not retain a process-lifetime filter cache. Before replacing a standing Conservative trailing BUY, the engine fetches these rules again, checks that they still identify the active market, and uses that refreshed metadata for both preflight validation and the subsequent replacement submission. A failed, incomplete, or mismatched refresh pauses the pair before cancellation, leaving the standing BUY untouched.
 
 ## Implemented application use case
 
@@ -134,19 +141,31 @@ export const createHarvesterServices = ({ config, logger }) => {
 }
 ```
 
-Bootstrap now selects the adapter only when `HARVESTER_BROKER=binance` is explicitly set, requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`, connects once, and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile. Order placement remains disabled because no strategy engine or recovery reconciliation is implemented.
+Bootstrap always selects Binance, requires `TRADING_MODE` to be exactly `testnet` or `live`, and requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE and permits real order execution. Trading is enabled in either mode; missing or invalid mode fails startup. `.env.development` supplies `TRADING_MODE=testnet`, while production `.env` supplies `TRADING_MODE=live`. `NODE_ENV` does not select the exchange. Bootstrap connects once and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile.
 
 ## Reliability rules
 
 Preserve the behavior documented in `packages/brokers/README.md`:
 
-1. A `terminated` or `connectionClosed` user-data status means events may have been missed. On `recovered` with `reconciliationRequired: true`, reconcile durable Harvester state against account snapshot, open orders, and available trade/order history before acknowledging recovery.
+1. A `recovered` status means the remote user-data subscription is restored; it is not application readiness. While `recoveryRequired: true`, Harvester keeps trading blocked while it reconciles the in-memory owned-order registry against canonical `getOpenOrders()`, `getCanonicalOrderHistory()`, and `getFills()`, drains queued events in recovery mode, captures fresh account balances and account-wide open orders, and durably flushes both RECOVERY audit records. It acknowledges the exact broker generation only after those checks succeed, then waits for the matching global `reconciled` status before reopening trading. Incomplete, conflicting, stale-generation, or non-durable state remains blocked. Durable restart state remains outside this same-process workflow.
+   - A broker `rpcError` with explicit `recoveryRequired: false` and no contradictory reconciliation flag is diagnostic-only: it preserves the current application readiness and generation state. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status (including close code `1006`) invalidates the generation and starts the full recovery gate; the close code itself is not a diagnosis of the underlying transport cause.
 2. A timeout or disconnect during place/cancel can mean the exchange accepted the operation but its response was lost. Treat the outcome as unknown; reconcile by client order ID, order status, open orders, and available history before retrying. Never blindly resubmit.
 3. Public market-stream reconnect is not user-data event replay.
 4. Only actual fills (including partial fills and actual commission assets) change Portfolio holdings. Acknowledgements, cancellations, rejections, expirations, and prices do not.
 5. Do not claim exactly-once processing or restart recovery until durable deduplication, reconciliation, and tests exist.
 
 A user-data subscription exposes recovery acknowledgement through its returned subscription data. Acknowledge only after reconciliation succeeds.
+
+Engine failures are classified as `OWNERSHIP_INTEGRITY`, `ACCOUNTING_INTEGRITY`,
+`ORDER_TRANSITION`, `REST_RECONCILIATION`, or `DURABILITY`. Only the first two
+are terminal process-lifetime accounting failures. Retryable categories keep
+readiness closed and may retry only through a new full authoritative
+reconciliation; they never bypass the broker-generation acknowledgement or
+durable RECOVERY audit barriers.
+
+The `REST_RECONCILIATION` identifier is retained for compatibility; current
+canonical order/fill reads use Binance WebSocket API request/response RPC, not
+HTTP REST.
 
 ## Testing
 
@@ -158,4 +177,10 @@ A user-data subscription exposes recovery acknowledgement through its returned s
 
 ## Implementation status
 
-Implemented: structural application broker port, Binance adapter, bootstrap composition, opt-in connection, graceful disconnect, and offline tests. Not implemented: Trading Engine, user-data reconciliation, Portfolio accounting, order lifecycle orchestration, and Conservative/Aggressive policies. Do not treat a connected broker as a readiness signal for trading.
+Implemented: application broker port and Binance adapter, Conservative Trading Engine, in-memory owned-order registry, canonical fill accounting, serialized user-data processing, and reconnect-time WebSocket API request/response reconciliation for tracked orders/fills. The reconciliation is process-local and fail-closed; it does not restore state after restart, reconcile account balances, or adopt external orders. Do not treat a connected broker or stream-level recovery acknowledgement alone as application trading readiness.
+
+### Book ticker broker-port contract
+
+The Harvester broker port exposes `subscribeForBookTicker({ symbol, onBookTicker })` alongside aggregate-trade price subscriptions. The callback receives normalized decimal strings for best bid/ask prices and quantities plus a local receipt timestamp in milliseconds. Bootstrap subscribes to this stream only when TESTNET trading is enabled, requires a successful unsubscribe handle, and removes the subscription during startup rollback and shutdown.
+
+For Conservative, order-type selection, POST-ONLY crossing constraints, and fail-closed behavior are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine requires fresh same-symbol book data before a LIMIT_MAKER submission; this document records the adapter boundary and implementation only. The Binance adapter only classifies the exact Spot `-2010` POST-ONLY matching-engine response as definite when the response is not marked `outcomeUnknown`; all uncertain outcomes retain the existing fail-closed pause behavior.

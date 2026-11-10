@@ -45,9 +45,11 @@ await bus.close()
 
 ### Payload snapshot
 
-Accepted payload graphs contain only primitives, arrays, and plain objects (including null-prototype objects). Cycles and repeated/shared references are preserved. The bus clones the graph before dispatch and freezes the cloned objects, arrays, and event envelope. The caller's original objects are not frozen or retained.
+Supported primitive values are `null`, `undefined`, strings, booleans, and numbers (including `NaN`, `Infinity`, `-Infinity`, and negative zero), plus `bigint`. Symbols and functions are rejected. Payload graphs may also contain arrays and plain objects (including null-prototype objects). Cycles and repeated/shared references are preserved. The bus clones the graph before dispatch and freezes the cloned objects, arrays, and event envelope. The caller's original objects are not frozen or retained.
 
-Mutable built-ins (including `Date`, `Map`, `Set`, typed arrays, `ArrayBuffer`, and `DataView`), class instances, functions, accessors, symbol-keyed properties, and unsupported object shapes are rejected. The bus does not claim to make those values immutable.
+Mutable built-ins (including `Date`, `Map`, `Set`, typed arrays, `ArrayBuffer`, and `DataView`), class instances, accessors, non-enumerable properties, symbol-keyed properties, custom array properties, and unsupported object shapes are rejected. The bus does not claim to make those values immutable.
+
+This is an **in-memory payload contract**, not a JSON-serialization guarantee. `JSON.stringify` is not lossless for the full accepted EventBus payload graph: BigInt and cycles throw; undefined object properties are omitted; undefined array entries and non-finite numbers become `null`; negative zero becomes `0`; and shared references are serialized as repeated subtrees without preserving reference identity. Journal currently persists EventBus messages as JSONL; until [Journal issue #889](https://github.com/45s/coinzilla/issues/889) is resolved, keep Journal-bound payloads acyclic and JSON-safe (no BigInt, undefined values, non-finite numbers, or negative zero), and do not rely on shared-reference identity after persistence. EventBus `publish()` and `flush()` do not themselves guarantee Journal persistence.
 
 ### Publish and delivery
 
@@ -95,4 +97,4 @@ pnpm --filter @coinzilla/event-bus test
 pnpm --filter @coinzilla/event-bus test:coverage
 ```
 
-The coverage command enforces package-specific minimums of 90% line coverage and 85% branch coverage using Node's built-in test runner. It requires Node.js 22.8 or newer (the repository CI runs Node.js 22). The package runtime itself remains compatible with Node.js 20 and newer.
+The coverage command enforces package-specific minimums of 90% line coverage and 85% branch coverage using Node's built-in test runner. It requires Node.js 22.8 or newer for `--experimental-test-coverage`; the package runtime itself remains compatible with Node.js 20 and newer. The Coinzilla workspace and CI use Node.js 24 or newer, as declared by the root `package.json` and workflow setup.

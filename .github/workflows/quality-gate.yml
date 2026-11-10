@@ -17,21 +17,24 @@ permissions:
 
 jobs:
   workflow-lint:
-    name: Lint GitHub Actions workflows
+    name: actionlint
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
-      checks: write
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Lint GitHub Actions workflows
-        uses: reviewdog/action-actionlint@7abf25e1607ec65838b73d0484ff31f8e9499d80 # v1.81.2
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          reporter: github-pr-check
-          fail_level: error
+          go-version: "1.24.x"
+
+      - name: Install and run actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint"
 
   syntax:
     name: Check JavaScript syntax
@@ -51,3 +54,18 @@ jobs:
 
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
+
+      - name: Test external-link checker
+        run: node --test scripts/check-external-links.test.js
+
+      - name: Report Markdown style baseline (report-only)
+        run: node --test scripts/markdown-style-baseline.test.js && node scripts/markdown-style-baseline.js
+
+      - name: Enforce Markdown style on changed maintained documents
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          node --test scripts/check-markdown-style.test.js
+          node scripts/check-markdown-style.js "$BASE_SHA"

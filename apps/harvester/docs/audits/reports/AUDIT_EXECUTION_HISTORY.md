@@ -1,0 +1,438 @@
+# Harvester Conservative Strategy Audit — Execution History
+
+**Parent:** [#645](https://github.com/45s/coinzilla/issues/645)  
+**Baseline:** `develop` `4af3434f788b87139513921f220294ae90daf4d5`  
+**Journal window:** 2026-11-06 07:00:00.896–07:58:16.387 UTC  
+**Current-session client ID namespace:** `h-971fc65d9a264984ab8aa7-`
+
+## Run-level sequence
+
+- 07:00:04.113 — PREFLIGHT balances captured: DOGE 19,119.8; USDT 8,954.11668541; ZRO 245.125; all locked balances zero.
+- 07:00:04.417 — PREFLIGHT account-wide open-order snapshot: READY, zero orders.
+- 07:00:08 onward — initial DOGE and ZRO BUY orders submitted.
+- 07:01:41–07:04:47 — BUY fills trigger recovery SELL cancellation/replacement and standing BUY submissions.
+- 07:08:47.127 — ZRO recovery cycle completed; free quantity 0.01; realized net profit 0.01136454 USDT.
+- 07:58:11.370 — CLOSING account snapshot captured INCOMPLETE with two unresolved owned orders.
+- 07:58:16.387 — Harvester stopped after SIGINT; Journal records outcome success. A successful process stop does not override the INCOMPLETE account audit.
+
+## All 23 current-session orders
+
+The order-history timestamp is the exchange order creation/time field in the supplied CLI export. Client IDs share the prefix `h-971fc65d9a264984ab8aa7-`; the suffix is the per-session sequence. Prices and quantities are exact exported strings.
+
+| Client suffix | Order-history time UTC | Symbol | Side | Binance orderId | Price | Original qty | Executed qty | Quote qty | History status |
+|---:|---|---|---|---:|---:|---:|---:|---:|---|
+| -1 | 2026-11-06T07:00:08.202Z | DOGEUSDT | BUY | 1276628 | 0.07157000 | 400.00000000 | 400.00000000 | 28.62800000 | FILLED |
+| -2 | 2026-11-06T07:00:08.808Z | ZROUSDT | BUY | 727817 | 1.60400000 | 5.00000000 | 5.00000000 | 8.02000000 | FILLED |
+| -3 | 2026-11-06T07:01:41.153Z | DOGEUSDT | SELL | 1276663 | 0.07203000 | 398.00000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -4 | 2026-11-06T07:01:41.456Z | DOGEUSDT | BUY | 1276664 | 0.07153000 | 400.00000000 | 400.00000000 | 28.61200000 | FILLED |
+| -5 | 2026-11-06T07:01:47.527Z | ZROUSDT | SELL | 727837 | 1.61500000 | 4.98000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -6 | 2026-11-06T07:01:47.830Z | ZROUSDT | BUY | 727838 | 1.60300000 | 5.00000000 | 5.00000000 | 8.01500000 | FILLED |
+| -7 | 2026-11-06T07:02:05.195Z | ZROUSDT | SELL | 727846 | 1.61100000 | 9.97000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -8 | 2026-11-06T07:02:05.500Z | ZROUSDT | BUY | 727847 | 1.60200000 | 5.00000000 | 5.00000000 | 8.01000000 | FILLED |
+| -9 | 2026-11-06T07:02:14.978Z | DOGEUSDT | SELL | 1276683 | 0.07191000 | 797.00000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -10 | 2026-11-06T07:02:15.284Z | DOGEUSDT | BUY | 1276684 | 0.07149000 | 400.00000000 | 400.00000000 | 28.59600000 | FILLED |
+| -11 | 2026-11-06T07:02:31.151Z | DOGEUSDT | SELL | 1276698 | 0.07185000 | 1196.00000000 | 1196.00000000 | 85.93260000 | FILLED* |
+| -12 | 2026-11-06T07:02:37.746Z | ZROUSDT | SELL | 727858 | 1.61000000 | 14.96000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -13 | 2026-11-06T07:02:38.051Z | ZROUSDT | BUY | 727859 | 1.60100000 | 5.00000000 | 5.00000000 | 8.00500000 | FILLED |
+| -14 | 2026-11-06T07:02:40.455Z | ZROUSDT | SELL | 727860 | 1.60900000 | 19.95000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -15 | 2026-11-06T07:02:40.761Z | ZROUSDT | BUY | 727861 | 1.60000000 | 5.00000000 | 5.00000000 | 8.00000000 | FILLED |
+| -16 | 2026-11-06T07:02:53.960Z | ZROUSDT | SELL | 727866 | 1.60800000 | 24.94000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -17 | 2026-11-06T07:02:54.264Z | ZROUSDT | BUY | 727867 | 1.59900000 | 5.00000000 | 5.00000000 | 7.99500000 | FILLED |
+| -18 | 2026-11-06T07:03:10.107Z | ZROUSDT | SELL | 727875 | 1.60800000 | 29.93000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -19 | 2026-11-06T07:03:10.417Z | ZROUSDT | BUY | 727876 | 1.59800000 | 5.00000000 | 5.00000000 | 7.99000000 | FILLED |
+| -20 | 2026-11-06T07:04:14.775Z | ZROUSDT | SELL | 727891 | 1.60700000 | 34.92000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -21 | 2026-11-06T07:04:15.080Z | ZROUSDT | BUY | 727892 | 1.59700000 | 5.00000000 | 5.00000000 | 7.98500000 | FILLED |
+| -22 | 2026-11-06T07:04:47.064Z | ZROUSDT | SELL | 727904 | 1.60600000 | 39.91000000 | 39.91000000 | 64.09546000 | FILLED |
+| -23 | 2026-11-06T07:04:47.368Z | ZROUSDT | BUY | 727905 | 1.59600000 | 5.00000000 | 0.00000000 | 0.00000000 | NEW |
+
+`* FILLED` is the order-history status only; it conflicts with the Journal/account closing evidence and must not be treated as reconciled.
+
+The Journal records nine cancellation requests and nine cancellation confirmations for the nine SELL orders with suffixes -3, -5, -7, -9, -12, -14, -16, -18, and -20. Each canceled order reports zero executed quantity in order history.
+
+## Applied execution ledger
+
+The Journal's canonical fill identity is `binance:<symbol>:<tradeId>`. Both the Journal event time and exchange `executedAt` are shown; the latter is the millisecond timestamp carried by the fill DTO.
+
+| Symbol | Journal event UTC | Exchange executedAt UTC | Client suffix | Trade ID | Binance orderId | Side | Price | Base qty | Quote qty | Actual commission | Liquidity | Commission status |
+|---|---|---|---:|---:|---:|---|---:|---:|---:|---|---|---|
+| DOGEUSDT | 2026-11-06T07:01:41.004Z | 2026-11-06T07:01:40.846Z | -1 | 221733 | 1276628 | BUY | 0.07157 | 400 | 28.628 | 0.4 DOGE | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:01:47.374Z | 2026-11-06T07:01:47.219Z | -2 | 11658 | 727817 | BUY | 1.604 | 5 | 8.02 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:03.551Z | 2026-11-06T07:02:03.388Z | -6 | 11659 | 727838 | BUY | 1.603 | 5 | 8.015 | 0.005 ZRO | MAKER | COMPLETE |
+| DOGEUSDT | 2026-11-06T07:02:13.334Z | 2026-11-06T07:02:13.170Z | -4 | 221736 | 1276664 | BUY | 0.07153 | 400 | 28.612 | 0.4 DOGE | MAKER | COMPLETE |
+| DOGEUSDT | 2026-11-06T07:02:29.509Z | 2026-11-06T07:02:29.345Z | -10 | 221738 | 1276684 | BUY | 0.07149 | 400 | 28.596 | 0.4 DOGE | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:36.107Z | 2026-11-06T07:02:35.944Z | -8 | 11660 | 727847 | BUY | 1.602 | 5 | 8.01 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:38.812Z | 2026-11-06T07:02:38.051Z | -13 | 11661 | 727859 | BUY | 1.601 | 5 | 8.005 | 0.005 ZRO | TAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:52.317Z | 2026-11-06T07:02:52.152Z | -15 | 11662 | 727861 | BUY | 1.6 | 5 | 8 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:03:08.450Z | 2026-11-06T07:03:08.289Z | -17 | 11663 | 727867 | BUY | 1.599 | 5 | 7.995 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:04:13.128Z | 2026-11-06T07:04:12.964Z | -19 | 11664 | 727876 | BUY | 1.598 | 5 | 7.99 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:04:45.423Z | 2026-11-06T07:04:45.259Z | -21 | 11665 | 727892 | BUY | 1.597 | 5 | 7.985 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:08:47.124Z | 2026-11-06T07:08:46.965Z | -22 | 11666 | 727904 | SELL | 1.606 | 39.91 | 64.09546 | 0.06409546 USDT | MAKER | COMPLETE |
+
+The Journal records 13 duplicate-fill notifications: ZRO trade 11661 is replayed at 07:02:40.928Z, then all 12 applied fills are replayed at CLOSING (07:58:11.075–07:58:11.077Z). No duplicate replay adds another execution to the ledger.
+
+## Strategy decision to order correlation
+
+The 13 Journal `strategy.decision` records map to the 23 order intents as follows. Client suffixes are the final sequence component of `h-971fc65d9a264984ab8aa7-<n>`.
+
+| Decision time UTC | Symbol | Reference price | Action(s) and matching client suffix |
+|---|---|---:|---|
+| 07:00:08.056 | DOGEUSDT | 0.07161000 | BUY 400 @ 0.07157 — -1 INITIAL_BUY |
+| 07:00:08.661 | ZROUSDT | 1.60500000 | BUY 5 @ 1.604 — -2 INITIAL_BUY |
+| 07:01:41.006 | DOGEUSDT | 0.07157000 | SELL 398 @ 0.07203 — -3 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 400 @ 0.07153 — -4 NEXT_STANDING_BUY |
+| 07:01:47.376 | ZROUSDT | 1.60400000 | SELL 4.98 @ 1.615 — -5 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.603 — -6 NEXT_STANDING_BUY |
+| 07:02:05.052 | ZROUSDT | 1.60300000 | SELL 9.97 @ 1.611 — -7 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.602 — -8 NEXT_STANDING_BUY |
+| 07:02:14.833 | DOGEUSDT | 0.07153000 | SELL 797 @ 0.07191 — -9 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 400 @ 0.07149 — -10 NEXT_STANDING_BUY |
+| 07:02:31.008 | DOGEUSDT | 0.07149000 | SELL 1,196 @ 0.07185 — -11 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT |
+| 07:02:37.604 | ZROUSDT | 1.60200000 | SELL 14.96 @ 1.61 — -12 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.601 — -13 NEXT_STANDING_BUY |
+| 07:02:40.312 | ZROUSDT | 1.60200000 | SELL 19.95 @ 1.609 — -14 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.600 — -15 NEXT_STANDING_BUY |
+| 07:02:53.814 | ZROUSDT | 1.60000000 | SELL 24.94 @ 1.608 — -16 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.599 — -17 NEXT_STANDING_BUY |
+| 07:03:09.962 | ZROUSDT | 1.59900000 | SELL 29.93 @ 1.608 — -18 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.598 — -19 NEXT_STANDING_BUY |
+| 07:04:14.631 | ZROUSDT | 1.59800000 | SELL 34.92 @ 1.607 — -20 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.597 — -21 NEXT_STANDING_BUY |
+| 07:04:46.922 | ZROUSDT | 1.59700000 | SELL 39.91 @ 1.606 — -22 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.596 — -23 NEXT_STANDING_BUY |
+
+The initial decision created one BUY per enabled market. Subsequent filled BUY transitions produced a recovery SELL intent first and, where present, the next standing BUY intent. The nine prior SELL intents (-3, -5, -7, -9, -12, -14, -16, -18, -20) were canceled with zero execution before their replacements. The final ZRO SELL (-22) filled; its paired standing BUY (-23) remained NEW. The final DOGE SELL (-11) remains the cross-source status conflict described in AUDIT.md.
+
+## Balance and order-state cross-check
+
+| Asset | PREFLIGHT total | CLOSING free | CLOSING locked | CLOSING total | Delta |
+|---|---:|---:|---:|---:|---:|
+| DOGE | 19,119.8 | 19,122.6 | 1,196 | 20,318.6 | +1,198.8 |
+| USDT | 8,954.11668541 | 8,860.31204995 | 7.98 | 8,868.29204995 | −85.82463546 |
+| ZRO | 245.125 | 245.175 | 0 | 245.175 | +0.05 |
+
+ZRO order 727905 is consistent across order history, the supplied open-orders snapshot, and the 7.98 USDT locked balance. DOGE order 1276698 is not consistent across order history, Journal state, and the 1,196 DOGE locked balance. The CLOSING account event's exchange sourceTime (1793948926965 / 2026-11-06T07:08:46.965Z) exactly matches ZRO SELL trade 11666's executedAt; the CLOSING Journal event timestamp is 07:58:11.370Z. Treat these as distinct source/event timestamps; do not infer snapshot query time from sourceTime.
+
+## Original application logs — verified and parsed
+
+The original `harvester.log` and `harvester-trace.log` were read-only inspected, independently SHA-256 verified against #645, and parsed. Integrity metadata, exact line references, ZRO Portfolio/RecoveryLedger transitions, DOGE final runtime state, shutdown execution inventory, and timestamp interpretation are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](../evidence/AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO runtime accounting is now directly observed. DOGE order 1276698 is OPEN/zero-executed in the last runtime evaluations and no DOGE SELL appears in the 12 shutdown execution records, but the separate exchange order-history row reports FILLED; retain CONFLICT. The logs do not identify the second CLOSING unresolved order with certainty.
+
+## Expanded per-symbol decision and lifecycle interpretation
+
+### DOGEUSDT decision sequence
+
+| # | Decision UTC | Strategy decision | Order action | Observed result | Status |
+|---:|---|---|---|---|---|
+| 1 | 07:00:08.056 | Initial BUY, reference 0.07161000 | BUY 400 @ 0.07157, suffix -1 | 1276628 FILLED; trade 221733 applied; 0.4 DOGE fee | PASS |
+| 2 | 07:01:41.006 | BUY-fill transition, reference 0.07157000 | SELL 398 @ 0.07203 (-3); BUY 400 @ 0.07153 (-4) | SELL 1276663 canceled zero; BUY 1276664 filled | PASS observed |
+| 3 | 07:02:14.833 | BUY-fill transition, reference 0.07153000 | SELL 797 @ 0.07191 (-9); BUY 400 @ 0.07149 (-10) | SELL 1276683 canceled zero; BUY 1276684 filled | PASS observed |
+| 4 | 07:02:31.008 | BUY-fill transition, reference 0.07149000 | SELL 1,196 @ 0.07185 (-11) | History FILLED; Journal OPEN; no applied SELL fill; 1,196 DOGE locked at close | CONFLICT |
+
+DOGE BUY checkpoint: 1,200 gross - 1.2 DOGE BUY fees = 1,198.8 net. The SELL is excluded from realized accounting until conflict is resolved. The account DOGE delta +1,198.8 matches BUY net exactly.
+
+### ZROUSDT decision sequence
+
+| # | Decision UTC | Strategy decision | Order action | Observed result | Status |
+|---:|---|---|---|---|---|
+| 1 | 07:00:08.661 | Initial BUY, reference 1.605 | BUY 5 @ 1.604 (-2) | 727817 / trade 11658 filled; 0.005 ZRO fee | PASS |
+| 2 | 07:01:47.376 | BUY transition, reference 1.604 | SELL 4.98 (-5); BUY 5 @ 1.603 (-6) | SELL 727837 canceled zero; BUY 727838 filled | PASS observed |
+| 3 | 07:02:05.052 | BUY transition, reference 1.603 | SELL 9.97 (-7); BUY 5 @ 1.602 (-8) | SELL 727846 canceled zero; BUY 727847 filled | PASS |
+| 4 | 07:02:37.604 | BUY transition, reference 1.602 | SELL 14.96 (-12); BUY 5 @ 1.601 (-13) | SELL 727858 canceled zero; BUY 727859 filled | PASS |
+| 5 | 07:02:40.312 | BUY transition, reference 1.602 | SELL 19.95 (-14); BUY 5 @ 1.600 (-15) | SELL 727860 canceled zero; BUY 727861 filled | PASS |
+| 6 | 07:02:53.814 | BUY transition, reference 1.600 | SELL 24.94 (-16); BUY 5 @ 1.599 (-17) | SELL 727866 canceled zero; BUY 727867 filled | PASS |
+| 7 | 07:03:09.962 | BUY transition, reference 1.599 | SELL 29.93 (-18); BUY 5 @ 1.598 (-19) | SELL 727875 canceled zero; BUY 727876 filled | PASS |
+| 8 | 07:04:14.631 | BUY transition, reference 1.598 | SELL 34.92 (-20); BUY 5 @ 1.597 (-21) | SELL 727891 canceled zero; BUY 727892 filled | PASS |
+| 9 | 07:04:46.922 | BUY transition, reference 1.597 | SELL 39.91 @ 1.606 (-22); BUY 5 @ 1.596 (-23) | SELL 727904 filled; trade 11666 applied; completion recorded; BUY 727905 remains NEW | PARTIAL |
+
+The nine canceled SELLs are not executions. Their zero executed quantities contribute no base debit, quote proceeds, or realized PnL.
+
+## Order-state vocabulary
+
+- INITIAL_BUY: first BUY intent after initial market evaluation.
+- NEXT_STANDING_BUY: subsequent BUY intent after a BUY-fill decision; intent does not mean filled.
+- RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT: strategy SELL intent; intent does not mean execution.
+- NEW: order-history/open-order state with zero execution in this run.
+- CANCELED: terminal history state; all nine canceled SELLs report zero executed.
+- FILLED*: history reports FILLED but Journal/account contradict it; not a reconciled fill.
+- execution.fill_applied: canonical fill applied to Journal/accounting.
+- execution.duplicate_fill: duplicate notification; must not change balances twice.
+- recovery.cycle_completed: completion event; still requires eligibility, commission, Portfolio, and RecoveryLedger verification.
+
+## Explicit event gaps
+
+1. Original app logs were unavailable. No exact DEBUG/TRACE decision rationale, market tick, filter response, retry timing, WebSocket reconnect, or cancel/replace interleaving is claimed.
+2. Full CLOSING open-order payload is absent. ZRO 727905 is identified; the second unresolved order is unknown.
+3. DOGE order 1276698 history creation time is 07:02:31.151Z; decision time is 07:02:31.008Z. Neither proves when terminal status changed. Need order update time and trade execution timestamps.
+4. ZRO trade 11666 exchange executedAt 07:08:46.965Z; Journal fill applied 07:08:47.124Z; completion 07:08:47.127Z. CLOSING event at 07:58:11.370Z carries sourceTime equal to the earlier trade timestamp; do not treat sourceTime as snapshot event time.
+5. Journal shows one early duplicate for ZRO trade 11661 and duplicate replays of all 12 applied fills during CLOSING. This does not prove all crash/reconnect permutations.
+
+## Reconciliation equations
+
+DOGE BUY: gross 400 + 400 + 400 = 1,200 DOGE; fees 0.4 + 0.4 + 0.4 = 1.2; net 1,198.8 DOGE; quote debit 28.628 + 28.612 + 28.596 = 85.836 USDT. Closing DOGE delta = (19,122.6 free + 1,196 locked) - 19,119.8 = +1,198.8 DOGE. Exclude SELL from realized accounting until resolved.
+
+ZRO: gross BUY 8 × 5 = 40; BUY fees 8 × 0.005 = 0.04; SELL 39.91; residual 40 - 0.04 - 39.91 = 0.05 ZRO. Gross SELL quote 39.91 × 1.606 = 64.09546; quote fee 0.06409546; net proceeds 64.03136454; BUY cost 64.02; realized net +0.01136454 USDT. Combined USDT delta -85.836 + 0.01136454 = -85.82463546, matching account total change.
+
+These equations prove ZRO arithmetic and DOGE BUY leg only. They do not resolve DOGE SELL or prove complete in-memory ownership state.
+
+
+## Expanded per-symbol decision and lifecycle interpretation
+
+### DOGEUSDT decision sequence
+
+| # | Decision UTC | Strategy decision | Order action | Observed result | Status |
+|---:|---|---|---|---|---|
+| 1 | 07:00:08.056 | Initial BUY, reference 0.07161000 | BUY 400 @ 0.07157, suffix -1 | 1276628 FILLED; trade 221733 applied; 0.4 DOGE fee | PASS |
+| 2 | 07:01:41.006 | BUY-fill transition, reference 0.07157000 | SELL 398 @ 0.07203 (-3); BUY 400 @ 0.07153 (-4) | SELL 1276663 canceled zero; BUY 1276664 filled | PASS observed |
+| 3 | 07:02:14.833 | BUY-fill transition, reference 0.07153000 | SELL 797 @ 0.07191 (-9); BUY 400 @ 0.07149 (-10) | SELL 1276683 canceled zero; BUY 1276684 filled | PASS observed |
+| 4 | 07:02:31.008 | BUY-fill transition, reference 0.07149000 | SELL 1,196 @ 0.07185 (-11) | History FILLED; Journal OPEN; no applied SELL fill; 1,196 DOGE locked at close | CONFLICT |
+
+DOGE BUY checkpoint: 1,200 gross - 1.2 DOGE BUY fees = 1,198.8 net. The SELL is excluded from realized accounting until conflict is resolved. Account DOGE delta +1,198.8 matches BUY net exactly.
+
+### ZROUSDT decision sequence
+
+| # | Decision UTC | Strategy decision | Order action | Observed result | Status |
+|---:|---|---|---|---|---|
+| 1 | 07:00:08.661 | Initial BUY, reference 1.605 | BUY 5 @ 1.604 (-2) | 727817 / trade 11658 filled; 0.005 ZRO fee | PASS |
+| 2 | 07:01:47.376 | BUY transition, reference 1.604 | SELL 4.98 (-5); BUY 5 @ 1.603 (-6) | SELL 727837 canceled zero; BUY 727838 filled | PASS observed |
+| 3 | 07:02:05.052 | BUY transition, reference 1.603 | SELL 9.97 (-7); BUY 5 @ 1.602 (-8) | SELL 727846 canceled zero; BUY 727847 filled | PASS |
+| 4 | 07:02:37.604 | BUY transition, reference 1.602 | SELL 14.96 (-12); BUY 5 @ 1.601 (-13) | SELL 727858 canceled zero; BUY 727859 filled | PASS |
+| 5 | 07:02:40.312 | BUY transition, reference 1.602 | SELL 19.95 (-14); BUY 5 @ 1.600 (-15) | SELL 727860 canceled zero; BUY 727861 filled | PASS |
+| 6 | 07:02:53.814 | BUY transition, reference 1.600 | SELL 24.94 (-16); BUY 5 @ 1.599 (-17) | SELL 727866 canceled zero; BUY 727867 filled | PASS |
+| 7 | 07:03:09.962 | BUY transition, reference 1.599 | SELL 29.93 (-18); BUY 5 @ 1.598 (-19) | SELL 727875 canceled zero; BUY 727876 filled | PASS |
+| 8 | 07:04:14.631 | BUY transition, reference 1.598 | SELL 34.92 (-20); BUY 5 @ 1.597 (-21) | SELL 727891 canceled zero; BUY 727892 filled | PASS |
+| 9 | 07:04:46.922 | BUY transition, reference 1.597 | SELL 39.91 @ 1.606 (-22); BUY 5 @ 1.596 (-23) | SELL 727904 filled; trade 11666 applied; completion recorded; BUY 727905 remains NEW | PARTIAL |
+
+The nine canceled SELLs are not executions. Their zero executed quantities contribute no base debit, quote proceeds, or realized PnL.
+
+## Order-state vocabulary
+
+- INITIAL_BUY: first BUY intent after initial market evaluation.
+- NEXT_STANDING_BUY: subsequent BUY intent after a BUY-fill decision; intent does not mean filled.
+- RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT: strategy SELL intent; intent does not mean execution.
+- NEW: order-history/open-order state with zero execution in this run.
+- CANCELED: terminal history state; all nine canceled SELLs report zero executed.
+- FILLED*: history reports FILLED but Journal/account contradict it; not a reconciled fill.
+- execution.fill_applied: canonical fill applied to Journal/accounting.
+- execution.duplicate_fill: duplicate notification; must not change balances twice.
+- recovery.cycle_completed: completion event; still requires eligibility, commission, Portfolio, and RecoveryLedger verification.
+
+## Explicit event gaps
+
+1. Original app logs were unavailable. No exact DEBUG/TRACE decision rationale, market tick, filter response, retry timing, WebSocket reconnect, or cancel/replace interleaving is claimed.
+2. Full CLOSING open-order payload is absent. ZRO 727905 is identified; the second unresolved order is unknown.
+3. DOGE order 1276698 history creation time is 07:02:31.151Z; decision time is 07:02:31.008Z. Neither proves when terminal status changed. Need order update time and trade execution timestamps.
+4. ZRO trade 11666 exchange executedAt 07:08:46.965Z; Journal fill applied 07:08:47.124Z; completion 07:08:47.127Z. CLOSING event 07:58:11.370Z carries sourceTime equal to the earlier trade timestamp; do not treat sourceTime as snapshot event time.
+5. Journal shows one early duplicate for ZRO trade 11661 and duplicate replays of all 12 applied fills during CLOSING. This does not prove all crash/reconnect permutations.
+
+## Reconciliation equations
+
+DOGE BUY: gross 400 + 400 + 400 = 1,200 DOGE; fees 0.4 + 0.4 + 0.4 = 1.2; net 1,198.8 DOGE; quote debit 28.628 + 28.612 + 28.596 = 85.836 USDT. Closing DOGE delta = (19,122.6 free + 1,196 locked) - 19,119.8 = +1,198.8 DOGE. Exclude SELL from realized accounting until resolved.
+
+ZRO: gross BUY 8 × 5 = 40; BUY fees 8 × 0.005 = 0.04; SELL 39.91; residual 40 - 0.04 - 39.91 = 0.05 ZRO. Gross SELL quote 39.91 × 1.606 = 64.09546; quote fee 0.06409546; net proceeds 64.03136454; BUY cost 64.02; realized net +0.01136454 USDT. Combined USDT delta -85.836 + 0.01136454 = -85.82463546, matching account total change.
+
+These equations prove ZRO arithmetic and DOGE BUY leg only. They do not resolve DOGE SELL or prove complete in-memory ownership state.
+
+
+## Verified log-derived lifecycle update — 2026-11-06
+
+- ZRO SELL trade 11666/order 727904: applied once; actual quote commission 0.06409546 USDT; net proceeds 64.03136454 USDT; Portfolio quote cash flow +0.01136454 USDT; RecoveryLedger outstanding reached zero. Recovery completion allocated 0.01 ZRO free, retained 0.04 active residual, and reset cycle totals. The next market evaluation preserved 0.04 active + 0.01 free.
+- DOGE SELL 1276698/client suffix -11: last observed evaluations show OPEN, executed 0, remaining 1,196; Portfolio remains 1,198.8 DOGE; RecoveryLedger proceeds remain zero. No DOGE SELL execution is among the 12 shutdown execution records. Exchange order history still reports FILLED, so terminal state and realized PnL remain CONFLICT.
+- ZRO BUY 727905/client suffix -23 remains confirmed NEW with 7.98 USDT locked. DOGE 1276698 is only a candidate for the other unresolved order until the complete CLOSING open-order payload is available.
+
+
+## 2026-11-06 post-CLOSING exchange trade timeline (operator-supplied read-only exports)
+
+The complete 50-row DOGE and ZRO trade-history outputs are preserved in [AUDIT_DOGE_TRADES_2026-11-06.md](../evidence/AUDIT_DOGE_TRADES_2026-11-06.md) and [AUDIT_ZRO_TRADES_2026-11-06.md](../evidence/AUDIT_ZRO_TRADES_2026-11-06.md).
+
+| UTC timestamp | Symbol | Trade | Order | Side | Qty | Quote | Fee |
+|---|---|---:|---:|---|---:|---:|---:|
+| 2026-11-06 07:08:46.965 | ZROUSDT | 11666 | 727904 | SELL | 39.91 ZRO | 64.09546000 USDT | 0.06409546 USDT |
+| 2026-11-06 08:03:01.841 | DOGEUSDT | 221990 | 1276698 | SELL | 278 DOGE | 19.97430000 USDT | 0.01997430 USDT |
+| 2026-11-06 08:03:18.202 | DOGEUSDT | 221991 | 1276698 | SELL | 918 DOGE | 65.95830000 USDT | 0.06595830 USDT |
+| 2026-11-06 08:38:24.782 | ZROUSDT | 12182 | 727905 | BUY | 5 ZRO | 7.98000000 USDT | 0.005 ZRO |
+
+DOGE 1276698: 1,196 DOGE total; 85.93260000 USDT gross proceeds; 0.08593260 USDT commission; 85.84666740 USDT net. ZRO 727905: 5 ZRO gross less 0.005 ZRO fee = 4.995 ZRO net; 7.98 USDT quote debit. ZRO 727904: 64.09546 gross less 0.06409546 fee = 64.03136454 net; against 64.02 cost gives +0.01136454 USDT realized net.
+
+Chronology is decisive: DOGE 1276698 fills at 08:03, after ~07:58 CLOSING; ZRO 727905 fills at 08:38, after ~07:58 CLOSING. The closing audit's two unresolved owned orders were therefore pending at that snapshot. The later evidence identifies both known order IDs as subsequently filled, but only one was confirmed among the two unresolved at close (ZRO 727905); DOGE's candidate identity is now supported by its matching post-close fill, but the full closing payload is still needed to prove the second identity conclusively. Neither post-close fill proves internal Harvester processing.
+
+
+## 2026-11-06 11:57 UTC — repository and CI verification
+
+- Re-read PR #653 metadata and branch ref. PR is OPEN, unmerged, base `develop`; branch `docs/harvester-log-evidence-2026-11-06` matched HEAD `94650284a05e0e18cda662d5a41bce0a47788ac8` at verification start.
+- Confirmed the PR changed-file list contains all seven expected evidence/audit documents; fetched all seven from the branch. The DOGE and ZRO raw trade addenda each retain the complete operator-provided 50-row bounded result, including displayed commission fields; no exhaustive-history claim is made.
+- Exact-HEAD Actions runs: JavaScript Syntax 42213769852 PASS; Test Coverage 42213769902 PASS; Dependency Audit 42213769838 PASS; Unit Tests 42213769873 PASS; Utils Unit Tests 42213769913 PASS. Inspected jobs completed successfully. The read-only Binance TESTNET integration job in Unit Tests was SKIPPED.
+- The separate commit-status API response was `pending`, `total_count=0`; record it as a distinct status signal, not as an Actions failure or success.
+- No PR reviews or inline review threads were present at the time of inspection.
+- No fresh TESTNET balances/open orders, full historical CLOSING open-order payload, or later Harvester Journal/runtime session were available. The connector cannot read GitHub secret values or dispatch the secret-backed exchange workflow. Current DOGE/ZRO/USDT balances and post-CLOSING internal processing remain UNVERIFIED.
+- #649 is closed after merge of exact-once regression coverage; #646 remains open for product decisions; #626 remains open for the original empty-TypeError disposition and controlled TESTNET/owner acceptance.
+- No exchange mutation, order change/cancel/replace, withdrawal, account-setting change, or bot restart occurred. TESTNET acceptance remains NOT ACCEPTED.
+
+
+## Evidence correction — previously supplied balances and open-orders snapshot (2026-11-06)
+
+A review of parent issue #645 comment 6680483675 and the original Journal comment 6680290142 confirms that these records were already supplied by the operator and must not be described as absent.
+
+### Historical account snapshots from the original Journal
+
+| Phase | Asset | Free | Locked | Total |
+|---|---|---:|---:|---:|
+| PREFLIGHT (~07:00:04Z) | DOGE | 19,119.8 | 0 | 19,119.8 |
+| PREFLIGHT (~07:00:04Z) | USDT | 8,954.11668541 | 0 | 8,954.11668541 |
+| PREFLIGHT (~07:00:04Z) | ZRO | 245.125 | 0 | 245.125 |
+| CLOSING (~07:58:11Z) | DOGE | 19,122.6 | 1,196 | 20,318.6 |
+| CLOSING (~07:58:11Z) | USDT | 8,860.31204995 | 7.98 | 8,868.29204995 |
+| CLOSING (~07:58:11Z) | ZRO | 245.175 | 0 | 245.175 |
+
+The PREFLIGHT account snapshot was COMPLETE and its open-orders snapshot reported zero orders. The CLOSING account snapshot was INCOMPLETE with `UNRESOLVED_OWNED_ORDERS:2`. These are historical Journal facts, not current wallet balances.
+
+### Operator-supplied latest open-orders snapshot
+
+The operator also supplied a separate point-in-time open-orders response, preserved in issue #645 comment 6680483675. It showed one open order:
+
+- Symbol: ZROUSDT
+- Side/type: BUY LIMIT
+- Exchange order ID: `727905`
+- Client order ID: `h-971fc65d9a264984ab8aa7-23`
+- Price: `1.59600000`
+- Original quantity: `5.00000000`
+- Executed quantity: `0`
+- Status: `NEW`
+
+This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is a supplied latest snapshot, but it is not the complete account-wide open-orders payload captured at the earlier ~07:58Z CLOSING event.
+
+### Corrected evidence classification
+
+- **Already supplied and preserved:** PREFLIGHT and CLOSING balances; PREFLIGHT zero-open-orders Journal record; separate latest one-order ZROUSDT open-orders snapshot; DOGE/ZRO order histories; bounded 50-row DOGE/ZRO trade exports; original Journal and parsed application-log evidence.
+- **Still not supplied/located in the preserved audit:** the complete historical ~07:58Z CLOSING open-orders payload identifying both unresolved owned orders.
+- **Still unverified:** a timestamped account-balance/open-orders snapshot after the later DOGE 1276698 and ZRO 727905 fills; any later Harvester Journal/runtime evidence proving those post-CLOSING fills were applied to Portfolio/RecoveryLedger.
+- Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
+
+The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
+
+
+## Post-CLOSING exchange execution addendum — supersedes the preliminary DOGE conflict (2026-11-06)
+
+The FILLED* order-history annotation for DOGE order 1276698 above records the original evidence-stage conflict only. The later preserved 50-row actual-trade export resolves the chronology:
+
+| Trade ID | Order ID | UTC execution time | Side | Base quantity | Gross quote | Commission |
+|---:|---:|---|---|---:|---:|---:|
+| 221990 | 1276698 | 08:03:01.841Z | SELL | 278 DOGE | 19.97430000 USDT | 0.01997430 USDT |
+| 221991 | 1276698 | 08:03:18.202Z | SELL | 918 DOGE | 65.95830000 USDT | 0.06595830 USDT |
+
+Total exchange execution: 1,196 DOGE; gross 85.93260000 USDT; quote commission 0.08593260 USDT; net proceeds 85.84666740 USDT. Both fills postdate the final runtime evaluation (~07:57:19Z), CLOSING snapshot (~07:58:11Z), and process stop (~07:58:16Z). The order was open/unfilled at the last observed runtime point and filled later; these are not contradictory same-time facts.
+
+ZRO BUY order 727905 likewise filled after CLOSING: trade 12182 at 08:38:24.782Z, 5 ZRO gross less 0.005 ZRO base commission = 4.995 ZRO net, with 7.98 USDT quote debit.
+
+The later fills do not rewrite the earlier CLOSING balances/open-order state and do not prove a later Harvester process applied them to Portfolio/RecoveryLedger. A post-fill account/open-orders snapshot and later Journal/runtime evidence remain unavailable. The complete historical CLOSING open-orders payload is still required to prove both unresolved order identities. The two trade exports are bounded 50-row responses with no fromId, not exhaustive all-time histories.
+
+
+## Operator downtime and post-shutdown fills — interpretation (2026-11-06)
+
+Harvester runs on the operator's personal PC; continuous uptime is not an operational requirement. The process was stopped around 07:58:16Z while Binance-owned orders remained open. Binance continued managing those orders and later executed DOGE SELL 1276698 at 08:03:01.841Z / 08:03:18.202Z and ZRO BUY 727905 at 08:38:24.782Z. This is expected exchange behavior during local application downtime.
+
+The timeline must therefore be read as: (1) Harvester observed open/unfilled orders at shutdown; (2) the process was offline; (3) Binance subsequently filled those resting orders. There is no expectation that the stopped process update its in-memory Portfolio/RecoveryLedger, and no evidence of same-session post-fill processing is required. The next required checkpoint is the next startup: reconcile these exchange-side fills and current account/open-order state before allowing new trading. The restart path must be idempotent and fail-closed.
+
+ 
+## Expected-versus-actual recovery reconciliation — 2026-11-06
+
+The decision-time config committed at audit baseline `4af3434f788b87139513921f220294ae90daf4d5` sets minProfit=0.01, DOGE keepQuantity=1, ZRO keepQuantity=0.01, and 0.1% maker/taker rates. Both actual recovery orders are ordinary LIMIT. Under candidate quantity-step assumptions DOGE=1 / ZRO=0.01, the canonical 0.1% reserve calculations reproduce the submitted quantities and prices. The original logs record only `Exchange trading rules validated`, not the actual filter values; historical tick/step/minimum-filter conformance is therefore UNVERIFIED. Exchange acceptance confirms that each submitted order passed the exchange's then-current filters, but does not prove the assumed filter values.
+
+| Symbol | Net BUY position | Full spent | Keep | Expected SELL | Actual SELL | Verdict |
+|---|---:|---:|---:|---:|---:|---|
+| DOGEUSDT | 1,198.8 DOGE | 85.836 USDT | 1 DOGE | 1,196 @ 0.07185* | 1,196 @ 0.07185 | FOLLOWED for submitted order; filter calculation UNVERIFIED |
+| ZROUSDT | 39.96 ZRO | 64.02 USDT | 0.01 ZRO | 39.91 @ 1.606* | 39.91 @ 1.606 | FOLLOWED for submitted order; filter calculation UNVERIFIED |
+
+*Expected quantities/prices are conditional on the candidate quantity steps above; the accepted exchange orders prove submitted order validity, not that the assumed historical filter values were exact.*
+
+### DOGE 1276698
+
+BUY fills 221733/221736/221738: gross 1,200 DOGE; base commission 1.2 DOGE; net quantity 1,198.8; quote spent 85.836 USDT. SELL fills:
+- 221990: 278 DOGE, 19.97430000 USDT gross, 0.01997430 USDT quote commission.
+- 221991: 918 DOGE, 65.95830000 USDT gross, 0.06595830 USDT quote commission.
+
+Total SELL: 1,196 DOGE; gross 85.93260000; actual quote commission 0.08593260; net proceeds 85.84666740; net profit +0.01066740 USDT. Remaining exchange-side quantity 2.8 DOGE = 1 configured keep + 1.8 excess. The two fills occurred after CLOSING and shutdown; they are not in the in-process closing Portfolio/RecoveryLedger and must not be retroactively applied. Historical filter evidence is insufficient to prove the 1.8 excess dust classification; mark it UNVERIFIED pending #654 reconciliation.
+
+### ZRO 727904
+
+Eight BUY fills 11658–11665: gross 40 ZRO; base commission 0.04; net quantity 39.96; quote spent 64.02000000 USDT. SELL trade 11666: 39.91 ZRO; gross quote 64.09546000; actual quote commission 0.06409546; net proceeds 64.03136454; realized net profit +0.01136454 USDT. Remaining quantity 0.05 ZRO.
+
+The historical runtime allocated 0.01 ZRO free and reset the recovery ledger while 0.04 ZRO remained active. Repeated following Conservative evaluations (07:08:47.129Z–07:09:04.750Z) returned NO_ACTION with actions=[] while the 0.04 active remainder persisted, confirming no residual SELL was planned. Verdict: **VIOLATED**. The 0.04 amount is above keepQuantity and cannot be silently discarded or absorbed into free inventory. Exact historical MIN_NOTIONAL evidence is absent; at 1.606 its value is 0.06424 USDT, so if the applicable minimum was 5 USDT it would be exchange-constrained dust. Either way, canonical completion must not allocate/reset while active quantity exceeds exact keepQuantity. The subsequent 727905 BUY (5 gross, 0.005 base fee, 4.995 net) filled after CLOSING and is a separate later event.
+
+### Confirmed implementation root cause and correction
+
+At baseline `4af3434f788b87139513921f220294ae90daf4d5`, completion rejected only `activeQuantity < keepQuantity` and incorrectly allowed `activeQuantity > keepQuantity`; the strategy also stopped creating SELL intents when outstanding recovery reached zero. Current branch code now defers completion for any residual above keepQuantity and continues residual SELL planning with current-market pricing, filter checks, and explicit dust. Exact DOGE/ZRO actual-fill regressions and an exact ZRO completion-gate regression were added. These new tests are not yet verified by local execution or GitHub Actions.
+
+
+## 2026-11-06 lifecycle audit — partial BUY while recovery SELL is open
+
+**Confirmed source finding — VIOLATED:** `processUserDataEventTransition()` in `src/use-cases/conservative-trading-engine.js` accounts a BUY TRADE fill but returns from the generic `PARTIALLY_FILLED` branch before canceling an active recovery SELL. Cancellation currently occurs only in the later FILLED-BUY path. The canonical specification requires the existing SELL to be canceled and fully reconciled after any new BUY fill, including a partial BUY fill, before recalculating SELL quantity/price.
+
+**Fix and regression added:** commit `9c054725e03a751b06b8a3421e859201640c6469` adds cancellation/reconciliation/replanning for a partial BUY while a recovery SELL is active; commit `3cfc085d0caecc9a74ca9cb279298dde7c6075df` adds a regression asserting the BUY remains PARTIALLY_FILLED, the old SELL is canceled, and a replacement SELL is opened only after reconciliation. Exact-head GitHub Actions had no runs at the time of this update; test and fix are therefore **PENDING VERIFICATION**, not passed.
+
+**Related lifecycle checks:** partial SELL fills are applied through the paired idempotent accounting transition and do not trigger completion; the cancellation-race regression at test line 2551 proves one application when a raced SELL fill is replayed. Dust becoming sellable after a later BUY still requires a dedicated regression. Completion must continue to require exact keepQuantity and preserve above-keep dust/basis without allocation/reset.
+
+The canonical specification remains the sole source of truth and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No TESTNET writes, cancellations, new orders, or bot restarts were performed.
+
+
+## Lifecycle audit refinement — partial BUY replacement path (2026-11-06)
+
+The partial-BUY fix required one additional source correction: `evaluateConservativeStrategy()` had an early return for any partially filled BUY, which suppressed all SELL planning even after the old recovery SELL had been reconciled. That gate is removed; active BUY/SELL orders themselves continue to suppress duplicate intents, while SELL planning can now use the updated active Position. Commit `546c2388962774ea89bcc78a98e319337252c895` contains this policy correction; regression commit `58f9369a5ef4b74b83b8680b174ac99765e3a310` updates the scenario to apply the BUY fill to both Position and RecoveryLedger and verify a larger replacement SELL while the BUY remains PARTIALLY_FILLED.
+
+Current lifecycle classifications:
+- Partial SELL exact-once accounting: FOLLOWED in-process; paired accounting and stable fill fingerprints, with partial/terminal regression coverage.
+- SELL fill racing cancellation and late stream replay: FOLLOWED in-process; test verifies one accounting application.
+- Any BUY fill while recovery SELL is open: source correction and regression added; **PENDING VERIFICATION** until exact-head tests run.
+- Dust becoming sellable after a later BUY while preserving accumulated basis: UNVERIFIED; source retains Position.spent and evaluates aggregate active quantity, but a dedicated dust-plus-later-BUY regression is still missing.
+- Exact keepQuantity on completion: FOLLOWED by the completion predicate and tests; above-keep residual/dust defers free allocation and both Position/RecoveryLedger reset.
+
+Latest source/test head known at this checkpoint: `58f9369a5ef4b74b83b8680b174ac99765e3a310`. No GitHub Actions runs were visible for that exact head. Do not claim tests passed. The canonical specification remains the only source of strategy rules and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No exchange or TESTNET actions were performed.
+
+
+## 2026-11-06 audit continuation — partial BUY policy regression
+
+Source/spec comparison found one stale regression in `src/domain/strategies/conservative/conservative-strategy.test.js`: it expected a PARTIALLY_FILLED BUY to suppress both strategy sides. The canonical contract requires active orders to suppress duplicate intents, but does not suppress a valid recovery SELL; the BUY remains active and no duplicate BUY is created. Current `evaluateConservativeStrategy` already plans the SELL while `hasActiveBuy` prevents another BUY. Updated the test to assert that behavior (commit `b1f28cb4dbe49e1d51cf110db1f1307e3d2644e1`). This is a test/spec alignment change, not a recovery, Journal, or broker implementation change. Exact-head CI/test execution is still pending; no pass is claimed.
+
+
+## 2026-11-06 audit continuation — dust plus subsequent BUY regression
+
+Added a domain regression covering the canonical dust lifecycle: a profitable SELL leaves 0.05 above `keepQuantity` that is below the quantity step; a later BUY is then applied to both Position and RecoveryLedger; the test asserts the old dust remains in active quantity, the original spent basis is preserved and increased by the new BUY cost, prior net SELL proceeds remain included, and the combined inventory produces a valid aggregate recovery SELL. Test-only change: `f8ff57f7170cb0750ee540862e393c1aadad6590`. No recovery, Journal, or broker implementation was changed. Exact-head CI/test execution remains pending.
+
+
+## 2026-11-06 audit finding — dust disposition is not durably recorded
+
+The canonical specification requires recording the exact `EXCHANGE_CONSTRAINED_DUST` quantity and limiting exchange filter. `evaluateConservativeStrategy` returns `inventoryDisposition`, but the engine's no-action path returns before publishing `STRATEGY_DECISION`; its evaluation log records `reason` and `actions` but omits `inventoryDisposition`. The lifecycle decision DTO also accepts only strategy, symbol, reference price, and actionable order facts. Therefore the dust quantity/filter classification is transient in the returned decision and is not evidenced in the lifecycle event/log path. **AUDIT GAP / NOT FIXED.** The Position quantity and spent basis remain active; the newly added later-BUY regression covers their aggregation. Per owner instruction, no Journal, event DTO, broker, or recovery implementation was changed. Track the missing durable dust disposition record separately from the completed test-only accounting regression.
+
+
+## 2026-11-06 audit continuation — conflicting partial-BUY lifecycle assertion
+
+A second stale test was found in the full-cycle `conservative-trading-engine.test.js` scenario. It asserted that a partial fill of the second BUY must leave the existing recovery SELL untouched until the BUY becomes FILLED. This directly contradicted canonical specification §5 (owner decision B: any new BUY fill while SELL is OPEN/PARTIALLY_FILLED requires cancel, full reconciliation, and replacement) and the current engine branch that performs that sequence on PARTIALLY_FILLED BUY. Updated the test to expect cancellation/reconciliation/replacement after the partial fill, preserve the BUY's PARTIALLY_FILLED state, then cancel/reconcile that replacement again when the remaining BUY fills. The expected order sequence now includes both replacement SELLs. Test-only commits: `fad7f3165b9ee3d515406693489923aeee753179`, `445c20d0441e56ea5c8126aa44d0a66b4938f9ae`, `03f27ac273b371e219bf358fd7df510d847eabfd`. No recovery, Journal, or broker implementation was changed. Exact-head tests remain unverified.
+
+
+## 2026-11-06 audit continuation — lifecycle regression precision
+
+After aligning the full-cycle partial-BUY scenario with owner decision B, its fill-count, order-count, and cancellation assertions were updated for both cancellation/reconciliation cycles (follow-up test commit `9c9b0d12fcd04d2ce08915a09e4431241bfd7f9f`). The partial-SELL/no-new-BUY regression was also strengthened to assert the same SELL remains PARTIALLY_FILLED with unchanged limit price and original quantity, with no duplicate SELL or cancellation after a market-price event (test commit `bbeb8ce4f39111bc0f076b99b9dc2001766332c6`). These are test-only changes. Exact-head CI remains unverified.
+
+
+## Source lifecycle audit — 2026-11-06 21:05 +02:00
+
+Audited PR #653 HEAD `8c1bdfda34c9f3e9fc0aaf4a5635ecf7cbb570ff` against canonical specification SHA `7e85f077a0722fff8ee386c3ddba53754ffa313c`.
+
+Reviewed Conservative policy, recovery SELL planner, recovery completion, serialized engine transition handling, and focused regression test names/assertions. Verified source/test coverage for partial BUY with active recovery SELL, partial SELL without a new BUY, dust plus later BUY, residual sell-through, maximum SELL quantity/notional caps, and completion blocked by excess inventory.
+
+Identified F-011: focused regression coverage is missing for terminal recovery SELL outcomes CANCELED, EXPIRED, and REJECTED (including partial terminal execution and reconciliation-before-replacement). Source currently reconciles terminal fill history before its SELL terminal reevaluation path; no runtime mismatch was established in this pass.
+
+Exact-HEAD workflow lookup returned zero PR-triggered runs. No package test command was run. Do not claim tests pass. No TESTNET or exchange actions occurred.
+
+## 2026-11-06 — F-011 terminal recovery-SELL regression tests added
+
+Added offline engine tests for partial terminal recovery SELL outcomes CANCELED, EXPIRED, and REJECTED. The valid cases verify exact fill application, quote commission preservation, Position quantity reduction, unchanged accumulated Position.spent, and cumulative RecoveryLedger net proceeds before the event can advance; REJECTED then pauses under existing policy. Missing fill history and conflicting duplicate fill IDs must fail closed before accounting or replacement.
+
+Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. No production implementation changes. Tests and exact-head CI are not yet verified.
+
+
+## 2026-11-06 — final SELL lifecycle review and scope verification
+
+Reviewed current branch source and tests for partial SELL stability, BUY-triggered SELL cancellation/reconciliation/replacement, terminal CANCELED/EXPIRED/REJECTED recovery SELLs with partial executions and actual quote commissions, residual sell-through, exchange-constrained dust, and dust plus a later BUY preserving accumulated cost basis. Regression coverage is present; this review did not execute tests.
+
+A local clone attempt failed because github.com could not be resolved from this environment. GitHub's exact-head workflow/status queries returned no runs and no statuses. Therefore focused Harvester tests, full verification, and exact-head CI remain unverified.
+
+Scope cleanup restored six changed files outside apps/harvester to byte-identical develop versions: AI_AGENT_WORKFLOW.md, two Binance shared fill-adapter files, and three shared commission/fill entity files. The PR changed-file inventory now contains 51 files, all under apps/harvester. PR #653 remains OPEN and UNMERGED. No TESTNET/exchange action, merge, Journal, broker, or out-of-app production change was performed in this continuation.
+
+The canonical specification is unchanged. Exact dust quantity/limiting-filter persistence remains unresolved and was not implemented under the explicit scope restriction.
+
+## Owner clarification — dust retention semantics (2026-11-06)
+
+The owner clarified that unsellable exchange-constrained dust is a **bonus to configured `keepQuantity`**. Example: `keepQuantity = 1.00`, unsellable dust `0.04` → retain `1.04` total. Do not discard dust, force an invalid SELL, or count it as sold. Once all sellable excess has been sold and other completion conditions pass, dust is retained with keepQuantity; it does not independently block completion/reset. Preserve its quantity and accounting provenance.
+
+This supersedes prior notes in this history that required above-keep dust to remain active, block completion/reset, or await a later BUY. Those notes record the earlier interpretation and are not current acceptance criteria. The canonical specification was updated accordingly.
+
+No source, test, Journal, event DTO, broker, recovery, or exchange code was changed in this documentation update. Source/test conformance and the separate durable dust quantity/filter evidence gap remain open.

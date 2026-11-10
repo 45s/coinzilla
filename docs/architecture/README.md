@@ -5,11 +5,16 @@ This directory records cross-cutting architecture principles and decisions for t
 ## Start here
 
 - [ADR-0001: Clean and Hexagonal Architecture](./decisions/ADR-0001-clean-hexagonal-architecture.md) — the accepted architectural style and dependency boundaries.
+- [ADR-0002: Explicit Binance trading environment](./decisions/ADR-0002-explicit-binance-trading-environment.md) — `TRADING_MODE` is the sole Binance endpoint selector; `NODE_ENV` is not used.
+
+## Templates
+
+- [ADR template](./decisions/ADR_TEMPLATE.md) — use for durable architectural decisions.
 
 ## Authority and change policy
 
-- [Free-Roll strategy specification](../../apps/bot-free-roll/README.md) is authoritative for the currently documented Free-Roll behavior.
-- [Free-Roll engineering roadmap](../../apps/bot-free-roll/ROADMAP.md) is authoritative for that application's engineering invariants and backlog.
+- [Harvester Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authority for Conservative trading behavior.
+- [Harvester Roadmap](../../apps/harvester/ROADMAP.md) tracks implementation status and planned improvements.
 - Each application owns its strategy-specific rules, workflows, configuration, and runtime composition.
 - Shared entities, broker contracts, event delivery, journal behavior, and utilities remain owned by their respective packages.
 - Repository-wide engineering standards and the AI-agent workflow remain mandatory.

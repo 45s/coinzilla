@@ -1,6 +1,14 @@
 # Harvester Trading Strategies
 
-Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. **Conservative (Free-Roll) is the first implementation priority and the default strategy for the first executable release. Aggressive is deferred until Conservative is proven end to end on TESTNET.** For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
+---
+status: active
+type: strategy-overview
+owner: harvester
+---
+
+> **Authority and status:** Conservative behavior is defined only by the [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The Aggressive material in this document is exploratory product/design discussion, not an accepted executable contract; Aggressive remains deferred and disabled. Do not implement its proposed rules until the product decisions are explicitly finalized and a dedicated specification is accepted.
+
+Harvester is one independent trading process with a shared Trading Engine and a strategy policy selected through `trading-config.json`. **Conservative is the only enabled and executable strategy for the first release. Configure it under `strategies.conservative.enabled`; keep `strategies.aggressive.enabled` set to `false` until Conservative is proven end to end on TESTNET.** There is no strategy handover or simultaneous strategy control in the current release. Strategy availability belongs in the trading config; environment variables remain for deployment-specific settings and the separate TESTNET execution safety gate.
 
 ## Implementation priority
 
@@ -8,71 +16,21 @@ Conservative is not merely the first policy to document: it is the first strateg
 
 ## Strategy modes
 
-### Conservative — Free-Roll
+### Conservative
 
-This policy is implemented as a broker-independent pure function in
-`src/domain/strategies/conservative/conservative-strategy.js`. It emits order
-intents only; the application engine validates and submits them.
+The Conservative strategy's complete and exclusive rule definition is [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-The first connected policy behavior is:
+This page intentionally does not restate Conservative BUY/SELL rules, accounting formulas, fee reserves, retained inventory, partial-fill behavior, cancellation/replacement behavior, or completion criteria. Older Conservative-specific text in this file is superseded by the canonical specification.
 
-The initial standing BUY follows the Free-Roll trailing rule. While the strategy
-is in its trailing phase, if the last traded price rises by at least one full
-compounded `priceStepPercent` from the last BUY reference, cancel the current
-BUY and replace it below the new last trade by the configured percentage.
-Round the replacement price down to the exchange tick. If the cancellation
-reveals any execution, reconcile those fills and pause instead of placing a
-replacement from uncertain inventory. After a BUY fully fills, the next
-standing BUY is fixed and does not trail. Trailing becomes active again after
-a profitable recovery SELL completes.
+Implementation code is under src/domain/strategies/conservative/ and src/use-cases/conservative-trading-engine.js. Its behavior is implementation evidence, not an alternate rule source. Current blockers and verification status are tracked in [ROADMAP](../ROADMAP.md).
 
-The default Harvester config enables only `ZROUSDT` while the first trading
-cycle is limited to one pair. `ZROFDUSD` remains configured but disabled until
-cross-pair shared-asset allocation is implemented.
+### Shared commission and order-type policy — Conservative and Aggressive
 
-- With no active strategy inventory and no active BUY, create one BUY at the
-  last traded price reduced by `priceStepPercent`, rounded down to the
-  exchange price tick. Quantity is `orderQuantity`, rounded down to the
-  exchange quantity step.
-- Use `LIMIT_MAKER` when `makerPercent` is zero; otherwise use `LIMIT`, with
-  exchange time-in-force and filter requirements handled by the broker adapter.
-- When another BUY fully fills while a recovery SELL is open, cancel the old
-  SELL, query and account all canonical fills for that order, verify the
-  cumulative filled quantity, and then recalculate the recovery SELL. If the
-  cancellation or fill history is ambiguous, pause rather than guessing.
-- With active inventory, create a recovery SELL when no SELL is already active.
-  The existing exact-decimal recovery planner preserves `keepQuantity`, covers
-  cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
-  proceeds, and rounds the SELL price up to the exchange tick.
-- When inventory exists, also maintain the next standing BUY unless one is
-  already active. Its reference is the last qualifying BUY price; before a
-  last-buy reference exists, the current last traded price is used.
-- Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
-  intents on subsequent market events. A new BUY is omitted when outstanding
-  recovery capital plus the new order notional would exceed the pair investment cap.
-- A strategy decision can therefore request both a BUY and a SELL. The policy
-  does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
+For Conservative, the canonical specification is authoritative. This section does not define or override Conservative fee reserves or order selection. Aggressive is not currently executable; any future Aggressive fee policy requires its own approved specification before implementation.
 
-The domain policy is composed by the Harvester trading engine. Offline
-bootstrap and engine tests cover BUY submission, trailing replacement,
-BUY-driven recovery-SELL replacement, fill accounting, recovery completion,
-and free-inventory allocation. A real Binance TESTNET run is still required
-to verify the broker integration against the exchange.
+### Shared BUY repricing safety — Conservative and Aggressive
 
-
-This mode is based on the existing `apps/bot-free-roll` strategy.
-
-Its defining objective is to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
-
-Key characteristics:
-
-- Maintain the Free-Roll capital-recovery accounting model.
-- Sell only when the required net-profit condition is satisfied.
-- Keep the configured reserve/free quantity out of subsequent invested-position calculations.
-- Use actual fills and commissions for accounting.
-- Preserve the existing Free-Roll order lifecycle and safety rules when adapting them to Harvester.
-
-The existing Free-Roll README is the detailed reference for its current strategy rules. Harvester's implementation must be reviewed against that document; copying its config does not implement the strategy.
+Conservative repricing eligibility is defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine's current implementation is evidence to be tested against that contract, not a second rule definition. Any future Aggressive repricing policy must be specified separately before it becomes executable.
 
 ### Aggressive — grid-style trading
 
@@ -147,10 +105,10 @@ If either boundary is reached:
 2. Cancel all active BUY orders.
 3. Cancel all active SELL orders.
 4. Reconcile any executions that occur while cancellation is in progress; cancellations do not undo fills.
-5. Combine the remaining available position into one SELL order.
-6. Use Conservative behavior to try to sell the entire position with that single order.
+5. Transfer pair control to Conservative and reconcile any outstanding Aggressive orders/fills.
+6. Let Conservative plan recovery SELL intents under its canonical specification; exchange filters, partial fills, and constrained residuals may require more than one SELL.
 
-After the fallback, control remains with Conservative until the entire position is sold and the invested quote capital has been recovered. The Trading Engine then returns control to Aggressive. A reduction in position size, including a reduction below the 20% takeover threshold, does not release control. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Do not force a sale at a loss merely to close the position or switch strategies. Existing SELL orders may execute; the strategy must wait for a recovery rather than realize a loss.
+After the fallback, control remains with Conservative until recovery completion under [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The configured `keepQuantity` is retained **per successfully completed recovery cycle**; it is not a cap on accumulated free inventory. For example, `keepQuantity = 0.01 LINK` contributes 0.01 LINK after each completed cycle, so four completed cycles contribute 0.04 LINK (before any validated exchange-constrained dust bonus). The Trading Engine then returns control to Aggressive. A reduction in position size, including a reduction below the 20% takeover threshold, does not release control. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Do not force a sale at a loss merely to close the position or switch strategies. Existing SELL orders may execute; the strategy must wait for a recovery rather than realize a loss.
 
 This is a strategy-mode transition, not a restart of the Harvester process. Shared execution safety, fill accounting, and broker constraints continue to apply during the transition.
 
@@ -226,21 +184,19 @@ first-cycle workflow:
    threshold-crossing behavior remain to be specified.
 3. **Aggressive fallback:** behavior when the consolidated recovery SELL is
    rejected, partially filled, or cannot be placed remains to be specified.
-4. **Multi-pair shared assets:** quote-currency and inventory allocation across
-   enabled pairs remains deferred. The first TESTNET configuration enables
-   exactly one pair.
+4. **Multi-pair TESTNET acceptance:** the in-process Conservative engine
+   supports multiple enabled markets and aggregates quote cash flow, owned
+   base inventory, and active BUY/SELL commitments by canonical asset ID.
+   Concurrent multi-pair regression coverage and exchange acceptance remain
+   outstanding.
 5. **Full order reservations:** durable and exchange-reconciled reservation
    behavior for partial fills, cancellations, rejections, and uncertain
-   outcomes remains deferred beyond the current in-process single-pair flow.
-6. **Restart and reconnect recovery:** persistence, historical exchange
-   reconciliation, and unattended operation guarantees remain deferred until
-   after the first real TESTNET cycle.
+   outcomes remains deferred beyond the current process.
+6. **Restart reconciliation:** tracked separately in [#654](https://github.com/45s/coinzilla/issues/654); it is outside the active Conservative strategy implementation scope. Harvester is expected to run on a personal PC and does not require 24/7 uptime.
 7. **Performance attribution:** strategy-specific attribution is optional and
    must not split the actual shared Position.
 
-Third-asset commissions are explicitly unsupported for now and cause the
-affected execution to fail closed. BUY and SELL commissions in the market's
-base or quote asset are accounted from actual fills.
+Conservative third-asset commissions require reliable quote valuation; otherwise the canonical specification requires fail-closed handling. See the [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ## Guidance for continuing the strategy discussion
 
@@ -256,16 +212,16 @@ The user is making product decisions, not taking a trading terminology test. Con
 
 ## Current implementation status
 
-Conservative is the first executable strategy. The bootstrap composes it when
-TESTNET trading is explicitly enabled. The current implementation includes
-initial and standing BUY orders, upward trailing in the initial/post-recovery
-phase, fixed next-BUY behavior after a BUY fill, recovery SELL planning,
-cancel-and-reconcile replacement of an active SELL after a new BUY fills,
-actual fill/commission accounting, profit-gated free-inventory allocation,
-and immediate fill-driven reevaluation.
+Conservative is the first executable strategy. The implementation-alignment
+and regression work from the Conservative conformance audit merged in
+[PR #653](https://github.com/45s/coinzilla/pull/653) on 2026-11-07; the parent
+audit [#645](https://github.com/45s/coinzilla/issues/645) is closed. This is
+implementation/test status, not exchange acceptance or a new rule definition.
 
 A fake-broker integration scenario covers the complete first recovery cycle,
 including a second BUY arriving before the recovery SELL completes. This is
-offline evidence only. A real Binance TESTNET run remains outstanding.
-Aggressive, multi-pair shared-asset allocation, durable restart recovery,
-comprehensive reconnect reconciliation, and Journal remain deferred.
+offline evidence only. Binance Spot TESTNET acceptance remains **PAUSED /
+UNVERIFIED** under the regional eligibility restriction; see the
+[controlled TESTNET runbook](./TESTNET_VALIDATION_RUNBOOK.md) and current
+[Harvester roadmap](../ROADMAP.md). Aggressive remains disabled and exploratory.
+Process-restart reconciliation remains separately tracked by [#654](https://github.com/45s/coinzilla/issues/654); broader multi-pair exchange acceptance is also unverified.

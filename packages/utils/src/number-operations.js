@@ -1,5 +1,15 @@
 /**
- * Pure numeric helpers used by the legacy NH facade.
+ * Pure Number-based helpers used by the legacy NH facade.
+ * These retain JavaScript floating-point semantics and are not exact decimal
+ * arithmetic; financial callers should use the decimal-string API instead.
+ */
+
+/**
+ * Round to a bounded number of fractional decimal places.
+ * @param {number} number
+ * @param {number} [decimals=2] Integer from 0 through 100.
+ * @returns {number}
+ * @throws {RangeError} If decimals is outside the supported range.
  */
 export function roundNumber(number, decimals = 2) {
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 100) {
@@ -16,7 +26,11 @@ export function roundNumber(number, decimals = 2) {
 }
 
 /**
- * Fix floating-point noise by rounding to a bounded number of decimal places.
+ * Fix floating-point noise by converting to a bounded number of decimal places.
+ * @param {number} number
+ * @param {number} [digits=4] Integer from 0 through 100.
+ * @returns {number}
+ * @throws {RangeError} If digits is outside the supported range.
  */
 export function fixNumber(number, digits = 4) {
   if (!Number.isInteger(digits) || digits < 0 || digits > 100) {
@@ -27,7 +41,11 @@ export function fixNumber(number, digits = 4) {
 }
 
 /**
- * Return a number rounded to a significant-digit precision.
+ * Round a number to a bounded number of significant digits.
+ * @param {number} number
+ * @param {number} [precision=2] Integer from 1 through 100.
+ * @returns {number}
+ * @throws {RangeError} If precision is outside the supported range.
  */
 export function preciseNumber(number, precision = 2) {
   if (!Number.isInteger(precision) || precision < 1 || precision > 100) {

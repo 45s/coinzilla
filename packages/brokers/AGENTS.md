@@ -22,28 +22,60 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - Document public contract changes and consumer migration impact.
 - Update this domain's roadmap when work is accepted, blocked, deferred, or merged. Mark work complete only after it is merged into `develop` and required checks pass.
 
+## DDD responsibility boundaries
+
+`@coinzilla/brokers` owns a **broker domain**: the exchange-neutral concepts, invariants, capability contracts, and broker application workflows needed to interact with exchanges. It also owns the infrastructure adapters that implement those contracts. It does not own portfolio/position policy, trading strategy, or bot product decisions.
+
+- **Domain:** own broker-specific, exchange-neutral capability concepts, value objects, invariants, domain errors, and policies. Do not duplicate canonical shared entities or import Binance protocol/transport code.
+- **Application:** own broker use cases and orchestration. Coordinate domain behavior through ports; keep socket management, signing, wire formats, and protocol retry mechanics in infrastructure.
+- **Ports:** define narrow broker-owned interfaces for exchange operations, streams, user-data sessions, clocks/schedulers, and other external effects where application behavior needs them. Avoid speculative abstractions and one-wrapper-per-RPC interfaces.
+- **Infrastructure:** own Binance RPC/Streams clients, transport, signing, configuration, protocol DTOs, and Binance-to-domain/entity mapping. Infrastructure implements the package's ports.
+- **Composition/public API:** preserve the public broker contract while wiring application services to Binance adapters. Keep `src/index.js` and exchange entry points thin.
+- The existing `broker-websocket/broker.js`, `src/application/user-data-session.js`, `src/application/ports/user-data-client-port.js`, `helpers/`, `utils/`, and `shared/` are the evolving implementation. `src/application/user-data-session.js` owns the exchange-neutral user-data lifecycle; `src/application/ports/user-data-client-port.js` owns its injected client contract; `src/infrastructure/binance/user-data-client-adapter.js` implements that contract. Move remaining infrastructure responsibilities incrementally when tests demonstrate a better boundary.
+- `apps/harvester` owns portfolio/position policy, strategies, and bot application behavior. That boundary does not make brokers merely an infrastructure-only package.
+- Create `domain/`, `application/`, `application/ports/`, or `infrastructure/` modules only when they contain real responsibilities; do not create empty template folders or a separate top-level `ports/` directory.
+
+Keep order-changing calls gated on user-data readiness/reconciliation and marked `stateChanging: true`. An uncertain timeout/disconnect is an unknown outcome; never blindly replay the operation.
+
 ## Workflow
 
-- Create a short-lived task branch from the latest `develop`, using `feature/brokers/<task>` or `fix/brokers/<task>`.
-- Open task PRs against `develop`; do not use permanent domain branches.
-- Run the relevant package test: `pnpm --filter @coinzilla/brokers test` (verify the package script exists before relying on it), followed by applicable workspace checks.
-- The responsible agent may merge into `develop` only after required CI and target-freshness checks pass. No routine human approval is expected for `develop`.
-- Never merge task work into `main`. Only the user approves the final release PR from `develop` to `main`.
+Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
+
+## Required package check
+
+- Run `pnpm --filter @coinzilla/brokers test` and `pnpm --filter @coinzilla/brokers test:coverage` (verify both scripts exist before relying on them), followed by applicable workspace checks. The coverage command enforces 90% line, 80% branch, and 80% function coverage.
 
 ## Domain-specific constraints
 
 Keep exchange-specific fields and behavior inside the relevant adapter. Default unit tests must be offline. Network integration tests are separate; any test placing orders must use TESTNET only. Preserve decimal strings at exchange boundaries and never fabricate unavailable broker facts.
 
+## Autonomous DDD refactoring execution rules
 
-## Repository-wide modularity rule (mandatory)
+These rules are mandatory for every AI agent working on the existing broker package. They clarify execution; they do not authorize replacing working broker behavior.
 
-The pure-function extraction and file-size requirements in the root `ENGINEERING_STANDARDS.md` and `AGENTS.md` apply to every change in this package. They are mandatory, not optional style suggestions.
+### Scope and compatibility
 
-- **Extract meaningful, non-trivial pure functions into focused separate modules, even when there is only one caller.** A function is a pure extraction candidate when its result depends only on explicit inputs and it does not read or mutate instance state, shared mutable state, globals, or external systems.
-- Keep validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions outside large classes/services whenever they can be expressed as pure functions. Classes/services should own state and coordinate side effects, not become containers for unrelated implementation details.
-- Group related pure functions by domain and responsibility. Use package/feature-local helpers for internal logic; use shared `utils` only for genuinely generic behavior. Do not create a miscellaneous catch-all module.
-- Keep pure logic independently testable. Add focused unit tests where they add confidence, and test orchestration through observable behavior. Keep I/O, network, filesystem, database, clock, randomness, logging, and process-environment access at explicit boundaries.
-- Avoid god files. Review files approaching 300 lines for cohesive extraction opportunities. Files exceeding 500 lines require a refactoring plan or a concrete technical justification in the PR. These are review triggers, not arbitrary limits.
-- Do not fragment trivial expressions, tiny context-dependent callbacks, or tightly coupled logic merely to reduce line count. The goal is cohesion, low coupling, readability, and independent testability—not the maximum number of files.
+- The existing `packages/brokers` implementation works. Refactor its internal architecture toward the documented DDD boundaries; do not rebuild, replace, or redesign working functionality.
+- Work strictly inside `packages/brokers/**`, except for repository-required metadata or explicitly coordinated cross-domain work under the repository workflow.
+- Preserve public exports, APIs, method signatures, result envelopes, event/callback behavior, exchange integrations, decimal precision, error semantics, and consumer compatibility. Do not change business behavior as an incidental consequence of moving code.
+- Characterize existing behavior before moving/refactoring it. Follow RED → GREEN → REFACTOR in small increments. Keep tests green after each increment; add regression tests for defects and tests for every intentional behavior change.
+- Separate genuine Domain, Application, Ports, and Infrastructure responsibilities where the code has real concepts and boundaries. Do not create empty/template folders or wrappers without a concrete architectural benefit.
 
-When modifying an existing large file, improve its structure as part of the task when the extraction is relevant and safe. Do not expand an already fragmented architecture or undertake unrelated mass refactoring.
+### Autonomous PR and merge loop
+
+- **Create as many focused PRs as needed.** Prefer small, reviewable vertical slices over a risky all-at-once rewrite. Every task branch must be short-lived, based on the latest `develop`, and every task PR must target `develop`.
+- **Do not pause for routine user approval, ask the user to merge, or wait for the user to tell you to continue.** The responsible agent owns implementation, testing, synchronization, PR creation, CI monitoring, merge, cleanup, and progression to the next task.
+- Once a PR is fully validated—its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage checks pass, the final diff is focused and safe, and existing broker behavior/contracts remain intact—**merge it into `develop` without waiting for human approval**. Never bypass branch protection or merge with pending, failed, missing, or unexpectedly skipped required checks.
+- After a successful merge, verify the merge and resulting `develop` state, update the roadmap, delete the merged task branch when safe, then immediately start the next incomplete DDD refactoring slice on a fresh branch from the latest `develop`. Continue until the agreed DDD refactor scope is complete or a concrete external blocker prevents safe progress.
+- Multiple commits per branch and multiple PRs across the overall refactor are expected. Commit in coherent increments with meaningful messages. Each PR must be well tested, documented, and independently safe to integrate.
+- A green CI run alone is not sufficient if broker behavior or compatibility is broken. Do not hold a validated task PR open for routine approval when required gates are green and the broker remains correct.
+- If tests, CI, permissions, branch protection, conflicts, or a compatibility risk prevent a safe merge, fix the issue autonomously where possible. If genuinely blocked, report the exact evidence and continue with independent safe work where possible; never invent a passing result or silently bypass a gate.
+
+### Definition of success for each merged slice
+
+1. Existing behavior is characterized and preserved; public compatibility is checked.
+2. Relevant deterministic tests and regression tests pass; package coverage thresholds remain satisfied.
+3. Required repository CI checks pass on the exact final PR head.
+4. Documentation and this roadmap reflect the actual change.
+5. The PR is merged into `develop`, the merge is verified, and the task branch is cleaned up.
+6. The next DDD slice starts without requiring another user prompt.

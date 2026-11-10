@@ -1,5 +1,6 @@
 export { EM } from "./error-messages.js"
 export { Logger, defaultLogger } from "./logger.js"
+export { captureBuildMetadata } from "./build-metadata.js"
 export { EVENTS, eventEmitter } from "./events.js"
 export { addTextToFile } from "./add-text-to-file.js"
 export { VR, Validator } from "./validator.js"

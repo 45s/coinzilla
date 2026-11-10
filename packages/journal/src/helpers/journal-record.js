@@ -1,6 +1,10 @@
 const JOURNAL_METADATA_KEY = "__coinzillaJournal"
 const SUPPORTED_SCHEMA_VERSION = 1
 
+function isValidJournalRecordId(value) {
+  return typeof value === "string" && value.trim() !== ""
+}
+
 function createJournalError({ code, message, details = {} }) {
   const error = new Error(message)
   error.code = code
@@ -8,16 +12,96 @@ function createJournalError({ code, message, details = {} }) {
   return error
 }
 
+function assertLosslessJsonValue(value, path = "$", ancestors = new WeakSet()) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`Journal source event contains a non-finite number at ${path}`)
+    }
+    if (Object.is(value, -0)) {
+      throw new TypeError(`Journal source event contains negative zero at ${path}`)
+    }
+    return
+  }
+
+  if (typeof value !== "object") {
+    throw new TypeError(`Journal source event contains unsupported ${typeof value} at ${path}`)
+  }
+
+  if (ancestors.has(value)) {
+    throw new TypeError(`Journal source event contains a cyclic reference at ${path}`)
+  }
+
+  const isArray = Array.isArray(value)
+  const prototype = Object.getPrototypeOf(value)
+  if (
+    (isArray && prototype !== Array.prototype) ||
+    (!isArray && prototype !== Object.prototype && prototype !== null)
+  ) {
+    throw new TypeError(`Journal source event contains a custom prototype at ${path}`)
+  }
+
+  ancestors.add(value)
+  try {
+    const keys = Reflect.ownKeys(value)
+
+    for (const key of keys) {
+      if (typeof key !== "string") {
+        throw new TypeError(`Journal source event contains a symbol property at ${path}`)
+      }
+      if (isArray && key === "length") continue
+
+      const propertyPath = isArray ? `${path}[${key}]` : `${path}[${JSON.stringify(key)}]`
+      if (isArray && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)) {
+        throw new TypeError(`Journal source event array contains a custom property at ${propertyPath}`)
+      }
+
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+        throw new TypeError(`Journal source event contains an accessor property at ${propertyPath}`)
+      }
+      if (!descriptor.enumerable) {
+        throw new TypeError(`Journal source event contains a non-enumerable property at ${propertyPath}`)
+      }
+      if (key === "toJSON" && typeof descriptor.value === "function") {
+        throw new TypeError(`Journal source event contains a custom toJSON hook at ${propertyPath}`)
+      }
+
+      assertLosslessJsonValue(descriptor.value, propertyPath, ancestors)
+    }
+
+    // JSON.stringify silently converts holes to null; reject sparse arrays before writing.
+    if (isArray && keys.length !== value.length + 1) {
+      throw new TypeError(`Journal source event contains a sparse array at ${path}`)
+    }
+  } finally {
+    // A repeated reference is valid and is serialized as a second subtree.
+    // Only references on the active recursion path represent a cycle.
+    ancestors.delete(value)
+  }
+}
+
 /**
- * Serialize a stable event with additive versioned journal metadata.
+ * Serialize a stable source event with additive versioned journal metadata.
+ * The complete source-event graph is validated before copying or JSON serialization.
+ * Shared-reference identity is outside the persisted contract; repeated references
+ * are serialized as repeated subtrees.
  * @param {{ event: object }} input
  * @returns {string}
+ * @throws {TypeError} If the event or any nested value cannot be represented losslessly in JSONL.
  */
 export function serializeJournalRecord({ event } = {}) {
   if (!event || typeof event !== "object" || Array.isArray(event)) {
     throw new TypeError("A valid event object is required")
   }
-  if (typeof event.id !== "string" || event.id.trim() === "") {
+
+  const idDescriptor = Object.getOwnPropertyDescriptor(event, "id")
+  if (
+    !idDescriptor ||
+    !Object.hasOwn(idDescriptor, "value") ||
+    !isValidJournalRecordId(idDescriptor.value)
+  ) {
     throw new TypeError("Journal events require a non-empty stable id")
   }
 
@@ -25,24 +109,28 @@ export function serializeJournalRecord({ event } = {}) {
     throw new TypeError(`Event field ${JOURNAL_METADATA_KEY} is reserved by Journal`)
   }
 
+  assertLosslessJsonValue(event)
+
+  // The recursive validator rejects accessors and custom prototypes before this copy.
+  const record = { ...event }
+
   // Keep event fields at the JSONL top level for existing consumers that
   // inspect persisted events directly; the metadata is additive.
-  const record = {
-    ...event,
+  Object.assign(record, {
     [JOURNAL_METADATA_KEY]: {
       schemaVersion: SUPPORTED_SCHEMA_VERSION,
-      id: event.id,
+      id: idDescriptor.value,
     },
-  }
+  })
 
   return `${JSON.stringify(record)}\n`
 }
-
 /**
  * Parse one complete JSONL session. No partial or malformed record is ignored.
  * Legacy raw event records without metadata are interpreted as schema version 1.
  * @param {{ content: string, fileName: string, maxRecordBytes: number }} input
- * @returns {Array<{ id: string, schemaVersion: number, payload: object, position: object }>}
+ * @returns {Array<{ id: string, schemaVersion: number, payload: object, position: { fileName: string, lineNumber: number } }>}
+ * @throws {TypeError|Error} If options are invalid or any line violates the record contract.
  */
 export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) {
   if (typeof content !== "string" || typeof fileName !== "string") {
@@ -126,8 +214,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
         })
       }
       if (
-        typeof id !== "string" ||
-        id.trim() === "" ||
+        !isValidJournalRecordId(id) ||
         !payload ||
         typeof payload !== "object" ||
         Array.isArray(payload) ||
@@ -144,7 +231,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
       id = parsed.id
       schemaVersion = SUPPORTED_SCHEMA_VERSION
       payload = parsed
-      if (typeof id !== "string" || id.trim() === "") {
+      if (!isValidJournalRecordId(id)) {
         throw createJournalError({
           code: "JOURNAL_MALFORMED_RECORD",
           message: `Legacy journal record at ${fileName}:${lineNumber} has no stable id`,

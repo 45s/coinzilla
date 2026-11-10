@@ -25,6 +25,28 @@ describe('pure validation helpers', () => {
     assert.throws(() => validateItems({ items: [['value']] }), TypeError)
   })
 
+  it('rejects unknown and malformed rule identifiers before applying validation', () => {
+    const invalidRules = [
+      { value: 'notEmptyStrng', description: 'a misspelled rule name' },
+      { value: 42, description: 'a numeric rule identifier' },
+      { value: null, description: 'a null rule identifier' },
+      { value: {}, description: 'an object rule identifier' },
+    ]
+
+    for (const invalidRule of invalidRules) {
+      assert.throws(
+        () => validateItems({
+          items: [
+            [0, [VR.required], 'firstValue'],
+            ['value', [invalidRule.value], 'secondValue'],
+          ],
+        }),
+        { name: 'TypeError' },
+        `Validator must reject ${invalidRule.description} instead of silently skipping the requested constraint`,
+      )
+    }
+  })
+
   it('exposes deterministic required-field predicates', () => {
     assert.equal(isRequiredNumberValid(1), true)
     assert.equal(isRequiredNumberValid(0), false)

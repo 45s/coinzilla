@@ -1,7 +1,36 @@
 # Notifiers roadmap
 
-**Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.  
+---
+status: active
+type: roadmap
+owner: notifiers
+---
+
+## Priority execution plan — current develop direction (2026-11-08)
+
+> Current assessment: no critical defect was established in the audited notifier package. Telegram transport, bounded serialized delivery, credential redaction, failure isolation and Harvester integration are already implemented.
+
+### IMPORTANT — preserve safe best-effort notification behavior
+
+1. **Keep Harvester's Telegram integration aligned with the notifier contract.**
+   - **Why:** operational alerts are useful only if they remain high-signal and cannot affect order processing, accounting, recovery or shutdown.
+   - **Do:** mark the Harvester integration complete (PR #734); maintain the fixed event allowlist, bounded queue, optional two-value configuration and isolated setup/delivery failures. Keep formatting and transport code inside this package.
+   - **Verify:** retain offline integration tests for startup with notifications disabled, partial credentials, setup failure, malformed events, queue saturation, transport failure and orderly shutdown.
+
+2. **Perform the operator-controlled Telegram smoke test when a dedicated test chat is available.**
+   - **Why:** fake-fetch tests prove request handling but do not prove the operator's bot token/chat configuration or real Telegram API acceptance.
+   - **Do:** use the existing one-message, credential-gated smoke-test command with a dedicated test chat. Do not put credentials in source, logs or PR output and do not add the smoke test to default CI.
+   - **Verify:** record only timestamp, command exit/result and redacted API acceptance; do not retry ambiguous delivery automatically.
+
+### DEFERRED — only when a real consumer requires it
+
+3. **Do not add automatic retries, email/Discord providers or a persistent outbox by default.**
+   - **Why:** ambiguous network outcomes can duplicate messages; extra transports/outbox infrastructure create new operational ownership and dependencies.
+   - **Do:** require a concrete consumer, duplicate-send/idempotency policy, rate-limit contract and storage owner before implementation.
+   - **Verify:** each future provider receives isolated tests, coverage and explicit shutdown/error guarantees. Keep the package dependency-free where practical.
+
+**Owner:** packages/notifiers/
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, #360, and Harvester integration PR #734). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -50,7 +79,7 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [x] Format an explicit allowlist of lifecycle, recovery, pair-pause, order-fill, and execution-fill events.
 - [x] Exclude raw exchange payloads and high-volume execution reports.
 - [x] Serialize sends and expose explicit subscriber cleanup.
-- [x] Integrate optional Telegram notifications into apps/bot-free-roll (consumer PR #346, merged).
+- [x] Integrate optional Telegram notifications into Harvester through the composition boundary (PR #734); delivery remains isolated from trading execution.
 - [x] Keep notifications disabled when both credentials are absent; reject partial configuration.
 
 **Acceptance:** Telegram is optional, isolated from trading behavior, and usable without adding a runtime dependency.
@@ -113,7 +142,6 @@ Each provider owns its transport client, provider-specific formatter, event inte
 
 A roadmap item is complete only after its task PR is merged into develop and required CI checks pass. Never mark a task complete merely because code has been committed or a PR has been opened.
 
-
 ## Validation record
 
 The refactor was merged to develop in PR #348. All required post-merge checks passed on commit 620818cb3ff3624c9869ab1d13fa181784dbbcbb:
@@ -125,7 +153,6 @@ The refactor was merged to develop in PR #348. All required post-merge checks pa
 - Utilities unit tests: passed.
 
 CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703343), [Test Coverage](https://github.com/45s/coinzilla/actions/runs/41240703334), [JavaScript Syntax](https://github.com/45s/coinzilla/actions/runs/41240703427), [Dependency Audit](https://github.com/45s/coinzilla/actions/runs/41240703340), [Utils Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703355).
-
 
 ## Phase 4 — Integration confidence and operational diagnostics
 
@@ -145,7 +172,6 @@ CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/4124070
 - [x] Record PR-head CI evidence and merge only after branch freshness and all required checks are verified (PRs #356 and #360).
 
 **Acceptance:** supported Node lines are continuously exercised, operational guidance matches implementation, and any stronger quality gate is evidence-based rather than cosmetic.
-
 
 ## Phase 6 — Operator-controlled live verification
 

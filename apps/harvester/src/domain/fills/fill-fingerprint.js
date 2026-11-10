@@ -20,10 +20,12 @@ export function createFillFingerprint({ fill } = {}) {
     .map((commission) => ({
       assetId: commission.amount.asset.id,
       amount: commission.amount.amount,
+      quoteValueAssetId: commission.quoteValue?.asset.id ?? null,
+      quoteValueAmount: commission.quoteValue?.amount ?? null,
     }))
     .sort((left, right) => {
-      const leftKey = left.assetId + ":" + left.amount
-      const rightKey = right.assetId + ":" + right.amount
+      const leftKey = left.assetId + ":" + left.amount + ":" + left.quoteValueAmount
+      const rightKey = right.assetId + ":" + right.amount + ":" + right.quoteValueAmount
       return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
     })
 

@@ -1,28 +1,46 @@
 # Harvester
 
+> **Documentation:** Start with the [Harvester documentation index](./docs/README.md). Repository-wide documentation lifecycle and AI-agent maintenance requirements are defined in [Documentation Governance](../../docs/DOCUMENTATION_GOVERNANCE.md). The [documentation migration plan](./docs/plans/DOCUMENTATION_MIGRATION.md) tracks the staged reorganization; historical evidence must be preserved.
+
+> **Current status — 2026-11-10:** Process-restart reconciliation remains an active forensic/release-readiness workstream under [#654](https://github.com/45s/coinzilla/issues/654). Current startup creates fresh in-memory Portfolio/RecoveryLedger/OrderRegistry state and does not replay prior Journal sessions. This integration gap is source-confirmed; end-to-end restart consequences and history-retention completeness remain under investigation. This process-restart workstream remains documentation/evidence only: no Journal replay, restart reconciliation, or TESTNET acceptance is claimed. Separately, [PR #906](https://github.com/45s/coinzilla/pull/906) adds same-process Journal flush-failure classification and retains the process-ownership lock when runtime shutdown or Journal close is not confirmed. That hardening does not resolve #654. See the [2026-11-10 process-restart recovery audit](./docs/audits/reports/2026-11-10_18-44-49_restart-recovery-audit.md), [Harvester Roadmap](./ROADMAP.md), [Journal Operations](./docs/JOURNAL_OPERATIONS.md), and [Conservative Strategy audit](./docs/audits/reports/AUDIT.md).
+
+> **Latest TESTNET session audit — 2026-11-08:** Source review traced the DOGE follow-up gap to an unowned ZRO execution closing global accounting readiness while an already-resting Harvester BUY remained live. The BUY-cancellation safety fix is in [PR #669](https://github.com/45s/coinzilla/pull/669). The configured-asset snapshot allowlist correction is implemented in [PR #670](https://github.com/45s/coinzilla/pull/670) and tracked in [#667](https://github.com/45s/coinzilla/issues/667). The audit readiness label BLOCKED describes unowned-order reconciliation, not startup readiness. See the [session audit in AUDIT.md](./docs/audits/reports/AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). This is retrospective evidence, not TESTNET acceptance or authorization to trade.
+
+> **AI WORK PRIORITY — HARD RULE:** The Conservative trading workflow and its safety gates remain the product priority; secondary work must not delay or change them. Explicitly selected, narrowly scoped engineering and evidence tasks may proceed independently when they remain non-blocking. This process-provenance work is explicitly selected and must not add a trading-readiness or Journal durability gate. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
+
 Harvester is an independent Node.js process for cryptocurrency trading, built inside the Coinzilla pnpm monorepo.
 
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
 
-- **Conservative (Free-Roll):** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
+- **Conservative:** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
 
 These are strategy modes, not separate trading engines. Shared capabilities (market data, broker access, order lifecycle, fills, balances, accounting, and safety controls) should be implemented once where their contracts genuinely match. Strategy-specific decisions must remain isolated behind clear boundaries.
 
 ## Package
 
 - Package: `@coinzilla/harvester`
-- Runtime: Node.js `>=22.23.4`
+- Runtime: Node.js `>=24`
 - Modules: native ECMAScript modules
 - Dependencies: keep minimal; add only for an agreed requirement
 
-Run from the repository root:
+Run development from the repository root:
 
 ```sh
 cp apps/harvester/.env.example apps/harvester/.env.development
 pnpm --filter @coinzilla/harvester dev
 ```
 
-Edit `.env.development` with your local credentials if needed. Keep this file local; do not commit it. The development script loads it using Node's native `--env-file` option, matching the Free-Roll app.
+The `dev` script loads `.env.development` before starting the logging runner; the child Harvester process inherits those values. Set `TRADING_MODE=testnet` in `.env.development` to select Binance Spot TESTNET. Trading is enabled in this mode; there is no separate trading-enable switch. Put TESTNET API credentials in `.env.development`.
+
+For production, use the same template and select LIVE explicitly:
+
+```sh
+cp apps/harvester/.env.example apps/harvester/.env
+# Set TRADING_MODE=live and provide Binance Spot LIVE credentials in .env
+pnpm --filter @coinzilla/harvester start
+```
+
+The `start` script loads `.env` before application and broker modules load. `TRADING_MODE=live` selects Binance Spot LIVE endpoints and enables real order execution. Use a dedicated API key with Spot trading permission and withdrawals disabled. Never copy TESTNET credentials into production. Externally injected credentials remain supported. `NODE_ENV` may still describe the Node.js runtime, but it does not select the Binance environment.
 
 Tests:
 
@@ -31,155 +49,211 @@ pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
 
-## Architecture direction
-
-Use a ports-and-adapters architecture:
-
-1. **Bootstrap** loads and validates configuration, composes dependencies, and manages process lifecycle.
-2. **Application / trading engine** coordinates market updates, strategy execution, order workflows, and reconciliation.
-3. **Domain** owns trading concepts, invariants, calculations, and strategy rules. Keep it deterministic and independent of I/O.
-4. **Ports** define required capabilities such as market data, broker operations, persistence, clock, and journal.
-5. **Infrastructure** implements those ports using concrete exchange/broker and storage adapters.
-
-The engine must not contain Conservative- or Aggressive-specific policy. Strategies must not depend on exchange SDKs. Broker responses and market data must be validated at infrastructure boundaries.
-
-See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
-
-### Portfolio domain
-
-A Portfolio is an immutable in-memory collection of market-scoped Positions. Positions track net base quantity and signed quote cash flow and are updated from canonical actual fills through `src/use-cases/update-portfolio.js`; market-price updates and order submissions do not change holdings. Base/quote commissions are applied exactly; incomplete/unknown and third-asset commissions fail closed. Duplicate canonical fill IDs are ignored for the current process.
-
-See [Portfolio Domain](./docs/domain/portfolio.md) for the domain boundary, fill accounting flow, responsibilities, reliability requirements, and unresolved design decisions.
-
-## Strategy documentation
-
-See [Trading strategies](./docs/trading-strategies.md) for the agreed scope and unresolved design decisions.
-
 ## Configuration
 
-Harvester uses one flat configuration shared by its strategy policies. The root contains:
+Harvester uses one `trading-config.json` with strategy-scoped configuration. The root contains a `strategies` object; each strategy owns its enabled flag, settings, and market pairs. The active strategy key is `CG_coinGrabber`.
 
-- `settings`: process-wide trading settings, currently `minProfit`.
-- `pairs`: market-specific settings keyed by symbol (for example, `ZROUSDT` or `ZROFDUSD`).
+- `strategies.CG_coinGrabber.enabled`: enables the strategy.
+- `strategies.CG_coinGrabber.settings.minProfit`: minimum required net profit per completed recovery sale, in the pair's quote currency.
+- `strategies.CG_coinGrabber.settings.conservative.enabled`: must remain `true`; Conservative is the first executable mode.
+- `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
+- `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, precision, and fee settings.
 
-There is no strategy-name wrapper in the config. Each pair has its own `enabled` flag, `investment` limit, order sizing, reserve quantity, price/quantity precision, and fee percentages.
+All settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Strategy availability is not configured through environment variables.
 
-`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. These values are not interchangeable.
+**Runtime environment contract:** `TRADING_MODE` is the only operator-facing exchange-mode setting and accepts exactly `testnet` or `live`. Binance is the only broker, so there is no broker selector. Trading is enabled in either selected mode; there is no profile selector or trading-enable flag. Missing or invalid `TRADING_MODE` must fail startup rather than silently choose an exchange environment. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
 
-Example:
+The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. Strategy and pair settings remain in `trading-config.json`.
+
+`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity.
+
+**Important — `keepQuantity` is retained per completed recovery cycle, not a total-balance cap.** Harvester sells all legally sellable strategy inventory above this amount, then retains the configured quantity when that recovery cycle completes. Each later completed cycle retains another `keepQuantity`, so the free/retained balance accumulates. Example: with `keepQuantity = 0.01 LINK`, four completed cycles retain 0.04 LINK in total; 100 cycles retain 1.00 LINK, assuming no dust bonus. Validated exchange-constrained dust is retained in addition to that cycle's `keepQuantity`. See the [canonical Conservative specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for the full rule and completion conditions. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup requests any missing initial ticker snapshot through Binance WebSocket API `ticker.price` or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
+
+Example (illustrative only; it does not identify the currently enabled default pair):
 
 ```json
 {
-  "settings": {
-    "minProfit": 0.01
-  },
-  "pairs": {
-    "ZROUSDT": {
+  "strategies": {
+    "CG_coinGrabber": {
       "enabled": true,
-      "investment": 100,
-      "orderQuantity": 5,
-      "keepQuantity": 0.01,
-      "priceStepPercent": 0.05,
-      "pricePrecision": 3,
-      "quantityPrecision": 1,
-      "makerPercent": 0.075,
-      "takerPercent": 0.075
+      "settings": {
+        "minProfit": 0.01,
+        "conservative": { "enabled": true },
+        "aggressive": { "enabled": false }
+      },
+      "pairs": {
+        "ZROUSDT": {
+          "enabled": true,
+          "investment": 100,
+          "orderQuantity": 5,
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.05,
+          "pricePrecision": 3,
+          "quantityPrecision": 1,
+          "makerPercent": 0.1,
+          "takerPercent": 0.1
+        }
+      }
     }
   }
 }
 ```
 
-The configuration loader and structural validation live in:
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed config enables only `ZROFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. The current USDT pair configuration reflects the reported 0.1% maker/taker setting; FDUSD pairs retain `makerPercent: 0` and use `takerPercent: 0.1`. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
-- `src/infrastructure/config/load-trading-config.js`
-- `src/domain/trading-config.js`
+The strategy configuration remains in `trading-config.json`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 
-The configuration loader and validation are implemented. Conservative is the first executable strategy and is composed with the in-process trading engine when TESTNET trading is explicitly enabled. The default remains read-only; see the TESTNET startup requirements above and the trading-strategy documentation for the implemented policy.
+## Runtime and safety
+
+- Journal is enabled by default and writes its JSONL session into the process-specific `logs/sessions/<timestamp>-<runtime-session-id>/` directory. Cumulative diagnostics live under `logs/cumulative/`. The process entrypoint requires a ready Journal and a `flush()` capability before invoking the runtime in both TESTNET and LIVE. Broker-connected trading startup must durably complete the PREFLIGHT account audit before market subscriptions; order-intent and cancellation durability barriers use the same Journal flush contract in both modes. A failed flush is retryable only when Journal status confirms an active, open writer with no recorded write failures; a poisoned writer or unclassified health state fails closed. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md).
+- Current startup creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state; it does not replay prior Journal sessions. Do not treat a process restart after trading as reconciled or safe. Follow [#654](https://github.com/45s/coinzilla/issues/654).
+- Pre-existing external/unowned orders are reported but are not adopted or canceled automatically.
+- `TRADING_MODE=testnet` executes on Binance Spot TESTNET; `TRADING_MODE=live` executes on Binance Spot LIVE and can submit real orders. Selecting `live` is the explicit environment choice; no separate trading-enable flag is used. The current startup path does not restore previous Portfolio, RecoveryLedger, or OrderRegistry state after a process restart (tracked in #654); do not assume restart-safe unattended operation until that work is implemented and verified.
+- The process-ownership locks are described in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
+
+## Documentation
+
+- [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
+- [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
+- [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
+- [Domain documentation](./docs/domain/README.md) — Conservative specification, accounting invariants, glossary and Portfolio.
+- [Infrastructure](./docs/infrastructure/README.md) — broker port and adapter.
+- [Audits and historical evidence](./docs/audits/README.md).
+- [Harvester roadmap](./ROADMAP.md) — current priorities only; historical details are in the roadmap archive.
+
+## Architecture direction
+
+[Architecture](./docs/architecture.md) defines the current ports-and-adapters boundaries and implementation pattern.
+
+### One-shot TESTNET account audit
+
+See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the required durable PREFLIGHT audit and the [TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) for controlled operator procedures.
+
+### Trading process ownership
+
+The broker-wide and Harvester process locks live under `~/.coinzilla/harvester/process-locks/`; Journal's own hidden writer lock stays with its active session directory. Acquisition/release order and stale-owner rules are defined in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
+
+### Optional Telegram notifications
+
+See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md).
+
+### Operational event journal
+
+See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) and the [Journal evidence contract](./docs/JOURNAL_EVIDENCE_CONTRACT.md).
+
+### Process-restart recovery — active forensic workstream (#654)
+
+Process-restart restoration is not implemented. Follow [#654](https://github.com/45s/coinzilla/issues/654), the [current Harvester roadmap](./ROADMAP.md) and [audit evidence](./docs/audits/README.md).
+
+### Portfolio domain
+
+See the [Portfolio domain reference](./docs/domain/portfolio.md).
+
+## Strategy documentation
+
+See [Trading strategies](./docs/trading-strategies.md) for an overview; the [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole current behavior authority.
 
 ## Logging
 
-The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils`. Keep logging at application boundaries, inject a logger where tests or alternate composition need control, and do not call global `console` directly from Harvester modules. The shared logger accepts one data argument per method; pass structured objects when a log needs metadata.
+The development runner writes raw stdout/stderr to
+`apps/harvester/logs/cumulative/terminal.log` and the `terminal.log` inside
+the current `logs/sessions/<timestamp>-<session-id>/` directory. Structured
+DEBUG/TRACE logs and the Journal JSONL file live in that same session directory.
+Standalone `start` creates structured session files but does not create
+terminal-capture files. See [Logging](./docs/LOGGING.md) for destinations, lifecycle and retention.
 
 ## Implementation style
 
-Harvester has a mandatory class-versus-function rule:
-
-- **Plain pure functions are required** for deterministic calculations, trading decisions, validation, predicates, parsing, normalization, and transformations. They receive explicit inputs, return results, and have no side effects.
-- Meaningful pure functions must live in focused, cohesive, independently testable modules—even if they have only one caller.
-- **Classes are for domain concepts that own state and protect state-related invariants**, such as `Fill`, `Position`, and `Portfolio`. Use private fields and deliberate getters/methods where appropriate.
-- Do not put independent calculations or trading decisions into class methods just because the class has the relevant data.
-- **Use cases are dependency-injected functions** that coordinate domain logic and explicit ports. Keep I/O at application/infrastructure boundaries.
-
-See [Architecture — implementation style](./docs/architecture.md#implementation-style-classes-versus-plain-pure-functions) and [Harvester agent standards](./AGENTS.md#required-domain-implementation-style-classes-and-pure-functions).
+See [Architecture](./docs/architecture.md) and [Harvester agent instructions](./AGENTS.md).
 
 ## Engineering rules
 
-- Follow [AGENTS.md](./AGENTS.md) and repository-level engineering guidance.
-- Use exact decimal arithmetic for prices, quantities, fees, and accounting.
-- Base accounting on actual fills and commissions, not estimates.
-- Make order state transitions explicit and handle partial fills, cancellations, rejections, and duplicate events safely.
-- Never silently ignore broker errors or unexpected commission assets.
-- Keep live exchange integration tests explicitly opt-in; the default test suite must not require credentials or place orders.
-- Do not claim restart recovery, exactly-once processing, or other guarantees until implemented and tested.
+Follow [Harvester AGENTS.md](./AGENTS.md), root [AGENTS.md](../../AGENTS.md) and [Documentation Governance](../../docs/DOCUMENTATION_GOVERNANCE.md).
 
 ## Startup and broker connection
 
-Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
+See [Architecture](./docs/architecture.md), [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) and [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for startup composition, broker lifecycle and safety gates.
 
-Broker connectivity is opt-in. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup enforces exactly one enabled pair, no open orders, and zero pre-existing base inventory for that pair. Enable additional pairs only after shared-asset allocation is implemented.
+### Trading-first implementation direction
 
-```sh
-HARVESTER_BROKER=binance
-HARVESTER_TRADING_MODE=testnet
-HARVESTER_ENABLE_TRADING=true
-BINANCE_API_KEY=...
-BINANCE_API_SECRET_KEY=...
-```
+See [Trading First](./docs/TRADING_FIRST.md) and the [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ## Controlled TESTNET runbook
 
-1. Use Binance Spot TESTNET credentials only. Never place production keys in
-   the Harvester environment file.
-2. Copy `.env.example` to `.env.development`. Set
-   `HARVESTER_BROKER=binance`, `HARVESTER_TRADING_MODE=testnet`, and
-   `HARVESTER_ENABLE_TRADING=true`. Keep `NODE_ENV=development`.
-3. Keep exactly one pair enabled. The committed default is `ZROUSDT`;
-   `ZROFDUSD`, DOGEUSDT, and SOLFDUSD are disabled.
-4. In the TESTNET account, cancel every existing order for the enabled pair
-   and clear its base-asset balance. Leave sufficient free quote balance for
-   the configured investment. Startup deliberately refuses an ambiguous
-   account.
-5. Start the app with
-   `pnpm --filter @coinzilla/harvester dev`.
-6. Confirm the broker connects, user-data readiness becomes READY, and the
-   enabled pair receives prices. The first Conservative BUY is submitted below
-   the current last trade by `priceStepPercent`, rounded down to the exchange
-   tick.
-7. When the BUY fills, Harvester accounts the actual fill and places the next
-   standing BUY plus the recovery SELL. If another BUY fills while that SELL
-   is open, Harvester cancels it, reconciles its fill history, and places a
-   recalculated SELL only after the cancellation is confirmed.
-8. After the recovery SELL fills, Harvester verifies actual net proceeds and
-   moves exactly `keepQuantity` into free inventory. Confirm the next BUY
-   remains active and the free amount is excluded from invested-position
-   calculations.
+Use the [controlled TESTNET validation runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md); it is a procedure, not standing authorization.
 
-**Shutdown/restart warning:** stopping Harvester does not cancel exchange
-orders. Before restarting, inspect the TESTNET account, cancel any remaining
-orders, and clear any unexplained base inventory. The first-cycle startup gate
-will reject an account that is not clean. If Harvester pauses because an order
-outcome or fill history is uncertain, do not restart and blindly resubmit;
-inspect the account and reconcile it first.
+## Binance client order identifiers
 
-This runbook is for TESTNET only. It does not enable live trading or claim
-durable restart recovery.
+See [Architecture — Client order identity](./docs/architecture.md#client-order-identity).
 
-Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown closes the trading gate first, drains queued user-data processing, and unsubscribes market data before disconnecting; queued fills cannot schedule new orders after shutdown begins.
+## Runtime boundary and startup reporting
 
-Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. When `HARVESTER_ENABLE_TRADING=true`, bootstrap composes the Conservative policy with the in-process trading engine. With trading disabled, the process remains read-only. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The first trading run is deliberately limited to one enabled pair and requires a clean TESTNET account with no open orders or pre-existing base inventory. Strategy BUY intents respect the configured pair investment cap; the engine checks each BUY against free quote balance and each SELL against free base balance. If quote funds are insufficient for the next BUY, a valid recovery SELL is still allowed to proceed. Aggressive remains deferred.
-
-Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is normalized into canonical order and Fill events. Harvester correlates order updates against its in-process registry and applies actual fills to Portfolio and RecoveryLedger. Reconnect recovery, durable restart state, reservation accounting, and complete TESTNET BUY → SELL → next-cycle proof remain unfinished.
+See [Architecture — Runtime API and process boundary](./docs/architecture.md#runtime-api-and-process-boundary).
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, clean TESTNET startup checks, and graceful shutdown. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable recovery, reservations, comprehensive reconciliation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
+Current priorities and blockers live in [ROADMAP.md](./ROADMAP.md). Historical audit evidence is indexed in [docs/audits/](./docs/audits/README.md); do not treat a historical snapshot as current runtime acceptance.
+
+## Standalone Binance TESTNET order tools
+
+Standalone TESTNET order, balance, and history commands are documented in [TESTNET order tools](./docs/testnet-order-tools.md). The interactive `pnpm --filter @coinzilla/harvester testnet` menu also exposes the exchange-read-only account audit and local Journal balance audit, documented in the [TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./docs/JOURNAL_OPERATIONS.md). The menu includes destructive actions and adds no confirmation layer; the account-wide cancel proceeds after a warning without an interactive prompt.
+
+## Standalone Binance TESTNET balance inspection
+
+See [TESTNET order tools — balances](./docs/testnet-order-tools.md#list-non-zero-account-balances-read-only).
+
+## Standalone Binance TESTNET ZRO market sell
+
+See [TESTNET order tools — legacy ZROUSDT market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This is a hardcoded ZROUSDT TESTNET MARKET SELL, not the current ZROFDUSD configured pair; it is outside the paused validation runbook and requires separate explicit authorization.
+
+## Standalone Binance TESTNET order history
+
+See [TESTNET order tools — order history](./docs/testnet-order-tools.md#list-recent-order-history-read-only).
+
+### 2026-11-04 TESTNET incident remediation
+
+Historical README notes are preserved in [README_HISTORY.md](./docs/audits/README_HISTORY.md); current incident evidence is indexed in [Harvester audits](./docs/audits/README.md).
+
+## Standalone Binance TESTNET trade history (read-only)
+
+See [TESTNET order tools — trade history](./docs/testnet-order-tools.md#list-actual-trade-history-read-only).
+
+### Follow-up execution-history validation
+
+See the preserved [README historical material](./docs/audits/README_HISTORY.md).
+
+### TESTNET commission configuration note — 2026-11-04
+
+See the preserved [README historical material](./docs/audits/README_HISTORY.md).
+
+### Incident review status — 2026-11-04 (follow-up PR #515)
+
+See the preserved [README historical material](./docs/audits/README_HISTORY.md).
+
+### Incident audit logging requirement — 2026-11-04
+
+See the preserved [README historical material](./docs/audits/README_HISTORY.md).
+
+### Account-level balance audit
+
+See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for PREFLIGHT/CLOSING account snapshots and balance evidence.
+
+### Compare persisted opening and closing balances
+
+See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for account snapshot comparison and durability rules.
+
+## Startup account preflight audit
+
+See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the broker-connected startup audit and fail-closed conditions.
+
+## Development logging
+
+See [Logging](./docs/LOGGING.md) for development commands and structured output.
+
+## Process identity and build provenance
+
+See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for process identity, Journal session metadata and provenance.
+
+## Conservative Strategy authority
+
+The [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authority for Conservative behavior. Aggressive remains deferred; see [Trading strategies](./docs/trading-strategies.md) for non-authoritative proposal context.

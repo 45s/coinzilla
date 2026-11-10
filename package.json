@@ -1,14 +1,16 @@
 {
   "name": "coinzilla",
   "version": "1.0.0",
+  "private": true,
   "description": "",
-  "main": "index.js",
   "scripts": {
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --filter './packages/*' --filter './apps/*' --recursive exec node --test --experimental-test-coverage",
     "check:syntax": "node --check scripts/check-syntax.js && node scripts/check-syntax.js",
     "check:agent-policy": "node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js",
-    "quality": "pnpm test && pnpm run check:syntax && pnpm run check:agent-policy"
+    "quality": "pnpm test && pnpm run check:syntax && pnpm run check:agent-policy && pnpm run test:external-links",
+    "check:external-links": "node scripts/check-external-links.js",
+    "test:external-links": "node --test scripts/check-external-links.test.js"
   },
   "keywords": [],
   "author": "",

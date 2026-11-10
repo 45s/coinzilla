@@ -6,63 +6,40 @@ import {
 } from "@coinzilla/utils"
 
 /**
- * Resolve the Conservative strategy's planning fee reserve from configured
- * fee percentages and actual commission rates observed on this pair.
- *
- * Configured rates are not charged fees and are never booked as accounting.
- * The configured ceiling is activated only after an actual non-zero
- * commission has been observed, matching the Free-Roll specification.
+ * Resolve the SELL fee reserve from the configured order type. LIMIT_MAKER
+ * cannot execute as taker, so use the maker rate. Ordinary LIMIT orders may
+ * execute in either role and reserve the higher configured rate.
  *
  * @param {object} input
- * @param {string} input.makerPercent Human-readable percentage (0.075 = 0.075%).
- * @param {string} input.takerPercent Human-readable percentage (0.075 = 0.075%).
- * @param {string[]} input.observedCommissionRates Actual rates from reconciled fills.
- * @returns {{ feeRate: string }} Conservative decimal fraction for sell planning.
+ * @param {string} input.makerPercent Human-readable percentage (0.1 = 0.1%).
+ * @param {string} input.takerPercent Human-readable percentage (0.1 = 0.1%).
+ * @param {string} [input.orderType] LIMIT_MAKER guarantees maker execution.
+ * @returns {{ feeRate: string, reservedPercent: string, reservedRole: string }}
  */
-export function calculateSellFeeRate({
-  makerPercent,
-  takerPercent,
-  observedCommissionRates = [],
-} = {}) {
-  assertDecimalString({ value: makerPercent, field: "makerPercent" })
-  assertDecimalString({ value: takerPercent, field: "takerPercent" })
-
-  if (
-    compareDecimal({ left: makerPercent, right: "0" }) < 0 ||
-    compareDecimal({ left: makerPercent, right: "100" }) >= 0 ||
-    compareDecimal({ left: takerPercent, right: "0" }) < 0 ||
-    compareDecimal({ left: takerPercent, right: "100" }) >= 0
-  ) {
-    throw new RangeError("Maker and taker percentages must be from 0 inclusive to 100 exclusive")
-  }
-  if (
-    !Array.isArray(observedCommissionRates) ||
-    observedCommissionRates.some((rate) => typeof rate !== "string")
-  ) {
-    throw new TypeError("observedCommissionRates must be an array of decimal strings")
-  }
-
-  let actualRate = "0"
-  for (const [index, rate] of observedCommissionRates.entries()) {
-    assertDecimalString({ value: rate, field: `observedCommissionRates[${index}]` })
-    if (compareDecimal({ left: rate, right: "0" }) < 0) {
-      throw new RangeError("Observed commission rates must be non-negative")
+export function calculateSellFeeRate({ makerPercent, takerPercent, orderType } = {}) {
+  const percentages = { makerPercent, takerPercent }
+  for (const [field, value] of Object.entries(percentages)) {
+    assertDecimalString({ value, field })
+    if (
+      compareDecimal({ left: value, right: "0" }) < 0 ||
+      compareDecimal({ left: value, right: "100" }) >= 0
+    ) {
+      throw new RangeError(field + " must be from 0 inclusive to 100 exclusive")
     }
-    actualRate = maxDecimal({ left: actualRate, right: rate })
   }
 
-  if (compareDecimal({ left: actualRate, right: "0" }) === 0) {
-    return Object.freeze({ feeRate: "0" })
-  }
-
-  const configuredCeiling = compareDecimal({ left: makerPercent, right: "0" }) === 0
-    ? "0"
-    : maxDecimal({
-      left: percentageToRate({ percent: makerPercent }),
-      right: percentageToRate({ percent: takerPercent }),
-    })
+  const reservedRole = orderType === "LIMIT_MAKER"
+    ? "MAKER"
+    : compareDecimal({ left: makerPercent, right: takerPercent }) >= 0
+      ? "MAKER"
+      : "TAKER"
+  const reservedPercent = orderType === "LIMIT_MAKER"
+    ? makerPercent
+    : maxDecimal({ left: makerPercent, right: takerPercent })
 
   return Object.freeze({
-    feeRate: maxDecimal({ left: configuredCeiling, right: actualRate }),
+    feeRate: percentageToRate({ percent: reservedPercent }),
+    reservedPercent,
+    reservedRole,
   })
 }

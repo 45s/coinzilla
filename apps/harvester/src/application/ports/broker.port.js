@@ -5,10 +5,14 @@ export const BROKER_PORT_METHODS = Object.freeze([
   "cancelOrder",
   "getOpenOrders",
   "getFills",
+  "getCanonicalOrderHistory",
+  "getCanonicalOrder",
   "getAccountSnapshot",
   "getSymbolFilters",
+  "getExchangeMarkets",
   "getPrices",
   "subscribeForPrices",
+  "subscribeForBookTicker",
   "subscribeForUserData",
 ])
 

@@ -17,7 +17,7 @@ No production-code or dependency changes were made. The available repository con
 ### Highest-priority risks
 
 1. **P1 — Journal contract and recovery semantics remain under-specified.** The package currently exposes an append-oriented JSONL journal. Its roadmap still lists record-schema documentation, read/replay semantics, serialization compatibility, and recovery behavior as open work. These are important for preserving and interpreting trading history.
-2. **P2 — Coverage enforcement is uneven across packages.** Dedicated thresholds exist for utils, notifiers, event-bus, and the Free-Roll application. The inspected manifests for entities, brokers, and journal do not define package-specific coverage gates.
+2. **P2 — Coverage enforcement is uneven across packages.** Dedicated thresholds exist for utils, notifiers, and event-bus. The inspected manifests for entities, brokers, and journal do not define package-specific coverage gates.
 3. **P2 — Root package publishability is ambiguous.** The root manifest declares a package name, version, and `main: index.js`, but the repository has no root `index.js` and the manifest is not marked `private`. Confirm whether the root workspace package is intended to be publishable.
 4. **P2 — JavaScript linting/formatting are not enforced.** CI validates syntax and GitHub Actions workflow syntax, but the inspected workflows do not run a JavaScript linter or formatter.
 5. **P2 — Develop ruleset deletion protection is a documented configuration gap.** The root roadmap says the `develop` ruleset lacks a branch-deletion restriction. This is a GitHub-side configuration issue and was not changed or re-verified during this audit.
@@ -36,7 +36,6 @@ No P0 issue was evidenced by the inspected files.
 | `packages/notifiers` — `@coinzilla/notifiers` | Telegram notification transport | None |
 | `packages/journal` — `@coinzilla/journal` | Event journal and JSONL persistence | event-bus, utils |
 | `packages/brokers` — `@coinzilla/brokers` | Binance broker and exchange integration | entities, utils |
-| `apps/bot-free-roll` — `@coinzilla/bot-free-roll` | Application composition and Free-Roll strategy | brokers, entities, event-bus, journal, notifiers, utils |
 
 The workspace is defined by `pnpm-workspace.yaml` with `apps/*` and `packages/*`. The package dependency declarations and lockfile importer records agree on the graph above. At the manifest level, dependencies flow from application/domain adapters toward shared lower-level contracts; no package dependency cycle is declared.
 
@@ -81,7 +80,6 @@ Recommended owner action: the Journal domain should define whether the journal i
 - Native Node.js `node:test` is used throughout the inspected package manifests.
 - Root `pnpm test` recursively runs workspace test scripts.
 - Root `pnpm run test:coverage` invokes Node's test coverage support across the package and app workspaces.
-- The coverage workflow enforces package-specific thresholds for utils, notifiers, event-bus, and Free-Roll.
 - Broker integration tests are separated from the default unit suite and are documented as TESTNET-only where they place orders.
 - Unit-test CI runs on Node.js 22.23.4 and Node.js 24.x.
 
@@ -139,8 +137,6 @@ No dependencies were added or removed.
 
 - Root: `README.md`, `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, `ROADMAP.md`.
 - Contributor and architecture docs: `docs/contributing.md`, `docs/workspace-package-map.md`.
-- Package manifests and instructions for all six packages and the Free-Roll application.
-- Public entry points for utils, entities, event-bus, notifiers, journal, brokers, and the Free-Roll app.
 - Journal implementation and its native Node.js test file.
 - CI workflows listed in the workflow inventory.
 - Existing hardening roadmaps for utils, notifiers, and event-bus.

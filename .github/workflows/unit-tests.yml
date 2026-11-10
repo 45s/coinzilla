@@ -7,6 +7,12 @@ on:
       - develop
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_broker_testnet_read_only:
+        description: Run read-only Binance TESTNET integration (never places or cancels orders)
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: unit-tests-${{ github.workflow }}-${{ github.ref }}
@@ -17,9 +23,23 @@ permissions:
 
 jobs:
   test:
-    name: Run package tests
+    name: "Unit tests (${{ matrix.package }})"
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        package:
+          - "@coinzilla/harvester"
+          - "@coinzilla/brokers"
+          - "@coinzilla/db"
+          - "@coinzilla/entities"
+          - "@coinzilla/event-bus"
+          - "@coinzilla/journal"
+          - "@coinzilla/market-simulator"
+          - "@coinzilla/notifiers"
+          - "@coinzilla/utils"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -39,5 +59,74 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run package tests
-        run: pnpm test
+      - name: Run ${{ matrix.package }} tests
+        run: pnpm --filter "${{ matrix.package }}" test
+
+      - name: Probe Binance TESTNET endpoints without credentials
+        if: matrix.package == '@coinzilla/brokers' && github.event_name == 'pull_request'
+        continue-on-error: true
+        run: node packages/brokers/src/infrastructure/binance/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
+
+  package-tests-gate:
+    name: Run package tests
+    if: always()
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package test to pass
+        env:
+          MATRIX_RESULT: ${{ needs.test.result }}
+        run: |
+          if [[ "$MATRIX_RESULT" != "success" ]]; then
+            echo "::error::At least one package unit-test matrix job did not succeed (result: $MATRIX_RESULT)."
+            exit 1
+          fi
+          echo "All package unit-test matrix jobs passed."
+
+  broker-testnet-read-only:
+    name: Run read-only Binance TESTNET integration
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.run_broker_testnet_read_only
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Probe TESTNET WebSocket endpoints (no credentials)
+        continue-on-error: true
+        run: node packages/brokers/src/infrastructure/binance/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
+
+      - name: Run broker TESTNET read-only integration
+        shell: bash
+        env:
+          NODE_ENV: test
+          BINANCE_TESTNET_INTEGRATION: "1"
+          BINANCE_API_KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
+          BINANCE_API_SECRET_KEY: ${{ secrets.BINANCE_TESTNET_API_SECRET_KEY }}
+          BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS: "0"
+          BINANCE_TESTNET_EXPECT_USER_DATA_EVENT: "0"
+        run: |
+          if [[ -z "$BINANCE_API_KEY" || -z "$BINANCE_API_SECRET_KEY" ]] ||
+             [[ "${BINANCE_API_KEY,,}" =~ (replace-with|mock) ]] ||
+             [[ "${BINANCE_API_SECRET_KEY,,}" =~ (replace-with|mock) ]]; then
+            echo "::error::Configure BINANCE_TESTNET_API_KEY and BINANCE_TESTNET_API_SECRET_KEY repository secrets with non-placeholder TESTNET credentials."
+            exit 1
+          fi
+
+          pnpm --filter @coinzilla/brokers test:integration

@@ -2,8 +2,11 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 node_modules
 
-# Bot session logs
+# Application session logs
 /logs_bot-free-roll/
+/apps/harvester/logs/harvester.log
+/apps/harvester/logs/harvester-trace.log

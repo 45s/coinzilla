@@ -8,6 +8,7 @@ A change is ready to merge only when:
 
 - [ ] The change solves the stated problem and handles expected edge cases.
 - [ ] Every new or changed behavior has meaningful automated test coverage, including relevant success, boundary, invalid-input, and failure scenarios.
+- [ ] For every behavior change, the test was written first, observed failing for the expected reason before implementation, then observed passing after the implementation (RED → GREEN → REFACTOR).
 - [ ] Every bug fix includes a regression test that reproduces the defect, unless a documented technical reason makes that impractical.
 - [ ] Tests are deterministic and do not depend on production services, credentials, or live exchange access.
 - [ ] The affected package's tests and coverage checks pass; applicable workspace and CI checks pass.
@@ -15,9 +16,40 @@ A change is ready to merge only when:
 - [ ] Modules are cohesive, follow single-responsibility boundaries, and do not turn public entry points into implementation dumping grounds.
 - [ ] Non-trivial pure logic is extracted into cohesive, independently testable modules rather than embedded in large classes/services or unrelated files.
 - [ ] Large files have been split by responsibility, or a concrete reason for keeping them together is documented in the PR.
-- [ ] Public APIs, configuration, and documentation are updated when behavior changes.
+- [ ] Documentation impact requirements in [Documentation impact](#documentation-impact) are satisfied.
 - [ ] No secrets, credentials, generated artifacts, or unrelated changes are included.
 - [ ] Any deliberate deviation from these standards is explained in the pull request, with a reason and follow-up plan when appropriate.
+
+## Documentation impact
+
+This section is the canonical policy for assessing and updating documentation in every meaningful change.
+
+- Assess whether the change affects documented behavior, public APIs/contracts, configuration, architecture, ownership, operational procedures, examples, or roadmap status.
+- Update every affected source of documentation in the same task/PR as the change and, where practical, in the same commit. This includes agent instructions and domain roadmaps when their guidance or status changes.
+- If no documentation update is warranted (for example, an internal refactor or test-only change that does not alter a documented contract), record a concise reason in the PR description.
+- Do not defer a required documentation update to an unspecified follow-up. Include a **Documentation impact** note in every meaningful PR, listing updates or explaining why none are needed.
+
+Other repository instructions and task checklists should link to this section rather than restating its policy. Document ownership, classification, lifecycle, ADRs, historical evidence, naming, indexes, migration safety and AI-agent maintenance requirements are defined in the canonical [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md); follow it rather than creating local variants.
+
+## Exchange environment configuration
+
+Binance exchange endpoint selection is governed by [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md). All consumers MUST pass an explicit `TRADING_MODE=testnet|live`; missing or invalid values fail closed. `NODE_ENV` is application runtime metadata only and MUST NOT select or influence Binance endpoints. Keep the ADR as the cross-workspace decision source and the Brokers/Harvester documentation as the operational guides.
+
+## Visual documentation and workflow schemas
+
+Visual explanations are a preferred documentation technique across **all applications, packages, infrastructure, and engineering workflows** when they make a non-trivial process easier to understand. They complement—not replace—the authoritative prose contract.
+
+- Prefer **Mermaid flowcharts** for workflows, decision trees, validation gates, state transitions, retry paths, and failure handling.
+- Prefer **Mermaid sequence diagrams** when the important detail is the order of messages or calls between actors, components, services, brokers, databases, or external systems.
+- Use diagrams when they materially improve understanding. Do not force them into trivial changes, simple reference material, or explanations that are already clearer as prose or a table.
+- When adding or materially changing a complex workflow, assess whether its owning documentation should gain or update a diagram in the same task/PR. Do not leave a useful diagram as an informal chat-only explanation.
+- Show meaningful branches, including rejected decisions, timeouts, unknown outcomes, retries, reconciliation, fallback behavior, and safety boundaries. Do not draw only the happy path when failure behavior is part of the contract.
+- Keep diagrams synchronized with the actual implementation, tests, and authoritative specification. Verify each node and transition against source code and tests before publishing.
+- Place a concise explanation near each diagram. State what the diagram covers, clarify important invariants, and identify which prose/specification remains authoritative if a diagram is illustrative.
+- Use GitHub-compatible Markdown Mermaid fences (`\`\`mermaid`) and valid Mermaid syntax. Keep labels concise and readable; split an oversized diagram into focused diagrams rather than shrinking text or omitting important behavior.
+- AI agents should proactively use these visual forms in technical documentation, PR descriptions, code reviews, investigation summaries, and user-facing explanations whenever they improve comprehension. Prefer a diagram followed by a concise explanation over unnecessarily long prose.
+
+This is a repository-wide convention. Domain-specific agent instructions may add examples or constraints, but must link here rather than define competing diagram rules.
 
 ## Principles
 
@@ -33,6 +65,14 @@ A change is ready to merge only when:
 
 ### 2. Test-first development and comprehensive coverage
 
+- **Strict TDD is mandatory for all code changes that introduce or alter behavior: tests first, implementation second.** Do not write or modify production implementation to satisfy a requirement until the corresponding test exists and has been run.
+- **RED:** write the smallest meaningful test that expresses the required observable behavior. Run it against the current implementation and confirm that it fails because the behavior is missing or incorrect—not because of a syntax error, broken fixture, invalid test, or unrelated setup failure. Record/inspect that failure before proceeding.
+- **GREEN:** only after the expected RED result, make the smallest production change that makes the test pass. Run the new test again and confirm it passes. Add further tests in the same test-first cycle for relevant boundaries, invalid inputs, failures, and interactions.
+- **REFACTOR:** only after GREEN, improve structure or remove duplication while preserving behavior. Re-run the relevant tests after each refactoring step; keep the suite green.
+- Repeat RED → GREEN → REFACTOR in small increments. Do not write a batch of implementation and add tests afterward. Do not treat a test that passes before the implementation as proof of RED; investigate whether the behavior already exists or the test is ineffective.
+- For a bug fix, first add a regression test that reproduces the defect and verify that it fails for the defect. Then implement the fix. A regression test added only after the fix does not satisfy this requirement.
+- If the test cannot be executed, the expected failure cannot be distinguished from an invalid test/setup, or the behavior cannot reasonably be tested automatically, stop before implementation and document the concrete blocker or narrowly scoped exception in the PR. Do not silently skip the RED step or claim it occurred.
+- For documentation-only, formatting-only, or other changes with no runtime behavior, use the applicable task checklist; do not invent meaningless tests. If a documentation change alters an executable contract or example, test that contract/example where practical.
 - **Every new or changed behavior must be tested.** Tests are a required part of implementation, not optional follow-up work.
 - For every bug fix, add a regression test that demonstrates the original defect and fails before the fix whenever practical.
 - Cover normal behavior, boundaries, malformed and adversarial input, exceptional conditions, rejected promises, concurrency/races, cleanup, and interactions with neighboring functionality as relevant to the risk.
@@ -42,10 +82,29 @@ A change is ready to merge only when:
 - Tests must clean up resources they create: listeners, timers, servers, temporary files, subscriptions, and pending work.
 - Do not mock away the behavior under test. Mock external boundaries, not every internal function.
 - Do not delete, skip, weaken, or loosen assertions to make a suite pass. If a test is invalid, replace it with an equally strong test and explain why.
+- **Every assertion must include a detailed failure message.** The message must explain the behavior/invariant being checked and, where useful, identify the relevant scenario or expected state; avoid restating only the expected literal (for example, `"expected 2"`). Assertions without a message are not acceptable in new or materially edited tests. When updating an existing test, add meaningful messages to every assertion in the edited test case.
 - Review coverage reports for uncovered lines and branches, especially error and lifecycle paths. Aim for high line and branch coverage; critical behavior and failure branches must be covered. A percentage alone is not proof of test quality.
 - Add or maintain package-specific coverage thresholds where the tooling supports them. A threshold must be meaningful, enforced by CI, and increased deliberately; do not claim coverage is gated when it is not.
 - Run the affected package's test and coverage scripts first, then relevant workspace tests and repository quality checks. Report exact commands and outcomes accurately.
 - Never claim tests passed unless they were actually executed and passed.
+
+### Human-readable test design
+
+Tests are executable specifications for people, not merely machine checks. A reviewer must be able to understand the scenario, the action, and the expected business outcome from the test name, local variable names, and assertion message without opening helper implementations or asking an author to decode abbreviations.
+
+Required practices:
+
+- Name suites and test cases in plain English. Describe the observable behavior and important scenario (for example, "submits the recovery SELL before the next standing BUY after the actual BUY fill"), not an implementation detail or vague verb such as "handles".
+- Write each test in a clear Arrange → Act → Assert flow. Keep setup and infrastructure behind a small, intention-revealing fixture/harness API; keep business expectations in the test itself.
+- Use precise domain names for values: `initialBuyOrder`, `recoverySellOrder`, `completedBuyOrders`, `retainedInventoryQuantity`, and `receivedExecutionReports`. Avoid opaque aliases such as `replay`, `buy`, `sell`, `pair`, `item`, `tmp`, `x`, or unexplained abbreviations when the value's role can be stated.
+- Do not make readers decode positional tuples. When comparing orders, fills, requests, positions, or lifecycle records, map them to objects with named fields such as `{ marketSymbol, side, price, quantity, orderType }`. Use arrays only when sequence or order is itself the behavior being verified, and keep each array element meaningful.
+- Give scenario constants and expected financial values descriptive names. Keep monetary and quantity values as exact decimal strings; do not replace exact comparisons with floating-point approximations.
+- Every assertion MUST include a detailed, plain-English failure message describing the invariant and scenario. A message that only repeats a literal or says "should equal" is insufficient. Include useful context such as the order role, market, lifecycle stage, or accounting outcome.
+- Prefer one assertion per business invariant. Group related assertions in a named helper only when that helper preserves the invariant's meaning and still receives a detailed failure message.
+- Name test helpers after the domain action or result they represent (for example, `submitInitialBuyOrder` or `waitForRecoveryCycleCompletion`). Keep fake broker/exchange mechanics separate from the scenario specification.
+- A test should be understandable top-to-bottom without navigating into the harness. If the harness is complex, give it a dedicated module and expose only the small operations the scenario needs. Keep scenario-specific fixture modules cohesive, hide their internal fake-exchange maps, and do not let test cases manipulate broker internals directly.
+
+A materially edited test case must comply with these practices throughout that case, not only on newly added lines. Review the full changed test file for opaque names, tuple-based comparisons, missing assertion messages, and unexplained expected values before delivery.
 
 ### 3. Reliability, error handling, and observability
 
@@ -66,6 +125,11 @@ A change is ready to merge only when:
 - Name booleans as predicates (for example, isEnabled, hasBalance, canRetry).
 - Functions should communicate their action or result. Tests should describe the behavior being verified.
 - Avoid comments that merely restate code. Explain non-obvious intent, constraints, and trade-offs.
+
+### JavaScript control flow
+
+- Do not use nested ternary operators. Use `if`/`else` statements or extract a clearly named helper when conditional logic needs multiple branches.
+- Always use braces for control statements, including single-line bodies: `if`, `else`, `for`, `while`, `do`, and other block-controlled statements. Do not write unbraced one-line control flow.
 
 ### 5. Functions and side effects
 
@@ -104,31 +168,13 @@ A change is ready to merge only when:
 - Avoid overengineering, speculative generality, unnecessary dependencies, and abstraction layers without a concrete benefit.
 - Refactor when it improves understanding, testability, or change safety—not solely to make files shorter.
 
-### 7.1 Mandatory pure-function extraction and file-size discipline
+### 7.1 Modularity
 
-This section is a required design and code-review standard for all new code and materially changed code.
+Follow the single [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md) for pure-function extraction, module boundaries, and file-size review. This standard is mandatory; do not copy its detailed rules into local agent instructions.
 
-- **A meaningful pure function belongs in a separate module.** When a function can produce its result from explicit inputs alone, without reading or mutating instance state, shared mutable state, globals, or external systems, extract it from a class/service or large feature file into a focused module. Do this even if there is only one current caller; independent testability and clear responsibility are sufficient reasons.
-- Keep pure logic separate from effectful orchestration. Validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions are common extraction candidates. Leave network, filesystem, database, clock, randomness, and process-environment access at explicit adapter/service boundaries.
-- A module may contain several closely related pure functions. Group by domain and reason to change, not by the fact that each function is technically pure. Use a focused feature-local `helpers/` or domain-named module for internal logic; reserve shared `utils/` for genuinely generic functions used across domains.
-- The owning class/service should retain only the state and orchestration it needs. It should import and compose extracted functions rather than implementing unrelated validation, transformation, formatting, and calculation details inline.
-- Keep modules independently testable. Add focused unit tests for extracted pure behavior and test the class/service's observable orchestration at its boundary. Avoid mocking internal pure functions just to test their callers.
-- **Do not create artificial fragmentation.** Trivial one-line expressions, tiny local callbacks whose meaning depends on their immediate context, and tightly coupled implementation details may remain local when extraction would obscure the flow. Do not create one-function files mechanically or introduce circular dependencies.
-- **Do not allow god files to grow.** Treat approximately 300 lines as a prompt for a modularity review, not an automatic failure. A file exceeding 500 lines must be split where cohesive responsibilities can be extracted; if it genuinely cannot be split without harming correctness or cohesion, document the reason in the PR. Generated files, declarative registries, schemas, and similarly constrained files may need explicit exceptions.
-- Line count is a warning signal, not the design goal. A short file with several unrelated responsibilities is still poorly structured; a longer cohesive file may be justified. The required outcome is clear ownership, low coupling, independent testability, and maintainable change boundaries.
+### 7.2 Shared utilities
 
-**Example — Telegram notifier:** Keep `TelegramNotifier` responsible for sending the request and validating the external API response. Move independent option validation, message validation, and safe error-message sanitization into focused modules such as `telegram-options.js`, `telegram-message.js`, and `safe-error-message.js` (or group closely related functions where that is more cohesive). Keep Telegram-specific constants near the feature or in a dedicated constants module. Do not put these unrelated pure operations into a generic catch-all `utils.js`.
-
-### 7.2 Shared utilities: search and reuse before implementation
-
-This rule is mandatory for every contributor and AI agent. Before implementing a helper or cross-cutting capability, search packages/utils/src/, its tests, and public exports first; then search the entire monorepo for equivalent behavior and consumers. Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) and follow its classification and migration rules.
-
-- Reuse an existing public @coinzilla/utils API when its contract fits. Do not import private files from another package.
-- If a genuinely generic capability is missing, extend packages/utils through the Utilities domain, with documented contracts, deterministic boundary/failure tests, and meaningful line/branch coverage.
-- Do not move business policy, domain invariants, or protocol-specific behavior into shared utilities. Pure does not automatically mean generic.
-- Do not create a duplicate generic helper because the existing API has a different name or because the agent did not search. Document intentional duplication and its domain boundary.
-- Use Logger or defaultLogger from @coinzilla/utils for application/package diagnostics. Direct console calls are limited to the logger implementation and intentional CLI stdout/stderr output; other exceptions require an explicit reason.
-- For exact financial arithmetic, do not use the legacy Number-based NH helpers. Use an exact decimal-string API; until a shared exact decimal API is approved and exported, keep the current domain implementation and track consolidation through the Utilities roadmap.
+Follow the single [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_POLICY.md) for search-first reuse, utility ownership, logging, and generic-helper decisions. Do not duplicate that procedure in other policy documents.
 
 ### 8. Security and external boundaries
 
@@ -159,6 +205,7 @@ This rule is mandatory for every contributor and AI agent. Before implementing a
 ### Expected — review requirement
 
 - Every changed behavior has meaningful tests, including regression coverage for bug fixes.
+- Strict TDD evidence is present for behavior changes: the test failed for the expected reason before implementation and passed afterward; refactoring preserved green tests.
 - Important edge cases, failure paths, and cleanup behavior are covered.
 - Logging and error handling provide actionable context without leaking sensitive data or creating noise.
 - Naming, module cohesion, single-responsibility boundaries, pure-function preference, controlled side effects, and explicit state ownership are respected.
@@ -171,21 +218,9 @@ This rule is mandatory for every contributor and AI agent. Before implementing a
 - Applying a design pattern or abstraction where the benefit is uncertain.
 - Enforcing purity or immutability where it conflicts with a clear, measured need.
 
-## PR branch freshness — required for every target branch
+## PR branch freshness
 
-A PR must contain the latest commit from its actual target branch before merge. The contributor/AI agent owns synchronization; the user must never be asked to perform routine branch updates manually.
-
-- For task PRs targeting `develop`, synchronize against the latest `develop`.
-- For the final release PR targeting `main`, synchronize against the latest `main`.
-- Fetch both target and PR refs immediately before merge. Verify the target tip is an ancestor of the PR head.
-- If stale, merge the latest target into the task branch (or use the repository's explicitly approved history policy), resolve conflicts on the task branch, inspect the complete diff, and push. Never force-push shared history.
-- Wait for required checks on the exact final PR head SHA. If either ref changes, repeat synchronization and validation.
-- Do not merge if checks are pending, failed, skipped unexpectedly, or missing from the required-check policy.
-- Task PRs may be merged by the responsible AI agent into `develop` after all required automated gates pass. No routine human approval is required for `develop`.
-- No AI agent may merge a task PR directly into `main`. The user approves the final milestone/release PR from `develop` to `main`.
-- If the agent cannot verify freshness, checks, or required permissions, stop and report the blocker. Never bypass branch protection or ask the user to update a branch.
-
-Repository rulesets must enforce PR-only merges, target freshness, required status checks, no force pushes, and no deletion for both `develop` and `main`. Written instructions are not a technical substitute for branch protection.
+The mandatory branch-freshness procedure is defined in [AI_AGENT_WORKFLOW.md — Branch freshness and conflict handling](AI_AGENT_WORKFLOW.md#6-branch-freshness-and-conflict-handling--required-on-every-pr-update). It applies before and after **every PR update**, as well as immediately before merge. Follow that single authoritative procedure for task PRs targeting `develop` and release PRs targeting `main`; do not maintain a separate or weaker synchronization process here.
 
 ## Exceptions
 
@@ -198,16 +233,18 @@ Before approving a pull request, ask:
 1. Is the behavior correct, and are success, edge, boundary, and failure cases covered?
 2. Does every bug fix have a regression test?
 3. Are tests deterministic, meaningful, and free of leaked resources?
-4. Are names and control flow easy to understand?
-5. Are side effects and state changes explicit?
-6. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
-7. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
-8. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
-9. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
-10. Is logic duplicated, or has an abstraction been introduced too early?
-11. Could the change expose secrets, weaken security, or break compatibility?
-12. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
-13. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
+4. Are test names, variables, comparisons, and failure messages understandable in plain English without decoding tuples or asking for context?
+5. Are names and control flow easy to understand?
+6. Are side effects and state changes explicit?
+7. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
+8. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
+9. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
+10. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
+11. Is logic duplicated, or has an abstraction been introduced too early?
+12. Could the change expose secrets, weaken security, or break compatibility?
+13. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
+14. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
+15. Are the requirements in [Documentation impact](#documentation-impact) satisfied?
 
 ## Rollout policy
 
@@ -215,11 +252,9 @@ This document describes the intended standard; it does not automatically enforce
 
 The repository's GitHub Actions workflows currently run package tests and test coverage. Configure repository rulesets or branch protection to require the desired status checks; a workflow running on a pull request does not by itself prevent merging.
 
-
 ## AI-agent workflow authority
 
 The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
-
 
 ## JavaScript and JSDoc
 
@@ -236,7 +271,6 @@ Coinzilla's default implementation language is modern JavaScript using the repos
 - A TypeScript consumer reporting `TS7016` is a separate package-interop issue. JSDoc comments alone do not guarantee that TypeScript can resolve declarations. If TypeScript consumers become a supported contract, add and test accurate declarations or an intentional declaration-generation workflow; do not solve it by silently declaring the package as `any`.
 
 See [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for examples and decision guidance.
-
 
 ## CI and repository automation safety
 

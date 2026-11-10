@@ -1,6 +1,11 @@
 /**
- * Assert that a public operation received a non-null, non-array object.
- * The caller owns property reads so accessors can be caught at its boundary.
+ * Assert that an operation received a non-null, non-array object.
+ * This helper deliberately does not read properties; callers own property
+ * access and should perform it inside their own error boundary.
+ *
+ * @param {{ input: unknown, operation?: string }} options
+ * @returns {void}
+ * @throws {TypeError} If the operation label or input shape is invalid.
  */
 export function assertObjectInput({ input, operation = "Operation" } = {}) {
   if (typeof operation !== "string" || operation.trim() === "") {

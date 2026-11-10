@@ -1,17 +1,15 @@
 # ADR-0001: Clean and Hexagonal Architecture for Coinzilla
 
-> **Scope clarification:** ADR-0002 supersedes the original in-place Free-Roll application migration approach. The Clean/Hexagonal architecture style and cross-cutting dependency rules recorded here remain in effect; the successor is a separate application, not a refactor of V1.
-
 - **Status:** Accepted
 - **Date:** 2026-11-01
 - **Owners:** Coinzilla architecture (cross-cutting)
-- **Related:** [Architecture blueprint](../COINZILLA_ARCHITECTURE.md), [Free-Roll roadmap](../../../apps/bot-free-roll/ROADMAP.md), [Engineering standards](../../../ENGINEERING_STANDARDS.md)
+- **Related:** [Coinzilla Architecture index](../README.md), [Engineering standards](../../../ENGINEERING_STANDARDS.md)
 
 ## Context
 
-Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. The existing Free-Roll application is retained as V1; the successor-app boundary is defined by ADR-0002.
+Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. Application-specific architecture transitions are documented by their owning applications; the current Harvester architecture is maintained in the [Harvester architecture guide](../../../apps/harvester/docs/architecture.md).
 
-The repository already has useful canonical entities, broker adapters, event and journal packages, and Free-Roll collaborators. It also has an explicit engineering roadmap that requires exact financial arithmetic, canonical fill-level accounting, broker capability contracts, safe reconciliation, deterministic tests, and incremental PRs.
+The repository already has useful canonical entities, broker adapters, event and journal packages, and shared application collaborators. It also has an explicit engineering roadmap that requires exact financial arithmetic, canonical fill-level accounting, broker capability contracts, safe reconciliation, deterministic tests, and incremental PRs.
 
 A simple layered architecture is not sufficient if business rules still import concrete adapters or if financial decisions are made in event handlers. A heavyweight framework or microservice decomposition would add complexity without solving the current core problem.
 
@@ -22,7 +20,7 @@ Adopt **Clean Architecture with Hexagonal (Ports and Adapters) boundaries and li
 The decision establishes these rules:
 
 1. Domain policies depend on canonical domain concepts, not application or infrastructure details.
-2. Free-Roll-specific strategy rules remain in the Free-Roll application; reusable exact financial/trading concepts remain in the shared entities/contracts package.
+2. Strategy-specific rules remain in their owning application; reusable exact financial/trading concepts remain in shared entity contracts.
 3. Application workflows depend on stable capability contracts (ports), not concrete exchange adapter classes.
 4. Concrete adapters translate external protocols and payloads into canonical contracts.
 5. The runtime composition root selects and injects concrete adapters and owns process lifecycle and resource cleanup.
@@ -79,7 +77,7 @@ Rejected. Existing queueing, event handling, reconciliation helpers, entities, a
 
 ## Implementation guidance
 
-- Treat the [architecture blueprint](../COINZILLA_ARCHITECTURE.md) as the structural reference.
-- Treat the Free-Roll strategy README as authoritative for trading behavior and the Free-Roll roadmap as authoritative for sequencing and acceptance criteria.
+- Treat the [Coinzilla Architecture index](../README.md) and applicable application architecture documents as structural references.
+- Treat each application's canonical domain specification as authoritative for its trading behavior and its roadmap as authoritative for implementation sequencing and acceptance criteria.
 - Do not use this ADR to change trading policy, approve unresolved accounting decisions, or declare existing code production-ready.
 - Add a new ADR for a material change to this decision; do not silently overwrite the historical rationale.

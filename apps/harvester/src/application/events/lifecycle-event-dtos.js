@@ -1,0 +1,839 @@
+import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { addDecimal, assertDecimalString, assertObjectInput, compareDecimal, toResult } from "@coinzilla/utils"
+
+const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
+const OUTCOMES = Object.freeze(["success", "failed"])
+const SECRET_ASSIGNMENT = /\b(api[\s_-]?key|api[\s_-]?secret|client[\s_-]?secret|access[\s_-]?token|secret|token|password|authorization|signature)\b(\s*[:=]\s*|\s+is\s+|\s+)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi
+const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi
+const URL_CREDENTIALS = /(https?:\/\/)[^/@\s:]+:[^/@\s]+@/gi
+
+const isSafeInteger = (value) => Number.isSafeInteger(value) && !Object.is(value, -0)
+const isNonNegativeSafeInteger = (value) => isSafeInteger(value) && value >= 0
+
+const requireSafeInteger = ({ value, field }) => {
+  if (!isSafeInteger(value)) throw new TypeError(field + " must be a safe integer other than negative zero")
+  return value
+}
+
+const requireNonNegativeSafeInteger = ({ value, field }) => {
+  if (!isNonNegativeSafeInteger(value)) {
+    throw new TypeError(field + " must be a non-negative safe integer other than negative zero")
+  }
+  return value
+}
+
+const requireString = ({ value, field }) => {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(field + " must be a non-empty string")
+  }
+  return value.trim()
+}
+
+const requireBoolean = ({ value, field }) => {
+  if (typeof value !== "boolean") {
+    throw new TypeError(field + " must be a boolean")
+  }
+  return value
+}
+
+const requireStrategyMode = ({ value }) => {
+  if (!STRATEGY_MODES.includes(value)) {
+    throw new TypeError("strategyMode must be read-only, conservative, or aggressive")
+  }
+  return value
+}
+
+const requireMarkets = ({ value }) => {
+  if (!Array.isArray(value)) {
+    throw new TypeError("enabledMarkets must be an array")
+  }
+  const markets = value.map((symbol, index) =>
+    requireString({ value: symbol, field: "enabledMarkets[" + index + "]" })
+  )
+  if (new Set(markets).size !== markets.length) {
+    throw new TypeError("enabledMarkets must not contain duplicates")
+  }
+  return markets
+}
+
+const safeError = ({ error }) => {
+  if (!(error instanceof Error)) {
+    throw new TypeError("error must be an Error")
+  }
+  const name = typeof error.name === "string" && error.name.trim()
+    ? error.name.trim().slice(0, 80)
+    : "Error"
+  const rawMessage = typeof error.message === "string" ? error.message : "Unknown error"
+  const message = rawMessage
+    .replace(SECRET_ASSIGNMENT, "$1$2[REDACTED]")
+    .replace(BEARER_TOKEN, "Bearer [REDACTED]")
+    .replace(URL_CREDENTIALS, "$1[REDACTED]@")
+    .slice(0, 240)
+  const code = typeof error.code === "string" || isSafeInteger(error.code)
+    ? { code: typeof error.code === "string" ? error.code.slice(0, 80) : error.code }
+    : {}
+  return { name, message, ...code }
+}
+
+const mapData = (input, operation, mapper) => {
+  try {
+    assertObjectInput({ input, operation })
+    return toResult({ data: mapper(input) })
+  } catch (error) {
+    return toResult({ error })
+  }
+}
+
+const BUILD_METADATA_SOURCES = Object.freeze(["git", "environment", "unavailable"])
+const WORKING_TREE_STATES = Object.freeze(["clean", "dirty", "unknown"])
+
+const requireNullableBuildText = ({ value, field, maxLength }) => {
+  if (value === null) return null
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(field + " must be a non-empty string or null")
+  }
+  return value.trim()
+    .replace(/[\r\n]+/g, " ")
+    .replace(SECRET_ASSIGNMENT, "$1$2[REDACTED]")
+    .replace(BEARER_TOKEN, "Bearer [REDACTED]")
+    .replace(URL_CREDENTIALS, "$1[REDACTED]@")
+    .slice(0, maxLength)
+}
+
+const requireBuildSource = ({ value }) => {
+  assertObjectInput({ input: value, operation: "Harvester process-start source mapping" })
+  const branch = requireNullableBuildText({ value: value.branch, field: "source.branch", maxLength: 160 })
+  const commit = requireNullableBuildText({ value: value.commit, field: "source.commit", maxLength: 64 })
+  if (commit !== null && !/^[a-f0-9]{40,64}$/i.test(commit)) {
+    throw new TypeError("source.commit must be a 40–64 character hexadecimal SHA or null")
+  }
+  const commitMessage = requireNullableBuildText({ value: value.commitMessage, field: "source.commitMessage", maxLength: 240 })
+  const commitDate = requireNullableBuildText({ value: value.commitDate, field: "source.commitDate", maxLength: 64 })
+  if (commitDate !== null && Number.isNaN(Date.parse(commitDate))) {
+    throw new TypeError("source.commitDate must be a valid timestamp or null")
+  }
+  if (!WORKING_TREE_STATES.includes(value.workingTree)) {
+    throw new TypeError("source.workingTree must be clean, dirty, or unknown")
+  }
+  if (!BUILD_METADATA_SOURCES.includes(value.metadataSource)) {
+    throw new TypeError("source.metadataSource must be git, environment, or unavailable")
+  }
+  return {
+    branch,
+    commit: commit?.toLowerCase() ?? null,
+    shortCommit: commit?.slice(0, 8).toLowerCase() ?? null,
+    commitMessage,
+    commitDate: commitDate === null ? null : new Date(commitDate).toISOString(),
+    workingTree: value.workingTree,
+    metadataSource: value.metadataSource,
+  }
+}
+
+/**
+ * Map process-start facts to a small sanitized allowlisted DTO.
+ * Extra input properties (including credentials and account data) are ignored.
+ */
+export const mapHarvesterProcessStartedData = (input = {}) =>
+  mapData(input, "Harvester process-start event mapping", ({
+    application,
+    version,
+    runtimeSessionId,
+    processId,
+    startedAt,
+    source,
+  }) => {
+    const normalizedStartedAt = requireString({ value: startedAt, field: "startedAt" })
+    const startedAtDate = new Date(normalizedStartedAt)
+    if (Number.isNaN(startedAtDate.getTime()) || startedAtDate.toISOString() !== normalizedStartedAt) {
+      throw new TypeError("startedAt must be a canonical UTC ISO timestamp")
+    }
+    if (!Number.isSafeInteger(processId) || processId <= 0) {
+      throw new TypeError("processId must be a positive safe integer")
+    }
+    return {
+      application: requireString({ value: application, field: "application" }).slice(0, 80),
+      version: requireString({ value: version, field: "version" }).slice(0, 80),
+      runtimeSessionId: requireString({ value: runtimeSessionId, field: "runtimeSessionId" }).slice(0, 128),
+      processId,
+      startedAt: new Date(normalizedStartedAt).toISOString(),
+      source: requireBuildSource({ value: source }),
+    }
+  })
+
+/** Map successful runtime startup facts to a small allowlisted DTO. */
+export const mapHarvesterStartedData = (input = {}) =>
+  mapData(input, "Harvester started event mapping", ({
+    broker,
+    strategyMode,
+    enabledMarkets,
+    tradingEnabled,
+  }) => ({
+    broker: requireString({ value: broker, field: "broker" }),
+    strategyMode: requireStrategyMode({ value: strategyMode }),
+    enabledMarkets: requireMarkets({ value: enabledMarkets }),
+    tradingEnabled: requireBoolean({ value: tradingEnabled, field: "tradingEnabled" }),
+  }))
+
+/** Map a startup failure without exposing stack traces, causes, or raw Error objects. */
+export const mapHarvesterStartupFailedData = (input = {}) =>
+  mapData(input, "Harvester startup-failed event mapping", ({ stage, error }) => ({
+    stage: requireString({ value: stage, field: "stage" }),
+    error: safeError({ error }),
+  }))
+
+/** Map a completed shutdown attempt. */
+export const mapHarvesterStoppedData = (input = {}) =>
+  mapData(input, "Harvester stopped event mapping", ({ reason, outcome, error }) => {
+    if (!OUTCOMES.includes(outcome)) {
+      throw new TypeError("outcome must be success or failed")
+    }
+    return {
+      reason: requireString({ value: reason, field: "reason" }),
+      outcome,
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+/** Map only non-secret effective configuration facts, never the full config. */
+export const mapConfigValidatedData = (input = {}) =>
+  mapData(input, "Configuration-validated event mapping", ({
+    enabledMarkets,
+    strategyMode,
+    tradingEnabled,
+  }) => ({
+    enabledMarkets: requireMarkets({ value: enabledMarkets }),
+    strategyMode: requireStrategyMode({ value: strategyMode }),
+    tradingEnabled: requireBoolean({ value: tradingEnabled, field: "tradingEnabled" }),
+  }))
+
+export const mapBrokerConnectedData = (input = {}) =>
+  mapData(input, "Broker-connected event mapping", ({ broker }) => ({
+    broker: requireString({ value: broker, field: "broker" }),
+  }))
+
+export const mapBrokerConnectionFailedData = (input = {}) =>
+  mapData(input, "Broker-connection-failed event mapping", ({ broker, error }) => ({
+    broker: requireString({ value: broker, field: "broker" }),
+    error: safeError({ error }),
+  }))
+
+export const mapBrokerDisconnectedData = (input = {}) =>
+  mapData(input, "Broker-disconnected event mapping", ({ broker, outcome, error }) => {
+    if (!OUTCOMES.includes(outcome)) {
+      throw new TypeError("outcome must be success or failed")
+    }
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      outcome,
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+const STREAM_KINDS = Object.freeze(["user-data", "market-price"])
+
+const requireStream = ({ value }) => {
+  if (!STREAM_KINDS.includes(value)) {
+    throw new TypeError("stream must be user-data or market-price")
+  }
+  return value
+}
+
+const optionalMarket = ({ value, stream }) => {
+  if (stream === "market-price") {
+    return requireString({ value, field: "market" })
+  }
+  if (value !== undefined) {
+    throw new TypeError("market is only valid for market-price streams")
+  }
+  return undefined
+}
+
+export const mapBrokerSubscriptionEstablishedData = (input = {}) =>
+  mapData(input, "Broker-subscription-established event mapping", ({ broker, stream, market }) => {
+    const normalizedStream = requireStream({ value: stream })
+    const normalizedMarket = optionalMarket({ value: market, stream: normalizedStream })
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      stream: normalizedStream,
+      ...(normalizedMarket === undefined ? {} : { market: normalizedMarket }),
+    }
+  })
+
+export const mapBrokerSubscriptionFailedData = (input = {}) =>
+  mapData(input, "Broker-subscription-failed event mapping", ({ broker, stream, market, error }) => {
+    const normalizedStream = requireStream({ value: stream })
+    const normalizedMarket = optionalMarket({ value: market, stream: normalizedStream })
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      stream: normalizedStream,
+      ...(normalizedMarket === undefined ? {} : { market: normalizedMarket }),
+      error: safeError({ error }),
+    }
+  })
+
+export const mapBrokerStatusChangedData = (input = {}) =>
+  mapData(input, "Broker-status-changed event mapping", ({
+    broker,
+    stream,
+    status,
+    recoveryRequired,
+    attempt,
+    code,
+    error,
+  }) => {
+    const normalizedStream = requireStream({ value: stream })
+    if (typeof recoveryRequired !== "boolean") {
+      throw new TypeError("recoveryRequired must be a boolean")
+    }
+    if (attempt !== undefined) requireNonNegativeSafeInteger({ value: attempt, field: "attempt" })
+    if (code !== undefined && code !== null) requireSafeInteger({ value: code, field: "code" })
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      stream: normalizedStream,
+      status: requireString({ value: status, field: "status" }),
+      recoveryRequired,
+      ...(attempt === undefined ? {} : { attempt }),
+      ...(code === undefined || code === null ? {} : { code }),
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+
+const requireDecimalString = ({ value, field }) => {
+  if (typeof value !== "string") throw new TypeError(field + " must be a decimal string")
+  assertDecimalString({ value, field })
+  return value
+}
+
+const requireOrderFacts = ({ order }) => {
+  if (!order || typeof order !== "object" || !order.market?.symbol) {
+    throw new TypeError("order must contain canonical market facts")
+  }
+  return {
+    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
+    symbol: requireString({ value: order.market.symbol, field: "symbol" }),
+    side: order.side === "BUY" || order.side === "SELL"
+      ? order.side
+      : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+    type: requireString({ value: order.type, field: "type" }),
+    price: requireDecimalString({ value: order.limitPrice?.amount, field: "price" }),
+    quantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "quantity" }),
+  }
+}
+
+const requireCount = ({ value, field }) => requireNonNegativeSafeInteger({ value, field })
+
+const mapStrategyDecisionInputs = (inputs) => {
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    throw new TypeError("inputs must be an object")
+  }
+  const mapped = {}
+  for (const field of [
+    "lastBuyPrice", "activeBaseQuantity", "activeBaseBalance", "freeQuoteBalance",
+    "freeBaseBalance", "quoteCashFlow", "committedQuote", "committedQuoteBalance",
+    "committedBase", "committedBaseBalance", "outstandingRecoveryAmount",
+    "investmentLimit", "orderQuantity", "keepQuantity", "priceStepPercent",
+    "makerPercent", "takerPercent", "minProfit",
+  ]) {
+    const value = inputs[field]
+    if (value === undefined) continue
+    if (field === "lastBuyPrice" && value === null) {
+      mapped[field] = null
+      continue
+    }
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) continue
+    const decimal = typeof value === "number" ? String(value) : value
+    if (typeof decimal !== "string") continue
+    try {
+      assertDecimalString({ value: decimal, field: "inputs." + field })
+      mapped[field] = decimal
+    } catch {
+      // Preserve valid decision inputs without letting malformed optional diagnostics hide the decision.
+    }
+  }
+  for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
+    const value = inputs[field]
+    if (isNonNegativeSafeInteger(value)) mapped[field] = value
+  }
+  return mapped
+}
+
+/** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
+export const mapStrategyDecisionData = (input = {}) =>
+  mapData(input, "Strategy-decision event mapping", ({ strategy, symbol, referencePrice, reason, inputs, actions }) => {
+    if (strategy !== "CONSERVATIVE") throw new TypeError("strategy must be CONSERVATIVE")
+    if (!Array.isArray(actions) || actions.length === 0) {
+      throw new TypeError("strategy decision must contain at least one actionable order")
+    }
+    return {
+      strategy,
+      symbol: requireString({ value: symbol, field: "symbol" }),
+      referencePrice: requireDecimalString({ value: referencePrice, field: "referencePrice" }),
+      ...(typeof reason === "string" && reason.trim() ? { reason: reason.trim().slice(0, 160) } : {}),
+      ...(inputs === undefined ? {} : { inputs: mapStrategyDecisionInputs(inputs) }),
+      actions: actions.map((action, index) => ({
+        side: action?.side === "BUY" || action?.side === "SELL"
+          ? action.side
+          : (() => { throw new TypeError("actions[" + index + "].side must be BUY or SELL") })(),
+        type: requireString({ value: action?.type, field: "actions[" + index + "].type" }),
+        price: requireDecimalString({ value: action?.price, field: "actions[" + index + "].price" }),
+        quantity: requireDecimalString({ value: action?.quantity, field: "actions[" + index + "].quantity" }),
+        ...(action?.reason === undefined ? {} : {
+          reason: requireString({ value: action.reason, field: "actions[" + index + "].reason" }),
+        }),
+      })),
+    }
+  })
+
+/** Map the local pending order immediately before broker submission. */
+export const mapOrderSubmissionRequestedData = (input = {}) =>
+  mapData(input, "Order-submission-requested event mapping", ({ order }) => ({
+    ...requireOrderFacts({ order }),
+    status: requireString({ value: order.status, field: "order.status" }),
+  }))
+
+/** Map only a broker-acknowledged canonical order. */
+export const mapOrderSubmittedData = (input = {}) =>
+  mapData(input, "Order-submitted event mapping", ({ order }) => ({
+    ...requireOrderFacts({ order }),
+    brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+    status: requireString({ value: order.status, field: "order.status" }),
+  }))
+
+/** Map a rejected or unknown submission without retaining raw errors or SDK data. */
+export const mapOrderSubmissionFailedData = (input = {}) =>
+  mapData(input, "Order-submission-failed event mapping", ({ order, outcome, error }) => {
+    if (!["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(outcome)) {
+      throw new TypeError("outcome must be REJECTED, REJECTED_OR_UNKNOWN, or UNKNOWN")
+    }
+    return {
+      clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
+      symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
+      side: order?.side === "BUY" || order?.side === "SELL"
+        ? order.side
+        : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+      outcome,
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+
+/** Map the first transition of a strategy pair into its paused state. */
+export const mapStrategyPausedData = (input = {}) =>
+  mapData(input, "Strategy-paused event mapping", ({ symbol, reason, error }) => ({
+    symbol: requireString({ value: symbol, field: "symbol" }),
+    reason: requireString({ value: reason, field: "reason" }),
+    ...(error === undefined ? {} : { error: safeError({ error }) }),
+  }))
+
+/** Map a cancellation intent before any broker cancellation request is sent. */
+export const mapOrderCancellationRequestedData = (input = {}) =>
+  mapData(input, "Order-cancellation-requested event mapping", ({ order, reason }) => {
+    const facts = requireOrderFacts({ order })
+    if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
+      throw new TypeError("order.status must be OPEN or PARTIALLY_FILLED before cancellation")
+    }
+    return {
+      ...facts,
+      brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+      executedQuantity: requireDecimalString({
+        value: order.executedQuantity?.amount,
+        field: "executedQuantity",
+      }),
+      status: order.status,
+      reason: requireString({ value: reason, field: "reason" }),
+    }
+  })
+
+/** Map a broker-confirmed cancellation after the local order registry is updated. */
+export const mapOrderCancelledData = (input = {}) =>
+  mapData(input, "Order-cancelled event mapping", ({ order }) => {
+    const facts = requireOrderFacts({ order })
+    if (order.status !== "CANCELED") throw new TypeError("order.status must be CANCELED")
+    return {
+      ...facts,
+      brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+      executedQuantity: requireDecimalString({
+        value: order.executedQuantity?.amount,
+        field: "executedQuantity",
+      }),
+      status: "CANCELED",
+    }
+  })
+
+/** Map a cancellation that was not confirmed without retaining raw broker data. */
+export const mapOrderCancelFailedData = (input = {}) =>
+  mapData(input, "Order-cancel-failed event mapping", ({ order, outcome, error }) => {
+    if (!["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_SENT", "NOT_REGISTERED", "NOT_CANCELED"].includes(outcome)) {
+      throw new TypeError("outcome must describe an unconfirmed or unsuccessful cancellation")
+    }
+    return {
+      clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
+      symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
+      side: order?.side === "BUY" || order?.side === "SELL"
+        ? order.side
+        : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+      ...(typeof order?.brokerOrderId === "string" && order.brokerOrderId.trim()
+        ? { brokerOrderId: order.brokerOrderId.trim() }
+        : {}),
+      status: requireString({ value: order?.status, field: "order.status" }),
+      outcome,
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+
+/** Map a canonical Fill only after both accounting projections were committed. */
+export const mapFillAppliedData = (input = {}) =>
+  mapData(input, "Fill-applied event mapping", ({ fill }) => {
+    if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
+    return {
+      fillId: requireString({ value: fill.id, field: "fillId" }),
+      tradeId: requireString({ value: fill.tradeId, field: "tradeId" }),
+      brokerOrderId: requireString({ value: fill.brokerOrderId, field: "brokerOrderId" }),
+      ...(fill.clientOrderId === undefined ? {} : {
+        clientOrderId: requireString({ value: fill.clientOrderId, field: "clientOrderId" }),
+      }),
+      symbol: requireString({ value: fill.market.symbol, field: "symbol" }),
+      side: fill.side === "BUY" || fill.side === "SELL"
+        ? fill.side
+        : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
+      price: requireDecimalString({ value: fill.price?.amount, field: "price" }),
+      quantity: requireDecimalString({ value: fill.quantity?.amount, field: "quantity" }),
+      quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount, field: "quoteQuantity" }),
+      liquidityRole: requireString({ value: fill.liquidityRole, field: "liquidityRole" }),
+      ...(fill.executedAt === undefined ? {} : {
+        executedAt: requireNonNegativeSafeInteger({ value: fill.executedAt, field: "fill.executedAt" }),
+      }),
+      commissions: fill.commissions.map((commission, index) => ({
+        amount: requireDecimalString({
+          value: commission.amount?.amount,
+          field: "commissions[" + index + "].amount",
+        }),
+        assetId: requireString({
+          value: commission.amount?.asset?.id,
+          field: "commissions[" + index + "].assetId",
+        }),
+        asset: requireString({
+          value: commission.amount?.asset?.code,
+          field: "commissions[" + index + "].asset",
+        }),
+      })),
+      commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
+    }
+  })
+
+
+const requireExecutionOrderFacts = ({ order }) => {
+  if (!(order instanceof CanonicalOrder)) throw new TypeError("order must be a canonical Harvester order")
+  if (order.side !== "BUY" && order.side !== "SELL") throw new TypeError("order.side must be BUY or SELL")
+  return {
+    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
+    ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
+      ? { brokerOrderId: order.brokerOrderId.trim() }
+      : {}),
+    symbol: requireString({ value: order.market?.symbol, field: "symbol" }),
+    side: order.side,
+    status: requireString({ value: order.status, field: "status" }),
+  }
+}
+
+const requireExecutionFillFacts = ({ fill }) => {
+  if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
+  return {
+    fillId: requireString({ value: fill.id, field: "fillId" }),
+    fillBrokerOrderId: requireString({ value: fill.brokerOrderId, field: "fillBrokerOrderId" }),
+    fillSymbol: requireString({ value: fill.market?.symbol, field: "fillSymbol" }),
+    fillSide: fill.side === "BUY" || fill.side === "SELL"
+      ? fill.side
+      : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
+  }
+}
+
+/** Map an order update that cannot be associated with a Harvester-owned order. */
+export const mapExecutionUnownedOrderData = (input = {}) =>
+  mapData(input, "Execution-unowned-order event mapping", ({ order }) => ({
+    ...requireExecutionOrderFacts({ order }),
+    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+  }))
+
+/** Map a missing or identity-mismatched Fill without exposing the raw event. */
+export const mapExecutionInvalidFillData = (input = {}) =>
+  mapData(input, "Execution-invalid-Fill event mapping", ({ order, fill, reason, error }) => {
+    if (!["MISSING_FILL", "IDENTITY_MISMATCH"].includes(reason)) {
+      throw new TypeError("reason must be MISSING_FILL or IDENTITY_MISMATCH")
+    }
+    return {
+      ...requireExecutionOrderFacts({ order }),
+      reason,
+      ...(fill === undefined ? {} : requireExecutionFillFacts({ fill })),
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+/** Map accounting failure after the canonical Fill has been validated. */
+export const mapExecutionAccountingFailedData = (input = {}) =>
+  mapData(input, "Execution-accounting-failed event mapping", ({ order, fill, error }) => ({
+    ...requireExecutionOrderFacts({ order }),
+    ...requireExecutionFillFacts({ fill }),
+    error: safeError({ error }),
+  }))
+
+
+/** Map an idempotent duplicate Fill without implying a second accounting application. */
+export const mapDuplicateFillData = (input = {}) => {
+  const fillResult = mapFillAppliedData(input)
+  if (!fillResult.ok) return fillResult
+  return toResult({ data: { ...fillResult.data, duplicate: true } })
+}
+
+const mapRecoveryDustData = ({ dust }) => {
+  if (dust === undefined) return undefined
+  if (!dust || dust.status !== "EXCHANGE_CONSTRAINED_DUST") throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")
+  if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) throw new TypeError("dust.reason must identify the limiting exchange filter")
+  const mapped = { status: "EXCHANGE_CONSTRAINED_DUST", quantity: requireDecimalString({ value: dust.quantity, field: "dust.quantity" }), reason: dust.reason }
+  const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
+  for (const field of fields) mapped[field] = requireDecimalString({ value: dust[field], field: "dust." + field })
+  if (compareDecimal({ left: mapped.quantity, right: "0" }) <= 0) throw new RangeError("dust.quantity must be positive")
+  if (dust.reason === "MIN_QUANTITY" &&
+      compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
+    throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
+  }
+  if (dust.reason === "MIN_NOTIONAL" &&
+      (compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) < 0 ||
+       compareDecimal({ left: mapped.evaluatedNotional, right: mapped.minimumNotional }) >= 0)) {
+    throw new RangeError("dust MIN_NOTIONAL evidence does not prove the notional is below the minimum")
+  }
+  if (dust.reason === "QUANTITY_INCREMENT" && mapped.evaluatedQuantity !== "0") {
+    throw new RangeError("dust QUANTITY_INCREMENT evidence must record a zero rounded candidate")
+  }
+  return mapped
+}
+
+/** Map a completed recovery cycle with its profit threshold and exact retained-inventory evidence. */
+export const mapRecoveryCycleCompletedData = (input = {}) =>
+  mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, keepQuantity, minProfit, realizedNetProfit, dust }) => {
+    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity, field: "keepQuantity" })
+    const mappedMinProfit = requireDecimalString({ value: minProfit, field: "minProfit" })
+    const mappedFreeQuantity = requireDecimalString({ value: freeQuantity, field: "freeQuantity" })
+    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" })
+    if (compareDecimal({ left: mappedKeepQuantity, right: "0" }) < 0) throw new RangeError("keepQuantity must be non-negative")
+    if (compareDecimal({ left: mappedMinProfit, right: "0.01" }) < 0) throw new RangeError("minProfit must be at least 0.01")
+    if (compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) < 0) throw new RangeError("realizedNetProfit must meet minProfit")
+    const mappedDust = dust === undefined ? undefined : mapRecoveryDustData({ dust })
+    const expectedFreeQuantity = addDecimal({ left: mappedKeepQuantity, right: mappedDust?.quantity ?? "0" })
+    if (compareDecimal({ left: mappedFreeQuantity, right: expectedFreeQuantity }) !== 0) {
+      throw new RangeError("freeQuantity must equal keepQuantity plus validated exchange-constrained dust")
+    }
+    return {
+      symbol: requireString({ value: symbol, field: "symbol" }),
+      marketId: requireString({ value: marketId, field: "marketId" }),
+      freeQuantity: mappedFreeQuantity,
+      keepQuantity: mappedKeepQuantity,
+      minProfit: mappedMinProfit,
+      realizedNetProfit: mappedRealizedNetProfit,
+      ...(mappedDust === undefined ? {} : { dust: mappedDust }),
+    }
+  })
+
+
+
+/** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
+export const mapAccountOpenOrdersCapturedData = (input = {}) =>
+  mapData(input, "Account-open-orders-captured event mapping", ({
+    phase, observedAt, orders, readiness, blockReasons = [],
+  }) => {
+    if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
+    const normalizedObservedAt = requireNonNegativeSafeInteger({ value: observedAt, field: "observedAt" })
+    if (!Array.isArray(orders)) throw new TypeError("orders must be an array")
+    if (!["READY", "RECONCILED", "BLOCKED"].includes(readiness)) {
+      throw new TypeError("readiness must be READY or BLOCKED")
+    }
+    if (!Array.isArray(blockReasons) || blockReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
+      throw new TypeError("blockReasons must contain non-empty strings")
+    }
+    const mappedOrders = orders.map((order, index) => {
+      if (!order || typeof order !== "object") {
+        throw new TypeError("orders[" + index + "] must be a normalized broker order")
+      }
+      const symbol = order.market?.symbol ?? order.symbol
+      const brokerOrderId = order.brokerOrderId ?? order.id
+      const price = order.limitPrice?.amount ?? order.originalPrice
+      const quantity = order.originalQuantity?.amount ?? order.originalQuantity
+      const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+      return {
+        ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
+          ? { clientOrderId: order.clientOrderId.trim() }
+          : {}),
+        brokerOrderId: requireString({ value: brokerOrderId, field: "orders[" + index + "].brokerOrderId" }),
+        symbol: requireString({ value: symbol, field: "orders[" + index + "].symbol" }),
+        side: order.side === "BUY" || order.side === "SELL"
+          ? order.side
+          : (() => { throw new TypeError("orders[" + index + "].side must be BUY or SELL") })(),
+        type: requireString({ value: order.type, field: "orders[" + index + "].type" }),
+        ...(price === undefined ? {} : {
+          price: requireDecimalString({ value: price, field: "orders[" + index + "].price" }),
+        }),
+        quantity: requireDecimalString({ value: quantity, field: "orders[" + index + "].quantity" }),
+        executedQuantity: requireDecimalString({
+          value: executedQuantity,
+          field: "orders[" + index + "].executedQuantity",
+        }),
+        status: requireString({ value: order.status, field: "orders[" + index + "].status" }),
+      }
+    }).sort((left, right) =>
+      left.symbol.localeCompare(right.symbol) ||
+      left.brokerOrderId.localeCompare(right.brokerOrderId)
+    )
+    const identities = mappedOrders.map(({ symbol, brokerOrderId }) => symbol + ":" + brokerOrderId)
+    if (new Set(identities).size !== identities.length) {
+      throw new TypeError("orders must not contain duplicate symbol/brokerOrderId identities")
+    }
+    if (readiness === "READY" && (mappedOrders.length > 0 || blockReasons.length > 0)) {
+      throw new TypeError("READY open-order audit requires no open orders and no block reasons")
+    }
+    if (readiness === "RECONCILED" && (mappedOrders.length === 0 || blockReasons.length > 0)) {
+      throw new TypeError("RECONCILED open-order audit requires owned open orders and no block reasons")
+    }
+    if (readiness === "BLOCKED" && blockReasons.length === 0) {
+      throw new TypeError("BLOCKED open-order audit requires blockReasons")
+    }
+    return {
+      phase,
+      observedAt: normalizedObservedAt,
+      readiness,
+      orderCount: mappedOrders.length,
+      orders: mappedOrders,
+      blockReasons: [...blockReasons],
+    }
+  })
+
+/** Map configured trading-pair balances into an exact-decimal account audit event. */
+export const mapAccountSnapshotCapturedData = (input = {}) =>
+  mapData(input, "Account-snapshot-captured event mapping", ({
+    phase, snapshot, allowedAssetCodes, auditStatus = "COMPLETE", auditReasons = [],
+  }) => {
+    if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, or RECOVERY")
+    if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
+    if (!snapshot || !Array.isArray(snapshot.balances)) {
+      throw new TypeError("snapshot must contain sourceTime and canonical balances")
+    }
+    const sourceTime = requireNonNegativeSafeInteger({ value: snapshot.sourceTime, field: "snapshot.sourceTime" })
+    if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
+      throw new TypeError("auditReasons must contain non-empty strings")
+    }
+    if (allowedAssetCodes !== undefined && (!Array.isArray(allowedAssetCodes) || allowedAssetCodes.some((code) => typeof code !== "string" || !code.trim()))) {
+      throw new TypeError("allowedAssetCodes must contain non-empty asset codes")
+    }
+    const allowedAssets = allowedAssetCodes === undefined ? undefined : new Set(allowedAssetCodes)
+    const selectedBalances = allowedAssets === undefined
+      ? snapshot.balances
+      : snapshot.balances.filter((balance) => allowedAssets.has(balance?.asset?.code))
+    if (allowedAssets !== undefined && selectedBalances.length !== allowedAssets.size) {
+      const found = new Set(selectedBalances.map((balance) => balance.asset.code))
+      const missing = [...allowedAssets].filter((code) => !found.has(code))
+      throw new TypeError("snapshot is missing configured assets: " + missing.join(", "))
+    }
+    const balances = selectedBalances.map((balance, index) => {
+      const asset = requireString({ value: balance?.asset?.code, field: "balances[" + index + "].asset.code" })
+      const free = requireDecimalString({ value: balance?.free?.amount, field: "balances[" + index + "].free" })
+      const locked = requireDecimalString({ value: balance?.locked?.amount, field: "balances[" + index + "].locked" })
+      return { asset, free, locked, total: addDecimal({ left: free, right: locked }) }
+    }).sort((left, right) => left.asset.localeCompare(right.asset))
+    if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
+      throw new TypeError("snapshot must not contain duplicate asset codes")
+    }
+    if (auditStatus === "COMPLETE" && auditReasons.length > 0) throw new TypeError("COMPLETE snapshot cannot contain auditReasons")
+    if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) throw new TypeError("INCOMPLETE snapshot requires auditReasons")
+    return { phase, auditStatus, sourceTime, assetCount: balances.length, balances, auditReasons: [...auditReasons] }
+  })
+
+
+/** Preserve versioned, allowlisted Binance executionReport facts separately from normalized events. */
+export const mapBrokerExecutionReportData = (input = {}) =>
+  mapData(input, "Broker execution-report evidence mapping", ({ evidence }) => {
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+        evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
+      throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
+    }
+    const data = { schemaVersion: 1, source: "binance.spot.userData.executionReport" }
+    for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason", "selfTradePreventionMode", "matchType"]) {
+      if (evidence[field] !== undefined) {
+        if (typeof evidence[field] !== "string") throw new TypeError("evidence." + field + " must be a string")
+        data[field] = evidence[field].slice(0, 256)
+      }
+    }
+    if (evidence.commissionAsset !== undefined) {
+      if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") throw new TypeError("evidence.commissionAsset must be a string or null")
+      data.commissionAsset = evidence.commissionAsset
+    }
+    for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
+      if (evidence[field] !== undefined) data[field] = String(evidence[field])
+    }
+    for (const field of ["orderQuantity", "orderPrice", "stopPrice", "icebergQuantity", "quoteOrderQuantity", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
+      if (evidence[field] !== undefined) data[field] = requireDecimalString({ value: evidence[field], field: "evidence." + field })
+    }
+    for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
+      if (evidence[field] !== undefined) {
+        data[field] = requireNonNegativeSafeInteger({ value: evidence[field], field: "evidence." + field })
+      }
+    }
+    for (const field of ["isMaker", "working"]) {
+      if (evidence[field] !== undefined) data[field] = requireBoolean({ value: evidence[field], field: "evidence." + field })
+    }
+    return data
+  })
+
+/** Record an applied canonical order-state transition with exact cumulative quantities. */
+export const mapOrderUpdatedData = (input = {}) =>
+  mapData(input, "Order-updated event mapping", ({ order, executionType, evidence }) => {
+    if (!(order instanceof CanonicalOrder)) throw new TypeError("order must be a canonical Harvester order")
+    return {
+      ...requireExecutionOrderFacts({ order }),
+      originalQuantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "originalQuantity" }),
+      executedQuantity: requireDecimalString({ value: order.executedQuantity?.amount, field: "executedQuantity" }),
+      ...(order.limitPrice === undefined ? {} : { price: requireDecimalString({ value: order.limitPrice.amount, field: "price" }) }),
+      ...(order.updatedAt === undefined ? {} : {
+        updatedAt: requireNonNegativeSafeInteger({ value: order.updatedAt, field: "order.updatedAt" }),
+      }),
+      ...(executionType === undefined ? {} : { executionType: requireString({ value: executionType, field: "executionType" }) }),
+      ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? { cumulativeQuoteQuantity: requireDecimalString({ value: evidence.cumulativeQuoteQuantity, field: "cumulativeQuoteQuantity" }) } : {}),
+      ...(evidence?.transactionTime === undefined ? {} : {
+        brokerTransactionTime: requireNonNegativeSafeInteger({
+          value: evidence.transactionTime,
+          field: "evidence.transactionTime",
+        }),
+      }),
+    }
+  })
+
+
+/** Capture the exact validated exchange filters used by Harvester order planning. */
+export const mapMarketTradingRulesCapturedData = (input = {}) =>
+  mapData(input, "Market trading-rules event mapping", ({ metadata }) => {
+    const market = metadata?.market
+    const tradingRules = metadata?.tradingRules
+    if (!market || typeof market !== "object" || !Array.isArray(tradingRules?.constraints)) {
+      throw new TypeError("metadata must contain a canonical market and trading rules")
+    }
+    if (!Array.isArray(metadata.supportedOrderTypes) || metadata.supportedOrderTypes.length === 0) {
+      throw new TypeError("metadata.supportedOrderTypes must be a non-empty array")
+    }
+    return {
+      venue: requireString({ value: market.venue, field: "market.venue" }),
+      symbol: requireString({ value: market.symbol, field: "market.symbol" }),
+      baseAsset: requireString({ value: market.baseAsset?.code, field: "market.baseAsset.code" }),
+      quoteAsset: requireString({ value: market.quoteAsset?.code, field: "market.quoteAsset.code" }),
+      orderType: requireString({ value: metadata.orderType, field: "metadata.orderType" }),
+      supportedOrderTypes: metadata.supportedOrderTypes.map((type, index) =>
+        requireString({ value: type, field: "supportedOrderTypes[" + index + "]" })),
+      constraints: tradingRules.constraints.map((constraint, index) => ({
+        type: requireString({ value: constraint?.type, field: "constraints[" + index + "].type" }),
+        status: requireString({ value: constraint?.status, field: "constraints[" + index + "].status" }),
+        ...(constraint?.value === undefined ? {} : {
+          amount: requireDecimalString({ value: constraint.value.amount, field: "constraints[" + index + "].amount" }),
+          asset: requireString({ value: constraint.value.asset?.code, field: "constraints[" + index + "].asset" }),
+        }),
+      })),
+    }
+  })

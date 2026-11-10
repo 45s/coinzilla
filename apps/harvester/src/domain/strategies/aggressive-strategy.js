@@ -1,3 +1,4 @@
+import { compareDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../portfolio/portfolio.js"
 
 /**
@@ -21,7 +22,14 @@ export function evaluateAggressiveStrategy({
   }
 
   const position = portfolio.getPosition({ symbol: marketPrice.symbol })
-  const hasInventory = position && position.baseQuantity.amount !== "0"
+  // Active strategy inventory is the only inventory that blocks a new BUY
+  // cycle. Retained freeBaseQuantity is deliberately excluded. Any future
+  // Aggressive grid repricing must apply this same Portfolio gate before
+  // evaluating thresholds or canceling/replacing BUY orders.
+  const hasInventory = compareDecimal({
+    left: position?.baseQuantity.amount ?? "0",
+    right: "0",
+  }) > 0
   const blockers = hasInventory
     ? ["SELL_PRICE_FORMULA_UNRESOLVED", "MAX_PRICE_DROP_FORMULA_UNRESOLVED"]
     : ["BUY_GRID_DEPTH_NOT_CONFIGURED"]

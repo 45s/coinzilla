@@ -37,6 +37,59 @@ test("accepts an order aligned to exchange increments and within all supported b
   assert.equal(result.notional, "10")
 })
 
+test("accepts exact inclusive MIN/MAX price, quantity and notional boundaries", () => {
+  const scenarios = [
+    {
+      name: "MIN_PRICE equality",
+      price: "0.01",
+      quantity: "500",
+      expectedNotional: "5",
+    },
+    {
+      name: "MAX_PRICE equality",
+      price: "10",
+      quantity: "500",
+      expectedNotional: "5000",
+    },
+    {
+      name: "MIN_QUANTITY equality",
+      price: "5",
+      quantity: "1",
+      expectedNotional: "5",
+    },
+    {
+      name: "MAX_QUANTITY equality",
+      price: "5",
+      quantity: "1000",
+      expectedNotional: "5000",
+    },
+    {
+      name: "MIN_NOTIONAL equality",
+      price: "0.1",
+      quantity: "50",
+      expectedNotional: "5",
+    },
+    {
+      name: "MAX_NOTIONAL equality",
+      price: "5",
+      quantity: "1000",
+      expectedNotional: "5000",
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const result = validateOrderAgainstTradingRules({
+      order: makeOrder({ price: scenario.price, quantity: scenario.quantity }),
+      tradingRules: rules,
+    })
+
+    assert.equal(result.valid, true, "The " + scenario.name + " order must be accepted at the inclusive exchange boundary.")
+    assert.equal(result.price, scenario.price, "The accepted order must preserve its exact aligned price.")
+    assert.equal(result.quantity, scenario.quantity, "The accepted order must preserve its exact aligned quantity.")
+    assert.equal(result.notional, scenario.expectedNotional, "The independently calculated exact notional must match the expected exchange boundary.")
+  }
+})
+
 test("rejects prices and quantities that do not align to exchange increments", () => {
   assert.throws(
     () => validateOrderAgainstTradingRules({ order: makeOrder({ price: "0.1001" }), tradingRules: rules }),
@@ -60,6 +113,61 @@ test("rejects min/max price, quantity and notional violations", () => {
     assert.throws(
       () => validateOrderAgainstTradingRules({ order, tradingRules: rules }),
       new RegExp(expected),
+    )
+  }
+})
+
+test("accepts exact equality at every supported price, quantity and notional boundary", () => {
+  const cases = [
+    {
+      boundary: "MIN_PRICE",
+      order: makeOrder({ price: "0.01", quantity: "501" }),
+      expectedNotional: "5.01",
+    },
+    {
+      boundary: "MAX_PRICE",
+      order: makeOrder({ price: "10", quantity: "2" }),
+      expectedNotional: "20",
+    },
+    {
+      boundary: "MIN_QUANTITY",
+      order: makeOrder({ price: "6", quantity: "1" }),
+      expectedNotional: "6",
+    },
+    {
+      boundary: "MAX_QUANTITY",
+      order: makeOrder({ price: "0.2", quantity: "1000" }),
+      expectedNotional: "200",
+    },
+    {
+      boundary: "MIN_NOTIONAL",
+      order: makeOrder({ price: "0.1", quantity: "50" }),
+      expectedNotional: "5",
+    },
+    {
+      boundary: "MAX_NOTIONAL",
+      order: makeOrder({ price: "8", quantity: "625" }),
+      expectedNotional: "5000",
+    },
+  ]
+
+  for (const scenario of cases) {
+    const result = validateOrderAgainstTradingRules({
+      order: scenario.order,
+      tradingRules: rules,
+    })
+
+    assert.deepEqual(
+      result,
+      {
+        valid: true,
+        market,
+        side: "BUY",
+        price: scenario.order.limitPrice.amount,
+        quantity: scenario.order.originalQuantity.amount,
+        notional: scenario.expectedNotional,
+      },
+      "An order exactly at " + scenario.boundary + " must be accepted with its exact canonical price, quantity and independently expected notional.",
     )
   }
 })

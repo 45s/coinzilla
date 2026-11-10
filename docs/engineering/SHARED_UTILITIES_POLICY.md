@@ -62,6 +62,20 @@ Shared low-level primitives may support these packages, but packages/utils must 
 - Use structured context and stable fields. Never log secrets, credentials, access tokens, private keys, or sensitive payloads. Do not log the same failure redundantly.
 - If the current logger lacks a required generic capability, improve packages/utils first rather than creating an application-specific logger.
 
+### Automated source guard
+
+The required `check:agent-policy` command checks production `.js`, `.mjs`, and `.cjs` files recursively under `apps/` and `packages/`. It reports global `console` identifier references (including member, computed, destructured, and `globalThis.console` access) with a repository-relative path and line number. Comments, string literals, regular-expression literals, and template text are ignored; executable template interpolations are inspected.
+
+The current exact-file exceptions are:
+
+- `packages/utils/src/logger.js` — the shared logger's console transport.
+- `packages/notifiers/scripts/telegram-smoke.js` — explicit, manually invoked smoke-test CLI output.
+- `apps/harvester/scripts/list-testnet-balances.js`, `list-testnet-open-orders.js`, `list-testnet-order-history.js`, and `list-testnet-trades.js` — read-only TESTNET inspection CLI output.
+- `apps/harvester/scripts/run-targeted-tests.js` — the configured-test runner's CLI output.
+- `apps/harvester/scripts/sell-testnet-zro.js` — interactive operator CLI preview/result output for a separately confirmed exchange-write command; this documentation/CI guard does not execute or authorize that command.
+
+Test files and generated/vendor directories are outside this production-source check. Root `scripts/` are also outside its scope because they are repository-tool CLI entry points. The guard does not authorize routine console logging elsewhere, and it does not replace the separate policy for fatal `process.stderr.write` fallbacks.
+
 Example:
 
     import { defaultLogger } from "@coinzilla/utils"
@@ -93,10 +107,10 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 | Area | Existing implementations observed | Initial disposition |
 | --- | --- | --- |
 | Shared logger | packages/utils/src/logger.js, exported as Logger and defaultLogger | Reuse this public API; inspect application adapters and direct console usage during the audit. |
-| Exact decimal arithmetic | Previously duplicated in Free-Roll, Harvester, Market Simulator, and Entities | [x] Consolidated in `packages/utils/src/decimal.js`; consumers now import the shared API. Domain-level accounting, trading rules, and market validation remain local. |
+| Exact decimal arithmetic | Previously duplicated across trading and shared packages; the Harvester TESTNET sell CLI consumer is now migrated | [x] Core arithmetic is consolidated in `packages/utils/src/decimal.js`; [PR #946](https://github.com/45s/coinzilla/pull/946) merged at `c956a0cf83bb8c443ba4a23684a2531d6e46a350` and migrated local parsing/step-rounding/comparison/rescaling to shared primitives while retaining Binance filter and quantity policy locally. |
 | Decimal normalization | Previously implemented in packages/entities/src/values/normalize-decimal-string.js | [x] Generic canonicalization now lives in `@coinzilla/utils`; Entities retains its result-envelope adapter and domain-facing validation contract. |
-| Percentage arithmetic | Previously implemented in apps/bot-free-roll/src/bot/helpers/percentage.js | [x] Exact percentage-rate, percentage-of, percentage-change, and apply-change functions now live in `@coinzilla/utils`. |
-| Keyed async queue | Previously implemented in apps/bot-free-roll/src/bot/helpers/lifecycle.js | [x] Generic per-key serial task queue now lives in `@coinzilla/utils`; subscription disconnection remains app-local. |
+| Percentage arithmetic | Previously implemented in application-local percentage helpers | [x] Exact percentage-rate, percentage-of, percentage-change, and apply-change functions now live in `@coinzilla/utils`. |
+| Keyed async queue | Previously implemented in application-local lifecycle helpers | [x] Generic per-key serial task queue now lives in `@coinzilla/utils`; subscription disconnection remains app-local. |
 | Object input assertion | Previously implemented in packages/event-bus/src/helpers/object-input.js | [x] Generic non-null, non-array object assertion now lives in `@coinzilla/utils`; EventBus still owns its event-specific input semantics. |
 | Numeric helpers | packages/utils/src/number-operations.js, number-helper.js and app-specific numeric calculations | Reuse existing Number-based helpers only for ordinary non-financial calculations. Do not use binary floating-point helpers for exact financial amounts. |
 | Time and wait | packages/utils/src/calculate-time-diff.js, format-time-relatively.js, wait.js, wait-duration.js | Existing shared capability; search before adding alternatives. |
@@ -109,25 +123,25 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 
 The original three application decimal modules were not interchangeable as-is:
 
-- Free-Roll had the broadest operation set, including division, rescaling, increment rounding, and bounded exponent parsing. Its old `formatDecimal()` returned a JavaScript Number; that lossy formatter was not carried into the shared API.
+- application-local had the broadest operation set, including division, rescaling, increment rounding, and bounded exponent parsing. Its old `formatDecimal()` returned a JavaScript Number; that lossy formatter was not carried into the shared API.
 - Harvester had a smaller signed decimal-string API.
 - Market Simulator had positional arguments and rejected negative subtraction results; its market/order rules remain domain-owned.
 - Entities had independent canonicalization and subtraction implementations; both now delegate to shared primitives while preserving the existing `toResult` contract.
 
-The shared API accepts decimal strings (and bigint for parsing) and intentionally rejects JavaScript Number operands. It defines bounded precision, explicit division/rescaling rounding, and exact string outputs. The migration removes duplicate arithmetic implementations without changing domain-level trading/accounting decisions.
+The shared API accepts decimal strings (and bigint for parsing) and intentionally rejects JavaScript Number operands. It defines bounded precision, explicit division/rescaling rounding, and exact string outputs. The migration removes duplicate arithmetic implementations without changing domain-level trading/accounting decisions. The standalone Harvester TESTNET sell helper now uses shared decimal primitives; Binance filter selection and operator-facing quantity policy remain domain-local.
 
 ## Audit and migration plan
 
 - [~] Inventory application and package helper/utility modules and classify candidates. The source-tree/helper inventory and current dispositions are recorded below; routine console-use verification and any future candidates remain.
 - [~] Review direct console use and application logger adapters; Harvester's default logger was migrated and existing shared logger consumers were confirmed. A repository-wide automated guard remains.
 - [x] Design and test the shared exact decimal API with explicit bounds and rounding behavior.
-- [x] Migrate Harvester, Market Simulator, Free-Roll, Entities, and EventBus consumers while keeping business-specific rules local.
+- [x] Migrate Harvester domain, Market Simulator, application-local, Entities, and EventBus consumers while keeping business-specific rules local.
+- [x] Migrate the standalone Harvester TESTNET sell helper from local BigInt arithmetic to shared decimal primitives in merged [PR #946](https://github.com/45s/coinzilla/pull/946); preserve CLI validation, filter selection, min/max rules, and output precision.
 - [x] Identify and extract additional generic helpers (percentage calculations, keyed task queue, object-input assertion); classify remaining package helpers by domain ownership.
 - [x] Update package READMEs, exports, consumer tests, and domain roadmaps for the extracted capabilities.
 - [ ] Add automated checks where reliable (for example, detecting direct console usage outside approved infrastructure/CLI paths).
 
 The audit is complete only when every identified candidate has a recorded disposition and the migration status is supported by tests and merged PRs.
-
 
 ## Repository-wide audit disposition (implementation pass)
 
@@ -135,12 +149,13 @@ The source-tree audit covers the applications and workspace packages present in 
 
 | Area | Audit disposition |
 | --- | --- |
-| Free-Roll exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in Free-Roll. |
+| application-local exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in application-local. |
 | Harvester portfolio arithmetic | [x] Removed app-local decimal engine and its duplicate unit suite; position accounting imports shared arithmetic. Position and fill invariants remain in Harvester/Entities. |
+| Harvester TESTNET sell quantity | [x] Replaced the local BigInt decimal implementation in `apps/harvester/scripts/testnet-sell-utils.js` with shared parsing, increment rounding, comparison, and precision restoration in merged PR #946; exchange filter selection and quantity policy remain local. |
 | Market Simulator arithmetic | [x] Removed app-local arithmetic engine; order matching uses shared comparison and a thin object-input facade delegates arithmetic while preserving the simulator's non-negative subtraction invariant. Candle validation and fill semantics remain local. |
 | Entities decimal values | [x] Canonical decimal normalization and subtraction delegate to shared primitives; `toResult` and entity validation behavior remain in Entities. |
-| Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from Free-Roll; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
-| Logging | [x] Harvester now defaults to `defaultLogger`; Free-Roll uses `defaultLogger`; Coin Farmer's adapter intentionally narrows the shared logger to its application port. |
+| Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from application-local; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
+| Logging | [x] Harvester uses the public `defaultLogger` API. The former Coin Farmer adapter observation is historical only; that application is not present in the current `develop` workspace. |
 | Brokers | Keep Binance signing, protocol payloads, stream adapters, and broker-specific normalization in `packages/brokers`; they depend on exchange contracts. |
 | Event Bus | Keep event-name validation, payload rules, queue capacity, and delivery semantics in `packages/event-bus`; they define event-bus contracts. |
 | Notifiers | Keep Telegram formatting, Telegram API validation, and Telegram delivery behavior in `packages/notifiers`; these are channel-specific. |
@@ -150,11 +165,10 @@ The source-tree audit covers the applications and workspace packages present in 
 
 ### Remaining audit work
 
-- [ ] Complete a repository-wide direct console/stderr scan and document the exact approved runtime/CLI exceptions.
-- [ ] Add an automated repository check for routine direct console usage outside approved files, after the allowlist is agreed.
+- [~] Complete the repository-wide direct console/stderr audit. Global `console` references in production JavaScript under `apps/` and `packages/` are now checked by the required policy workflow; the separate fatal `process.stderr.write` inventory remains open.
+- [x] Add an automated repository check for routine direct console usage outside approved files. The source guard and deterministic tests merged in [PR #942](https://github.com/45s/coinzilla/pull/942) at `2db7d6f15a0660adea8584fa8f27827dead28902`; all six required `develop-core` contexts passed.
 - [ ] Continue to classify new generic candidates when they appear; do not move single-domain helpers without a stable domain-neutral contract.
 - [ ] Complete consumer migration verification through workspace CI and remove any stale imports or unused duplicate tests.
-
 
 ### Helper inventory: intentionally domain-local
 
@@ -162,13 +176,15 @@ The following helper groups were inspected and retained because their behavior b
 
 | Location | Examples | Why it stays local |
 | --- | --- | --- |
-| `packages/brokers/src/binance/**/helpers` and `utils` | Binance message/trade adapters, history query parameters, user-data event deduplication, RPC/stream protocol, signing, transport | These encode Binance wire formats, authentication, or broker lifecycle contracts. |
+| `packages/brokers/src/infrastructure/binance/broker-websocket/helpers` and `utils` | Binance message/trade adapters, history query parameters, user-data event deduplication, RPC/stream protocol, signing, transport | These encode Binance wire formats, authentication, or broker lifecycle contracts. |
 | `packages/brokers/**/test-helpers` | Fake broker clients, fake clock, fake WebSocket | Test doubles are scoped to broker protocol tests; they are not production runtime utilities. |
 | `packages/event-bus/src/helpers` | Event-name validation, payload/options validation, delivery capacity | These define EventBus-specific contracts. The one generic object-shape assertion was extracted. |
 | `packages/notifiers/src/telegram` | Telegram request/message validation and token-aware safe error formatting | These depend on Telegram API behavior and token handling. |
-| `apps/bot-free-roll/src/bot/helpers` | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on Free-Roll strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
+| Application-local trading helpers | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on application-local strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
 | `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
-| `apps/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
-| `apps/bot-coin-farmer/test/helpers` | Configuration test fixtures | Test-only fixtures are not production shared utilities. |
+| `apps/harvester/scripts/testnet-sell-utils.js` | Binance `MARKET_LOT_SIZE`/`LOT_SIZE` selection, minimum/maximum enforcement, and operator-facing errors | Keep exchange-filter and CLI policy local; reuse shared exact-decimal parsing/rounding/comparison/rescaling (PR #946 merged). |
+| `packages/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
 
 The shared package already contained and continues to own the general-purpose logger, result normalization, validators, UUID generation, date/time formatting and differences, waits, feature flags, event emitter, file append helper, log formatting/redaction, string capitalization, and Number-based convenience helpers. The new decimal, percentage, keyed queue, and object-input modules extend that existing public utility set.
+
+**Current-workspace clarification:** the former `apps/bot-coin-farmer` application has been removed from `develop`; its test fixtures are not a current utility candidate. The Market Simulator is now owned by `packages/market-simulator`, and Binance infrastructure lives under `packages/brokers/src/infrastructure/binance/`. The intentionally domain-local inventory above uses those current paths; older paths in prior audit snapshots are historical only.

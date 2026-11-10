@@ -1,10 +1,74 @@
 # Binance Broker Roadmap
 
+---
+status: active
+type: roadmap
+owner: brokers
+---
+
+## Priority execution plan — current develop direction (2026-11-10)
+
+This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
+
+### Canonical order acknowledgement completeness — issue #960
+
+- [x] **Request complete Binance RESULT acknowledgements for canonical order placement — issue [#960](https://github.com/45s/coinzilla/issues/960), implemented in merged [PR #961](https://github.com/45s/coinzilla/pull/961).** Binance's default response for `LIMIT_MAKER` is minimal `ACK`, which omits the order facts required by `adaptCanonicalOrder()`. Canonical placement explicitly requests `newOrderRespType: "RESULT"`, returning the canonical order fields without the optional fills array.
+- [x] **Verification:** the test-first regression and all seven GitHub Actions workflows passed on exact PR head `37b4a805219edc9fc901cc5c11dd44bf850b4908`; PR #961 merged as `8e2f795223a4d594947a6577a09bd183f9b48328` and issue #960 is closed. The compatibility `createOrder()` contract is unchanged; no automatic retry or inference from incomplete ACK was added.
+- Consumer recovery remains Harvester-owned and is tracked separately in [issue #962](https://github.com/45s/coinzilla/issues/962).
+
+### Trading environment selection — explicit contract
+
+- Binance endpoint selection is controlled only by `TRADING_MODE`, with the exact values `testnet` and `live`.
+- `testnet` selects the Spot TESTNET WebSocket API and Streams endpoints; `live` selects the Spot LIVE endpoints.
+- The broker configuration requires an explicit `tradingMode` value. Missing or unsupported values fail during construction; there is no implicit default.
+- `NODE_ENV` must never select or influence exchange endpoints.
+- Harvester must pass its resolved `TRADING_MODE` into the broker adapter. All broker fixtures must state `tradingMode: "testnet"` explicitly unless a test specifically covers LIVE selection.
+- TESTNET integration suites must assert `TRADING_MODE=testnet` and the actual TESTNET endpoint pair before connecting.
+- [x] **Explicit Binance trading-mode selection — PR #841.** `TRADING_MODE` is the sole endpoint selector; required `tradingMode` configuration is validated fail-closed, Harvester passes the resolved value, and broker fixtures state TESTNET/LIVE explicitly. Offline endpoint, invalid-mode, override, and `NODE_ENV`-independence tests pass. Hosted TESTNET acceptance remains a separate, externally blocked verification.
+
+### CRITICAL — protocol and recovery safety
+
+1. **Resolve the outstanding native WebSocket TESTNET handshake/acceptance gap.**
+   - **Why:** the read-only Binance TESTNET workflow has failed during the native Undici WebSocket handshake before account/recovery checks completed. Passing offline broker tests does not prove real endpoint compatibility or reconnect behavior.
+   - **Do:** preserve the exact failing error/cause and distinguish DNS/TLS/HTTP upgrade/Undici transport failures from application authentication. Reproduce only in an authorized, eligible environment; use the existing read-only workflow and keep order mutations disabled. Do not inspect or print secrets, change regions, weaken validation or repeatedly retry an identical blocked path.
+   - **Verify:** record exact Node/Undici versions, endpoint, workflow commit, handshake stage and sanitized cause; then complete read-only account/open-order/trade queries and user-data recovery acknowledgement. Full exchange acceptance remains unverified until the complete run succeeds.
+
+2. **Preserve recovery-generation and subscriber acknowledgement invariants.**
+   - **Why:** stale acknowledgements or a terminal recovery notification delivered to the wrong subscriber can reopen a consumer before authoritative reconciliation is complete.
+   - **Do:** retain the explicit per-subscriber acknowledgement result API, monotonic generation token, active-subscriber fencing and one terminal `reconciled` notification per active subscriber. Keep state-changing RPCs blocked until global recovery completion; removed subscribers must not receive terminal events.
+   - **Verify:** cover multiple subscribers, first-versus-last acknowledgement, duplicate/stale token, subscriber removal, second disconnect during reconciliation, reminder cancellation and exactly one terminal event. Do not regress the legacy boolean API's documented meaning.
+
+### Accepted cross-domain contract work — Harvester issue #774
+
+- [x] **Cancellation request outcome classification — Harvester issue [#774](https://github.com/45s/coinzilla/issues/774), implemented in merged PR [#786](https://github.com/45s/coinzilla/pull/786).** The broker exposes `NOT_SENT` only for a local preflight refusal before the Binance RPC and `OUTCOME_UNKNOWN` for a dispatched request without an authoritative canonical order result. Harvester accepts `NOT_SENT` only on `ok: false`, preserves known canonical order state, and retains fail-closed behavior for ambiguity. Exact-head broker/Harvester regressions, workspace tests, coverage, syntax/actionlint, Utils tests, and dependency audit passed. No TESTNET or exchange operations were performed.
+
+### IMPORTANT — lifecycle quality and maintainability
+
+3. **Complete the read-only integration matrix and document what remains unverified.**
+   - **Why:** unit tests prove deterministic behavior against fakes, not Binance protocol compatibility, signed RPC behavior, or exchange-side recovery semantics.
+   - **Do:** keep integration suites explicitly opt-in, read-only by default, credential-safe and separate from offline CI. Add a clear result matrix for public streams, signed RPC, user-data subscription, reconnect/resubscribe, account snapshots and canonical order/trade reconciliation.
+   - **Verify:** every run records exact commit/runtime and skipped checks; never describe skipped mutation tests or failed handshakes as passed acceptance.
+
+4. **Decompose the largest broker lifecycle modules in small, behavior-preserving steps.**
+   - **Why:** the broker contains large transport, streams and user-data lifecycle modules. Their responsibilities overlap at connection ownership, pending requests, listener cleanup and recovery, making regressions difficult to localize.
+   - **Do:** map state ownership first; extract only cohesive state machines (transport handshake/close, RPC request lifecycle, stream subscription control, user-data recovery) with explicit ports. Keep the public broker interface and wire contracts stable.
+   - **Verify:** add characterization tests before each extraction and retain timeout, late-ack, reconnect, manual-close, listener-removal and resource-cleanup regressions. Do not refactor several lifecycle areas in one PR.
+
+5. **Keep broker contracts exchange-neutral and testable.**
+   - **Why:** Harvester and other consumers should depend on normalized broker capabilities/results, not Binance-specific transport details.
+   - **Do:** use the existing Entities contracts for orders, fills, commissions, balances, trading rules and capability snapshots. Add a shared contract only when a second consumer needs it; keep Binance mapping inside the adapter.
+   - **Verify:** contract tests cover supported/unsupported/unknown capabilities, partial responses, unknown outcomes, exact decimal strings and timestamp identity.
+
+### DEFERRED
+
+6. **Additional exchanges/transports:** do not add another venue or generic transport abstraction until a real consumer and protocol acceptance matrix exist.
+7. **Performance work:** add benchmarks only when production evidence identifies throughput, memory or latency limits; preserve bounded queues and deterministic cleanup first.
+
 > **Agent entry point:** When asked to implement, improve, audit, or maintain `/packages/brokers`, read this file first and follow it as the package-level source of truth. Start with **Current status and next action**, then complete the mandatory pre-work checks before changing code. Do not rely on chat history or assume earlier findings are still current.
 
-**Package:** `@coinzilla/brokers`  
-**Repository:** `45s/coinzilla`  
-**Shared integration branch:** `develop` (use short-lived broker task branches; see the repository-root `AI_AGENT_WORKFLOW.md`)  
+**Package:** `@coinzilla/brokers`
+**Repository:** `45s/coinzilla`
+**Shared integration branch:** `develop` (use short-lived broker task branches; see the repository-root `AI_AGENT_WORKFLOW.md`)
 **Scope:** broker package, broker tests, required root dependency metadata/lockfile changes, and broker documentation.
 
 This roadmap is intentionally detailed. It contains the architecture, verified decisions, compatibility contract, phased implementation plan, test requirements, branch synchronization policy, and agent working rules for the broker package. Update it whenever implementation evidence changes a decision or phase status.
@@ -20,6 +84,7 @@ Replace the Binance broker's third-party SDK-backed runtime with a carefully tes
 The target is **zero third-party runtime dependencies in `@coinzilla/brokers`**. Internal workspace dependencies such as `@coinzilla/entities` and `@coinzilla/utils` may remain when needed; they are not third-party dependencies.
 
 Use WebSockets for supported Binance operations:
+
 - **Binance Spot WebSocket API:** request/response operations, including orders, account information, order/trade history, symbol metadata, and authenticated user-data subscription/events.
 - **Binance Spot WebSocket Streams:** public market-data push streams.
 
@@ -28,7 +93,6 @@ Do not build a new REST trading client. Move symbol-filter retrieval from REST t
 ### Non-goals and hard scope boundaries
 
 - Do not add trading strategy or bot product features.
-- Do not modify `apps/bot-free-roll` or any other bot application code as part of this migration. Bot source may be inspected read-only to verify the consumer contract.
 - Do not add another third-party WebSocket package as a shortcut.
 - Do not add credentials, Ed25519 keys, or a new authentication setup for the current HMAC signature-subscription flow.
 - Do not remove public exports or change consumer-facing method/event/result shapes without an explicit compatibility decision supported by repository-wide consumer checks.
@@ -55,28 +119,158 @@ The migration is complete only when all of the following are true:
 
 ### Overall status
 
+### Accepted cross-domain recovery contract — issue #702 (2026-11-08)
+
+The repository owner approved the compatibility-preserving per-subscriber acknowledgement result contract. This is now authorized implementation work, not a pending product decision.
+
+- [x] Add `acknowledgeRecoveryResult()` to each user-data subscription handle; preserve the existing `acknowledgeRecovery()` boolean behavior exactly. Merged in PR #732 (`adb3639e6c1a1b03e885d394a07f8ce4c05356dd`).
+- [x] Return `{ accepted: true, completed: false }` when this active subscriber's acknowledgement is recorded but another active subscriber remains pending.
+- [x] Return `{ accepted: true, completed: true }` when this call completes shared recovery.
+- [x] Reject inactive/stale handles explicitly; reject calls when no recovery is pending without changing subscriber state.
+- [x] Broker-side recovery remains required, bounded reminders continue, and state-changing RPCs remain blocked until all active subscribers acknowledge. Harvester's consumer failure behavior is completed in PR #735; rejected acknowledgements remain fail-closed.
+- [x] Preserve exactly one terminal `reconciled` status per recovery generation for each still-active subscriber; removed subscribers receive none (PR #729).
+- [x] Update the Harvester consumer only after the broker contract is merged. Local acceptance must never open the application readiness gate before the matching global `reconciled` status. Completed in [PR #735](https://github.com/45s/coinzilla/pull/735); Harvester readiness is matched to recovery generation and active subscription ID.
+- [x] Fence `acknowledgeRecoveryResult(recoveryGeneration)` with a broker-issued monotonic generation token. The token is emitted with `recovered` and `reconciled`; missing/invalid/older tokens are rejected without changing subscriber acknowledgement state. Implemented in follow-up PR #740.
+- [x] Propagate the broker token through Harvester and require it to match the locally acknowledged recovery generation and active subscription ID before readiness opens. The legacy no-argument boolean method remains callable for compatibility; it cannot provide stale-work fencing because it carries no generation token.
+
+**DDD/TDD execution:** the Brokers Application user-data session owns the subscription-handle use case and result contract; the Domain recovery policy remains authoritative for the all-active-subscriber completion invariant; Infrastructure/ Binance adapters remain unchanged. Add deterministic application-session tests first (RED), implement the smallest additive application change (GREEN), then update README and consumer tests. Preserve the existing Broker API for current consumers. No TESTNET/live exchange action is required.
+
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 merged into `migration/binance-native-ws`.
 - [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
 - [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
 - [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-- [~] Phase 6 — user-data session lifecycle and recovery; reconnect retry liveness and repeated reconciliation acknowledgement are being hardened after the WebSocket-only migration.
+- [x] Phase 6 — user-data session lifecycle and recovery; deterministic offline coverage characterizes subscription setup and uncertain outcomes, termination/reconnect retries, repeated reconciliation acknowledgements, state-changing request gates, stale events, listener rollback, and stale-subscription cleanup. Opt-in live TESTNET/soak validation remains in Phase 8.
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
-- [ ] Phase 8 — operational hardening and completion; opt-in TESTNET verification and long-running recovery/soak validation remain.
+- [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete, but live TESTNET acceptance is blocked by a failed read-only integration run. Workflow run [#42483880274](https://github.com/45s/coinzilla/actions/runs/42483880274) ran on `develop` at `6236f49dca53a2938b016b52802f907c90611b44` on 2026-11-08. All nine package unit-test jobs passed; `Run read-only Binance TESTNET integration` failed during `BinanceWebSocketBroker.connect()` with a native Undici WebSocket handshake `TypeError` (`failHandshake`, blank message). The account/read-only checks and recovery test did not complete. The repository owner confirms the credentials are Binance Spot TESTNET credentials with trading permissions; secret values remain uninspected. The run kept `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0` and `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`; order mutation and external-event tests remained skipped. Diagnose the handshake failure before retrying; do not enable mutations or weaken reconciliation. A controlled live recovery/soak remains pending.
+  - Offline regression coverage now includes 100 deterministic disconnect/reconnect cycles in `src/infrastructure/binance/broker-websocket/tests/user-data-session.soak.test.js`, using the existing Node.js test runner and fake clients/scheduler. This simulated soak verifies order-safety gating, current/stale event handling, one replacement subscription per cycle, and listener/timer cleanup; it does not replace the still-pending live TESTNET run or controlled real-session soak.
+- [x] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; complete after PR #697 (complete Binance Infrastructure placement) and PR #704 (executable dependency-direction and public API guards) merged into `develop`. Slices 1–10 are merged. The user-data recovery workflow is separated across Domain, Application, Application Ports, and Binance Infrastructure; the concrete broker facade remains the Infrastructure composition boundary. No speculative use-case wrappers or separate Bootstrap were introduced.
+- [x] JSDoc contract coverage — completed by PR #657 and merged into `develop` at `ccf4662`. Public broker methods and non-obvious inputs/outputs at Binance adapter, RPC, Streams, transport, and user-data boundaries are documented. The package remains JavaScript-first; no `checkJs` or TypeScript tooling was added.
+
+### DDD architecture modernization — first tranche complete; operational verification remains
+
+The first DDD/TDD modernization tranche established deterministic tests, selected ports, and focused adapters, but did not complete the intended architecture at that time. The subsequent Phase 9 work below has since completed and is merged into `develop`.
+
+- [x] Establish and execute the package-scoped coverage command in CI. Pre-threshold package coverage snapshot on PR #528 head `ba1fe560048fecd1d7d7aec83f071cf709c218da`: **83.20% lines, 85.89% branches, 80.55% functions**.
+- [x] Document the initial package boundary and selected responsibilities in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md). This first-tranche description is historical; Phase 9 supersedes its blanket instruction against package-owned `domain/` and `application/` layers.
+- [x] Add deterministic RPC/Streams failure-path characterization. The package suite has since grown to **387/387** passing tests on PR #573's synchronized head. Latest critical runtime coverage is recorded below; the RPC client remains at 99.06%/93.39%/94.12% (lines/branches/functions). PR #527 prevents late message/close callbacks from superseded Streams transports; PR #528 explicitly verifies that all four order mutation methods fail closed while user data is unavailable.
+- [x] Introduce the injected `createUserDataClientPort` boundary. The user-data session owns lifecycle/recovery and acknowledgement state; the Binance adapter owns RPC method names, signed subscription options, and client listener forwarding.
+- [x] Complete deterministic user-data lifecycle/recovery characterization. The session suite has 42 offline tests covering uncertain subscription resolution, retries, reconnect races, repeated reconciliation acknowledgement, blocked state-changing operations, stale events, listener rollback, and stale-subscription cleanup. `user-data-session.js` measures 98.11% lines / 90.05% branches / 100.00% functions on PR #555's exact CI head. The broker-level order-safety regression also verifies that `createOrder`, `createCanonicalOrder`, `cancelOrder`, and `cancelAllOpenOrders` issue no mutation RPC after stream termination.
+- [x] Extract focused pure Binance adapters for symbol filters, canonical fills, order history, and order request parameters. Each new adapter has direct tests and 100% line/branch/function coverage.
+- [x] Follow RED → GREEN → REFACTOR for the vertical slices while preserving public exports, method signatures, result envelopes, decimal strings, event semantics, order-safety gates, and reconciliation acknowledgement behavior.
+- [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#525 are merged.
+- [x] Set risk-based package coverage thresholds after reviewing the critical recovery/operational paths. `packages/brokers/package.json` now enforces 90% lines / 80% branches / 80% functions for active Binance WebSocket runtime and shared adapter sources. TESTNET integration suites, test files, and test-only fixtures/helpers are excluded; this is a targeted broker-runtime floor, not a blanket workspace percentage.
+
+  Coverage review on PR #539's exact CI head `c6c073ee07043b63e83f1d72863e768bc903df51`: broker facade 97.25% lines / 90.79% branches / 96.00% functions; user-data session 99.37% / 91.28% / 100.00%; RPC client 99.06% / 93.39% / 94.12%; Streams client 93.47% / 85.78% / 81.03%; native transport 93.84% / 79.10% / 92.31%. This was the initial risk review before the targeted 90% lines / 80% branches / 80% functions threshold was enforced. Integration suites and test helpers remain excluded from production-code thresholds.
+
+  PR #543's exact CI head `dfbb79ba3de1e656270cb81ec176304e3d3e2b1b` raised native transport coverage to 100.00% lines / 91.25% branches / 96.15% functions. The legacy `adaptTrade` adapter measured 81.25% lines / 40.00% branches / 100.00% functions before PR #547; its direct required-field, ID, side, decimal-string, optional-fee, and timestamp tests raised it to 100.00% lines / 100.00% branches / 100.00% functions.
+  PR #547's exact CI head `d289dfe8fd96be47e67099e4dcfb1c71ebc3d26a` confirms the legacy adapter at 100.00% lines / 100.00% branches / 100.00% functions. PR #548 adds further Streams lifecycle tests for late connection completion after shutdown, invalid initial subscription lists, custom base URL paths, array-form server shutdown, pending-request cleanup, close cleanup failures, and throwing error observers.
+
+  PR #573's synchronized exact CI head `22a961bbb4565962ff86021002bbcc674c963f5c` passed 387/387 broker tests and all 5 required checks. Current runtime coverage: broker facade 97.24% lines / 92.15% branches / 96.08% functions; user-data session 99.37% / 91.28% / 100.00%; RPC client 99.06% / 93.39% / 94.12%; Streams client 98.57% / 92.80% / 82.76%; native transport 100.00% / 91.25% / 96.15%.
+
+The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
+
+### Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers` (complete)
+
+**Scope is the broker package itself.** This phase is not a Harvester refactor, does not move broker responsibilities into another package, and does not authorize changes to other domains. Harvester and bot packages may be inspected only when necessary to verify existing public broker consumers; they are not implementation scope.
+
+**Architecture objective:** make `@coinzilla/brokers` a cohesive, independently testable broker domain/application package with exchange-specific infrastructure adapters. The package owns the domain of broker capabilities and exchange interaction contracts—not portfolio policy, trading strategy, or bot product decisions.
+
+Target dependency direction:
+
+`Infrastructure adapters → Application use cases → Broker domain`
+
+Ports are defined at the boundary needed by application/domain policy; infrastructure implements those ports. Dependencies and imports must not point inward from domain/application to Binance SDK/protocol/transport implementation details.
+
+**Target responsibilities (derive names and module layout from real concepts; do not create empty template folders):**
+
+- **Domain:** exchange-neutral broker concepts, capability contracts, value objects, invariants, domain errors, and policies that genuinely belong to the broker domain. Keep Binance DTOs, wire names, sockets, and protocol envelopes out.
+- **Application:** broker-owned use cases and orchestration for account, order, market-data, and user-data capabilities. Coordinate domain behavior through explicit ports; do not embed transport mechanics.
+- **Application ports:** application-owned, narrow interfaces for user-data subscription/session capabilities and other demonstrated external effects. Keep them under `src/application/ports/`; infrastructure implements them. Avoid speculative generic abstractions and one-wrapper-per-method interfaces.
+- **Infrastructure:** Binance-specific RPC/Streams clients, transport, signing, endpoint configuration, protocol DTOs, request/response/event mapping, and adapters implementing broker ports.
+- **Composition/public API:** preserve the existing public broker exports and consumer contract while composing application services with Binance infrastructure.
+
+**Implementation sequence:**
+
+1. Inventory the current package modules, imports, responsibilities, public exports, and existing tests. Produce a dependency/responsibility map before moving code.
+2. Identify concrete domain rules and application workflows currently embedded in the Binance facade, user-data session, or protocol utilities. Do not relabel pure DTO mapping as domain logic.
+3. Define broker-owned domain contracts and application use cases from actual package behavior. Record important architectural decisions and dependency rules.
+4. Add ports at demonstrated side-effect boundaries and adapt Binance infrastructure to implement them.
+5. Refactor one vertical capability slice at a time (for example account reads, order lifecycle, market metadata, or user-data lifecycle). Preserve behavior and compatibility at every slice.
+6. Remove duplicated responsibilities and accidental dependencies only when tests and the dependency map demonstrate the improvement.
+7. Update package architecture documentation and this roadmap as the implementation evolves.
+
+**TDD is mandatory for each slice:** write a failing test first (RED), implement the smallest passing behavior (GREEN), then improve structure without changing behavior (REFACTOR). Verify focused tests, package tests, coverage, and relevant workspace consumers after each slice. Do not perform a directory-only rewrite or move code without behavioral/architectural tests.
+
+**Required test boundaries:**
+
+- Domain tests: deterministic, pure, no Binance client, socket, network, or credentials.
+- Application tests: use-case behavior with fake/in-memory ports; cover success, invalid state, failures, retries, timeouts, and uncertain outcomes.
+- Port/adapter contract tests: prove Binance infrastructure satisfies the application-facing contracts.
+- Infrastructure tests: protocol framing, signing, DTO mapping, transport lifecycle, reconnect, cleanup, and malformed responses.
+- Public broker contract tests: preserve exports, signatures, result envelopes, decimal strings, callback/event semantics, and safety gates.
+- Integration tests: remain opt-in, TESTNET-only, and separate from default offline tests.
+
+**Compatibility and safety constraints:**
+
+- Preserve current public exports, method signatures, result shapes, exact decimal strings, event semantics, reconciliation acknowledgements, and order-safety gates unless a separately reviewed compatibility change is approved.
+- Never blindly replay a state-changing RPC after an uncertain timeout or disconnect.
+- Never enable live order mutations or weaken TESTNET safety controls as part of architecture work.
+- Keep portfolio/position policy, strategies, and bot product behavior outside this package; this is a scope boundary, not a reason to keep broker-owned domain/application concepts out of brokers.
+
+**Phase 9 exit criteria (all required):**
+
+- The package has a documented, implemented domain/application/ports/infrastructure responsibility map that matches actual source dependencies.
+- Domain code has no dependency on Binance protocol, transport, or concrete infrastructure.
+- Application use cases depend on explicit ports rather than concrete Binance clients.
+- Binance infrastructure implements the ports and passes adapter contract tests.
+- Domain and application tests run offline without credentials or network.
+- Important failure, retry, timeout, reconnect, cleanup, and uncertain-outcome paths have deterministic coverage.
+- Existing public broker contracts and consumers remain compatible, or an approved migration is documented and verified.
+- Package tests and the configured coverage gates pass on the exact final PR head.
+- Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
+
+**Status:** complete. Slices 1–10 are merged. Slice 9 was merged in [PR #697](https://github.com/45s/coinzilla/pull/697) at `ae5d1a8a9c474cff46a6db72f4258787bb071669`; Slice 10 was merged in [PR #704](https://github.com/45s/coinzilla/pull/704) at `216f7c8397d83837c4e6d3202778469c2a4e85bf`. The Domain/Application/Ports/Infrastructure responsibility map matches the source tree, dependency direction is executable, the four public exports are pinned, and the user-data application workflow has offline port-based tests. The broker facade remains the concrete Infrastructure composition boundary.
+
+**Progress**
+
+- [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged via PR #596. Six pure domain tests; package tests and domain coverage gate passed.
+- [x] Slice 2 — normalize user-data client-port subscription results; merged via PR #599. The adapter unwraps Binance RPC envelopes; the session consumes IDs and ID arrays only. 399/399 broker tests and coverage passed.
+- [x] Slice 3 — normalize Binance user-data events and termination notifications in the adapter; the session retains only generic bounded identity state. Merged via PR #602; 400/400 broker tests and coverage passed.
+- [x] Slice 4 — move the session coordinator into `src/application/user-data-session.js` and initially define `src/ports/user-data-client-port.js` (relocated under `src/application/ports/` by Slice 6); runtime port validation and application/port coverage merged via PR #603. 405/405 broker tests and coverage passed.
+- [x] Slice 5 — move the Binance user-data client-port implementation into `src/infrastructure/binance/user-data-client-adapter.js`, co-locate deterministic adapter tests, and include infrastructure modules in the package coverage gate; merged via PR #605 on 2026-11-05 (merge commit `675b4c693abceecfd26a6401a7430f148c0ca1cc`).
+- [x] Slice 6 — move the application-owned `UserDataClientPort` contract and its deterministic contract tests from `src/ports/` to `src/application/ports/`; update application/adapter imports, package coverage includes, and architecture/roadmap docs. Merged via PR #691; contract/test contents unchanged, and package/workspace verification passed.
+- [x] Slice 7 — move the Binance-specific DTO/Entity adapters from `src/binance/shared/` to `src/infrastructure/binance/adapters/`; move all direct mapper tests with assertions unchanged; update relative test imports where needed, update the broker/root/helper imports, remove the obsolete shared coverage glob (the infrastructure glob now covers these modules), and preserve public exports/results. Merged via [PR #693](https://github.com/45s/coinzilla/pull/693) at `512b77f4a7745e2b5fbff7849dcfe136830acab8`; Brokers tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit passed.
+- [x] Slice 8 — extract the six direct `UserDataSession` tests from the broker setup suite into `src/application/user-data-session.test.js`; move broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test from `methods/` to `infrastructure/binance/broker-websocket/tests/`. Preserve assertions and keep application tests independent of Binance. Merged via [PR #695](https://github.com/45s/coinzilla/pull/695) at `5e7313a22303534dc555522fed22ccac0d3b08d9`; Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit passed.
+- [x] Slice 9 — move the complete former `src/binance/` tree (88 files) under `src/infrastructure/binance/`, preserving the internal `broker-websocket/` layout, tests, and fixtures. Update the root entrypoint, broker facade, user-data adapter, cross-folder imports, coverage globs, and opt-in integration scripts. Public exports, broker methods, result shapes, decimal fidelity, event semantics, and protocol behavior remain unchanged. Merged via [PR #697](https://github.com/45s/coinzilla/pull/697) at `ae5d1a8a9c474cff46a6db72f4258787bb071669` (verified head `96acccc94532641aaa5be4e2bc4cd314a512e150`); Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted tests, JavaScript syntax, and production dependency audit passed. TESTNET integration remained opt-in and was not run.
+
+---
+
+### Large-file review and scoped refactoring plan
+
+The following modules and test suites are review targets because of state ownership, historical size, or shared lifecycle fixtures. File size is a review signal, not a reason for mechanical splitting:
+
+| File | Current technical justification | Scoped follow-up plan |
+|---|---|---|
+| `infrastructure/binance/broker-websocket/broker.js` | Public facade coordinates the exchange RPC/Streams clients and preserves result/callback contracts. Pure mappings for symbol filters, canonical fills, order history, and order parameters are already extracted. | Keep simple RPC methods cohesive in the facade. `getAccountSnapshot` was inspected: balance normalization already delegates to shared `adaptSpotBalance`, while the only local transformation is a single safe-integer `updateTime` guard with no second caller. A separate one-function adapter would add indirection without improving testability, so this extraction is deliberately not needed. Revisit only if multiple account operations acquire a shared, independently testable mapping. Do not create one wrapper per RPC. |
+| `src/application/user-data-session.js` | The application coordinator owns subscriber state, reconnect/ack timers, remote subscription identity, and listener cleanup through the injected `UserDataClientPort`. | Keep its state machine cohesive; split only when a distinct use case or domain invariant warrants it. |
+| `application/user-data-session.test.js` and `infrastructure/binance/broker-websocket/tests/user-data-session*.test.js` | Direct Application tests exercise the injected port without Binance; broker-composition suites share deterministic scheduler, client, and broker fixtures. | Keep direct Application tests independent of Binance. Keep broker-level setup/recovery/reconciliation/cleanup scenarios and the opt-in integration test grouped under `broker-websocket/tests/`; shared broker fixtures remain in `test-helpers/`. Existing cases/assertions are preserved. |
+| `utils/rpc-client*.test.js` | Request/protocol and transport-lifecycle scenarios share one fake transport and deterministic timer setup. | Split the former 609-line suite into protocol/request (16 tests) and lifecycle/cleanup (13 tests) files; extracted the shared native transport/fake socket/fake clock setup into `test-helpers/rpc-client-fixtures.js`. All 29 test cases remain in their original order with unchanged bodies. |
+| `utils/streams-client.js` (585 lines) | One stateful coordinator owns desired/active streams, request acknowledgements, reconnect, rotation, and control timers. | Keep the lifecycle class cohesive. Consider extracting the pure raw-event-to-stream matching matrix only if it gains independent consumers or a substantially larger rule set. |
+| `utils/streams-client*.test.js` | Subscription, reconnect, acknowledgement, and cleanup cases share one FakeTransport/FakeClock fixture. | Split the former 661-line suite into protocol/subscription (10 tests) and lifecycle/cleanup (16 tests) files; extracted `FakeTransport`, client factory, flush helper, and acknowledgement helper into `test-helpers/streams-client-fixtures.js`. All 26 test cases remain in original order with unchanged bodies. |
 
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `674a3b10ed34fb444a9f2ef2179fc073c90b7827` (PR #365).
-2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
-3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
-4. PR #342 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
-5. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A successful socket connection or subscription is never proof that missed events have been reconciled.
-6. Phase 6 remains in progress until reconnect/reconciliation liveness tests and opt-in Binance TESTNET verification are complete. PR #343 removed fixed microtask-count polling from recovery race tests; the fake scheduler awaits async timer callbacks and tests use explicit recovery synchronization. Do not claim the broker can replay events missed during a disconnect.
+1. The source of truth is `develop`; the baseline for PR #527 was merge commit `322a60c0cb1c1f41933539cea5815a601f4a1e25` (PR #525).
+2. The DDD/TDD first tranche is merged through PRs #516–#525: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
+3. Latest package verification on PR #573 synchronized head `22a961bbb4565962ff86021002bbcc674c963f5c`: **387/387 broker tests passed**. The exact package coverage workflow passed on PR #573's synchronized head `22a961bbb4565962ff86021002bbcc674c963f5c`; the targeted 90% lines / 80% branches / 80% functions runtime gate passed. The pure Binance adapters retain direct deterministic coverage.
+4. Phase 6 is complete for deterministic offline lifecycle/recovery behavior: 42 session tests cover uncertain subscribe/unsubscribe outcomes, reconnect retry liveness, fresh acknowledgements after each interruption, order gates, and stale cleanup. The latest package coverage report measures `user-data-session.js` at 98.11% lines / 90.05% branches / 100.00% functions. A connected socket or successful subscription is never proof that missed events have been reconciled.
+5. Phase 8 remains open for opt-in TESTNET verification and long-running recovery/soak validation. The integration suite requires `BINANCE_TESTNET_INTEGRATION=1`, non-placeholder `BINANCE_API_KEY`/`BINANCE_API_SECRET_KEY`, and a TESTNET endpoint; the live-event case additionally requires `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1` and external TESTNET activity. These checks were not run in this offline workstream. Do not claim replay of events missed during a disconnect unless that behavior is proven.
+6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
-8. PR #347 is merged: RPC connection-startup rejection now detaches all registered RPC transport listeners. PR #350 is merged: native transport listener registration failures now roll back partial setup and close the socket. PR #351 is merged: Streams startup exceptions now detach listeners and close the transport. PR #353 made user-data listener registration transactional, PR #354 made listener detachment exhaustive and idempotent, PR #355 detaches listeners immediately on RPC close, PR #357 verifies uncertain final-subscriber unsubscribe outcomes, PR #359 cleans up failed reconnect attempts, PR #361 applies verified unsubscribe handling to stale subscription responses, PR #362 rejects malformed subscription lookup state, PR #365 makes RPC listener removal exhaustive, and PR #366 makes native transport close finalization resilient. The next test-coverage pass verifies the existing fallback when the underlying socket's `close()` itself throws, including error reporting, close notification, timer cleanup, and idempotent completion.
-9. Bot strategy implementation remains owned by `apps/bot-free-roll`; broker changes must preserve the callback/recovery acknowledgement contract and must not edit bot runtime code without an explicit cross-domain task.
-
+8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
+9. Phase 9 is complete: Slices 1–10 are merged, including the full Binance Infrastructure relocation (PR #697) and executable dependency/public API boundary enforcement (PR #704). The user-data recovery vertical slice is separated across Domain, Application, Application Ports, and Binance Infrastructure, with direct Application tests beside the workflow. Keep the broker facade as the current composition boundary; do not add one wrapper or port per RPC. Phase 8's manual TESTNET/soak validation remains pending.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -84,102 +278,90 @@ The migration is complete only when all of the following are true:
 
 ## 3. Verified baseline and compatibility contract
 
-The detailed Phase 0 inventory is maintained in [`docs/brokers-websocket-contract.md`](../../docs/brokers-websocket-contract.md). Re-read it and re-check current source/consumers before implementation; this section summarizes the decisions agents must preserve.
+The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the original SDK-to-native migration baseline. Its historical SDK dependency and export inventory is not the current state; use the current facts below and re-check source/consumers before changing a contract.
 
-### Dependency inventory
+### Current dependency inventory
 
-- `packages/brokers/package.json` currently declares `@binance/spot` as a third-party runtime dependency (audited version range `^34.0.3`; lockfile version `34.0.3`).
-- Internal workspace dependencies `@coinzilla/entities` and `@coinzilla/utils` may remain if still required.
-- Removing an import is not enough. Update the package manifest and lockfile, then inspect the production dependency tree and run the repository dependency audit.
-- Re-run a repository-wide search for `@binance/spot` before final removal.
+- `packages/brokers/package.json` has **no third-party runtime dependencies**. Its only runtime dependencies are workspace packages `@coinzilla/entities` and `@coinzilla/utils`.
+- The native WebSocket implementation uses Node.js built-ins (`WebSocket`, `node:crypto`) and requires Node.js `>=22.23.4`, with a runtime guard for patched bundled Undici.
+- Do not reintroduce the Binance SDK, third-party WebSocket packages, or REST trading fallbacks.
 
-### Public package exports to preserve initially
+### Current public package exports
 
-The current `packages/brokers/src/index.js` exports:
+The current `packages/brokers/src/index.js` exports exactly:
 
-| Export | Current source | Initial compatibility decision |
+| Export | Source | Contract |
 |---|---|---|
-| `BinanceSdkBroker` | `binance/broker-sdk/broker.js` | Preserve the exported name while replacing internals. A rename needs a separate consumer migration decision. |
-| `BinanceSdkConfig` | `binance/broker-sdk/binance-sdk-config.js` | Preserve the exported name initially; remove SDK-derived constants while keeping equivalent validated configuration. |
-| `BinanceBroker` | `binance/broker/broker.js` | Legacy custom REST broker. Deprecate; do not expand; remove only after usage checks. |
-| `BinanceStreamClient` | `binance/websocket-stream/stream-client.js` | Existing custom Streams client is incomplete. Its exported methods require a preserve/deprecate decision. |
-| `wsEventsMap` | `binance/websocket-stream/adapters/index.js` | Preserve unless consumer search proves it unused and removal is explicitly planned. |
-| `CoreBroker` | `broker.core.js` | Preserve shared base-class contract. |
+| `BinanceWebSocketBroker` | `infrastructure/binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
+| `BinanceWebSocketConfig` | `infrastructure/binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
+| `CoreBroker` | `broker.core.js` | Shared base class used by broker implementations, including Market Simulator |
+| `normalizeBinanceId` | `infrastructure/binance/adapters/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
 
-### Current repository consumer
+The module retains an internal `BinanceSdkConfig` alias for compatibility inside its own module, but it is not a separate public root export. The old SDK/REST broker and standalone legacy Streams exports are not current root exports. Do not restore or remove aliases without a consumer-backed compatibility decision.
 
-The Phase 0 audit found `apps/bot-free-roll` as the only workspace package declaring `@coinzilla/brokers`. Its source is read-only during this migration.
+### Verified workspace consumers
 
-The audited bot calls:
-- `connect()` and `disconnect()`.
-- `subscribeForUserData({ onEvent })`.
-- `subscribeForPrices({ symbol, onPrice })`.
-- `getSymbolFilters({ symbol })`.
-- `createOrder(input)`.
-- `cancelOrder({ symbol, orderId })`.
-- `getMyTrades({ symbol, orderId, limit })`.
+A scan of current workspace manifests found two consumers of `@coinzilla/brokers`:
 
-Compatibility includes the existing Promise/result behavior, callback payload shape, symbol casing, client order ID mapping, order defaults, normalized order/fill fields, and exact decimal strings for quantity, price, commission, and commission asset. Re-inspect the consumer and broker adapter tests before changing any of these assumptions.
-
-Other SDK broker methods remain compatibility candidates even if the current bot does not call them:
-- `getAssets()`
-- `getOpenOrders({ symbol? })`
-- `getOrder({ symbol, orderId })`
-- `getOrderHistory({ symbol, orderId?, limit? })`
-- `cancelAllOpenOrders({ symbol })`
-- `getPrices({ symbol })`
-
-Do not silently drop public methods because one current consumer does not call them.
-
-### Broker method to Binance operation map
-
-| Broker method | Binance Spot WebSocket API method | Security class |
+| Consumer | Usage | Compatibility contract |
 |---|---|---|
-| `getAssets()` | `account.status` | USER_DATA, signed |
-| `getOpenOrders({ symbol? })` | `openOrders.status` | USER_DATA, signed |
-| `getOrder({ symbol, orderId })` | `order.status` | USER_DATA, signed |
-| `getOrderHistory(...)` | `allOrders` | USER_DATA, signed |
-| `getMyTrades(...)` | `myTrades` | USER_DATA, signed |
-| `createOrder(input)` | `order.place` | TRADE, signed |
-| `cancelOrder(...)` | `order.cancel` | TRADE, signed |
-| `cancelAllOpenOrders({ symbol })` | `openOrders.cancelAll` | TRADE, signed |
-| `getPrices({ symbol })` | `ticker.price` | Public |
-| `getSymbolFilters({ symbol })` | `exchangeInfo` | Public |
+| `apps/harvester` | `createBinanceBrokerAdapter` wraps `BinanceWebSocketBroker` and implements Harvester's application-owned `BrokerPort`. | Preserve broker methods/results/events, exact decimal strings, recovery acknowledgement, and order safety. Harvester owns trading use cases and its port. |
+| `packages/market-simulator` | `HistoricalMarketBroker` extends `CoreBroker`; `SimulatedExecutionBroker` extends the historical broker. | Preserve `CoreBroker` construction, shared maps/state, and default unsupported-method behavior. Treat it as a live public extension point. |
 
-Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a starting map, not permission to guess undocumented behavior.
+Do not modify either consumer's implementation as part of a Brokers-owned refactor. Read them to verify compatibility and run their relevant tests through repository CI.
 
-### Existing public Streams inventory
+### Current broker operations and Binance mapping
 
-The old exported `BinanceStreamClient` exposes these stream methods, which need an explicit preserve/deprecate decision:
-
-| Method | Stream name |
+| Broker operation | Binance operation / behavior |
 |---|---|
-| `trade({ tickets })` | `<symbol>@trade` |
-| `kline({ tickets, interval })` | `<symbol>@kline_<interval>` |
-| `miniTicker({ symbol? })` | `<symbol>@miniTicker` or `!miniTicker@arr` |
-| `ticker({ symbol? })` | `<symbol>@ticker` or `!ticker@arr` |
-| `rollingWindowTicker({ windowSize, symbol? })` | `<symbol>@ticker_<windowSize>` or `!ticker_<windowSize>@arr` |
-| `bookTicker({ symbol })` | `<symbol>@bookTicker` |
-| `partialBookDepth({ symbol, levels, speed })` | `<symbol>@depth<levels>@<speed>` |
-| `diffBookDepth({ symbol, speed })` | `<symbol>@depth@<speed>` |
-| `aggTrade({ tickets })` | `<symbol>@aggTrade` |
-| `userData()` | Legacy REST listen-key path; do not confuse with the current SDK broker user-data subscription. |
+| `getAssets()` | `account.status` with zero balances omitted; legacy `Coin` values |
+| `getBalances()` | `account.status` including zero balances; canonical `Balance[]` |
+| `getAccountSnapshot()` | `account.status` including balances and validated source `updateTime` |
+| `getServerTime()` | `time` |
+| `getOpenOrders({ symbol? })` | `openOrders.status` |
+| `getOrder({ symbol, orderId })` / `getOrder({ symbol, clientOrderId })` | `order.status` using `orderId` or `origClientOrderId` |
+| `getCanonicalOrder({ symbol, orderId? , clientOrderId? })` | `order.status` plus canonical order adaptation |
+| `getOrderHistory(...)` | `allOrders`, preserving the established normalized legacy result |
+| `getCanonicalOrderHistory(...)` | `allOrders` plus canonical `CanonicalOrder[]` adaptation |
+| `getMyTrades(...)` | `myTrades`, preserving the established trade result |
+| `getFills(...)` | `myTrades` plus canonical `Fill[]` adaptation |
+| `createOrder(input)` / `createCanonicalOrder(input)` | `order.place`; preserve each method's current result contract |
+| `cancelOrder(...)` | `order.cancel` |
+| `cancelAllOpenOrders({ symbol })` | `openOrders.cancelAll` |
+| `getPrices({ symbol })` | `ticker.price` |
+| `getSymbolFilters({ symbol })` | `exchangeInfo` with symbol filter |
+| `getExchangeMarkets()` | Unfiltered `exchangeInfo`, adapted to canonical `Market[]` |
+| `subscribeForPrices({ symbol, onPrice })` | Public `<symbol>@aggTrade` stream |
+| `subscribeForBookTicker({ symbol, onBookTicker })` | Public `<symbol>@bookTicker` stream |
+| `subscribeForUserData({ onEvent, onStatus })` | Signed `userDataStream.subscribe.signature` on the WebSocket API connection |
 
-The audited current bot uses aggregate trade prices through `BinanceSdkBroker.subscribeForPrices()`. The other exported stream methods still require an explicit compatibility decision.
+Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a current mapping, not permission to guess undocumented behavior. `CoreBroker.getPrice()` remains the inherited unsupported default unless a concrete broker overrides it.
 
----
+### Current public stream surface
+
+The active public streaming methods are `subscribeForPrices` (aggregate trades) and `subscribeForBookTicker` (best bid/ask). Public stream protocol details, subscription limits, reconnect behavior, and payload contracts are internal infrastructure; do not reintroduce the old standalone `BinanceStreamClient` API as part of architecture work.
+
+### Compatibility invariants
+
+- Preserve public root exports and existing method signatures/results unless a separately reviewed migration plan exists.
+- Preserve exact decimal strings in canonical order/fill/balance and market-data contracts; do not route financial values through JavaScript `Number` where precision matters.
+- Preserve `onEvent({ event })`, optional status notifications, and explicit recovery acknowledgement semantics.
+- Treat state-changing RPC timeouts/disconnects as unknown outcomes. Never blindly replay order placement or cancellation.
+- Keep all default tests offline; TESTNET integration remains opt-in and TESTNET-only.
 
 ## 4. Architecture decisions and non-negotiable protocol rules
 
 ### Two distinct WebSocket roles
 
 **A. WebSocket API connection**
+
 - Request/response RPC for order, account, history, metadata, and other API operations.
 - Authenticated user-data subscription and push events.
 - Request IDs and pending-request correlation.
 - API-key authentication and signed request parameters where required.
 
 **B. Public WebSocket Streams connection**
+
 - Public market-data push events such as `<symbol>@aggTrade`.
 - Stream subscription/unsubscription messages and raw/combined stream envelopes.
 - Independent lifecycle, reconnect policy, and message adaptation.
@@ -257,7 +439,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Add a reusable WHATWG-style fake WebSocket with deterministic lifecycle and message delivery.
 - [x] Add a deterministic fake clock for timeout scheduling.
 - [x] Pin existing normalization and `toResult` behavior with tests.
-- [ ] Add RPC-specific regression cases for concurrent requests, malformed messages, unknown request IDs, duplicate/late responses, and disconnects with pending requests.
+- [x] Add RPC-specific regression cases for concurrent requests, malformed messages, unknown request IDs, duplicate/late responses, and disconnects with pending requests. `utils/rpc-client.test.js` covers concurrent/out-of-order correlation, malformed JSON and envelopes, unknown/duplicate/late IDs, disconnect settlement of all pending requests, timeout/send-failure cleanup, and uncertain state-changing outcomes; Phase 3 exact-head CI evidence is recorded below.
   - These cases must run against the native RPC client introduced in Phase 3. The current SDK owns its socket/correlation internals, so do not write misleading tests against a nonexistent native RPC implementation.
 - **Exit criteria:** existing broker compatibility behavior and reusable test seams are tested without live credentials or network access. RPC correlation/failure tests remain Phase 3 gates.
 - **PR:** [#256 — test(brokers): characterize Binance broker contract](https://github.com/45s/coinzilla/pull/256). Merged into the migration integration branch; no bot application files or runtime dependencies were added.
@@ -335,10 +517,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Verify failure-safe startup cleanup, partial-shutdown cleanup, idempotent disconnect, and callback/resource cleanup with deterministic tests; exact-head CI remains the verification gate.
 - [x] Complete the full broker contract and regression suite on the native client interfaces; Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit all pass on the exact PR head.
 - [x] Re-audit current consumers read-only against latest `main`; no bot application files were changed.
-**Read-only consumer contract audit (main `49c5aba675e71490123181d757641376be35c78a`):**
 
-- `apps/bot-free-roll/src/prepare-broker.js` constructs `BinanceSdkConfig` and `BinanceSdkBroker`, calls `connect()`, and calls `disconnect()` on startup failure. Constructor and lifecycle remain compatible.
-- `bot-free-roll.js` expects `subscribeForUserData()` to return a lifecycle handle with `disconnect()`, and each `subscribeForPrices()` result to expose `unsubscribe()`. The native broker returns both expected cleanup methods.
 - The bot consumes `getSymbolFilters()` as decimal strings and converts them to numbers itself; exact string outputs are preserved.
 - Fill reconciliation expects `getMyTrades()` to return an array of canonical fills. `adaptTrade` remains the normalizer.
 - Order execution consumes `createOrder()`/`cancelOrder()` results with IDs, status, and original/executed quantities. `adaptOrder` remains the normalizer.
@@ -349,10 +528,12 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 6 — User-data session lifecycle and recovery
 
-- [ ] Implement the documented `userDataStream.subscribe.signature` flow on the WebSocket API connection using existing HMAC `apiKey` + `apiSecret` credentials.
-- [ ] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method.
-- [ ] Do not carry forward the legacy REST listen-key timer.
+- [x] Implement `userDataStream.subscribe.signature` on the WebSocket API connection using the existing HMAC `apiKey` + `apiSecret` credentials. Verified in `src/application/user-data-session.js`, the Binance signing adapter, deterministic session tests, and the opt-in `user-data-session.integration.js` suite.
+- [x] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method. Repository source search under `packages/brokers/src` returns no `ed25519` or `session.logon` references.
+- [x] Do not carry forward the legacy REST listen-key timer. Repository source search under `packages/brokers/src` returns no `listenKey` references; the legacy REST/listen-key implementation was retired in Phase 7.
+
 #### Phase 6A — lifecycle observability and event idempotency (merged PR #285)
+
 - [x] Expose RPC socket-close notifications without changing existing request/event behavior.
 - [x] Detect explicit `eventStreamTerminated` events and unexpected API socket closure.
 - [x] Add an optional `onStatus` callback that reports `terminated` and `connectionClosed` with `recoveryRequired: true`, plus `rpcError` diagnostics without claiming a recovery gap; keep the existing `onEvent({ event })` contract unchanged.
@@ -367,6 +548,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 #### Phase 6B — reconnect, resubscribe, and reconciliation (split into 6B.1 and 6B.2)
 
 **6B.1 — single-subscription session manager and safe recovery coordinator (PR #288)**
+
 - [x] Maintain one remote signature subscription per account/API connection and fan out to local subscriber handles.
 - [x] Coalesce concurrent local subscribe calls; detach a handle locally and remotely unsubscribe only after the last handle is removed.
 - [x] Recreate the one-shot RPC client/transport after unexpected close; preserve the injected factory seam and intentional shutdown semantics.
@@ -379,14 +561,14 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Isolate callback exceptions and preserve connection-close observability even without active user-data handles.
 
 **6B.2 — reconciliation contract and integration verification (in progress)**
+
 - [x] Complete deterministic account-update / execution-report duplicate and recovery-acknowledgement coverage in Phase 6B.1.
 - [x] Document the consumer reconciliation procedure: `account.status` and `openOrders.status` for current snapshots; symbol-scoped `myTrades` / `allOrders` for available trade/order history. These cannot reconstruct every missed intermediate balance delta.
 - [x] Add opt-in Binance TESTNET coverage for signature subscription, forced API socket disconnect, reconnect/resubscription, read-only account/order/trade reconciliation queries, and explicit recovery acknowledgement.
 - [x] Add an additional opt-in event-receipt test gated by `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1`; it requires external testnet activity while the test runs and never places an order.
-- [ ] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. Default CI remains offline and skips these tests without credentials.
-- [x] Complete bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304) via [PR #314](https://github.com/45s/coinzilla/pull/314); [PR #315](https://github.com/45s/coinzilla/pull/315) adds repeated-interruption and shutdown hardening. This is bot-domain work; no bot files are changed by the Brokers domain.
-- [x] Re-audit the read-only bot consumer contract; broker changes do not modify bot application files.
+- [~] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. The repository owner has reported configuring repository secrets `BINANCE_TESTNET_API_KEY` and `BINANCE_TESTNET_API_SECRET_KEY`; secret presence/value is intentionally not inspected by agents. The **Unit Tests** workflow's `run_broker_testnet_read_only` manual input rejects placeholders and hard-disables order mutations and externally triggered live-event checks. **Next: dispatch on `develop` and record the exact run/commit/results.** Use a dedicated TESTNET key with account-read access and Spot trading/withdrawal permissions disabled. Default CI remains offline.
 - **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
+
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
 - [x] Confirm repository consumers use the supported WebSocket broker contract.
@@ -399,20 +581,23 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 8 — Operational hardening and completion
 
-- [~] Add opt-in Binance testnet integration coverage for connection, public stream, signed RPC, safe order lifecycle where appropriate, and user-data events.
+- [x] Add opt-in Binance TESTNET integration coverage for connection, public stream, signed RPC, independently gated safe order lifecycle, and user-data events. Both `broker.integration.js` and `user-data-session.integration.js` are present, assert TESTNET endpoints, and require explicit opt-in plus non-placeholder credentials. This marks test coverage implemented, not live TESTNET execution.
 
   Offline safety regression: the native broker integration suite now creates its broker only inside the credential-gated setup hook, so missing credentials produce a clean skip instead of a module-load exception. The suite asserts both configured WebSocket endpoints are Binance TESTNET before connecting. A deterministic unit test launches both integration suites with dummy non-placeholder credentials but no opt-in flag and verifies that they exit successfully as skipped.
 - [x] Require the explicit `BINANCE_TESTNET_INTEGRATION=1` opt-in in both native broker and user-data integration suites, in addition to non-placeholder credentials. The default unit suite proves both suites skip without network access even when dummy non-placeholder credentials are present.
   The opt-in flag is documented in `.env.example` and defaults to `0`. Live TESTNET protocol/order verification remains outstanding.
+- [x] Add an independent `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=1` gate around the order create/check/cancel integration case. The general TESTNET opt-in continues to permit read-only checks without enabling order mutations. Deterministic guard tests and both configuration flags are documented. PR #530 passed all six required `develop` CI contexts on synchronized head `216c4eeea2268399c4d1507c279bd38fb56a016d`; the broker package reported 349/349 tests passing. Live order execution remains intentionally unrun until a TESTNET environment is explicitly configured.
 - [x] Remove fixed microtask-count polling from user-data recovery unit tests. The fake scheduler now awaits asynchronous timer callbacks, and race tests await the session's recovery promise instead of relying on twelve `Promise.resolve()` turns.
 - [x] Document supported Node versions, required API permissions, endpoints, reconnect semantics, rate-limit handling, failure modes, uncertain order outcomes, and safe shutdown in `packages/brokers/README.md` (PR #345).
-- [ ] Verify broker package tests, full workspace tests, syntax checks, production dependency audit, and repository-required branch-protection checks.
-- [ ] Run opt-in TESTNET verification with explicitly configured credentials and record the exact runtime/environment/results; do not treat default CI as live protocol verification.
-- [ ] Review logs for secret leakage.
-- [~] Audit lifecycle cleanup. PR #347 fixed RPC client listener cleanup after transport connection rejection. PR #350 fixed partial native socket-listener registration. PR #351 fixed Streams listener cleanup for synchronous startup failures and unexpected close. PR #353 made user-data listener registration transactional. PR #354 made user-data listener detachment exhaustive and idempotent. PR #355 detaches session listeners immediately on RPC close. PR #357 reconciles uncertain final-subscriber unsubscribe outcomes. PR #359 cleans up listeners after failed replacement-client connections. PR #361 verifies stale subscription cleanup. PR #362 rejects malformed subscription lookup entries. This task makes RPC transport listener removal exhaustive even when a remover throws, preserving the original connect/disconnect result and reporting cleanup failures. Continue auditing stop/reconnect races before marking the lifecycle item complete.
-- [ ] Verify timers, sockets, pending requests, and listeners are cleaned up on shutdown and failure.
-- [ ] Re-audit all consumers and public exports.
-- [ ] Confirm no bot application files were changed by this migration.
+- [x] Document the manual GitHub Actions TESTNET secret names, repository-secret scope, least-privilege permissions, and the distinction between the read-only workflow and the separately gated order-mutation integration case. The read-only workflow must use a TESTNET key with Spot trading/withdrawals disabled; extra trading permission is unnecessary even though the workflow's mutation flag is hard-disabled.
+- [x] Audit and harden the manual TESTNET workflow's credential boundary. The prior job-level secret environment exposed credentials to checkout, tool setup, and dependency installation; placeholder matching was also case-sensitive, allowing uppercase placeholder values to reach integration suites that then skipped. Credentials are now scoped to the final integration step, and missing/placeholder validation fails closed regardless of placeholder casing. Order mutations and externally triggered event checks remain explicitly disabled. This workflow-policy hardening is not evidence of a live exchange run.
+- [x] Verify broker package tests, full workspace tests, syntax checks, production dependency audit, and repository-required branch-protection checks. PR #548 passed all required CI contexts on synchronized head `e7b5a0df1ee3c2ee00de5f20c785e738e3b4baa4`; broker package tests reported 370/370 passing. PR #549 then passed the package coverage gate enforcing 90% lines / 80% branches / 80% functions.
+- [~] Run opt-in TESTNET verification with explicitly configured credentials and record the exact runtime/environment/results; do not treat default CI as live protocol verification. The manual workflow performs read-only checks only. The repository owner reports that both required repository Actions secrets have been added; agents must not inspect or request their values. Before dispatch, verify the dedicated TESTNET key has account-read access and Spot trading/withdrawals disabled. **Pending manual dispatch on `develop` and evidence capture.** No live exchange requests/orders have been run as part of this documentation update.
+- [x] Review broker runtime logging for secret leakage. Inspected all broker logger call sites and the signing/config/RPC paths: no API key, API secret, signature, signed request parameters, or authenticated payload is logged; diagnostics contain contextual messages and caught error objects only.
+- [x] Review the remaining defensive Streams lifecycle branches. PR #555 adds deterministic coverage for obsolete initial-subscription cleanup when listeners change during reconnect, disconnect racing with the initial `LIST_SUBSCRIPTIONS` acknowledgement, and cancellation of the control-pump timer when its only queued request times out. The connection handshake now rechecks transport identity, open state, and manual-disconnect status after each awaited control request, so a superseded connection cannot issue stale unsubscribe/subscribe work. The request timeout clears the pump timer when no queued control work remains.
+  The raw matcher’s fallback remains a defensive false result: `validateStreamName` is the only ingress into the desired-stream map and rejects unsupported names; the raw-event matrix covers every supported event family. The array recursion fallback is not used by dispatch: `#handleMessage` expands parsed array payloads before calling the matcher. PR #573 synchronized exact CI head `22a961bbb4565962ff86021002bbcc674c963f5c` passed all 5 required checks with 387/387 broker tests; `streams-client.js` measured 98.57% lines / 92.80% branches / 82.76% functions.
+  Earlier lifecycle cleanup remains covered by PRs #347, #350, #351, #353, #354, #355, #357, #359, #361, #362, #365, #366, #532, #534, #543, #548, and #569.
+- [x] Verify timers, sockets, pending requests, and listeners are cleaned up on shutdown and failure. Deterministic coverage spans transport connect/close timeouts and listener removal, RPC pending-request/timer settlement and listener removal, Streams reconnect/manual shutdown cleanup, user-data reconnect/stop/final-subscriber races, and broker dual-client shutdown. PRs #532, #534, #543, and #548 add the late replacement-client, late resubscription, transport close, and Streams pending-request cleanup regressions.
 - **Exit criteria:** all required checks pass on the exact final PR head; opt-in integration results are recorded against the supported TESTNET environment; `develop` contains the verified implementation; all definition-of-done items in Section 1 are evidenced.
 
 ---
@@ -430,6 +615,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 ### Minimum failure matrix
 
 Cover relevant cases across layers:
+
 - invalid/missing parameters and unsupported stream names;
 - socket constructor failure, connection timeout, send failure, close during connect;
 - duplicate error/close events and messages after close;
@@ -452,6 +638,7 @@ The fake WebSocket and fake clock are test tools, not deliverables by themselves
 ### Commands
 
 Use the actual package scripts and workspace scripts from current manifests; verify them before assuming command names. At minimum, run:
+
 - broker package deterministic tests;
 - relevant workspace tests;
 - JavaScript syntax workflow/check;
@@ -510,6 +697,7 @@ Keep these files aligned:
 - Root `ROADMAP.md` — project-wide engineering roadmap and links to package-level roadmaps; do not move broker protocol implementation details back into the root file.
 
 When a new discovery changes an implementation decision:
+
 1. Verify it against current source, tests, consumer usage, and official documentation.
 2. Update this roadmap and the contract audit where appropriate.
 3. Record the date, old decision, new decision, evidence, and affected phases in the decision log below.
@@ -579,7 +767,6 @@ Re-check these official sources during implementation because Binance protocol d
 
 The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the sources reviewed and the findings at that audit date. Official docs remain authoritative if they change.
 
-
 ## 12. Cross-domain contract adoption
 
 ### Exact account balances (request #310)
@@ -588,28 +775,121 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [x] Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
 - [x] Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
 - [x] Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
-- [x] Consumer: Free-Roll recovery request #304 is integrated and verified through PRs #314/#315.
 
 ### Timestamped reconciliation snapshot ports (request #316)
+
 - [x] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
 - [x] Add validated `fromId` pagination to `getMyTrades()` and canonical `getFills()`, plus time-window filters to `getOrderHistory()` while preserving existing result shapes.
 - [x] Validate response-side trade, fill, and order cursor IDs before exposing them; reject values outside JavaScript's safe-integer range ([PR #322](https://github.com/45s/coinzilla/pull/322)).
 - [x] Keep full pages potentially incomplete by returning unchanged array results without a false `complete` claim; tests prove inclusive cursors can continue from the last returned ID + 1 without duplicates.
-- Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
 
 ### Canonical order-history records (request #321)
-- [~] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract.
+
+- [x] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract. Broker implementation and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
+- [x] Extend `getOrder()` to accept exactly one of `orderId` or `clientOrderId`; only Binance `order.status` error `-2013` maps to a successful `data: null`. Implemented and verified in PR #573, merged into `develop` at `c146309ac7edf1d525670b5cb7f8bda751d4b9a5`; 387/387 broker tests and the coverage gate passed.
 - Use exact `exchangeInfo` metadata for Market/Asset identity, preserve decimal strings and source timestamps, and map unsupported lifecycle states to canonical `UNKNOWN` without leaking Binance field names.
 - Reject unsupported order types, malformed records, and unsafe numeric IDs; do not convert financial values through JavaScript `Number`.
-- Consumer: Free-Roll FR-057 snapshot collection. Request: [#321](https://github.com/45s/coinzilla/issues/321).
 
 ## 13. Shared Entities contract adoption
 
 ### Canonical fills and commissions
 
-- [~] Additive `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values.
-- Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
+- [x] Additive `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values. Broker API and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
+- [x] Add `getExchangeMarkets()` to return canonical `Market` values for every symbol in the current unfiltered Binance `exchangeInfo` catalog and prime the broker's canonical market cache; delisted symbols remain outside this catalog.
+- Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate application consumers in this Brokers-owned change.
 - Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
-- Consumer migration is separate work. The Free-Roll recovery flow currently continues to use the compatibility `getMyTrades()` API until its owning domain deliberately adopts canonical fills.
-- Canonical fill API implementation is present on `develop`; consumer migration remains separately owned by the bot domain.
+- Canonical fill API implementation is present on `develop`; consumer migration remains separately owned by the consuming application domains.
+
+## Accepted cross-domain capability — Harvester book ticker (#506)
+
+- [x] Expose Binance `bookTicker` through the additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method while preserving the aggregate-trade `subscribeForPrices` contract. Broker API, immutable exact-string adapter, deterministic adapter/subscription tests, and README documentation merged in PRs #507 and #510; Harvester's fresh best-bid/best-ask POST-ONLY crossing validation and shutdown coverage merged in PRs #508 and #509.
+
+## 14. Mandatory autonomous DDD refactoring execution
+
+**Architecture source of truth:** [Brokers Package Architecture](./ARCHITECTURE.md). It defines the proposed target tree, dependency rules, responsibility map, TDD method, and phase exit criteria. This section tracks execution status; update both documents together when evidence changes.
+
+### DDD documentation and audit status
+
+- [x] Target architecture, dependency rules, and proposed tree documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+- [x] Existing user-data recovery vertical slice and current import direction documented.
+- [x] Package-wide responsibility/import and consumer audit is complete: production module imports, dependency direction, state ownership, test/coverage baseline, and both workspace consumers are recorded in ARCHITECTURE.md.
+- [x] Confirmed that the user-data infrastructure adapter slice is merged (PR #605); do not repeat it.
+- [x] Phase 9 slices 1–10 are merged, including complete Binance Infrastructure placement (PR #697) and executable dependency/public API enforcement (PR #704).
+
+**Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](./ROADMAP.md) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
+
+**Current next action:** Phase 9 is complete. Phase 8 remains open because read-only TESTNET account reads and recovery assertions have not passed. PR #720 merged into `develop` at `39f6ab666523cdee937f3003944dbc291f62a52e`; diagnostic PR #721 merged at `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. The credential-free GitHub Actions probe confirms that the hosted runner's Spot TESTNET API upgrade is denied with HTTP 451 and Binance's restricted-location eligibility response, while the TESTNET Streams endpoint upgrades successfully with HTTP 101. Do not retry the manual read-only account/recovery workflow on that runner. Do not ask the operator to change location. The hosted Spot TESTNET account API path is paused because the runner receives HTTP 451 with Binance's restricted-location eligibility response. Keep Phase 8 UNVERIFIED/PAUSED until an eligible, authorized environment is independently available. Do not retry the same blocked runner. Continue offline DDD/TDD work, deterministic tests, and CI. Any later read-only account/recovery validation and controlled soak still require separate authorization and must keep both safety flags preserved. Keep order mutation and externally generated user-data events disabled; preserve fail-closed reconciliation.
+
+**Important distinction:** WebSocket protocol/lifecycle hardening and DDD architecture migration are separate tracks. Preserve completed reliability work and its coverage. The goal is the correct Domain → Application/Ports → Infrastructure ownership, not adding more WebSocket layers.
+
+The DDD modernization is an internal refactor of a working package. **Do not rebuild or replace the working broker.** Preserve public contracts, runtime behavior, exchange integrations, result/event semantics, exact decimal handling, and consumer compatibility while improving internal boundaries.
+
+- Work only in `packages/brokers/**` unless a separately authorized repository-level metadata change or cross-domain request requires otherwise.
+- Characterize existing behavior first. Follow strict RED → GREEN → REFACTOR in small vertical slices; run deterministic tests after each change and maintain the package coverage gates. Do not weaken or delete existing tests to make a refactor pass.
+- Create as many focused PRs as necessary. Each task branch is short-lived, starts from the latest `develop`, and targets `develop`. Multiple coherent commits per task branch are encouraged.
+- The agent owns the full delivery loop: implement, test, document, synchronize, open PR, inspect CI, merge when safe, clean up, update this roadmap, and start the next task. **Do not stop to request routine user approval or wait for the user to ask you to continue.**
+- Merge a task PR into `develop` once its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage pass, the diff is focused, and existing broker behavior/compatibility has been verified. No routine human approval is required for task PRs into `develop`. Never bypass branch protection or merge with pending/failed/missing required checks.
+- After merge, verify the merge, update task status here, delete the source branch when no longer needed, and start the next incomplete DDD slice from the latest `develop`. Repeat until the refactor scope is complete.
+- A task is not complete merely because code or a PR exists. Every slice must be well tested, documented, CI-verified, and merged. A green CI badge does not excuse a behavior or compatibility regression.
+- If a genuine blocker prevents safe merge, state the exact blocker and evidence; fix it where possible and continue with independent safe tasks. Never claim tests were run when they were not.
+
+### Phase 9 implementation slice 10 — executable dependency-direction enforcement (PR #704)
+
+**Scope:** architecture enforcement and public API contract characterization only. No Binance WebSocket internals, runtime behavior, consumer adapter, or public export was changed.
+
+- [x] Add the architecture contract test before its scanner implementation (RED stage). The RED-stage commit was `b5410b217fac6ab20b272dec87b1e980e603422e`; GitHub Actions reported the Brokers unit-test and coverage jobs failed on that intentionally incomplete test commit. The TESTNET job was skipped.
+- [x] Add the Node-built-in scanner in `src/test-helpers/architecture-boundaries.js`; no dependency was added.
+- [x] Enforce Domain → no Application/Infrastructure/Bootstrap; Application → no Infrastructure/Bootstrap; Infrastructure → no Bootstrap. Bootstrap composition and Infrastructure → Application/Domain remain allowed.
+- [x] Add synthetic negative/control cases proving forbidden imports are detected and inward/composition imports are accepted.
+- [x] Add `src/index.contract.test.js` for the exact four root exports and public Binance broker construction/method availability without connecting.
+- [x] Verify the real source graph and all package/consumer checks on the final PR head. Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed: Brokers unit tests 411/411; Brokers coverage 98.73% lines / 93.62% branches / 94.94% functions against 90/80/80 thresholds; all workspace unit-test and coverage jobs; Harvester targeted regressions; JavaScript syntax; actionlint; production dependency audit. TESTNET integration was skipped. The documentation-only follow-up `43caec1a636b289e97e7ac1ee1b93b019af744fa` was included in final PR head `f611175838f99cf1861ab7a0a9b0e9fee849723c`; all required checks passed on that exact head and PR #704 was merged.
+
+**Exact contract coverage:** `src/architecture-boundaries.test.js`; `src/index.contract.test.js`; existing `src/infrastructure/binance/broker-websocket/broker.test.js` and operation suites under `src/infrastructure/binance/broker-websocket/tests/`; `src/infrastructure/binance/adapters/*.test.js`; `src/infrastructure/binance/user-data-client-adapter.test.js`; `src/infrastructure/binance/broker-websocket/helpers/adapters/user.test.js`. Harvester compatibility passed in the repository's `harvester-targeted-tests.yml` workflow on the verified source/test commit.
+
+**Closeout:** PR #704 merged into `develop` at `216f7c8397d83837c4e6d3202778469c2a4e85bf`. Its final head `f611175838f99cf1861ab7a0a9b0e9fee849723c` passed Brokers unit tests (411/411), Brokers coverage (98.73% lines / 93.62% branches / 94.94% functions), workspace tests and coverage, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. TESTNET was intentionally skipped. GitHub automatically removed the merged task branch (verified absent from branch search). Phase 9 is complete; Phase 8 remains pending its manual read-only TESTNET run and controlled soak validation.
+
+## 2026-11-08 — read-only TESTNET handshake failure
+
+- Workflow: [Unit Tests run #42483880274](https://github.com/45s/coinzilla/actions/runs/42483880274), manual dispatch on `develop`.
+- Exact tested commit: `6236f49dca53a2938b016b52802f907c90611b44`.
+- Result: all nine package unit-test matrix jobs passed; the opt-in `Run read-only Binance TESTNET integration` job failed.
+- Failure point: `BinanceWebSocketBroker.connect()` during the native WebSocket handshake. The captured error is a blank-message `TypeError` whose stack enters Node.js bundled Undici at `failHandshake` / `processResponse` / `#onSocketClose`. The broker setup failed before account reads or user-data recovery assertions could run; downstream “test did not finish” cancellations follow from setup failure.
+- Environment: workflow used Node.js 24.x and TESTNET-only endpoints asserted by the integration tests (`wss://ws-api.testnet.binance.vision/ws-api/v3` and `wss://stream.testnet.binance.vision/ws`). The owner confirms the configured credentials are Binance Spot TESTNET credentials with trading permissions. Secret values were not inspected or recorded.
+- Safety: `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0` and `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`; order placement/cancellation and externally generated user-data event tests remained skipped. Do not enable either flag as a diagnostic shortcut.
+- Interpretation: this run does not establish that credentials or account permissions are invalid. The observable failure is at WebSocket handshake time, before read-only broker operations. The missing `.env.development` message is informational in CI; the workflow injects credentials through GitHub Actions secrets.
+- Next: inspect safe handshake diagnostics (HTTP upgrade status when available, close code/reason, and underlying error cause) without logging credentials or signing material; verify TESTNET endpoint reachability and Node.js 24/Undici behavior from the runner; add a deterministic transport regression for the observed failure shape if reproducible. Re-run only the read-only workflow after a focused fix. Keep reconciliation fail-closed and order mutation disabled. A successful read-only run is still required before controlled live recovery/soak.
+
+## 2026-11-08 — native WebSocket handshake diagnostics (PR #721)
+
+- PR #720's documentation-only checkpoint merged into `develop` at `39f6ab666523cdee937f3003944dbc291f62a52e`; its exact head `b913a1c3024d476441a8c5844ac9e62c12d71997` had six successful CI workflows (JavaScript Syntax, Dependency Audit, Test Coverage, Utils Unit Tests, Unit Tests, and Harvester Targeted Tests).
+- The failed run #42483880274 used Node.js `v24.22.2`. The failure reached `NativeWebSocketTransport.connect()` and Node's bundled Undici `failHandshake`; the old transport forwarded only `event.error`, losing the ErrorEvent message and the subsequent close code/reason. The runtime guard had allowed transport construction, so the runtime met the guard's supported Node/Undici floor; the original run did not print the exact bundled Undici version.
+- The WHATWG WebSocket error event does not guarantee an HTTP upgrade status. The transport now records an HTTP status/statusCode only when the runtime exposes a valid numeric value; otherwise it explicitly reports it unavailable. It retains a sanitized underlying error name/message/stack, close code, close reason, and clean-close state. Sensitive-looking credential fields and URLs are redacted; endpoint URLs, headers, credentials, signatures, and RPC payloads are never included.
+- Exact-head GitHub Actions evidence: Node.js `v24.22.2`, bundled Undici `7.30.1`, runtime guard passed. A raw unauthenticated HTTP WebSocket upgrade to the Spot TESTNET API returned HTTP `451` with Binance's response `Service unavailable from a restricted location according to 'b. Eligibility'`; the API's native WebSocket failed with Undici `TypeError` and close `1006`. The raw Spot TESTNET Streams upgrade returned `101` with a valid `Sec-WebSocket-Accept`, and Node's native WebSocket opened. Thus runtime/protocol compatibility are verified; the API failure is the runner's location eligibility restriction, before authentication. The response does not identify the intermediary enforcing the restriction.
+- The diagnostic step reports the API restriction but is non-blocking, so the broker package tests and CI remain green. No account request or recovery assertion was run: the manual read-only integration job is skipped in PR CI and must not be retried on the same restricted runner.
+- Added deterministic transport tests for an Undici-style blank-message `TypeError`, optional HTTP status metadata, abnormal close code/reason, underlying cause retention, and redaction. The transport waits for close (bounded by the existing close timeout) before rejecting a failed handshake so close diagnostics are attached to the error delivered to the broker. Established-connection error classification remains separate.
+- Added a credential-free TESTNET probe to the manual read-only workflow and the `@coinzilla/brokers` pull-request matrix job. It sends raw unauthenticated WebSocket upgrade requests to the configured Spot TESTNET API and Streams endpoints, captures the HTTP upgrade status/body when rejected, validates the WebSocket accept hash on HTTP 101, and separately exercises Node's native WebSocket implementation. It prints Node.js and bundled Undici versions and checks the existing runtime guard. It sends no credentials, RPC messages, signatures, or order operations. Both workflow invocations are non-blocking; the manual job still runs the original read-only integration and reports its own result.
+- PR #721: [diagnose native TESTNET WebSocket handshake failures](https://github.com/45s/coinzilla/pull/721), merged to `develop` as `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. Exact head `ad48ae4bb71d81d0318a031f101f582a67cca083` passed JavaScript Syntax/actionlint, Dependency Audit, Utils Unit Tests, Harvester Targeted Tests, all nine workspace package-test jobs, and all package plus workspace coverage jobs. Brokers: 414/414 tests passed; coverage 98.72% statements, 93.39% branches, 94.98% functions. The read-only TESTNET integration job was skipped because the PR event is not the manual workflow dispatch.
+- Safety remains unchanged: `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0`, `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`, and no changes to order safety, reconciliation, or recovery acknowledgement gates. Phase 8 remains incomplete pending successful read-only account/recovery validation and a controlled live recovery/soak.
+
+## 2026-11-08 — established-socket Undici diagnostic correlation characterization
+
+Cross-domain request [#680](https://github.com/45s/coinzilla/issues/680) asks whether the native Node.js WebSocket runtime exposes an underlying socket error that can be safely attributed to the affected WebSocket client.
+
+- Undici documents `undici:websocket:socket_error` as publishing the underlying `Error` object only. The separate `undici:websocket:open` and `undici:websocket:close` channels include a `websocket` instance, but the socket-error channel does not include that instance or another documented connection identifier.
+- A process-wide subscriber cannot safely assign an uncorrelated socket error to the Binance WebSocket API socket versus the public Streams socket when both are active. Timing-based or last-opened-socket attribution would risk false diagnosis.
+- Added `utils/undici-socket-error-diagnostics.test.js`, an offline local-WebSocket characterization test. It opens a real Node native WebSocket against a loopback HTTP upgrade server and forces a post-connect peer reset without a WebSocket close frame. On Node 24.x the connection closes with code 1006, the `open` and `close` diagnostics identify the WebSocket instance, but `undici:websocket:socket_error` emits no event for this reset. Thus the channel is not guaranteed to provide an underlying error for every abnormal close; when it does publish, its documented payload is only an Error and has no documented WebSocket identity.
+- The first exact-head CI attempt on `14641d2d5e08a4e0fb6a51adb28cbe74c7bb013c` ran 415 Brokers tests: 414 passed and the new characterization failed because it expected one socket-error event but observed zero. That failure is the runtime evidence; the test was corrected to assert the observed silent-channel behavior for this close path.
+- This is characterization only: no global diagnostics subscriber, socket monkey-patch, timing heuristic, production transport behavior, public broker contract, or dependency was added.
+- **Verified and merged:** PR #725 merged into `develop` as `bf9e51e298535cf14f113343a5216f4b8a1ec80f`; exact tested head `b50d453d8846e82a2918b5d4752dfc8d81412ceb`. Brokers tests passed 415/415, Brokers coverage passed, and all six required offline CI workflows passed. The corrected test confirms the silent `socket_error` channel on the reproduced post-connect 1006 reset.
+- **Disposition:** established-socket diagnostic characterization is complete as a documented Node/Undici limitation for this failure shape. No safe per-client error correlation is exposed by the tested runtime. Do not add timing-based attribution or a global monkey-patch. Cross-domain issue #680 may be closed as investigated/documented; revisit only if a supported runtime exposes a reliable per-WebSocket socket-error correlation.
+
+## 2026-11-08 — multi-subscriber terminal recovery notification count
+
+Cross-domain request [#702](https://github.com/45s/coinzilla/issues/702) includes a broker-owned proof requirement that is independent of the still-open public acknowledgement-result contract.
+
+- Added exact per-subscriber assertions to the existing two-subscriber reconnect/recovery regression: the first local acknowledgement remains recorded-but-globally-pending (legacy boolean `false`), the final acknowledgement completes recovery, each still-active subscriber receives exactly one `reconciled` status for subscription `110`, and a repeated acknowledgement cannot publish another terminal status.
+- Asserted the acknowledgement reminder timer is cleared at global completion and the existing order-mutation gate remains blocked until that point.
+- Added a second regression proving that when the first subscriber has acknowledged and the second disconnects, the remaining active subscriber receives exactly one terminal `reconciled` status while the removed subscriber receives none.
+- No broker source, public API, Harvester consumer, or acknowledgement return semantics changed. The additive result-shape proposal remains pending owner agreement.
+- Exact-head CI verification is pending; do not mark the cross-domain contract issue complete until the agreed public acknowledgement semantics and consumer compatibility work are resolved.

@@ -1,6 +1,11 @@
 import { EM } from './error-messages.js'
 
+/** @typedef {'number'|'string'|'array'|'function'|'required'|'notEmptyString'|'notUndefined'|'notEmptyArr'} ValidationRule */
+/** @typedef {[value: unknown, rules: ValidationRule[], fieldName?: string]} ValidationItem */
+/** @typedef {{ value: unknown, msgs: string[], fieldName?: string }} ValidationError */
+
 // VR stands for "validation rule"
+/** @type {{ num: 'number', str: 'string', arr: 'array', fn: 'function', required: 'required', notEmptyString: 'notEmptyString', notUndefined: 'notUndefined', notEmptyArr: 'notEmptyArr' }} */
 export const VR = {
   num: 'number',
   str: 'string',
@@ -12,22 +17,50 @@ export const VR = {
   notEmptyArr: 'notEmptyArr',
 }
 
+const supportedRules = new Set(Object.values(VR))
+
 /**
- * Validate the declarative [value, rules, fieldName] tuples used by Validator.
- * The function is pure: it returns validation errors or throws without
- * changing the supplied items.
+ * Validate declarative [value, rules, fieldName?] tuples without mutating them.
+ * Soft mode returns all validation errors; hard mode throws that error array.
+ *
+ * Every rule must be an exported VR value. If supplied, isSoft must be boolean;
+ * omitting it preserves the default soft mode.
+ *
+ * @param {{ isSoft?: boolean, items: ValidationItem[] }} [options]
+ * @returns {ValidationError[]|undefined} Errors in soft mode, otherwise undefined when valid.
+ * @throws {Error|TypeError|ValidationError[]} For missing/malformed items, unsupported rules,
+ *   invalid isSoft configuration, or failed hard-mode validation.
  */
-export function validateItems({ isSoft = true, items } = {}) {
+export function validateItems(options = {}) {
+  const { items } = options
   if (!Array.isArray(items)) {
     throw new Error(EM.invalidParameter('items'))
   }
 
-  const errors = []
-  for (const [index, item] of items.entries()) {
+  const hasIsSoft = Object.hasOwn(options, 'isSoft')
+  if (hasIsSoft && typeof options.isSoft !== 'boolean') {
+    throw new TypeError('Validation option "isSoft" must be a boolean when provided')
+  }
+  const isSoft = hasIsSoft ? options.isSoft : true
+
+  // Validate the complete tuple/rule configuration before evaluating any values.
+  for (const [itemIndex, item] of items.entries()) {
     if (!Array.isArray(item) || item.length < 2 || !Array.isArray(item[1])) {
-      throw new TypeError(`Validation item at index ${index} must be [value, rules, fieldName?]`)
+      throw new TypeError(`Validation item at index ${itemIndex} must be [value, rules, fieldName?]`)
     }
 
+    for (const [ruleIndex, rule] of item[1].entries()) {
+      if (!supportedRules.has(rule)) {
+        const ruleDescription = typeof rule === 'string' ? JSON.stringify(rule) : typeof rule
+        throw new TypeError(
+          `Unsupported validation rule ${ruleDescription} at item index ${itemIndex}, rule index ${ruleIndex}; use an exported VR value`,
+        )
+      }
+    }
+  }
+
+  const errors = []
+  for (const item of items) {
     const [value, rules, fieldName] = item
     const messages = []
 
@@ -75,10 +108,10 @@ export function validateItems({ isSoft = true, items } = {}) {
   }
 }
 
-/** Whether a finite, non-zero number satisfies a required numeric field. */
+/** Whether a finite, non-zero number satisfies a required numeric field. @param {unknown} number @returns {boolean} */
 export const isRequiredNumberValid = (number) =>
   typeof number === 'number' && Number.isFinite(number) && Boolean(number)
 
-/** Whether a string contains at least one non-whitespace character. */
+/** Whether a string contains at least one non-whitespace character. @param {unknown} value @returns {boolean} */
 export const isRequiredNotEmptyString = (value) =>
   typeof value === 'string' && Boolean(value.trim())

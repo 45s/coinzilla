@@ -8,6 +8,8 @@ AI agents and contributors must follow [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.
 
 See [the contributing guide](docs/contributing.md), [domain ownership map](docs/workspace-package-map.md), [engineering standards](ENGINEERING_STANDARDS.md), and the [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md).
 
+See the [documentation index](docs/README.md) for repository-wide guidance, application documentation and historical records. [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md) defines how documentation is owned, maintained and verified.
+
 See the [architecture documentation](docs/architecture/README.md) for Coinzilla-wide architecture principles and decisions.
 
 ## Requirements
@@ -29,21 +31,22 @@ Run the unit tests:
 pnpm test
 ```
 
-Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command.
+Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command. The Brokers package uses native WebSocket API and Streams clients; it does not use the Binance REST API or a third-party Binance SDK.
 
-To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`. The Binance SDK integration tests are skipped automatically unless actual Binance TESTNET credentials are configured; no credentials are needed for the default unit tests.
+To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`. Integration suites remain skipped unless the explicit opt-in and non-placeholder Binance TESTNET credentials are configured; no credentials are needed for the default unit tests.
 
 ```sh
 pnpm --filter @coinzilla/brokers test:integration
 ```
 
-To run only the Binance SDK integration tests:
+To run the focused broker integration suites:
 
 ```sh
-pnpm --filter @coinzilla/brokers test:sdk
+pnpm --filter @coinzilla/brokers test:websocket
+pnpm --filter @coinzilla/brokers test:user-data-integration
 ```
 
-Integration tests need network access. Tests that place orders use TESTNET only and are intentionally not part of the default test/CI unit-test run. Never use production credentials for these tests or commit real credentials.
+Integration tests need network access and use TESTNET only. The WebSocket order-lifecycle suite can create and cancel a TESTNET order only when its separate mutation opt-in is enabled; the user-data session suite is read-only. These suites are intentionally not part of the default test/CI unit-test run. Never use production credentials for these tests or commit real credentials. See the [Brokers README](packages/brokers/README.md#testnet-integration-tests) for the complete safety gates and permissions.
 
 To run the utility package tests directly:
 
@@ -91,10 +94,10 @@ GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.
 
 - **JavaScript Syntax** runs actionlint, JavaScript syntax checks, and agent-policy checks.
 - **Unit Tests** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm test`.
-- **Utils Unit Tests** independently runs `node --test packages/utils`.
+- **Utils Unit Tests** independently runs `node --test packages/utils/src/*.test.js`.
 - **Test Coverage** runs workspace coverage and enforces package-specific coverage thresholds.
 - **Dependency Audit** runs `pnpm audit --prod --audit-level high` on pull requests, pushes to `main` and `develop`, and a weekly schedule.
 
 The Unit Tests and Utils Unit Tests workflows overlap with other workspace/package checks. Keep their independent status checks until branch-protection requirements have been reviewed; removing a workflow can invalidate a required status check.
 
-A workflow reporting success does not, by itself, prevent merging. Configure GitHub branch protection or a ruleset for `main` and require the relevant status checks. The repository's root `ROADMAP.md` records the currently configured check contexts and the remaining ruleset follow-up; re-check the live ruleset before changing workflow names or removing checks.
+A workflow reporting success does not, by itself, prevent merging. The active `core` ruleset protects `main` and `develop-core` protects `develop`; both currently require the same six status contexts documented in [`docs/ci-workflows.md`](docs/ci-workflows.md). The root `ROADMAP.md` records the verified configuration; re-check live rulesets before changing workflow names or removing checks.

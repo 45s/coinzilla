@@ -1,11 +1,14 @@
 # Harvester Architecture
 
+> **Audit companion:** See [DDD and Clean Architecture Audit](./DDD_CLEAN_ARCHITECTURE_AUDIT.md) for the source-based assessment, scorecard, current architectural risks, and sequenced follow-up roadmap. The audit is pinned to the source revision stated in that report; it is not a live status feed. The roadmap remains authoritative for delivery priority and implementation status.
+>
+> **Documentation rule:** this guide contains both stable architecture rules and implementation examples/snapshots. Treat claims about what is currently wired or not wired as time-sensitive; verify them against the current source and [Harvester Roadmap](../ROADMAP.md). Historical snapshots must not be used as current implementation instructions.
+
 ## Purpose
 
-Harvester uses one shared Trading Engine with multiple strategy policies. The engine coordinates trading workflows; a strategy decides what trading action should be taken. This lets Conservative (Free-Roll) and Aggressive use the same execution, broker, and portfolio capabilities without sharing their trading rules.
+Harvester uses one shared Trading Engine with multiple strategy policies. The engine coordinates trading workflows; a strategy decides what trading action should be taken. This lets Conservative and Aggressive use the same execution, broker, and portfolio capabilities without sharing their trading rules.
 
 This document records the current architectural direction. It does not define implementation APIs or settle the strategy and portfolio decisions listed in the roadmap.
-
 
 ## Product priority: make the trading loop work first
 
@@ -13,19 +16,39 @@ The architecture exists to deliver a running trading application, not to postpon
 
 For the first controlled TESTNET cycle, implement only the minimum execution safeguards needed for valid orders, balance/market-rule checks, fill correctness, duplicate prevention, and safe pause on uncertain state. Journal integration, durable state, comprehensive restart recovery/reconciliation, dashboards, optimization, and Aggressive are later work. Do not build those systems before the actual strategy-to-order-to-execution path exists and works. Keep the code simple and use existing contracts; do not add abstractions solely for hypothetical future needs.
 
+## Product rule: DDD must not delay the trading loop
+
+Harvester implements the Conservative strategy through its own domain, application, and infrastructure boundaries. Keep the lifecycle simple and improve it incrementally without changing approved financial behavior.
+
+The reference workflow is config → broker connection/price subscription → price → strategy decision → BUY/SELL submission → execution report → actual-fill accounting → next decision. DDD means pure strategy/domain rules, state-owning entities, injected use cases, broker adapters, and bootstrap composition. It does not mean adding a new layer, state machine, persistence store, or reconciliation process for every event.
+
+**Account/readiness rule:** use in-process actual-fill accounting for the ordinary strategy loop. Do not fetch a full account snapshot after each execution report unless a concrete broker-state uncertainty requires it. Perform the minimum specific free-balance/market-rule checks before submission. A clean TESTNET account is a controlled-test recommendation, not a reason to permanently prevent app startup. Never silently adopt external balances/orders as strategy-owned inventory.
+
+**Pending-order rule:** register PENDING before submission so events can be correlated, but keep it non-cancellable until broker acknowledgement provides a validated broker order ID. If a replacement is needed while submission is pending, defer that replacement intent; after acknowledgement, cancel and reconcile fills before placing the replacement.
+
+**Cancellation-outcome rule:** the broker reports `NOT_SENT` only when a local guard proves the exchange cancellation RPC was never invoked. Harvester preserves the last known canonical order state for that result, publishes `order.cancel_failed` with outcome `NOT_SENT`, and still pauses the pair. A failed/ambiguous state-changing RPC remains `UNKNOWN` / `UNCONFIRMED` until authoritative reconciliation. Harvester accepts `NOT_SENT` only on an unsuccessful broker result (`ok: false`) with that exact classification. A success-shaped, contradictory, missing, or unknown classification is treated as unconfirmed and remains fail-closed.
+
+Before changing an execution path, compare it with the approved Conservative Domain Specification and the current Harvester implementation. Keep only the minimum safeguards that prevent a demonstrated duplicate, oversell, double-accounting, or unknown-outcome hazard. Do not build generic polling, sleeps, or broad reconciliation to handle ordinary event ordering.
+
 ## Architectural roles
 
 | Concept | Responsibility | Architectural role |
 | --- | --- | --- |
 | Portfolio | Holds spot positions and applies fill-driven state changes | Domain entity |
 | Position | Tracks holdings and quote cash flow for its defined market scope | Domain entity |
-| Conservative strategy | Defines Free-Roll capital-recovery and free-asset rules | Domain policy |
+| Conservative strategy | Defines Conservative capital-recovery and retained-inventory rules | Domain policy |
 | Aggressive strategy | Defines rules for managing multiple BUY and SELL orders | Domain policy |
 | Trading Engine | Coordinates market updates, strategy evaluation, order workflows, and fill processing | Application layer / orchestrator |
 | Use case | Performs an application goal by coordinating domain objects and ports | Application layer |
 | Broker adapter | Communicates with an exchange and translates exchange-specific messages | Infrastructure / interface adapter |
 
 These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy policy is implemented as a plain pure function when its decision is deterministic. Calling it a domain policy describes its business responsibility; it does not imply a class or stateful strategy object.
+
+## Operational notifications
+
+Telegram is an optional outbound observer composed at the process boundary. Harvester owns the mapping from its application event vocabulary to the shared notifier package's allowlisted notification vocabulary; `@coinzilla/notifiers` owns Telegram formatting, queueing, delivery, and transport validation. The domain and trading engine must not depend on Telegram or its credentials.
+
+Notification setup and delivery are best-effort. A missing or invalid optional configuration disables notifications without blocking the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority.
 
 ## Entity versus policy
 
@@ -44,6 +67,7 @@ Harvester uses two complementary styles. Choose based on responsibility, not per
 **Calculations and decisions MUST be plain pure functions.** A pure function receives all required facts through arguments, derives its result only from those arguments, and has no observable side effects. The same inputs must produce the same output.
 
 Use plain pure functions for:
+
 - price, quantity, fee, and profit calculations;
 - trading-policy and strategy decisions;
 - validation and predicates;
@@ -79,6 +103,14 @@ Use cases are focused functions created with explicit dependencies. They coordin
 - **Portfolio records executed reality:** it changes from actual fills, not from market prices, strategy intentions, or accepted orders.
 
 The engine must not contain Conservative- or Aggressive-specific trading rules. Strategies must not duplicate broker communication or order-lifecycle mechanics.
+
+**Shared repricing safety invariant:** all strategy BUY repricing paths must consult
+the latest Portfolio Position inside the serialized engine transition before
+threshold evaluation or BUY cancellation/replacement. Repricing is allowed only
+when active `baseQuantity.amount` is exactly zero (or the Position is absent);
+retained `freeBaseQuantity` does not count. Conservative trailing BUY already
+enforces this. Aggressive grid repricing is not executable yet and must use the
+same gate when implemented.
 
 ## Typical interaction
 
@@ -123,11 +155,13 @@ Updated state available to the next strategy evaluation
 
 The diagram is a responsibility flow, not a mandated synchronous call sequence. Event delivery, serialization, persistence, and recovery contracts remain to be designed.
 
-### Implemented market-price and Portfolio flow
+### Historical implementation snapshot — superseded
+
+> **Historical note:** The following paragraphs describe an earlier Aggressive-first implementation snapshot. They are retained only as migration history and are not authoritative for current runtime behavior. In particular, statements below that the user-data stream is not normalized into canonical fills and that Aggressive is the only composed policy are obsolete. Use the [Harvester Roadmap](../ROADMAP.md) for current implementation status and the [DDD/Clean Architecture audit](./DDD_CLEAN_ARCHITECTURE_AUDIT.md) for the assessment and documentation follow-up.
 
 Bootstrap loads and validates trading-config.json, connects the selected broker, and subscribes only to enabled markets. The Binance adapter receives the broker package's normalized aggregate-trade stream; the application validates the symbol, decimal price string, and event timestamp before invoking the strategy. A failed subscription aborts startup and cleans up subscriptions already created. Shutdown unsubscribes before disconnecting.
 
-The first market-price input is the first aggregate-trade event after subscription; there is no initial REST ticker snapshot. Ordered/serialized market-event evaluation, backpressure, stale-event policy, and market-data readiness states remain future Trading Engine work.
+For TESTNET trading, bootstrap establishes the aggregate-trade subscription first, then requests the current Binance `ticker.price` snapshot through the existing broker `getPrices()` operation. If no fresh WebSocket event has already arrived, the snapshot is validated and immediately seeds Conservative evaluation; if neither source provides a usable price, startup fails and cleans up. Binance `ticker.price` is a request/response WebSocket API operation (not an HTTP REST call) and does not include a source timestamp, so Harvester stamps it at receipt. Aggregate-trade timestamps are checked against a 5-second maximum age and 1-second future-clock tolerance before evaluation. Cached prices are checked again before later order decisions, including decisions resumed by order/fill events. Stale events are ignored without canceling existing standing orders; a fresh price is required before another strategy decision. The engine enforces cached-price freshness at both order-submission gates, including after PENDING registration and before each action in a multi-order decision. If the price expires, the pending local record is removed and broker I/O is deferred until a fresh event. This does not add timers or persistence.
 
 Bootstrap composes the plain pure function `evaluateAggressiveStrategy`, an in-memory immutable Portfolio, and the `updatePortfolio` application workflow. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
 
@@ -164,7 +198,7 @@ This is a conceptual direction, not a request to create every directory immediat
 
 Both initial strategy modes use the same Trading Engine and Portfolio, but they do not control a pair simultaneously:
 
-- **Conservative (Free-Roll):** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
+- **Conservative:** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
 - **Aggressive:** may maintain multiple active BUY and multiple active SELL orders while it controls the pair. Its exact order planning and risk rules remain partly undecided.
 
 There is exactly one Position per trading pair, shared by both strategies. The Trading Engine grants operational control to only one strategy at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). It switches from Aggressive to Conservative when actual executed BUY investment exceeds that percentage of the pair's planned total quote budget; open/unfilled BUY orders and their reserved quote commitment are excluded. Conservative retains control until the entire position is sold and the invested quote capital has been recovered. If the position is losing money, the strategy must stop creating new BUY orders while keeping existing SELL orders active; it must never force a sale at a loss merely to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. During a handover, the outgoing strategy stops issuing new orders and the engine reconciles/cancels its outstanding orders before the incoming strategy acts. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved. See [Trading Strategies](./trading-strategies.md) for the behavior contract.
@@ -187,7 +221,7 @@ There is exactly one Position per trading pair, shared by both strategies. The T
 - [Trading Strategies](./trading-strategies.md)
 - [Harvester Roadmap](../ROADMAP.md)
 - [Harvester Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md)
-
+- [Broker–Harvester Trading Flow](./architecture/BROKER_HARVESTER_TRADING_FLOW.md)
 
 ## Implementation pattern for use cases
 
@@ -257,7 +291,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 2. The `updatePortfolio({ portfolio, fill })` workflow receives that normalized fill; it does not parse a raw Binance event.
 3. The use case locates/loads the relevant Portfolio or Position through its injected dependency, then delegates the state transition to the domain.
 4. It persists or publishes the resulting state only through explicit ports, according to the implemented persistence contract.
-5. Duplicate fills, partial fills, invalid quantities, and unsupported third-asset commissions must follow explicit domain/application rules—not be silently discarded. Third-asset commission fills are currently rejected.
+5. Duplicate fills, partial fills, invalid quantities, and third-asset commissions must follow the canonical domain rules—not be silently discarded. A third-asset commission requires reliable quote-currency valuation; otherwise the affected accounting transition fails closed. See [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 **Critical accounting rule:** order submission, acknowledgement, cancellation, rejection, and market-price updates do not change holdings. Only actual normalized fills change Portfolio state, including partial fills and actual commissions. See [Portfolio Domain](./domain/portfolio.md).
 
@@ -266,14 +300,20 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Responsibility | Harvester location / owner |
 | --- | --- |
 | Trading invariants, value construction, calculations, deterministic policy | `src/domain/` |
+
+Market-data timestamp freshness is a deterministic domain policy in `src/domain/market/is-market-data-fresh.js`; the caller supplies the current time and policy bounds.
 | One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
+
+Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its WebSocket API/stream sequence plus durable Journal barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial Binance WebSocket API `ticker.price` request/response seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket Streams-before-WebSocket API request/response ordering.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
-Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. The current market-price workflow injects `evaluateStrategy`; the current `updatePortfolio` workflow is a direct function because it has no external dependencies. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
+Startup configuration validation and exchange selection are coordinated by `src/bootstrap/config/resolve-harvester-options.js`. `TRADING_MODE` is mandatory and selects Binance TESTNET or LIVE independently of `NODE_ENV`; there is no runtime-profile, no-broker, or read-only startup fallback.
+
+Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. The market-price workflow injects `evaluateStrategy`. The state-owning `createPortfolioWorkflow` factory in `src/use-cases/create-portfolio-workflow.js` serializes fill accounting and recovery completion while delegating immutable state transitions to Portfolio and RecoveryLedger. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
 
 ### Testing pattern
 
@@ -285,17 +325,17 @@ Use dependency-injected functions for application workflows and plain pure funct
 
 The tutorial's companion implementation is a pattern reference, not a source of Harvester APIs. Reuse its separation of concerns and explicit dependency composition, while retaining Harvester's ports-and-adapters direction, existing package contracts, exact-decimal accounting, and reliability requirements.
 
-
 ## Exchange market metadata
 
 The Binance infrastructure adapter converts raw exchange filters into canonical `Market` and `TradingRules` entities. Exact decimal strings are preserved; absent or disabled optional bounds are represented as `UNSUPPORTED`, never as guessed zero-valued limits. Required price/quantity increments, minimum quantity, minimum notional, and the configured order type are validated for every enabled pair before Harvester subscribes to account events or market prices.
 
-This is only a market-metadata readiness gate. It does not yet initialize account-wide available balances, reserve quote/base assets, reconcile open orders, or enforce all min/max constraints at the final order-submission boundary. Those are separate P0 execution-safety requirements.
+Startup readiness also checks configured pair values against the exchange-reported assets and filters: `orderQuantity` is rounded down by the actual base-asset quantity increment and the effective quantity must satisfy supported minimum/maximum quantity bounds; the quote-asset `investment` allocation must be at least the minimum notional. The market symbol must match the configured pair. This is an early configuration-feasibility check, not a substitute for validating concrete orders.
 
+Immediately before submission, `validateOrderAgainstTradingRules` independently checks each actual order's price and quantity increments and all supported minimum/maximum price, quantity, and notional bounds using exact decimal arithmetic. Account-wide available balances, quote/base reservations, and authoritative post-only crossing validation remain separate execution-safety requirements.
 
 ## Account balance snapshot
 
-After the user-data stream is established, bootstrap loads a canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The same validation is repeated after each accounted execution. A failed or stale refresh blocks further order placement. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
+After the user-data stream is established, bootstrap loads a complete canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The complete snapshot remains in memory and is used for validation after each accounted execution; a failed or stale refresh blocks further order placement. Only the Journal event is filtered: it stores the de-duplicated base/quote asset balances for currently enabled pairs (including zero balances), not unrelated account assets. This filtering does not mutate or narrow the in-memory AccountSnapshot used by runtime checks. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
 
 This does not yet solve account-wide budget allocation or order reservations. Multiple pairs can share a quote asset, and the order lifecycle must reserve and release free/locked balances before any strategy is allowed to submit orders.
 
@@ -316,14 +356,17 @@ The Binance adapter prefers the broker's canonical order-placement operation
 so the application receives a `CanonicalOrder` acknowledgement rather than a
 raw exchange response.
 
-
 ## In-process Conservative trading engine
 
-`makeConservativeTradingEngine` connects market-price events to the pure
-Conservative policy and validated order-submission use case. It owns the
-in-process order registry, latest market prices, last completed BUY reference
-prices, and pair pause flags. Portfolio and RecoveryLedger remain owned by the
-bootstrap domain workflow and are supplied through explicit callbacks.
+`makeConservativeTradingEngine` receives a broker-independent strategy policy
+from bootstrap and connects its decisions to the validated order-submission
+use case. The policy supplies pure decision evaluation and trailing-BUY
+repricing calculations; the engine does not import strategy calculators. The
+engine owns the in-process order registry, latest market prices, last completed
+BUY reference prices, and pair pause flags. Portfolio and RecoveryLedger
+remain owned by the bootstrap domain workflow and are supplied through
+explicit callbacks. Conservative-specific order lifecycle sequencing remains
+in this engine; full multi-strategy lifecycle separation is still outstanding.
 
 Only order updates matching a registered Harvester client order ID are
 accepted. TRADE events must contain a canonical Fill and are applied through
@@ -352,10 +395,14 @@ claiming durable restart or stream-recovery reconciliation.
 ## Trailing BUY lifecycle
 
 The engine tracks whether the pair is in a trailing phase. A newly initialized
-pair and a pair whose recovery SELL has completed may trail its standing BUY
-upward. A BUY that has fully filled turns trailing off; the next standing BUY
-is fixed while the new recovery cycle is active. A profitable recovery SELL
-turns trailing back on, including for a next BUY that was already resting.
+pair may trail its standing BUY upward while its active Position quantity is
+zero. A BUY that has fully filled turns trailing off; the next standing BUY is
+fixed while active strategy inventory exists. A profitable recovery SELL may
+turn the trailing phase back on, including for a next BUY that was already
+resting, but the engine still suppresses trailing repricing until the actual
+Portfolio Position has zero active `baseQuantity.amount`. Retained
+`freeBaseQuantity` does not count as active inventory and does not prevent
+trailing from becoming eligible once active quantity reaches zero.
 
 A trailing adjustment occurs only after the last traded price rises by at
 least one full percentage step from the reference used for the current BUY.
@@ -364,3 +411,259 @@ cumulative execution quantity. If any quantity filled during cancellation,
 the fills are accounted and the pair pauses; it never submits a replacement
 from uncertain inventory. A clean zero-fill cancellation is followed by a
 new BUY below the current last trade, rounded down to the exchange tick.
+
+## Operational event journal
+
+**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Step 5a adds actionable Conservative decisions and order submission request/acknowledgement/failure events from the application engine boundary. Journal initialization is awaited for broker-connected startup and the mandatory durable PREFLIGHT account audit. Ordinary event delivery remains asynchronous, while order-submission and cancellation intent events are durably flushed immediately before their broker writes. Coordinated shutdown draining remains Step 7.
+
+Harvester may add an application-level EventBus and an optional Journal subscriber independently of trading progress. The first use case is ordinary operational visibility: configuration validated, application started/stopped, and broker connected/disconnected. This works without enabling trading and does not require TESTNET orders or fills. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
+
+The Journal is not trading-state authority and ordinary event delivery remains asynchronous. Two narrow durability barriers are required before exchange side effects: each order-submission intent and each cancellation intent must be durably flushed before the corresponding broker call. Broker-connected startup also requires a durable PREFLIGHT account audit.
+
+- Journal readiness and the PREFLIGHT audit gate broker-connected startup before market subscriptions or trading-engine activation.
+- Strategy evaluation, market-price handling, fill accounting, and the serialized user-data queue must never await Journal I/O, flush, or close.
+- Immediately before broker placement/cancellation, publish the allowlisted intent event and await a successful durable flush. If it fails, do not perform the exchange write and pause the pair.
+- Ordinary event publication remains best-effort. A synchronous EventBus publication exception or failed result must be contained and reported without escaping into unrelated trading workflows.
+- EventBus subscriber delivery and ordinary Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted; only the explicit barriers above establish durability.
+- Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
+- Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
+- On normal shutdown, stop market-price/book intake first and prevent new strategy decisions. Keep user-data intake active while the existing engine cancels only acknowledged, strategy-owned BUY orders and reconciles cancellation-racing fills. Preserve all SELL orders. Drain accepted user-data events, perform final owned-order reconciliation as verification only (without another BUY-cancellation pass), then stop user-data intake and drain again before the CLOSING audit and resource cleanup. Known open SELL orders are intentional and do not make CLOSING incomplete; unresolved BUYs or unknown order states do. For trading-enabled runs, unresolved cancellation, owned-order reconciliation, or user-data/accounting state fails shutdown and retains the trading-process lock. Other incomplete CLOSING audits remain recorded. A failed Journal close must not skip broker/resource cleanup.
+- Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
+
+Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. Broker-connected startup intentionally fails closed when Journal readiness or the durable PREFLIGHT audit is unavailable; order and cancellation intents likewise require a durable pre-write barrier.
+
+### Initial lifecycle event contract
+
+The application-owned event names are exported from `src/application/events/event-names.js`: `harvester.process_started`, `harvester.started`, `harvester.startup_failed`, `harvester.stopped`, `config.validated`, `broker.connected`, `broker.connection_failed`, `broker.disconnected`, `broker.status_changed`, `broker.subscription_established`, and `broker.subscription_failed`. `HARVESTER_EVENT_SOURCE` is `harvester`.
+
+`harvester.process_started` records the original process-entry timestamp, package version, build source, PID, and runtime-session ID. It is separate from `harvester.started`, which is emitted only after runtime startup succeeds. The process identity is captured once and attached to shared Logger context before startup diagnostics; DEBUG/TRACE file transports retain it separately from log data. Process-start Journal publication waits for Journal subscription readiness but remains best-effort and introduces no new durability barrier; broker-connected startup can include the admitted event in its existing PREFLIGHT flush. Configuration-only/no-broker startup does not wait for optional Journal setup. Startup-failure and shutdown paths do not separately await the process-start publication promise; the existing Journal close lifecycle remains unchanged and may wait for Journal readiness. If the process exits before the Journal subscriber becomes ready, the Journal event is not guaranteed, while DEBUG/TRACE logs retain the process identity. If readiness is delayed, Journal append order may place the process event after `harvester.started`, while the payload retains the original process-entry timestamp.
+
+`src/application/events/lifecycle-event-dtos.js` maps explicit application facts into small allowlisted `toResult({ data })` DTOs. Startup/configuration DTOs contain the broker identifier, current strategy mode, enabled market symbols, and trading-enabled flag as applicable; they never copy the full trading config, credentials, or account snapshot. Failure DTOs contain a bounded error name/message only: stack and cause are omitted, and common labelled secret/token/authorization values and URL credentials are redacted. These mappings are published from the process and bootstrap lifecycle boundaries. `broker.status_changed` is limited to meaningful user-data transitions exposed by the broker callback; unchanged `recovered` reminders are published once per application recovery generation, while every reminder still reaches the recovery coordinator as a retry trigger. `recovered` means the remote stream is restored but does not prove Harvester account/order reconciliation. Journal persistence remains best-effort and can miss events published before its asynchronous subscription is active. No financial decimal values are part of these initial lifecycle DTOs; future financial event contracts must preserve canonical decimal strings.
+
+The implementation is deliberately split into independently testable PRs and has no TESTNET prerequisite. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
+
+### Strategy decision and order submission events
+
+The Step 5a contract adds `strategy.decision`, `order.submission_requested`,
+`order.submitted`, and `order.submission_failed`. Only actionable decisions
+are published, after available-balance filtering; repeated NO_ACTION evaluations
+are omitted. The decision DTO contains the strategy, market symbol, reference
+price, and allowlisted order intents.
+
+The order-request event is published after the local PENDING canonical order
+has been registered and immediately before broker I/O. The submitted event is
+published only after the broker returns a canonical acknowledgement with the
+matching client order ID and the local order registry accepts it. Rejected or
+unknown outcomes include only safe identifiers plus a sanitized error
+name/message. The current broker result contract reports failed results as
+`REJECTED_OR_UNKNOWN`; transport exceptions and acknowledgement-registration
+failures are `UNKNOWN`. Do not claim a definitive exchange rejection unless the
+broker port later exposes that distinction. Price and quantity remain exact decimal strings.
+
+These events are emitted through the existing best-effort publisher. The engine
+does not await subscriber delivery or Journal persistence, and publication
+failure cannot prevent broker submission. Pair pause and trailing BUY
+cancellation events are Step 5b; recovery SELL cancellation is Step 5c.
+Execution and accounting facts remain Step 6.
+
+### Strategy pause and order cancellation events
+
+Step 5b adds `strategy.paused`, `order.cancelled`, and
+`order.cancel_failed`. A pause event is emitted only when a market first enters
+the paused set; repeated causes do not create duplicate transition events.
+The current engine has no pair-resume operation, so no resume event or new
+resume behavior is introduced.
+
+Trailing BUY cancellation success is published only after a canonical
+cancellation result has been accepted by the local order registry. Cancellation
+failure events contain stable order identifiers, a bounded outcome
+classification, and sanitized error details. A confirmed cancellation is still
+recorded even if subsequent fill reconciliation fails; that later failure
+remains represented by the existing pause/error behavior. Recovery SELL cancellation events are implemented separately in Step 5c, after the first pause and trailing BUY cancellation milestone. All event publication is best-effort
+and does not wait for subscriber delivery or Journal persistence.
+
+### Recovery SELL cancellation events
+
+Step 5c publishes the same `order.cancelled` and `order.cancel_failed`
+contracts for recovery SELL cancellation. Success is emitted only after the
+canonical broker response has been accepted by the local order registry.
+Unknown order state, unconfirmed cancellation, unregistered order, and a
+non-CANCELED broker response are represented as safe failure outcomes.
+
+The existing recovery SELL fill reconciliation remains authoritative and runs
+unchanged after the cancellation response. Event publication does not wait for
+Journal delivery and cannot alter accounting or pause behavior.
+
+### Applied execution events
+
+Step 6a adds `execution.fill_applied`. The event is published only after the
+existing serialized accounting workflow succeeds and reports `applied: true`,
+which means both immutable Portfolio and RecoveryLedger projections have
+already been committed by the composition boundary. Duplicate/idempotent Fill
+deliveries do not emit a second applied event.
+
+The DTO contains only stable fill/order identifiers, market symbol, side,
+exact decimal price and quantity values, liquidity role, optional execution
+time, and commission status. It does not contain raw exchange messages,
+commission objects, account snapshots, credentials, or mutable domain values.
+Event publication is best-effort and is not awaited by the user-data queue.
+Invalid/unowned execution and accounting-failure diagnostics remain Step 6b.
+
+### Duplicate Fill and recovery completion events
+
+Step 6c adds `execution.duplicate_fill` only when the accounting workflow
+explicitly reports `duplicate: true`; it does not re-apply or re-publish a
+duplicate as a newly applied Fill. It also adds `recovery.cycle_completed`
+only after the existing recovery completion workflow reports `eligible: true`
+and returns after committing the Portfolio free-quantity allocation and
+RecoveryLedger cycle reset.
+
+The recovery event contains only the market identifier, allocated free
+quantity, and realized net profit. It does not expose the full ledger or
+account snapshot. Both events are best-effort and are not awaited by trading
+or user-data workflows.
+
+## In-process engine transition serialization
+
+The Conservative engine serializes its public market-price, user-data, and explicit evaluation entry points through one in-process promise tail. Each transition holds the turn across strategy evaluation, pending-order registration, broker submission and acknowledgement, cancellation, fill-history reconciliation, and accounting callbacks. Internal workflow steps call their already-held transition functions directly; they must not enqueue themselves again. A rejected transition is isolated from the tail so later events can still run. This is process-local ordering only: it is not a cross-process lock, durable queue, exactly-once delivery guarantee, or restart-recovery mechanism.
+
+## In-memory WebSocket API/stream order reconciliation
+
+After the broker reports that its recovered user-data stream has completed
+stream-level reconciliation, bootstrap keeps the trading gate closed and
+starts WebSocket API request/response reads without blocking normal stream-event processing. Before the
+broker snapshot is applied, bootstrap drains user-data events received during
+the reads; the engine then validates and applies the snapshot in its serialized
+transition queue. The trading gate is reopened only after both steps succeed.
+
+During application recovery, the account-balance and account-wide open-orders audits are separate durability barriers. After the account snapshot is durably published, bootstrap revalidates the recovery generation and accounting state, drains queued user-data events, and compares the event sequence before it starts the open-orders audit. If the generation was superseded or an event changed the snapshot boundary, the open-orders audit is skipped and the snapshot window is retried. After the open-orders audit flush, bootstrap revalidates the generation and accounting state before draining more queued events; a superseded task does not drain under an obsolete generation. The final drain and stable event-sequence check must then succeed before broker acknowledgement.
+
+Immediately after the asynchronous owned-order WebSocket API/stream reconciliation returns, bootstrap revalidates the recovery generation and accounting state before certifying canonical ownership. A superseded generation or accounting failure must not set the ownership-reconciled flag and must not proceed to account or open-orders audits.
+
+The Conservative engine reconciles only orders already present in its
+in-memory `OrderRegistry`. For each owned symbol it reads `getOpenOrders()`;
+for each acknowledged owned order it reads exactly one matching
+`getCanonicalOrderHistory()` record and the order's canonical `getFills()`.
+Unknown/manual open orders are ignored and never registered or accounted.
+A pending order without an exchange-assigned broker ID, a missing or
+conflicting order-history record, an invalid open-order response, or a fill
+quantity that does not equal the order's cumulative executed quantity keeps
+the affected market paused and the application trading gate closed.
+
+WebSocket API fill-history responses are validated as a complete set before any are applied, deduplicated
+by stable `Fill.id` (market plus exchange trade ID), and ordered by execution
+time with trade ID as a deterministic fallback. The history-response execution quantity
+must match the canonical order's cumulative executed quantity, must not lag the
+latest stream-updated order quantity, and must contain every execution ID
+already processed from the stream. Each recovered execution is then passed
+through the existing serialized user-data transition and paired
+Portfolio/RecoveryLedger accounting workflow; there is no second accounting
+path. Intermediate cumulative quantities are represented as partial order
+updates, and the final recovered fill carries the authoritative terminal
+status. A later overlapping stream event therefore reaches the same
+idempotent accounting path and cannot account the execution twice.
+
+This is deliberately process-local reconciliation. It does not restore orders
+or accounting after a process restart, replay startup history, reconcile
+balances or external inventory, or adopt manual orders. It also does not claim
+durable exactly-once delivery. If broker request/response state is incomplete or inconsistent,
+trading remains paused rather than guessing.
+
+## Cancellation preconditions
+
+Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
+
+Market-price subscription setup now awaits an already-received WebSocket Streams tick before deciding whether a Binance WebSocket API `ticker.price` request/response seed is needed; it does not issue that request when the stream price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
+
+## Bootstrap composition and safety-halt workflow
+
+`bootstrap/start-harvester.js` is the process composition root. It resolves
+configuration, constructs domain/application state, connects adapters, wires
+user-data and market-data handlers, establishes startup gates, and exposes the
+runtime stop operation. It delegates account snapshots, market metadata,
+subscription setup, user-data event/status/recovery handling, and shutdown
+sequencing to focused bootstrap modules.
+
+The account-integrity safety halt is an application workflow in
+`src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
+execution or accounting failure is observed, it reconciles broker-owned order
+identities using `reconcileOwnedOrders({ recoveryMode: true })` before asking
+the trading engine to cancel only strategy-owned BUYs. Recovery mode applies
+canonical order and fill facts while suppressing strategy-driven recovery SELL
+cancellation/replacement; it does not skip ownership or fill reconciliation.
+The explicit `cancelOwnedBuyOrdersForSafetyHalt()` stage remains the only
+exchange-mutation stage in this workflow. Concurrent triggers share one
+in-flight task. Bootstrap supplies the live engine lookup, stopped-process
+predicate, and logger; the use case does not depend on broker SDK or
+process-global state.
+
+The source-verified shutdown sequence, cancellation/fill-race handling,
+CLOSING account audit, resource cleanup, and process-lock retention are defined
+in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
+
+## Runtime API and process boundary
+
+`startHarvester()` returns a frozen application runtime handle with the validated trading configuration, strategy mode, selected event publisher and application capabilities such as market-price processing, Portfolio/account access, readiness/status, subscriptions and `stop()`. It does **not** expose the raw broker port or a standalone `placeOrder()` function. Order placement must flow through the Conservative Trading Engine so strategy decisions, market rules, balance/commitment checks, order ownership and fill lifecycle cannot be bypassed by runtime callers.
+
+The process entry point in `src/index.js` composes process identity/logging, EventBus, the optional notifier, the Journal service, the broker-wide and Journal-directory process locks, runtime startup, signal handling and coordinated shutdown. Broker-connected startup requires the durable PREFLIGHT account audit before market subscriptions proceed. Detailed event payloads, Journal durability, lock acquisition/release, failure handling and shutdown ordering are maintained in [Journal Operations](./JOURNAL_OPERATIONS.md); do not duplicate those operational procedures here.
+
+## Client order identity
+
+The Conservative order executor creates one random process-local namespace at engine construction using a UUID-derived 22-hex-character value (88 bits), then increments a local sequence for each submitted order. Client IDs use the `h-<namespace>-<sequence>` shape; preflight validation uses a separate `preflight` marker within the same namespace. This avoids predictable counter-only identifiers being reused when a new process starts.
+
+A unique client ID is an identity/correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original identity; never create a replacement order merely because an acknowledgement was lost. Durable cross-process retry idempotency and process-restart state restoration are not implemented.
+
+## Recovery failure classification and retry contract
+
+Engine event-processing failures carry an explicit `failure` object with
+`category`, `stage`, and `retryable`. The outer event handler does not infer
+accounting corruption from a generic non-success result.
+
+`REST_RECONCILIATION` is a retained legacy failure-category identifier. It does not describe an HTTP REST transport: the current Binance broker performs canonical order/fill reads through WebSocket API request/response RPC.
+
+| Category | Meaning | Retry policy |
+|---|---|---|
+| `OWNERSHIP_INTEGRITY` | Unknown/mismatched order or Fill identity, or invalid ownership transition | Terminal process-lifetime accounting gate; never acknowledge recovery |
+| `ACCOUNTING_INTEGRITY` | Fill/accounting projection failure, conflicting duplicate, or order/fill quantity parity failure | Terminal process-lifetime accounting gate; never acknowledge recovery |
+| `ORDER_TRANSITION` | Cancellation/replacement transition failed after the owned order was matched | Keep readiness closed; require a fresh authoritative order/fill reconciliation |
+| `REST_RECONCILIATION` | Canonical order/fill history or owned-order WebSocket API request/response read failed/incomplete | Keep readiness closed; retry only through a new single-flight recovery attempt |
+| `DURABILITY` | Required order-intent Journal durability barrier failed | Keep readiness closed; retry only after a new attempt revalidates canonical state and durability |
+
+An unclassified engine failure defaults to terminal
+`ACCOUNTING_INTEGRITY`; missing metadata never becomes permission to retry.
+Retryable failures set a generation-scoped marker. A recovery attempt that
+observes a marker while draining queued events must stop before audit
+acknowledgement. A later broker reminder may clear that marker only at the
+start of a new single-flight attempt, which must repeat the complete canonical
+order/fill reconciliation, queued-event drain, account/open-order snapshots,
+and both durable audit flushes. The process-lifetime accounting latch is never
+cleared by a transport reconnect or by reclassifying an error.
+
+```mermaid
+flowchart TD
+    A[Owned user-data event] --> B[Conservative engine transition]
+    B --> C{Typed failure}
+    C -->|Ownership or accounting integrity| D[accountingFailed = true]
+    C -->|Order, broker request/response, or durability retryable| E[requiresReconciliation = true]
+
+A failure from an asynchronous recovery stage may update application failure
+state only while the attempt's captured recovery generation is still current.
+If a disconnect supersedes the attempt while a REST read or durable audit is
+pending, a later rejection from that obsolete operation is logged with the
+captured/current generations and original error, then discarded as stale. It
+must not set the process-lifetime accounting latch, create a retry marker for
+the current generation, publish subsequent recovery audits, or acknowledge
+the broker. The current generation remains blocked and must complete its own
+single-flight reconciliation and durable audit barriers before readiness can
+
+    D --> F[Readiness closed; no broker acknowledgement]
+    E --> G[Generation-scoped retryable failure marker]
+    G --> H[Abort current recovery before acknowledgement]
+    H --> I[Next recovered reminder starts a new single-flight attempt]
+    I --> J[Canonical orders and fills; drain queued events]
+    J --> K[Fresh account and open orders; durable RECOVERY audits]
+    K --> L[Revalidate generation and event sequence]
+    L --> M[Exact broker generation acknowledgement]
+    M --> N[Matching global reconciled status]
+    N --> O[Readiness may return]
+```

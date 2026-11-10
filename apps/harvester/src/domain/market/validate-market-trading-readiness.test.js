@@ -28,12 +28,13 @@ const makeMetadata = ({
       ...(omitRule === "MIN_NOTIONAL" ? [] : [
         { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
       ]),
+      { type: "MAX_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1000", asset: baseAsset }) },
     ],
   }),
   supportedOrderTypes,
 })
 
-const pairConfig = { makerPercent: 0 }
+const pairConfig = { makerPercent: 0, takerPercent: 0.1, investment: 100, orderQuantity: 100 }
 
 test("accepts a market with required increments, quantity/notional minimums and LIMIT_MAKER support", () => {
   const result = validateMarketTradingReadiness({
@@ -51,7 +52,7 @@ test("accepts a market with required increments, quantity/notional minimums and 
 test("selects regular LIMIT when configured maker commission is non-zero", () => {
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { makerPercent: 0.075 },
+    pairConfig: { ...pairConfig, makerPercent: 0.075, takerPercent: 0.2 },
     marketMetadata: makeMetadata({ supportedOrderTypes: ["LIMIT"] }),
   })
   assert.equal(result.orderType, "LIMIT")
@@ -98,12 +99,121 @@ test("rejects mismatched market, rules, and invalid configuration", () => {
   )
   assert.throws(() => validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { makerPercent: -1 },
+    pairConfig: { ...pairConfig, makerPercent: -1 },
     marketMetadata: makeMetadata(),
   }), /makerPercent/)
+  assert.throws(() => validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
+    pairConfig: { ...pairConfig, makerPercent: 100 },
+    marketMetadata: makeMetadata(),
+  }), /makerPercent/)
+  assert.throws(() => validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
+    pairConfig: { ...pairConfig, takerPercent: 100 },
+    marketMetadata: makeMetadata(),
+  }), /takerPercent/)
   assert.throws(() => validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
     pairConfig,
     marketMetadata: {},
   }), /canonical Market/)
+})
+
+test("enforces exchange quantity limits at exact boundaries and immediately outside them", () => {
+  const scenarios = [
+    {
+      name: "one increment below MIN_QUANTITY",
+      orderQuantity: 0.99,
+      expectedRule: "MIN_QUANTITY",
+    },
+    {
+      name: "exact MIN_QUANTITY",
+      orderQuantity: 1,
+    },
+    {
+      name: "exact MAX_QUANTITY",
+      orderQuantity: 1000,
+    },
+    {
+      name: "one increment above MAX_QUANTITY",
+      orderQuantity: 1001,
+      expectedRule: "MAX_QUANTITY",
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const evaluate = () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig: { ...pairConfig, orderQuantity: scenario.orderQuantity },
+      marketMetadata: makeMetadata(),
+    })
+
+    if (scenario.expectedRule) {
+      assert.throws(
+        evaluate,
+        new RegExp(scenario.expectedRule),
+        "The " + scenario.name + " configuration must be rejected after exchange-step rounding.",
+      )
+    } else {
+      assert.doesNotThrow(
+        evaluate,
+        "The " + scenario.name + " configuration is an inclusive supported boundary.",
+      )
+    }
+  }
+})
+
+test("accepts exact MIN_NOTIONAL equality and a configured quantity that rounds down to MAX_QUANTITY", () => {
+  const metadata = makeMetadata()
+  const result = validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
+    pairConfig: { ...pairConfig, orderQuantity: 1000.9, investment: 5 },
+    marketMetadata: metadata,
+  })
+
+  assert.equal(
+    result.market,
+    market,
+    "The enabled pair must remain bound to its canonical market when readiness boundaries are exactly satisfied.",
+  )
+  assert.equal(
+    result.orderType,
+    "LIMIT_MAKER",
+    "A zero maker fee must preserve the configured post-only order type at the readiness boundary.",
+  )
+  assert.deepEqual(
+    result.supportedOrderTypes,
+    ["LIMIT", "LIMIT_MAKER"],
+    "Readiness must return the exchange-supported order types unchanged.",
+  )
+  assert.equal(
+    result.tradingRules,
+    metadata.tradingRules,
+    "The validated rules must remain bound to the same canonical Market metadata.",
+  )
+  assert.equal(
+    Object.isFrozen(result.supportedOrderTypes),
+    true,
+    "The returned supported-order-type list must remain immutable.",
+  )
+})
+
+test("enforces MIN_NOTIONAL at exact equality and immediately below the configured investment", () => {
+  assert.doesNotThrow(
+    () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig: { ...pairConfig, investment: 5 },
+      marketMetadata: makeMetadata(),
+    }),
+    "An investment exactly equal to the exchange MIN_NOTIONAL is admissible.",
+  )
+  assert.throws(
+    () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig: { ...pairConfig, investment: 4.999 },
+      marketMetadata: makeMetadata(),
+    }),
+    /investment.*MIN_NOTIONAL/,
+    "An investment immediately below the exchange MIN_NOTIONAL must fail closed.",
+  )
 })

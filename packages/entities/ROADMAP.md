@@ -1,11 +1,44 @@
 # Entities roadmap
 
-**Owner:** `packages/entities/`  
+---
+status: active
+type: roadmap
+owner: entities
+---
+
+## Priority execution plan — current develop direction (2026-11-08)
+
+### IMPORTANT — preserve canonical financial and broker contracts
+
+1. **Strengthen cross-package contract conformance for financial values and execution facts.**
+   - **Why:** Entities is the shared language for Money, Quantity, Balance, Fill, Commission, Order, Market and broker outcomes. A subtle contract mismatch can corrupt accounting or reconciliation in every consumer.
+   - **Do:** maintain exact decimal-string invariants, immutable values, explicit fee asset identity and COMPLETE/PARTIAL/UNKNOWN fee semantics. Add consumer contract cases for partial fills, duplicate/conflicting trade IDs, unknown order outcomes, locked/free balances and missing commission data.
+   - **Verify:** test values at precision/scale boundaries, negative Money versus non-negative Quantity, malformed IDs, unsupported values and serialization round trips. Never convert financial values through JavaScript Number.
+
+2. **Keep Entities independent of infrastructure and application packages.**
+   - **Why:** importing logging, file-system or event infrastructure into shared value objects would make every consumer inherit unrelated dependencies and weaken dependency direction.
+   - **Do:** review imports and public exports; replace broad utility imports with narrowly scoped pure decimal/result helpers where practical. Keep exchange-specific parsing and strategy policy outside Entities.
+   - **Verify:** add an architecture test that rejects imports from Brokers, Harvester, Journal, Event Bus, DB and infrastructure modules. Run package and workspace tests after each import change.
+
+3. **Establish package-owned coverage and contract-test gates.**
+   - **Why:** the workspace aggregate can hide a weak shared package behind the coverage of other packages. Entities contracts are high leverage and need their own regression signal.
+   - **Do:** measure production-source coverage by package, identify untested invariants and add a package-scoped coverage command with a negative self-check. Choose thresholds from a real baseline; target at least 90% lines and 80% branches without adding meaningless tests.
+   - **Verify:** CI proves the command fails below threshold and passes on the exact PR head.
+
+### DEFERRED — only with a demonstrated contract need
+
+4. **Add new domain entities or expand existing contracts only for a real consumer.**
+   - **Why:** speculative abstractions increase coupling and make canonical contracts harder to evolve.
+   - **Do:** document the owning bounded context, invariants, compatibility and migration path before adding a public value/entity.
+   - **Verify:** add focused domain tests and consumer migration tests; preserve backward compatibility unless a deliberate versioned change is approved.
+
+**Owner:** `packages/entities/`
 **Purpose:** maintain small, exchange-neutral domain contracts shared by applications and adapters.
 
 Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
 
 ## Principles
+
 - Stable canonical identity; do not infer asset identity from exchange symbols.
 - Exact decimal representations for financial amounts and increments.
 - Immutable, explicit value contracts with validation at construction/boundaries.
@@ -29,7 +62,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - Both value types require an existing canonical `Asset` instance; ticker strings alone are not sufficient identity.
 - Amounts are decimal strings only, trimmed and canonicalized without floating-point conversion. Leading integer zeros and trailing fractional zeros are removed; negative zero becomes `0`.
 - Plain decimal notation is accepted. Exponent notation, non-finite values, malformed syntax, and unsupported precision are rejected.
-- Maximum supported precision is 256 total digits and 100 fractional digits, matching the existing Free-Roll decimal arithmetic bounds.
+- Maximum supported precision is 256 total digits and 100 fractional digits, matching the supported decimal arithmetic bounds.
 - `Money` permits negative values for losses, adjustments, and deltas. `Quantity` represents a magnitude and rejects negative values.
 - Both entities are immutable and expose independent `value` snapshots containing the canonical amount and an Asset snapshot. They intentionally provide no arithmetic methods.
 - Existing `Coin`, `Order`, and `ExecutedOrder` behavior is unchanged.
@@ -104,7 +137,6 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 ## Completion policy
 
 An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
-
 
 ## Shared utility reuse
 

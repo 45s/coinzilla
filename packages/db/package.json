@@ -1,0 +1,16 @@
+{
+  "name": "@coinzilla/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js",
+    "test:coverage": "pnpm test"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

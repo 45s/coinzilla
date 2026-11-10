@@ -1,4 +1,5 @@
 import { addDecimal, subtractDecimal, negateDecimal } from "@coinzilla/utils"
+import { validateFillCommissions } from "../fills/validate-fill-commissions.js"
 
 /**
  * Purely calculate the next Position amounts from its current values and one
@@ -8,12 +9,10 @@ export function calculatePositionFill({
   market,
   baseQuantity,
   quoteNetCashFlow,
+  spent = "0",
   fill,
 } = {}) {
   if (!market || !fill) throw new TypeError("calculatePositionFill requires market and fill")
-  if (fill.commissionStatus !== "COMPLETE") {
-    throw new TypeError("Portfolio requires complete commission data before applying a fill")
-  }
   if (fill.side !== "BUY" && fill.side !== "SELL") {
     throw new TypeError("Fill side must be BUY or SELL")
   }
@@ -21,21 +20,7 @@ export function calculatePositionFill({
     throw new TypeError("Fill market does not match Position market")
   }
 
-  const commissionByAsset = new Map()
-  for (const commission of fill.commissions) {
-    const assetId = commission.amount.asset.id
-    if (assetId !== market.baseAsset.id && assetId !== market.quoteAsset.id) {
-      throw new TypeError("Unsupported third-asset commission: " + commission.amount.asset.code)
-    }
-    const previous = commissionByAsset.get(assetId) ?? "0"
-    commissionByAsset.set(assetId, addDecimal({
-      left: previous,
-      right: commission.amount.amount,
-    }))
-  }
-
-  const baseCommission = commissionByAsset.get(market.baseAsset.id) ?? "0"
-  const quoteCommission = commissionByAsset.get(market.quoteAsset.id) ?? "0"
+  const { baseCommission, quoteCommission, thirdAssetQuoteValue } = validateFillCommissions({ market, fill })
   const baseDelta = fill.side === "BUY"
     ? subtractDecimal({ left: fill.quantity.amount, right: baseCommission })
     : addDecimal({ left: fill.quantity.amount, right: baseCommission })
@@ -51,16 +36,24 @@ export function calculatePositionFill({
     ? negateDecimal({
       value: addDecimal({
         left: fill.quoteQuantity.amount,
-        right: quoteCommission,
+        right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
       }),
     })
     : subtractDecimal({
       left: fill.quoteQuantity.amount,
-      right: quoteCommission,
+      right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
     })
+
+  const spentDelta = fill.side === "BUY"
+    ? addDecimal({
+      left: fill.quoteQuantity.amount,
+      right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
+    })
+    : "0"
 
   return Object.freeze({
     baseQuantity: nextBaseQuantity,
+    spent: addDecimal({ left: spent, right: spentDelta }),
     quoteNetCashFlow: addDecimal({
       left: quoteNetCashFlow,
       right: quoteDelta,

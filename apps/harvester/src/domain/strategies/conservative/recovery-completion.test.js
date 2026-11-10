@@ -1,17 +1,18 @@
-import test from "node:test"
+import nodeTest from "node:test"
+const test = (name, ...args) => nodeTest("[recovery-completion.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 
 const baseInput = {
   sellOrderFullyFilled: true,
-  buyCost: "10",
+  spent: "10",
   netSellProceeds: "10.01",
-  activeQuantity: "1.2",
+  activeQuantity: "1",
   keepQuantity: "1",
   minProfit: "0.01",
 }
 
-test("allocates exactly keepQuantity only after a fully filled profitable recovery SELL", () => {
+test("allocates exactly keepQuantity after a profitable recovery SELL", () => {
   assert.deepEqual(evaluateRecoveryCompletion(baseInput), {
     eligible: true,
     pause: false,
@@ -56,14 +57,36 @@ test("pauses when actual remaining inventory is below keepQuantity", () => {
   assert.equal(result.freeQuantity, "0")
 })
 
-test("retains exactly keepQuantity when residual active inventory is larger", () => {
+test("continues recovery without pausing when profit is below the floor but sellable inventory remains", () => {
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    activeQuantity: "1.25",
+    keepQuantity: "1",
+    netSellProceeds: "10.009",
+  })
+
+  assert.deepEqual(result, {
+    eligible: false,
+    pause: false,
+    reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    freeQuantity: "0",
+    realizedNetProfit: "0.009",
+  })
+})
+
+test("defers completion while any active residual remains above keepQuantity", () => {
   const result = evaluateRecoveryCompletion({
     ...baseInput,
     activeQuantity: "1.25",
     keepQuantity: "1",
   })
-  assert.equal(result.freeQuantity, "1")
-  assert.equal(result.eligible, true)
+  assert.deepEqual(result, {
+    eligible: false,
+    pause: false,
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    freeQuantity: "0",
+    realizedNetProfit: "0.01",
+  })
 })
 
 test("rejects invalid completion inputs", () => {
@@ -73,10 +96,51 @@ test("rejects invalid completion inputs", () => {
   }))
   assert.throws(() => evaluateRecoveryCompletion({
     ...baseInput,
+    minProfit: "0.009",
+  }))
+  assert.throws(() => evaluateRecoveryCompletion({
+    ...baseInput,
     keepQuantity: "-1",
   }))
   assert.throws(() => evaluateRecoveryCompletion({
     ...baseInput,
     sellOrderFullyFilled: "true",
   }))
+})
+
+
+test("completes a profitable cycle when keepQuantity is configured as zero", () => {
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    activeQuantity: "0",
+    keepQuantity: "0",
+  })
+
+  assert.deepEqual(result, {
+    eligible: true,
+    pause: false,
+    reason: null,
+    freeQuantity: "0",
+    realizedNetProfit: "0.01",
+  })
+})
+
+
+test("does not complete the actual ZRO recovery while the 0.04 residual remains above keepQuantity", () => {
+  const result = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: "64.02",
+    netSellProceeds: "64.03136454",
+    activeQuantity: "0.05",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
+  })
+
+  assert.deepEqual(result, {
+    eligible: false,
+    pause: false,
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    freeQuantity: "0",
+    realizedNetProfit: "0.01136454",
+  })
 })

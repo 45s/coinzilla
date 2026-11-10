@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
@@ -13,6 +14,9 @@ export function makeExecuteStrategyDecision({
   onPendingOrder,
   onAcknowledgedOrder,
   onSubmissionFailure,
+  onOrderValidationFailure = async ({} = {}) => {},
+  canSubmit = ({} = {}) => true,
+  onSubmissionDeferred = async ({} = {}) => {},
 } = {}) {
   if (typeof broker?.placeOrder !== "function") {
     throw new TypeError("makeExecuteStrategyDecision requires a broker placeOrder port")
@@ -21,12 +25,55 @@ export function makeExecuteStrategyDecision({
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
+    onOrderValidationFailure,
+    canSubmit,
+    onSubmissionDeferred,
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
+  const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
 
-  return async function executeStrategyDecision({ decision, marketMetadata } = {}) {
+  const validateDecision = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) => {
+    try {
+      if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
+        throw new TypeError("validateDecision requires a strategy decision with actions")
+      }
+      if (!marketMetadata?.market || !marketMetadata?.tradingRules) {
+        throw new TypeError("validateDecision requires canonical market metadata and trading rules")
+      }
+      const validatedOrders = []
+      for (const [index, action] of decision.actions.entries()) {
+        const pendingOrder = createPendingCanonicalOrder({
+          order: {
+            symbol: marketMetadata.market.symbol,
+            side: action.side,
+            type: action.type,
+            quantity: action.quantity,
+            price: action.price,
+          },
+          market: marketMetadata.market,
+          clientOrderId: "h-" + orderIdNamespace + "-preflight-" + index,
+          supportedOrderTypes: marketMetadata.supportedOrderTypes,
+        })
+        try {
+          validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
+        } catch (error) {
+          if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
+          throw error
+        }
+        if (!canSubmit({ order: pendingOrder })) {
+          return toResult({ data: { deferred: true, validatedOrders: [] } })
+        }
+        validatedOrders.push(pendingOrder)
+      }
+      return toResult({ data: { validatedOrders } })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+
+  const executeStrategyDecision = async ({ decision, marketMetadata } = {}) => {
     try {
       if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
         throw new TypeError("executeStrategyDecision requires a strategy decision with actions")
@@ -35,8 +82,8 @@ export function makeExecuteStrategyDecision({
         throw new TypeError("executeStrategyDecision requires canonical market metadata and trading rules")
       }
 
-      const pendingOrders = decision.actions.map((action) => {
-        const clientOrderId = "h-" + marketMetadata.market.symbol + "-" + (++orderSequence)
+      const pendingOrders = await Promise.all(decision.actions.map(async (action) => {
+        const clientOrderId = "h-" + orderIdNamespace + "-" + (++orderSequence)
         const orderIntent = {
           symbol: marketMetadata.market.symbol,
           side: action.side,
@@ -51,13 +98,27 @@ export function makeExecuteStrategyDecision({
           clientOrderId,
           supportedOrderTypes: marketMetadata.supportedOrderTypes,
         })
-        validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
+        try {
+          validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
+        } catch (error) {
+          await onOrderValidationFailure({ order: pendingOrder, error })
+          throw error
+        }
         return Object.freeze({ orderIntent, pendingOrder })
-      })
+      }))
 
       const submittedOrders = []
       for (const { orderIntent, pendingOrder } of pendingOrders) {
-        await onPendingOrder({ order: pendingOrder })
+        if (!canSubmit({ order: pendingOrder })) {
+          await onSubmissionDeferred({ order: pendingOrder, registered: false })
+          return toResult({ data: { deferred: true, submittedOrders } })
+        }
+        const pendingResult = onPendingOrder({ order: pendingOrder })
+        if (pendingResult && typeof pendingResult.then === "function") await pendingResult
+        if (!canSubmit({ order: pendingOrder })) {
+          await onSubmissionDeferred({ order: pendingOrder, registered: true })
+          return toResult({ data: { deferred: true, submittedOrders } })
+        }
         let brokerResult
         try {
           brokerResult = await broker.placeOrder({ order: orderIntent })
@@ -95,4 +156,6 @@ export function makeExecuteStrategyDecision({
       return toResult({ error })
     }
   }
+  executeStrategyDecision.validate = validateDecision
+  return executeStrategyDecision
 }

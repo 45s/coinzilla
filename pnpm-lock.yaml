@@ -169,27 +169,6 @@ importers:
 
   .: {}
 
-  apps/bot-free-roll:
-    dependencies:
-      '@coinzilla/entities':
-        specifier: workspace:*
-        version: link:../../packages/entities
-      '@coinzilla/brokers':
-        specifier: workspace:*
-        version: link:../../packages/brokers
-      '@coinzilla/event-bus':
-        specifier: workspace:*
-        version: link:../../packages/event-bus
-      '@coinzilla/journal':
-        specifier: workspace:*
-        version: link:../../packages/journal
-      '@coinzilla/utils':
-        specifier: workspace:*
-        version: link:../../packages/utils
-      '@coinzilla/notifiers':
-        specifier: workspace:*
-        version: link:../../packages/notifiers
-
   apps/harvester:
     dependencies:
       '@coinzilla/brokers':
@@ -198,18 +177,27 @@ importers:
       '@coinzilla/entities':
         specifier: workspace:*
         version: link:../../packages/entities
+      '@coinzilla/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
+      '@coinzilla/journal':
+        specifier: workspace:*
+        version: link:../../packages/journal
+      '@coinzilla/notifiers':
+        specifier: workspace:*
+        version: link:../../packages/notifiers
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
 
-  apps/market-simulator:
+  packages/market-simulator:
     dependencies:
       '@coinzilla/brokers':
         specifier: workspace:*
-        version: link:../../packages/brokers
+        version: link:../brokers
       '@coinzilla/utils':
         specifier: workspace:*
-        version: link:../../packages/utils
+        version: link:../utils
 
   packages/brokers:
     dependencies:
@@ -240,6 +228,8 @@ importers:
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../utils
+
+  packages/db: {}
 
   packages/notifiers: {}
 

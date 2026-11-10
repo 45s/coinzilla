@@ -1,22 +1,20 @@
 import { addDecimal, assertDecimalString, compareDecimal, maxDecimal, subtractDecimal } from "@coinzilla/utils"
-import { Fill, Market } from "@coinzilla/entities"
+import { Fill, Market, Money } from "@coinzilla/entities"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
-import { calculateFillCommissionRate } from "./fill-commission-rate.js"
 import { calculateRecoveryFillAccounting } from "./recovery-fill-accounting.js"
 
 /**
  * Immutable strategy-specific pooled recovery ledger for one market.
  *
- * It tracks quote-denominated acquisition cost, confirmed net SELL proceeds,
- * observed actual commission rates, and execution identities. Position
- * separately tracks active/free base inventory and applies base-asset
- * commissions to quantity.
+ * It tracks confirmed net SELL proceeds and execution identities. Position.spent
+ * is the authoritative accumulated BUY cost. buyCost remains only as a
+ * compatibility mirror for the deferred Journal/restart workstream (#654);
+ * Conservative strategy decisions must read Position.spent, never this mirror.
  */
 export class RecoveryLedger {
   #market
   #buyCost
   #netSellProceeds
-  #maxObservedCommissionRate
   #appliedFillIds
   #appliedFillFingerprints
 
@@ -24,7 +22,6 @@ export class RecoveryLedger {
     market,
     buyCost = "0",
     netSellProceeds = "0",
-    maxObservedCommissionRate = "0",
     appliedFillIds = [],
     appliedFillFingerprints = [],
   } = {}) {
@@ -34,15 +31,11 @@ export class RecoveryLedger {
     for (const [field, value] of Object.entries({
       buyCost,
       netSellProceeds,
-      maxObservedCommissionRate,
     })) {
       assertDecimalString({ value, field })
       if (compareDecimal({ left: value, right: "0" }) < 0) {
         throw new RangeError("RecoveryLedger " + field + " must be non-negative")
       }
-    }
-    if (compareDecimal({ left: maxObservedCommissionRate, right: "1" }) >= 0) {
-      throw new RangeError("RecoveryLedger.maxObservedCommissionRate must be less than one")
     }
     if (
       !Array.isArray(appliedFillIds) ||
@@ -67,7 +60,6 @@ export class RecoveryLedger {
     this.#market = market
     this.#buyCost = buyCost
     this.#netSellProceeds = netSellProceeds
-    this.#maxObservedCommissionRate = maxObservedCommissionRate
     this.#appliedFillIds = Object.freeze([...appliedFillIds])
     this.#appliedFillFingerprints = Object.freeze(
       appliedFillFingerprints.map((item) => Object.freeze({ ...item })),
@@ -78,7 +70,6 @@ export class RecoveryLedger {
   get market() { return this.#market }
   get buyCost() { return this.#buyCost }
   get netSellProceeds() { return this.#netSellProceeds }
-  get maxObservedCommissionRate() { return this.#maxObservedCommissionRate }
   get outstandingRecoveryAmount() {
     return maxDecimal({
       left: "0",
@@ -122,20 +113,12 @@ export class RecoveryLedger {
       market: this.#market,
       fill,
     })
-    const commissionRate = calculateFillCommissionRate({
-      market: this.#market,
-      fill,
-    }).rate
     const ledger = new RecoveryLedger({
       market: this.#market,
       buyCost: addDecimal({ left: this.#buyCost, right: accounting.buyCost }),
       netSellProceeds: addDecimal({
         left: this.#netSellProceeds,
         right: accounting.netSellProceeds,
-      }),
-      maxObservedCommissionRate: maxDecimal({
-        left: this.#maxObservedCommissionRate,
-        right: commissionRate,
       }),
       appliedFillIds: [...this.#appliedFillIds, fill.id],
       appliedFillFingerprints: [
@@ -152,14 +135,41 @@ export class RecoveryLedger {
   }
 
   /**
-   * Start a new recovery cycle after successful completion. Execution identity
-   * and observed fee history survive so late duplicate events remain safe and
-   * later SELL plans retain the highest actual commission rate seen.
+   * Start a new recovery cycle only after the configured minimum profit is realized against authoritative Position.spent. Execution identity
+   * survives so late duplicate events remain safe. Actual commissions are
+   * already included in cycle totals and are not converted into fee history.
    */
-  resetCycle() {
+  resetCycle({ minProfit, spent } = {}) {
+    assertDecimalString({ value: minProfit, field: "minProfit" })
+    if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+      throw new RangeError("RecoveryLedger.resetCycle minProfit must be at least 0.01")
+    }
+    if (!(spent instanceof Money)) {
+      throw new TypeError("RecoveryLedger.resetCycle requires authoritative Position.spent as Money")
+    }
+    if (
+      spent.asset.id !== this.#market.quoteAsset.id ||
+      spent.asset.code !== this.#market.quoteAsset.code
+    ) {
+      throw new TypeError("RecoveryLedger.resetCycle Position.spent must use the market quote asset")
+    }
+    if (compareDecimal({ left: spent.amount, right: "0" }) < 0) {
+      throw new RangeError("RecoveryLedger.resetCycle Position.spent must be non-negative")
+    }
+    if (compareDecimal({ left: spent.amount, right: this.#buyCost }) !== 0) {
+      throw new Error("RecoveryLedger buyCost compatibility mirror does not match authoritative Position.spent")
+    }
+
+    const realizedNetProfit = subtractDecimal({
+      left: this.#netSellProceeds,
+      right: spent.amount,
+    })
+    if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+      throw new RangeError("RecoveryLedger cannot reset before the configured minimum profit is reached")
+    }
+
     return new RecoveryLedger({
       market: this.#market,
-      maxObservedCommissionRate: this.#maxObservedCommissionRate,
       appliedFillIds: this.#appliedFillIds,
       appliedFillFingerprints: this.#appliedFillFingerprints,
     })
@@ -172,7 +182,6 @@ export class RecoveryLedger {
       netSellProceeds: this.#netSellProceeds,
       outstandingRecoveryAmount: this.outstandingRecoveryAmount,
       realizedNetProfit: this.realizedNetProfit,
-      maxObservedCommissionRate: this.#maxObservedCommissionRate,
       appliedFillIds: [...this.#appliedFillIds],
       appliedFillFingerprints: this.#appliedFillFingerprints.map((item) => ({ ...item })),
     })

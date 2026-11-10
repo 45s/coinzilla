@@ -5,6 +5,103 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const domainAreas = ['apps', 'packages'];
 
+const ignoredMarkdownDirectories = new Set([
+  '.git', 'node_modules', '.pnpm-store', '.cache', '.turbo', '.next',
+  'coverage', 'dist', 'build', 'vendor', 'tmp',
+]);
+
+/**
+ * Discover all repository Markdown/MDX files, excluding generated/vendor trees.
+ *
+ * @param {string} root Repository root.
+ * @returns {{ path: string, content: string }[]} Sorted Markdown documents.
+ */
+export function findMarkdownDocuments(root) {
+  const documents = [];
+
+  function visit(directory, relativeDirectory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (ignoredMarkdownDirectories.has(entry.name)) continue;
+        visit(
+          join(directory, entry.name),
+          relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name,
+        );
+        continue;
+      }
+
+      if (!entry.isFile() || !/\.mdx?$/i.test(entry.name)) continue;
+      const path = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      documents.push({ path, content: readFileSync(join(directory, entry.name), 'utf8') });
+    }
+  }
+
+  visit(root, '');
+  return documents.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+/**
+ * Ensure canonical documentation entry points remain present.
+ *
+ * @param {string} root Repository root.
+ * @param {string[]} requiredPaths Required relative paths.
+ * @returns {string[]} Missing-document errors.
+ */
+export function findMissingRequiredDocuments(root, requiredPaths) {
+  return requiredPaths
+    .filter((path) => !existsSync(join(root, path)))
+    .map((path) => `Required documentation file is missing: ${path}`);
+}
+
+/**
+ * Remove fenced and inline code before scanning Markdown destinations.
+ * @param {string} content
+ * @returns {string}
+ */
+export function removeCodeExamples(content) {
+  const output = [];
+  let activeFence = null;
+
+  for (const line of content.split(/\r?\n/)) {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (activeFence) {
+      if (fence && fence[1][0] === activeFence.character && fence[1].length >= activeFence.length &&
+          /^ {0,3}(?:`{3,}|~{3,})\s*$/.test(line)) {
+        activeFence = null;
+      }
+      continue;
+    }
+    if (fence) {
+      activeFence = { character: fence[1][0], length: fence[1].length };
+      continue;
+    }
+    output.push(line);
+  }
+
+  return output.join('\n').replace(/(`+)[\s\S]*?\1/g, '');
+}
+/**
+ * Extract destinations from Markdown inline links and reference definitions.
+ * Code examples and HTML comments are excluded.
+ * @param {string} content Markdown source.
+ * @returns {string[]} Link destinations in source order.
+ */
+function extractMarkdownLinkDestinations(content) {
+  const source = removeCodeExamples(content).replace(/<!--[\s\S]*?-->/g, '');
+  const destinations = [];
+  const inlineLinks = /!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))/g;
+  const referenceDefinitions = /^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*(?:<([^>]+)>|([^\s]+))/gm;
+
+  for (const match of source.matchAll(inlineLinks)) {
+    destinations.push(match[1] || match[2]);
+  }
+  for (const match of source.matchAll(referenceDefinitions)) {
+    destinations.push(match[1] || match[2]);
+  }
+
+  return destinations;
+}
+
 export function findInstructionDirectories(root) {
   const directories = [];
 
@@ -48,16 +145,14 @@ function comparePathMaps(actualDirectories, mappedDirectories, documentName) {
   return gaps;
 }
 
-export function findOwnershipGaps(directories, ownershipDocument, workflowDocument) {
-  return [
-    ...comparePathMaps(directories, extractMappedPaths(ownershipDocument, '/'), 'DOMAIN_OWNERSHIP.md'),
-    ...comparePathMaps(directories, extractMappedPaths(workflowDocument, '/\\*\\*'), 'AI_AGENT_WORKFLOW.md'),
-  ];
+export function findOwnershipGaps(directories, ownershipDocument) {
+  return comparePathMaps(directories, extractMappedPaths(ownershipDocument, '/'), 'DOMAIN_OWNERSHIP.md');
 }
 
 
 /**
- * Find broken relative Markdown links in the repository's central policy documents.
+ * Find broken relative Markdown links in all discovered repository Markdown/MDX documents.
+ * Inline links and reference definitions are checked; code examples and HTML comments are ignored.
  * External URLs, mail links, and same-document anchors are intentionally ignored.
  *
  * @param {string} root Repository root.
@@ -68,19 +163,246 @@ export function findMissingLocalLinks(root, documents) {
   const gaps = [];
 
   for (const document of documents) {
-    const links = document.content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
-
-    for (const match of links) {
-      const target = match[1];
+    for (const target of extractMarkdownLinkDestinations(document.content)) {
       if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(target)) continue;
 
-      const relativeTarget = decodeURIComponent(target.split(/[?#]/, 1)[0]);
-      if (!relativeTarget) continue;
+      const rawPath = target.split(/[?#]/, 1)[0];
+      if (!rawPath) continue;
+
+      let relativeTarget;
+      try {
+        relativeTarget = decodeURIComponent(rawPath);
+      } catch {
+        gaps.push(document.path + ' has malformed URL-encoded local link path "' + rawPath + '"');
+        continue;
+      }
 
       const absoluteTarget = resolve(root, dirname(document.path), relativeTarget);
       if (!existsSync(absoluteTarget)) {
-        gaps.push(`${document.path} links to missing path ${target}`);
+        gaps.push(document.path + ' links to missing path ' + target);
       }
+    }
+  }
+
+  return gaps.sort();
+}
+
+/**
+ * Collect GitHub-style heading slugs and explicit HTML anchor IDs.
+ *
+ * @param {string} content Markdown/MDX source.
+ * @returns {Set<string>} Anchor identifiers present in the document.
+ */
+function collectMarkdownHeadingAnchors(content) {
+  const anchors = new Set();
+  const lines = content.split(/\r?\n/);
+  const codeCharacter = String.fromCharCode(96);
+  const fencePattern = new RegExp('^ {0,3}(' + codeCharacter + '{3,}|~{3,})(.*)$');
+  const inlineCodePattern = new RegExp(codeCharacter + '+([^' + codeCharacter + ']*?)' + codeCharacter + '+', 'g');
+  const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
+  let activeFence = null;
+  let inHtmlComment = false;
+  let inFrontMatter = lines[0]?.trim() === '---';
+
+  function addHeading(rawHeading) {
+    if (/[{}]/.test(rawHeading)) return;
+
+    const plainText = rawHeading
+      .replace(/<!--.*?-->/g, '')
+      .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+      .replace(inlineCodePattern, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\\([#.+!?()[\]{}])/g, '$1')
+      .replace(/[*~]/g, '')
+      .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&nbsp;/gi, ' ');
+
+    const baseSlug = plainText
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
+      .trim()
+      .replace(/ /g, '-');
+    if (!baseSlug) return;
+
+    let slug = baseSlug;
+    let suffix = 0;
+    while (anchors.has(slug)) {
+      suffix += 1;
+      slug = baseSlug + '-' + suffix;
+    }
+    anchors.add(slug);
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    let line = lines[index];
+
+    if (inFrontMatter) {
+      if (index > 0 && line.trim() === '---') inFrontMatter = false;
+      continue;
+    }
+
+    if (inHtmlComment) {
+      if (line.includes('-->')) inHtmlComment = false;
+      continue;
+    }
+
+    if (line.includes('<!--')) {
+      if (!line.includes('-->')) {
+        inHtmlComment = true;
+        continue;
+      }
+      line = line.replace(/<!--.*?-->/g, '');
+    }
+
+    const fenceMatch = line.match(fencePattern);
+    if (activeFence) {
+      const isClosingFence = fenceMatch &&
+        fenceMatch[1][0] === activeFence.character &&
+        fenceMatch[1].length >= activeFence.length &&
+        /^[ \t]*$/.test(fenceMatch[2]);
+      if (isClosingFence) activeFence = null;
+      continue;
+    }
+
+    if (fenceMatch) {
+      activeFence = { character: fenceMatch[1][0], length: fenceMatch[1].length };
+      continue;
+    }
+
+    for (const match of line.matchAll(explicitIdPattern)) {
+      const identifier = match[1] ?? match[2] ?? match[3];
+      if (identifier) anchors.add(identifier);
+    }
+
+    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/);
+    if (atxHeading) {
+      addHeading(atxHeading[1].replace(/[ \t]+#+[ \t]*$/, ''));
+      continue;
+    }
+
+    if (/^ {0,3}(=+|-+)[ \t]*$/.test(line) && index > 0) {
+      const setextHeading = lines[index - 1].trim();
+      if (setextHeading && !setextHeading.startsWith('>') && !setextHeading.startsWith('|')) {
+        addHeading(setextHeading);
+      }
+    }
+  }
+
+  return anchors;
+}
+
+/**
+ * Find unresolved local Markdown heading fragments.
+ *
+ * External URLs, non-Markdown assets, missing target paths (reported by
+ * findMissingLocalLinks), code examples and text fragments are excluded.
+ * Historical documents remain included in this report-only baseline.
+ *
+ * @param {string} root Repository root.
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable heading-anchor errors.
+ */
+export function findMissingLocalAnchors(root, documents) {
+  const gaps = [];
+  const documentsByAbsolutePath = new Map(
+    documents.map((document) => [resolve(root, document.path), document]),
+  );
+  const anchorCache = new Map();
+
+  for (const document of documents) {
+    for (const target of extractMarkdownLinkDestinations(document.content)) {
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) continue;
+
+      const hashIndex = target.indexOf('#');
+      if (hashIndex < 0) continue;
+      const rawFragment = target.slice(hashIndex + 1);
+      if (!rawFragment || rawFragment.startsWith(':~:text=')) continue;
+
+      const pathAndQuery = target.slice(0, hashIndex);
+      const rawPath = pathAndQuery.split('?', 1)[0];
+      let decodedPath;
+      try {
+        decodedPath = decodeURIComponent(rawPath);
+      } catch {
+        gaps.push(document.path + ' has malformed URL-encoded local link path "' + rawPath + '"');
+        continue;
+      }
+      const absoluteTarget = decodedPath
+        ? resolve(root, dirname(document.path), decodedPath)
+        : resolve(root, document.path);
+
+      if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) continue;
+      const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
+      if (!targetDocument) continue;
+
+      let fragment;
+      try {
+        fragment = decodeURIComponent(rawFragment);
+      } catch {
+        gaps.push(document.path + ' has malformed URL-encoded heading fragment "#' + rawFragment + '"');
+        continue;
+      }
+
+      if (!anchorCache.has(absoluteTarget)) {
+        anchorCache.set(absoluteTarget, collectMarkdownHeadingAnchors(targetDocument.content));
+      }
+      if (!anchorCache.get(absoluteTarget).has(fragment)) {
+        gaps.push(document.path + ' links to missing heading anchor "#' + fragment + '" in ' + targetDocument.path);
+      }
+    }
+  }
+
+  return gaps.sort();
+}
+
+/**
+ * Find unclosed fenced code blocks in repository Markdown/MDX documents.
+ *
+ * Fences may use backticks or tildes, with a closing fence of the same
+ * character and at least the opening fence length.
+ *
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable Markdown structure errors.
+ */
+export function findUnbalancedMarkdownFences(documents) {
+  const gaps = [];
+
+  for (const document of documents) {
+    let activeFence = null;
+    const lines = document.content.split(/\r?\n/);
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (!match) continue;
+
+      if (!activeFence) {
+        activeFence = {
+          character: match[1][0],
+          length: match[1].length,
+          line: index + 1,
+        };
+        continue;
+      }
+
+      const isClosingFence = match[1][0] === activeFence.character &&
+        match[1].length >= activeFence.length &&
+        /^[ \t]*$/.test(match[2]);
+
+      if (isClosingFence) activeFence = null;
+    }
+
+    if (activeFence) {
+      gaps.push(
+        `${document.path} has an unclosed ${activeFence.character.repeat(activeFence.length)} fence opened at line ${activeFence.line}`,
+      );
     }
   }
 
@@ -100,36 +422,277 @@ export function findMissingRoadmaps(root, ownershipDocument) {
     .map((directory) => `${directory} is missing ROADMAP.md`);
 }
 
+
+const ignoredJavaScriptDirectories = new Set([
+  ...ignoredMarkdownDirectories,
+  'test', 'tests', 'test-helpers',
+]);
+
+const approvedConsoleFiles = new Set([
+  'packages/utils/src/logger.js',
+  'packages/notifiers/scripts/telegram-smoke.js',
+  'apps/harvester/scripts/list-testnet-balances.js',
+  'apps/harvester/scripts/list-testnet-open-orders.js',
+  'apps/harvester/scripts/list-testnet-order-history.js',
+  'apps/harvester/scripts/list-testnet-trades.js',
+  'apps/harvester/scripts/run-targeted-tests.js',
+  'apps/harvester/scripts/sell-testnet-zro.js',
+]);
+
+/**
+ * Mask JavaScript comments, strings, template text, and regular-expression
+ * literals while preserving code in template interpolations and line numbers.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+function maskJavaScriptNonCode(source) {
+  const output = source.split('');
+  const blank = (start, end) => {
+    for (let index = start; index < end; index += 1) {
+      if (output[index] !== '\n' && output[index] !== '\r') output[index] = ' ';
+    }
+  };
+
+  function skipQuoted(index, quote) {
+    const start = index;
+    index += 1;
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (source[index] === quote) {
+        index += 1;
+        break;
+      }
+      index += 1;
+    }
+    blank(start, index);
+    return index;
+  }
+
+  function skipRegex(index) {
+    const start = index;
+    index += 1;
+    let inCharacterClass = false;
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (source[index] === '[') inCharacterClass = true;
+      else if (source[index] === ']') inCharacterClass = false;
+      else if (source[index] === '/' && !inCharacterClass) {
+        index += 1;
+        while (/[a-z]/i.test(source[index] ?? '')) index += 1;
+        break;
+      } else if (source[index] === '\n') {
+        break;
+      }
+      index += 1;
+    }
+    blank(start, index);
+    return index;
+  }
+
+  function scanTemplate(index) {
+    let segmentStart = index - 1;
+    blank(segmentStart, index);
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (source[index] === String.fromCharCode(96)) {
+        blank(segmentStart, index + 1);
+        return index + 1;
+      }
+      if (source[index] === '$' && source[index + 1] === '{') {
+        blank(segmentStart, index + 2);
+        index = scanCode(index + 2, true);
+        segmentStart = index;
+        continue;
+      }
+      index += 1;
+    }
+    blank(segmentStart, index);
+    return index;
+  }
+
+  function scanCode(index, stopAtTemplateBrace = false) {
+    let nestedBraces = 0;
+    let previousToken = '';
+    while (index < source.length) {
+      const character = source[index];
+      const next = source[index + 1];
+
+      if (stopAtTemplateBrace && character === '}') {
+        if (nestedBraces === 0) {
+          blank(index, index + 1);
+          return index + 1;
+        }
+        nestedBraces -= 1;
+      } else if (stopAtTemplateBrace && character === '{') {
+        nestedBraces += 1;
+      }
+
+      if (character === "'" || character === '"') {
+        index = skipQuoted(index, character);
+        previousToken = 'value';
+        continue;
+      }
+      if (character === String.fromCharCode(96)) {
+        index = scanTemplate(index + 1);
+        previousToken = 'value';
+        continue;
+      }
+      if (character === '/' && next === '/') {
+        const start = index;
+        while (index < source.length && source[index] !== '\n') index += 1;
+        blank(start, index);
+        continue;
+      }
+      if (character === '/' && next === '*') {
+        const start = index;
+        index += 2;
+        while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) index += 1;
+        index = Math.min(source.length, index + 2);
+        blank(start, index);
+        continue;
+      }
+      if (
+        character === '/' &&
+        (previousToken === '' ||
+          ['=', '(', '[', '{', ',', ':', ';', '!', '?', '&&', '||', '??', 'return', 'throw', 'case', '=>'].includes(previousToken))
+      ) {
+        index = skipRegex(index);
+        previousToken = 'value';
+        continue;
+      }
+
+      const pair = source.slice(index, index + 2);
+      if (['=>', '&&', '||', '??'].includes(pair)) {
+        previousToken = pair;
+        index += 2;
+        continue;
+      }
+
+      if (/[A-Za-z_$]/.test(character)) {
+        const start = index;
+        index += 1;
+        while (/[A-Za-z0-9_$]/.test(source[index] ?? '')) index += 1;
+        previousToken = source.slice(start, index);
+        continue;
+      }
+
+      if (!/\s/.test(character)) previousToken = character;
+      index += 1;
+    }
+    return index;
+  }
+
+  scanCode(0);
+  return output.join('');
+}
+
+/**
+ * Discover production JavaScript files in application/package domains.
+ * Tests and generated/vendor directories are excluded; explicit CLI and
+ * logger-boundary exceptions are handled by findDirectConsoleUsages.
+ *
+ * @param {string} root
+ * @returns {string[]}
+ */
+export function findJavaScriptFiles(root) {
+  const files = [];
+
+  function visit(directory, relativeDirectory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (ignoredJavaScriptDirectories.has(entry.name)) continue;
+        visit(
+          join(directory, entry.name),
+          relativeDirectory ? relativeDirectory + '/' + entry.name : entry.name,
+        );
+        continue;
+      }
+      if (!entry.isFile() || !/\.(?:js|mjs|cjs)$/i.test(entry.name)) continue;
+      if (/\.(?:test|spec)\.(?:js|mjs|cjs)$/i.test(entry.name)) continue;
+      const path = relativeDirectory ? relativeDirectory + '/' + entry.name : entry.name;
+      files.push(path);
+    }
+  }
+
+  for (const area of domainAreas) {
+    const directory = join(root, area);
+    if (existsSync(directory)) visit(directory, area);
+  }
+  return files.sort();
+}
+
+/**
+ * Reject direct global console access from application/package production code.
+ *
+ * @param {string} root
+ * @returns {string[]} Actionable source-location errors.
+ */
+export function findDirectConsoleUsages(root) {
+  const gaps = [];
+  const expression = /\bconsole\b/g;
+
+  for (const path of findJavaScriptFiles(root)) {
+    if (approvedConsoleFiles.has(path)) continue;
+    const source = readFileSync(join(root, path), 'utf8');
+    const code = maskJavaScriptNonCode(source);
+    for (const match of code.matchAll(expression)) {
+      const line = code.slice(0, match.index).split('\n').length;
+      gaps.push(
+        path + ':' + line + ': direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      );
+    }
+  }
+  return gaps.sort();
+}
+
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
-  const workflowDocument = readFileSync(join(repositoryRoot, 'AI_AGENT_WORKFLOW.md'), 'utf8');
-  const policyPaths = [
+  const requiredDocumentationPaths = [
     'AGENTS.md',
     'AI_AGENT_WORKFLOW.md',
     'ENGINEERING_STANDARDS.md',
-    'docs/engineering/TASK_WORKFLOWS.md',
-    'docs/engineering/DOMAIN_OWNERSHIP.md',
-    '.github/PULL_REQUEST_TEMPLATE.md',
+    'docs/DOCUMENTATION_GOVERNANCE.md',
+    'docs/README.md',
+    'apps/harvester/AGENTS.md',
+    'apps/harvester/README.md',
+    'apps/harvester/docs/README.md',
   ];
-  const policyDocuments = policyPaths.map((path) => ({
-    path,
-    content: readFileSync(join(repositoryRoot, path), 'utf8'),
-  }));
-  const gaps = [
-    ...findOwnershipGaps(directories, ownershipDocument, workflowDocument),
+  const markdownDocuments = findMarkdownDocuments(repositoryRoot);
+  const anchorGaps = findMissingLocalAnchors(repositoryRoot, markdownDocuments);
+  console.log(
+    'Markdown heading-anchor baseline (report-only): ' + anchorGaps.length +
+    ' unresolved local anchors across ' + markdownDocuments.length + ' Markdown/MDX files.',
+  );
+  for (const gap of anchorGaps) console.log('- ' + gap);
+
+  const gaps = [...new Set([
+    ...findOwnershipGaps(directories, ownershipDocument),
     ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
-    ...findMissingLocalLinks(repositoryRoot, policyDocuments),
-  ];
+    ...findMissingRequiredDocuments(repositoryRoot, requiredDocumentationPaths),
+    ...findUnbalancedMarkdownFences(markdownDocuments),
+    ...findMissingLocalLinks(repositoryRoot, markdownDocuments),
+    ...findDirectConsoleUsages(repositoryRoot),
+  ])];
 
   if (gaps.length > 0) {
-    console.error('Agent policy ownership check failed:');
+    console.error('Agent policy check failed:');
     for (const gap of gaps) console.error(`- ${gap}`);
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ownership maps, domain roadmaps, and central policy links are valid).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

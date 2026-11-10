@@ -1,5 +1,34 @@
 # Event Bus Reliability Roadmap
 
+---
+status: active
+type: roadmap
+owner: event-bus
+---
+
+## Priority execution plan — current develop direction (2026-11-08)
+
+> Current assessment: no critical defect was established in the audited Event Bus implementation. Core validation, bounded fan-out, failure isolation, lifecycle diagnostics and package coverage gates are already implemented.
+
+### IMPORTANT — maintain the existing delivery guarantees
+
+1. **Keep publish, delivery and shutdown semantics explicit and regression-tested.**
+   - **Why:** Event Bus is a shared process boundary. Ambiguous behavior when handlers throw, publish is rejected, queues are full or shutdown races with delivery can silently lose work or hang application shutdown.
+   - **Do:** preserve documented admission/backpressure behavior, immutable payload handling, handler error isolation, flush/close semantics and stable diagnostics. Update the contract whenever behavior changes; do not add implicit retries.
+   - **Verify:** retain tests for fan-out atomicity, slow/throwing handlers, re-entrant publish, capacity limits, close while pending and cleanup after failures.
+
+2. **Keep observability bounded and semantically precise.**
+   - **Why:** counters that mix accepted, rejected, scheduled and completed deliveries are misleading and can create accidental public API commitments.
+   - **Do:** define each diagnostic field before adding it; expose immutable scalar snapshots only. Add no high-cardinality event labels or unbounded histories.
+   - **Verify:** assert counter transitions for accepted/rejected publishes, pending/high-water state and completed/failed deliveries without exposing internal Maps/Sets.
+
+### DEFERRED — only when a consumer proves the need
+
+3. **Sequential delivery, AbortSignal cancellation, retries and dead-letter handling.**
+   - **Why:** each feature changes ordering, cancellation and duplicate-delivery guarantees. Adding them speculatively increases complexity and may conflict with current concurrent fan-out.
+   - **Do:** require a concrete consumer requirement and a written compatibility contract before implementing any of these capabilities.
+   - **Verify:** define ordering/idempotency and shutdown behavior first, then add focused tests and benchmarks. Preserve the default delivery contract.
+
 > Status: core hardening complete; optional enhancements remain demand-driven
 > Package: `@coinzilla/event-bus`
 > Primary objective: make the package bug-resistant, predictable under failure, fully tested, and easy for humans and AI agents to change safely.
@@ -155,12 +184,16 @@ The audit also identified these risks:
 
 These are audit observations to verify against the current implementation before each fix; do not blindly apply stale line numbers or assumptions.
 
+### Cross-domain persistence constraint — Journal issue #889
+
+EventBus is an in-memory dispatcher and intentionally accepts `bigint`, `undefined`, all JavaScript numbers, cycles, and shared references as payload values. Journal currently writes EventBus messages with JSONL/`JSON.stringify`: BigInt and cycles throw; undefined object properties are omitted; undefined array entries and non-finite numbers become `null`; negative zero becomes `0`; and shared references are serialized as repeated subtrees without preserving identity. The Journal subscription also does not currently surface a serialization rejection through its durability result. This is a Journal-owned persistence contract issue, tracked in [#889](https://github.com/45s/coinzilla/issues/889). Do not narrow EventBus's in-memory payload contract as a workaround. Until Journal resolves the request, consumers that require Journal persistence must publish acyclic JSON-safe payloads and must not rely on shared-reference identity. Revisit this note when the Journal owner merges a tested fix.
+
 ## 5. Roadmap and acceptance criteria
 
 ### Phase 0 — Contract and baseline
 
 - [x] Document publish, delivery, ordering, error, unsubscribe, flush, and close semantics in `README.md`; keep this contract synchronized with tests and implementation.
-- [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and primitive values only; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
+- [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and `null`/`undefined`/string/boolean/number (including non-finite and negative-zero values)/BigInt primitive values; symbols and functions are rejected; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
 - [x] Inspect all in-repository consumers for compatibility constraints.
 - [x] Capture baseline test results and package coverage. CI on PR #294: 77 package tests passed; source coverage was 99.54% lines and 98.63% branches (Node.js 22; [Unit Tests run](https://github.com/45s/coinzilla/actions/runs/41194370503), [Test Coverage run](https://github.com/45s/coinzilla/actions/runs/41194370511)).
 
@@ -170,7 +203,7 @@ Acceptance: public behavior is documented and tests encode the intended contract
 
 Internal code is organized by responsibility: `event-bus.js` coordinates the public class; `helpers/event-name.js`, `helpers/options.js`, and `helpers/payload.js` own focused validation and payload transformation. Keep `index.js` as the public export boundary. Reserve `utils/` for genuinely shared, reusable primitives rather than one-off helpers.
 
-Event names are preserved exactly when valid. They must be 1–128 ASCII characters, begin with a letter, digit, or underscore, and contain only letters, digits, underscore, period, colon, or hyphen. Names such as `error`, `newListener`, `removeListener`, and `__proto__` remain valid ordinary application names. Constructor options are a plain object with only `logger` and `onError`; `logger` is an object with an optional `error` function, and `onError`, when supplied, must be a function.
+Event names are preserved exactly when valid. They must be 1–128 ASCII characters, begin with a letter, digit, or underscore, and contain only letters, digits, underscore, period, colon, or hyphen. Names such as `error`, `newListener`, `removeListener`, and `__proto__` remain valid ordinary application names. Constructor options are a plain object with only `logger`, `onError`, and `maxPending`; `logger` is an object with an optional `error` function, `onError`, when supplied, must be a function, and `maxPending` must be a positive safe integer (default: `1000`).
 
 - [x] Remove Node EventEmitter special-name behavior from event dispatch.
 - [x] Define and enforce truly safe payload immutability (reject mutable built-ins, accessors, symbol keys, and unsupported object shapes; clone and freeze supported data graphs).
@@ -276,6 +309,7 @@ The package `test:coverage` script enforces at least 90% line coverage and 85% b
 Core audit hardening was merged in [PR #381](https://github.com/45s/coinzilla/pull/381) at merge commit `3488b42b0ecbbdf4e5f42b109b5a372c94fceecc`.
 
 The exact PR head passed all required checks:
+
 - Unit tests on Node.js 22.23.4 and Node.js 24.x, including the aggregate required-version job ([run](https://github.com/45s/coinzilla/actions/runs/41288818211)).
 - Workspace coverage, including event-bus 90% line / 85% branch thresholds and both negative threshold self-checks ([run](https://github.com/45s/coinzilla/actions/runs/41288818233)).
 - JavaScript syntax ([run](https://github.com/45s/coinzilla/actions/runs/41288818236)).
@@ -293,7 +327,6 @@ Remaining unchecked roadmap items are intentionally deferred: sequential subscri
 - Correctness and bug resistance take precedence over feature count and micro-optimizations.
 - Do not create GitHub issues as a substitute for this roadmap; track progress here and in focused pull requests.
 - Update this file whenever a guarantee, phase, or acceptance criterion changes.
-
 
 ## AI-agent ownership and workflow
 

@@ -4,14 +4,14 @@ Coinzilla is a monorepo with independently maintained application and package do
 
 | Domain | Owned path | Responsibility |
 | --- | --- | --- |
-| Free-Roll | `apps/bot-free-roll/` | Strategy orchestration, pair lifecycle, trading decisions, application configuration |
-| Market Simulator | `apps/market-simulator/` | Deterministic historical simulation, market data and simulated order matching |
+| Market Simulator | `packages/market-simulator/` | Deterministic historical simulation, market data and simulated order matching |
 | Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
 | Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
 | Brokers | `packages/brokers/` | Broker contracts/adapters, exchange API integration, normalization, market/account/order I/O |
 | Utils | `packages/utils/` | Domain-neutral reusable helpers, logging and generic utilities |
 | Event bus | `packages/event-bus/` | Event publication, subscription, delivery and event-bus reliability |
 | Journal | `packages/journal/` | Journal records, persistence boundaries and journal-specific behavior |
+| Database Infrastructure | `packages/db/` | Provider-neutral database lifecycle/transaction boundary and concrete database infrastructure adapters |
 | Notifiers | `packages/notifiers/` | Telegram notification formatting, delivery and lifecycle safety |
 
 ## Shared infrastructure
@@ -19,6 +19,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 The following are cross-domain and must be treated as shared ownership: root package manifests and lockfile, CI workflows, GitHub rules, root engineering documentation, workspace scripts, and dependency policy.
 
 An agent changing shared infrastructure must:
+
 - Explain why the change is needed and which domains it affects.
 - Check all affected package/app consumers.
 - Add or update integration-level tests where appropriate.

@@ -1,0 +1,247 @@
+# Binance Spot TESTNET order scripts
+
+---
+status: active
+type: operational-runbook
+owner: harvester
+---
+
+These standalone package scripts let an operator inspect account balances, open orders, order history, and actual trades; preview/submit a fixed ZROUSDT market sell; or cancel all open orders in a Binance Spot TESTNET account. They are outside Harvester's trading runtime. The command procedures below are current tool behavior; dated incident snapshots are preserved in [Harvester Roadmap History](./audits/ROADMAP_HISTORY.md) and are not current behavior instructions.
+
+> **Current pair-scope warning:** `trading-config.json` currently enables only `ZROFDUSD` (PR #836). The `testnet:sell-zro` helper below is hardcoded to `ZROUSDT` and submits a MARKET SELL after exact confirmation; it is a legacy one-off TESTNET write, not a generic cleanup tool and not part of the CLOSED / PAUSED controlled validation runbook. Do not run it while that hold remains or infer authorization from its preview. The `testnet:history` default (`ZROUSDT`) and `testnet:trades` default (`DOGEUSDT`) are read-only diagnostic defaults, not derived from current config; pass an explicit symbol when querying another market. The `testnet:cancel-orders` action cancels every open order across all symbols and proceeds automatically after a warning; it has no interactive confirmation. The interactive `pnpm --filter @coinzilla/harvester testnet` menu invokes these same scripts and exposes both read-only and destructive actions; selecting an action is not authorization.
+
+They use Node.js built-in `fetch` and `node:crypto`; no dependency is added. The API host is hard-coded to `https://testnet.binance.vision`. The scripts cannot be pointed at Binance production through environment configuration.
+
+## Interactive menu
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet
+```
+
+The menu requires an interactive TTY and launches the standalone scripts documented below. It includes order/balance/history inspection, the exchange-read-only account audit (`testnet:audit`, which persists PREFLIGHT evidence to a local Journal session; see [the runbook](./TESTNET_VALIDATION_RUNBOOK.md) and [Journal Operations](./JOURNAL_OPERATIONS.md)), and local Journal balance reconciliation (`journal:balance-audit`; see [Journal Operations](./JOURNAL_OPERATIONS.md)), as well as the legacy ZROUSDT MARKET SELL and account-wide cancel actions. The menu is only a convenience wrapper and adds no confirmation layer. The ZROUSDT sell script requires its exact phrase; the account-wide cancel script proceeds automatically after logging a warning and has no interactive confirmation. Selecting either action is an exchange-write decision and is not authorized by the paused validation runbook.
+
+## Prerequisites
+
+1. Stop Harvester and any other process that may submit or manage orders before running the cancellation command.
+2. Copy `apps/harvester/.env.example` to `apps/harvester/.env.development` if you have not already done so.
+3. Put your Binance Spot TESTNET API key and secret in that local file:
+   - `BINANCE_API_KEY`
+   - `BINANCE_API_SECRET_KEY`
+4. The API key must have permission to read account/open-order information. The cancellation command also requires trading permission.
+5. Keep `.env.development` local and never commit or share its credentials.
+
+The scripts use signed requests with a 5-second receive window and a 15-second request timeout. API keys are sent in the `X-MBX-APIKEY` header. Secrets and signatures are not printed.
+
+## List all open orders (read-only)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:orders
+```
+
+The command calls `GET /api/v3/openOrders` without a symbol, so it lists open orders across all symbols. It prints the symbol, order ID, side, type, price, original quantity, executed quantity, status, and client order ID. It does not change the account.
+
+## Cancel all open orders (destructive)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:cancel-orders
+```
+
+The command:
+
+1. Fetches and logs the current open orders across all symbols.
+2. Stops without making changes if there are no open orders.
+3. Automatically calls `DELETE /api/v3/openOrders` once for each distinct symbol in the initial snapshot; there is no interactive confirmation.
+4. Fetches open orders again and reports whether any remain.
+
+**This is an account-wide destructive operation.** Every open order on every symbol found in the initial snapshot is targeted, including orders placed manually or by another application. **Stop Harvester and every other trading process first.** Review the account with the read-only `testnet:orders` command before invoking cancellation. Do not run this command if any order must be preserved. The command has no interactive confirmation; invoking it immediately starts cancellation. Run it only after a separate explicit operator decision to cancel every open order in that TESTNET account. Orders created after the initial snapshot are not part of the cancellation requests, so the final verification is essential. A failed cancellation or any remaining order produces a non-zero exit code.
+
+The command does not sell, transfer, or otherwise change asset balances. Canceling an order may release its locked balance, but existing free base-asset inventory remains and can still prevent Harvester's clean-account startup check from passing.
+
+## Troubleshooting
+
+- **Missing credentials:** confirm both variables exist in `apps/harvester/.env.development`; do not paste secrets into chat or logs.
+- **API-key permission error:** verify the TESTNET key has the required read permission for listing and trading permission for cancellation.
+- **Timestamp/receive-window error:** check the computer's system clock and retry.
+- **Remaining orders:** inspect the final table. Do not assume a cancellation succeeded merely because one symbol's request returned successfully.
+- **Harvester still refuses startup:** these scripts only inspect/cancel open orders. They do not clear pre-existing base-asset inventory or disable Harvester's safety checks.
+
+## Implementation boundary
+
+All files for these tools live under `apps/harvester/scripts/`; none are imported by `src/` or composed into the trading runtime. The shared request helper fixes the API host to Spot TESTNET and signs requests locally. Unit tests cover deterministic request signing; the default test suite does not make network calls or require credentials.
+
+## List non-zero account balances (read-only)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:balances
+```
+
+The command calls the signed Spot TESTNET endpoint `GET /api/v3/account`,
+then displays every asset whose free or locked amount is non-zero. It prints
+the exact decimal strings returned by Binance (without rounding), including
+the asset symbol, free amount, and locked amount. Assets with both amounts
+equal to zero are omitted.
+
+This is a read-only account inspection. It does not place or cancel orders,
+transfer funds, or otherwise change balances. It is useful for diagnosing
+Harvester's clean-account gate: canceling open orders can release locked funds,
+but it does not remove existing free base-asset inventory. Do not sell or
+transfer an asset merely to satisfy the gate until you have independently
+identified and understood that inventory.
+
+The script is under `scripts/`, outside the trading runtime. Its filtering
+logic is a plain pure function with deterministic offline tests. The API call
+reuses the shared TESTNET request helper and remains fixed to the TESTNET host.
+
+## Sell all free ZRO at market (destructive)
+
+> **Legacy ZROUSDT exchange write:** this helper sends `POST /api/v3/order` with `side=SELL` and `type=MARKET` for `ZROUSDT` after the exact confirmation phrase. It is not part of the current ZROFDUSD-only config or the paused validation runbook. Do not run it while the runbook is CLOSED / PAUSED; a preview is not authorization.
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:sell-zro
+```
+
+The command is a standalone Binance Spot TESTNET operator tool, not part of
+Harvester's trading runtime. It is fixed to the TESTNET API host and the
+`ZROUSDT` market. The default run is a preview only. To submit, confirm the
+exact phrase `SELL ALL FREE ZRO ON TESTNET` when prompted.
+
+Before submission it reads the current free ZRO balance, loads the symbol's
+market quantity filters, rounds the quantity down using exact decimal
+arithmetic (preserving the maximum precision supplied by the balance and
+exchange filters), and displays the quantity that will be sold. Exact decimal
+parsing, step rounding, comparison, and output-scale restoration use the shared
+`@coinzilla/utils` API; Binance filter selection and minimum/maximum policy stay
+in Harvester. A zero `LOT_SIZE` fallback step is rejected. It refuses to continue
+when the market is not trading, the available quantity is below the market
+minimum, or open orders exist for `ZROUSDT`. After confirmation
+it refreshes the balance and open orders; if the sellable quantity changed,
+it aborts and requires a new preview/confirmation.
+
+Only the free ZRO balance is eligible. ZRO locked in any order is not sold;
+cancel and inspect those orders separately if you intend to release it.
+The market order executes at the available market price and does not
+guarantee a particular execution price. The script does not cancel orders,
+transfer assets, or affect other symbols. Review the preview carefully:
+this command sells the entire displayed free ZRO quantity.
+
+The command is implemented by `scripts/sell-testnet-zro.js`; its exact
+quantity validation and step-size rounding live in the pure
+`scripts/testnet-sell-utils.js` module and are covered by
+`scripts/testnet-sell-utils.test.js`. It reuses the shared signed TESTNET
+request helper. No live trading host or production mode is configurable.
+
+### Exchange metadata request behavior
+
+The ZRO sell preview reads `GET /api/v3/exchangeInfo` using the public
+TESTNET market-data request path. This endpoint must receive only its supported
+parameters (here, `symbol`); it must not receive signed-account metadata such
+as `timestamp`, `recvWindow`, or `signature`. Account, open-order, and order
+submission endpoints continue to use signed requests. The shared helper keeps
+these two request types separate and tests that public query construction
+does not add authentication parameters.
+
+## List recent order history (read-only)
+
+> The default `ZROUSDT` symbol is a legacy diagnostic default, not the currently enabled pair. Pass the symbol explicitly; the command is read-only.
+
+Run from the repository root:
+
+```sh
+# Latest 20 orders for the default ZROUSDT symbol
+pnpm --filter @coinzilla/harvester testnet:history
+
+# Latest 50 orders for ZROUSDT
+pnpm --filter @coinzilla/harvester testnet:history ZROUSDT 50
+
+# Latest 20 orders for another symbol
+pnpm --filter @coinzilla/harvester testnet:history BTCUSDT 20
+```
+
+The command calls the signed Spot TESTNET endpoint `GET /api/v3/allOrders`.
+Binance requires one symbol per request, so this tool does not return a
+mixed-symbol account-wide history. The default symbol is `ZROUSDT`; the
+default limit is 20 and the accepted limit is 1-1000. Binance returns the
+most recent orders up to the requested limit; the script displays them
+newest-first.
+
+When passing arguments through `pnpm run`, do not insert an extra `--` before
+`SYMBOL` and `LIMIT`; that separator is forwarded to this script and becomes
+an unexpected first argument. For example, from `apps/harvester`, run
+`pnpm run testnet:history ZROUSDT 50`.
+
+The table includes exchange time, order ID, symbol, side, type, price,
+original quantity, executed quantity, cumulative quote quantity, status,
+and client order ID. Decimal values are printed exactly as returned by
+Binance. Historical orders can have a negative cumulative quote quantity
+when Binance does not have that value available.
+
+The endpoint includes active, canceled, and filled orders, as well as other
+exchange-recorded terminal statuses such as rejected or expired orders.
+It is read-only and does not place, cancel, or modify orders.
+
+**Diagnostic limitation:** a submission rejected before Binance creates an
+order may not appear in order history. Preserve the original broker/API
+error code and message in Harvester diagnostics when investigating an
+order-submission failure. An empty order-history result does not prove that
+a failed submission was never attempted.
+
+The command is implemented by
+`scripts/list-testnet-order-history.js`. Its argument parsing and order
+normalization/sorting are plain pure functions in
+`scripts/testnet-order-history-utils.js`, with deterministic offline tests.
+It reuses the existing signed TESTNET request helper and does not add
+dependencies or connect to the trading runtime.
+
+## Diagnosing an unowned execution report
+
+When a user-data order event fails with the `OWNERSHIP_INTEGRITY` category, the event handler logs **"rejected an unowned or invalid order event"** and keeps trading readiness closed. Preserve the complete structured log entry, including:
+
+- `failureCategory`, `failureStage`, `failureRetryable`, `eventType`, and `executionType`;
+- `symbol`, `brokerOrderId`, `clientOrderId`, `originalClientOrderId`, `side`, `orderStatus`, and `executionId`;
+- `registryMatchedByClientOrderId`, `registryMatchedByBrokerOrderId`, `clientIdMatchStatus`, `clientIdMatchBrokerOrderId`, and `brokerIdMatchClientOrderId`;
+- the structured `errors` array, including native Error and cause details.
+
+Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Compare the captured identifiers with same-time order history and submission/acknowledgement Journal entries. A client-ID match with a different exchange order ID is not proof that the event is owned. Unknown broker order IDs must remain unowned and must not be adopted to restore readiness.
+
+### Historical ownership investigation
+
+The dated client-ID reuse hypothesis, the 2026-11-03 `666845` event evidence, the raw Binance `c`/`C` investigation, and the later Free-Roll comparison are preserved in [Harvester Roadmap History — order ownership audit](./audits/ROADMAP_HISTORY.md#order-ownership-audit--2026-11-03). Those records explain how the investigation evolved; they are historical evidence, not a current diagnosis or an instruction to repeat the old TESTNET investigation.
+
+## Current order-event ownership boundary
+
+`OrderRegistry.applyUpdate()` matches acknowledged events by exchange-assigned `brokerOrderId` first. It retains the locally submitted `clientOrderId` as canonical state and rejects an update if the incoming broker and client IDs resolve to two different registered orders. Unknown broker order IDs are not adopted.
+
+The user-data handler records the correlation fields listed above and logs accepted/ignored processing outcomes separately from the initial receipt of a TRADE event. In particular, the initial `Trade execution received` log proves receipt only; it does not prove that fill accounting completed. Check the subsequent `Order update processed` outcome and the corresponding durable/accounting evidence.
+
+This is an offline/source-verified implementation boundary, not proof of real TESTNET acceptance. The real BUY fill → recovery SELL → next BUY acceptance sequence remains **PAUSED / UNVERIFIED**; see the [controlled TESTNET validation runbook](./TESTNET_VALIDATION_RUNBOOK.md).
+
+## List actual trade history (read-only)
+
+> The default `DOGEUSDT` symbol is a legacy diagnostic default, not the currently enabled pair. Pass the symbol explicitly; the command is read-only.
+
+Run from the repository root:
+
+```sh
+# Latest 1,000 DOGEUSDT trades (default)
+pnpm --filter @coinzilla/harvester testnet:trades
+
+# Latest 500 ZROUSDT trades
+pnpm --filter @coinzilla/harvester testnet:trades ZROUSDT 500
+
+# Continue from an exchange trade ID
+pnpm --filter @coinzilla/harvester testnet:trades ZROUSDT 500 123456
+```
+
+The command calls the signed Spot TESTNET endpoint `GET /api/v3/myTrades` for one symbol. The default symbol is `DOGEUSDT`; the default and maximum page size is 1,000. The optional `FROM_ID` is the exchange trade ID cursor. It prints exact price, base quantity, quote quantity, commission amount and commission asset, plus side, maker/taker role, order ID and exchange time.
+
+This is a read-only account-history query. Preserve the raw returned rows when reconciling executions or commissions. A single page is not proof of complete account history; use the exchange trade-ID cursor to retrieve subsequent pages when required. The script is outside the Harvester runtime and has deterministic offline argument/normalization tests.

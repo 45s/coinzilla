@@ -1,5 +1,26 @@
 import { Balance } from "@coinzilla/entities"
-import { compareDecimal } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
+
+function createBaselineMap({ records = [], field, allowNegative = false } = {}) {
+  if (!Array.isArray(records) || records.some((item) =>
+    !item || typeof item.assetId !== "string" || !item.assetId.trim()
+  )) {
+    throw new TypeError("AccountSnapshot." + field + " must contain assetId/amount records")
+  }
+  const values = new Map()
+  for (const item of records) {
+    assertDecimalString({ value: item.amount, field: field + ".amount" })
+    if (!allowNegative && compareDecimal({ left: item.amount, right: "0" }) < 0) {
+      throw new RangeError("AccountSnapshot." + field + ".amount must be non-negative")
+    }
+    if (values.has(item.assetId)) {
+      throw new TypeError("AccountSnapshot " + field + " contains duplicate asset " + item.assetId)
+    }
+    values.set(item.assetId, item.amount)
+  }
+  return values
+}
+
 
 /**
  * Immutable point-in-time view of exchange balances.
@@ -11,8 +32,19 @@ export class AccountSnapshot {
   #balances
   #balancesByAssetId
   #sourceTime
+  #quoteCashFlowBaselineByAssetId
+  #portfolioBaseQuantityBaselineByAssetId
+  #committedQuoteBalanceBaselineByAssetId
+  #committedBaseBalanceBaselineByAssetId
 
-  constructor({ balances, sourceTime } = {}) {
+  constructor({
+    balances,
+    sourceTime,
+    quoteCashFlowBaseline = [],
+    portfolioBaseQuantityBaseline = [],
+    committedQuoteBalanceBaseline = [],
+    committedBaseBalanceBaseline = [],
+  } = {}) {
     if (!Array.isArray(balances) || balances.some((balance) => !(balance instanceof Balance))) {
       throw new TypeError("AccountSnapshot.balances must contain canonical Balance values")
     }
@@ -34,9 +66,31 @@ export class AccountSnapshot {
       balancesByAssetId.set(balance.asset.id, balance)
     }
 
+    const quoteCashFlowBaselineByAssetId = createBaselineMap({
+      records: quoteCashFlowBaseline,
+      field: "quoteCashFlowBaseline",
+      allowNegative: true,
+    })
+    const portfolioBaseQuantityBaselineByAssetId = createBaselineMap({
+      records: portfolioBaseQuantityBaseline,
+      field: "portfolioBaseQuantityBaseline",
+    })
+    const committedQuoteBalanceBaselineByAssetId = createBaselineMap({
+      records: committedQuoteBalanceBaseline,
+      field: "committedQuoteBalanceBaseline",
+    })
+    const committedBaseBalanceBaselineByAssetId = createBaselineMap({
+      records: committedBaseBalanceBaseline,
+      field: "committedBaseBalanceBaseline",
+    })
+
     this.#balances = Object.freeze([...balances])
     this.#balancesByAssetId = balancesByAssetId
     this.#sourceTime = sourceTime
+    this.#quoteCashFlowBaselineByAssetId = quoteCashFlowBaselineByAssetId
+    this.#portfolioBaseQuantityBaselineByAssetId = portfolioBaseQuantityBaselineByAssetId
+    this.#committedQuoteBalanceBaselineByAssetId = committedQuoteBalanceBaselineByAssetId
+    this.#committedBaseBalanceBaselineByAssetId = committedBaseBalanceBaselineByAssetId
     Object.freeze(this)
   }
 
@@ -56,6 +110,36 @@ export class AccountSnapshot {
 
   getLockedBalance({ assetId } = {}) {
     return this.getBalance({ assetId })?.locked
+  }
+
+  /** Return total Portfolio base quantity (active plus retained free) already represented by this snapshot. */
+  getPortfolioBaseQuantityBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getPortfolioBaseQuantityBaseline requires assetId")
+    }
+    return this.#portfolioBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  getCommittedQuoteBalanceBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getCommittedQuoteBalanceBaseline requires assetId")
+    }
+    return this.#committedQuoteBalanceBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  getCommittedBaseBalanceBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getCommittedBaseBalanceBaseline requires assetId")
+    }
+    return this.#committedBaseBalanceBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  /** Return Portfolio quote cash flow already reflected by this snapshot. */
+  getQuoteCashFlowBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getQuoteCashFlowBaseline requires assetId")
+    }
+    return this.#quoteCashFlowBaselineByAssetId.get(assetId) ?? "0"
   }
 
   get value() {

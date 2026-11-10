@@ -21,6 +21,7 @@ What happens today? Include a minimal reproduction, failing test, logs, or other
 Describe observable behavior and expected inputs/outputs, not an assumed internal implementation.
 
 ## Acceptance criteria
+
 - [ ]
 
 ## Consumer impact
