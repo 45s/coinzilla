@@ -1645,6 +1645,8 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
     symbol: "DOGEUSDT",
     marketId: market.id,
     freeQuantity: "0.1",
+    keepQuantity: "0.1",
+    minProfit: "0.01",
     realizedNetProfit: "1.5",
   })
 })
