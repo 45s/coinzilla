@@ -21,7 +21,7 @@ import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngin
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
+import { compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -3912,7 +3912,8 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   const dust = nextEvaluation.data.decision.inventoryDisposition
   const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
   assert.equal(completedPosition.baseQuantity.amount, "0")
-  assert.equal(completedPosition.freeBaseQuantity.amount, addDecimal({ left: "0.1", right: dust.quantity }))
+  assert.equal(dust.quantity, "0.05", "The quantity-step-constrained residual must be exactly 0.05 above the 0.1 keepQuantity.")
+  assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
   const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
