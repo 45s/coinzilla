@@ -277,7 +277,7 @@ For example, a fee rate of `"0.001"` means 0.1%, not 0.001%.
 
 | Order type | Behavior |
 |---|---|
-| `MARKET` | Fills immediately at the latest emitted candle close. |
+| `MARKET` | Fills immediately at the broker's current price. On connect, that price is initialized from the first history candle's close; playback then updates it to each emitted candle's close. |
 | `LIMIT` BUY | Rests until a candle low is at or below the limit price; fills fully at the limit price. |
 | `LIMIT` SELL | Rests until a candle high is at or above the limit price; fills fully at the limit price. |
 | `LIMIT_MAKER` | Uses the same resting fill rules, but is rejected if it would immediately take liquidity at submission time. |
@@ -308,7 +308,7 @@ Additional accounting rules:
 
 `runStrategySimulation({ broker, symbol, strategy, maxCandles })` expects:
 
-- `strategy.onStart({ broker, symbol })` — optional; called once before subscribing.
+- `strategy.onStart({ broker, symbol })` — optional; called once after broker connection and before subscribing. For `SimulatedExecutionBroker`, the current price is already initialized from the first history candle's close, so a MARKET order placed in `onStart` fills at that initial close before the first candle is emitted.
 - `strategy.onPrice(candle, { broker })` — required; called for each candle. Async callbacks are serialized, so the next strategy callback waits for the previous one to finish.
 - `strategy.onStop({ broker, symbol })` — optional; called after playback and queued price callbacks finish successfully.
 

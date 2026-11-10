@@ -47,7 +47,7 @@ The following items are intentionally deferred; they are not current release blo
 
 ## Mission
 
-Provide a deterministic, offline simulation environment that lets strategy code consume historical prices and a controlled simulated spot-order lifecycle through Coinzilla's existing `CoreBroker` contract.
+Provide an offline simulation environment with deterministic candle-matching and accounting rules that lets strategy code consume historical prices and a controlled simulated spot-order lifecycle through Coinzilla's existing `CoreBroker` contract. The complete report is not byte-for-byte deterministic while order creation/cancellation/immediate MARKET timestamps use wall-clock time.
 
 ## Architecture
 
@@ -119,7 +119,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 ## Explicit limitations of MS-005
 
 - Full fills only; no partial fills or queue priority.
-- Market orders use the latest candle close.
+- On connect, the broker's current price is initialized from the first history candle's close. A MARKET order placed in `strategy.onStart` uses that initial close before playback emits the first candle; subsequent MARKET orders use the most recently emitted candle close.
 - Limit fills occur at limit price; no price improvement.
 - No spread, slippage, market impact, intrabar path, latency or exchange-specific filters.
 - No exchange user-data stream, leverage, margin, funding, liquidation, or derivatives simulation.
