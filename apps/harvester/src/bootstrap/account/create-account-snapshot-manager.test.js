@@ -130,7 +130,7 @@ test("captures Portfolio and active-order baselines at the account snapshot boun
   const snapshot = await fixture.manager.refreshAccountSnapshot()
 
   assert.equal(snapshot.getQuoteCashFlowBaseline({ assetId: fixtureMarket.quoteAsset.id }), "-100", "The quote cash-flow baseline must reflect the Portfolio BUY already represented by the exchange snapshot.")
-  assert.equal(snapshot.getActiveBaseQuantityBaseline({ assetId: fixtureMarket.baseAsset.id }), "10", "The active base-position baseline must equal the tracked Position quantity at snapshot time.")
+  assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: fixtureMarket.baseAsset.id }), "10", "The total Portfolio base baseline must include active and retained free quantities at snapshot time.")
   assert.equal(snapshot.getCommittedQuoteBalanceBaseline({ assetId: fixtureMarket.quoteAsset.id }), "100", "The BUY commitment baseline must equal the remaining two units multiplied by the exact 50 quote limit price.")
   assert.equal(snapshot.getCommittedBaseBalanceBaseline({ assetId: fixtureMarket.baseAsset.id }), "3", "The SELL commitment baseline must equal the remaining three units of the partially filled SELL order.")
 })

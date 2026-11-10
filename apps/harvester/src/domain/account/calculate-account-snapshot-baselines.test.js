@@ -67,7 +67,7 @@ test("aggregates Portfolio and active-order baselines by shared exchange asset",
   assert.equal(portfolioWithRetainedFreeBase.getPosition({ marketId: btcMarket.id }).baseQuantity.amount, "8", "Free allocation must reduce only the strategy-active quantity for the selected market.")
   assert.equal(portfolioWithRetainedFreeBase.getPosition({ marketId: btcMarket.id }).freeBaseQuantity.amount, "2", "The allocated keep quantity must remain explicitly tracked as retained free inventory.")
   assert.equal(portfolioWithRetainedFreeBase.getPosition({ marketId: btcMarket.id }).totalBaseQuantity.amount, "10", "Moving quantity from active to retained free inventory must conserve total Portfolio base holdings.")
-  assert.deepEqual(result.data.activeBaseQuantityBaseline, [
+  assert.deepEqual(result.data.portfolioBaseQuantityBaseline, [
     { assetId: btc.id, amount: "15" },
     { assetId: eth.id, amount: "5" },
   ], "Total Portfolio base inventory, including retained free quantity, must remain isolated by asset while aggregating positions across markets.")

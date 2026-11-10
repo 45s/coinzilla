@@ -31,7 +31,7 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
     }
 
     const quoteCashFlow = new Map()
-    const activeBaseQuantity = new Map()
+    const portfolioBaseQuantity = new Map()
     const committedQuoteBalance = new Map()
     const committedBaseBalance = new Map()
 
@@ -43,10 +43,10 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
         field: "Portfolio quote cash flow",
       })
       addAmount({
-        values: activeBaseQuantity,
+        values: portfolioBaseQuantity,
         assetId: position.market.baseAsset.id,
-        amount: position.baseQuantity.amount,
-        field: "Portfolio active base quantity",
+        amount: position.totalBaseQuantity.amount,
+        field: "total Portfolio base quantity",
       })
     }
 
@@ -80,7 +80,7 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
     return toResult({
       data: Object.freeze({
         quoteCashFlowBaseline: toRecords(quoteCashFlow),
-        activeBaseQuantityBaseline: toRecords(activeBaseQuantity),
+        portfolioBaseQuantityBaseline: toRecords(portfolioBaseQuantity),
         committedQuoteBalanceBaseline: toRecords(committedQuoteBalance),
         committedBaseBalanceBaseline: toRecords(committedBaseBalance),
       }),

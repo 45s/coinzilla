@@ -33,7 +33,7 @@ export class AccountSnapshot {
   #balancesByAssetId
   #sourceTime
   #quoteCashFlowBaselineByAssetId
-  #activeBaseQuantityBaselineByAssetId
+  #portfolioBaseQuantityBaselineByAssetId
   #committedQuoteBalanceBaselineByAssetId
   #committedBaseBalanceBaselineByAssetId
 
@@ -41,7 +41,7 @@ export class AccountSnapshot {
     balances,
     sourceTime,
     quoteCashFlowBaseline = [],
-    activeBaseQuantityBaseline = [],
+    portfolioBaseQuantityBaseline = [],
     committedQuoteBalanceBaseline = [],
     committedBaseBalanceBaseline = [],
   } = {}) {
@@ -71,9 +71,9 @@ export class AccountSnapshot {
       field: "quoteCashFlowBaseline",
       allowNegative: true,
     })
-    const activeBaseQuantityBaselineByAssetId = createBaselineMap({
-      records: activeBaseQuantityBaseline,
-      field: "activeBaseQuantityBaseline",
+    const portfolioBaseQuantityBaselineByAssetId = createBaselineMap({
+      records: portfolioBaseQuantityBaseline,
+      field: "portfolioBaseQuantityBaseline",
     })
     const committedQuoteBalanceBaselineByAssetId = createBaselineMap({
       records: committedQuoteBalanceBaseline,
@@ -88,7 +88,7 @@ export class AccountSnapshot {
     this.#balancesByAssetId = balancesByAssetId
     this.#sourceTime = sourceTime
     this.#quoteCashFlowBaselineByAssetId = quoteCashFlowBaselineByAssetId
-    this.#activeBaseQuantityBaselineByAssetId = activeBaseQuantityBaselineByAssetId
+    this.#portfolioBaseQuantityBaselineByAssetId = portfolioBaseQuantityBaselineByAssetId
     this.#committedQuoteBalanceBaselineByAssetId = committedQuoteBalanceBaselineByAssetId
     this.#committedBaseBalanceBaselineByAssetId = committedBaseBalanceBaselineByAssetId
     Object.freeze(this)
@@ -113,11 +113,11 @@ export class AccountSnapshot {
   }
 
   /** Return active Portfolio base quantity already represented by this snapshot. */
-  getActiveBaseQuantityBaseline({ assetId } = {}) {
+  getPortfolioBaseQuantityBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
-      throw new TypeError("AccountSnapshot.getActiveBaseQuantityBaseline requires assetId")
+      throw new TypeError("AccountSnapshot.getPortfolioBaseQuantityBaseline requires assetId")
     }
-    return this.#activeBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
+    return this.#portfolioBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
   }
 
   getCommittedQuoteBalanceBaseline({ assetId } = {}) {
