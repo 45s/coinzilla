@@ -64,7 +64,7 @@ The original Portfolio test reused the same broker trade ID for ETHUSDT and SOLU
 
 ### Medium — third-asset commission valuation boundaries need direct assertions
 
-The validator already rejects third-asset fees without quote valuation and accepts a reliable quote valuation. The remaining failure branches are a valuation denominated in the wrong asset and a zero quote value. Add deterministic cases for both so third-asset fees cannot enter quote recovery accounting with an invalid valuation. The negative commission amount path is covered separately in PR #947. Test-only; no production defect is claimed. Exact PR-head CI is pending.
+The validator already rejects third-asset fees without quote valuation and accepts a reliable quote valuation. The remaining failure branches are a valuation denominated in the wrong asset and a zero quote value. Add deterministic cases for both so third-asset fees cannot enter quote recovery accounting with an invalid valuation. The negative commission amount path is covered separately in PR #947. Test-only; no production defect is claimed. The test head `dd6c990` passed 881/881; this documentation-only follow-up requires a fresh exact-head CI run.
 
 ### Medium — market trading-readiness boundaries are incomplete
 

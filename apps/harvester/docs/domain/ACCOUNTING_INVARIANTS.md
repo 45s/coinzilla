@@ -36,7 +36,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Recovery ledger | Partial SELL fills accumulate net proceeds across replacement | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Base commissions do not alter quote ledger | `recovery-fill-accounting.test.js` | Existing |
 | Recovery ledger | Multiple base/quote commission entries aggregate correctly | `recovery-fill-accounting.test.js` aggregated commission validation and per-asset accounting cases | Existing — execution pending |
-| Recovery ledger | Third-asset/incomplete/negative commission reject | `recovery-fill-accounting.test.js` — missing valuation, wrong quote asset, zero valuation, unknown status and negative amount (negative amount in PR #947) | Added across open PRs #947/#949; exact-head CI pending |
+| Recovery ledger | Third-asset/incomplete/negative commission reject | `recovery-fill-accounting.test.js` — missing valuation, wrong quote asset, zero valuation, unknown status and negative amount (negative amount in PR #947) | Added across open PRs #947/#949; test heads passed 884/884 and 881/881 respectively; documentation-only follow-up CI pending |
 | Recovery ledger | Reset clears cycle amounts but preserves IDs | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Late duplicate after reset stays duplicate | reset test | Existing |
 | Fee reserve | Configured maker/taker maximum (zero, maker-higher, taker-higher, equal, invalid) | `sell-fee-rate.test.js`; actual per-fill commission accounting is covered separately by `recovery-fill-accounting.test.js` | Existing |
