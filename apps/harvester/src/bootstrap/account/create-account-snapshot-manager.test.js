@@ -228,10 +228,10 @@ test("treats an invalid open-orders audit DTO as terminal integrity failure", as
   assert.equal(fixture.getFlushCount(), 0, "An invalid audit DTO must not trigger a durability flush.")
 })
 
-test("records unowned open orders as blocked without adopting them", async () => {
+test("records unowned open orders as blocked and scopes the strategy gate to their symbol", async () => {
   const externalOrder = {
     id: "external-order-1",
-    symbol: "BTCUSDT",
+    symbol: "DOGEUSDT",
     side: "BUY",
     type: "LIMIT",
     originalPrice: "65000",
@@ -240,14 +240,35 @@ test("records unowned open orders as blocked without adopting them", async () =>
     status: "NEW",
     clientOrderId: "manual-order-1",
   }
-  const fixture = createFixture({ openOrders: [externalOrder] })
+  const openOrders = [externalOrder]
+  const fixture = createFixture({ openOrders })
 
   const orders = await fixture.manager.publishOpenOrdersSnapshot()
 
   assert.equal(orders.length, 1, "The account-wide audit must retain the observed external open order.")
   assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED", "An unowned open order must be recorded as blocked in the audit event.")
+  assert.equal(
+    fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }),
+    true,
+    "A symbol with an external open order must be blocked for strategy activity.",
+  )
+  assert.equal(
+    fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "ZROUSDT" }),
+    false,
+    "An unrelated enabled symbol must remain eligible for strategy activity.",
+  )
   assert.deepEqual(fixture.manager.getAccountSnapshot(), undefined, "An open-order audit must not manufacture an account balance snapshot.")
   assert.equal(fixture.getFlushCount(), 1, "The open-order audit must be durably flushed before startup continues.")
+
+  openOrders.length = 0
+  await fixture.manager.publishOpenOrdersSnapshot({ phase: "RECOVERY", ownershipReconciled: true })
+
+  assert.equal(
+    fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }),
+    false,
+    "A later authoritative reconnect snapshot with no external order must clear the symbol-scoped strategy gate.",
+  )
+  assert.equal(fixture.getFlushCount(), 2, "The reconnect snapshot must be durably flushed before clearing the gate.")
 })
 
 
