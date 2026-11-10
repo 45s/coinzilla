@@ -11,6 +11,8 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Area | Required case | Current Harvester evidence | Status |
 |---|---|---|---|
 | Portfolio | BUY adds gross quantity less base commission | `position.test.js` | Existing |
+| Market readiness | Configured BUY quantity after step rounding: exact MIN/MAX and immediately outside each boundary | `validate-market-trading-readiness.test.js` — `enforces exchange quantity limits at exact boundaries and immediately outside them` | Existing — PR #930 exact head `c433c345` passed 872/872 Harvester tests and all required checks |
+| Market readiness | Configured investment exactly at and immediately below MIN_NOTIONAL | `validate-market-trading-readiness.test.js` — `enforces MIN_NOTIONAL at exact equality and immediately below the configured investment` | Existing — PR #930 exact head `c433c345` passed 872/872 Harvester tests and all required checks |
 | Portfolio | BUY quote commission increases quote cash outflow | `position.test.js` | Existing |
 | Portfolio | SELL consumes gross quantity plus base commission | `position.test.js` | Existing |
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
