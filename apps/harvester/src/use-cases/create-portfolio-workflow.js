@@ -26,7 +26,7 @@ import {
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers } = {}) => {
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset } = {}) => {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -66,7 +66,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
   const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
 
   const updateTradingAccounting = ({ fill } = {}) => {
-    const task = updateQueue.then(() => {
+    const task = updateQueue.then(async () => {
       if (!(fill instanceof Fill)) {
         logger.error?.({
           message: "accounting rejected non-canonical fill",
@@ -75,6 +75,20 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
       }
 
+      const thirdAssetCommissions = new Map()
+      for (const commission of fill.commissions ?? []) {
+        const amount = commission.amount
+        if (amount.asset.id === fill.market.baseAsset.id ||
+            amount.asset.id === fill.market.quoteAsset.id ||
+            compareDecimal({ left: amount.amount, right: "0" }) <= 0) {
+          continue
+        }
+        const existingCode = thirdAssetCommissions.get(amount.asset.id)
+        if (existingCode !== undefined && existingCode !== amount.asset.code) {
+          return toResult({ error: new Error("Third-asset commission ID maps to contradictory asset codes") })
+        }
+        thirdAssetCommissions.set(amount.asset.id, amount.asset.code)
+      }
       const previousPortfolio = portfolio
       const currentLedger = recoveryLedgers.get(fill.market.id) ??
         RecoveryLedger.empty({ market: fill.market })
@@ -114,6 +128,29 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedger: currentLedger,
         fill,
       })
+      // Journal is optional: a failed baseline write must not block a validated fill.
+      // The later account audit detects the missing baseline and fails closed.
+      if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
+        try {
+          if (typeof onCommissionAsset !== "function") {
+            throw new Error("Third-asset commission baseline capture is unavailable")
+          }
+          for (const [assetId, assetCode] of thirdAssetCommissions) {
+            const baselineResult = await onCommissionAsset({ assetId, assetCode })
+            if (baselineResult?.ok !== true) {
+              throw baselineResult?.errors?.[0] ?? new Error("Unable to persist the third-asset commission baseline for " + assetCode)
+            }
+          }
+        } catch (error) {
+          logger.warning?.({
+            message: "third-asset commission baseline was not persisted; account reconciliation will fail closed",
+            executionId: fill.id,
+            tradeId: fill.tradeId,
+            symbol: fill.market.symbol,
+            errors: [{ name: error?.name, message: error?.message ?? String(error) }],
+          })
+        }
+      }
       if (result.ok) {
         portfolio = result.data.portfolio
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
