@@ -518,8 +518,15 @@ export const mapFillAppliedData = (input = {}) =>
           value: commission.amount?.asset?.code,
           field: "commissions[" + index + "].asset",
         })
-        const isThirdAsset = assetId !== fill.market.baseAsset?.id &&
-          assetId !== fill.market.quoteAsset?.id
+        const isBaseAsset = assetId === fill.market.baseAsset?.id
+        const isQuoteAsset = assetId === fill.market.quoteAsset?.id
+        if ((isBaseAsset && asset !== fill.market.baseAsset?.code) ||
+            (isQuoteAsset && asset !== fill.market.quoteAsset?.code) ||
+            (!isBaseAsset && !isQuoteAsset &&
+              (asset === fill.market.baseAsset?.code || asset === fill.market.quoteAsset?.code))) {
+          throw new TypeError("Commission asset ID and code do not match the market asset identity")
+        }
+        const isThirdAsset = !isBaseAsset && !isQuoteAsset
         if (isThirdAsset && commission.quoteValue === undefined) {
           throw new TypeError("Third-asset commission requires historical quote valuation")
         }
