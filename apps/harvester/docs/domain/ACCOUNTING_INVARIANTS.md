@@ -11,8 +11,8 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Area | Required case | Current Harvester evidence | Status |
 |---|---|---|---|
 | Portfolio | BUY adds gross quantity less base commission | `position.test.js` | Existing |
-| Portfolio | Same trade ID in different markets preserves exact per-market quantity, spent basis and quote cash flow | `portfolio.test.js` — `keeps exact fill accounting isolated when different markets reuse the same trade ID` | Existing — PR #924 exact head `e998f720` passed 872/872 Harvester tests and all required checks; awaiting merge |
-| Portfolio | Conflicting fill identity is rejected without changing position accounting or applied fill identities | `portfolio.test.js` — `rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting` | Existing — no-mutation assertions added in PR #924; CI pending |
+| Portfolio | Same trade ID in different markets preserves exact per-market quantity, spent basis and quote cash flow | `portfolio.test.js` — `keeps exact fill accounting isolated when different markets reuse the same trade ID` | Existing — PR #924 exact head `fad107c7` passed 872/872 Harvester tests and all required checks; awaiting merge |
+| Portfolio | Conflicting fill identity is rejected without changing position accounting or applied fill identities | `portfolio.test.js` — `rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting` | Existing — PR #924 exact head `fad107c7` passed 872/872 Harvester tests and all required checks |
 | Portfolio | BUY quote commission increases quote cash outflow | `position.test.js` | Existing |
 | Portfolio | SELL consumes gross quantity plus base commission | `position.test.js` | Existing |
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
