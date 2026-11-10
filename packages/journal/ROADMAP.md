@@ -62,9 +62,26 @@ This section supersedes stale checkboxes below where they conflict with merged w
    - **Do:** keep mandatory flush failures fail-closed at their existing boundaries; keep extra event evidence asynchronous/best-effort and visibly report gaps. Never claim Journal records override broker facts.
    - **Verify:** Harvester tests prove no corresponding broker side effect occurs when a required flush fails, and optional evidence failures do not change Portfolio, RecoveryLedger, order execution or readiness.
 
+### CRITICAL — lossless JSONL serialization and durability propagation (#889)
 
+**Status:** OPEN — Journal-owned follow-up tracked in [issue #889](https://github.com/45s/coinzilla/issues/889). This documentation update does not implement or close the runtime defect.
 
-**Owner:** `packages/journal/`  
+The current serializer calls `JSON.stringify` after checking only the top-level event object, stable ID, reserved metadata, and root-level `toJSON` hook. It does not recursively reject nested values that JSONL cannot preserve. The EventBus subscription logs a failed `record()` result but resolves normally; the failure is not added to `writeErrors`, so `flushLifecycle()` can sync the remaining queue and return `durable: true` despite the omitted event. Lossy values can also be persisted after JSON conversion.
+
+**Interim consumer constraint:** until #889 is fixed, Journal-bound EventBus payloads must be acyclic and losslessly JSON-safe: `null`, strings, booleans, finite numbers other than negative zero, dense arrays, and plain/null-prototype objects with enumerable string-keyed data properties. Exclude undefined values and sparse holes, BigInt, NaN/infinities, cycles, custom serialization hooks, and any values outside that subset. Shared-reference identity is not preserved. Do not change EventBus's broader in-memory contract as a workaround. The audit did not identify a current Harvester DTO that violates this restriction; the Harvester-side consumer rule is documented in its Journal Evidence Contract.
+
+**Required J-6 work (all remains open):**
+
+- [ ] Define and enforce the exact nested source-event value contract, including array holes, numeric edge cases, custom serialization hooks, cycles, and shared references.
+- [ ] Reject unsupported/lossy values before writing, or introduce a separately reviewed versioned encoding that preserves them losslessly.
+- [ ] Propagate serialization failures into observable `record()`, `flush()`, and `close()` outcomes; never report durable success after a subscribed event was omitted.
+- [ ] Add deterministic integration regressions using the real EventBus and Journal for BigInt, cyclic graphs, undefined object properties, undefined array entries, NaN, infinities, and negative zero.
+- [ ] Define and test whether shared-reference identity is preserved or explicitly outside the persisted contract.
+- [ ] Preserve existing schema-v1 records and historical JSONL bytes; do not rewrite or truncate history.
+- [ ] Review consumers, including Harvester, and document any migration requirement.
+
+**Owner:** `packages/journal/`
+
 **Purpose:** provide reliable, auditable journal records and persistence behavior for application and operational history.
 
 Read [the journal agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
@@ -104,7 +121,7 @@ Journal must not classify an event as a domain or integration event based on its
 | --- | --- | --- |
 | Bounded context and ownership | Dedicated `@coinzilla/journal` package with package-local instructions, roadmap, README, tests, and one public `Journal` export. | Strong boundary. Keep application strategy and domain decisions out of this package. |
 | Public API and orchestration | `Journal` owns start/record/flush/close/read/replay and coordinates EventBus delivery, queued writes, durability, and lifecycle sequencing through the package-private store. | Keep sequencing decisions in Journal and filesystem resource ownership in the adapter; preserve the public facade. |
-| Record identity/schema | `helpers/journal-record.js` contains pure serialization and session parsing; stable IDs and schema-v1 metadata are enforced; legacy raw records are supported. | Good foundation. Formalize the distinction between source event, persisted record representation, and recovered record result; keep the contract lightweight and backward compatible. |
+| Record identity/schema | `helpers/journal-record.js` contains pure serialization and session parsing; stable IDs and schema-v1 metadata are enforced; legacy raw records are supported. Nested JSON-lossy values are not recursively validated, and subscription serialization failures are not included in flush durability (#889). | Preserve the lightweight record contract while J-6 defines the exact JSON-safe value subset and failure propagation. |
 | Persistence boundary | `FileSystemJournalStore` owns Node filesystem APIs, lock/session handles, bounded discovery, stat, and byte reads; Journal and recovery services depend on its narrow internal contract. | Implemented in PR #748. Keep the adapter package-private; do not publish a backend plugin API or add another backend without a concrete use case. |
 | EventBus dependency | Constructor injection exists; Journal consumes `subscribeAll` and `flush`. | Dependency injection is already present. Document and validate the narrow consumed contract; do not wrap EventBus in an unnecessary adapter or modify the EventBus package. |
 | Recovery and replay | Complete sessions are validated before replay; duplicate IDs, malformed/incomplete data, unsupported schema, invalid encoding, and configured limits fail closed. Replay stops at the first handler failure and reports progress. | Preserve. Improve contract clarity and test isolation, not semantics. |
@@ -116,14 +133,14 @@ Journal must not classify an event as a domain or integration event based on its
 ### Existing behavior and invariants to preserve
 
 - `record({ event })` acknowledges completion of the JSONL write, not durable storage; it does not claim fsync.
-- `flush()` waits for EventBus delivery and queued writes, then syncs the active file. Only a successful sync reports `durable: true`.
+- `flush()` waits for EventBus delivery and queued writes, then syncs the active file. Only a successful sync reports `durable: true` for writes that reached the queue; serialization failures logged by the EventBus subscription are not included yet (J-6 / #889).
 - A transient file-content sync failure does not poison the writer; a later successful flush can make earlier completed writes durable. A write failure poisons the active writer.
 - `close()` drains queued writes, attempts final sync and file close, then releases the directory lock. A failed durability outcome remains failed on repeated close.
 - A writer acquires `.coinzilla-journal.lock` exclusively before creating its session file. Existing locks are never stolen or removed automatically. Startup rollback releases a lock acquired by that attempt.
 - Session ordering is timestamp then numeric collision suffix; record order within a session is line order.
 - Read validates the full snapshot before returning it. Replay validates the full snapshot before invoking the first handler, then invokes handlers sequentially.
 - Replay is at-least-once across crashes. Journal does not provide exactly-once external effects, application checkpoints, business-level deduplication, or transaction coordination.
-- Legacy raw event JSONL remains readable. Current writes preserve source event fields at the top level and add reserved schema-v1 metadata.
+- Legacy raw event JSONL remains readable. Current writes retain JSON-representable source event fields at the top level and add reserved schema-v1 metadata; the wider EventBus payload contract is not yet represented losslessly (J-6 / #889).
 - Partial final lines and malformed/unsupported history remain unchanged on disk and cause an explicit failure; recovery never silently repairs or truncates evidence.
 - Read/replay is only supported while this Journal instance is stopped and does not acquire a cross-process reader lock. Callers must not overlap a writer.
 
@@ -133,7 +150,8 @@ Each numbered slice below is a separate task PR targeting `develop`, with one pr
 
 ### J-1 — Define the record vocabulary and contract
 
-**Status:** [x] complete — source-event, persisted-record, and recovered-record vocabulary and public contracts are documented and tested in PR #746.  
+**Status:** [x] complete — source-event, persisted-record, and recovered-record vocabulary and public contracts are documented and tested in PR #746.
+
 **Intent:** make the existing contract explicit before changing its structure.
 
 Scope:
@@ -156,8 +174,10 @@ Tests and verification:
 
 ### J-2 — Establish a lightweight JournalRecord domain contract
 
-**Status:** [x] complete — the lightweight schema-v1 record contract, identity validation, serialization boundary, and compatibility tests were delivered in PR #747.  
-**Depends on:** J-1  
+**Status:** [x] complete — the lightweight schema-v1 record contract, identity validation, serialization boundary, and compatibility tests were delivered in PR #747.
+
+**Depends on:** J-1
+
 **Intent:** give record identity and schema rules one explicit owner without introducing a heavyweight domain model.
 
 Scope:
@@ -191,8 +211,10 @@ TDD and documentation:
 
 ### J-3 — Isolate filesystem persistence behind an internal adapter
 
-**Status:** [x] complete — the package-private filesystem adapter and resource-ownership tests were delivered in PR #748.  
-**Depends on:** J-2  
+**Status:** [x] complete — the package-private filesystem adapter and resource-ownership tests were delivered in PR #748.
+
+**Depends on:** J-2
+
 **Intent:** separate Journal lifecycle/orchestration from Node filesystem mechanics and provide deterministic control of I/O in service tests.
 
 Scope:
@@ -230,8 +252,10 @@ TDD and documentation:
 
 ### J-4 — Make orchestration state ownership explicit
 
-**Status:** [x] complete — lifecycle matrix is covered, including the deterministic publish-before-close drain regression added with the final Journal acceptance PR.  
-**Depends on:** J-3 (merged in PR #748)  
+**Status:** [x] complete — lifecycle matrix is covered, including the deterministic publish-before-close drain regression added with the final Journal acceptance PR.
+
+**Depends on:** J-3 (merged in PR #748)
+
 **Intent:** ensure the Journal service owns lifecycle policy while the adapter owns resource mechanics.
 
 Scope:
@@ -267,8 +291,10 @@ TDD and documentation:
 
 ### J-5 — Contract conformance and operational documentation
 
-**Status:** [x] complete — the README now documents the public contracts, recovery limits, locking, durability boundaries, errors, backup/restore, and maintainer verification commands.  
-**Depends on:** J-2 through J-4  
+**Status:** [x] complete — the README now documents the public contracts, recovery limits, locking, durability boundaries, errors, backup/restore, and maintainer verification commands.
+
+**Depends on:** J-2 through J-4
+
 **Intent:** make the final architecture easy for package consumers and maintainers to use correctly.
 
 Scope:
@@ -318,7 +344,7 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] Verify append/read ordering and behavior after partial write failures.
 - [x] [PR #714](https://github.com/45s/coinzilla/pull/714) merged: a transient file-content sync failure is reported as non-durable; a later flush on the same Journal instance succeeds and durably preserves both the original completed write and the retry record in append order. Journal tests passed 43/43 on exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`; all six required offline CI contexts passed. No source change, deduplication, record rewrite, or deletion.
 - [x] Define and test duplicate/replay handling and stable record identity. Stable IDs are required, duplicates fail recovery, and replay is sequential/idempotency-aware.
-- [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly.
+- [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly. The separate nested JSON-safe value and subscription-failure contract remains open under J-6 / #889.
 - [x] Verify recovery behavior after process interruption and malformed records. Restart read/replay, invalid UTF-8, malformed/incomplete data, unsupported versions, and missing-directory failures are covered. No automatic truncation is performed.
 - [x] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery enforces session, record, total-byte, and per-record limits.
 - [x] [PR #741](https://github.com/45s/coinzilla/pull/741) merged: exclusive directory ownership is acquired before session creation, competing/stale locks are preserved, and startup rollback/durable close release the owned lock. Cross-process, stale-lock, and rollback regressions were confirmed RED before implementation; all required CI passed on exact PR head `74ad5a7369aee444940b5d7feb009ee0d17ffc7d`.
@@ -339,12 +365,12 @@ These requirements apply to every implementation slice above. A roadmap item is 
 The authoritative current behavior is described in [README](./README.md). In summary:
 
 - `record({ event })` resolves after the JSONL write completes, but does not claim durability.
-- `flush()` waits for EventBus delivery and queued writes, then confirms file-content sync on success.
+- `flush()` waits for EventBus delivery and queued writes, then confirms file-content sync on success for writes that reached the queue. Until J-6 / #889 is fixed, a logged subscription serialization failure can still be absent from the result.
 - A transient file sync failure may be retried by a later flush; a write failure poisons the active writer.
 - `close()` drains, syncs, closes the session file, and releases the exclusive directory lock; failure remains visible.
 - `read()` validates all sessions in deterministic filename/line order and applies configured recovery limits.
 - `replay()` validates the full history before sequential handler execution; effects are at-least-once and consumers must be idempotent.
-- Malformed, incomplete, duplicate, unsupported, invalidly encoded, or oversized history fails closed and is never silently rewritten.
+- Malformed, incomplete, duplicate, unsupported, invalidly encoded, or oversized persisted history fails closed and is never silently rewritten. This read-side guarantee does not close the separate source-event serialization gap in J-6 / #889.
 - Only one writer may own a journal directory. Existing/stale locks are not automatically removed.
 - Read/replay requires the Journal instance to be stopped and must not overlap another process's writer; no reader lock is currently acquired.
 
@@ -359,4 +385,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint at this review:** `7b2345c5e2fea538ba5bc023f36cc6a8c77259ca` (2026-11-09).
+**Historical `develop` checkpoint for the 2026-11-09 review:** `7b2345c5e2fea538ba5bc023f36cc6a8c77259ca`.
