@@ -1,24 +1,28 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { addDecimal } from "@coinzilla/utils"
 import { reconcileAccountSnapshotDeltas } from "./reconcile-account-snapshot-deltas.js"
 
 const snapshot = ({ phase, sourceTime, balances, auditStatus = "COMPLETE", auditReasons = [] }) => ({
   phase, sourceTime, balances, auditStatus, auditReasons,
 })
-const balance = (asset, free, locked = "0") => ({
-  asset, free, locked, total: addDecimal({ left: free, right: locked }),
+const balance = (asset, free, locked, total) => ({
+  asset, free, locked, total,
+})
+const copySnapshot = (value) => ({
+  ...value,
+  balances: value.balances.map((item) => ({ ...item })),
+  auditReasons: [...value.auditReasons],
 })
 
 test("reconciles exact per-asset wallet deltas and assets appearing/disappearing", () => {
   const result = reconcileAccountSnapshotDeltas({
     openingSnapshot: snapshot({
       phase: "OPENING", sourceTime: 100,
-      balances: [balance("DOGE", "100"), balance("USDT", "10", "2"), balance("FDUSD", "5")],
+      balances: [balance("DOGE", "100", "0", "100"), balance("USDT", "10", "2", "12"), balance("FDUSD", "5", "0", "5")],
     }),
     closingSnapshot: snapshot({
       phase: "CLOSING", sourceTime: 200,
-      balances: [balance("DOGE", "101.25"), balance("USDT", "8.5", "1"), balance("BNB", "0.01")],
+      balances: [balance("DOGE", "101.25", "0", "101.25"), balance("USDT", "8.5", "1", "9.5"), balance("BNB", "0.01", "0", "0.01")],
     }),
   })
   assert.equal(result.ok, true)
@@ -45,22 +49,79 @@ test("propagates incomplete closing audit status and reasons", () => {
   assert.deepEqual(result.data.auditReasons, ["CLOSING:UNRESOLVED_OWNED_ORDERS:1"])
 })
 
-test("rejects inconsistent, negative, duplicate, or out-of-order snapshots", () => {
-  const opening = snapshot({ phase: "OPENING", sourceTime: 100, balances: [balance("USDT", "1")] })
-  assert.equal(reconcileAccountSnapshotDeltas({
-    openingSnapshot: opening,
-    closingSnapshot: snapshot({ phase: "CLOSING", sourceTime: 99, balances: [] }),
-  }).ok, false)
-  assert.equal(reconcileAccountSnapshotDeltas({
-    openingSnapshot: opening,
-    closingSnapshot: snapshot({ phase: "CLOSING", sourceTime: 200, balances: [{ asset: "USDT", free: "1", locked: "1", total: "1" }] }),
-  }).ok, false)
-  assert.equal(reconcileAccountSnapshotDeltas({
-    openingSnapshot: opening,
-    closingSnapshot: snapshot({ phase: "CLOSING", sourceTime: 200, balances: [balance("USDT", "-1")] }),
-  }).ok, false)
-  assert.equal(reconcileAccountSnapshotDeltas({
-    openingSnapshot: opening,
-    closingSnapshot: snapshot({ phase: "CLOSING", sourceTime: 200, balances: [balance("USDT", "1"), balance("USDT", "2")] }),
-  }).ok, false)
+test("returns the exact failure and leaves both snapshots unchanged for invalid reconciliation inputs", () => {
+  const openingSnapshot = snapshot({
+    phase: "OPENING",
+    sourceTime: 100,
+    balances: [balance("USDT", "1", "0", "1")],
+  })
+  const cases = [
+    {
+      name: "closing snapshot predates opening snapshot",
+      closingSnapshot: snapshot({ phase: "CLOSING", sourceTime: 99, balances: [] }),
+      expectedError: "CLOSING account snapshot predates OPENING snapshot",
+    },
+    {
+      name: "closing balance total is inconsistent",
+      closingSnapshot: snapshot({
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [{ asset: "USDT", free: "1", locked: "1", total: "1" }],
+      }),
+      expectedError: "CLOSING snapshot total does not equal free plus locked for USDT",
+    },
+    {
+      name: "closing balance is negative",
+      closingSnapshot: snapshot({
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [balance("USDT", "-1", "0", "-1")],
+      }),
+      expectedError: "CLOSING snapshot balance cannot be negative: USDT.free",
+    },
+    {
+      name: "closing snapshot contains a duplicate asset",
+      closingSnapshot: snapshot({
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [balance("USDT", "1", "0", "1"), balance("USDT", "2", "0", "2")],
+      }),
+      expectedError: "CLOSING snapshot contains duplicate asset USDT",
+    },
+  ]
+
+  for (const scenario of cases) {
+    const openingBefore = copySnapshot(openingSnapshot)
+    const closingBefore = copySnapshot(scenario.closingSnapshot)
+    const result = reconcileAccountSnapshotDeltas({
+      openingSnapshot,
+      closingSnapshot: scenario.closingSnapshot,
+    })
+
+    assert.equal(
+      result.ok,
+      false,
+      "The " + scenario.name + " case must return a structured reconciliation failure.",
+    )
+    assert.equal(
+      result.data,
+      undefined,
+      "The " + scenario.name + " case must not expose a partial reconciliation result.",
+    )
+    assert.deepEqual(
+      result.errors.map((error) => error.message),
+      [scenario.expectedError],
+      "The " + scenario.name + " case must report its precise domain validation failure.",
+    )
+    assert.deepEqual(
+      openingSnapshot,
+      openingBefore,
+      "Rejecting the " + scenario.name + " case must not mutate the accepted opening snapshot.",
+    )
+    assert.deepEqual(
+      scenario.closingSnapshot,
+      closingBefore,
+      "Rejecting the " + scenario.name + " case must not mutate the invalid closing snapshot.",
+    )
+  }
 })
