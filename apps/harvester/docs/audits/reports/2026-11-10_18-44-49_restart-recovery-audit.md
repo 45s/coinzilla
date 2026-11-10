@@ -56,27 +56,17 @@ Process-restart restoration is not implemented in the current startup compositio
 
 This is not a defect in Journal's documented flat-directory reader contract. It is a mismatch between Harvester's current nested session layout and the reader path recovery would need. Recovery must explicitly enumerate every prior process-session directory, retain legacy flat root-level sessions, impose deterministic ordering and resource bounds, and fail closed on missing, malformed, truncated or ambiguous history.
 
-### F-036 — BLOCKED open-order audit does not block trading readiness
+### F-036 — External open-order ownership audit is distinct from trading readiness
 
-**Status:** CONFIRMED readiness gap; duplicate-order consequence STRONGLY INDICATED, NOT REPRODUCED. **Severity:** HIGH.
+**Status:** owner-confirmed external-order startup policy; same-symbol interaction risk is strongly indicated but not reproduced. **Severity:** HIGH potential risk, not a confirmed global readiness bypass.
 
-**Expected vs actual:** BLOCKED unowned-order audit must keep startup/reconnect readiness closed. Current callers ignore that classification and can reopen readiness/acknowledge recovery. **Potential financial consequence:** an unowned same-symbol order can be invisible to the in-memory registry, allowing overlapping orders or unexpected shared-fund use. **Required regression:** same-symbol manual order before startup and during reconnect; assert no strategy submission and no broker-generation acknowledgement.
+**Expected vs actual:** the owner-confirmed policy allows external orders at startup, keeps them external/unowned, and forbids Harvester from adopting, canceling, or modifying them. The `BLOCKED` value emitted by the account-wide open-order audit means ownership attribution is incomplete; it is not a global trading-readiness status. Current startup behavior that allows the process to become ready after the durable PREFLIGHT audit and independent user-data checks is intentional. The startup gate must not be changed into a global rejection for unrelated manual orders.
 
-`createAccountSnapshotManager()` classifies unmatched account-wide open orders as `readiness: BLOCKED` with `UNOWNED_OPEN_ORDERS` reasons, but returns only the order array. `subscribeToUserData()` awaits that audit but does not inspect readiness before setting `state.ready = true` and resuming deferred strategy evaluation. The same gap exists during same-process broker recovery: `createUserDataRecoveryHandler()` awaits the RECOVERY open-order audit but does not reject a BLOCKED result before acknowledging the broker recovery generation. The current startup regression explicitly allows runtime startup with an unowned open order.
+**Remaining risk:** the engine's duplicate-order/commitment checks see only the in-memory OrderRegistry. The existing regression has an unowned ZROUSDT order while BTCUSDT is enabled and emits no market tick. It proves external-order preservation and global startup, but does not test a later strategy-triggering tick on the same symbol as an unowned order. A same-symbol interaction is strongly indicated by source, not reproduced. Do not describe it as an observed duplicate submission.
 
-That regression uses an unowned ZROUSDT order while BTCUSDT is enabled and emits no market-price tick. It proves that the order is neither adopted nor canceled and that startup proceeds; it does not prove that a later same-symbol market tick cannot cause a new strategy order. The Conservative engine's active-order and commitment guards use only its in-memory OrderRegistry. With no restored registry entry, a prior same-symbol order can be invisible to duplicate suppression if sufficient free quote remains.
+The recovery coordinator passes `blockOnExistingOrders`, but the account snapshot manager does not consume that argument; it does not establish a recovery gate. An external order by itself is not a failed account-wide reconciliation. An actual unowned execution event is different: the current ownership/accounting handler raises a terminal process-level safety halt and runs the owned-BUY safety workflow. A transport reconnect alone does not clear that latch. External orders remain untouched.
 
-Do not label a duplicate submission as an observed incident. Add deterministic same-symbol startup and reconnect regressions; verify readiness remains closed and broker recovery is not acknowledged while conflicting unowned orders remain. The policy must preserve manual-order ownership: never adopt, cancel or modify an external order. Decide whether conflicting unowned orders block the affected symbol, shared-asset account scope, or the whole trading process; do not leave `BLOCKED` as a diagnostic-only value without an explicit risk decision.
-
-**Severity:** HIGH — trading readiness/ownership.
-
-**Expected vs actual:** a conflicting unowned account-wide order must keep the applicable trading gate closed. Currently the manager records BLOCKED but returns only the order array; startup and reconnect callers do not enforce the classification.
-
-**Potential financial consequence:** a same-symbol manual order can be invisible to the in-memory OrderRegistry, allowing overlapping Harvester orders or unexpected use of shared free funds. This duplicate-order outcome is strongly indicated, not reproduced.
-
-**Required regression:** same-symbol manual open order before startup followed by a market tick; repeat during reconnect. Assert no strategy submission and no broker recovery acknowledgement while the order remains unowned.
-
-**Proposal only:** return a typed readiness result and make both startup and reconnect gates consume it. Keep manual orders external and require operator resolution; never adopt/cancel them.
+**Required regression before changing source:** use an external order on an enabled symbol, emit a strategy-triggering market tick, and assert the exact order decision. Repeat for an unrelated external symbol and during same-process reconnect. Any mitigation must be scoped no more broadly than the proven invariant, preserve unrelated market readiness, and never adopt/cancel/modify the external order. The owner policy is documented in [issue #667](https://github.com/45s/coinzilla/issues/667#issuecomment-6717086777).
 
 ### F-037 — Durable recovery conflicts with the current Journal non-blocking contract
 
