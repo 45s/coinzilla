@@ -156,7 +156,7 @@ async function awaitWithAbort(promise, signal) {
   }
 
   let abortListener;
-  const aborted = new Promise((resolve, reject) => {
+  const aborted = new Promise((_, reject) => {
     abortListener = () => reject(signal.reason ?? new Error('DNS resolution aborted before completion'));
     signal.addEventListener('abort', abortListener, { once: true });
   });
@@ -181,6 +181,9 @@ export async function resolvePublicAddresses(hostname, options = {}) {
   const normalizedHostname = hostname.toLowerCase().replace(/\.$/, '');
   if (isIP(normalizedHostname) || isLocalHostname(normalizedHostname)) {
     throw createUnsafeAddressError();
+  }
+  if (options.signal?.aborted) {
+    throw options.signal.reason ?? new Error('DNS resolution aborted before completion');
   }
   const resolver = options.resolveHost ?? dnsLookup;
   const resolution = resolver(normalizedHostname, { all: true, verbatim: true });
