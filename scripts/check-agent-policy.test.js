@@ -320,14 +320,18 @@ test('detects direct console access in production code while ignoring comments, 
       'const example = ' + tick + 'console.info("template text only")' + tick + ';',
       'const actual = ' + tick + 'template ' + '$' + '{console.error("interpolation")} ' + tick + ';',
       'console["warn"]("computed access");',
+      'const { error: reportError } = console;',
+      'const hostConsole = globalThis.console;',
     ].join('\n'));
     writeFileSync(join(root, 'apps', 'sample', 'test', 'runtime.test.js'), 'console.error("test stub")');
     writeFileSync(join(root, 'packages', 'utils', 'src', 'logger.js'), 'console.log("approved logger")');
     writeFileSync(join(root, 'packages', 'notifiers', 'scripts', 'telegram-smoke.js'), 'console.info("approved CLI")');
 
     assert.deepEqual(findDirectConsoleUsages(root), [
-      'apps/sample/src/runtime.js:5: direct console access is not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
-      'apps/sample/src/runtime.js:6: direct console access is not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      'apps/sample/src/runtime.js:5: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      'apps/sample/src/runtime.js:6: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      'apps/sample/src/runtime.js:7: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+      'apps/sample/src/runtime.js:8: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
     ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
