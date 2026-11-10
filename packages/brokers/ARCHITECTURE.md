@@ -135,9 +135,9 @@ Bootstrap constructs concrete Binance infrastructure, injects it into applicatio
 
 Keep the current public broker API stable during this internal migration. Any proposed public API change requires a separate compatibility analysis and consumer migration plan.
 
-## Current implementation snapshot (develop baseline)
+## Phase 9 implementation snapshot (after PR #697)
 
-**Code baseline before this slice:** `fb1b40c4780f476dc41045825c759b9c801e11b9` (after PR #696). The tree below reflects the completed Infrastructure placement: the complete Binance adapter and broker-websocket implementation live under `src/infrastructure/binance/`.
+**Structural baseline:** merge commit `ae5d1a8a9c474cff46a6db72f4258787bb071669` (PR #697). This is the historical starting snapshot for the remaining Phase 9 DDD slices, not the current `develop` commit. The later dependency-direction enforcement and public-contract verification are recorded in [Enforced dependency direction (PR #704)](#enforced-dependency-direction-pr-704) and the [package roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution). The tree below is a selective architecture map, not an exhaustive file listing.
 
 The package now has a physical Domain / Application / Infrastructure split. The existing `broker-websocket` implementation remains internally organized as before; this slice relocates it under Infrastructure without redesigning protocol clients or decomposing folders for their own sake.
 
@@ -253,7 +253,7 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 
 ### Current gaps and boundary pressure
 
-- `infrastructure/binance/broker-websocket/broker.js` is 782 lines and imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
+- `infrastructure/binance/broker-websocket/broker.js` imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
 - The user-data client port is now nested under `application/ports/`, matching the application-owned port placement used by Harvester. The infrastructure adapter implements this contract; application session code owns its use.
 - There is no `bootstrap/` folder or dedicated `create-binance-broker.js` composition root yet. Client construction currently starts in module-local factories in `broker.js`.
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
@@ -277,9 +277,9 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 | `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
 | `broker.core.js` | Shared base class and contract used by Market Simulator | Public compatibility extension point; preserve construction, state, and default methods |
 
-The 658-line `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
+`application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
 
-The 782-line broker facade warrants review because its constructor and imports reveal both composition and exchange-operation responsibilities. The existing package roadmap records a concrete reason to keep simple RPC methods cohesive there. No code movement is authorized by this snapshot alone; identify a genuine dependency inversion or cohesive responsibility before extracting anything.
+The broker facade warrants review because its constructor and imports reveal both composition and exchange-operation responsibilities. The existing package roadmap records a concrete reason to keep simple RPC methods cohesive there. No code movement is authorized by this snapshot alone; identify a genuine dependency inversion or cohesive responsibility before extracting anything.
 
 ## Existing code: initial responsibility map
 
@@ -288,7 +288,7 @@ This map is a starting hypothesis based on the current tree. Validate each modul
 | Existing module / area | Primary responsibility | Target owner |
 | --- | --- | --- |
 | `src/broker.core.js` | Shared broker base class and contract used by Market Simulator | Public compatibility extension point; preserve constructor/state/default-method behavior until consumers are migrated |
-| `src/infrastructure/binance/broker-websocket/broker.js` | 782-line public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
+| `src/infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
 | `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
 | `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
 | `utils/transport.js`, `utils/runtime.js` | Native socket and runtime mechanics | Infrastructure / transport |
@@ -334,6 +334,8 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 
 ## Migration phases and exit criteria
 
+**Status reconciliation (2026-11-10):** This A–F breakdown is the original work breakdown for the broker architecture migration. Its accepted offline DDD/TDD scope is complete and merged through Phase 9 / PR #704. The checklist below records that completed scope; it is not a second active roadmap. The conditional live TESTNET item remains separate Phase 8 operational acceptance in `ROADMAP.md` and is PAUSED / UNVERIFIED. It does not reopen the completed Phase 9 architecture work.
+
 ### Phase A — Architecture discovery and baseline
 - [x] Inventory all source modules, exports, import edges, side effects, state ownership, and consumers.
 - [x] Map each responsibility to Domain, Application, Infrastructure, Bootstrap, or compatibility surface.
@@ -343,43 +345,45 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - **Exit:** reviewed responsibility map and dependency graph; completed before the next extraction slice.
 
 ### Phase B — Characterization and test preparation
-- [ ] Identify public behaviors and safety-critical edge cases not already characterized.
+- [x] Identify public behaviors and safety-critical edge cases not already characterized.
 - [x] Add direct Application unit tests for `UserDataSession` through its injected `UserDataClientPort`; keep broker-composition and opt-in exchange integration tests in the infrastructure test suite.
-- [ ] Add only missing characterization tests; do not inflate test count for its own sake.
-- [ ] Capture public exports, result/error shapes, callback semantics, decimal fidelity, and state-changing RPC uncertainty.
-- [ ] Ensure deterministic fakes control clocks, timers, sockets, and concurrency without arbitrary sleeps.
+- [x] Add only missing characterization tests; do not inflate test count for its own sake.
+- [x] Capture public exports, result/error shapes, callback semantics, decimal fidelity, and state-changing RPC uncertainty.
+- [x] Ensure deterministic fakes control clocks, timers, sockets, and concurrency without arbitrary sleeps.
 - **Exit:** a trustworthy offline safety net exists for the first extraction slice.
 
 ### Phase C — Domain extraction
-- [ ] Extract genuinely domain-owned canonical value construction, invariants, and pure transformations from mixed modules.
-- [ ] Reuse Entities contracts; do not fork existing domain types.
-- [ ] Keep Binance protocol field mapping in infrastructure.
-- [ ] Add domain tests at the pure-function/value boundary.
+- [x] Extract the demonstrated broker-owned recovery-completion invariant into `domain/user-data-recovery-policy.js`; no separate Order / Market / Account model was justified.
+- [x] Reuse existing `@coinzilla/entities` contracts; do not fork canonical domain types.
+- [x] Keep Binance protocol field mapping in Infrastructure.
+- [x] Add deterministic tests at the pure recovery-policy boundary.
 - **Exit:** extracted domain modules have no application/infrastructure imports and are tested independently.
 
 ### Phase D — Application boundary and use cases
-- [ ] Identify actual caller goals and the minimal broker capabilities each workflow needs.
-- [ ] Define application-owned ports only for those required capabilities.
-- [ ] Extract focused injected workflows where orchestration is currently mixed with protocol work.
-- [ ] Keep domain independent of application ports and workflow code.
+- [x] Identify the real package-owned workflow: user-data subscription and recovery coordination.
+- [x] Define the narrow `UserDataClientPort` under `application/ports/` for that workflow.
+- [x] Extract `UserDataSession` as an injected Application coordinator; keep simple one-RPC broker methods in Infrastructure.
+- [x] Keep the Domain recovery policy independent of Application ports and workflow code.
 - **Exit:** application workflows can be tested with fake ports and do not instantiate Binance clients.
 
 ### Phase E — Infrastructure adapters and composition
 - [x] Group all Binance-specific runtime, API/Streams, transport, sessions, signing/configuration, and response adapters under `src/infrastructure/binance/`, preserving the existing `broker-websocket` internal structure.
 - [x] Implement application ports through the Binance infrastructure adapters without changing the public facade.
 - [x] Evaluate a dedicated bootstrap factory: keep composition in the concrete infrastructure broker facade because no separate bootstrap currently removes a demonstrated coupling or improves ownership. Keep public exports thin.
-- [ ] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes remain safe.
+- [x] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes through deterministic offline lifecycle and broker regression suites. Live exchange verification remains a separate Phase 8 gate.
 - **Exit:** concrete Binance dependencies are constructed only at infrastructure/composition boundaries; a separate bootstrap module exists only if it provides a demonstrated benefit.
 
 ### Phase F — Dependency and compatibility verification
-- [ ] Verify dependency direction (static import audit or focused architecture tests where practical).
-- [ ] Run public export and broker contract tests.
-- [ ] Run full package tests and coverage; run workspace quality gates.
-- [ ] Run opt-in TESTNET verification only when explicitly configured and safe.
-- [ ] Update package README, architecture, roadmap, and any consumer-facing docs.
-- **Exit:** migration is integrated into `develop`, all required CI checks pass, and the roadmap records the final tree and verified evidence.
+- [x] Verify dependency direction with the executable production-import architecture test (PR #704).
+- [x] Run the exact public export contract test and existing broker operation/adapter contract suites.
+- [x] Run full package tests and coverage plus required workspace quality gates on the exact PR #704 head.
+- [~] Run opt-in TESTNET verification only when explicitly configured and safe. It was not run for PR #704 and remains separately PAUSED / UNVERIFIED under Phase 8; do not retry the restricted hosted runner or weaken safety controls.
+- [x] Update package README, architecture, roadmap, and consumer-facing contract documentation.
+- **Exit:** the offline DDD migration is integrated into `develop`, all required CI checks pass, and the roadmap records the final tree and verified evidence. Live TESTNET acceptance remains separate under Phase 8.
 
 ## Per-PR delivery checklist
+
+**Template:** The unchecked boxes below are a reusable per-PR review template, not outstanding project work. Project-level completion is tracked in the migration phases above and `ROADMAP.md`.
 
 - [ ] One coherent architectural slice; no unrelated cleanup.
 - [ ] RED → GREEN → REFACTOR evidence is clear in tests and PR description.
