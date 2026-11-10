@@ -900,3 +900,16 @@ Before PR #824, the handler's bounded-log deduplication key included the outer e
 **Test-first regression:** the test-only PR #824 head `1eae58ff11ca3d72508c0fd7e4e36c8a16c8a70f` reproduced three expected failures: diagnostic-only readiness was closed, distinct causes were deduplicated together, and a subsequent close incremented the generation twice. The missing-metadata fail-closed test passed. The implementation now treats only explicit `recoveryRequired: false` with no contradictory reconciliation flag as diagnostic-only, preserves all state in that case, and includes bounded error/cause stack and cause identity in the deduplication key. Actual closes, contradictory flags, and unknown/malformed metadata retain the fail-closed path. Additional tests verify that a diagnostic-only error cannot clear an already unresolved application gate or overwrite the existing operational status.
 
 **Scope:** Harvester status handling only. No broker contract change, retry timer, reconnect heuristic, order mutation, TESTNET operation, or process-restart recovery is introduced.
+
+
+
+## F-033 — Permanent Journal write failure is incorrectly treated as retryable recovery work
+
+**Status:** CONFIRMED; test-first regressions added on the current task branch; implementation pending.
+
+- **Evidence:** `prepareOptionalJournal()` exposes `status.writeFailed` from the Journal writer. `Journal.record()` sets the writer's `writeFailed` latch after an append/write failure; later records and flushes on that instance continue failing. A file-content sync failure does not set this latch and may succeed on a later flush.
+- **Harvester propagation gap:** `index.js` currently forwards only the Journal flush result and discards the wrapper's `status.writeFailed` state. `makeEventPublisher.flush()` normalizes failed results to errors and drops additional recovery metadata. `createAccountSnapshotManager()` consequently marks every failed audit flush as retryable `DURABILITY` work.
+- **Recovery impact:** the coordinator correctly remains fail-closed and does not acknowledge the broker, but later `recovered` reminders can repeat owned-order reconciliation, account reads and audit publication even though the same Journal writer cannot recover.
+- **Expected behavior:** classify an explicitly poisoned Journal writer as terminal `DURABILITY / JOURNAL_WRITE_FAILURE` (`retryable: false`). Keep the readiness/reconciliation gates closed, preserve the original write error, and suppress further attempts for that terminal recovery state. Keep transient sync failures retryable; a retry must repeat authoritative reconciliation and both durability barriers before acknowledgement.
+- **TDD RED:** added focused regressions at the Harvester composition boundary, event-publisher boundary, account snapshot manager, and recovery coordinator. These tests are expected to fail before implementation because the classification is dropped or downgraded and the recovery coordinator does not preserve the terminal `DURABILITY` category. Exact RED execution is pending GitHub Actions.
+- **Safety:** no Journal package API or persistence semantics change; no Journal replay, process-restart recovery, TESTNET/live trading, or exchange action.

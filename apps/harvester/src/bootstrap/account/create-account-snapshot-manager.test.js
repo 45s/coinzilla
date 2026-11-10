@@ -338,6 +338,41 @@ test("preserves the original broker error as cause when the account-wide open-or
 })
 
 
+test("classifies a permanent Journal write failure as terminal during the recovery account audit", async () => {
+  const market = createFixture().market
+  const writeError = new Error("Journal session is failed after a previous write error")
+  const recoveryFailure = {
+    category: "DURABILITY",
+    stage: "JOURNAL_WRITE_FAILURE",
+    retryable: false,
+  }
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    flushResults: [{
+      ok: false,
+      durable: false,
+      errors: [writeError],
+      recoveryFailure,
+    }],
+  })
+
+  await assert.rejects(
+    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    (error) => {
+      assert.match(error.message, /Unable to durably persist RECOVERY account snapshot/)
+      assert.deepEqual(
+        error.recoveryFailure,
+        recoveryFailure,
+        "A poisoned Journal writer must not be downgraded to a retryable sync failure.",
+      )
+      return true
+    },
+  )
+
+  assert.equal(fixture.publishedEvents.length, 1, "The uncertain recovery audit publication must remain intact.")
+  assert.equal(fixture.getFlushCount(), 1, "A permanent write failure must not trigger an internal flush retry.")
+})
+
 test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
   const market = createFixture().market
   const syncFailure = new Error("simulated Journal file sync failure")

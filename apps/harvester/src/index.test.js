@@ -1165,6 +1165,39 @@ test("captures process provenance before trading startup and publishes it separa
   assert.ok(operations.indexOf("publish:harvester.process_started") < operations.indexOf("runtime.start"), "trading bootstrap must start only after the process event has been admitted to the existing Journal/EventBus pipeline")
 })
 
+test("preserves terminal Journal write-failure classification at the Harvester composition boundary", async () => {
+  const writeError = new Error("Journal writer is poisoned after a previous append failure")
+  let flushResult
+  await runMain({
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: true }),
+      status: { state: "degraded", writeFailed: true, writeErrorCount: 1 },
+      flush: async () => ({ ok: false, errors: [writeError] }),
+      close: async () => ({ ok: true, closed: true, durable: false }),
+    }),
+    start: async ({ eventPublisher }) => {
+      flushResult = await eventPublisher.flush()
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }
+    },
+    logger: { info() {}, system() {}, error() {} },
+    registerSignalHandler: () => {},
+  })
+
+  assert.equal(flushResult.ok, false, "A failed Journal write must remain a failed durable flush.")
+  assert.equal(flushResult.errors[0], writeError, "The original Journal write error must remain available.")
+  assert.deepEqual(
+    flushResult.recoveryFailure,
+    { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false },
+    "A poisoned Journal writer must expose an explicit terminal recovery classification.",
+  )
+})
+
 test("requires Journal readiness and publishes process provenance before trading startup", async () => {
   let resolveJournalReady
   let resolveProcessStarted

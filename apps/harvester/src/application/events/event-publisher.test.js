@@ -32,6 +32,32 @@ test("fails closed when durable flush is unavailable or fails", async () => {
   assert.match(failed.errors[0].message, /fsync failed/)
 })
 
+test("preserves explicit terminal recovery metadata from a failed durable flush", async () => {
+  const recoveryFailure = {
+    category: "DURABILITY",
+    stage: "JOURNAL_WRITE_FAILURE",
+    retryable: false,
+  }
+  const publisher = makeEventPublisher({
+    eventBus: { publish: () => ({ ok: true }) },
+    flush: async () => ({
+      ok: false,
+      errors: [new Error("Journal writer is permanently failed")],
+      recoveryFailure,
+    }),
+    logger: { error() {} },
+  })
+
+  const result = await publisher.flush()
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(
+    result.recoveryFailure,
+    recoveryFailure,
+    "The event publisher must not discard the Journal's explicit terminal failure classification.",
+  )
+})
+
 test("normalizes a thrown flush failure without throwing across the publisher boundary", async () => {
   const publisher = makeEventPublisher({
     eventBus: { publish: () => ({ ok: true }) },
