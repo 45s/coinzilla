@@ -14,6 +14,20 @@ function withRecoveryFailure(error, category, stage, retryable) {
   return normalized
 }
 
+function resolveAuditFlushFailure(flushed, stage) {
+  const failure = flushed?.recoveryFailure
+  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) return failure
+  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) return failure
+  return { category: "DURABILITY", stage: stage + "_UNCLASSIFIED", retryable: false }
+}
+
+function createAuditFlushError({ flushed, message, stage }) {
+  const failure = resolveAuditFlushFailure(flushed, stage)
+  const cause = flushed?.errors?.find?.((error) => error instanceof Error)
+  const error = cause ? new Error(message, { cause }) : new Error(message)
+  return withRecoveryFailure(error, failure.category, failure.stage, failure.retryable)
+}
+
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
     logger.system(data)
@@ -224,14 +238,15 @@ export function createAccountSnapshotManager({
     if (typeof eventPublisher?.flush === "function") {
       let flushed
       try { flushed = await eventPublisher.flush() } catch (error) {
-        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH", true)
+        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED", false)
       }
       if (flushed?.ok !== true || flushed?.durable !== true) {
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw withRecoveryFailure(
-          new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : "")),
-          "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH", true,
-        )
+        throw createAuditFlushError({
+          flushed,
+          message: "Unable to durably persist account open-orders audit" + (details ? ": " + details : ""),
+          stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
+        })
       }
     } else {
       throw withRecoveryFailure(
@@ -287,14 +302,15 @@ export function createAccountSnapshotManager({
     if (typeof eventPublisher?.flush === "function") {
       let flushed
       try { flushed = await eventPublisher.flush() } catch (error) {
-        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH", true)
+        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
       }
       if (flushed?.ok !== true || flushed?.durable !== true) {
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw withRecoveryFailure(
-          new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : "")),
-          "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH", true,
-        )
+        throw createAuditFlushError({
+          flushed,
+          message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
+          stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+        })
       }
     } else {
       throw withRecoveryFailure(

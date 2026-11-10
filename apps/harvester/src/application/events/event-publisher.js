@@ -71,7 +71,9 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
         : [new Error("Harvester event journal flush failed")]
       const failure = toResult({ errors })
       reportFailure({ event: { name: "journal.flush" }, error: failure.errors[0] })
-      return failure
+      return result?.recoveryFailure
+        ? { ...failure, recoveryFailure: result.recoveryFailure }
+        : failure
     } catch (error) {
       reportFailure({ event: { name: "journal.flush" }, error })
       return toResult({ error })

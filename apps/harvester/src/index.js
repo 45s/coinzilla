@@ -29,6 +29,21 @@ function logSystem(logger, message) {
   logger?.info?.(message)
 }
 
+function classifyJournalFlushFailure({ status } = {}) {
+  if (status?.writeFailed === true) {
+    return { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false }
+  }
+  if (
+    status?.started === true &&
+    status?.closed === false &&
+    status?.writeFailed === false &&
+    status?.writeErrorCount === 0
+  ) {
+    return { category: "DURABILITY", stage: "JOURNAL_FLUSH_FAILURE", retryable: true }
+  }
+  return { category: "DURABILITY", stage: "JOURNAL_FLUSH_UNCLASSIFIED", retryable: false }
+}
+
 function createDefaultJournalService({ eventBus, logger, processIdentity }) {
   return prepareOptionalJournal({ eventBus, logger, processIdentity })
 }
@@ -183,10 +198,15 @@ export async function main({
       logger,
       flush: async () => {
         await processStartedPublication
-        return journalService?.flush?.() ?? Promise.resolve({
+        const result = await (journalService?.flush?.() ?? Promise.resolve({
           ok: false,
           errors: [new Error("Harvester Journal durable flush is unavailable")],
-        })
+        }))
+        if (result?.ok !== false) return result
+        return {
+          ...result,
+          recoveryFailure: classifyJournalFlushFailure({ status: journalService?.status }),
+        }
       },
     })
 
