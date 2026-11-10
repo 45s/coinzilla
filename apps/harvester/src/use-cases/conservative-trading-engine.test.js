@@ -2639,7 +2639,7 @@ test("accepts a matching Binance NEW report after a lost order acknowledgement",
     order: unknownOrder,
     brokerOrderId: "binance-accepted-after-timeout",
     status: "OPEN",
-    updatedAt: 3,
+    updatedAt: 1,
   })
   const result = await engine.processUserDataEvent({
     event: { eventType: "executionReport", executionType: "NEW", executedOrder: exchangeNew },
