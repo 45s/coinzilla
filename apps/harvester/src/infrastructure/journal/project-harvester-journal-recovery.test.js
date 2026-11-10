@@ -230,6 +230,8 @@ test("projects recovery-cycle completions and paused strategy state", () => {
         symbol: "BTCUSDT",
         marketId: "binance:BTCUSDT",
         freeQuantity: "0.01",
+        keepQuantity: "0.01",
+        minProfit: "0.01",
         realizedNetProfit: "0.25",
       }),
       record("strategy.paused", {
@@ -244,6 +246,8 @@ test("projects recovery-cycle completions and paused strategy state", () => {
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
     freeQuantity: "0.01",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
     realizedNetProfit: "0.25",
     completedOrderClientId: "h-BTCUSDT-sell-1",
     completedOrderBrokerOrderId: "9002",
@@ -527,7 +531,7 @@ const completedCycleRecords = () => [
     symbol: "BTCUSDT",
     side: "BUY",
     type: "LIMIT",
-    price: "100",
+    price: "102.757352941176470588",
     quantity: "0.5",
     status: "PENDING",
   }),
@@ -537,7 +541,7 @@ const completedCycleRecords = () => [
     symbol: "BTCUSDT",
     side: "BUY",
     type: "LIMIT",
-    price: "100",
+    price: "102.757352941176470588",
     quantity: "0.5",
     status: "FILLED",
   }),
@@ -548,7 +552,7 @@ const completedCycleRecords = () => [
     clientOrderId: "h-BTCUSDT-buy-1",
     symbol: "BTCUSDT",
     side: "BUY",
-    price: "100",
+    price: "102.757352941176470588",
     quantity: "0.5",
     quoteQuantity: "50",
     liquidityRole: "MAKER",
@@ -560,8 +564,8 @@ const completedCycleRecords = () => [
     symbol: "BTCUSDT",
     side: "SELL",
     type: "LIMIT",
-    price: "100",
-    quantity: "0.4",
+    price: "102.757352941176470588",
+    quantity: "0.4896",
     status: "PENDING",
   }),
   record("order.submitted", {
@@ -570,8 +574,8 @@ const completedCycleRecords = () => [
     symbol: "BTCUSDT",
     side: "SELL",
     type: "LIMIT",
-    price: "100",
-    quantity: "0.4",
+    price: "102.757352941176470588",
+    quantity: "0.4896",
     status: "FILLED",
   }),
   record("execution.fill_applied", {
@@ -581,8 +585,8 @@ const completedCycleRecords = () => [
     clientOrderId: "h-BTCUSDT-sell-1",
     symbol: "BTCUSDT",
     side: "SELL",
-    price: "125.625",
-    quantity: "0.4",
+    price: "102.757352941176470588",
+    quantity: "0.4896",
     quoteQuantity: "50.25",
     liquidityRole: "MAKER",
     commissions: [],
@@ -592,6 +596,8 @@ const completedCycleRecords = () => [
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
     freeQuantity: "0.01",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
     realizedNetProfit: "0.25",
   }),
 ]
@@ -607,9 +613,9 @@ test("restores Portfolio, RecoveryLedger, free inventory, and order ownership fr
 
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join('; '))
   const position = restored.data.portfolio.getPosition({ symbol: "BTCUSDT" })
-  assert.equal(position.baseQuantity.amount, "0.0896")
+  assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.01")
-  assert.equal(position.totalBaseQuantity.amount, "0.0996")
+  assert.equal(position.totalBaseQuantity.amount, "0.01")
   const ledger = restored.data.recoveryLedgers.get(canonicalMarket.id)
   assert.equal(ledger.buyCost, "0")
   assert.equal(ledger.netSellProceeds, "0")
@@ -618,6 +624,28 @@ test("restores Portfolio, RecoveryLedger, free inventory, and order ownership fr
   assert.ok(restored.data.orderRegistry.orders.every((order) => order.status === "UNKNOWN"))
   assert.deepEqual([...restored.data.completedOrderClientIds], ["h-BTCUSDT-sell-1"])
   assert.deepEqual([...restored.data.trailingBuySymbols], ["BTCUSDT"])
+})
+
+test("fails closed when a completed-cycle journal record leaves active sellable inventory", () => {
+  const records = completedCycleRecords()
+  records[6] = record("recovery.cycle_completed", {
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    freeQuantity: "0.009",
+    keepQuantity: "0.009",
+    minProfit: "0.01",
+    realizedNetProfit: "0.25",
+  })
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors?.[0]?.message ?? "", /must allocate all replayed active inventory/)
 })
 
 test("fails closed when canonical market metadata is missing for a recovered fill", () => {
@@ -637,6 +665,8 @@ test("fails closed when recovery-cycle profit contradicts replayed fills", () =>
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
     freeQuantity: "0.01",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
     realizedNetProfit: "0.26",
   })
   const projection = projectHarvesterJournalRecovery({ records })
