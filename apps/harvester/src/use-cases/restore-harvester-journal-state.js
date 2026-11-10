@@ -158,12 +158,14 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       }) !== 0) {
         throw new Error("Recovery-cycle completion must allocate all replayed active inventory (keepQuantity plus validated dust) for " + item.symbol)
       }
-      const nextPortfolio = portfolio
-        .allocateFreeQuantity({
+      let nextPortfolio = portfolio
+      if (compareDecimal({ left: item.freeQuantity, right: "0" }) > 0) {
+        nextPortfolio = nextPortfolio.allocateFreeQuantity({
           marketId: market.id,
           quantity: item.freeQuantity,
         })
-        .resetRecoveryBasis({ marketId: market.id })
+      }
+      nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id })
       const resetLedger = recoveryLedger.resetCycle({
         minProfit: item.minProfit,
         spent: position.spent,
