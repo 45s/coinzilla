@@ -109,6 +109,8 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       symbol: "BTCUSDT",
       marketId: "binance:BTCUSDT",
       freeQuantity,
+      keepQuantity: "0.01",
+      minProfit: "0.01",
       realizedNetProfit: "0.25",
     }, 9),
     record("account.snapshot_captured", {
