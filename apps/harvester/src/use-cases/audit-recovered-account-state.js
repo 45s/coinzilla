@@ -41,7 +41,8 @@ function getInitialTradingSnapshot({ projection }) {
   )
   if (!firstTradingSession) return undefined
   const snapshots = projection.data.accountSnapshots.filter((snapshot) =>
-    snapshot.fileName === firstTradingSession.fileName && snapshot.phase === "PREFLIGHT"
+    snapshot.fileName === firstTradingSession.fileName &&
+    ["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)
   )
   if (snapshots.length === 0) return undefined
 
