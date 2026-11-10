@@ -36,9 +36,9 @@ The domain suite is supplemented by application-level engine and use-case tests 
 
 ### High — blocked recovery SELL must not be bypassed by a new BUY
 
-Source review found a decision-path gap in `strategies/conservative/strategy.js`: after recording `PRICE_FILTER_BLOCKED` for a required recovery SELL, the function continues into standing-BUY planning. The existing MAX_PRICE test asserted only that no SELL was emitted and did not inspect the complete decision. Under the canonical specification, a price-filter block is unsafe and must fail closed; the next BUY must not bypass the blocked recovery SELL.
+Source review found two decision-path gaps in `strategies/conservative/strategy.js`: (1) after recording `PRICE_FILTER_BLOCKED` for a required recovery SELL, the function continues into standing-BUY planning; and (2) an active recovery SELL in `PENDING` or `UNKNOWN` state suppresses duplicate SELL intent but still permits a new BUY. The canonical specification permits the next standing BUY alongside an acknowledged OPEN/PARTIALLY_FILLED recovery SELL, not an unacknowledged or unresolved SELL.
 
-A strengthened regression now asserts the complete decision and exact blocked disposition. Its RED result is pending execution on the PR head; no production defect is claimed as confirmed until that test is run.
+The MAX_PRICE regression was executed on PR #917 head `9c34968997e61e5c781a8b2c95067c761635a60e`: Harvester tests reported 870 passed / 1 failed. The failure was the intended assertion: actual actions contained a `NEXT_STANDING_BUY` at `0.099` for quantity `100`, while expected actions were empty. A second deterministic status-matrix regression now covers PENDING and UNKNOWN; its RED result is pending CI. No production defect is claimed for that second path until execution confirms it.
 
 ### High — assertion diagnostics are inconsistent
 

@@ -124,6 +124,34 @@ test("does not create a second SELL while a recovery SELL is active", () => {
   assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
 })
 
+test("blocks the next BUY while the recovery SELL acknowledgement is pending or unknown", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+
+  for (const status of ["PENDING", "UNKNOWN"]) {
+    const decision = evaluateConservativeStrategy({
+      marketPrice,
+      pairConfig,
+      settings,
+      portfolio,
+      recoveryLedger,
+      marketMetadata,
+      activeOrders: [{ market, side: "SELL", status }],
+      lastBuyPrice: "0.1",
+    })
+
+    assert.deepEqual(
+      decision.actions,
+      [],
+      "A " + status + " recovery SELL must not be bypassed by submitting the next standing BUY.",
+    )
+    assert.equal(
+      decision.action,
+      "NO_ACTION",
+      "The strategy must wait for an acknowledged recovery SELL before enabling the next BUY; current SELL status: " + status,
+    )
+  }
+})
+
 test("rejects missing exchange increments and invalid strategy context", () => {
   assert.throws(() => evaluateConservativeStrategy({
     marketPrice,
