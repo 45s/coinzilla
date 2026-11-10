@@ -132,6 +132,13 @@ export function evaluateConservativeStrategy({
     symbol: marketPrice.symbol,
     side: "SELL",
   })
+  // A pending or unknown recovery SELL is not an acknowledged execution
+  // commitment. Likewise, a price-filter-blocked SELL must not be bypassed
+  // by creating the next standing BUY.
+  const hasUnacknowledgedRecoverySell = activeOrders.some((order) =>
+    order?.market?.symbol === marketPrice.symbol &&
+    order.side === "SELL" &&
+    (order.status === "PENDING" || order.status === "UNKNOWN"))
   const actions = []
   // The recovery ledger remains open until every exchange-sellable unit above
   // keepQuantity has been sold. This includes residual sell-through after the
@@ -280,7 +287,9 @@ export function evaluateConservativeStrategy({
     }
   }
 
-  if (!hasActiveBuy) {
+  if (!hasActiveBuy &&
+      !hasUnacknowledgedRecoverySell &&
+      inventoryDisposition?.status !== "PRICE_FILTER_BLOCKED") {
     if (hasActivePosition({ activeQuantity }) && lastBuyPrice === undefined) {
       throw new Error("Conservative active Position requires the reconciled completed-BUY VWAP before placing the next standing BUY")
     }

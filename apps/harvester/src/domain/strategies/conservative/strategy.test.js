@@ -108,20 +108,71 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
   ])
 })
 
-test("does not create a second SELL while a recovery SELL is active", () => {
+test("allows the next BUY only after the recovery SELL is acknowledged", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
-  const decision = evaluateConservativeStrategy({
-    marketPrice,
-    pairConfig,
-    settings,
-    portfolio,
-    recoveryLedger,
-    marketMetadata,
-    activeOrders: [{ market, side: "SELL", status: "PARTIALLY_FILLED" }],
-    lastBuyPrice: "0.1",
-  })
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
+
+  for (const status of ["OPEN", "PARTIALLY_FILLED"]) {
+    const decision = evaluateConservativeStrategy({
+      marketPrice,
+      pairConfig,
+      settings,
+      portfolio,
+      recoveryLedger,
+      marketMetadata,
+      activeOrders: [{
+        market,
+        side: "SELL",
+        status,
+        brokerOrderId: "broker-sell-1",
+      }],
+      lastBuyPrice: "0.1",
+    })
+
+    assert.deepEqual(
+      decision.actions,
+      [{
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: "0.099",
+        quantity: "100",
+        reason: "NEXT_STANDING_BUY",
+      }],
+      "An acknowledged " + status + " recovery SELL may coexist with exactly one next standing BUY.",
+    )
+    assert.equal(
+      decision.action,
+      "PLACE_ORDERS",
+      "The strategy must keep the next BUY eligible after recovery SELL acknowledgement: " + status,
+    )
+  }
+})
+
+test("blocks the next BUY while the recovery SELL acknowledgement is pending or unknown", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+
+  for (const status of ["PENDING", "UNKNOWN"]) {
+    const decision = evaluateConservativeStrategy({
+      marketPrice,
+      pairConfig,
+      settings,
+      portfolio,
+      recoveryLedger,
+      marketMetadata,
+      activeOrders: [{ market, side: "SELL", status }],
+      lastBuyPrice: "0.1",
+    })
+
+    assert.deepEqual(
+      decision.actions,
+      [],
+      "A " + status + " recovery SELL must not be bypassed by submitting the next standing BUY.",
+    )
+    assert.equal(
+      decision.action,
+      "NO_ACTION",
+      "The strategy must wait for an acknowledged recovery SELL before enabling the next BUY; current SELL status: " + status,
+    )
+  }
 })
 
 test("rejects missing exchange increments and invalid strategy context", () => {
@@ -575,7 +626,7 @@ test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-t
   assert.equal(multiplyDecimal({ left: sell.price, right: sell.quantity }), "0.06")
 })
 
-test("defers a recovery SELL when its profit-preserving price exceeds MAX_PRICE", () => {
+test("blocks the next BUY when the required recovery SELL exceeds MAX_PRICE", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -595,9 +646,27 @@ test("defers a recovery SELL when its profit-preserving price exceeds MAX_PRICE"
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.inventoryDisposition.status, "PRICE_FILTER_BLOCKED")
-  assert.equal(decision.inventoryDisposition.reason, "MAX_PRICE")
+  assert.deepEqual(
+    decision.actions,
+    [],
+    "A MAX_PRICE-blocked recovery SELL must prevent the next standing BUY from being submitted.",
+  )
+  assert.equal(
+    decision.action,
+    "NO_ACTION",
+    "The strategy must fail closed instead of returning an executable BUY while recovery SELL pricing is blocked.",
+  )
+  assert.deepEqual(
+    decision.inventoryDisposition,
+    {
+      status: "PRICE_FILTER_BLOCKED",
+      quantity: "99",
+      reason: "MAX_PRICE",
+      requiredPrice: "0.102",
+      maximumPrice: "0.101",
+    },
+    "The decision must preserve the exact blocked recovery inventory and exchange price-filter evidence.",
+  )
 })
 
 test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL", () => {
