@@ -10,6 +10,12 @@ owner: brokers
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
 
+### Canonical order acknowledgement completeness — issue #960
+
+- [~] **Request complete Binance RESULT acknowledgements for canonical order placement.** Binance's default response for `LIMIT_MAKER` is minimal `ACK`, which omits the order facts required by `adaptCanonicalOrder()`. Canonical placement must explicitly request `newOrderRespType: "RESULT"`; this returns the canonical order fields without the optional fills array.
+- [ ] Verify the test-first regression and full broker/workspace CI on the exact PR head before merge. The implementation must not add a retry, infer missing facts from an ACK, or change the compatibility `createOrder()` contract.
+- Consumer recovery remains Harvester-owned and is tracked separately in [issue #962](https://github.com/45s/coinzilla/issues/962).
+
 ### Trading environment selection — explicit contract
 
 - Binance endpoint selection is controlled only by `TRADING_MODE`, with the exact values `testnet` and `live`.
