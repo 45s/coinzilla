@@ -66,10 +66,11 @@ test("captures the third-asset baseline before applying the fill to Portfolio an
   assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "650.1")
 })
 
-test("leaves Portfolio and RecoveryLedger unchanged when the third-asset baseline cannot be persisted", async () => {
+test("accounts a valid fill when optional third-asset baseline persistence fails and warns that audit will fail closed", async () => {
+  const warnings = []
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
-    logger: {},
+    logger: { warning: (entry) => warnings.push(entry) },
     onCommissionAsset: async () => {
       throw new Error("PREFLIGHT fee-asset baseline is unavailable")
     },
@@ -86,10 +87,11 @@ test("leaves Portfolio and RecoveryLedger unchanged when the third-asset baselin
 
   const result = await workflow.updateTradingAccounting({ fill })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /PREFLIGHT fee-asset baseline is unavailable/)
-  assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }), undefined)
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), undefined)
+  assert.equal(result.ok, true)
+  assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }).spent.amount, "650.1")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "650.1")
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0].message, /account reconciliation will fail closed/)
 })
 
 test("serializes concurrent canonical fills and commits both accounting projections", async () => {
