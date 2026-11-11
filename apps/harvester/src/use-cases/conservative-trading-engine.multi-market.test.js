@@ -4,6 +4,7 @@ import assert from "node:assert/strict"
 import {
   Asset,
   CanonicalOrder,
+  Order,
   Fill,
   Market,
   Money,
@@ -12,6 +13,7 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 
@@ -48,7 +50,14 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio } = {}) {
+async function createHarness({
+  quoteFreeBalance = "10000",
+  portfolio: initialPortfolio,
+  initialOrders = [],
+  openOrdersBySymbol = new Map(),
+  orderHistoryById = new Map(),
+  brokerCalls = [],
+} = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -116,7 +125,18 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
         completedAt: 2,
       }),
     }),
-    getFills: async () => ({ ok: true, data: [] }),
+    getOpenOrders: async ({ symbol }) => {
+      brokerCalls.push({ method: "getOpenOrders", symbol })
+      return { ok: true, data: openOrdersBySymbol.get(symbol) ?? [] }
+    },
+    getCanonicalOrderHistory: async ({ symbol, orderId }) => {
+      brokerCalls.push({ method: "getCanonicalOrderHistory", symbol, orderId })
+      return { ok: true, data: orderHistoryById.get(orderId) ?? [] }
+    },
+    getFills: async ({ symbol, orderId }) => {
+      brokerCalls.push({ method: "getFills", symbol, orderId })
+      return { ok: true, data: [] }
+    },
   }
   const engine = makeConservativeTradingEngine({
     broker,
@@ -151,6 +171,9 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     isMarketBookFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
+    initialState: initialOrders.length > 0
+      ? { orderRegistry: new OrderRegistry({ orders: initialOrders }) }
+      : {},
   })
 
   for (const market of markets) {
@@ -164,7 +187,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     } })
   }
 
-  return { engine, orders, pauses, accountedFills }
+  return { engine, orders, pauses, accountedFills, brokerCalls }
 }
 
 async function startBothMarkets(engine) {
@@ -408,4 +431,89 @@ test("duplicate fills and stale order updates do not double-account across marke
   assert.equal(engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT").status, "PARTIALLY_FILLED")
   assert.equal(engine.getOrders().find((order) => order.market.symbol === "SOLUSDT").status, "PARTIALLY_FILLED")
   assert.deepEqual(pauses, [])
+})
+
+
+test("reconciles only the requested market when recovery order snapshots are scoped", async () => {
+  const dogeOrder = new CanonicalOrder({
+    clientOrderId: "h-DOGEUSDT-buy-1",
+    brokerOrderId: "doge-broker-1",
+    market: marketsBySymbol.get("DOGEUSDT"),
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: dogeAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: dogeAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const solOrder = new CanonicalOrder({
+    clientOrderId: "h-SOLUSDT-buy-1",
+    brokerOrderId: "sol-broker-1",
+    market: marketsBySymbol.get("SOLUSDT"),
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: solAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: solAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const toBrokerOrder = (canonicalOrder) => {
+    const order = new Order({
+      id: canonicalOrder.brokerOrderId,
+      clientOrderId: canonicalOrder.clientOrderId,
+      symbol: canonicalOrder.market.symbol,
+      type: canonicalOrder.type,
+      side: canonicalOrder.side,
+      quantity: 1,
+      price: 100,
+    })
+    Object.assign(order, {
+      originalQuantity: "1",
+      executedQuantity: "0",
+      status: "NEW",
+    })
+    return order
+  }
+  const openOrdersBySymbol = new Map([
+    ["DOGEUSDT", [toBrokerOrder(dogeOrder)]],
+    ["SOLUSDT", [toBrokerOrder(solOrder)]],
+  ])
+  const orderHistoryById = new Map([
+    ["doge-broker-1", [dogeOrder]],
+    ["sol-broker-1", [solOrder]],
+  ])
+  const { engine, brokerCalls } = await createHarness({
+    initialOrders: [dogeOrder, solOrder],
+    openOrdersBySymbol,
+    orderHistoryById,
+  })
+
+  const result = await engine.reconcileOwnedOrders({
+    symbol: "DOGEUSDT",
+    recoveryMode: true,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.reconciled, 1)
+  assert.deepEqual(result.data.symbols, ["DOGEUSDT"])
+  assert.deepEqual(
+    brokerCalls.map(({ method, symbol }) => ({ method, symbol })),
+    [
+      { method: "getOpenOrders", symbol: "DOGEUSDT" },
+      { method: "getCanonicalOrderHistory", symbol: "DOGEUSDT" },
+      { method: "getFills", symbol: "DOGEUSDT" },
+    ],
+    "A market-scoped recovery must not query or reconcile another market's owned orders.",
+  )
+  assert.equal(
+    engine.getOrders().find((order) => order.market.symbol === "SOLUSDT").status,
+    "OPEN",
+    "The unrelated market's order must remain unchanged.",
+  )
 })
