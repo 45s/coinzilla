@@ -75,3 +75,42 @@ test("refuses a missing or corrupt durable-fact store", async (t) => {
 
   assert.equal(result.ok, false)
 })
+
+
+test("rejects a durable history-coverage sequence that narrows prior verified coverage", async () => {
+  const durableFactsStore = {
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [
+          {
+            factId: "coverage:btc:1",
+            factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+            data: {
+              symbol: "BTCUSDT",
+              coveredFromTime: 100,
+              verifiedAt: 200,
+              evidenceDigest: "a".repeat(64),
+              verifiedBy: "operator:trader",
+            },
+          },
+          {
+            factId: "coverage:btc:2",
+            factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+            data: {
+              symbol: "BTCUSDT",
+              coveredFromTime: 150,
+              verifiedAt: 300,
+              evidenceDigest: "b".repeat(64),
+              verifiedBy: "operator:trader",
+            },
+          },
+        ],
+      },
+    }),
+  }
+  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /narrows the verified history window/)
+})
