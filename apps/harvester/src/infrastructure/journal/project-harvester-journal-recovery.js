@@ -703,7 +703,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity" })
         const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
         const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
-        const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
         if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
           throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
         }
@@ -747,7 +747,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           throw new TypeError("Recovery-cycle non-completion outcome is invalid")
         }
         const reason = requireString({ value: data.reason, field: "reason" })
-        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
         const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
         const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
         const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
