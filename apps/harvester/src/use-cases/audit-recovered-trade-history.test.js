@@ -49,9 +49,10 @@ const journalFill = (fill = makeFill()) => ({
 
 const marketHistoryEvidence = Object.freeze({
   historyPagesComplete: true,
-  marketHistoryComplete: true,
+  marketHistoryPagesComplete: true,
   historyScope: "MARKET",
   marketsQueried: Object.freeze(["BTCUSDT"]),
+  historyStartTime: 50,
 })
 
 const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
@@ -61,6 +62,12 @@ const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
   scope: "MARKET",
   market,
   historyEvidence: marketHistoryEvidence,
+  historyRetentionEvidence: {
+    baselineFactId: "history-baseline-btc-1",
+    symbol: "BTCUSDT",
+    coveredFromTime: 50,
+    verifiedAt: 60,
+  },
 })
 
 test("rejects a caller-supplied market-universe boolean as account-wide completeness evidence", () => {
@@ -276,4 +283,39 @@ test("rejects cross-market executions in a single-market history response", () =
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /contains a fill for another market/)
+})
+
+
+test("rejects market pagination without durable retention coverage", () => {
+  const fill = makeFill()
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    scope: "MARKET",
+    market,
+    historyEvidence: marketHistoryEvidence,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /Durable market-history retention evidence is missing/)
+})
+
+test("rejects a durable market-history baseline that starts after the queried history", () => {
+  const fill = makeFill()
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    scope: "MARKET",
+    market,
+    historyEvidence: marketHistoryEvidence,
+    historyRetentionEvidence: {
+      baselineFactId: "history-baseline-btc-late",
+      symbol: "BTCUSDT",
+      coveredFromTime: 51,
+      verifiedAt: 60,
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /does not cover BTCUSDT/)
 })
