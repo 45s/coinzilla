@@ -2,7 +2,6 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
-
 ## Operator tooling — interactive trading-pair configuration generator
 
 **Status: IN PROGRESS — implementation and tests are included in [PR #1012](https://github.com/45s/coinzilla/pull/1012); exact-head CI and final review remain pending.**
