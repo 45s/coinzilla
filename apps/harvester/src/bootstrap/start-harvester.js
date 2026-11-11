@@ -3,6 +3,7 @@ import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
+import { createCandleHistoryService } from "../use-cases/create-candle-history-service.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
@@ -103,6 +104,7 @@ export async function startHarvester({
   const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
+  let candleHistoryService
   // One explicit state object makes user-data readiness and queue ownership visible.
   const userDataState = {
     stopped: false,
@@ -290,6 +292,9 @@ export async function startHarvester({
       bookSubscriptions,
       marketPriceIntake,
     })
+
+    candleHistoryService = createCandleHistoryService({ broker, logger, now })
+    await candleHistoryService.start({ pairs, subscriptions })
   } catch (error) {
     logger.error?.({
       message: "Broker startup step failed",
@@ -344,7 +349,8 @@ export async function startHarvester({
     getRecoveryLedger,
     getMarketMetadata,
     getAccountSnapshot,
-    subscriptions: subscriptions.map(({ symbol }) => symbol),
+    subscriptions: [...new Set(subscriptions.map(({ symbol }) => symbol))],
+    getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
     connected: true,
     stop,
   })
