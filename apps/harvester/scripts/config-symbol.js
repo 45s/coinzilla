@@ -52,12 +52,12 @@ export async function runConfigSymbol({
     makerPercent: parseDecimalInput(await ask("Maker commission percent (for example 0): "), "makerPercent"),
     takerPercent: parseDecimalInput(await ask("Taker commission percent (for example 0.1): "), "takerPercent"),
     minProfit: parseDecimalInput(
-      askWithDefault(await ask("Minimum profit per recovery cycle in quote asset [0.01]: "), "0.01"),
+      await ask("Minimum profit per recovery cycle in quote asset: "),
       "minProfit",
       { exclusiveMin: true },
     ),
     priceStepPercent: parseDecimalInput(
-      askWithDefault(await ask("Price step percent [0.05]: "), "0.05"),
+      await ask("Price step percent: "),
       "priceStepPercent",
       { exclusiveMin: true },
     ),
