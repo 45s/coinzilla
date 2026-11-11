@@ -216,7 +216,7 @@ export function normalizePairInputs(inputs) {
  * Create the complete pair object accepted by Harvester's current app-config schema.
  *
  * @param {{inputs: object, metadata: object}} options - Operator inputs and Binance metadata.
- * @returns {Readonly<object>} Runtime-valid, disabled-by-default pair configuration.
+ * @returns {Readonly<object>} Runtime-valid pair configuration ready to add to the strategy.
  * @throws {TypeError|RangeError|Error} If sizing, exchange constraints, or order-type support is invalid.
  */
 export function createPairConfig({ inputs, metadata } = {}) {
@@ -263,7 +263,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   }
 
   return Object.freeze({
-    enabled: false,
+    enabled: true,
     investment: toConfigNumber(investment, "investment"),
     orderQuantity: toConfigNumber(orderQuantity, "orderQuantity"),
     keepQuantity: toConfigNumber(keepQuantity, "keepQuantity"),
