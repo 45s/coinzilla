@@ -138,6 +138,7 @@ export async function fetchAccountTradeHistory({
         historyPagesComplete: true,
         marketHistoryComplete: true,
         historyScope: markets.length === 1 ? "MARKET" : "MARKETS",
+        marketsQueried: Object.freeze(markets.map((market) => market.symbol)),
         marketUniverseComplete: marketUniverseComplete === true,
         complete: marketUniverseComplete === true,
       }),
