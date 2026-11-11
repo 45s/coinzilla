@@ -806,7 +806,7 @@ test("fails closed when an exchange open order reuses a terminal recovered broke
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /terminal recovered order as open/)
+  assert.match(result.errors[0].message, /non-active recovered order as open/)
 })
 
 test("fails closed when an unowned open order reuses a recovered clientOrderId", () => {
