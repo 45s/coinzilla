@@ -217,7 +217,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       const name = payload.name
       if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
       if (!Object.values(EVENT).includes(name)) {
-        if (payload.source === "harvester" && !IGNORABLE_HARVESTER_EVENTS.has(name)) {
+        if ((payload.source === "harvester" || payload.source === undefined) && !IGNORABLE_HARVESTER_EVENTS.has(name)) {
           throw new Error("unknown Harvester recovery event: " + name)
         }
         continue
