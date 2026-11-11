@@ -72,7 +72,7 @@ The current Harvester broker port does **not** expose historical or live candles
 - **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical candles.
 - **subscribeForCandles({ symbol, interval, onCandle })** for live candle updates.
 
-These methods are a design proposal, not current runtime APIs. The Harvester adapter will map the normalized Candle contract supplied by @coinzilla/brokers; domain and application policy must not import Binance DTOs or use the concrete broker directly. See [Volatility Protection](../volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016).
+The concrete @coinzilla/brokers API now implements both methods in [PR #1017](https://github.com/45s/coinzilla/pull/1017). They are still **not exposed by Harvester's application-owned BrokerPort or infrastructure adapter**. The next Harvester integration change should add narrow port methods and map them to the concrete broker; domain and application policy must not import Binance DTOs or use the concrete broker directly. See [Volatility Protection](../volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016).
 
 ## Implemented infrastructure adapter
 

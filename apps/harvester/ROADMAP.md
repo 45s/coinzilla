@@ -18,7 +18,7 @@
 
 ### Delivery order
 
-1. [ ] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests.
+1. [x] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
 2. [ ] Indicators: create @coinzilla/indicators; implement parameterized ATR, NATR and volatility-ratio calculations with reference tests.
 3. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
 4. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.

@@ -131,18 +131,20 @@ The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `
 
 These reconnect guarantees apply to the public stream subscription set; they do not imply user-data event replay or reconciliation.
 
-### Historical and live candles — planned, not yet public
+### Historical and live candles
 
-Harvester issue [#1016](https://github.com/45s/coinzilla/issues/1016) requires normalized historical candles and live Kline updates. The current public broker API does **not** expose either capability. The proposed exchange-neutral methods are:
+The Binance WebSocket broker now exposes normalized historical candles and live Kline updates for Harvester issue [#1016](https://github.com/45s/coinzilla/issues/1016):
 
-- **getCandles({ symbol, interval, limit, startTime?, endTime? })** — return normalized historical candles in ascending open-time order.
-- **subscribeForCandles({ symbol, interval, onCandle })** — deliver normalized Kline updates and an unsubscribe handle.
+- **getCandles({ symbol, interval, limit = 500, startTime?, endTime? })** — uses the unsigned WebSocket API time and klines methods, returns immutable candles in strictly ascending open-time order, and supports 1–1000 rows.
+- **subscribeForCandles({ symbol, interval, onCandle })** — subscribes to the public Kline stream and returns an unsubscribe handle.
 
-The normalized candle should include symbol, interval, openTime, closeTime (Unix milliseconds), exact decimal-string open, high, low, close, volume, and an isClosed flag. Historical and live payloads must map to the same shape. A forming live candle may be delivered with isClosed false; consumers decide whether to retain it for display, while indicator history must use completed candles only.
+The normalized immutable candle contains symbol, interval, openTime, closeTime (Unix milliseconds), exact decimal-string open, high, low, close and volume, plus isClosed. Historical isClosed is determined using Binance server time fetched immediately before the klines request, not the local machine clock. A current candle can be returned with isClosed false. Live updates preserve Binance's Kline close flag.
 
-The Binance implementation should use the native WebSocket API klines request for history and the public Kline stream for live updates. The Streams protocol already validates Kline stream names internally, but the public broker method and normalized adapter do not exist yet. Keep this capability inside the existing native WebSocket architecture; do not add a REST fallback or third-party SDK.
+Malformed rows, invalid timestamps/prices/volume, inconsistent OHLC values, duplicate/out-of-order history, unsupported intervals and invalid time bounds return an unsuccessful broker result. The broker does not sort or invent missing candles; gap detection and backfill policy belong to the consumer.
 
-Protocol references: [Binance Spot WebSocket API — Klines](https://developers.binance.me/en/docs/products/spot/testnet/web-socket-api) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
+The implementation uses the existing native WebSocket API klines request and public Kline Streams subscription. It adds no REST fallback or third-party SDK. The Streams protocol already recognized Kline stream names; PR #1017 adds the public normalized adapter and broker methods.
+
+Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md#klines) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
 
 ## Offline tests and coverage
 
