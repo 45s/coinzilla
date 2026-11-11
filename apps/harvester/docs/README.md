@@ -30,6 +30,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Operations and safety
 
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
+- [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — why executable intents can be deferred without broker submission, stable reasons, and safe LIMIT_MAKER diagnosis.
 
 - [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD-only default config. Reconcile scope before any future session.
 - [Journal operations](JOURNAL_OPERATIONS.md)
