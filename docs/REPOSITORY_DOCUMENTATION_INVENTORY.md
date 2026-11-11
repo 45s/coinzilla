@@ -4,7 +4,7 @@
 - Type: Repository documentation inventory
 - Owner: Repository engineering
 - Baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Date: 2026-11-09 (baseline); latest verification: 2026-11-10
+- Date: 2026-11-09 (baseline); latest verification: 2026-11-11
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](DOCUMENTATION_GOVERNANCE.md)
 - Harvester detail: [Harvester documentation inventory](../apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md)
@@ -70,8 +70,24 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` | Historical source-verified develop checkpoint after [PR #968](https://github.com/45s/coinzilla/pull/968); complete recursive tree contained 117 tracked Markdown/MDX paths (57 Harvester, 60 elsewhere) | 117 |
 | `515324a6b1cb872b99593bdf448d1914b005bfcb` | Current source-verified develop checkpoint after PR #1002; complete recursive tree contains 118 tracked Markdown/MDX paths (58 Harvester, 60 elsewhere), including the 2026-11-10 restart-recovery audit report | 118 |
 | `bbd80b93cc0b8ab09172119c0d2d87617257a159` | Current source-verified develop checkpoint after merged PR #1003; complete recursive tree contains 119 tracked Markdown/MDX paths (59 Harvester, 60 elsewhere) | 119 |
+| `e753f9f07a201802814f4019ec2222fc7df7d798` | Current source-verified develop checkpoint after merged PR #1017; complete recursive tree contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
+| `452b19bbb13ee4bbe86df23c3d1da6f4566039d6` | Current source-verified develop checkpoint after merged PR #1018; complete recursive tree still contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
 
-At the current source-verified develop checkpoint `bbd80b93cc0b8ab09172119c0d2d87617257a159` (after merged PR #1003), the repository contains **119 tracked Markdown/MDX files**: 97 frozen baseline files plus 22 additions, zero net file removals. The complete recursive tree is not truncated: 59 files are under Harvester and 60 are elsewhere. The 113-to-114 increase was `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` in PR #917; PR #951 added three audit-category indexes and relocated nine existing evidence files without deleting their contents. The 118-file increase since the 117-file PR #968 checkpoint is the 2026-11-10 restart-recovery audit report; PR #1003 adds the recovery ADR. `docs/MARKDOWN_STYLE.md` remains in the outside-Harvester inventory. Earlier 110-, 112-, 113-, 114-, 117- and 118-file counts remain valid historical snapshots.
+At the current source-verified develop checkpoint `452b19bbb13ee4bbe86df23c3d1da6f4566039d6` (after merged PR #1018), the repository contains **124 tracked Markdown/MDX files**: 97 frozen baseline files plus 27 additions, zero net file removals. The complete recursive tree is not truncated: 61 files are under Harvester and 63 are elsewhere. The 113-to-114 increase was `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` in PR #917; PR #951 added three audit-category indexes and relocated nine existing evidence files without deleting their contents. The 118-file increase since the 117-file PR #968 checkpoint is the 2026-11-10 restart-recovery audit report; PR #1003 adds the recovery ADR. Subsequent additions include `apps/harvester/docs/exchange-trading-constraints.md`, the four design/proposal documents merged in PR #1013, and the normalized Brokers candle contract documentation. `docs/MARKDOWN_STYLE.md` remains in the outside-Harvester inventory. Earlier 110-, 112-, 113-, 114-, 117-, 118- and 119-file counts remain valid historical snapshots.
+
+## Merged documentation additions — PR #1013 and follow-up work
+
+[PR #1013](https://github.com/45s/coinzilla/pull/1013) merged the four maintained design/proposal documents below. They are included in the current 124-file recursive inventory.
+
+| Added path | Purpose |
+| --- | --- |
+| `packages/indicators/README.md` | Defines the exchange-neutral indicator package boundary and intended consumers. |
+| `packages/indicators/AGENTS.md` | Defines Indicators domain ownership and implementation constraints. |
+| `packages/indicators/ROADMAP.md` | Tracks the Indicators delivery stages and acceptance gates. |
+| `apps/harvester/docs/volatility-protection.md` | Defines per-market protection, candle data, the recovery-SELL exception and Harvester implementation/test plan. |
+| `apps/harvester/docs/exchange-trading-constraints.md` | Records exchange trading constraints and their application-level handling. |
+
+The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths; the 124-file count remains unchanged.
 
 ## Source-verified content reviews (post-baseline)
 

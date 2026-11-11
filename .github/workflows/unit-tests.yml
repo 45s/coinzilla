@@ -33,6 +33,7 @@ jobs:
           - "@coinzilla/brokers"
           - "@coinzilla/db"
           - "@coinzilla/entities"
+          - "@coinzilla/indicators"
           - "@coinzilla/event-bus"
           - "@coinzilla/journal"
           - "@coinzilla/market-simulator"

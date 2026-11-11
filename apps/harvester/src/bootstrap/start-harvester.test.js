@@ -185,6 +185,8 @@ const createBroker = (calls = [], {
       return { ok: true, data: createMarketMetadata(symbol) }
     },
     getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
+    getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ symbol, onPrice }) => {
       calls.push("subscribe:" + symbol)
       subscriptions.set(symbol, onPrice)
@@ -1312,6 +1314,8 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       }
     },
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
+    getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     cancelOrder: async ({ order }) => {
       if (order.side === "BUY") buyCancellationCount.value += 1
       const canceledOrder = new CanonicalOrder({
@@ -2247,7 +2251,8 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
     getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }), getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
     getExchangeMarkets: async () => ({ ok: true, data: [] }),
-    getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
+    getPrices: async () => ({ ok: true }), getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForPrices: async () => ({ ok: true }), subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
   }
   const broker = createBinanceBrokerAdapter({

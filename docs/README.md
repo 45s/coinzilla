@@ -11,7 +11,7 @@ This index is the entry point for maintained Coinzilla documentation. The reposi
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 117 tracked Markdown/MDX files)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 124 tracked Markdown/MDX files)
 
 ## Repository-wide engineering
 
@@ -45,6 +45,7 @@ Each active application/package owns its local README, agent instructions, roadm
 
 - [Harvester](../apps/harvester/README.md) — application guide
 - [Harvester documentation index](../apps/harvester/docs/README.md)
+- [Harvester Volatility Protection](../apps/harvester/docs/volatility-protection.md) — accepted design, not yet implemented
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
 - [Workspace ownership map](engineering/DOMAIN_OWNERSHIP.md)
 
@@ -54,6 +55,7 @@ Each active application/package owns its local README, agent instructions, roadm
 - [Database](../packages/db/README.md) — SQLite persistence infrastructure
 - [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
+- [Indicators](../packages/indicators/README.md) — exchange-neutral technical indicator calculations
 - [Journal](../packages/journal/README.md) — durable event recording and replay
 - [Market Simulator](../packages/market-simulator/README.md) — offline market simulation
 - [Notifiers](../packages/notifiers/README.md) — optional operational notifications

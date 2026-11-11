@@ -12,12 +12,16 @@ The Binance broker and Harvester adapter perform exchange I/O and translate exch
 | --- | --- | --- |
 | Live market prices | `subscribeForPrices({ symbol, onPrice })` | Subscribes to the aggregate-trade price stream and invokes `onPrice` with a normalized price event. |
 | Initial ticker price | `getPrices({ symbol })` | Requests a ticker snapshot when startup has not received a fresh stream price. |
+| Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` | Exposes normalized historical candles through the application port; not yet called by bootstrap. |
+| Live candle updates | `subscribeForCandles({ symbol, interval, onCandle })` | Exposes normalized Kline callbacks and unsubscribe lifecycle; not yet subscribed by bootstrap. |
 | Trading constraints | `getSymbolFilters({ symbol })` | Loads symbol filters and converts them into Harvester market metadata. |
 | Best bid/ask | `subscribeForBookTicker({ symbol, onBookTicker })` | Delivers normalized best-bid/best-ask updates used by the trading engine's LIMIT_MAKER safety checks. |
 | Submit an order | Harvester port: `placeOrder({ order })`; Binance client: `createCanonicalOrder(order)` or `createOrder(order)` | The adapter prefers canonical submission when the client supports it; otherwise it uses the regular order method. |
 | User-data events | `subscribeForUserData({ onEvent })` | Delivers order updates. For execution reports, the Binance broker normalizes the order and, for TRADE events, the execution into canonical values before forwarding the event. |
 
 The adapter is `src/infrastructure/brokers/binance-broker-adapter.js`; the application-owned contract is `src/application/ports/broker.port.js`. Binance-specific API operations, stream names, and payload mappings stay behind this boundary.
+
+The candle methods are now part of the required Harvester port and are forwarded unchanged by the adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)). They are available capabilities, not current bootstrap behavior: the startup flow below does not yet fetch history or subscribe to Kline streams.
 
 **Naming clarification:** `createCanonicalOrder()` and `createOrder()` are methods on the shared Binance broker client, not Harvester's application port. Harvester submits through `broker.placeOrder({ order })`. Likewise, `subscribeForBookTicker()` is an available broker-port capability; it supplies order-book safety data and is not the Conservative price-decision input.
 

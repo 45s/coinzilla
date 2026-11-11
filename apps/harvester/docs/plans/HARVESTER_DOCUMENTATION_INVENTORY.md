@@ -94,6 +94,16 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/audits/sessions/README.md` | Index for distinct historical session audits (PR #951). | **KEEP** |
 | `apps/harvester/docs/audits/evidence/README.md` | Index for read-only exchange exports and log-integrity evidence (PR #951). | **KEEP** |
 
+## Pending addition — PR #1013
+
+The documentation-only update to [PR #1013](https://github.com/45s/coinzilla/pull/1013) adds one Harvester design document:
+
+| Proposed path | Purpose | Disposition |
+| --- | --- | --- |
+| apps/harvester/docs/volatility-protection.md | Accepted high-volatility protection behavior, candle-data contract, recovery-SELL exception and implementation/test plan for issue #1016. | **KEEP** |
+
+The current develop checkpoint remains 59 Harvester Markdown/MDX files. If PR #1013 merges with this addition, the Harvester count will become 60. Refresh the complete recursive-tree count and checkpoint SHA at PR closeout; do not claim the proposed count as current develop state.
+
 ## Content-based findings
 
 1. The Conservative audit, findings register, execution history and trade/log/session records are distinct evidence artifacts with different roles. PR #951 moved them into reports, sessions and evidence archives; similar topic or filename does not establish duplication.

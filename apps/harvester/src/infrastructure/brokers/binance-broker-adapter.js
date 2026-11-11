@@ -95,7 +95,9 @@ export function createBinanceBrokerAdapter({
     "getSymbolFilters",
     "getExchangeMarkets",
     "getPrices",
+    "getCandles",
     "subscribeForPrices",
+    "subscribeForCandles",
     "subscribeForBookTicker",
     "subscribeForUserData",
   ]
@@ -170,8 +172,10 @@ export function createBinanceBrokerAdapter({
       }
     },
     getPrices: ({ symbol }) => client.getPrices({ symbol }),
+    getCandles: (input) => client.getCandles(input),
     subscribeForPrices: ({ symbol, onPrice }) =>
       client.subscribeForPrices({ symbol, onPrice }),
+    subscribeForCandles: (input) => client.subscribeForCandles(input),
     subscribeForBookTicker: ({ symbol, onBookTicker }) =>
       client.subscribeForBookTicker({ symbol, onBookTicker }),
     subscribeForUserData: ({ onEvent, onStatus }) =>

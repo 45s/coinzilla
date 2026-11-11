@@ -135,6 +135,10 @@ Example (illustrative only; it does not identify the currently enabled default p
 
 The strategy configuration remains in `config.json` under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 
+## Volatility protection
+
+Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection is **not active in the runtime**. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), and the Harvester BrokerPort/adapter exposes it in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Startup history loading, live Kline intake, gap/freshness handling and the trading protection gate remain pending. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+
 ## Runtime and safety
 
 - Journal is enabled by default and writes its JSONL session into the process-specific `logs/sessions/<timestamp>-<runtime-session-id>/` directory. Cumulative diagnostics live under `logs/cumulative/`. The process entrypoint requires a ready Journal and a `flush()` capability before invoking the runtime in both TESTNET and LIVE. Broker-connected trading startup must durably complete the PREFLIGHT account audit before market subscriptions; order-intent and cancellation durability barriers use the same Journal flush contract in both modes. A failed flush is retryable only when Journal status confirms an active, open writer with no recorded write failures; a poisoned writer or unclassified health state fails closed. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md).
@@ -148,6 +152,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 - [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
 - [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
 - [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
+- [Volatility Protection](./docs/volatility-protection.md) — accepted design and staged implementation plan; not yet implemented.
 - [Domain documentation](./docs/domain/README.md) — Conservative specification, accounting invariants, glossary and Portfolio.
 - [Infrastructure](./docs/infrastructure/README.md) — broker port and adapter.
 - [Audits and historical evidence](./docs/audits/README.md).
