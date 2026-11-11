@@ -8,6 +8,7 @@ import {
 const TELEGRAM_NOTIFICATION_EVENTS = Object.freeze(["order.filled", "fill.received", "bot.pair_paused", "bot.recovery_failed", "bot.recovery_completed", "bot.startup_failed", "broker.connected", "broker.disconnected", "order.submitted", "order.cancelled", "order.failed", "account.safety_alert", "bot.started", "bot.stopped"])
 
 const subscribeTelegramNotifications = (options = {}) => subscribeTelegramNotificationsRaw({
+  eventNames: TELEGRAM_NOTIFICATION_EVENTS,
   formatMessage: (event) => event.name.replaceAll(".", " ").toUpperCase(),
   ...options,
 })
