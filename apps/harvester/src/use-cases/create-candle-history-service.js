@@ -112,7 +112,7 @@ function createCandleHistoryService({
   broker,
   logger = {},
   now = Date.now,
-  onSnapshot = async () => {},
+  onSnapshot,
 } = {}) {
   if (!broker || typeof broker !== "object") {
     throw new TypeError("candle history service requires a broker port")
@@ -126,9 +126,10 @@ function createCandleHistoryService({
   if (typeof now !== "function") {
     throw new TypeError("candle history service now must be a function")
   }
-  if (typeof onSnapshot !== "function") {
-    throw new TypeError("candle history service onSnapshot must be a function")
+  if (onSnapshot !== undefined && typeof onSnapshot !== "function") {
+    throw new TypeError("candle history service onSnapshot must be a function when provided")
   }
+  const snapshotObserver = onSnapshot ?? (async () => {})
 
   const markets = new Map()
   let startPromise
@@ -180,7 +181,7 @@ function createCandleHistoryService({
   function notifySnapshot({ state } = {}) {
     const currentSnapshot = snapshot({ symbol: state.symbol })
     state.observerQueue = state.observerQueue
-      .then(() => onSnapshot({ symbol: state.symbol, snapshot: currentSnapshot }))
+      .then(() => snapshotObserver({ symbol: state.symbol, snapshot: currentSnapshot }))
       .catch((error) => {
         logger.error?.({
           message: "Volatility snapshot observer failed",
@@ -513,7 +514,7 @@ function createCandleHistoryService({
       await Promise.all(enabledSymbols.map((symbol) =>
         loadInitialHistory({ state: markets.get(symbol) })
       ))
-      if (enabledSymbols.length > 0 && !freshnessMonitor) {
+      if (enabledSymbols.length > 0 && onSnapshot && !freshnessMonitor) {
         freshnessMonitor = setInterval(() => {
           for (const state of markets.values()) {
             if (!state.stopped) notifySnapshot({ state })
