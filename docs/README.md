@@ -45,7 +45,7 @@ Each active application/package owns its local README, agent instructions, roadm
 
 - [Harvester](../apps/harvester/README.md) — application guide
 - [Harvester documentation index](../apps/harvester/docs/README.md)
-- [Harvester Volatility Protection](../apps/harvester/docs/volatility-protection.md) — accepted design, not yet implemented
+- [Harvester Volatility Protection](../apps/harvester/docs/volatility-protection.md) — runtime protection implemented; historical threshold calibration remains open
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
 - [Workspace ownership map](engineering/DOMAIN_OWNERSHIP.md)
 
