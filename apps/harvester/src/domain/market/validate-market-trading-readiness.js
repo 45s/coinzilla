@@ -44,16 +44,6 @@ export function validateMarketTradingReadiness({
   if (!Array.isArray(unvalidatedConstraints)) {
     throw new TypeError("Market metadata unvalidatedConstraints must be an array")
   }
-  if (unvalidatedConstraints.length > 0) {
-    const blockers = unvalidatedConstraints.map(({ type, scope, sourceFilterType }) =>
-      [type, scope, sourceFilterType].filter(Boolean).join("/")
-    )
-    throw new Error(
-      "Market " + symbol + " has exchange constraints that Harvester cannot validate: " +
-      blockers.join(", "),
-    )
-  }
-
   for (const type of REQUIRED_RULE_TYPES) {
     const constraint = tradingRules.constraints.find((item) => item.type === type)
     if (!constraint || constraint.status !== "SUPPORTED") {
@@ -129,6 +119,9 @@ export function validateMarketTradingReadiness({
     market,
     tradingRules,
     supportedOrderTypes: Object.freeze([...supportedOrderTypes]),
+    unvalidatedConstraints: Object.freeze(unvalidatedConstraints.map((constraint) =>
+      Object.freeze({ ...constraint })
+    )),
     orderType,
   })
 }

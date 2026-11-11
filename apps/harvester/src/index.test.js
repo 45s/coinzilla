@@ -8,6 +8,7 @@ import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
+import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -1588,4 +1589,39 @@ test("keeps Harvester process ownership locks outside the application logs direc
     false,
     "The Harvester logs tree must contain log/session artifacts rather than trading-process ownership locks",
   )
+})
+
+
+test("preserves typed market-readiness diagnostics in fatal startup logs", async () => {
+  const calls = []
+  const error = new UnvalidatedMarketExchangeConstraintsError({
+    symbol: "LINKFDUSD",
+    constraints: [
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+      { type: "ASSET_ORDER_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_ASSET" },
+    ],
+  })
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await runMain({
+      start: async () => { throw error },
+      logger: {
+        info() {},
+        debug() {},
+        error: (data) => calls.push(data),
+      },
+    })
+    const startupFailure = calls.find((call) => call.message === "startup failed.")
+    assert.ok(startupFailure, "A fatal market-readiness error must produce a startup-failure diagnostic.")
+    assert.equal(startupFailure.errorCode, error.code, "The compact startup diagnostic must expose the stable market-readiness error code.")
+    assert.equal(startupFailure.symbol, "LINKFDUSD", "The compact startup diagnostic must identify the blocked market.")
+    assert.equal(startupFailure.errorDetails.name, "UnvalidatedMarketExchangeConstraintsError", "The structured error details must preserve the domain-specific error name.")
+    assert.equal(startupFailure.errorDetails.code, error.code, "The structured error details must preserve the stable error code.")
+    assert.deepEqual(startupFailure.errorDetails.details.constraints, error.constraints, "The structured error details must retain every unvalidated exchange filter.")
+    assert.match(startupFailure.errorDetails.stack, /LINKFDUSD/, "The fatal startup stack must point to the exact blocked market.")
+    assert.equal(process.exitCode, 1, "A blocked market must continue to fail startup rather than bypass readiness.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })
