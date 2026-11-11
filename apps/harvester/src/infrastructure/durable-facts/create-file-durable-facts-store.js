@@ -73,7 +73,9 @@ function canonicalize(value, depth = 0) {
   }
   if (Array.isArray(value)) {
     if (value.length > MAX_ARRAY_LENGTH) throw new RangeError("Durable fact array exceeds the maximum length")
-    if (Object.keys(value).length !== value.length || Object.getOwnPropertySymbols(value).length > 0) {
+    const arrayKeys = Reflect.ownKeys(value)
+    if (Object.keys(value).length !== value.length || arrayKeys.length !== value.length + 1 ||
+        arrayKeys.some((key) => typeof key !== "string")) {
       throw new TypeError("Durable fact arrays must not contain holes, symbols or custom properties")
     }
     for (let index = 0; index < value.length; index += 1) {
