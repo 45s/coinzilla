@@ -45,13 +45,14 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
     DOGEUSDT: {
       enabled: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
+      minProfit: 0.01,
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
