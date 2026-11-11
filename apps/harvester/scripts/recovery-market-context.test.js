@@ -34,12 +34,61 @@ const context = {
   },
 }
 
+const readyContext = {
+  ...context,
+  journalRecords: [
+    {
+      position: { fileName: "legacy/session" },
+      payload: {
+        source: "harvester",
+        name: "account.snapshot_captured",
+        data: {
+          phase: "PREFLIGHT",
+          sourceTime: 100,
+          auditStatus: "COMPLETE",
+          auditReasons: [],
+          balances: [
+            { asset: "LINK", free: "0", locked: "0", total: "0" },
+            { asset: "USDT", free: "100", locked: "0", total: "100" },
+          ],
+        },
+      },
+    },
+    {
+      position: { fileName: "legacy/session" },
+      payload: {
+        source: "harvester",
+        name: "harvester.started",
+        data: { tradingEnabled: true },
+      },
+    },
+  ],
+  exchange: {
+    ...context.exchange,
+    currentAccountSnapshot: {
+      sourceTime: 300,
+      balances: [
+        { assetId: "binance:LINK", asset: "LINK", free: "0", locked: "0" },
+        { assetId: "binance:USDT", asset: "USDT", free: "100", locked: "0" },
+      ],
+    },
+  },
+}
+
 test("offline context adapter builds canonical dependencies and reports a skipped audit without exchange access", async () => {
   const result = await runOfflineMarketRecovery({ context })
 
   assert.equal(result.ok, true, "A valid offline context with no prior trading state must be auditable.")
   assert.equal(result.data.reconciliation.status, "SKIPPED", "No prior trading state must remain an explicit skipped outcome.")
   assert.equal(result.data.reconciliation.ready, false, "The offline context adapter must never convert a skipped audit into readiness.")
+})
+
+test("offline context adapter runs the production audit from a complete offline evidence bundle", async () => {
+  const result = await runOfflineMarketRecovery({ context: readyContext })
+
+  assert.equal(result.ok, true, "A complete Journal projection and canonical account/history evidence must pass the offline production audit.")
+  assert.equal(result.data.reconciliation.status, "READY", "The offline context adapter must report READY only after the production audit succeeds.")
+  assert.equal(result.data.reconciliation.audit.tradeHistory.complete, true, "The production trade-history audit must verify the selected market and coverage baseline.")
 })
 
 test("offline context adapter refuses confirmation without a durable-fact store", async () => {
