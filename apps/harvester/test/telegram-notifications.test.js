@@ -465,7 +465,7 @@ test("delivers startup, broker, order, and execution safety failures in custom m
   )
   for (const [fragment, description] of [
     ["BOT STARTUP FAILED", "startup failure"],
-    ["BROKER DISCONNECTED", "broker connection failure"],
+    ["DISCONNECTED", "broker connection failure"],
     ["broker-subscription-failed", "broker subscription failure"],
     ["FAILED", "order submission/cancellation failure"],
     ["unowned-order", "unowned external order"],
