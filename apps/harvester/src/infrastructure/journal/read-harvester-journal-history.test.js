@@ -3,8 +3,6 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { EventBus } from "@coinzilla/event-bus"
-import { Journal } from "@coinzilla/journal"
 import { mapHarvesterProcessStartedData } from "../../application/events/lifecycle-event-dtos.js"
 import { readHarvesterJournalHistory } from "./read-harvester-journal-history.js"
 
@@ -35,37 +33,37 @@ async function writeJournalSession({
   runtimeSessionId,
   processId,
   eventName,
+  processStartedEventAt = new Date(Date.parse(startedAt) + 1).toISOString(),
+  markerEventAt = new Date(Date.parse(startedAt) + 2).toISOString(),
+  processStartedLast = false,
 }) {
   await mkdir(directory, { recursive: true })
-  const eventBus = new EventBus()
-  const journal = new Journal({
-    eventBus,
-    directory,
-    sessionIdentity: { startedAt, runtimeSessionId },
-  })
-  try {
-    const started = await journal.start()
-    assert.equal(started.ok, true, "Each fixture Journal must acquire its own directory and create a session")
-    const processStarted = eventBus.publish({
-      name: "harvester.process_started",
-      source: "harvester",
-      data: processStartedData({ startedAt, runtimeSessionId, processId }),
-    })
-    assert.equal(processStarted.ok, true, "The canonical process-start fact must be accepted")
-    const marker = eventBus.publish({
-      name: eventName,
-      source: "harvester",
-      data: { runtimeSessionId },
-    })
-    assert.equal(marker.ok, true, "Each fixture lifecycle event must be accepted")
-    const closed = await journal.close()
-    assert.equal(closed.ok, true, "Each fixture Journal must durably close before history is read")
-  } finally {
-    await journal.close()
-    await eventBus.close()
+  const fileTimestamp = startedAt.slice(0, 19)
+    .replace("T", "_")
+    .replaceAll(":", "-")
+  const safeSessionId = runtimeSessionId.replace(/[^a-zA-Z0-9_-]/g, "-")
+  const fileName = fileTimestamp + "-" + safeSessionId + ".jsonl"
+  const processStarted = {
+    id: runtimeSessionId + ":process-started",
+    timestamp: processStartedEventAt,
+    source: "harvester",
+    name: "harvester.process_started",
+    data: processStartedData({ startedAt, runtimeSessionId, processId }),
   }
+  const marker = {
+    id: runtimeSessionId + ":marker",
+    timestamp: markerEventAt,
+    source: "harvester",
+    name: eventName,
+    data: { runtimeSessionId },
+  }
+  const events = processStartedLast ? [marker, processStarted] : [processStarted, marker]
+  const lines = events.map((event) => JSON.stringify({
+    ...event,
+    __coinzillaJournal: { schemaVersion: 1, id: event.id },
+  }))
+  await writeFile(path.join(directory, fileName), lines.join("\n") + "\n")
 }
-
 async function writeLegacyFlatSession({ directory, fileName, id, timestamp, eventName = "harvester.legacy_session" }) {
   await mkdir(directory, { recursive: true })
   const event = {
