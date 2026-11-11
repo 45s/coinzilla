@@ -128,7 +128,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–5 complete; restart restoration remains disabled pending Steps 6–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -166,17 +166,21 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
    - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
-6. **[ ] Step 6 — Add verifiable durable-fact integrity (F-037, F-042; [PR #1027](https://github.com/45s/coinzilla/pull/1027) in progress).**
+6. **[x] Step 6 — Add verifiable durable-fact integrity (F-037, F-042; [PR #1027](https://github.com/45s/coinzilla/pull/1027) merged).**
    - Implement the smallest durable store/port needed by the agreed contract, with explicit durability acknowledgement before dependent state transitions proceed.
    - Detect missing/reordered/duplicated records using a monotonic decimal-string sequence, canonical JSON, SHA-256 previous-record digest, and an append-only committed-head manifest journal.
    - Require explicit one-time genesis initialization; normal startup/verify/append never creates a missing ledger. Exact duplicate fact identity/payload is idempotent; uncertain commits fail closed.
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps).**
-   - Reconcile owned order identity/status, complete execution history, all relevant asset balances (including fee assets), locked funds, and current open orders.
-   - Keep external orders unowned and untouched; detect and block only actual unsafe conflicts or unowned executions according to the agreed policy.
-   - Treat incomplete exchange history, missing assets, mismatched quantities, unknown outcomes, and unexplained commitments as unresolved—not as zero.
+7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; [PR #1034](https://github.com/45s/coinzilla/pull/1034) audit primitives in progress).**
+   - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
+   - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
+   - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
+   - [x] Persist and project the `MARKET_HISTORY_COVERAGE_CONFIRMED` fact through ADR-0001; enforce a monotonic per-symbol coverage interval and bind it to the reviewed evidence digest/verifier.
+   - [ ] Provide an explicit offline operator workflow to create the coverage fact from reviewed exchange-history evidence and account reconciliation; no Telegram command is added.
+   - [ ] Compose canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders into one read-only reconciliation use case.
+   - [ ] Prove complete one-market outcomes and external-order isolation with deterministic end-to-end tests before connecting the audit to startup readiness.
 
 8. **[ ] Step 8 — Restore behind a closed readiness gate.**
    - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.

@@ -301,7 +301,7 @@ ADR-0001 defines the application-owned durable-fact store. Genesis creation is a
 
 The explicit command is documented in [ADR-0001 — Application-owned recovery facts](./docs/architecture/decisions/0001-application-owned-recovery-facts.md). Do not run it against a production directory until the runtime-integration step explicitly instructs you to initialize the store.
 
-The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor.
+The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor. The allowlisted `MARKET_HISTORY_COVERAGE_CONFIRMED` fact records only a reviewed per-market history interval and never certifies account-wide market-universe completeness.
 
 ## Process identity and build provenance
 
