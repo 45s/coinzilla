@@ -72,6 +72,12 @@
    - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
+10. **Domain-owned custom error classes and typed error handling ([#1028](https://github.com/45s/coinzilla/issues/1028)) — PLANNED.**
+   - **Why:** generic `Error` instances and message-based classification make failure handling and tests brittle; callers need reliable semantic categories at selected boundaries.
+   - **Plan:** audit concrete throw/catch sites; define package ownership and a minimal convention; introduce specific subclasses (for example `ConfigValidationError`) only where consumers need typed distinction; preserve `cause`, stack traces and structured diagnostic context; migrate incrementally with tests and documentation.
+   - **Safety:** no blanket conversion of all errors, no premature global error framework/shared package, and no message parsing when typed classification is available. Keep ordinary control flow out of exceptions.
+   - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
+
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
 
 - **Decision:** Binance endpoint selection uses only explicit `TRADING_MODE=testnet|live`; `NODE_ENV` must never influence exchange routing. Missing/invalid mode fails closed. See [ADR-0002](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md).
