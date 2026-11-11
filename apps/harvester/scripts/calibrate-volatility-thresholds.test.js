@@ -203,7 +203,7 @@ test("analyzes historical volatility with the runtime ATR/NATR ratio and protect
   assert.equal(report.latestMetrics.volatilityRatio, runtimeMetrics.metrics.volatilityRatio, "The final historical ratio must match the production metric calculation exactly.")
   assert.ok(report.thresholdCounts.protection > 0, "A deliberately injected volatility spike must cross the protection threshold.")
   assert.ok(report.protectionEntries > 0, "The state-machine replay must record a protection entry after the injected spike.")
-  assert.ok(report.recoveries >= 2, "The replay must show startup recovery and recovery after the volatility spike.")
+  assert.ok(report.recoveryTransitions >= 2, "The replay must show startup recovery and recovery after the volatility spike.")
   assert.equal(report.assumptions.activeBuyOrderCount, 0, "The report must disclose that historical order-cancellation state is not simulated.")
 })
 

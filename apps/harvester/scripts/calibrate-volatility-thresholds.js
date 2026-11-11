@@ -241,6 +241,7 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
       indicatorScale: INDICATOR_SCALE,
       ratioScale: RATIO_SCALE,
     })
+    latestMetrics = calculated.metrics ?? null
 
     let snapshot
     if (!calculated.metrics) {
@@ -253,7 +254,6 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
         },
       }
     } else {
-      latestMetrics = calculated.metrics
       const ratio = calculated.metrics.volatilityRatio
       ratios.push(ratio)
       if (compareDecimal({ left: ratio, right: thresholds.warningRatio }) >= 0) thresholdCounts.warning += 1
