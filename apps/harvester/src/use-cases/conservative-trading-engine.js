@@ -804,6 +804,24 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
           return toResult({ error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation") })
         }
+        if (completion.data?.eligible) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+            dataResult: mapRecoveryCycleCompletedData({
+              symbol,
+              marketId: canceledOrder.market.id,
+              freeQuantity: completion.data.freeQuantity,
+              keepQuantity: String(pairs[symbol].keepQuantity),
+              minProfit: String(pairs[symbol].minProfit),
+              realizedNetProfit: completion.data.realizedNetProfit,
+              ...(completion.data.dust === undefined ? {} : { dust: completion.data.dust }),
+            }),
+          })
+          state.completedRecoverySellSymbols.delete(symbol)
+          state.completedRecoverySellOrdersBySymbol.delete(symbol)
+          state.trailingBuy.set(symbol, true)
+        }
         state.replacementIntents.delete(symbol)
         state.sellExecutionTotals.delete(order.brokerOrderId)
       } else if (
