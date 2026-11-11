@@ -1,7 +1,9 @@
 import { adaptAggTrades } from "./adapters/adapt-trades.js"
+import { adaptKlineStreamMessage } from "./adapters/adapt-kline.js"
 
 const publicAdapters = new Map([
   ["aggTrade", adaptAggTrades],
+  ["kline", adaptKlineStreamMessage],
 ])
 
 const userDataEventTypes = new Set([

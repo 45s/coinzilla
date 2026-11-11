@@ -35,10 +35,43 @@ test("adapts aggregate trade events using the existing pure adapter", () => {
   assert.equal(event.p, "65000.1000")
 })
 
+test("normalizes Kline events through the shared candle adapter", () => {
+  const event = {
+    e: "kline",
+    s: "BTCUSDT",
+    k: {
+      t: 1_700_000_000_000,
+      T: 1_700_000_059_999,
+      s: "BTCUSDT",
+      i: "1m",
+      o: "1.0000",
+      h: "2.0000",
+      l: "0.5000",
+      c: "1.5000",
+      v: "10.0000",
+      x: false,
+    },
+  }
+
+  assert.deepEqual(adaptPublicStreamMessage(event), {
+    symbol: "BTCUSDT",
+    interval: "1m",
+    openTime: 1_700_000_000_000,
+    closeTime: 1_700_000_059_999,
+    open: "1.0000",
+    high: "2.0000",
+    low: "0.5000",
+    close: "1.5000",
+    volume: "10.0000",
+    isClosed: false,
+  })
+  assert.equal(event.e, "kline")
+})
+
 test("passes through other public market-data events unchanged", () => {
   for (const event of [
     { e: "trade", s: "BTCUSDT", p: "1.00" },
-    { e: "kline", s: "BTCUSDT", k: { i: "1m" } },
+
     { e: "24hrMiniTicker", s: "BTCUSDT", c: "1.00" },
     { e: "bookTicker", s: "BTCUSDT", b: "1.00" },
     { e: "depthUpdate", s: "BTCUSDT", b: [], a: [] },

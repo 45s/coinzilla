@@ -117,6 +117,165 @@ test("getPrices uses the public ticker.price method", async () => {
   })
 })
 
+test("getCandles uses public klines and returns normalized, ordered exact-string candles", async () => {
+  const now = Date.now()
+  const rows = [
+    [now - 120_000, "1.0000", "1.5000", "0.9000", "1.2000", "10.0000", now - 60_001, "12", 10, "5", "6", "0"],
+    [now - 60_000, "1.2000", "1.6000", "1.1000", "1.5000", "11.0000", now - 1, "15", 11, "5", "7", "0"],
+  ]
+  const { broker, rpc } = createBroker({ klines: (params) => {
+    assert.deepEqual(params, { symbol: "BTCUSDT", interval: "1m", limit: 100 })
+    return rows
+  } })
+
+  const result = await broker.getCandles({ symbol: "btcusdt", interval: "1m", limit: 100 })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(rpc.calls[0], {
+    method: "klines",
+    params: { symbol: "BTCUSDT", interval: "1m", limit: 100 },
+    options: {},
+  })
+  assert.deepEqual(result.data.map(({ symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed }) => ({
+    symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed,
+  })), [
+    {
+      symbol: "BTCUSDT", interval: "1m",
+      openTime: now - 120_000, closeTime: now - 60_001,
+      open: "1.0000", high: "1.5000", low: "0.9000", close: "1.2000", volume: "10.0000", isClosed: true,
+    },
+    {
+      symbol: "BTCUSDT", interval: "1m",
+      openTime: now - 60_000, closeTime: now - 1,
+      open: "1.2000", high: "1.6000", low: "1.1000", close: "1.5000", volume: "11.0000", isClosed: true,
+    },
+  ])
+  assert.equal(Object.isFrozen(result.data), true)
+})
+
+test("getCandles passes optional time bounds and accepts an empty history", async () => {
+  const { broker, rpc } = createBroker({ klines: () => [] })
+  const result = await broker.getCandles({
+    symbol: "BTCUSDT",
+    interval: "1m",
+    startTime: 100,
+    endTime: 200,
+  })
+
+  assert.deepEqual(result, { ok: true, data: [] })
+  assert.deepEqual(rpc.calls[0], {
+    method: "klines",
+    params: { symbol: "BTCUSDT", interval: "1m", limit: 500, startTime: 100, endTime: 200 },
+    options: {},
+  })
+})
+
+test("getCandles rejects invalid query arguments before making an RPC request", async () => {
+  const invalidInputs = [
+    { symbol: "", interval: "1m" },
+    { symbol: "BTCUSDT", interval: "2m" },
+    { symbol: "BTCUSDT", interval: "1m", limit: 0 },
+    { symbol: "BTCUSDT", interval: "1m", limit: 1001 },
+    { symbol: "BTCUSDT", interval: "1m", startTime: -1 },
+    { symbol: "BTCUSDT", interval: "1m", startTime: 200, endTime: 100 },
+  ]
+
+  for (const input of invalidInputs) {
+    const { broker, rpc } = createBroker()
+    const result = await broker.getCandles(input)
+    assert.equal(result.ok, false, JSON.stringify(input))
+    assert.equal(rpc.calls.length, 0, JSON.stringify(input))
+  }
+})
+
+test("getCandles rejects malformed and non-ascending Binance responses", async () => {
+  const malformed = createBroker({ klines: () => ({ rows: [] }) })
+  assert.equal((await malformed.broker.getCandles({ symbol: "BTCUSDT", interval: "1m" })).ok, false)
+
+  const now = Date.now()
+  const first = [now - 120_000, "1", "2", "0.5", "1.5", "10", now - 60_001, "15", 10, "5", "7", "0"]
+  const second = [now - 60_000, "1.5", "2", "1", "1.7", "10", now - 1, "17", 10, "5", "7", "0"]
+  const unsorted = createBroker({ klines: () => [second, first] })
+  assert.equal((await unsorted.broker.getCandles({ symbol: "BTCUSDT", interval: "1m" })).ok, false)
+})
+
+test("subscribeForCandles subscribes to the normalized Kline stream and forwards candles", async () => {
+  const { broker, streams } = createBroker()
+  broker.connected = true
+  const candles = []
+  const result = await broker.subscribeForCandles({
+    symbol: "btcusdt",
+    interval: "1m",
+    onCandle: (candle) => candles.push(candle),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.stream, "btcusdt@kline_1m")
+  assert.deepEqual(streams.calls, [{ method: "subscribe", stream: "btcusdt@kline_1m" }])
+
+  streams.emit("btcusdt@kline_1m", {
+    e: "kline",
+    s: "BTCUSDT",
+    k: {
+      t: 1_700_000_000_000,
+      T: 1_700_000_059_999,
+      s: "BTCUSDT",
+      i: "1m",
+      o: "1.0000",
+      h: "2.0000",
+      l: "0.5000",
+      c: "1.5000",
+      v: "10.0000",
+      x: false,
+    },
+  })
+  assert.equal(candles.length, 1)
+  assert.equal(candles[0].isClosed, false)
+  assert.equal(candles[0].symbol, "BTCUSDT")
+  assert.equal(Object.isFrozen(candles[0]), true)
+
+  await result.data.unsubscribe()
+  assert.deepEqual(streams.calls[1], { method: "unsubscribe", stream: "btcusdt@kline_1m" })
+})
+
+test("subscribeForCandles rejects invalid subscriptions and mismatched stream events", async () => {
+  const { broker, streams } = createBroker()
+  assert.equal((await broker.subscribeForCandles({
+    symbol: "BTCUSDT", interval: "1m", onCandle: () => {},
+  })).ok, false)
+
+  broker.connected = true
+  assert.equal((await broker.subscribeForCandles({
+    symbol: "BTCUSDT", interval: "2m", onCandle: () => {},
+  })).ok, false)
+  assert.equal((await broker.subscribeForCandles({
+    symbol: "BTCUSDT", interval: "1m", onCandle: null,
+  })).ok, false)
+
+  const result = await broker.subscribeForCandles({
+    symbol: "BTCUSDT",
+    interval: "1m",
+    onCandle: () => {},
+  })
+  assert.equal(result.ok, true)
+  assert.throws(() => streams.emit("btcusdt@kline_1m", {
+    e: "kline",
+    s: "ETHUSDT",
+    k: {
+      t: 1_700_000_000_000,
+      T: 1_700_000_059_999,
+      s: "ETHUSDT",
+      i: "1m",
+      o: "1.0000",
+      h: "2.0000",
+      l: "0.5000",
+      c: "1.5000",
+      v: "10.0000",
+      x: false,
+    },
+  }), /does not match the candle subscription/)
+})
+
 test("connect opens the WebSocket API client and disconnect closes both native clients", async () => {
   const { broker, rpc, streams } = createBroker()
   await broker.connect()

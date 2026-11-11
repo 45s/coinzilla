@@ -14,6 +14,7 @@ import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js
 import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
 import { normalizeBinanceId } from "../adapters/normalize-binance-id.js"
 import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
+import { adaptKlineHistoryRow } from "./helpers/adapters/adapt-kline.js"
 import { createBinanceUserDataClientPort } from "../user-data-client-adapter.js"
 import { adaptCanonicalOrderHistory, createCanonicalOrderHistoryMarket, requireOrderHistoryArray, validateOrderHistoryCursorItems } from "./helpers/adapters/order-history.js"
 
@@ -595,6 +596,61 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /**
+   * @param {{symbol: string, interval: string, limit?: number, startTime?: number, endTime?: number}} options
+   * @returns {Promise<BrokerResult<import("./helpers/adapters/adapt-kline.js").NormalizedCandle[]>>}
+   */
+  async getCandles({ symbol, interval, limit = 500, startTime, endTime } = {}) {
+    try {
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("getCandles requires a non-empty symbol")
+      }
+      const normalizedSymbol = symbol.trim().toUpperCase()
+      createStreamName("kline", { symbol: normalizedSymbol, interval })
+
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
+        throw new RangeError("getCandles limit must be an integer from 1 to 1000")
+      }
+      for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
+        if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+          throw new RangeError("getCandles " + field + " must be a non-negative safe integer")
+        }
+      }
+      if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
+        throw new RangeError("getCandles startTime must not be after endTime")
+      }
+
+      const params = { symbol: normalizedSymbol, interval, limit }
+      if (startTime !== undefined) params.startTime = startTime
+      if (endTime !== undefined) params.endTime = endTime
+
+      const response = await this.tradingConnection.request("klines", params)
+      if (!Array.isArray(response?.data)) {
+        throw new TypeError("Binance klines response must be an array")
+      }
+
+      const now = Date.now()
+      const candles = response.data.map((row) => adaptKlineHistoryRow({
+        row,
+        symbol: normalizedSymbol,
+        interval,
+        now,
+      }))
+      let previousOpenTime = -1
+      for (const candle of candles) {
+        if (candle.openTime <= previousOpenTime) {
+          throw new TypeError("Binance klines response must be strictly ascending by openTime")
+        }
+        previousOpenTime = candle.openTime
+      }
+
+      return toResult({ data: Object.freeze(candles) })
+    } catch (error) {
+      handleErr({ where: "BinanceWebSocketBroker.getCandles()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
   /** @returns {Promise<BrokerResult<import("@coinzilla/entities").Market[]>>} Frozen canonical market catalog. */
   async getExchangeMarkets() {
     try {
@@ -674,6 +730,41 @@ export class BinanceWebSocketBroker extends CoreBroker {
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * @param {{symbol: string, interval: string, onCandle: (candle: import("./helpers/adapters/adapt-kline.js").NormalizedCandle) => void}} options
+   * @returns {Promise<BrokerResult<{stream: string, unsubscribe: () => Promise<unknown>}>>}
+   */
+  async subscribeForCandles({ symbol, interval, onCandle } = {}) {
+    let stream
+    try {
+      validateCallback(onCandle, "onCandle")
+      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to candles")
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("subscribeForCandles requires a non-empty symbol")
+      }
+      const normalizedSymbol = symbol.trim().toUpperCase()
+      stream = createStreamName("kline", { symbol: normalizedSymbol, interval })
+      const listener = (message) => {
+        const candle = adaptPublicStreamMessage(message)
+        if (candle.symbol !== normalizedSymbol || candle.interval !== interval) {
+          throw new TypeError("Binance Kline event does not match the candle subscription")
+        }
+        onCandle(candle)
+      }
+      await this.marketConnection.subscribe(stream, listener)
+
+      return toResult({
+        data: {
+          stream,
+          unsubscribe: () => this.marketConnection.unsubscribe(stream, listener),
+        },
+      })
+    } catch (error) {
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForCandles()", error })
       return toResult({ errors: [error] })
     }
   }
