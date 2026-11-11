@@ -10,7 +10,7 @@ created: 2026-11-11
 
 ## Status
 
-**Accepted — application and trading-engine contract.** The first implementation slice is in progress in [PR #1011](https://github.com/45s/coinzilla/pull/1011). The engine boundary and transport-independent application use cases exist; the ADR-0001 durable-fact store/projection and inbound Telegram adapter are not yet implemented or enabled.
+**Accepted — application and trading-engine contract.** The first implementation slice is in progress in [PR #1011](https://github.com/45s/coinzilla/pull/1011). The engine boundary, transport-independent application use cases and offline-testable Telegram adapter module exist; the ADR-0001 durable-fact store/projection and runtime wiring are not yet implemented or enabled.
 
 **Owner:** Harvester
 

@@ -157,7 +157,7 @@ See [architecture — operational notifications](./docs/architecture.md#operatio
 
 ### Operator control
 
-Harvester has a transport-independent operator application capability and a separate engine-level operator-pause state. The accepted [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md) and [operator-control documentation](./docs/operator-control/README.md) define the contract. The initial inbound command is planned as Telegram `/pause <SYMBOL>`; it is not available until the ADR-0001 durable-fact store and startup projection are implemented. Outbound `notifications.telegram` remains independent.
+Harvester has a transport-independent operator application capability, a separate engine-level operator-pause state, and an offline-testable Telegram adapter module. The accepted [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md) and [operator-control documentation](./docs/operator-control/README.md) define the contract. The initial inbound command is Telegram `/pause <SYMBOL>`, but it is not available until the ADR-0001 durable-fact store, startup projection and runtime wiring are implemented. Outbound `notifications.telegram` remains independent.
 
 ### Operational event journal
 

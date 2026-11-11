@@ -4,7 +4,7 @@ This is the entry point for Harvester's operator-control capability.
 
 ## Current status
 
-The transport-independent engine boundary and application use cases are implemented and covered by offline tests. Inbound Telegram control is **not enabled or available yet** because the production ADR-0001 durable-fact store and startup projection are not implemented.
+The transport-independent engine boundary, application use cases and an offline-testable Telegram adapter module are implemented. Inbound Telegram control is **not enabled or available yet** because the production ADR-0001 durable-fact store, startup projection and runtime wiring are not implemented.
 
 Do not enable a process-local or Journal-backed substitute. A pause must be committed to the authoritative durable-fact stream and restored before strategy evaluation.
 

@@ -14,7 +14,8 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine now exposes a serialized operator-pause boundary separate from safety pause state.
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases.
 - The application use cases require the ADR-0001 durable-facts append port and pass its commit callback into the engine transition.
-- There is not yet a production ADR-0001 durable-fact store/projection, inbound Telegram receiver, operator-control runtime configuration or HTTP server. Do not enable or advertise an inbound command as available until the store and startup projection are implemented.
+- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. It is offline-tested but not started or wired into the runtime.
+- There is not yet a production ADR-0001 durable-fact store/projection or operator-control runtime configuration. Do not enable or advertise an inbound command as available until the store, startup projection and fail-closed bootstrap integration are implemented.
 
 ## DDD ownership and source layout
 
