@@ -6,7 +6,10 @@ function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
     return String(value)
   }
-  if (typeof value === "string" && /^\d+$/.test(value)) return value
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const numericValue = Number(value)
+    if (Number.isSafeInteger(numericValue) && numericValue > 0) return String(numericValue)
+  }
   return undefined
 }
 
@@ -16,13 +19,15 @@ function waitForRetry({ milliseconds, signal }) {
       resolve()
       return
     }
+    let timer
     const finish = () => {
       clearTimeout(timer)
       signal.removeEventListener("abort", finish)
       resolve()
     }
-    const timer = setTimeout(finish, milliseconds)
+    timer = setTimeout(finish, milliseconds)
     signal.addEventListener("abort", finish, { once: true })
+    if (signal.aborted) finish()
   })
 }
 
@@ -82,7 +87,11 @@ export function createTelegramOperatorAdapter({
     throw new TypeError("Telegram operator adapter requires a bot token")
   }
   if (!Array.isArray(allowedUserIds) || allowedUserIds.length === 0 ||
-      allowedUserIds.some((value) => typeof value !== "string" || !/^\d+$/.test(value))) {
+      allowedUserIds.some((value) => {
+        if (typeof value !== "string" || !/^\d+$/.test(value)) return true
+        const numericValue = Number(value)
+        return !Number.isSafeInteger(numericValue) || numericValue <= 0
+      })) {
     throw new TypeError("Telegram operator adapter requires a non-empty decimal user-ID allowlist")
   }
   if (typeof operator?.pauseMarket !== "function") {
@@ -103,6 +112,8 @@ export function createTelegramOperatorAdapter({
   let offset
   let controller
   let pollPromise
+  let startPromise
+  let stopPromise
 
   const callApi = async ({ method, payload, signal }) => {
     let response
@@ -248,36 +259,60 @@ export function createTelegramOperatorAdapter({
 
   return Object.freeze({
     async start() {
+      if (stopPromise) await stopPromise
+      if (startPromise) return startPromise
       if (controller) return Object.freeze({ started: true, alreadyStarted: true })
+
       const nextController = new AbortController()
-      let identity
-      try {
-        identity = await callApi({
-          method: "getMe",
-          payload: {},
-          signal: nextController.signal,
-        })
-        if (typeof identity?.username !== "string" || identity.username.trim() === "") {
-          throw new TypeError("Telegram getMe response is missing the bot username")
-        }
-      } catch (error) {
-        nextController.abort()
-        throw error
-      }
-      botUsername = identity.username
       controller = nextController
-      pollPromise = poll({ signal: controller.signal })
-      return Object.freeze({ started: true, alreadyStarted: false })
+      startPromise = (async () => {
+        try {
+          const identity = await callApi({
+            method: "getMe",
+            payload: {},
+            signal: nextController.signal,
+          })
+          if (nextController.signal.aborted) {
+            throw new Error("Telegram operator adapter startup was aborted")
+          }
+          if (typeof identity?.username !== "string" || identity.username.trim() === "") {
+            throw new TypeError("Telegram getMe response is missing the bot username")
+          }
+          botUsername = identity.username
+          pollPromise = poll({ signal: nextController.signal })
+          return Object.freeze({ started: true, alreadyStarted: false })
+        } catch (error) {
+          nextController.abort()
+          if (controller === nextController) controller = undefined
+          throw error
+        } finally {
+          startPromise = undefined
+        }
+      })()
+      return startPromise
     },
     async stop() {
-      if (!controller) return Object.freeze({ stopped: true, alreadyStopped: true })
-      controller.abort()
-      await pollPromise
-      controller = undefined
-      pollPromise = undefined
-      botUsername = undefined
-      offset = undefined
-      return Object.freeze({ stopped: true, alreadyStopped: false })
+      if (stopPromise) return stopPromise
+      if (!controller) {
+        if (startPromise) await startPromise.catch(() => {})
+        if (!controller) return Object.freeze({ stopped: true, alreadyStopped: true })
+      }
+      const activeController = controller
+      activeController.abort()
+      stopPromise = (async () => {
+        if (startPromise) await startPromise.catch(() => {})
+        if (pollPromise) await pollPromise
+        if (controller === activeController) controller = undefined
+        pollPromise = undefined
+        botUsername = undefined
+        offset = undefined
+        return Object.freeze({ stopped: true, alreadyStopped: false })
+      })()
+      try {
+        return await stopPromise
+      } finally {
+        stopPromise = undefined
+      }
     },
   })
 }

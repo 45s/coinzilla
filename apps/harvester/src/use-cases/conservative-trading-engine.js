@@ -1304,6 +1304,7 @@ export function makeConservativeTradingEngine({
           data: {
             decision,
             submittedOrders: result.data.submittedOrders ?? [],
+            operatorSuppressedActions,
             deferred: true,
             reason: "TRADING_NOT_READY",
           },
@@ -1316,7 +1317,14 @@ export function makeConservativeTradingEngine({
         )
         state.buyReferenceOverrides.delete(symbol)
       }
-      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders, deferredActions } })
+      return toResult({
+        data: {
+          decision,
+          submittedOrders: result.data.submittedOrders,
+          deferredActions,
+          operatorSuppressedActions,
+        },
+      })
     } catch (error) {
       await pause({ symbol, reason: "STRATEGY_EVALUATION_FAILED", error })
       return toResult({ error })
@@ -2677,7 +2685,9 @@ export function makeConservativeTradingEngine({
   const pauseMarket = ({ symbol, beforeApply } = {}) => runTransition({
     task: async () => {
       if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
-        return toResult({ error: new TypeError("Operator pause requires a configured market symbol") })
+        const error = new TypeError("Operator pause requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
       }
       if (typeof beforeApply !== "function") {
         return toResult({ error: new TypeError("Operator pause requires a durable-fact commit callback") })
@@ -2712,7 +2722,9 @@ export function makeConservativeTradingEngine({
   const resumeMarket = ({ symbol, beforeApply } = {}) => runTransition({
     task: async () => {
       if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
-        return toResult({ error: new TypeError("Operator resume requires a configured market symbol") })
+        const error = new TypeError("Operator resume requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
       }
       const safetyBlocked =
         state.paused.has(symbol) ||
