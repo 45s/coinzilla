@@ -73,6 +73,19 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 
 At the current source-verified develop checkpoint `bbd80b93cc0b8ab09172119c0d2d87617257a159` (after merged PR #1003), the repository contains **119 tracked Markdown/MDX files**: 97 frozen baseline files plus 22 additions, zero net file removals. The complete recursive tree is not truncated: 59 files are under Harvester and 60 are elsewhere. The 113-to-114 increase was `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` in PR #917; PR #951 added three audit-category indexes and relocated nine existing evidence files without deleting their contents. The 118-file increase since the 117-file PR #968 checkpoint is the 2026-11-10 restart-recovery audit report; PR #1003 adds the recovery ADR. `docs/MARKDOWN_STYLE.md` remains in the outside-Harvester inventory. Earlier 110-, 112-, 113-, 114-, 117- and 118-file counts remain valid historical snapshots.
 
+## Pending documentation additions — PR #1013
+
+The open [PR #1013](https://github.com/45s/coinzilla/pull/1013) adds four maintained documents: three for the proposed Indicators domain and one for Harvester volatility protection. None are part of the current develop inventory until the PR is merged.
+
+| Proposed path | Purpose |
+| --- | --- |
+| packages/indicators/README.md | Defines the proposed package purpose, ownership boundary, exchange-neutral inputs and non-goals. |
+| packages/indicators/AGENTS.md | Defines proposal-only domain scope and implementation constraints for the future package. |
+| packages/indicators/ROADMAP.md | Tracks the staged proposal and implementation gates; no package implementation is claimed. |
+| apps/harvester/docs/volatility-protection.md | Accepted per-market high-volatility safety design, candle-data contract, recovery-SELL exception and implementation/test plan for issue #1016. |
+
+If merged, these four additions will increase the current 119-file Markdown/MDX inventory to 123 (60 Harvester files and 63 elsewhere). Update the recursive-tree checkpoint with the actual merge commit during PR closeout; do not pre-record an unverified tree SHA.
+
 ## Source-verified content reviews (post-baseline)
 
 The original 97-file inventory table above is a frozen baseline: its recorded byte sizes and first-pass dispositions are not current file metadata. Source-review findings and later document changes are recorded separately here rather than rewriting baseline rows.

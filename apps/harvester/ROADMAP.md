@@ -2,6 +2,93 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## High-volatility protection — issue #1016
+
+**Status: ACCEPTED DESIGN — NOT IMPLEMENTED.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+
+- Per-market protection; one volatile pair must not stop another.
+- Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
+- Load approximately 100 completed candles per enabled market at startup; maintain the series from live Kline updates and backfill gaps after reconnect.
+- Missing, stale, invalid, insufficient or discontinuous candle data blocks new strategy activity. It is never treated as low volatility.
+- While protected, block all new BUY and non-recovery strategy actions. Cancel only Harvester-owned, acknowledged active BUYs through the existing durable cancellation and fill-reconciliation path.
+- Preserve resting recovery SELLs without volatility-driven cancellation or repricing. Continue SELL fills/accounting and permit only recovery SELL lifecycle actions needed to recover invested capital.
+- Enforce protection centrally immediately before broker submission; identify recovery SELL intent explicitly rather than allowing every SELL.
+- Initial ratio thresholds (warning 1.5, protect 2.0, recover 1.3 for 3 completed candles) are provisional pending offline historical validation.
+- Do not alter Conservative recovery economics or imply process-restart recovery is complete. No exchange operations are authorized.
+
+### Delivery order
+
+1. [ ] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests.
+2. [ ] Indicators: create @coinzilla/indicators; implement parameterized ATR, NATR and volatility-ratio calculations with reference tests.
+3. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
+4. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
+5. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+
+---
+
+## Adaptive price step — volatility-adjusted spacing
+
+**Status: PROPOSED — DESIGN NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the proposed shared [Indicators package](../../packages/indicators/README.md). Average True Range (ATR) is the leading candidate measure, but the package API and calculation contract are not yet approved.
+
+### Intended behavior
+
+- At reference volatility, the coefficient is neutral (`1.0`) and the effective step equals the configured baseline.
+- When current volatility is 1.5 times its reference level, the illustrative coefficient is `1.5`; a baseline of `0.5%` therefore produces an effective step of `0.75%`.
+- The configured baseline is never overwritten. The strategy consumes a derived effective value for the decisions explicitly included in the final scope.
+- Whether lower volatility may reduce the baseline, or whether the baseline is a hard floor, remains an open policy decision.
+- Calculate volatility independently for each market. Do not compare raw ATR values across symbols with different price scales.
+- The indicator calculation must not know about Binance DTOs, order placement, Harvester positions, fees or strategy policy.
+
+### Proposed calculation model (illustrative, not yet accepted)
+
+Normalize ATR to the instrument's price level:
+
+`ATR% = ATR / Close × 100`
+
+Compare a current normalized ATR value with a reference value for the same market and timeframe:
+
+`VolatilityCoefficient = CurrentATR% / ReferenceATR%`
+
+Then derive:
+
+`EffectivePriceStepPercent = ConfiguredPriceStepPercent × VolatilityCoefficient`
+
+Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coefficient `1.5`, effective step `0.75%`. This is an example of the intended relationship, not a frozen formula or parameter set. Raw ATR is an absolute price movement and must not be multiplied directly into a percentage-based `priceStepPercent`.
+
+### Ownership boundary
+
+- The proposed `@coinzilla/indicators` package owns exchange-neutral, deterministic indicator calculations over normalized candle data (for example ATR, normalized ATR and a volatility ratio).
+- Harvester owns the policy: candle timeframe and history requirements, reference window, coefficient bounds/smoothing, fallback behavior, configuration, which strategy decisions use the value, and when orders may be recalculated.
+- Brokers owns exchange-specific market-data retrieval and DTO adaptation. Indicator code must not import broker or exchange SDKs.
+- Existing orders must not be silently repriced when a new indicator value arrives. Any order replacement policy must be separately specified and tested.
+- Exchange tick/step filters remain authoritative after strategy spacing is calculated.
+
+### Design questions to resolve before implementation
+
+1. **Indicator contract:** normalized candle shape, timestamp/interval semantics, missing-candle handling, precision and result/error shape.
+2. **ATR definition:** period, smoothing variant (for example Wilder's), warm-up/history requirements and closed-candle policy.
+3. **Reference:** rolling reference window and how the baseline adapts across market regimes.
+4. **Timeframe and cadence:** candle interval, refresh frequency and whether the coefficient is stable between closed candles.
+5. **Coefficient policy:** exact ratio, neutral point, smoothing/hysteresis and treatment of sudden volatility spikes.
+6. **Bounds:** minimum/maximum coefficient and effective step; decide whether low volatility can reduce the configured baseline.
+7. **Fallback:** behavior for missing, stale, insufficient, invalid or discontinuous market data. Never silently treat unavailable volatility as zero.
+8. **Strategy scope:** Conservative/Aggressive applicability and the exact BUY/SELL decisions affected.
+9. **Observability/configuration:** diagnostics for baseline, indicator inputs, reference, coefficient, effective step and fallback reason; opt-in/disabled-by-default rollout.
+10. **Validation:** historical/offline evidence, multi-symbol behavior, restart/recovery interaction, precision/tick-size and a separately approved TESTNET plan.
+
+### Proposed delivery sequence
+
+1. [ ] Discuss and freeze the package boundary, candle contract and mathematical definition before implementation.
+2. [ ] Create the proposed Indicators package foundation and its own public API, tests, README and roadmap.
+3. [ ] Implement and validate ATR, normalized ATR and the volatility-ratio calculation in the owning package.
+4. [ ] Submit a separate Harvester consumer change for configuration, strategy policy and effective-step integration.
+5. [ ] Add regression coverage for multiple markets, invalid/stale history, bounds, smoothing, order lifecycle and unchanged behavior when disabled.
+6. [ ] Validate against historical/offline market data; consider TESTNET only under a separately approved bounded plan.
+
+**Safety constraints:** this roadmap item changes no runtime behavior. No coefficient, timeframe, period, bound or fallback is finalized. The feature remains unimplemented and disabled until the design, tests and acceptance criteria are agreed. No TESTNET/LIVE operation is authorized by this planning work.
+
+---
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.

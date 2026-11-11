@@ -10,6 +10,19 @@ owner: brokers
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
 
+### Historical candle and live Kline capability — Harvester issue #1016
+
+**Status: PLANNED — public API not implemented.** Harvester volatility protection needs completed 1-minute candles at startup and a live Kline stream thereafter.
+
+- Add an exchange-neutral normalized candle result contract with symbol, interval, millisecond open/close timestamps, exact OHLCV decimal strings and an isClosed flag.
+- Expose historical retrieval through the broker API using Binance WebSocket API klines; expose live updates through the existing public Streams client using the Kline stream.
+- Add the corresponding narrow Harvester-owned broker-port methods and Binance infrastructure-adapter mapping. Do not expose Binance DTOs to Harvester domain/application policy.
+- Validate request symbol/interval/limit/time bounds, response shape, ascending order, duplicate identities and exact decimal fields. Preserve deterministic error/result behavior.
+- Test history limits, malformed rows, empty history, out-of-order/duplicate rows, partial/current candles, live closed-candle events, reconnect/resubscription and unsubscribe cleanup.
+- Keep the current no-REST/no-third-party-SDK broker architecture. No exchange order operations are part of this work.
+
+The first consumer requests approximately 100 completed 1-minute candles per enabled market and backfills gaps after reconnect. The exact public contract must be reviewed against the current Binance WebSocket API and the package's request/response lifecycle before implementation.
+
 ### Canonical order acknowledgement completeness — issue #960
 
 - [x] **Request complete Binance RESULT acknowledgements for canonical order placement — issue [#960](https://github.com/45s/coinzilla/issues/960), implemented in merged [PR #961](https://github.com/45s/coinzilla/pull/961).** Binance's default response for `LIMIT_MAKER` is minimal `ACK`, which omits the order facts required by `adaptCanonicalOrder()`. Canonical placement explicitly requests `newOrderRespType: "RESULT"`, returning the canonical order fields without the optional fills array.
