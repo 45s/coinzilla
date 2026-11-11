@@ -51,13 +51,13 @@ flowchart TD
     G --> H[Average previous 60 NATR values]
     H --> I[Publish per-market volatility snapshot]
     F --> J{Gap detected?}
-    J -- yes --> K[Backfill exact missing range]
+    J -- yes --> K[Block readiness; backfill exact missing range]
     K --> F
     J -- no --> L[Wait for next Kline update]
     L --> F
 ```
 
-A market is not data-ready until it has at least 74 contiguous completed candles (61 NATR observations), a successful live subscription, and a fresh Kline update. The current five-second stream freshness rule is reused. A zero reference NATR, invalid candle, unresolved gap, failed subscription or stale stream remains explicitly unavailable. This service reports data readiness only; it does not yet pause trading or authorize an order.
+A market is not data-ready until it has at least 74 contiguous completed candles (61 NATR observations), a successful live subscription, and a fresh valid Kline update. A detected gap immediately removes readiness while its exact historical backfill is pending; readiness returns only after continuity is restored. Delayed events outside the retained window do not refresh freshness. The current five-second stream freshness rule is reused. A zero reference NATR, invalid candle, unresolved gap, failed subscription or stale stream remains explicitly unavailable. Shutdown drains accepted candle/backfill callbacks before broker disconnect, even when the unsubscribe operation itself fails. This service reports data readiness only; it does not yet pause trading or authorize an order.
 
 ## Interaction diagram
 

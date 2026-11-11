@@ -48,8 +48,8 @@ The historical/live candle methods are required by the Harvester port and forwar
 7. After subscriptions are established, bootstrap calls `getPrices({ symbol })` to obtain an initial ticker snapshot. It seeds the engine only if no fresh WebSocket price was received for that symbol. The current Binance implementation uses a `ticker.price` request/response over its WebSocket API; it is not an HTTP REST request.
 8. Bootstrap then subscribes to one-minute Kline streams for every enabled market before requesting candle history.
 9. It requests 101 historical candles, filters the forming final bar, retains up to 100 completed candles, and merges live events buffered during warm-up.
-10. On a detected gap, the service requests the exact missing time range and keeps that market unavailable if backfill cannot restore continuity.
-11. It calculates ATR(14), NATR and the ratio against the previous 60 NATR observations. The per-market data/readiness snapshot is exposed through runtime `getVolatilityData({ symbol })`; no trading gate consumes it yet.
+10. On a detected gap, the service immediately marks that market unavailable while it requests the exact missing time range. Readiness returns only after the full contiguous range is restored; a forming candle can reveal a gap but is never appended to indicator history.
+11. It calculates ATR(14), NATR and the ratio against the previous 60 NATR observations. Only valid current Kline events refresh stream freshness; delayed events older than the retained history are ignored. Unsubscribe drains accepted candle/backfill work before shutdown continues, while preserving any unsubscribe error. The per-market data/readiness snapshot is exposed through runtime `getVolatilityData({ symbol })`; no trading gate consumes it yet.
 
 ### 2. Market price to strategy decision
 
