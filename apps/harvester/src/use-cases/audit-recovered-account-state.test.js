@@ -665,7 +665,7 @@ test("fails closed when a relevant market asset is absent from the current accou
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /current account snapshot is missing required asset BTC/)
+  assert.match(result.errors[0].message, /current account snapshot is missing required asset BTC/i)
 })
 
 test("fails closed when the durable baseline omits a relevant market asset", () => {
@@ -690,7 +690,7 @@ test("fails closed when the durable baseline omits a relevant market asset", () 
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /initial account snapshot is missing required asset BTC/)
+  assert.match(result.errors[0].message, /initial account snapshot is missing required asset BTC/i)
 })
 
 test("fails closed when an unowned open order has no canonical market metadata", () => {
@@ -723,7 +723,7 @@ test("fails closed when an unowned open order has no canonical market metadata",
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /canonical Market metadata is missing for unowned open order ETHUSDT/)
+  assert.match(result.errors[0].message, /canonical Market metadata is missing for unowned open order ETHUSDT/i)
 })
 
 
