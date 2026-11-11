@@ -279,7 +279,7 @@ test("normalizes only definite Binance filter rejections and preserves uncertain
   client.createOrder = async () => ({ ok: false, errors: [filterRejection] })
 
   const rejected = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
-  assert.equal(rejected.errors[0].code, "BINANCE_FILTER_REJECTED", "A definite -1013 filter rejection must be normalized into the venue-neutral definite-rejection signal used by Harvester.")
+  assert.equal(rejected.errors[0].code, "DEFINITE_EXCHANGE_FILTER_REJECTED", "A definite -1013 filter rejection must be normalized into the venue-neutral definite-rejection signal used by Harvester.")
   assert.equal(rejected.errors[0].cause, filterRejection, "The original Binance error must remain available as the normalized error cause.")
 
   const uncertainFilterError = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), {
