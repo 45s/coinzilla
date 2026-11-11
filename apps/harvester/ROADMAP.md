@@ -128,7 +128,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–4 complete; restart restoration remains disabled pending Steps 5–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–5 complete; restart restoration remains disabled pending Steps 6–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -160,10 +160,11 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Add DTO → projection → restore parity tests for all three execution safety events, plus fail-closed, diagnostic allowlist, pre-start snapshot and reconnect phase regressions.
    - Exact PR head `f06304f9`: **1,019 Harvester tests passed, 0 failed**; all seven required workflows passed, including package/workspace coverage and external documentation links. TESTNET integration was skipped.
 
-5. **[ ] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041).**
-   - Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation.
-   - Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconcile the related asset balance.
-   - Represent cycle completion explicitly. A full SELL without a proven completed/not-completed cycle outcome is unresolved and must not silently restore stale basis or re-sell retained inventory.
+5. **[x] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041; [PR #1024](https://github.com/45s/coinzilla/pull/1024)).**
+   - [x] Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation; completed cycles reset basis while explicit residual sell-through preserves active inventory and cost basis.
+   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance remains a Step 7 gate.
+   - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
+   - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
 6. **[ ] Step 6 — Add verifiable durable-fact integrity (F-037, F-042).**
    - Implement the smallest durable store/port needed by the agreed contract, with explicit durability acknowledgement before dependent state transitions proceed.

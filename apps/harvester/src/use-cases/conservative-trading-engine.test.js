@@ -63,7 +63,7 @@ const appConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -133,6 +133,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
       if (cancelNotSentOnSuccess) return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       canceledOrders.set(order.brokerOrderId, order)
+      const executedQuantity = typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order })
+        : cancelExecutedQuantity
       return {
       ok: true,
       data: new CanonicalOrder({
@@ -144,10 +147,10 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         limitPrice: order.limitPrice,
         originalQuantity: order.originalQuantity,
         executedQuantity: new Quantity({
-          amount: cancelExecutedQuantity,
+          amount: executedQuantity,
           asset: baseAsset,
         }),
-        status: "CANCELED",
+        status: cancelOrderStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
         updatedAt: 2,
@@ -162,6 +165,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
+      const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order: canceledOrder })
+        : cancelExecutedQuantity)
       const cancelFill = cancelWithFill && canceledOrder
         ? [new Fill({
             tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase() + "-" + orderId,
@@ -170,9 +176,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
             market,
             side: canceledOrder.side,
             price: canceledOrder.limitPrice,
-            quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+            quantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
             quoteQuantity: new Money({
-              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: "0.1" }),
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: executedQuantity }),
               asset: quoteAsset,
             }),
             commissions: [],
@@ -2418,6 +2424,10 @@ test("does not publish recovery completion when the cycle is ineligible", async 
   })
   assert.equal(result.ok, false)
   assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "BLOCKED")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
 })
 
 
@@ -4048,8 +4058,13 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
+  const continuedEvent = events.find((event) => event.name === "recovery.cycle_not_completed")
+  assert.ok(continuedEvent)
+  assert.equal(continuedEvent.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(continuedEvent.data.sellOrderClientId, recoverySell.clientOrderId)
   const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
   assert.ok(completedEvent)
+  assert.ok(events.indexOf(continuedEvent) < events.indexOf(completedEvent))
   assert.deepEqual(completedEvent.data.dust, {
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: dust.quantity,
@@ -6486,3 +6501,70 @@ test("definite Binance filter rejection removes PENDING without marking the orde
   assert.equal(engine.getOrders().length, 0, "The definitely rejected PENDING order must be removed instead of becoming a phantom active order.")
   assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED", "The Journal must record a definite rejection, not UNKNOWN.")
 });
+
+test("publishes a CONTINUE_SELL_THROUGH outcome for a fully filled SELL below the profit target", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "continue-sell-through" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
+})
+
+test("publishes an explicit cycle outcome when the recovery SELL fills during cancellation", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelWithFill: true,
+    cancelExecutedQuantity: ({ order }) => order.originalQuantity.amount,
+    cancelOrderStatus: "FILLED",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "cancel-race-buy", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
+})
