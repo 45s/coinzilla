@@ -1,4 +1,4 @@
-import { open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises"
+import { open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { validateAppConfig } from "../../src/domain/app-config.js"
@@ -9,6 +9,16 @@ async function removeIfPresent(filePath) {
     await unlink(filePath)
   } catch (error) {
     if (error?.code !== "ENOENT") throw error
+  }
+}
+
+async function removeStaleTemporaryFiles(directory, configFileName) {
+  const prefix = "." + configFileName + "."
+  const entries = await readdir(directory)
+  for (const entry of entries) {
+    if (entry.startsWith(prefix) && entry.endsWith(".tmp")) {
+      await removeIfPresent(path.join(directory, entry))
+    }
   }
 }
 
@@ -38,10 +48,15 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
       lockHandle = await open(lockPath, "wx", 0o600)
     } catch (error) {
       if (error?.code === "EEXIST") {
-        throw new Error("Another config:symbol operation holds the configuration lock; inspect and remove a stale lock only after confirming no generator is running")
+        throw new Error("Another config:symbol operation holds the configuration lock; inspect its PID/timestamp and remove a stale lock only after confirming no generator is running")
       }
       throw error
     }
+    await lockHandle.writeFile(JSON.stringify({
+      pid: process.pid,
+      createdAt: new Date().toISOString(),
+    }) + "\n", "utf8")
+    await removeStaleTemporaryFiles(directory, path.basename(absoluteConfigPath))
 
     let currentConfigText
     try {
@@ -66,20 +81,26 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
     const serializedConfig = JSON.stringify(updatedConfig, null, 2) + "\n"
     const originalMode = (await stat(absoluteConfigPath)).mode & 0o777
 
+    temporaryCreated = true
     await writeFile(temporaryPath, serializedConfig, {
       encoding: "utf8",
       flag: "wx",
       mode: originalMode,
     })
-    temporaryCreated = true
     await rename(temporaryPath, absoluteConfigPath)
     temporaryCreated = false
     return absoluteConfigPath
   } finally {
-    if (temporaryCreated) await removeIfPresent(temporaryPath)
-    if (lockHandle) {
-      await lockHandle.close()
-      await removeIfPresent(lockPath)
+    try {
+      if (temporaryCreated) await removeIfPresent(temporaryPath)
+    } finally {
+      if (lockHandle) {
+        try {
+          await lockHandle.close()
+        } finally {
+          await removeIfPresent(lockPath)
+        }
+      }
     }
   }
 }

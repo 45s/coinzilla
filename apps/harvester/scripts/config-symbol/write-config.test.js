@@ -74,6 +74,19 @@ test("atomically merges a new pair while preserving existing app settings and cl
   })
 })
 
+test("cleans abandoned temporary files only after acquiring the generator lock", async () => {
+  await withConfigFile(async ({ directory, configPath }) => {
+    const staleTemporaryPath = path.join(directory, ".config.json.abandoned.tmp")
+    await writeFile(staleTemporaryPath, "partial configuration", "utf8")
+    await writePairConfigAtomically({
+      configPath,
+      symbol: "ADAFDUSD",
+      pairConfig: generatedPair,
+    })
+    assert.deepEqual(await readdir(directory), ["config.json"], "A subsequent locked generation must remove only abandoned generator temporary files.")
+  })
+})
+
 test("refuses to overwrite an existing pair and leaves the original file byte-for-byte unchanged", async () => {
   await withConfigFile(async ({ directory, configPath }) => {
     const before = await readFile(configPath, "utf8")
