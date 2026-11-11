@@ -126,6 +126,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     market,
     tradingRules,
     supportedOrderTypes: ['LIMIT_MAKER'],
+    unvalidatedConstraints: [],
   };
   const balances = [
     new Balance({
