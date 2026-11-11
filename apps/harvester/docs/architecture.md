@@ -52,6 +52,10 @@ Profiles are `minimal`, `trader`, `verbose`, and `custom`. Per-event overrides m
 
 Notification setup and delivery are best-effort. An explicit `enabled: false` or missing credentials disables notifications; malformed application configuration fails normal configuration validation rather than silently falling back. Transport/setup failures remain isolated from the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority.
 
+## Operator control (proposed; not implemented)
+
+Telegram currently supports outbound notifications only. The proposed transport-independent inbound operator-control design is documented in [Operator control interface](./architecture/OPERATOR_CONTROL_DESIGN.md). It is discussion-only: no command receiver, public control API, or web server is implemented.
+
 ## Entity versus policy
 
 A **domain entity** represents something whose state and business invariants matter to the domain. Portfolio and Position are examples: actual executions change their state, and their rules govern valid accounting transitions.
