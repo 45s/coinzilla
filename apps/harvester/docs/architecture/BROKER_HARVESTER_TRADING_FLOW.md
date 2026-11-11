@@ -1,6 +1,6 @@
 # Broker–Harvester Trading Flow
 
-This document describes the current Conservative trading path at the application/infrastructure boundary. Method names and responsibilities below were checked against the Harvester broker port, Binance adapter, bootstrap, Trading Engine, and shared Binance broker implementation. A [Mermaid-free text version](./BROKER_HARVESTER_TRADING_FLOW_TEXT.md) is also available.
+This document describes the current Conservative trading path at the application/infrastructure boundary. Method names and responsibilities below were checked against the Harvester broker port, Binance adapter, bootstrap, Trading Engine, and shared Binance broker implementation. A [Mermaid-free text version](./BROKER_HARVESTER_TRADING_FLOW_TEXT.md) is also available. For the gate's stable deferral reasons and missing-order troubleshooting, see [Submission deferrals and missing-order diagnostics](../operations/submission-deferrals.md).
 
 ## Responsibilities
 
@@ -78,12 +78,24 @@ Strategy-->>Engine: BUY / SELL decision or NO_ACTION
 alt NO_ACTION
     Note over Engine,Strategy: No order is submitted
 else BUY or SELL action
-    Engine->>Broker: placeOrder({ order })
-    Note over Broker: Adapter selects createCanonicalOrder(order) when available; otherwise createOrder(order)
-    Broker->>Binance: order.place
-    Binance-->>Broker: order acknowledgement
-    Broker-->>Engine: normalized acknowledged order
-    Note over Engine: Register/update order state; acknowledgement is not a fill
+    Engine->>Engine: Validate exchange rules and submission readiness
+    alt Readiness gate defers
+        Engine-->>Bootstrap: ok=true, deferred=true, reason/details; no broker call
+    else Readiness gate allows
+        Engine->>Engine: Register PENDING and durably publish submission intent
+        Engine->>Engine: Recheck readiness after durable intent barrier
+        alt Readiness changed / post-only guard fails
+            Engine->>Engine: Remove local PENDING order
+            Engine-->>Bootstrap: deferred=true with stable reason; no broker call
+        else Still safe to submit
+            Engine->>Broker: placeOrder({ order })
+            Note over Broker: Adapter selects createCanonicalOrder(order) when available; otherwise createOrder(order)
+            Broker->>Binance: order.place
+            Binance-->>Broker: order acknowledgement
+            Broker-->>Engine: normalized acknowledged order
+            Note over Engine: Register acknowledgement; acknowledgement is not a fill
+        end
+    end
 end
 
 opt No fresh stream price arrived during startup
@@ -126,6 +138,7 @@ end
 - **Market filters:** bootstrap loads `getSymbolFilters({ symbol })` for every configured market before market subscriptions. Enabled markets are validated for trading readiness; disabled markets retain canonical base/quote metadata for account-audit coverage but are not order-readiness validated and do not emit trading-rule capture events. The Harvester's process-local `marketMetadata` map retains this startup snapshot for strategy use. The Binance adapter itself does not cache exchange filters: each `getSymbolFilters` request fetches current exchange metadata and normalizes it. Current bootstrap loads the map once; no background refresh is claimed.
 - **Initial price fallback:** bootstrap first establishes every enabled market-price subscription. It then calls `getPrices({ symbol })` and seeds the engine only when no fresh WebSocket price was received for that symbol. The current Binance implementation sends `ticker.price` as a request/response operation over its WebSocket API; it is **not an HTTP REST call**.
 - **Book ticker:** when TESTNET trading is enabled, bootstrap subscribes to best bid/ask updates and forwards them to `processBookTicker()`. The engine uses fresh same-symbol book data to reject a crossing `LIMIT_MAKER` order before submission.
+- **Submission deferral:** an executable strategy intent may still be withheld before broker I/O. The result distinguishes `ok` from `deferred`, includes a stable reason and safe context, and leaves no active broker order for a fully deferred action. A readiness recheck after the durable PENDING intent barrier removes the local PENDING record if safety changed. Missing/stale book data and a crossing `LIMIT_MAKER` remain fail-closed; see the [submission deferral runbook](../operations/submission-deferrals.md).
 - **Acknowledgement versus execution:** `placeOrder()` returns an order acknowledgement/status. It is not evidence that any quantity traded. A later `executionReport` with `executionType: "TRADE"` carries the actual execution. If the submission acknowledgement itself is already `FILLED`, the engine retrieves canonical fills with `getFills()` and reconciles/applies them before completing that serialized transition.
 - **Accounting authority:** only canonical actual fills update Portfolio and RecoveryLedger. Status-only reports, market prices, order requests, and acknowledgements do not change holdings.
 
