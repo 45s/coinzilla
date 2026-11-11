@@ -133,7 +133,7 @@ function validateFactData({ factType, data }) {
     requireNonEmptyString({ value: canonicalData.actorId, field: "data.actorId", maxLength: MAX_FACT_ID_LENGTH })
     requireNonEmptyString({ value: canonicalData.symbol, field: "data.symbol" })
   }
-  if (factType === "LEDGER_INITIALIZED" && canonicalData.schemaVersion !== DEFAULT_SCHEMA_VERSION) {
+  if (factType === "LEDGER_INITIALIZED" && (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
   }
   return canonicalData
@@ -199,6 +199,9 @@ function validateRecordEnvelope({ record, schemaVersion, expectedSequence, previ
   }
   if (!SHA256_PATTERN.test(record.digest ?? "")) throw new TypeError("Durable fact digest is malformed")
   validateFactData({ factType: record.factType, data: record.data })
+  if (index === 0 && record.data.schemaVersion !== schemaVersion) {
+    throw new Error("Durable fact genesis schema version does not match the stream schema")
+  }
   if (digestRecord(record) !== record.digest) throw new Error("Durable fact digest mismatch at sequence " + record.sequence)
 }
 
@@ -219,7 +222,7 @@ function createManifest({ schemaVersion, record }) {
     schemaVersion,
     lastCommittedSequence: record.sequence,
     lastCommittedDigest: record.digest,
-    recordCount: Number(BigInt(record.sequence) + 1n),
+    recordCount: (BigInt(record.sequence) + 1n).toString(),
   }
 }
 
@@ -348,7 +351,7 @@ export function createFileDurableFactsStore({
     if (!SHA256_PATTERN.test(manifest.lastCommittedDigest ?? "")) {
       throw new TypeError("Durable-fact manifest digest is malformed")
     }
-    if (!Number.isSafeInteger(manifest.recordCount) || manifest.recordCount < 1) {
+    if (typeof manifest.recordCount !== "string" || !SEQUENCE_PATTERN.test(manifest.recordCount) || manifest.recordCount === "0") {
       throw new TypeError("Durable-fact manifest recordCount is malformed")
     }
     const lastRecord = records.at(-1)
@@ -358,7 +361,7 @@ export function createFileDurableFactsStore({
     if (BigInt(manifest.lastCommittedSequence) > BigInt(lastRecord.sequence)) {
       throw new Error("Durable-fact log is truncated below the committed manifest head")
     }
-    if (manifest.lastCommittedDigest !== lastRecord.digest || manifest.recordCount !== records.length) {
+    if (manifest.lastCommittedDigest !== lastRecord.digest || manifest.recordCount !== String(records.length)) {
       throw new Error("Durable-fact manifest and verified log head do not agree")
     }
     return { records, manifest, lastRecord }
