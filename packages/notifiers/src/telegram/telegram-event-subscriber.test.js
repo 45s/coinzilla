@@ -494,7 +494,7 @@ test("subscribes only to the explicitly selected supported notification events",
   )
 })
 
-test("rejects malformed, duplicate, empty, and unsupported Telegram event selections", () => {
+test("rejects malformed, duplicate, and empty application event selections", () => {
   const invalidSelections = [
     { eventNames: "bot.started", message: /eventNames/ },
     { eventNames: [], message: /at least one/ },
