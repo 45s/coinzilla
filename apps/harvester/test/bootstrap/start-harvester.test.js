@@ -206,8 +206,14 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
     getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
-    getCandles: async () => toResult({ data: [] }),
-    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
+    getCandles: async ({ symbol, interval, limit } = {}) => {
+      candleHistoryRequests.push({ symbol, interval, limit })
+      return toResult({ data: [] })
+    },
+    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+      candleSubscriptions.set(symbol, { interval, onCandle })
+      return toResult({ data: { unsubscribe: async () => candleUnsubscriptions.push(symbol) } })
+    },
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
       return toResult({ data: { unsubscribe: async () => {} } });
@@ -382,6 +388,9 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     },
   }
   const priceSubscriptions = new Map()
+  const candleSubscriptions = new Map()
+  const candleHistoryRequests = []
+  const candleUnsubscriptions = []
   const bookSubscriptions = []
   const submittedSymbols = []
   const diagnosticLogs = []
@@ -449,8 +458,14 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     getPrices: async ({ symbol } = {}) => toResult({
       data: { symbol, price: symbol === "DOGEUSDT" ? "0.1" : "1" },
     }),
-    getCandles: async () => toResult({ data: [] }),
-    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
+    getCandles: async ({ symbol, interval, limit } = {}) => {
+      candleHistoryRequests.push({ symbol, interval, limit })
+      return toResult({ data: [] })
+    },
+    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+      candleSubscriptions.set(symbol, { interval, onCandle })
+      return toResult({ data: { unsubscribe: async () => candleUnsubscriptions.push(symbol) } })
+    },
     subscribeForPrices: async ({ symbol, onPrice } = {}) => {
       priceSubscriptions.set(symbol, onPrice)
       return toResult({ data: { unsubscribe: async () => {} } })
@@ -490,6 +505,19 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
 
   assert.equal(context.userDataReady, true)
   assert.deepEqual([...priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual([...candleSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"], "The candle service must subscribe every enabled pair independently.")
+  assert.deepEqual(candleHistoryRequests, [
+    { symbol: "DOGEUSDT", interval: "1m", limit: 101 },
+    { symbol: "ZROUSDT", interval: "1m", limit: 101 },
+  ], "Startup must request one-minute history for each enabled market after candle subscriptions are established.")
+  assert.deepEqual(
+    context.subscriptions,
+    ["DOGEUSDT", "ZROUSDT"],
+    "Adding candle streams must not duplicate market symbols in the existing runtime subscription summary.",
+  )
+  const dogeVolatilityData = context.getVolatilityData({ symbol: "DOGEUSDT" })
+  assert.equal(dogeVolatilityData.ok, true)
+  assert.equal(dogeVolatilityData.data.status.reason, "INSUFFICIENT_HISTORY", "Missing candle history must remain explicitly unavailable for the later fail-closed gate.")
   assert.deepEqual(bookSubscriptions, ["DOGEUSDT", "ZROUSDT"])
   assert.deepEqual(submittedSymbols, ["DOGEUSDT", "ZROUSDT"], JSON.stringify(diagnosticLogs))
   assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
@@ -508,5 +536,10 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
       JSON.stringify(diagnosticLogs.filter(({ message }) =>
         message === "Shutdown order reconciliation failed" ||
         message === "paused a trading pair")),
+  )
+  assert.deepEqual(
+    candleUnsubscriptions.sort(),
+    ["DOGEUSDT", "ZROUSDT"],
+    "Harvester shutdown must unsubscribe each live candle stream as part of market-data cleanup.",
   )
 })
