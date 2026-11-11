@@ -1,4 +1,4 @@
-import { compareDecimal, maxDecimal, normalizeDecimalString } from "@coinzilla/utils"
+import { compareDecimal, normalizeDecimalString, roundDecimalToIncrement } from "@coinzilla/utils"
 import { normalizeSymbolInput } from "./configuration.js"
 
 const DEFAULT_BINANCE_SPOT_BASE_URL = "https://api.binance.com"
@@ -13,6 +13,9 @@ function readExactlyOneFilter(filters, filterType) {
 }
 
 function normalizePositiveExchangeDecimal(value, field) {
+  if (typeof value !== "string" || value.trim() !== value) {
+    throw new TypeError("Binance " + field + " must be a decimal string")
+  }
   let normalized
   try {
     normalized = normalizeDecimalString({ value, allowNegative: false, field })
@@ -20,9 +23,9 @@ function normalizePositiveExchangeDecimal(value, field) {
     throw new TypeError("Binance " + field + " must be a valid decimal string", { cause })
   }
   if (compareDecimal({ left: normalized, right: "0" }) <= 0) {
-    throw new RangeError("Binance " + field + " must be positive")
+    throw new RangeError("Binance " + field + " must be a positive decimal increment/value")
   }
-  return normalized
+  return value
 }
 
 function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
@@ -57,7 +60,23 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
   const stepSize = normalizePositiveExchangeDecimal(lotSizeFilter.stepSize, "LOT_SIZE.stepSize")
   const minQuantity = normalizePositiveExchangeDecimal(lotSizeFilter.minQty, "LOT_SIZE.minQty")
   const maxQuantity = normalizePositiveExchangeDecimal(lotSizeFilter.maxQty, "LOT_SIZE.maxQty")
+  const alignedMinimumQuantity = roundDecimalToIncrement({
+    value: minQuantity,
+    increment: stepSize,
+    direction: "down",
+  })
+  if (compareDecimal({ left: alignedMinimumQuantity, right: minQuantity }) !== 0) {
+    throw new Error("Binance LOT_SIZE.minQty is not aligned to LOT_SIZE.stepSize")
+  }
+  if (compareDecimal({ left: minQuantity, right: maxQuantity }) > 0) {
+    throw new Error("Binance LOT_SIZE.minQty exceeds LOT_SIZE.maxQty")
+  }
 
+  for (const filterType of ["MIN_NOTIONAL", "NOTIONAL"]) {
+    if (symbolInfo.filters.filter((filter) => filter?.filterType === filterType).length > 1) {
+      throw new Error("Binance exchangeInfo contains duplicate " + filterType + " filters")
+    }
+  }
   const notionalFilters = symbolInfo.filters.filter(
     (filter) => filter?.filterType === "MIN_NOTIONAL" || filter?.filterType === "NOTIONAL",
   )
@@ -65,11 +84,13 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
     throw new Error("Binance exchangeInfo is missing MIN_NOTIONAL/NOTIONAL for " + requestedSymbol)
   }
   const minNotionalValues = notionalFilters.map((filter) => {
-    return normalizePositiveExchangeDecimal(filter.minNotional, filter.filterType + ".minNotional")
+    const value = normalizePositiveExchangeDecimal(filter.minNotional, filter.filterType + ".minNotional")
+    return { value, normalized: normalizeDecimalString({ value, allowNegative: false }) }
   })
-  const minNotional = minNotionalValues.reduce((highest, value) => {
-    return maxDecimal({ left: highest, right: value })
+  const strictestMinimum = minNotionalValues.reduce((highest, current) => {
+    return compareDecimal({ left: highest.normalized, right: current.normalized }) >= 0 ? highest : current
   })
+  const minNotional = strictestMinimum.value
 
   return {
     symbol: requestedSymbol,
