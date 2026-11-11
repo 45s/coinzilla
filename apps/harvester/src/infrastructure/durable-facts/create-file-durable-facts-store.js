@@ -50,8 +50,8 @@ function createError(message, code) {
 }
 
 function requireNonEmptyString({ value, field, maxLength = MAX_STRING_LENGTH }) {
-  if (typeof value !== "string" || value.trim() === "" || value.length > maxLength) {
-    throw new TypeError(field + " must be a non-empty string of at most " + maxLength + " characters")
+  if (typeof value !== "string" || value.trim() === "" || value !== value.trim() || value.length > maxLength) {
+    throw new TypeError(field + " must be a canonical non-empty string of at most " + maxLength + " characters")
   }
   return value
 }
