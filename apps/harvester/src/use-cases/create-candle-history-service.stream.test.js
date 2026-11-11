@@ -415,3 +415,23 @@ test("notifies the protection consumer after warm-up and each accepted live cand
   )
   assert.equal(observed.at(-1).snapshot.data.metrics.openTime, 100 * INTERVAL_MS)
 })
+
+
+test("notifies the protection consumer when the live Kline stream becomes stale without another candle event", async () => {
+  const observed = []
+  const fixture = createFixture({
+    onSnapshot: async ({ snapshot }) => observed.push(snapshot),
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+    },
+  })
+  await fixture.start()
+  assert.equal(observed.at(-1).data.status.isFresh, true)
+
+  fixture.clock.now += 5_001
+  await new Promise((resolve) => setTimeout(resolve, 1_100))
+  await fixture.subscriptions[0].unsubscribe()
+
+  assert.equal(observed.at(-1).data.status.isFresh, false)
+  assert.equal(observed.at(-1).data.status.reason, "STALE_STREAM")
+})
