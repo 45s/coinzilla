@@ -14,7 +14,7 @@ test("resolves the minimal, trader, verbose, and custom profile defaults", () =>
   assert.equal(trader.shouldNotify({ name: "broker.connected" }), false, "Trader must suppress routine broker connection success messages.")
 
   const verbose = resolveTelegramNotificationPolicy({ telegramConfig: { profile: "verbose" } })
-  assert.deepEqual(verbose.eventNames, HARVESTER_TELEGRAM_NOTIFICATION_EVENTS, "Verbose must subscribe to every supported notifier event.")
+  assert.deepEqual(verbose.eventNames, HARVESTER_TELEGRAM_NOTIFICATION_EVENTS, "Verbose must subscribe to every Harvester-formatted notification event.")
   assert.equal(verbose.shouldNotify({ name: "broker.connected" }), true, "Verbose must include routine broker lifecycle events.")
 
   const custom = resolveTelegramNotificationPolicy({
