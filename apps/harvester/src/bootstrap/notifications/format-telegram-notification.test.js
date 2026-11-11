@@ -45,7 +45,7 @@ test("uses the approved compact icon and layout for each notification type", () 
   const examples = [
     [{ name: "order.submitted", data: { side: "BUY", symbol: "LINKUSDT", price: "14.25", quantity: "2", orderId: "42" } }, "🟢 BUY LINK/USDT ORDER SUBMITTED @ 14.25 × 2\n#42"],
     [{ name: "order.submitted", data: { side: "SELL", symbol: "LINKFDUSD", price: "14.5", quantity: "1" } }, "🔴 SELL LINK/FDUSD ORDER SUBMITTED @ 14.5 × 1"],
-    [{ name: "order.cancelled", data: { side: "BUY", symbol: "LINKFDUSD", executedQuantity: "0", orderId: "43" } }, "✖️ BUY LINK/FDUSD CANCELLED · Filled 0\n#43"],
+    [{ name: "order.cancelled", data: { side: "BUY", symbol: "LINKFDUSD", executedQuantity: "0", orderId: "43" } }, "✖️ BUY LINK/FDUSD ORDER CANCELLED · Filled 0\n#43"],
     [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BINANCE CONNECTED · TESTNET"],
     [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "🟥 BINANCE DISCONNECTED · success"],
     [{ name: "bot.started", data: {} }, "🚀 BOT STARTED"],
