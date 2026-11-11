@@ -1,5 +1,4 @@
 import { Market, TradingRules } from "@coinzilla/entities"
-import { UnvalidatedMarketExchangeConstraintsError } from "./errors/unvalidated-market-exchange-constraints-error.js"
 import { compareDecimal, roundDecimalToIncrement } from "@coinzilla/utils"
 
 const REQUIRED_RULE_TYPES = Object.freeze([
@@ -45,13 +44,6 @@ export function validateMarketTradingReadiness({
   if (!Array.isArray(unvalidatedConstraints)) {
     throw new TypeError("Market metadata unvalidatedConstraints must be an array")
   }
-  if (unvalidatedConstraints.length > 0) {
-    throw new UnvalidatedMarketExchangeConstraintsError({
-      symbol,
-      constraints: unvalidatedConstraints,
-    })
-  }
-
   for (const type of REQUIRED_RULE_TYPES) {
     const constraint = tradingRules.constraints.find((item) => item.type === type)
     if (!constraint || constraint.status !== "SUPPORTED") {
@@ -127,6 +119,9 @@ export function validateMarketTradingReadiness({
     market,
     tradingRules,
     supportedOrderTypes: Object.freeze([...supportedOrderTypes]),
+    unvalidatedConstraints: Object.freeze(unvalidatedConstraints.map((constraint) =>
+      Object.freeze({ ...constraint })
+    )),
     orderType,
   })
 }
