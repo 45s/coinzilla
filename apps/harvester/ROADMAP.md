@@ -2,41 +2,66 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
-## Adaptive price step — ATR-based volatility adjustment
+## Adaptive price step — volatility-adjusted spacing
 
-**Status: PROPOSED — DESIGN NOT YET FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStep` remains the baseline. Harvester may derive an effective step from a normalized volatility coefficient, with Average True Range (ATR) as the initial candidate volatility measure.
+**Status: PROPOSED — DESIGN NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the proposed shared [Indicators package](../../packages/indicators/README.md). Average True Range (ATR) is the leading candidate measure, but the package API and calculation contract are not yet approved.
 
 ### Intended behavior
 
-- In normal/reference volatility, the effective step equals the configured baseline.
-- When current volatility is higher than its reference level, widen the effective step proportionally (subject to defined bounds).
-- When current volatility is lower, reduce the effective step only if the agreed policy permits it; otherwise keep the baseline as a floor.
-- Example: baseline `priceStep = 0.5`; normalized volatility coefficient `1.5`; effective step `0.5 × 1.5 = 0.75`.
-- Apply the derived value consistently to the strategy's price-spacing decisions without mutating the configured baseline.
+- At reference volatility, the coefficient is neutral (`1.0`) and the effective step equals the configured baseline.
+- When current volatility is 1.5 times its reference level, the illustrative coefficient is `1.5`; a baseline of `0.5%` therefore produces an effective step of `0.75%`.
+- The configured baseline is never overwritten. The strategy consumes a derived effective value for the decisions explicitly included in the final scope.
+- Whether lower volatility may reduce the baseline, or whether the baseline is a hard floor, remains an open policy decision.
+- Calculate volatility independently for each market. Do not compare raw ATR values across symbols with different price scales.
+- The indicator calculation must not know about Binance DTOs, order placement, Harvester positions, fees or strategy policy.
+
+### Proposed calculation model (illustrative, not yet accepted)
+
+Normalize ATR to the instrument's price level:
+
+`ATR% = ATR / Close × 100`
+
+Compare a current normalized ATR value with a reference value for the same market and timeframe:
+
+`VolatilityCoefficient = CurrentATR% / ReferenceATR%`
+
+Then derive:
+
+`EffectivePriceStepPercent = ConfiguredPriceStepPercent × VolatilityCoefficient`
+
+Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coefficient `1.5`, effective step `0.75%`. This is an example of the intended relationship, not a frozen formula or parameter set. Raw ATR is an absolute price movement and must not be multiplied directly into a percentage-based `priceStepPercent`.
+
+### Ownership boundary
+
+- The proposed `@coinzilla/indicators` package owns exchange-neutral, deterministic indicator calculations over normalized candle data (for example ATR, normalized ATR and a volatility ratio).
+- Harvester owns the policy: candle timeframe and history requirements, reference window, coefficient bounds/smoothing, fallback behavior, configuration, which strategy decisions use the value, and when orders may be recalculated.
+- Brokers owns exchange-specific market-data retrieval and DTO adaptation. Indicator code must not import broker or exchange SDKs.
+- Existing orders must not be silently repriced when a new indicator value arrives. Any order replacement policy must be separately specified and tested.
+- Exchange tick/step filters remain authoritative after strategy spacing is calculated.
 
 ### Design questions to resolve before implementation
 
-1. **Measure:** compare ATR in price units, normalized ATR (ATR divided by close price), or another volatility measure? Prefer normalized ATR for comparing volatility across symbols and price levels.
-2. **Reference:** define a stable per-symbol reference ATR/volatility (for example, a rolling baseline) rather than comparing unrelated absolute ATR values.
-3. **Timeframe and sampling:** choose candle interval, ATR period, closed-candle versus in-progress-candle input, and update cadence. Avoid noisy intrabar step changes.
-4. **Coefficient:** define the exact ratio/formula, neutral point (1.0), smoothing/hysteresis, and handling of sudden spikes.
-5. **Bounds:** define minimum/maximum coefficient and effective priceStep so volatility cannot produce unsafe or unusable order spacing.
-6. **Fallback:** define behavior for missing, stale, insufficient, invalid or discontinuous market data. Never silently treat unavailable volatility as zero.
-7. **Rounding and exchange constraints:** apply symbol tick-size/precision rules after calculation and ensure the result remains valid for the target market.
-8. **Strategy scope:** establish whether the adjustment applies to Conservative and Aggressive strategies, and whether it affects BUY spacing, recovery SELL pricing, or only specified price-step decisions.
-9. **Observability/configuration:** expose baseline, ATR inputs, reference, coefficient, effective step and fallback reason in diagnostics; keep the feature opt-in until validated.
+1. **Indicator contract:** normalized candle shape, timestamp/interval semantics, missing-candle handling, precision and result/error shape.
+2. **ATR definition:** period, smoothing variant (for example Wilder's), warm-up/history requirements and closed-candle policy.
+3. **Reference:** rolling reference window and how the baseline adapts across market regimes.
+4. **Timeframe and cadence:** candle interval, refresh frequency and whether the coefficient is stable between closed candles.
+5. **Coefficient policy:** exact ratio, neutral point, smoothing/hysteresis and treatment of sudden volatility spikes.
+6. **Bounds:** minimum/maximum coefficient and effective step; decide whether low volatility can reduce the configured baseline.
+7. **Fallback:** behavior for missing, stale, insufficient, invalid or discontinuous market data. Never silently treat unavailable volatility as zero.
+8. **Strategy scope:** Conservative/Aggressive applicability and the exact BUY/SELL decisions affected.
+9. **Observability/configuration:** diagnostics for baseline, indicator inputs, reference, coefficient, effective step and fallback reason; opt-in/disabled-by-default rollout.
+10. **Validation:** historical/offline evidence, multi-symbol behavior, restart/recovery interaction, precision/tick-size and a separately approved TESTNET plan.
 
 ### Proposed delivery sequence
 
-1. [ ] Document and agree the mathematical definition and configuration contract; add representative numerical examples.
-2. [ ] Add pure, deterministic tests for normalization, coefficient calculation, bounds, smoothing and invalid/stale input behavior.
-3. [ ] Implement the volatility/ATR input port and adapter mapping without coupling domain logic to Binance candle DTOs.
-4. [ ] Integrate the derived effective step at the strategy decision boundary while preserving the configured baseline and existing behavior when disabled.
-5. [ ] Add multi-symbol, restart/recovery, precision/tick-size and regression coverage; update operator documentation.
-6. [ ] Validate with historical/offline market data and a separate explicitly approved TESTNET plan before considering enablement.
+1. [ ] Discuss and freeze the package boundary, candle contract and mathematical definition before implementation.
+2. [ ] Create the proposed Indicators package foundation and its own public API, tests, README and roadmap.
+3. [ ] Implement and validate ATR, normalized ATR and the volatility-ratio calculation in the owning package.
+4. [ ] Submit a separate Harvester consumer change for configuration, strategy policy and effective-step integration.
+5. [ ] Add regression coverage for multiple markets, invalid/stale history, bounds, smoothing, order lifecycle and unchanged behavior when disabled.
+6. [ ] Validate against historical/offline market data; consider TESTNET only under a separately approved bounded plan.
 
-**Safety constraints:** no automatic multiplier is assumed yet; no live/TESTNET trading behavior changes in this planning item. The feature must be bounded, deterministic, observable, independently testable and disabled by default until its design and acceptance criteria are approved.
-
+**Safety constraints:** this roadmap item changes no runtime behavior. No coefficient, timeframe, period, bound or fallback is finalized. The feature remains unimplemented and disabled until the design, tests and acceptance criteria are agreed. No TESTNET/LIVE operation is authorized by this planning work.
 ---
 
 ## Process-restart recovery — small-step delivery plan (#654)
