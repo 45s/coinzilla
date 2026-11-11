@@ -58,7 +58,7 @@ function createCanonicalEvidence({ context }) {
         (existingByCode && existingByCode.id !== id)) {
       throw new Error("Offline evidence contains contradictory canonical asset identity for " + code)
     }
-    const asset = existingById ?? new Asset({ id, code })
+    const asset = existingById ?? existingByCode ?? new Asset({ id, code })
     assetsById.set(id, asset)
     assetsByCode.set(code, asset)
     return asset
@@ -361,8 +361,13 @@ export async function runOfflineMarketRecovery({
         refreshAccountSnapshot: async () => toResult({ data: currentAccountSnapshot }),
         refreshOpenOrders: async () => toResult({ data: openOrders }),
         fetchMarketTradeHistory: async ({ market: requestedMarket, startTime }) => {
-          if (requestedMarket.id !== targetMarket.id || startTime !== coverage.coveredFromTime) {
-            throw new Error("Offline trade-history evidence does not match the requested target market and coverage start")
+          if (requestedMarket.id !== targetMarket.id || startTime !== coverage.coveredFromTime ||
+              tradeHistory.historyStartTime !== startTime ||
+              tradeHistory.historyScope !== "MARKET" ||
+              !Array.isArray(tradeHistory.marketsQueried) ||
+              tradeHistory.marketsQueried.length !== 1 ||
+              tradeHistory.marketsQueried[0] !== symbol) {
+            throw new Error("Offline trade-history evidence must cover exactly the target market from the reviewed coverage start")
           }
           return toResult({
             data: {
@@ -380,6 +385,7 @@ export async function runOfflineMarketRecovery({
     }
 
     if (confirm) {
+      requireString({ value: context.runtimeSessionId, field: "context.runtimeSessionId" })
       if (typeof durableFactsStore?.readAll !== "function" ||
           typeof durableFactsStore?.append !== "function") {
         throw new TypeError("Offline coverage confirmation requires the existing ADR-0001 durable-facts read/append port")
