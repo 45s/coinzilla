@@ -729,7 +729,7 @@ PR #513 is already merged. Keep PR #515 draft until its offline acceptance crite
 - [x] Remove duplicate OPENING snapshot flush-failure test.
 - [x] Add recovery SELL exact tick-rounding and base-commission retained-inventory boundary tests.
 - [x] Validate maker/taker percentages in both trading-config and market-readiness validation: accept 0 inclusive, reject 100 or higher.
-- [x] Align trading config with the reported fee settings: USDT pairs use 0.1% maker/taker; FDUSD pairs retain the configured zero-maker policy and use 0.1% taker. README and config tests document/verify this split.
+- [x] Align strategy settings with the reported fee settings: USDT pairs use 0.1% maker/taker; FDUSD pairs retain the configured zero-maker policy and use 0.1% taker. README and config tests document/verify this split.
 - [x] Add duplicate CLOSING snapshot endpoint and malformed Journal snapshot/session/profit record tests.
 - [x] Add streamed BUY partial-fill sequence coverage (cumulative 0.4 → 0.7 → 1.0) and assert VWAP is reconciled before strategy advancement.
 - [x] Add REST/stream stale-history protection: REST order history behind an already-applied stream fill is rejected without applying stale REST fills.

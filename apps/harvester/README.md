@@ -51,7 +51,7 @@ pnpm --filter @coinzilla/harvester test:coverage
 
 ## Configuration
 
-Harvester uses one `trading-config.json` with strategy-scoped configuration. The root contains a `strategies` object; each strategy owns its enabled flag, settings, and market pairs. The active strategy key is `CG_coinGrabber`.
+Harvester uses one application-wide `config.json`. The root contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. The active strategy key is `CG_coinGrabber`.
 
 - `strategies.CG_coinGrabber.enabled`: enables the strategy.
 - `strategies.CG_coinGrabber.settings.minProfit`: minimum required net profit per completed recovery sale, in the pair's quote currency.
@@ -59,11 +59,11 @@ Harvester uses one `trading-config.json` with strategy-scoped configuration. The
 - `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
 - `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, precision, and fee settings.
 
-All settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Strategy availability is not configured through environment variables.
+Trading settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Application-wide settings such as `notifications` are sibling root sections. Strategy availability is not configured through environment variables.
 
-**Runtime environment contract:** `TRADING_MODE` is the only operator-facing exchange-mode setting and accepts exactly `testnet` or `live`. Binance is the only broker, so there is no broker selector. Trading is enabled in either selected mode; there is no profile selector or trading-enable flag. Missing or invalid `TRADING_MODE` must fail startup rather than silently choose an exchange environment. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
+**Runtime environment contract:** `TRADING_MODE` is the only operator-facing exchange-mode setting and accepts exactly `testnet` or `live`. Binance is the only broker, so there is no broker selector or exchange-mode profile selector. Trading is enabled in either selected mode; there is no trading-enable flag. Telegram notification profiles are independent and never select the exchange environment. Missing or invalid `TRADING_MODE` must fail startup rather than silently choose an exchange environment. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
 
-The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. Strategy and pair settings remain in `trading-config.json`.
+The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. Strategy and pair settings remain in `config.json` under `strategies`.
 
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity.
 
@@ -73,6 +73,14 @@ Example (illustrative only; it does not identify the currently enabled default p
 
 ```json
 {
+  "notifications": {
+    "telegram": {
+      "enabled": true,
+      "profile": "trader",
+      "markets": [],
+      "events": {}
+    }
+  },
   "strategies": {
     "CG_coinGrabber": {
       "enabled": true,
@@ -99,9 +107,9 @@ Example (illustrative only; it does not identify the currently enabled default p
 }
 ```
 
-`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed config enables only `ZROFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. The current USDT pair configuration reflects the reported 0.1% maker/taker setting; FDUSD pairs retain `makerPercent: 0` and use `takerPercent: 0.1`. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed `config.json` currently enables only `LINKFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. The disabled `LINKUSDT` pair currently has configured maker/taker assumptions of 0.075% / 0.075%; enabled `LINKFDUSD` has maker 0% and taker 0.075%. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
-The strategy configuration remains in `trading-config.json`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
+The strategy configuration remains in `config.json` under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 
 ## Runtime and safety
 
@@ -135,7 +143,15 @@ The broker-wide and Harvester process locks live under `~/.coinzilla/harvester/p
 
 ### Optional Telegram notifications
 
-See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md).
+Telegram policy lives in `config.json` under `notifications.telegram`; bot credentials remain in `.env.development` / deployment environment variables and must never be committed.
+
+- `enabled`: set to `false` to disable Telegram even when credentials exist. The default is `true`; transport is still created only when both credential variables are present.
+- `profile`: `minimal` (safety alerts only), `trader` (useful order/fill/recovery and lifecycle milestones), `verbose` (all supported low-volume operational events), or `custom` (only explicitly enabled ordinary events).
+- `markets`: an empty array means all markets; otherwise ordinary symbol-specific notifications are limited to the listed symbols.
+- `events`: optional boolean overrides keyed by `orderSubmitted`, `orderCancelled`, `orderFailed`, `fillReceived`, `pairPaused`, `recoveryCompleted`, `recoveryFailed`, `botStarted`, `botStopped`, `startupFailed`, `brokerConnected`, `brokerDisconnected`, and `accountSafetyAlert`. Overrides merge with the selected profile; with `custom`, unspecified ordinary events remain off.
+- Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, and account-safety alerts cannot be disabled and bypass market filters.
+
+See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md) for the event vocabulary and delivery contract.
 
 ### Operational event journal
 

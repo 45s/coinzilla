@@ -97,12 +97,10 @@
 
 **Steps:**
 
-1. [~] **RED — Reproduce conflict (test-only stage, PR [#987](https://github.com/45s/coinzilla/pull/987)):** deterministic manager and Conservative-engine regressions now express the same-symbol block and unrelated-symbol control. On PR head `0fcc159e8bf0d75cc7aa6d329507da3ffe9d2c29`, CI fails at the intended missing behavior: the snapshot manager has no symbol-query API and the engine submits one competing order. This is RED evidence only; it is not a passing test or production fix.
+1. [ ] **RED — Reproduce conflict:** unowned open BUY/SELL on symbol A, no owned order in OrderRegistry, otherwise-valid strategy decision. Assert no competing strategy order. Control: symbol B remains eligible.
 2. [ ] **GREEN — Add narrow symbol gate:** use a current authoritative account-wide open-order view; defer only the affected symbol while a conflicting unowned order is open. Never adopt, cancel, modify or claim ownership of it.
 3. [ ] **RED/GREEN — Snapshot lifecycle:** startup snapshot, order update/terminal event, reconnect refresh, stale/missing snapshot and snapshot-read failure. Unknown/stale state must not mean “no open orders”.
 4. [ ] **Regression — Isolation/diagnostics:** no duplicate intent; external order unchanged; unrelated symbols unaffected; actionable blocked-symbol reason.
-
-**Current status (2026-11-11):** [#985](https://github.com/45s/coinzilla/issues/985) remains open. [PR #987](https://github.com/45s/coinzilla/pull/987) is open and currently contains only the two unit-test changes above; it does not yet contain the production guard, startup/reconnect integration coverage, or removal of the unused `blockOnExistingOrders` argument. Harvester unit tests and coverage are red on the expected new regressions; no required-green or merge claim is made. Continue with the smallest source fix, then add authoritative startup/reconnect lifecycle coverage before marking this item complete.
 
 **Acceptance:** no conflicting same-symbol order can be submitted while an unowned order is open; external orders stay untouched/unowned; unrelated symbols remain independent; inability to establish current open-order state fails closed for that decision.
 
@@ -344,7 +342,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
-- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed config enables only ZROFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed `config.json` enables only LINKFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -371,7 +369,8 @@ This section is the current operational status and supersedes older statements b
 ### Optional operational notifications
 
 - [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected lifecycle, pause, applied-fill, recovery-completion, and accounting-failure events; the notifier package owns formatting, bounded serialized delivery, and transport.
-- Notifications are disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
+- Telegram transport is constructed only when `notifications.telegram.enabled` is not false and both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
+- [~] Add Harvester-owned `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filtering, and non-disableable safety alerts through the single `config.json`; depend on the Notifiers event-selection contract tracked by [#996](https://github.com/45s/coinzilla/issues/996).
 - Delivery is best-effort, in-memory, and not a durable outbox. No trading behavior, exchange integration, or financial accounting rules are changed.
 
 ### Other active and deferred work
@@ -428,10 +427,10 @@ These items are intentionally recorded for future work. They are not current tra
 ### D. Optional Telegram notifications
 
 - [x] Integrate Harvester with the existing @coinzilla/notifiers package for optional Telegram notifications (PR #734; optional, bounded and failure-isolated).
-- [ ] Define a small allowlisted set of useful operational events (startup/connection status, trading pause or safety halt, order/fill lifecycle milestones, and shutdown) before implementation.
-- [ ] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
-- [ ] Reuse existing notifier and event-bus contracts; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
-- [ ] Define configuration, credential handling, message content, and tests when this feature is selected. Notifications remain disabled unless explicitly configured.
+- [x] Map low-volume Harvester lifecycle, broker, order, fill, recovery, and account-safety events to the shared notifier vocabulary; do not publish market ticks or routine strategy decisions. The expanded event contract is provided by Notifiers PR #997 and Harvester integration is tracked by [#998](https://github.com/45s/coinzilla/issues/998).
+- [x] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
+- [x] Reuse the Notifiers event-selection contract and event bus; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
+- [~] Configure `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filters, and non-disableable safety alerts in the single `config.json`; keep credentials environment-only. The default profile is `trader`, but Telegram transport is created only when both credentials are present and `notifications.telegram.enabled` is not false. Implementation and documentation are in [#998](https://github.com/45s/coinzilla/issues/998).
 
 ## Current work selection
 
@@ -439,13 +438,16 @@ These items are intentionally recorded for future work. They are not current tra
 - [x] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Implemented and merged in [PR #663](https://github.com/45s/coinzilla/pull/663).
 - [x] Account-integrity safety halt: after an unowned/invalid execution or accounting failure closes global readiness, reconcile Harvester-owned order identities and cancel only acknowledged BUY orders; preserve SELLs and external orders; keep the gate closed if any cancellation/fill reconciliation is unresolved. Tracking incident [#667](https://github.com/45s/coinzilla/issues/667), implementation PR [#669](https://github.com/45s/coinzilla/pull/669).
 
-The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
+The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. The #654 restriction against implementation applies only to restart-recovery work; the separately selected application-config/notification task must not alter restart recovery. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
+
+- [~] Unified application configuration and Telegram notification profiles: owner-selected implementation tracked by [#998](https://github.com/45s/coinzilla/issues/998), dependent on the shared Notifiers event-selection contract in [#996](https://github.com/45s/coinzilla/issues/996). This work does not change strategy, broker, exchange, order-execution, or restart-recovery behavior.
 
 Trading safety requirements remain in force: the operator selects TESTNET or LIVE explicitly through `TRADING_MODE`; `live` means real Binance order execution. Keep order-safety protections, exact-order ownership, and the existing mandatory Journal durability barriers intact. Journal evidence beyond those barriers is bounded, allowlisted, and best-effort. Journal is not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
 
 ## Strategy-scoped trading configuration
 
-- [x] Keep Harvester configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
+- [x] Keep strategy-owned trading configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs, within the single application-wide `config.json`.
+- [~] Keep application-wide notification policy in the sibling `notifications.telegram` section; do not mix Telegram credentials or delivery logic into strategy configuration.
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
 - [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together — completed in [PR #839](https://github.com/45s/coinzilla/pull/839).
 
@@ -459,7 +461,7 @@ Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independentl
 
 **Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
 
-**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `trading-config.json`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
+**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `config.json` under `strategies`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Application-wide notification policy is a sibling `notifications` section and does not change strategy or exchange selection. Architecture expansion, optional features, and optimization come after that.
 
 The paragraph below was an earlier audit snapshot and is superseded by the current implementation status and checklist in this roadmap. On `develop`, Harvester now composes the Conservative trading engine when TESTNET trading is explicitly enabled, submits strategy intents through the engine, tracks owned orders, processes canonical fills, updates Portfolio/RecoveryLedger, and has fake-broker coverage for a complete recovery cycle. A real Binance TESTNET cycle is still unverified; do not treat the offline simulation as exchange proof.
 
@@ -572,7 +574,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
 - [x] Implement minimum process readiness for the first TESTNET cycle. When `TRADING_MODE=testnet` is selected, startup requires at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite; genuine reconnect/reconciliation requirements still fail closed.
 - [x] Enable order execution after the selected `TRADING_MODE` is validated and strategy configuration, enabled-pair exchange filters, a fresh account snapshot, and an active user-data stream are ready. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
-- [x] Replace `trading-config.json` runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Completed on [PR #841](https://github.com/45s/coinzilla/pull/841), merged 2026-11-09: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings remain in `trading-config.json`. All six required exact-head CI contexts passed; the optional read-only Binance TESTNET integration check was skipped. This completes explicit mode/endpoint selection, not live-trading or TESTNET acceptance.
+- [x] Replace legacy runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Completed on [PR #841](https://github.com/45s/coinzilla/pull/841), merged 2026-11-09: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings were stored in the previous configuration file at the time; the current single application-wide filename is `config.json`. All six required exact-head CI contexts passed; the optional read-only Binance TESTNET integration check was skipped. This completes explicit mode/endpoint selection, not live-trading or TESTNET acceptance.
 - [x] Validate enabled pair configuration against exchange assets/filters at startup: `orderQuantity` is rounded down by the actual base-asset step and checked against supported min/max quantity; quote-asset `investment` is checked against minimum notional. The symbol must match the exchange market metadata. Actual price/quantity/notional validation remains at order submission.
 
 ### P0.3 — Order intent, safety checks, and reservations
@@ -647,7 +649,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ## P1 — Implement Aggressive after Conservative is proven
 
-- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `trading-config.json`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
+- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `config.json`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
 
 Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
 

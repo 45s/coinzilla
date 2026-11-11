@@ -12,8 +12,8 @@ import { publishLifecycleEvent } from "./application/events/publish-lifecycle-ev
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
-import { loadTradingConfig } from "./infrastructure/config/load-trading-config.js"
-import { resolveHarvesterRuntimeConfig } from "./domain/trading-config.js"
+import { loadAppConfig } from "./infrastructure/config/load-app-config.js"
+import { resolveRuntimeConfig } from "./domain/app-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
@@ -144,7 +144,7 @@ export async function main({
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
   acquireProcessLock = acquireHarvesterProcessLocks,
-  loadConfig = loadTradingConfig,
+  loadConfig = loadAppConfig,
   configSource,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
@@ -174,8 +174,8 @@ export async function main({
   let runtimeStartAttempted = false
   try {
     eventBus = createEventBus({ logger })
-    const tradingConfig = await loadConfig(configSource)
-    const runtimeConfig = resolveHarvesterRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
+    const appConfig = await loadConfig(configSource)
+    const runtimeConfig = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
     const processLockDirectory = resolveHostProcessLockDirectory()
     const lockResult = await acquireProcessLock({
       journalDirectory: processLockDirectory,
@@ -244,14 +244,17 @@ export async function main({
 
     const telegramToken = env.TELEGRAM_BOT_TOKEN?.trim()
     const telegramChatId = env.TELEGRAM_CHAT_ID?.trim()
-    if (telegramToken && telegramChatId) {
+    const telegramConfig = appConfig.notifications?.telegram ?? {}
+    if (telegramConfig.enabled !== false && telegramToken && telegramChatId) {
       try {
         const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
-        telegramNotifications = await subscribeHarvesterTelegramNotifications({ eventBus, notifier, logger })
+        telegramNotifications = await subscribeHarvesterTelegramNotifications({ eventBus, notifier, logger, telegramConfig })
         logSystem(logger, "Telegram notifications enabled.")
       } catch (error) {
         logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
       }
+    } else if (telegramConfig.enabled === false) {
+      logSystem(logger, "Telegram notifications disabled by app configuration.")
     } else if (telegramToken || telegramChatId) {
       logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
     }
@@ -267,9 +270,10 @@ export async function main({
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, tradingConfig, env })
-    const enabledMarkets = runtime.tradingConfig?.pairs
-      ? Object.entries(runtime.tradingConfig.pairs)
+    const runtime = await start({ eventPublisher, appConfig, env })
+    const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
+    const enabledMarkets = configuredPairs
+      ? Object.entries(configuredPairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
         .map(([symbol]) => symbol)
       : runtime.subscriptions ?? []

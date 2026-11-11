@@ -32,7 +32,7 @@ See [Harvester Architecture](../architecture.md) for the distinction between dom
 
 ## Lifecycle and data flow
 
-1. Bootstrap loads and validates `trading-config.json`.
+1. Bootstrap loads and validates `config.json`.
 2. The configured, enabled trading pairs are made available to the trading engine.
 3. The market-data adapter subscribes to the broker's market streams.
 4. Incoming prices are normalized and delivered to the selected strategy. A price update may cause the strategy to request an order, but it does not modify the portfolio.
@@ -42,7 +42,7 @@ See [Harvester Architecture](../architecture.md) for the distinction between dom
 8. The use case applies the fill to the matching position and returns the updated portfolio (or an explicit failure). The strategy/engine then observes the updated portfolio when making subsequent decisions.
 
 ```text
-trading-config.json
+config.json
        |
        v
     Bootstrap
