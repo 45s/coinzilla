@@ -260,3 +260,30 @@ test("rejects malformed unvalidated constraint metadata instead of treating it a
     "Malformed exchange-constraint metadata must close the readiness gate rather than be interpreted as no restrictions.",
   )
 })
+
+
+test("rejects incomplete context when constructing an unvalidated-market error", () => {
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: " ", constraints: [] }),
+    /requires a market symbol/,
+    "A market-readiness error must not be constructed without the affected market identity.",
+  )
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT", constraints: [] }),
+    /requires at least one unvalidated exchange constraint/,
+    "A market-readiness error must identify at least one concrete exchange constraint.",
+  )
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT", constraints: [null] }),
+    /descriptors must be objects/,
+    "Malformed constraint entries must be rejected rather than hidden inside a diagnostic.",
+  )
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({
+      symbol: "DOGEUSDT",
+      constraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" }],
+    }),
+    /require type, scope, and sourceFilterType/,
+    "A constraint diagnostic must retain its source filter type as well as its canonical category and scope.",
+  )
+})
