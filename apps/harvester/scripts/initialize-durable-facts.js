@@ -11,8 +11,8 @@ function isAbsoluteLocalDirectory(directory) {
 export async function runInitializeDurableFacts({
   env = process.env,
   argv = process.argv.slice(2),
-  stdout = console.log,
-  stderr = console.error,
+  stdout = (message) => process.stdout.write(message + "\n"),
+  stderr = (message) => process.stderr.write(message + "\n"),
   createStore = createFileDurableFactsStore,
 } = {}) {
   if (!argv.includes("--confirm")) {
