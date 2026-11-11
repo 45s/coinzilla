@@ -610,3 +610,112 @@ test("operator pause does not cancel or reprice an already acknowledged BUY", as
   assert.equal(orders.length, 2, "No replacement BUY may be submitted after the operator pause.")
   assert.ok(dogeOrder, "The pre-existing DOGEUSDT order must remain registered.")
 })
+
+test("operator resume commits its fact before removing only the operator pause", async () => {
+  const { engine, orders } = await createHarness()
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+  assert.equal(pauseResult.ok, true, "The test market must first enter the operator-paused state.")
+
+  let durableResumeWrites = 0
+  const resumeResult = await engine.resumeMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => {
+      durableResumeWrites += 1
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  assert.equal(resumeResult.ok, true, "A blocker-free operator pause must be resumable.")
+  assert.equal(durableResumeWrites, 1, "The resume fact must be committed exactly once before state is cleared.")
+  assert.deepEqual(engine.getOperatorPausedMarkets(), [], "Resume must remove the operator-owned pause.")
+  assert.deepEqual(engine.getPausedMarkets(), [], "Resume must not create or clear a safety pause.")
+
+  await startBothMarkets(engine)
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [{ symbol: "DOGEUSDT", side: "BUY" }, { symbol: "SOLUSDT", side: "BUY" }],
+    "The next market evaluation may resume normal BUY planning after a committed operator resume.",
+  )
+})
+
+test("operator resume refuses to clear a safety blocker and does not persist a resume fact", async () => {
+  const { engine } = await createHarness()
+  const solMarket = marketsBySymbol.get("SOLUSDT")
+  const unownedSolOrder = new CanonicalOrder({
+    clientOrderId: "manual-sol-client-for-resume",
+    brokerOrderId: "manual-sol-order-for-resume",
+    market: solMarket,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: solAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: solAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const safetyResult = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executedOrder: unownedSolOrder },
+  })
+  assert.equal(safetyResult.ok, false, "The unowned order must establish the safety blocker.")
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "SOLUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+  assert.equal(pauseResult.ok, true, "An operator pause may coexist with a safety blocker.")
+
+  let durableResumeWrites = 0
+  const resumeResult = await engine.resumeMarket({
+    symbol: "SOLUSDT",
+    beforeApply: async () => {
+      durableResumeWrites += 1
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  assert.equal(resumeResult.ok, false, "An operator resume must not clear a safety blocker.")
+  assert.equal(resumeResult.errors[0].code, "SAFETY_BLOCKER_ACTIVE")
+  assert.equal(durableResumeWrites, 0, "A forbidden resume must not append a resume fact.")
+  assert.deepEqual(engine.getOperatorPausedMarkets(), ["SOLUSDT"])
+  assert.deepEqual(engine.getPausedMarkets(), ["SOLUSDT"])
+})
+
+test("repeated operator pause is idempotent and does not append another fact", async () => {
+  const { engine } = await createHarness()
+  let durablePauseWrites = 0
+  const beforeApply = async () => {
+    durablePauseWrites += 1
+    return { ok: true, data: { durable: true } }
+  }
+
+  const first = await engine.pauseMarket({ symbol: "DOGEUSDT", beforeApply })
+  const second = await engine.pauseMarket({ symbol: "DOGEUSDT", beforeApply })
+
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  assert.equal(second.data.alreadyPaused, true)
+  assert.equal(durablePauseWrites, 1, "An already-paused market must not append another pause fact.")
+})
+
+test("operator pause rejects an unconfigured market before attempting a durable write", async () => {
+  const { engine } = await createHarness()
+  let durablePauseWrites = 0
+
+  const result = await engine.pauseMarket({
+    symbol: "UNKNOWNUSDT",
+    beforeApply: async () => {
+      durablePauseWrites += 1
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(durablePauseWrites, 0)
+  assert.deepEqual(engine.getOperatorPausedMarkets(), [])
+})
+
