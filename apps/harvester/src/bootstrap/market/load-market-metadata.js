@@ -69,7 +69,11 @@ export async function loadMarketMetadata({
         eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
         dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
       })
-      logSystem(logger, { message: "Exchange trading rules validated", symbol })
+      logSystem(logger, {
+        message: "Supported exchange trading rules validated",
+        symbol,
+        unvalidatedConstraintCount: validatedMetadata.unvalidatedConstraints.length,
+      })
     }
 
   return marketMetadata
