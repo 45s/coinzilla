@@ -47,7 +47,8 @@ export async function runConfigSymbol({
     askWithDefault(await ask("Binance environment [testnet/live] (default " + defaultEnvironment + "): "), defaultEnvironment),
   )
   const inputs = normalizePairInputs({
-    investment: parseDecimalInput(await ask("Investment / quote budget: "), "investment", { exclusiveMin: true }),
+    investment: parseDecimalInput(await ask("Total investment / quote budget for this pair: "), "investment", { exclusiveMin: true }),
+    orderQuantity: parseDecimalInput(await ask("Quantity per individual order (base asset): "), "orderQuantity", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
     makerPercent: parseDecimalInput(await ask("Maker commission percent (for example 0): "), "makerPercent"),
     takerPercent: parseDecimalInput(await ask("Taker commission percent (for example 0.1): "), "takerPercent"),
