@@ -14,6 +14,7 @@ import {
   mapFillAppliedData,
   mapDuplicateFillData,
   mapRecoveryCycleCompletedData,
+  mapRecoveryCycleNotCompletedData,
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
@@ -228,6 +229,7 @@ export function makeConservativeTradingEngine({
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     completedRecoverySellSymbols: new Set(),
+    completedRecoverySellOrdersBySymbol: new Map(),
     reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
   }
@@ -358,6 +360,49 @@ export function makeConservativeTradingEngine({
     } catch (error) {
       return toResult({ error })
     }
+  }
+
+  const publishRecoveryCycleNotCompleted = ({ order, completion }) => {
+    const data = completion?.data
+    if (!data) return
+    const marketId = order.market.id
+    const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
+    const position = portfolio?.getPosition({ marketId })
+    const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
+    const realizedNetProfit = data.realizedNetProfit ??
+      (position && recoveryLedger
+        ? subtractDecimal({ left: recoveryLedger.netSellProceeds, right: position.spent.amount })
+        : undefined)
+    const activeQuantity = data.activeQuantity ?? position?.baseQuantity.amount
+    const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
+    const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
+    if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
+      // Missing evaluation evidence must remain unresolved in the Journal projection.
+      return
+    }
+    const continueReasons = [
+      "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    ]
+    const outcome = data.pause === false && continueReasons.includes(data.reason)
+      ? "CONTINUE_SELL_THROUGH"
+      : "BLOCKED"
+    return publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED,
+      dataResult: mapRecoveryCycleNotCompletedData({
+        symbol: order.market.symbol,
+        marketId,
+        sellOrderClientId: order.clientOrderId,
+        sellOrderBrokerOrderId: order.brokerOrderId,
+        outcome,
+        reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+        realizedNetProfit,
+        activeQuantity,
+        keepQuantity,
+        minProfit,
+      }),
+    })
   }
 
   const pause = async ({ symbol, reason, error }) => {
@@ -536,7 +581,10 @@ export function makeConservativeTradingEngine({
       state.deferredEvaluations.add(order.market.symbol)
     },
     onPendingOrder: async ({ order }) => {
-      if (order.side === "SELL") state.completedRecoverySellSymbols.delete(order.market.symbol)
+      if (order.side === "SELL") {
+        state.completedRecoverySellSymbols.delete(order.market.symbol)
+        state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
+      }
       state.registry = state.registry.registerPending({ order }).registry
       const persisted = await publishDurableIntent({
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
@@ -741,6 +789,8 @@ export function makeConservativeTradingEngine({
       state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
       if (canceledOrder.status === "FILLED") {
         state.completedOrderTransitions.add(canceledOrder.clientOrderId)
+        state.completedRecoverySellSymbols.add(symbol)
+        state.completedRecoverySellOrdersBySymbol.set(symbol, canceledOrder)
         if (compareDecimal({
           left: canceledOrder.executedQuantity.amount,
           right: canceledOrder.originalQuantity.amount,
@@ -763,10 +813,29 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
         }
+        if (!completion.data?.eligible) publishRecoveryCycleNotCompleted({ order: canceledOrder, completion })
         if (!completion.data?.eligible &&
             !["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason)) {
           await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
           return toResult({ error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation") })
+        }
+        if (completion.data?.eligible) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+            dataResult: mapRecoveryCycleCompletedData({
+              symbol,
+              marketId: canceledOrder.market.id,
+              freeQuantity: completion.data.freeQuantity,
+              keepQuantity: String(pairs[symbol].keepQuantity),
+              minProfit: String(pairs[symbol].minProfit),
+              realizedNetProfit: completion.data.realizedNetProfit,
+              ...(completion.data.dust === undefined ? {} : { dust: completion.data.dust }),
+            }),
+          })
+          state.completedRecoverySellSymbols.delete(symbol)
+          state.completedRecoverySellOrdersBySymbol.delete(symbol)
+          state.trailingBuy.set(symbol, true)
         }
         state.replacementIntents.delete(symbol)
         state.sellExecutionTotals.delete(order.brokerOrderId)
@@ -1059,6 +1128,11 @@ export function makeConservativeTradingEngine({
         recoveryLedger: recoveryLedgerBefore?.value ?? null,
       })
       if (decision.inventoryDisposition?.status === "EXCHANGE_CONSTRAINED_DUST" && state.completedRecoverySellSymbols.has(symbol)) {
+        const completedSellOrder = state.completedRecoverySellOrdersBySymbol.get(symbol)
+        if (!completedSellOrder) {
+          await pause({ symbol, reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING" })
+          return toResult({ error: new Error("Completed recovery SELL identity is unavailable for dust completion") })
+        }
         const completion = await completeRecoveryCycle({ marketId: metadata.market.id,
           keepQuantity: String(pairs[symbol].keepQuantity), minProfit: String(pairs[symbol].minProfit),
           inventoryDisposition: decision.inventoryDisposition })
@@ -1073,11 +1147,15 @@ export function makeConservativeTradingEngine({
               minProfit: String(pairs[symbol].minProfit), realizedNetProfit: completion.data.realizedNetProfit,
               dust: completion.data.dust }) })
           state.completedRecoverySellSymbols.delete(symbol)
+          state.completedRecoverySellOrdersBySymbol.delete(symbol)
           state.trailingBuy.set(symbol, true)
           if (decision.actions.length > 0) return evaluateLatestTransition({ symbol })
-        } else if (completion.data?.pause !== false) {
-          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
-          return toResult({ error: new Error("Dust recovery completion did not satisfy the Conservative contract") })
+        } else {
+          publishRecoveryCycleNotCompleted({ order: completedSellOrder, completion })
+          if (completion.data?.pause !== false) {
+            await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
+            return toResult({ error: new Error("Dust recovery completion did not satisfy the Conservative contract") })
+          }
         }
       }
       if (decision.actions.length === 0) {
@@ -1432,7 +1510,11 @@ export function makeConservativeTradingEngine({
           retryable: false,
         })
       }
-      if (fill.side === "BUY") { recordBuyExecutionFill({ fill }); state.completedRecoverySellSymbols.delete(symbol) }
+      if (fill.side === "BUY") {
+        recordBuyExecutionFill({ fill })
+        state.completedRecoverySellSymbols.delete(symbol)
+        state.completedRecoverySellOrdersBySymbol.delete(symbol)
+      }
       if (fill.side === "SELL") recordSellExecutionFill({ fill })
       if (accounting.data?.applied === true) {
         publishLifecycleEvent({
@@ -1840,6 +1922,7 @@ export function makeConservativeTradingEngine({
       }
       if (order.status === "FILLED" && order.side === "SELL") {
         state.completedRecoverySellSymbols.add(symbol)
+        state.completedRecoverySellOrdersBySymbol.set(symbol, order)
         if (recoveryMode) {
           resolveRecoveryManagedCancellation({ order })
         } else {
@@ -1871,6 +1954,7 @@ export function makeConservativeTradingEngine({
           })
         }
         if (!completion.data?.eligible) {
+          publishRecoveryCycleNotCompleted({ order, completion })
           if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
               completion.data?.pause === false) {
             // Keep the original cost/proceeds basis. The next serialized
@@ -1910,6 +1994,7 @@ export function makeConservativeTradingEngine({
         })
         state.sellExecutionTotals.delete(order.brokerOrderId)
         state.completedRecoverySellSymbols.delete(symbol)
+        state.completedRecoverySellOrdersBySymbol.delete(symbol)
         state.trailingBuy.set(symbol, true)
       }
       if (recoveryMode) {
