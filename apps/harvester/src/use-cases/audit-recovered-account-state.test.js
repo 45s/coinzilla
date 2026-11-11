@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Balance, CanonicalOrder, Market, Money, Order, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Commission, Fill, Market, Money, Order, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
@@ -724,4 +724,61 @@ test("fails closed when an unowned open order has no canonical market metadata",
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /canonical Market metadata is missing for unowned open order ETHUSDT/)
+})
+
+
+test("integrates structured one-market history evidence with account balance and order reconciliation", () => {
+  const { projection, restored } = restoreState()
+  const exchangeFills = restored.journalFills.map((entry) => new Fill({
+    tradeId: entry.tradeId,
+    brokerOrderId: entry.brokerOrderId,
+    clientOrderId: entry.clientOrderId,
+    market,
+    side: entry.side,
+    price: new Money({ amount: entry.price, asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: entry.quantity, asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: entry.quoteQuantity, asset: market.quoteAsset }),
+    liquidityRole: entry.liquidityRole,
+    ...(entry.executedAt === undefined ? {} : { executedAt: entry.executedAt }),
+    commissions: entry.commissions.map((commission) => new Commission({
+      amount: new Money({
+        amount: commission.amount,
+        asset: new Asset({ id: commission.assetId, code: commission.asset }),
+      }),
+      ...(commission.quoteValue === undefined ? {} : {
+        quoteValue: new Money({
+          amount: commission.quoteValue.amount,
+          asset: new Asset({
+            id: commission.quoteValue.assetId,
+            code: commission.quoteValue.asset,
+          }),
+        }),
+      }),
+    })),
+    commissionStatus: entry.commissionStatus,
+  }))
+  const exchangeTradeHistory = {
+    fills: exchangeFills,
+    historyPagesComplete: true,
+    marketHistoryComplete: true,
+    historyScope: "MARKET",
+    marketsQueried: ["BTCUSDT"],
+    marketUniverseComplete: false,
+  }
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [],
+    markets: [market],
+    targetMarket: market,
+    exchangeTradeHistory,
+    requireCompleteTradeHistory: true,
+    tradeHistoryScope: "MARKET",
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.tradeHistory.scope, "MARKET")
+  assert.equal(result.data.tradeHistory.marketSymbol, "BTCUSDT")
+  assert.equal(result.data.tradeHistory.marketUniverseComplete, false)
 })
