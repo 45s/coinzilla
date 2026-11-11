@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
 import * as fsPromises from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -7,6 +8,18 @@ import test from "node:test"
 import { createFileDurableFactsStore } from "./create-file-durable-facts-store.js"
 
 const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-durable-facts-"))
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]))
+  }
+  return value
+}
+const canonicalStringify = (value) => JSON.stringify(canonicalize(value))
+const digestRecord = (record) => {
+  const { digest, ...body } = record
+  return createHash("sha256").update(canonicalStringify(body), "utf8").digest("hex")
+}
 const createStore = (directory, options = {}) => createFileDurableFactsStore({
   directory,
   runtimeSessionId: "runtime-session-1",
@@ -144,7 +157,8 @@ test("preserves exact decimal strings and canonical key ordering", async (t) => 
   const record = JSON.parse(lines[1])
   assert.equal(record.data.quantity, "0.0100")
   assert.equal(record.data.price, "67234.50")
-  assert.equal(lines[1], JSON.stringify(record, Object.keys(record).sort()))
+  assert.equal(lines[1], canonicalStringify(record))
+  assert.equal(record.digest, digestRecord(record))
 })
 
 test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized payloads", async (t) => {
@@ -158,7 +172,7 @@ test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized
   assert.equal((await store.append(operatorPause({ data: { requestId: "r4", actorId: "a", symbol: "BTCUSDT", note: "x".repeat(70_000) } })).ok, false)
 })
 
-test("detects tampered record digests, missing manifests, sequence gaps, and partial tails", async (t) => {
+test("detects tampered record digests", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -168,10 +182,48 @@ test("detects tampered record digests, missing manifests, sequence gaps, and par
   const original = await readFile(logPath, "utf8")
   await writeFile(logPath, original.replace("BTCUSDT", "ETHUSDT"))
   assert.equal((await store.verify()).ok, false)
-  await writeFile(logPath, original)
+})
+
+test("detects missing committed-head manifests and missing log files", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
   await unlink(path.join(directory, "manifest.json"))
   assert.equal((await store.verify()).ok, false)
-  await store.initialize().catch(() => {})
+  await unlink(path.join(directory, "facts.jsonl"))
+  assert.equal((await store.readAll()).ok, false)
+})
+
+test("detects a validly re-digested sequence gap", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  await store.append(operatorPause())
+  const logPath = path.join(directory, "facts.jsonl")
+  const lines = (await readFile(logPath, "utf8")).trimEnd().split("\\n")
+  const record = JSON.parse(lines[1])
+  record.sequence = "2"
+  record.digest = digestRecord(record)
+  lines[1] = canonicalStringify(record)
+  await writeFile(logPath, lines.join("\\n") + "\\n")
+  const verification = await store.verify()
+  assert.equal(verification.ok, false)
+  assert.match(verification.errors[0].message, /sequence|gap|integrity/i)
+})
+
+test("detects a partial or torn final record", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  const logPath = path.join(directory, "facts.jsonl")
+  const original = await readFile(logPath, "utf8")
+  await writeFile(logPath, original + "{")
+  const verification = await store.verify()
+  assert.equal(verification.ok, false)
+  assert.match(verification.errors[0].message, /partial|torn|canonical|json|newline/i)
 })
 
 test("does not acknowledge an append when the manifest commit is uncertain", async (t) => {
