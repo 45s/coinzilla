@@ -50,15 +50,17 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
         BTCUSDT: {
           enabled: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
+          minProfit: 0.01,
           priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
           makerPercent: 0, takerPercent: 0,
         },
         ETHUSDT: {
           enabled: false, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
+          minProfit: 0.01,
           priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
           makerPercent: 0, takerPercent: 0,
         },
@@ -1452,13 +1454,14 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: {
       BTCUSDT: {
         enabled: true,
         investment: 2000,
         orderQuantity: 0.01,
         keepQuantity: 0.001,
+        minProfit: 0.01,
         priceStepPercent: 0.05,
         pricePrecision: 2,
         quantityPrecision: 3,
@@ -3227,16 +3230,19 @@ test("account snapshots include every configured pair asset, including disabled 
           ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
             enabled: false, investment: 100, orderQuantity: 400, keepQuantity: 1,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
             makerPercent: 0, takerPercent: 0.1,
           },
           ZROFDUSD: {
             enabled: false, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
+            minProfit: 0.01,
             priceStepPercent: 0.5, pricePrecision: 3, quantityPrecision: 1,
             makerPercent: 0, takerPercent: 0.1,
           },
           SOLFDUSD: {
             enabled: false, investment: 100, orderQuantity: 1, keepQuantity: 0.01,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
             makerPercent: 0, takerPercent: 0.1,
           },
