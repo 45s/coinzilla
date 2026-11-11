@@ -1,5 +1,8 @@
 import { subscribeTelegramNotifications } from "@coinzilla/notifiers"
-import { formatHarvesterTelegramNotification, HARVESTER_TELEGRAM_NOTIFICATION_EVENTS } from "./format-telegram-notification.js"
+import {
+  formatHarvesterTelegramNotification,
+  HARVESTER_TELEGRAM_NOTIFICATION_EVENTS,
+} from "./format-telegram-notification.js"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "../../application/events/event-names.js"
 import { resolveTelegramNotificationPolicy } from "./resolve-telegram-notification-policy.js"
 
