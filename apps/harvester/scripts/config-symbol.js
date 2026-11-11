@@ -75,7 +75,6 @@ export async function runConfigSymbol({
   if (metadata?.symbol !== symbol || metadata?.environment !== environment) {
     throw new Error("Binance metadata symbol/environment does not match the operator selection")
   }
-  const metadataFetchedAt = new Date().toISOString()
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
   writeLine("Configuration preview — config.json pair entry:")
