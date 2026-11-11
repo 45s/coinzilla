@@ -27,7 +27,6 @@ The application-level `resumeMarket` use case exists for a future trusted adapte
 
 The operator facade and use cases belong to `apps/harvester`. Do not create a shared `packages/operator` package until another application demonstrates the same transport-independent actor, authorization and request semantics.
 
-
 ## Implementation status
 
 | Slice | Status |
