@@ -5,8 +5,8 @@ function text(value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH) {
   if (typeof value === "number" && !Number.isFinite(value)) return fallback
 
   const normalized = String(value)
-    .replace(/[\\u0000-\\u001f\\u007f-\\u009f]/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength)
 
@@ -33,18 +33,17 @@ function orderId(data) {
   return id === undefined || id === null ? null : `#${text(id, "n/a", 96)}`
 }
 
-function compactOrder(event, titleIcon, title) {
-  const { data } = event
+function compactOrder(data, icon, status = "") {
   const direction = side(data.side)
-  const details = `${titleIcon ?? direction.icon} ${direction.label} ${symbol(data.symbol)} ${title}`
+  const heading = `${icon ?? direction.icon} ${direction.label} ${symbol(data.symbol)}${status ? ` ${status}` : ""}`
   const price = data.price === undefined ? null : `@ ${text(data.price, "n/a", 96)}`
   const quantity = data.quantity === undefined ? null : `× ${text(data.quantity, "n/a", 96)}`
   const facts = [price, quantity].filter(Boolean).join(" ")
-  return [facts ? `${details} ${facts}` : details, orderId(data)].filter(Boolean).join("\\n")
+  return [facts ? `${heading} ${facts}` : heading, orderId(data)].filter(Boolean).join("\n")
 }
 
 const formatters = Object.freeze({
-  "order.filled": ({ data }) => compactOrder({ data }, "💰", "FILLED"),
+  "order.filled": ({ data }) => compactOrder(data, "💰", "FILLED"),
   "fill.received": ({ data }) => {
     const fill = data.fill && typeof data.fill === "object" && !Array.isArray(data.fill) ? data.fill : {}
     const price = text(fill.price, "n/a", 96)
@@ -53,7 +52,7 @@ const formatters = Object.freeze({
     return [
       `💰 FILL RECEIVED · ${symbol(data.symbol)} @ ${price} × ${quantity}`,
       trade === undefined || trade === null ? null : `#${text(trade, "n/a", 96)}`,
-    ].filter(Boolean).join("\\n")
+    ].filter(Boolean).join("\n")
   },
   "bot.pair_paused": ({ data }) => `⚠️ ${symbol(data.symbol)} PAUSED · ${text(data.message ?? data.reason)}`,
   "bot.recovery_failed": ({ data }) => `⚠️ BOT RECOVERY FAILED · ${text(data.message ?? data.reason)}`,
@@ -64,15 +63,11 @@ const formatters = Object.freeze({
     ...(data.tradingMode === undefined ? [] : [text(data.tradingMode, "n/a", 24).toUpperCase()]),
   ].join(" · "),
   "broker.disconnected": ({ data }) => `🟥 ${text(data.broker, "BROKER", 64).toUpperCase()} DISCONNECTED · ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
-  "order.submitted": ({ data }) => compactOrder({ data }, null, ""),
-  "order.cancelled": ({ data }) => {
-    const direction = side(data.side)
-    const filled = text(data.executedQuantity, "0", 96)
-    return [
-      `✖️ ${direction.label} ${symbol(data.symbol)} CANCELLED · Filled ${filled}`,
-      orderId(data),
-    ].filter(Boolean).join("\\n")
-  },
+  "order.submitted": ({ data }) => compactOrder(data),
+  "order.cancelled": ({ data }) => [
+    `✖️ ${side(data.side).label} ${symbol(data.symbol)} CANCELLED · Filled ${text(data.executedQuantity, "0", 96)}`,
+    orderId(data),
+  ].filter(Boolean).join("\n"),
   "order.failed": ({ data }) => `❌ ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
   "account.safety_alert": ({ data }) => `⚠️ ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
   "bot.started": () => "🚀 BOT STARTED",
