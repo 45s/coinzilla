@@ -177,6 +177,13 @@ test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized
   assert.equal(secret.ok, false)
   const oversized = await store.append(operatorPause({ data: { requestId: "r4", actorId: "a", symbol: "BTCUSDT", note: "x".repeat(70_000) } }))
   assert.equal(oversized.ok, false)
+  const sparse = new Array(1)
+  const sparseArray = await store.append(operatorPause({ data: { requestId: "r5", actorId: "a", symbol: "BTCUSDT", items: sparse } }))
+  assert.equal(sparseArray.ok, false)
+  const accessorData = { requestId: "r6", symbol: "BTCUSDT" }
+  Object.defineProperty(accessorData, "actorId", { enumerable: true, get: () => "actor-1" })
+  const accessor = await store.append(operatorPause({ data: accessorData }))
+  assert.equal(accessor.ok, false)
 })
 
 test("detects tampered record digests", async (t) => {
