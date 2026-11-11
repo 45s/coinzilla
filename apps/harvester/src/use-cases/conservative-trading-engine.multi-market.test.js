@@ -48,7 +48,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -151,6 +151,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     isMarketBookFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
+    initialState,
   })
 
   for (const market of markets) {
@@ -413,7 +414,10 @@ test("duplicate fills and stale order updates do not double-account across marke
 test("operator pause blocks new BUY orders only for the selected market without creating a safety pause", async () => {
   const { engine, orders } = await createHarness()
 
-  const pauseResult = await engine.pauseMarket({ symbol: "DOGEUSDT" })
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
 
   assert.equal(
     pauseResult.ok,
@@ -472,3 +476,50 @@ test("operator pause leaves already acknowledged exchange orders untouched", asy
   )
 })
 
+
+
+test("operator pause requires a durable fact before changing in-memory state", async () => {
+  const { engine, orders } = await createHarness()
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({
+      ok: false,
+      errors: [new Error("durable fact commit failed")],
+    }),
+  })
+
+  assert.equal(pauseResult.ok, false, "A failed durable-fact commit must reject the operator pause.")
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    [],
+    "A pause whose durable fact was not committed must not change in-memory operator state.",
+  )
+
+  await startBothMarkets(engine)
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [{ symbol: "DOGEUSDT", side: "BUY" }, { symbol: "SOLUSDT", side: "BUY" }],
+    "A failed durable commit must not partially pause the market or block its normal strategy evaluation.",
+  )
+})
+
+test("operator pause state supplied by durable recovery is restored before market evaluation", async () => {
+  const { engine, orders } = await createHarness({
+    initialState: { operatorPausedMarkets: ["DOGEUSDT"] },
+  })
+
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "The engine must accept the operator-pause projection supplied by the durable recovery boundary.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [{ symbol: "SOLUSDT", side: "BUY" }],
+    "A restored operator pause must block the selected market before its first strategy evaluation.",
+  )
+})
