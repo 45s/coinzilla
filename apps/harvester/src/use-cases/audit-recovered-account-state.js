@@ -528,6 +528,7 @@ export function auditRecoveredAccountState({
         )),
         blockedMarkets: Object.freeze([...blockedMarkets].sort()),
         targetMarketBlocked: targetMarket ? blockedMarkets.has(targetMarket.symbol) : undefined,
+        ...(tradeHistoryAudit ? { tradeHistory: tradeHistoryAudit.data } : {}),
         sourceTime: currentAccountSnapshot.sourceTime,
       }),
     })
