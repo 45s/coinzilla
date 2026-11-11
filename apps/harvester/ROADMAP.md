@@ -89,6 +89,43 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ---
 
+## Operator tooling — interactive trading-pair configuration generator
+
+**Status: IMPLEMENTATION COMPLETE — delivered in [PR #1012](https://github.com/45s/coinzilla/pull/1012).**
+
+**Problem:** manually adding a pair requires looking up exchange-specific precision and trading filters. Guessing tick size, quantity step, minimum quantity or minimum notional can produce invalid configuration and rejected orders.
+
+**Command:** `pnpm run config:symbol` (also available from the repository root through `pnpm --filter @coinzilla/harvester config:symbol`).
+
+**Canonical destination:** merge the generated pair into `apps/harvester/config.json` at `strategies.CG_coinGrabber.pairs.<SYMBOL>`. Harvester has one application-wide configuration file; do not create a parallel `config/strategies/CG/pair/` format.
+
+**Operator inputs:** symbol, quote investment budget, `keepQuantity`, maker percentage, taker percentage, minimum profit (quote units), and price-step percentage; both are required strategy inputs because their values are market-specific and must not be guessed. Derive `orderQuantity` from the quote budget and a current public ticker-price snapshot, rounded down to the exchange step and capped by active maximum quantity/notional bounds. Derive price/quantity precision from Binance filters and check the reference price against active minimum/maximum price bounds.
+
+**Safety and validation:**
+
+- Use public, read-only Binance Spot `exchangeInfo` and `ticker/price`; select TESTNET (`https://testnet.binance.vision`) or LIVE (`https://api.binance.com`) explicitly. Default to TESTNET unless the shell's `TRADING_MODE` is `live`; no API credentials or order endpoints. Generate against the same environment Harvester will use because symbols/filters can differ. Reject active symbol/exchange filters outside the currently validated LIMIT/LIMIT_MAKER subset; ignore only filters exclusive to unsupported order types. Account-specific `myFilters` remain a runtime startup check because this generator intentionally requires no credentials. The preview records the public metadata source and fetch timestamp.
+- Require an existing, actively trading Spot symbol and the LIMIT/LIMIT_MAKER order types used by Harvester.
+- Preserve exact decimal strings while parsing inputs and calculating order quantity. Reject malformed/negative/non-finite values, invalid percentages, a budget below minimum notional, quantities below minimum quantity, and `keepQuantity` not aligned to `LOT_SIZE.stepSize`.
+- Keep maker/taker assumptions as separate operator inputs; do not treat public exchange metadata as account commission data.
+- Generate a complete pair object and validate the merged application configuration with the runtime `validateAppConfig` contract.
+- New pairs are disabled by default. Refuse an already configured symbol; never silently replace an existing pair.
+- Serialize writes under an exclusive lock and atomically replace `config.json`; preserve all existing pairs and unrelated application settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
+- Show the generated pair and exchange constraints for operator review before writing. Declining confirmation changes nothing.
+
+**Implementation and verification checklist:**
+
+1. [x] Inspect/reuse the canonical config loader/schema and public decimal utilities; keep the CLI and Binance adapter at the application tooling boundary.
+2. [x] RED/GREEN — symbol/input validation, percentage boundaries, exact decimal sizing, exchange precision and min/max/notional boundaries.
+3. [x] RED/GREEN — mocked Binance exchange-info/ticker responses, unsupported symbols/status/order types, malformed/duplicate filters, HTTP/JSON/network failures.
+4. [x] RED/GREEN — complete config generation, runtime-schema validation, disabled-by-default behavior and existing-pair preservation.
+5. [x] RED/GREEN — interactive confirmation/cancellation, atomic persistence, lock contention, malformed existing config and cleanup on failure.
+6. [x] Register the package command; document prompts, defaults, generated fields, safety behavior and operator invocation.
+7. [x] Run Harvester tests/coverage and all required repository CI on the exact PR head. No TESTNET/LIVE order activity is needed or authorized for this feature.
+
+**Verification:** exact PR head `a680ad6e612d088c3565beae9b039618f1496a20` passed the full Harvester suite (1,025/1,025), workspace package tests, Harvester/workspace coverage, JavaScript syntax, actionlint, production dependency audit, Utils tests and external documentation links. The optional read-only Binance TESTNET integration workflow was skipped; no live/testnet trading or order placement was performed.
+
+**Acceptance:** the operator supplies strategy-owned inputs without guessing exchange filters; the generator obtains and validates Binance Spot metadata, creates a complete runtime-valid disabled pair in the canonical config, and cannot silently overwrite existing pair settings or leave a partial config after failure.
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: IN PROGRESS — Steps 1–2 complete; restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
