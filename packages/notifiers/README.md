@@ -19,7 +19,7 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
         email/    (future; create when implemented)
         discord/  (future; create when implemented)
 
-Email and Discord are roadmap candidates, not implemented transports. Do not create empty placeholder folders or speculative shared abstractions. If another transport is added, keep its API, formatting, tests, and provider-specific behavior inside its own folder. Extract shared functionality only when multiple real transports need the same stable contract.
+Email and Discord are roadmap candidates, not implemented transports. Do not create empty placeholder folders or speculative shared abstractions. If another transport is added, keep its transport API, validation, tests, and provider-specific behavior inside its own folder; application message templates remain with consuming applications. Extract shared functionality only when multiple real transports need the same stable contract.
 
 ## Domain-driven boundaries
 
@@ -58,7 +58,7 @@ Architecture regression tests protect the dependency direction and keep composit
     } from "@coinzilla/notifiers"
 
 - TelegramNotifier: validates options and sends plain-text messages through Telegram's sendMessage Bot API method.
-- subscribeTelegramNotifications: subscribes to the full supported event allowlist by default, to the application-provided `eventNames` list; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
+- subscribeTelegramNotifications: subscribes to the application-provided `eventNames` list; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
 - `subscribeTelegramNotifications` requires a `formatMessage(event)` function from the consuming application. It never formats domain events itself.
 
 The package does not load environment variables. Applications own configuration and secret management.
@@ -94,23 +94,16 @@ Both values are required by the consuming application. Leave both unset to disab
     const notifications = subscribeTelegramNotifications({
       eventBus,
       notifier: telegram,
-      formatMessage: (event) => `${event.name}: ${event.data?.summary ?? ""}`,
       logger,
       maxPending: 1000,
-      eventNames: ["bot.started", "fill.received", "bot.pair_paused"],
+      eventNames: ["notification.created"],
       formatMessage: (event) => `${event.name}: ${event.data?.summary ?? ""}`,
     })
 
     eventBus.publish({
-      name: "order.filled",
-      source: "trading-bot",
-      data: {
-        orderId: "123",
-        symbol: "BTCUSDT",
-        side: "BUY",
-        price: "65000",
-        quantity: "0.01",
-      },
+      name: "notification.created",
+      source: "example-app",
+      data: { summary: "A notification for the consuming application." },
     })
 
     // Stop publishers first, then drain accepted deliveries.
