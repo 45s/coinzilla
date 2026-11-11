@@ -160,3 +160,19 @@ test("resume rejects an unauthorized actor before touching the engine or store",
   assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED")
   assert.deepEqual(calls, [])
 })
+
+test("rejects a non-canonical actor identity before touching the engine or store", async () => {
+  const { calls, durableFacts, engine } = createHarness()
+  const operator = createHarvesterOperator({ durableFacts, engine })
+
+  const result = await operator.pauseMarket({
+    actor: { id: " telegram-user:12345 ", roles: ["trading-operator"] },
+    requestId: "telegram:1006",
+    symbol: "LINKUSDT",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0].code, "INVALID_OPERATOR_ACTOR")
+  assert.deepEqual(calls, [])
+})
+

@@ -719,3 +719,33 @@ test("operator pause rejects an unconfigured market before attempting a durable 
   assert.deepEqual(engine.getOperatorPausedMarkets(), [])
 })
 
+test("failed durable resume commit preserves the operator pause", async () => {
+  const { engine } = await createHarness()
+  await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+
+  const resumeResult = await engine.resumeMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({
+      ok: false,
+      errors: [new Error("durable resume commit failed")],
+    }),
+  })
+
+  assert.equal(resumeResult.ok, false)
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "An uncommitted resume must leave the operator pause in force.",
+  )
+})
+
+test("operator pause recovery rejects an unconfigured market before engine activation", async () => {
+  await assert.rejects(
+    createHarness({ initialState: { operatorPausedMarkets: ["UNKNOWNUSDT"] } }),
+    /operatorPausedMarkets contains an unconfigured market/,
+  )
+})
+
