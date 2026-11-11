@@ -105,6 +105,9 @@ export function auditRecoveredTradeHistory({
     if (scope === "MARKET" && !(market instanceof Market)) {
       throw new TypeError("MARKET trade-history scope requires a canonical Market")
     }
+    if (scope === "ACCOUNT" && marketUniverseComplete === true) {
+      throw new Error("Caller-supplied marketUniverseComplete is not authoritative evidence; account-wide history cannot be certified from the current exchange catalog")
+    }
     if (scope === "MARKET") {
       if (marketUniverseComplete === true) {
         throw new Error("Single-market trade history cannot prove account-wide market-universe completeness")
