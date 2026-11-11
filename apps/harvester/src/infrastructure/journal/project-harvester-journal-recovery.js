@@ -13,6 +13,7 @@ const EVENT = Object.freeze({
   CANCEL_FAILED: "order.cancel_failed",
   FILL_APPLIED: "execution.fill_applied",
   RECOVERY_COMPLETED: "recovery.cycle_completed",
+  RECOVERY_NOT_COMPLETED: "recovery.cycle_not_completed",
   STRATEGY_PAUSED: "strategy.paused",
   EXECUTION_UNOWNED_ORDER: "execution.unowned_order",
   EXECUTION_INVALID_FILL: "execution.invalid_fill",
@@ -199,6 +200,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     const fillsById = new Map()
     const tradeIdBySymbol = new Map()
     const cycles = []
+    const recoveryCycleEvaluations = []
     const pausedMarkets = new Map()
     const stickySafetyBlockers = []
     const sessionsByFile = new Map()
@@ -276,6 +278,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.CANCEL_FAILED,
         EVENT.FILL_APPLIED,
         EVENT.RECOVERY_COMPLETED,
+        EVENT.RECOVERY_NOT_COMPLETED,
         EVENT.STRATEGY_PAUSED,
         EVENT.EXECUTION_UNOWNED_ORDER,
         EVENT.EXECUTION_INVALID_FILL,
@@ -675,8 +678,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           left: cumulativeFillQuantity,
           right: order.quantity,
         }) === 0) {
-          if (lastFullyFilledSellBySymbol.has(order.symbol)) {
-            throw new Error("Multiple fully filled Harvester SELL orders precede a recovery-cycle completion for " + order.symbol)
+          const previousFullyFilledSell = lastFullyFilledSellBySymbol.get(order.symbol)
+          if (previousFullyFilledSell && previousFullyFilledSell.outcome !== "CONTINUE_SELL_THROUGH") {
+            throw new Error("Multiple fully filled Harvester SELL orders require an explicit continue-sell-through outcome for " + order.symbol)
           }
           lastFullyFilledSellBySymbol.set(order.symbol, {
             clientOrderId: order.clientOrderId,
@@ -709,6 +713,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (!completedSellOrder) {
           throw new Error("Recovery-cycle completion has no preceding fully filled Harvester SELL order for " + symbol)
         }
+        if (completedSellOrder.outcome === "BLOCKED") {
+          throw new Error("Recovery-cycle completion follows a blocked non-completion outcome for " + symbol)
+        }
         cycles.push({
           symbol,
           marketId,
@@ -722,6 +729,47 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           sequence: currentSequence,
         })
         lastFullyFilledSellBySymbol.delete(symbol)
+        continue
+      }
+
+      if (name === EVENT.RECOVERY_NOT_COMPLETED) {
+        const symbol = requireString({ value: data.symbol, field: "symbol" })
+        const marketId = requireString({ value: data.marketId, field: "marketId" })
+        const sellOrderClientId = requireString({ value: data.sellOrderClientId, field: "sellOrderClientId" })
+        const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" })
+        if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
+          throw new TypeError("Recovery-cycle non-completion outcome is invalid")
+        }
+        const reason = requireString({ value: data.reason, field: "reason" })
+        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
+        const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
+        const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
+        if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
+        if (data.outcome === "CONTINUE_SELL_THROUGH") {
+          if (!["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
+            throw new Error("CONTINUE_SELL_THROUGH has an unsupported reason")
+          }
+          if (compareDecimal({ left: activeQuantity, right: keepQuantity }) <= 0) {
+            throw new Error("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
+          }
+          if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+            throw new Error("Profit-target continuation requires realized profit below minProfit")
+          }
+        } else if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
+          throw new Error("BLOCKED cannot use a residual sell-through reason")
+        }
+        const pendingSell = lastFullyFilledSellBySymbol.get(symbol)
+        if (!pendingSell || pendingSell.clientOrderId !== sellOrderClientId || pendingSell.brokerOrderId !== sellOrderBrokerOrderId) {
+          throw new Error("Recovery-cycle non-completion does not match the latest fully filled SELL order for " + symbol)
+        }
+        if (pendingSell.outcome === "BLOCKED") throw new Error("Recovery-cycle SELL already has a terminal BLOCKED outcome for " + symbol)
+        const evaluation = Object.freeze({
+          symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome: data.outcome, reason,
+          realizedNetProfit, activeQuantity, keepQuantity, minProfit, sequence: currentSequence,
+        })
+        recoveryCycleEvaluations.push(evaluation)
+        pendingSell.outcome = data.outcome
         continue
       }
 
@@ -757,6 +805,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
     }
 
+    for (const [symbol, pendingSell] of lastFullyFilledSellBySymbol) {
+      if (pendingSell.outcome === undefined) {
+        throw new Error("Fully filled SELL has no explicit recovery-cycle outcome for " + symbol)
+      }
+    }
+
     const sessions = [...sessionsByFile.values()].map((session) => Object.freeze({
       ...session,
       uncleanTradingShutdown: (session.tradingEnabled || session.hasTradingActivity) && (
@@ -784,6 +838,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         orders: Object.freeze(orders),
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
+        recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),
         pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
         stickySafetyBlockers: Object.freeze(stickySafetyBlockers),
         sessions: Object.freeze(sessions),
