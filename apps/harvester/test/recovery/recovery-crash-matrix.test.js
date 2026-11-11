@@ -371,7 +371,7 @@ test("restores retained inventory, reset basis, and sticky pause after cycle and
   })
 
   assert.equal(
-    fixture.records[fixture.checkpoints.afterCycleCompletion].payload.name,
+    fixture.records[fixture.checkpoints.afterRecoveryCycleCompletion].payload.name,
     "execution.unowned_order",
   )
   assert.equal(
