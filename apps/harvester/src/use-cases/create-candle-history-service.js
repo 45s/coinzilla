@@ -191,7 +191,7 @@ function createMarketState(symbol) {
     subscriptionReady: false,
     stopped: false,
     lastEventAt: null,
-    pendingGap: false,
+    pendingGapOpenTime: null,
     bufferOverflow: false,
     bufferedEvents: [],
     fatalReason: null,
@@ -232,6 +232,10 @@ function updateMetrics({ state, logger } = {}) {
 function appendCompletedCandles({ state, candles, logger } = {}) {
   const merged = [...state.candles, ...candles]
   state.candles = Object.freeze(merged.slice(-HISTORY_SIZE))
+  const latest = state.candles.at(-1)
+  if (state.pendingGapOpenTime !== null && latest?.openTime >= state.pendingGapOpenTime) {
+    state.pendingGapOpenTime = null
+  }
   state.bufferOverflow = false
   updateMetrics({ state, logger })
 }
@@ -270,7 +274,7 @@ function createCandleHistoryService({
     const blockers = []
     if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
     if (state.reason) blockers.push(state.reason)
-    else if (state.pendingGap) blockers.push("GAP_DETECTED")
+    else if (state.pendingGapOpenTime !== null) blockers.push("GAP_DETECTED")
     if (state.stopped) blockers.push("STOPPED")
     if (!isFresh) blockers.push(state.lastEventAt === null ? "AWAITING_LIVE_DATA" : "STALE_STREAM")
     const reason = blockers[0] ?? null
@@ -300,19 +304,21 @@ function createCandleHistoryService({
 
   function failMarket({ state, reason, error, fatal = false } = {}) {
     if (fatal && !state.fatalReason) state.fatalReason = reason
-    if (fatal) state.pendingGap = false
+    if (fatal) state.pendingGapOpenTime = null
     state.metrics = null
     logUnavailable(logger, state, state.fatalReason ?? reason, error)
   }
 
   async function backfillGap({ state, incomingCandle, nextCandleOpenTime } = {}) {
-    state.pendingGap = true
     const latest = state.candles.at(-1)
     const expectedOpenTime = latest.openTime + CANDLE_INTERVAL_MS
     const nextOpenTime = incomingCandle?.openTime ?? nextCandleOpenTime
+    const lastMissingOpenTime = nextOpenTime - CANDLE_INTERVAL_MS
+    state.pendingGapOpenTime = state.pendingGapOpenTime === null
+      ? lastMissingOpenTime
+      : Math.max(state.pendingGapOpenTime, lastMissingOpenTime)
     const missingCount = (nextOpenTime - expectedOpenTime) / CANDLE_INTERVAL_MS
     if (missingCount > MAX_BACKFILL_CANDLES) {
-      state.pendingGap = false
       failMarket({ state, reason: "GAP_TOO_LARGE" })
       return false
     }
@@ -327,12 +333,10 @@ function createCandleHistoryService({
         endTime: nextOpenTime - 1,
       })
     } catch (error) {
-      state.pendingGap = false
       failMarket({ state, reason: "GAP_DETECTED", error })
       return false
     }
     if (!result?.ok || !Array.isArray(result.data)) {
-      state.pendingGap = false
       failMarket({
         state,
         reason: "GAP_DETECTED",
@@ -347,18 +351,16 @@ function createCandleHistoryService({
       if (
         backfill.length !== missingCount ||
         backfill[0]?.openTime !== expectedOpenTime ||
-        backfill.at(-1)?.openTime !== nextOpenTime - CANDLE_INTERVAL_MS
+        backfill.at(-1)?.openTime !== lastMissingOpenTime
       ) {
         throw new RangeError("candle gap backfill did not restore every missing interval")
       }
-      state.pendingGap = false
       const restoredCandles = incomingCandle
         ? [...backfill, incomingCandle]
         : backfill
       appendCompletedCandles({ state, candles: restoredCandles, logger })
       return true
     } catch (error) {
-      state.pendingGap = false
       failMarket({ state, reason: "GAP_DETECTED", error })
       return false
     }
@@ -441,7 +443,10 @@ function createCandleHistoryService({
       Number.isSafeInteger(candle.openTime) &&
       candle.openTime > latest.openTime + CANDLE_INTERVAL_MS
     ) {
-      state.pendingGap = true
+      const lastMissingOpenTime = candle.openTime - CANDLE_INTERVAL_MS
+      state.pendingGapOpenTime = state.pendingGapOpenTime === null
+        ? lastMissingOpenTime
+        : Math.max(state.pendingGapOpenTime, lastMissingOpenTime)
     }
 
     state.queue = state.queue
