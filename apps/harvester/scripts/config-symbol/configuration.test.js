@@ -208,7 +208,7 @@ test("rejects exchange metadata whose required order type is unsupported", () =>
 test("adds a new pair without mutating or replacing existing application configuration", () => {
   const original = createAppConfig()
   const pair = createPairConfig({
-    inputs: { investment: "100", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+    inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
     metadata,
   })
   const updated = addPairToAppConfig({ appConfig: original, symbol: "ADAFDUSD", pairConfig: pair })
