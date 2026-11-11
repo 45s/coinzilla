@@ -50,6 +50,19 @@ The current Conservative execution path submits ordinary `LIMIT` or `LIMIT_MAKER
 - Binance documents `myFilters` at IP request weight 40. The broker currently refreshes it with each symbol metadata fetch rather than serving account constraints from an unbounded cache. Monitor request-weight usage if metadata refresh frequency grows; any future cache must define a bounded TTL, invalidation rules, and fail-closed behavior after expiry.
 - This is a Binance implementation of a venue-neutral contract. No other exchange adapter is added by this change.
 
+## Why unvalidated filters are preserved instead of blocking readiness
+
+“Do not block” does **not** mean “assume valid”, “drop the filter”, or “skip Binance enforcement”. It separates checks Harvester can prove locally from constraints whose authoritative inputs or semantics it does not own:
+
+- **Dynamic price bands** (`PERCENT_PRICE`, `PERCENT_PRICE_BY_SIDE`) depend on Binance reference-price/weighted-average semantics and side-specific multipliers. A last-trade ticker is not a safe substitute.
+- **Order-count constraints** (`MAX_NUM_ORDERS`, `EXCHANGE_MAX_NUM_ORDERS`) depend on current symbol- or exchange-wide open-order counts, not merely Harvester's local order registry.
+- **Position and asset limits** (`MAX_POSITION`, `MAX_ASSET`) depend on current account balances, locked assets, and venue-defined asset/order calculations.
+- **Unknown active filters** have unknown applicability and must remain visible rather than being silently discarded.
+
+These constraints are retained as immutable `unvalidatedConstraints` diagnostics (`type`, `scope`, `sourceFilterType`). They are not claimed to have passed local validation. Binance evaluates them when an order is submitted and can definitively reject an order. A definite filter rejection is handled as `DEFINITE_EXCHANGE_FILTER_REJECTED`; it must not become an ambiguous/UNKNOWN order or a phantom reservation. This avoids a false safety claim while also avoiding a blanket startup/configuration outage for constraints the application cannot independently evaluate. Supported static price/quantity/notional rules, required metadata completeness, and supported order types remain locally validated and fail closed.
+
+The credential-free `pnpm run config:symbol` generator reads public `exchangeInfo` and ticker data only. It cannot query authenticated `myFilters`, so account-specific constraints are checked by Harvester during authenticated startup. Its preview must disclose public unvalidated-filter diagnostics. See the [generator instructions](../README.md#generate-a-new-trading-pair).
+
 ## Adding another exchange later
 
 A future adapter must:

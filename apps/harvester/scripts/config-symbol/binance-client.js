@@ -34,13 +34,27 @@ function validateUniqueFilterTypes(filters, label) {
   }
 }
 
-function rejectUnvalidatedFilters(filters, label, knownFilters = KNOWN_SYMBOL_FILTERS) {
-  const unsupported = [...new Set(filters
-    .map((filter) => filter.filterType)
-    .filter((type) => !knownFilters.has(type) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(type)))]
-  if (unsupported.length > 0) {
-    throw new Error("Binance " + label + " contains constraints not validated by Harvester's current LIMIT/LIMIT_MAKER workflow: " + unsupported.join(", "))
-  }
+const CANONICAL_UNVALIDATED_FILTER_TYPES = Object.freeze({
+  PERCENT_PRICE: "DYNAMIC_PRICE_BAND",
+  PERCENT_PRICE_BY_SIDE: "DYNAMIC_PRICE_BAND",
+  MAX_POSITION: "BASE_ASSET_POSITION_LIMIT",
+  MAX_NUM_ORDERS: "OPEN_ORDER_COUNT_PER_MARKET",
+  EXCHANGE_MAX_NUM_ORDERS: "OPEN_ORDER_COUNT_EXCHANGE_WIDE",
+  MAX_ASSET: "ASSET_ORDER_LIMIT",
+})
+
+function collectUnvalidatedFilters(filters, defaultScope, knownFilters = KNOWN_SYMBOL_FILTERS) {
+  return filters
+    .filter((filter) => !knownFilters.has(filter.filterType) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(filter.filterType))
+    .map((filter) => Object.freeze({
+      type: CANONICAL_UNVALIDATED_FILTER_TYPES[filter.filterType] ?? "UNMODELED_EXCHANGE_CONSTRAINT",
+      scope: filter.filterType === "MAX_NUM_ORDERS" || filter.filterType === "MAX_POSITION" || filter.filterType === "MAX_ASSET"
+        ? "ACCOUNT"
+        : filter.filterType === "EXCHANGE_MAX_NUM_ORDERS"
+          ? "EXCHANGE"
+          : defaultScope,
+      sourceFilterType: filter.filterType,
+    }))
 }
 
 function readExactlyOneFilter(filters, filterType) {
@@ -109,13 +123,15 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
     throw new TypeError("Binance symbol " + requestedSymbol + " has malformed exchange filters")
   }
   validateUniqueFilterTypes(filters, "symbol filters for " + requestedSymbol)
-  rejectUnvalidatedFilters(filters, "symbol " + requestedSymbol)
   const exchangeFilters = exchangeInfo.exchangeFilters ?? []
   if (!Array.isArray(exchangeFilters)) {
     throw new TypeError("Binance exchangeInfo response has malformed exchangeFilters")
   }
   validateUniqueFilterTypes(exchangeFilters, "exchange filters")
-  rejectUnvalidatedFilters(exchangeFilters, "exchange", new Set())
+  const unvalidatedConstraints = Object.freeze([
+    ...collectUnvalidatedFilters(filters, "SYMBOL"),
+    ...collectUnvalidatedFilters(exchangeFilters, "EXCHANGE", new Set()),
+  ])
   const priceFilter = readExactlyOneFilter(filters, "PRICE_FILTER")
   const lotSizeFilter = readExactlyOneFilter(filters, "LOT_SIZE")
   const tickSize = normalizePositiveExchangeDecimal(priceFilter.tickSize, "PRICE_FILTER.tickSize")
@@ -179,6 +195,7 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
     minNotional,
     ...(maxNotional === undefined ? {} : { maxNotional }),
     supportedOrderTypes,
+    unvalidatedConstraints,
   }
 }
 

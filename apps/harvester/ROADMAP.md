@@ -1530,13 +1530,11 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Remove the unused `blockOnExistingOrders` recovery argument and cover snapshot lifecycle, symbol isolation, and the final submission race with offline regressions.
 - [ ] Merge after final-head CI passes.
 
-## 2026-11-11 — Exchange constraint safety / issue #957
+## 2026-11-11 — Exchange constraint safety / issue #957 (historical decision)
 
-Implementation is in progress on a task branch targeting `develop`. The Binance adapter now has a path to preserve applicable dynamic, account-level, exchange-wide and unknown filters as exchange-neutral unvalidated constraints; the enabled-market readiness gate is intended to fail closed on those constraints. Authenticated `myFilters` retrieval is required so account-level `MAX_ASSET` data is not silently omitted.
+The initial #957 proposal treated every applicable but locally unvalidated dynamic/account/exchange filter as a readiness blocker. That policy was superseded by merged PR #1020. Keep this historical entry for decision provenance; do not use its fail-closed readiness proposal as the current contract. The current policy preserves those filters as diagnostics without blocking readiness solely because they are present. Supported static rules and complete, well-formed authoritative metadata still fail closed. Binance remains authoritative for constraints Harvester does not evaluate locally.
 
-The detailed contract, currently supported static rules, deliberately excluded order-type-specific filters, known limitations and readiness flow are documented in [Exchange trading constraints](docs/exchange-trading-constraints.md).
-
-Do not mark #957 complete until the exact PR head has green broker and Harvester tests, full required CI, and review confirms all active Binance filter sources are covered. Dynamic price-band and account-state constraints remain blockers rather than implemented evaluators in this slice; this is intentional fail-closed behavior, not a claim that those constraints are supported.
+The current rationale, filter mapping, deliberately excluded order-type-specific filters, limitations and readiness flow are documented in [Exchange trading constraints](docs/exchange-trading-constraints.md).
 
 ## 2026-11-11 — Unsupported exchange filters no longer block startup
 
