@@ -4,7 +4,7 @@
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
 
-The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. Journal replay is not used to reconstruct trading state. There is no database, outbox, exactly-once delivery, or per-market-price capture.
+The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. The offline `projectHarvesterJournalRecovery()` and `restoreHarvesterJournalState()` helpers can validate and rehydrate a candidate state for controlled offline use, but runtime startup does not invoke them or resume trading from Journal data. Journal replay is not yet wired as runtime trading-state authority. There is no database, outbox, exactly-once delivery, or per-market-price capture.
 
 ## Configuration
 
@@ -13,7 +13,7 @@ Journal JSONL session inside the matching
 `apps/harvester/logs/sessions/<UTC timestamp>-<runtime session ID>/`
 directory, beside that process's structured logs. Cumulative diagnostic files
 remain under `apps/harvester/logs/cumulative/`. The application entrypoint
-does not expose environment or `trading-config.json` settings to disable the
+does not expose environment or `config.json` settings to disable the
 Journal or change its directory. The lower-level `prepareOptionalJournal()`
 helper accepts `enabled` and `directory` options for controlled programmatic
 composition and tests; these are not deployment settings.
@@ -75,13 +75,13 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `order.cancel_requested` | full owned order intent, broker order ID, executed quantity, current status, cancellation reason; durably flushed before the broker cancellation call |
 | `order.cancelled` | order facts, broker order ID, executed quantity, canceled status |
 | `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, current order status (including UNKNOWN), outcome, optional sanitized error |
-| `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, commission status |
+| `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, optional exact historical `quoteValue` (amount plus quote-asset ID/code) for third-asset commissions, commission status |
 | `execution.unowned_order` | client/broker order IDs, symbol, side, order status, reason |
 | `execution.invalid_fill` | order facts, reason, optional Fill identity facts, sanitized error |
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
 | `execution.duplicate_fill` | Fill facts plus `duplicate: true` |
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
-| `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING phase, audit status, exchange source timestamp, every returned asset with exact free/locked/total quantities, audit reasons |
+| `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING or targeted COMMISSION_BASELINE phase, audit status, exchange source timestamp, allowlisted exact free/locked/total balances, audit reasons |
 | `account.open_orders_captured` | PREFLIGHT/OPENING phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
 The `harvester.process_started` event records the process attempt, including its original UTC entry timestamp, even when optional Journal initialization delays publication. It is distinct from `harvester.started`, which records successful runtime startup. The process event is allowlisted and best-effort: for broker-connected startup, it is admitted before the existing PREFLIGHT flush can persist it; it does not add a separate durability barrier.
@@ -244,7 +244,7 @@ This identity recovery is important to shutdown: the initial `reconcileOwnedOrde
 - For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
 - User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final WebSocket API/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
 - Shutdown never cancels SELL orders. An owned SELL in OPEN or PARTIALLY_FILLED state is explicitly excluded from the unresolved-order check and remains resting at the broker. Other non-terminal/unknown owned-order states are unresolved.
-- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker WebSocket API is connected, filtered to configured market assets, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
+- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker WebSocket API is connected, filtered to configured market assets plus third-asset commission baselines actually used in the session, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. Unrelated wallet assets remain excluded. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
 - Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes `harvester.stopped`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
 
 ### Failure and process-lock behavior
@@ -289,7 +289,7 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 ## Security
 
-Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each commission's exact amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. **They currently omit third-asset `quoteValue`.** Live accounting accepts a third-asset commission only when its historical quote valuation is available, but the retained restore helper rejects third-asset commissions. Therefore the present DTO does not preserve enough information for deterministic recovery of every Fill currently accepted by live accounting. See F-039/#654. This does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
+Event DTOs do not include credentials, raw exchange messages, or SDK objects. Account-audit events persist configured market-asset balances and the complete account-wide open-order set using allowlisted exact-decimal fields; unrelated wallet balances are not persisted or treated as Harvester-owned. When a non-zero third-asset commission is first applied, the account snapshot manager publishes one targeted `COMMISSION_BASELINE` snapshot containing only that asset's original PREFLIGHT free/locked/total balance. The raw PREFLIGHT balance map is retained in memory only; it is not copied wholesale into Journal. The baseline is merged with the original PREFLIGHT snapshot during offline reconciliation. Applied-fill events persist each commission's exact amount and asset ID/code; third-asset commissions also persist their exact historical quote valuation as a separate quote-asset amount and identity. DTO mapping rejects a third-asset commission without that valuation and rejects a valuation in an asset other than the market quote asset. The recovery projector validates and retains the same fields, and offline restoration rebuilds the canonical Commission with both the original fee asset/amount and historical quoteValue. It never derives a historical value from a current price. Legacy journal fills that contain a third-asset commission but no quoteValue remain unrestorable and fail closed. If an optional Journal baseline write fails, valid fill accounting continues; the later account reconciliation fails closed because the required fee-asset baseline is absent. This does not wire automatic process-restart recovery. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
 
 ## Safety-pause state is process-local
 
@@ -330,9 +330,11 @@ The engine's active-order and commitment guards read only the in-memory `OrderRe
 
 The shared Journal package supports bounded read/replay, but replay is at-least-once and requires an idempotent consumer. That capability is not wired into Harvester startup. The previous statement that Harvester reads all prior sessions and blocks trading startup when historical trading events exist was inaccurate for the inspected current source and is removed.
 
-**Operational restriction:** do not enable unattended process restarts until [#654](https://github.com/45s/coinzilla/issues/654) has a separately implemented and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
+**Accepted target contract:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./architecture/decisions/0001-application-owned-recovery-facts.md) defines a separate append-only, integrity-checked durable-fact stream and a closed startup reconciliation gate. The ADR is design-only; it does not wire Journal replay, alter current Journal durability barriers, or enable restart recovery.
 
-This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](audits/reports/AUDIT.md), [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
+**Operational restriction:** do not enable unattended process restarts until the ADR's later delivery steps have a separately implemented, audited, and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
+
+See [AUDIT.md](audits/reports/AUDIT.md), [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
 
 ## Trading process ownership locks
 
@@ -349,7 +351,7 @@ Both Harvester process locks are local to one OS user's home directory; they do 
 
 ## Additional restart-recovery limitations — 2026-11-10
 
-- **Third-asset commission valuation:** applied-fill DTOs currently omit `Commission.quoteValue`, and restore rejects third-asset commissions. Do not treat the persisted amount/asset pair as sufficient for cost-basis reconstruction. See F-039 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+- **Third-asset commission valuation (F-039):** PR #990 preserves exact commission amount/asset identity and historical quoteValue through the applied-fill DTO, journal projection and offline restoration. Legacy records without quoteValue fail closed; no current-price reconstruction is permitted. Wallet reconciliation for unconfigured commission assets remains outstanding. See [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 - **Same-second session chronology:** process start times have millisecond precision, but session paths and Journal filenames retain only seconds. The reader breaks same-second ties by random session ID, not chronological start time. See F-040 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 - **Recovery-cycle outcome durability:** the engine resets in-memory recovery basis before best-effort publication of `recovery.cycle_completed`. The projection does not reject an unmatched fully filled SELL at end-of-input, so a missing completion event can restore stale cost basis without a wallet-balance mismatch. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 

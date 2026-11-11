@@ -1,4 +1,12 @@
 {
+  "notifications": {
+    "telegram": {
+      "enabled": true,
+      "profile": "trader",
+      "markets": [],
+      "events": {}
+    }
+  },
   "strategies": {
     "CG_coinGrabber": {
       "enabled": true,
@@ -14,21 +22,21 @@
       "pairs": {
         "LINKUSDT": {
           "enabled": false,
-          "investment": 100,
+          "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
-          "priceStepPercent": 0.1,
+          "priceStepPercent": 0.3,
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0.075,
           "takerPercent": 0.075
         },
         "LINKFDUSD": {
-          "enabled": false,
-          "investment": 100,
+          "enabled": true,
+          "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
-          "priceStepPercent": 0.1,
+          "priceStepPercent": 0.3,
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0,
@@ -68,7 +76,7 @@
           "takerPercent": 0.1
         },
         "ZROFDUSD": {
-          "enabled": true,
+          "enabled": false,
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,

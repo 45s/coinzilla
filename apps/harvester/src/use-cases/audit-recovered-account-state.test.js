@@ -13,6 +13,7 @@ const market = new Market({
   baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
   quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
 })
+const feeAsset = new Asset({ id: "binance:BNB", code: "BNB" })
 
 const record = (name, data, lineNumber) => ({
   id: "record-" + lineNumber,
@@ -20,7 +21,7 @@ const record = (name, data, lineNumber) => ({
   position: { fileName: "2026-11-05_08-00-00.jsonl", lineNumber },
 })
 
-const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
+const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = false, includeCommissionBaseline = true } = {}) => {
   const balances = [
     { asset: "BTC", free: "0", locked: "0", total: "0" },
     { asset: "USDT", free: "1000", locked: "0", total: "1000" },
@@ -58,6 +59,13 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       quantity: "0.5",
       status: "FILLED",
     }, 4),
+    ...(thirdAssetCommission && includeCommissionBaseline ? [record("account.snapshot_captured", {
+      phase: "COMMISSION_BASELINE",
+      sourceTime: 1000,
+      auditStatus: "COMPLETE",
+      balances: [{ asset: "BNB", free: "0.75", locked: "0.25", total: "1" }],
+      auditReasons: [],
+    }, 5)] : []),
     record("execution.fill_applied", {
       fillId: "binance:BTCUSDT:trade-1",
       tradeId: "trade-1",
@@ -69,9 +77,17 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       quantity: "0.5",
       quoteQuantity: "50",
       liquidityRole: "MAKER",
-      commissions: [{ amount: "0.0004", assetId: "binance:BTC", asset: "BTC" }],
+      commissions: [
+        { amount: "0.0004", assetId: "binance:BTC", asset: "BTC" },
+        ...(thirdAssetCommission ? [{
+          amount: "0.0001",
+          assetId: "binance:BNB",
+          asset: "BNB",
+          quoteValue: { amount: "0.01", assetId: "binance:USDT", asset: "USDT" },
+        }] : []),
+      ],
       commissionStatus: "COMPLETE",
-    }, 5),
+    }, thirdAssetCommission ? 6 : 5),
     record("order.submission_requested", {
       clientOrderId: "h-BTCUSDT-sell-1",
       symbol: "BTCUSDT",
@@ -80,7 +96,7 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       price: "102.757352941176470588",
       quantity: "0.4896",
       status: "PENDING",
-    }, 6),
+    }, thirdAssetCommission ? 7 : 6),
     record("order.submitted", {
       clientOrderId: "h-BTCUSDT-sell-1",
       brokerOrderId: "9002",
@@ -90,7 +106,7 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       price: "102.757352941176470588",
       quantity: "0.4896",
       status: "FILLED",
-    }, 7),
+    }, thirdAssetCommission ? 8 : 7),
     record("execution.fill_applied", {
       fillId: "binance:BTCUSDT:trade-2",
       tradeId: "trade-2",
@@ -104,32 +120,33 @@ const recoveryProjection = ({ freeQuantity = "0.01" } = {}) => {
       liquidityRole: "MAKER",
       commissions: [],
       commissionStatus: "COMPLETE",
-    }, 8),
+    }, thirdAssetCommission ? 9 : 8),
     record("recovery.cycle_completed", {
       symbol: "BTCUSDT",
       marketId: "binance:BTCUSDT",
       freeQuantity,
       keepQuantity: "0.01",
       minProfit: "0.01",
-      realizedNetProfit: "0.25",
-    }, 9),
+      realizedNetProfit: thirdAssetCommission ? "0.24" : "0.25",
+    }, thirdAssetCommission ? 10 : 9),
     record("account.snapshot_captured", {
       phase: "CLOSING",
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
         { asset: "BTC", free: "0.01", locked: "0", total: "0.01" },
-        { asset: "USDT", free: "1000.25", locked: "0", total: "1000.25" },
+        { asset: "USDT", free: thirdAssetCommission ? "1000.24" : "1000.25", locked: "0", total: thirdAssetCommission ? "1000.24" : "1000.25" },
+        ...(thirdAssetCommission ? [{ asset: "BNB", free: "0.7499", locked: "0.25", total: "0.9999" }] : []),
       ],
       auditReasons: [],
-    }, 10),
-    record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }, 11),
+    }, thirdAssetCommission ? 11 : 10),
+    record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }, thirdAssetCommission ? 12 : 11),
   ]
   return projectHarvesterJournalRecovery({ records })
 }
 
-const restoreState = () => {
-  const projection = recoveryProjection()
+const restoreState = (options) => {
+  const projection = recoveryProjection(options)
   assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
   const restored = restoreHarvesterJournalState({
     projection,
@@ -193,7 +210,7 @@ const resolveRestoredOrdersAsFilled = ({ recoveredState }) => ({
   }),
 })
 
-const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", sourceTime = 3000 } = {}) =>
+const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", bnbFree, bnbLocked = "0", sourceTime = 3000 } = {}) =>
   new AccountSnapshot({
     sourceTime,
     balances: [
@@ -205,6 +222,10 @@ const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usd
         free: new Quantity({ amount: usdtFree, asset: market.quoteAsset }),
         locked: new Quantity({ amount: usdtLocked, asset: market.quoteAsset }),
       }),
+      ...(bnbFree === undefined ? [] : [new Balance({
+        free: new Quantity({ amount: bnbFree, asset: feeAsset }),
+        locked: new Quantity({ amount: bnbLocked, asset: feeAsset }),
+      })]),
     ],
   })
 
@@ -234,6 +255,79 @@ test("accepts balances and reservations that exactly match replayed strategy own
   assert.equal(result.data.balancesChecked, 2)
   assert.equal(result.data.openOrdersChecked, 0)
   assert.equal(result.data.reservationsChecked, 0)
+})
+
+test("accounts for third-asset commission debits during recovered account reconciliation", () => {
+  const { projection, restored } = restoreState({ thirdAssetCommission: true })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.balancesChecked, 3)
+})
+
+test("fails closed when the third-asset baseline is journaled after the applied fill", () => {
+  const { projection, restored } = restoreState({ thirdAssetCommission: true })
+  const fill = restored.journalFills.find(({ commissions }) =>
+    commissions.some(({ asset }) => asset === "BNB"))
+  const lateBaselineProjection = {
+    ...projection,
+    data: {
+      ...projection.data,
+      accountSnapshots: projection.data.accountSnapshots.map((snapshot) =>
+        snapshot.phase === "COMMISSION_BASELINE"
+          ? { ...snapshot, sequence: fill.sequence + 1 }
+          : snapshot
+      ),
+    },
+  }
+  const result = auditRecoveredAccountState({
+    projection: lateBaselineProjection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /must be durably recorded before its applied fill/)
+})
+
+test("fails closed when a positive third-asset commission has no durable baseline", () => {
+  const { projection, restored } = restoreState({
+    thirdAssetCommission: true,
+    includeCommissionBaseline: false,
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /missing required third-asset commission baseline for BNB/)
+})
+
+test("rejects an unexplained third-asset balance movement despite matching market balances", () => {
+  const { projection, restored } = restoreState({ thirdAssetCommission: true })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.75", bnbLocked: "0.25" }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /BNB/)
+  assert.match(result.errors[0].message, /does not match replayed Harvester ownership/)
 })
 
 test("rejects unexplained external balance changes", () => {

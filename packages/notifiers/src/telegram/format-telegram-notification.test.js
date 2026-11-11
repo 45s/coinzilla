@@ -114,3 +114,72 @@ test("validates event envelopes and safely defaults malformed data", () => {
     "🟢 BOT STARTED",
   )
 })
+
+
+test("formats additional operational notification events with bounded allowlisted fields", () => {
+  const examples = [
+    {
+      name: "bot.startup_failed",
+      data: { stage: "broker-connect", message: "connection refused", apiKey: "must-not-leak" },
+      expected: /BOT STARTUP FAILED.*broker-connect.*connection refused/s,
+    },
+    {
+      name: "broker.connected",
+      data: { broker: "binance", tradingMode: "testnet", secret: "must-not-leak" },
+      expected: /BROKER CONNECTED.*binance.*TESTNET/s,
+    },
+    {
+      name: "broker.disconnected",
+      data: { broker: "binance", reason: "socket closed", token: "must-not-leak" },
+      expected: /BROKER DISCONNECTED.*binance.*socket closed/s,
+    },
+    {
+      name: "order.submitted",
+      data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", orderId: "42", apiKey: "must-not-leak" },
+      expected: /ORDER SUBMITTED.*BUY LINKUSDT.*14.25.*2.*42/s,
+    },
+    {
+      name: "order.cancelled",
+      data: { symbol: "LINKFDUSD", side: "SELL", orderId: "43", token: "must-not-leak" },
+      expected: /ORDER CANCELLED.*SELL LINKFDUSD.*43/s,
+    },
+    {
+      name: "order.failed",
+      data: { symbol: "LINKUSDT", side: "BUY", operation: "submission", message: "insufficient balance", stack: "must-not-leak" },
+      expected: /ORDER FAILED.*BUY LINKUSDT.*submission.*insufficient balance/s,
+    },
+    {
+      name: "account.safety_alert",
+      data: { symbol: "ZROFDUSD", category: "unowned-order", message: "manual order detected", secret: "must-not-leak" },
+      expected: /ACCOUNT SAFETY ALERT.*ZROFDUSD.*unowned-order.*manual order detected/s,
+    },
+  ]
+
+  for (const example of examples) {
+    const message = formatTelegramNotification(example)
+    assert.match(message, example.expected, `The ${example.name} notification must include its curated operational facts.`)
+    assert.doesNotMatch(message, /must-not-leak/, `The ${example.name} notification must exclude unallowlisted credentials and payload fields.`)
+    assert.ok(message.length < 1000, `The ${example.name} notification must remain bounded for Telegram delivery.`)
+  }
+
+  assert.ok(
+    examples.every(({ name }) => TELEGRAM_NOTIFICATION_EVENT_NAMES.includes(name)),
+    "Every newly formatted operational event must appear in the exported supported-event allowlist.",
+  )
+})
+
+
+test("omits unavailable broker mode and exposes failed shutdown outcome", () => {
+  const connected = formatTelegramNotification({
+    name: "broker.connected",
+    data: { broker: "binance" },
+  })
+  assert.match(connected, /BROKER CONNECTED.*binance/s, "Broker connection messages must include the known broker name.")
+  assert.doesNotMatch(connected, /Mode: n\/a/, "Broker connection messages must not invent an unavailable exchange mode.")
+
+  const stopped = formatTelegramNotification({
+    name: "bot.stopped",
+    data: { outcome: "failed", reason: "cleanup incomplete" },
+  })
+  assert.match(stopped, /BOT STOPPED.*Outcome: failed.*cleanup incomplete/s, "Shutdown notifications must distinguish a failed cleanup outcome.")
+})

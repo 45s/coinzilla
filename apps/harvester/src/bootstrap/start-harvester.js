@@ -4,7 +4,7 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
+import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
@@ -30,8 +30,8 @@ function logSystem(logger, data) {
 
 export async function startHarvester({
   configSource,
-  tradingConfig: suppliedTradingConfig,
-  loadConfig = loadTradingConfig,
+  appConfig: suppliedAppConfig,
+  loadConfig = loadAppConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
   evaluateStrategy = conservativeStrategyPolicy.evaluate,
@@ -50,7 +50,7 @@ export async function startHarvester({
   now = Date.now,
 } = {}) {
   const {
-    tradingConfig,
+    appConfig,
     settings,
     pairs,
     enabledSymbols,
@@ -58,9 +58,16 @@ export async function startHarvester({
     brokerName,
     tradingMode,
     tradingEnabled,
-  } = await resolveHarvesterOptions({ configSource, tradingConfig: suppliedTradingConfig, loadConfig, env, eventPublisher, logger })
+  } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
 
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
+  let accountSnapshotManager
+  const onCommissionAsset = ({ assetId, assetCode } = {}) => {
+    if (!accountSnapshotManager) {
+      throw new Error("Commission asset baseline manager is not ready")
+    }
+    return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
+  }
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
@@ -85,7 +92,6 @@ export async function startHarvester({
   const getRecoveryLedger = (...args) => portfolioWorkflow.getRecoveryLedger(...args)
   const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
   const marketMetadata = new Map()
-  let accountSnapshotManager
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
   const getAccountSnapshot = () => accountSnapshotManager?.getAccountSnapshot()
   let tradingEngine
@@ -207,7 +213,7 @@ export async function startHarvester({
       broker,
       strategyPolicy: conservativeStrategyPolicy,
       eventPublisher,
-      tradingConfig,
+      appConfig,
       getPortfolio,
       getRecoveryLedger,
       getMarketMetadata,
@@ -245,7 +251,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
 
     userDataSubscription = await subscribeToUserData({
       broker,
@@ -320,7 +326,7 @@ export async function startHarvester({
   })
 
   return Object.freeze({
-    tradingConfig,
+    appConfig,
     eventPublisher,
     environment,
     brokerName,

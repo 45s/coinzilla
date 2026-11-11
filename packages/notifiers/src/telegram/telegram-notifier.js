@@ -53,19 +53,30 @@ export class TelegramNotifier {
       throw new TypeError("Telegram API returned an invalid HTTP response")
     }
 
-    if (!response.ok) {
-      const status = Number.isSafeInteger(response.status)
-        ? response.status
-        : "unknown"
-      throw new Error(`Telegram API HTTP request failed with status ${status}`)
-    }
+    const status = Number.isSafeInteger(response.status)
+      ? response.status
+      : "unknown"
 
     let payload
     try {
       payload = await response.json()
     } catch (error) {
+      if (!response.ok) {
+        // Preserve the HTTP status when an intermediary returns a non-JSON error body.
+        throw new Error(`Telegram API HTTP request failed with status ${status}`)
+      }
       throw new Error(
         `Telegram API returned invalid JSON: ${safeErrorMessage(error, this.#token)}`,
+      )
+    }
+
+    if (!response.ok) {
+      const description = typeof payload?.description === "string"
+        ? safeErrorMessage(payload.description, this.#token)
+        : null
+      const detail = description ? `: ${description}` : ""
+      throw new Error(
+        `Telegram API HTTP request failed with status ${status}${detail}`,
       )
     }
 

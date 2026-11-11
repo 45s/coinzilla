@@ -7,7 +7,32 @@ const DEFAULT_MAX_PENDING = 1000
 
 export const TELEGRAM_NOTIFICATION_EVENTS = TELEGRAM_NOTIFICATION_EVENT_NAMES
 
-function validateDependencies({ eventBus, notifier, logger, maxPending }) {
+function validateEventNames(eventNames) {
+  if (!Array.isArray(eventNames)) {
+    throw new TypeError("eventNames must be an array of supported Telegram event names")
+  }
+  if (eventNames.length === 0) {
+    throw new RangeError("eventNames must contain at least one supported Telegram event")
+  }
+
+  const seen = new Set()
+  for (const eventName of eventNames) {
+    if (typeof eventName !== "string" || !eventName.trim()) {
+      throw new TypeError("Every event name must be a non-empty string")
+    }
+    if (!TELEGRAM_NOTIFICATION_EVENTS.includes(eventName)) {
+      throw new TypeError(`Unsupported Telegram notification event: ${eventName}`)
+    }
+    if (seen.has(eventName)) {
+      throw new TypeError(`Duplicate Telegram notification event: ${eventName}`)
+    }
+    seen.add(eventName)
+  }
+
+  return Object.freeze([...eventNames])
+}
+
+function validateDependencies({ eventBus, notifier, logger, maxPending, eventNames }) {
   if (!eventBus || typeof eventBus.subscribe !== "function") {
     throw new TypeError("eventBus must expose subscribe()")
   }
@@ -25,6 +50,7 @@ function validateDependencies({ eventBus, notifier, logger, maxPending }) {
   if (!Number.isSafeInteger(maxPending) || maxPending < 1) {
     throw new RangeError("maxPending must be a positive safe integer")
   }
+  return validateEventNames(eventNames)
 }
 
 function emitWarningSafely(message, error) {
@@ -80,8 +106,9 @@ export function subscribeTelegramNotifications({
   notifier,
   logger,
   maxPending = DEFAULT_MAX_PENDING,
+  eventNames = TELEGRAM_NOTIFICATION_EVENTS,
 } = {}) {
-  validateDependencies({ eventBus, notifier, logger, maxPending })
+  const selectedEventNames = validateDependencies({ eventBus, notifier, logger, maxPending, eventNames })
 
   let deliveryTail = Promise.resolve()
   let pendingCount = 0
@@ -94,7 +121,7 @@ export function subscribeTelegramNotifications({
   const subscriptions = []
 
   try {
-    for (const eventName of TELEGRAM_NOTIFICATION_EVENTS) {
+    for (const eventName of selectedEventNames) {
       const result = eventBus.subscribe({
         name: eventName,
         handler: (event) => {

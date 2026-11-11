@@ -1,5 +1,5 @@
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
-const fail = (path, expectation) => { throw new TypeError(`Invalid trading config at "${path}": expected ${expectation}`) }
+const fail = (path, expectation) => { throw new TypeError(`Invalid app config at "${path}": expected ${expectation}`) }
 const requireRecord = (value, path) => { if (!isRecord(value)) fail(path, "an object") }
 const requireBoolean = (value, path) => { if (typeof value !== "boolean") fail(path, "a boolean") }
 const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false } = {}) => {
@@ -11,9 +11,52 @@ const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max
 }
 const requirePrecision = (value, path) => { if (!Number.isInteger(value) || value < 0) fail(path, "a non-negative integer") }
 
-/** Validate CG_coinGrabber and its strategy-owned settings and pairs. */
-export function validateTradingConfig(config) {
+
+const TELEGRAM_NOTIFICATION_PROFILES = Object.freeze(["minimal", "trader", "verbose", "custom"])
+export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
+  "orderSubmitted", "orderCancelled", "orderFailed", "fillReceived", "pairPaused",
+  "recoveryCompleted", "recoveryFailed", "botStarted", "botStopped", "startupFailed",
+  "brokerConnected", "brokerDisconnected", "accountSafetyAlert",
+])
+
+function validateTelegramNotificationConfig(config) {
+  if (config.notifications === undefined) return
+  requireRecord(config.notifications, "notifications")
+  const telegram = config.notifications.telegram
+  if (telegram === undefined) return
+  requireRecord(telegram, "notifications.telegram")
+  const path = "notifications.telegram"
+
+  if (telegram.enabled !== undefined) requireBoolean(telegram.enabled, `${path}.enabled`)
+  if (telegram.profile !== undefined && !TELEGRAM_NOTIFICATION_PROFILES.includes(telegram.profile)) {
+    fail(`${path}.profile`, "one of minimal, trader, verbose, or custom")
+  }
+  if (telegram.markets !== undefined) {
+    if (!Array.isArray(telegram.markets)) fail(`${path}.markets`, "an array of unique non-empty market symbols")
+    const seenMarkets = new Set()
+    for (const [index, symbol] of telegram.markets.entries()) {
+      if (typeof symbol !== "string" || !symbol.trim() || symbol !== symbol.trim()) {
+        fail(`${path}.markets[${index}]`, "a non-empty trimmed market symbol")
+      }
+      if (seenMarkets.has(symbol)) fail(`${path}.markets`, "unique market symbols")
+      seenMarkets.add(symbol)
+    }
+  }
+  if (telegram.events !== undefined) {
+    requireRecord(telegram.events, `${path}.events`)
+    for (const [eventKey, enabled] of Object.entries(telegram.events)) {
+      if (!TELEGRAM_NOTIFICATION_EVENT_KEYS.includes(eventKey)) {
+        fail(`${path}.events.${eventKey}`, "a supported Telegram notification event key")
+      }
+      requireBoolean(enabled, `${path}.events.${eventKey}`)
+    }
+  }
+}
+
+/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
+export function validateAppConfig(config) {
   requireRecord(config, "root")
+  validateTelegramNotificationConfig(config)
   if (config.runtime !== undefined) fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")
   requireRecord(config.strategies, "strategies")
   requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
@@ -50,7 +93,7 @@ export function validateTradingConfig(config) {
 }
 
 /** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
-export function resolveHarvesterRuntimeConfig({ tradingMode, environment } = {}) {
+export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
   if (tradingMode !== "testnet" && tradingMode !== "live") throw new Error('TRADING_MODE must be set to "testnet" or "live"')
   return Object.freeze({ environment: environment ?? "unspecified", brokerName: "binance", tradingMode, tradingEnabled: true })
 }

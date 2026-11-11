@@ -491,6 +491,7 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
 test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
   const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const feeAsset = new Asset({ id: "asset:BNB", code: "BNB" })
   const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
   const fill = new Fill({
     tradeId: "trade-42",
@@ -503,9 +504,15 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     quoteQuantity: new Money({ amount: "49.97500", asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 123,
-    commissions: [new Commission({
-      amount: new Money({ amount: "0.0005", asset: baseAsset }),
-    })],
+    commissions: [
+      new Commission({
+        amount: new Money({ amount: "0.0005", asset: baseAsset }),
+      }),
+      new Commission({
+        amount: new Money({ amount: "0.0001", asset: feeAsset }),
+        quoteValue: new Money({ amount: "0.123456789012345678", asset: quoteAsset }),
+      }),
+    ],
     commissionStatus: "COMPLETE",
   })
   const result = mapFillAppliedData({
@@ -528,15 +535,111 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       quoteQuantity: "49.975",
       liquidityRole: "MAKER",
       executedAt: 123,
-      commissions: [{
-        amount: "0.0005",
-        assetId: "asset:DOGE",
-        asset: "DOGE",
-      }],
+      commissions: [
+        {
+          amount: "0.0005",
+          assetId: "asset:DOGE",
+          asset: "DOGE",
+        },
+        {
+          amount: "0.0001",
+          assetId: "asset:BNB",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.123456789012345678",
+            assetId: "asset:USDT",
+            asset: "USDT",
+          },
+        },
+      ],
       commissionStatus: "COMPLETE",
     },
   })
   assert.equal(mapFillAppliedData({ fill: {} }).ok, false)
+
+  const missingThirdAssetValuation = mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-43",
+      brokerOrderId: "broker-order-43",
+      clientOrderId: "harvester-order-43",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 124,
+      commissions: [new Commission({ amount: new Money({ amount: "0.0001", asset: feeAsset }) })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(missingThirdAssetValuation.ok, false)
+  assert.match(missingThirdAssetValuation.errors[0].message, /requires historical quote valuation/)
+
+  const contradictoryAssetIdentity = mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-44",
+      brokerOrderId: "broker-order-44",
+      clientOrderId: "harvester-order-44",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 125,
+      commissions: [new Commission({
+        amount: new Money({ amount: "0.0001", asset: new Asset({ id: baseAsset.id, code: "WRONG" }) }),
+        quoteValue: new Money({ amount: "0.01", asset: quoteAsset }),
+      })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(contradictoryAssetIdentity.ok, false)
+  assert.match(contradictoryAssetIdentity.errors[0].message, /asset ID and code do not match/)
+
+  const invalidQuoteValuation = (quoteValue) => mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-45",
+      brokerOrderId: "broker-order-45",
+      clientOrderId: "harvester-order-45",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 126,
+      commissions: [new Commission({
+        amount: new Money({ amount: "0.0001", asset: feeAsset }),
+        quoteValue,
+      })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(invalidQuoteValuation(new Money({ amount: "0", asset: quoteAsset })).ok, false)
+  assert.equal(invalidQuoteValuation(new Money({
+    amount: "0.01",
+    asset: new Asset({ id: "asset:USDC", code: "USDC" }),
+  })).ok, false)
+
+  const zeroThirdAssetFee = mapFillAppliedData({
+    fill: new Fill({
+      tradeId: "trade-46",
+      brokerOrderId: "broker-order-46",
+      clientOrderId: "harvester-order-46",
+      market,
+      side: "BUY",
+      price: new Money({ amount: "100", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      liquidityRole: "MAKER",
+      executedAt: 127,
+      commissions: [new Commission({ amount: new Money({ amount: "0", asset: feeAsset }) })],
+      commissionStatus: "COMPLETE",
+    }),
+  })
+  assert.equal(zeroThirdAssetFee.ok, true)
 })
 
 

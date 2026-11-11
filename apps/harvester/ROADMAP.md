@@ -2,6 +2,209 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Process-restart recovery — small-step delivery plan (#654)
+
+**Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+
+**Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
+
+### Delivery sequence
+
+1. **[x] Step 1 — Freeze the recovery contract (docs/design only; merged in PR #1003).**
+   - **Accepted:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./docs/architecture/decisions/0001-application-owned-recovery-facts.md) defines the authoritative append-only fact stream, global sequence and committed-head integrity, minimum durable fact set, acknowledgement/failure boundary, candidate-state projection, closed readiness gate, external-order policy, and legacy Journal treatment.
+   - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
+   - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
+   - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 is the next implementation-preparation item.
+
+2. **[ ] Step 2 — Build a deterministic recovery test harness (tests only).**
+   - Create representative multi-session fixtures from real DTO shapes, without changing production behavior.
+   - Add crash-point scenarios around order intent, broker acknowledgement, partial/final fill, accounting application, cycle completion, and pause/blocker publication.
+   - Make every scenario assert the complete restored state, not only total wallet quantity.
+
+3. **[ ] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040).**
+   - Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment.
+   - Use explicit durable chronology where available; never use random session IDs or second-resolution filenames as ordering authority.
+   - Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history.
+   - Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
+
+4. **[ ] Step 4 — Make replay understand every relevant fact (F-043, F-044).**
+   - Classify known events as state facts, sticky safety blockers, or explicitly ignorable diagnostics; unknown stateful/safety events fail closed.
+   - Accept and correctly order valid `RECOVERY` account/open-order snapshots emitted by normal reconnect handling.
+   - Add DTO → projection → restore parity tests for every recovery-relevant event.
+
+5. **[ ] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041).**
+   - Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation.
+   - Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconcile the related asset balance.
+   - Represent cycle completion explicitly. A full SELL without a proven completed/not-completed cycle outcome is unresolved and must not silently restore stale basis or re-sell retained inventory.
+
+6. **[ ] Step 6 — Add verifiable durable-fact integrity (F-037, F-042).**
+   - Implement the smallest durable store/port needed by the agreed contract, with explicit durability acknowledgement before dependent state transitions proceed.
+   - Detect missing/reordered/duplicated records using a monotonic sequence and a simple integrity mechanism (for example, a previous-record digest or committed manifest).
+   - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
+
+7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps).**
+   - Reconcile owned order identity/status, complete execution history, all relevant asset balances (including fee assets), locked funds, and current open orders.
+   - Keep external orders unowned and untouched; detect and block only actual unsafe conflicts or unowned executions according to the agreed policy.
+   - Treat incomplete exchange history, missing assets, mismatched quantities, unknown outcomes, and unexplained commitments as unresolved—not as zero.
+
+8. **[ ] Step 8 — Restore behind a closed readiness gate.**
+   - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
+   - Compare candidate state with authoritative exchange state. Publish READY only after every required reconciliation and safety check succeeds.
+   - On any ambiguity, keep trading paused and provide actionable operator diagnostics. Never auto-adopt or auto-cancel external orders.
+
+9. **[ ] Step 9 — Prove crash/restart behavior, then consider controlled TESTNET validation.**
+   - Run the full crash-point matrix, duplicate/reordered event tests, missing-record/session tests, legacy-session tests, and restart-twice idempotency tests.
+   - Verify no duplicate order, fill, reservation, cost-basis reset, or retained-inventory sale.
+   - Review evidence and approve a separate small, bounded TESTNET plan before any exchange-connected validation. Live trading remains out of scope.
+
+### Finding-to-step map
+
+- F-035 → Step 3 (session discovery)
+- F-036 → Steps 1 and 7 (external-order policy and reconciliation; not a blanket startup gate)
+- F-037 → Steps 1 and 6 (durability contract)
+- F-038 → Step 5 (atomic accounting restore)
+- F-039 → Steps 5 and 7 (third-asset fee valuation and balance reconciliation)
+- F-040 → Step 3 (chronological session ordering)
+- F-041 → Step 5 (explicit cycle outcome)
+- F-042 → Step 6 (record completeness/integrity)
+- F-043 → Step 4 (event classification and sticky blockers)
+- F-044 → Step 4 (RECOVERY snapshot parity)
+
+**Implementation rule:** complete one numbered step, review its diff, run its focused RED/GREEN tests and required CI, update this checklist, then start the next step. No broad recovery rewrite, no speculative framework, and no enabling restart restoration until Step 9 is accepted.
+
+---
+
+## Conservative strategy correctness — prioritized fix plan (2026-11-11)
+
+> **Status: PLANNED — findings require implementation and exact-head verification.** Scope: `apps/harvester`, Conservative strategy only. Financial correctness takes priority over trading availability. One behavior/invariant per PR; RED regression first, minimal GREEN correction second; focused tests and required CI on the exact final PR head. No Binance connection or TESTNET/LIVE operation is part of these steps. Do not enable unattended restart/resumption before its separate recovery gate is complete.
+
+### Implementation order
+
+1. **P0 — Prevent competing same-symbol orders when an external order is open** — [#985](https://github.com/45s/coinzilla/issues/985).
+2. **P0 — Preserve exact fill accounting and commission valuation**, especially third-asset commissions and live/DTO/replay parity — [#654](https://github.com/45s/coinzilla/issues/654), finding F-039.
+3. **P0 — Prove recovery SELL lifecycle and cycle completion** under partial fills, cancel/fill races, UNKNOWN outcomes and missing durable completion facts — [#654](https://github.com/45s/coinzilla/issues/654), finding F-041.
+4. **P1 — Close residual quantity/notional/dust boundaries** and prevent unchanged invalid-order retry loops.
+5. **P0 before unattended restart — Complete durable restore and exchange reconciliation** — [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626). This is a separate release gate; it does not authorize early resumption.
+
+---
+
+### P0.1 — Block new strategy orders when an unowned external order is open on the same symbol
+
+**Problem:** the owned OrderRegistry is not the account-wide open-order set. A manually placed or otherwise unowned order can already be working while the strategy sees no owned order and submits a competing order. External orders must remain unowned and untouched, but must be considered by the strategy's safety gate. This is a symbol-level conflict, not a reason to disable unrelated markets.
+
+**Tracking:** [issue #985](https://github.com/45s/coinzilla/issues/985).
+
+**Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js) (decision/order-intent gates); [create-account-snapshot-manager.js](./src/bootstrap/account/create-account-snapshot-manager.js) (authoritative account/open-order snapshot); [subscribe-to-user-data.js](./src/bootstrap/user-data/subscribe-to-user-data.js) (updates/reconnect). Inspect current tests before adding coverage.
+
+**Steps:**
+
+1. [ ] **RED — Reproduce conflict:** unowned open BUY/SELL on symbol A, no owned order in OrderRegistry, otherwise-valid strategy decision. Assert no competing strategy order. Control: symbol B remains eligible.
+2. [ ] **GREEN — Add narrow symbol gate:** use a current authoritative account-wide open-order view; defer only the affected symbol while a conflicting unowned order is open. Never adopt, cancel, modify or claim ownership of it.
+3. [ ] **RED/GREEN — Snapshot lifecycle:** startup snapshot, order update/terminal event, reconnect refresh, stale/missing snapshot and snapshot-read failure. Unknown/stale state must not mean “no open orders”.
+4. [ ] **Regression — Isolation/diagnostics:** no duplicate intent; external order unchanged; unrelated symbols unaffected; actionable blocked-symbol reason.
+
+**Acceptance:** no conflicting same-symbol order can be submitted while an unowned order is open; external orders stay untouched/unowned; unrelated symbols remain independent; inability to establish current open-order state fails closed for that decision.
+
+---
+
+### P0.2 — Preserve exact commission facts and quote valuation through fill accounting
+
+**Problem:** live commission validation supports third-asset commissions when historical quote valuation is supplied, but the lifecycle fill DTO drops `quoteValue` and the restore helper rejects third-asset commissions. The configured-market-only account snapshot filter can omit the commission asset. A fill accepted live must remain reconstructable and reconcilable. Missing valuation must never silently become a zero fee or be recomputed from today's price.
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), forensic finding F-039. Keep live-accounting correction and durable-recovery integration as separate PRs if their contracts differ.
+
+**Relevant code:** [position-accounting.js](./src/domain/portfolio/position-accounting.js) (Position cost/proceeds); [recovery-fill-accounting.js](./src/domain/strategies/conservative/recovery-fill-accounting.js); [lifecycle-event-dtos.js](./src/application/events/lifecycle-event-dtos.js) (safe DTO); [create-portfolio-workflow.js](./src/use-cases/create-portfolio-workflow.js) (live apply/restore); [create-account-snapshot-manager.js](./src/bootstrap/account/create-account-snapshot-manager.js) (fee-asset reconciliation).
+
+**Steps:**
+
+1. [x] **RED — Third-asset DTO round-trip:** canonical fill has commission asset different from base and quote, exact commission amount and historical quoteValue. Assert serialization/deserialization preserves every field exactly; expose current quoteValue loss.
+2. [x] **GREEN — Preserve valuation in safe DTO:** extend only the relevant DTO schema/mapping/validation. Keep decimal representation exact; never substitute current market price for historical valuation.
+3. [ ] **RED — Live BUY/SELL accounting:** assert quote-denominated cost/proceeds for base-, quote- and third-asset fees; include multiple and partial fills. Verify fee amount, asset and valuation.
+4. [ ] **GREEN — One canonical accounting path:** use existing domain accounting; no parallel fee calculator. Missing, malformed, negative or contradictory valuation fails closed, without treating fee as zero.
+5. [x] **RED — Fee-asset balance:** commission asset is not a configured trading pair. Regression proves the current snapshot/reconciliation path misses its debit and accepts an unexplained balance movement.
+6. [x] **GREEN — Include required fee assets:** persist a targeted `COMMISSION_BASELINE` only for a non-zero third-asset commission actually used. Keep unrelated wallet assets excluded; compare the exact fee debit and preserve the fee asset's pre-existing locked balance.
+7. [x] **Parity — Live versus DTO/projection/restore:** exact BUY/SELL fills with base-, quote- and third-asset commissions now produce identical complete Position and RecoveryLedger values through live accounting and DTO → projection → offline restore.
+8. [x] **Atomicity — Invalid fee evidence:** missing historical valuation and contradictory commission/valuation asset identities fail before either immutable accounting projection is committed; regressions compare complete pre-fill Portfolio and RecoveryLedger snapshots.
+
+**Implementation update — PR #990:** the DTO → journal projection → offline restore segment is implemented test-first. The original test-only RED PR #989 reproduced three failures (DTO valuation loss, projection valuation loss, and third-asset restore rejection) and was closed as superseded after the roadmap update merged. PR #990 preserves the exact third-asset commission amount/asset ID/code and historical quoteValue amount/quote-asset ID/code; it rejects missing valuation for non-zero third-asset fees, non-positive valuation for non-zero fees, contradictory asset identity, and valuation in the wrong quote asset. Zero-amount third-asset commission entries remain valid without an invented quote valuation. The projector retains exact decimal strings. Restoration rebuilds a canonical Commission with the original fee Asset and historical quoteValue; legacy positive third-asset records without quoteValue fail closed. BUY restoration regression verifies Position spent/quote cash flow and RecoveryLedger buyCost include the exact historical valuation. Exact-head CI at `289fb39981b6f496c6f3efabdb315ea5d9c8ecbc`: Harvester 942 passed/0 failed; all package unit tests, targeted tests, JavaScript syntax, dependency audit, coverage workflow and external documentation links passed. No Binance/TESTNET/LIVE operations were performed.
+
+**Implementation update — PR #995:** targeted fee-asset reconciliation is implemented test-first. The RED regressions demonstrated that an unconfigured BNB debit was not included in the audit delta and that an unexplained BNB balance movement could pass. The account snapshot manager now retains the original PREFLIGHT balances in memory and writes a separate `COMMISSION_BASELINE` event only for a third-asset commission actually applied; unrelated assets remain excluded. `createPortfolioWorkflow` requests the baseline before committing the fill's Portfolio/RecoveryLedger projections. Journal remains optional: baseline persistence failure does not block valid fill accounting, but `auditRecoveredAccountState()` fails closed when a required baseline is absent. The audit merges targeted baselines with PREFLIGHT, subtracts exact fee amounts, preserves existing locked fee-asset balances, compares only configured market assets plus actually charged fee assets, and requires the baseline event to precede the first applied fill. Tests cover exact BNB debit, unexplained movement, missing/late baseline, locked balance preservation, unrelated XRP exclusion, and non-blocking Journal failure. Harvester unit tests: 950 passed/0 failed at original implementation head `34ce098f543a58cbdb124710c45a9d61c54e9b04`; full package tests, targeted tests, JavaScript syntax, dependency audit and workspace coverage passed. Exact final PR-head CI is required after synchronizing this branch. No Binance/TESTNET/LIVE operations were performed.
+
+**Implementation update — PR #1002:** completed the remaining live-accounting and parity gates test-first. The RED stage exposed two accepted-invalid-fact cases: a third-asset commission could reuse an asset ID with a different code, and a historical quote valuation could reuse the quote asset ID with a different code. The shared `validateFillCommissions()` path now validates ID/code identity consistently against market assets and across commission entries before Position or RecoveryLedger accounting. New regressions cover multiple BUY/SELL fills, multiple third-asset fee entries, exact historical quote values, and identical complete Position/RecoveryLedger state across live accounting and DTO → Journal projection → offline restore for base-, quote- and third-asset commissions. Invalid fee evidence is rejected atomically; complete pre-fill Portfolio and RecoveryLedger snapshots remain unchanged, and the live workflow does not persist a fee baseline for an invalid fill. Harvester tests passed 956/956 and all seven workflows (unit tests, workspace coverage, Harvester targeted tests, JavaScript syntax/actionlint, Utils tests, production dependency audit, and external documentation links) passed on tested head `8b1ea0259e3fe14113a99ca9088ba826bd18d2db`. The final documentation-only commit is also subject to exact-head CI before merge. No Binance/TESTNET/LIVE operations were performed.
+
+**Acceptance:** every accepted fill retains exact commission asset, amount and historical quote valuation through supported lifecycle representations; live and replay results match; fee assets reconcile; unavailable valuation is an explicit unresolved safety condition, never zero.
+
+---
+
+### P0.3 — Prove recovery SELL accounting and cycle completion use reconciled fills
+
+**Problem:** order status is not proof of financial recovery. Submitted, acknowledged, partial, canceled or UNKNOWN SELLs cannot complete a cycle. Cancellation can race with fills. A full SELL whose durable cycle outcome is missing can leave replay with stale cost basis or incorrect retained-inventory allocation. Preserve existing serialized transitions, fill reconciliation, minimum-profit checks, dust evidence and atomic Portfolio/RecoveryLedger completion; extend rather than replace them.
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), finding F-041. Check the current [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) before adding duplicate tests.
+
+**Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); [recovery-completion.js](./src/domain/strategies/conservative/recovery-completion.js); [recovery-ledger.js](./src/domain/strategies/conservative/recovery-ledger.js); [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [position-accounting.js](./src/domain/portfolio/position-accounting.js); recovery projector/Journal replay paths under #654.
+
+**Steps:**
+
+1. [ ] **RED — Status is not completion:** SUBMITTED, NEW/OPEN, PARTIALLY_FILLED, canceled with residual, REJECTED and UNKNOWN must not reset Position basis or RecoveryLedger.
+2. [ ] **GREEN — Fill-driven completion:** allow completion only after authoritative execution reconciliation and all domain preconditions pass.
+3. [ ] **RED — Cancel/fill interleavings:** execution before/during/after cancel response; duplicate/delayed report; UNKNOWN cancel; stale terminal report. Each canonical fill once; replacement never overdraws.
+4. [ ] **GREEN — Reconcile before replace/complete:** use existing serialized transition and authoritative reconciliation; never infer final remaining quantity from cancel response alone.
+5. [ ] **RED — BUY during recovery SELL:** partial BUY while SELL is open, cancel race and replacement. Assert no conflicting commitments, oversell or premature cycle reset.
+6. [ ] **GREEN — Preserve approved lifecycle policy:** make only the smallest correction supported by failing behavior; no blanket prohibition without evidence.
+7. [ ] **RED — Missing cycle outcome:** replay a full SELL without explicit durable completed/not-completed outcome. Restore must not guess, reset basis or re-sell retained inventory.
+8. [ ] **GREEN — Explicit outcome in projection:** persist/project the minimum cycle outcome required; unresolved full SELL fails closed. Preserve legitimate residual sell-through.
+9. [ ] **RED/GREEN — Profit/inventory matrix:** exact minimum-profit equality and immediately below; keepQuantity zero/nonzero; fee-adjusted proceeds; retained quantity plus validated dust; residual sellable quantity; consecutive cycles.
+10. [ ] **Atomicity regression:** Portfolio and RecoveryLedger either both complete the cycle or neither changes.
+
+**Acceptance:** completion requires reconciled canonical fills, sufficient net recovery/profit and exact active/free/dust allocation. Unresolved orders or missing cycle outcome block the next cycle. Retained inventory cannot be sold accidentally.
+
+---
+
+### P1 — Prevent invalid residual orders and minimum-notional retry loops
+
+**Problem:** after partial execution or filter changes, remaining quantity may fall below MIN_QTY/MIN_NOTIONAL although the original order was valid. Rebuilding the same invalid trailing BUY or recovery SELL repeatedly creates noise and can hide a lifecycle/accounting defect. Expected post-only rejection is not a fill and is not success.
+
+**Relevant code:** [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); confirm current order-filter validator path before editing. Existing boundary work: [PR #929](https://github.com/45s/coinzilla/pull/929), [#930](https://github.com/45s/coinzilla/pull/930), [#932](https://github.com/45s/coinzilla/pull/932).
+
+**Steps:**
+
+1. [ ] **RED — Residual below MIN_NOTIONAL:** valid SELL partially fills, remainder is immediately below current minimum. Assert no invalid replacement is emitted.
+2. [ ] **GREEN — Classify residual first:** retain it as explicitly classified inventory/dust or unresolved safety state under the existing contract; never discard or call it recovered.
+3. [ ] **RED/GREEN — Exact boundaries:** below/equal/above min quantity and notional; max quantity/notional; step/tick rounding for BUY and SELL.
+4. [ ] **RED/GREEN — No unchanged retry loop:** repeated identical market updates with unchanged price/rules/inventory do not repeatedly submit the same invalid order. Retry only after a relevant input changes and the new plan validates.
+5. [ ] **RED/GREEN — Rejection classification:** post-only/LIMIT_MAKER rejection is distinct from unexpected broker failure; it creates no fill, does not clear unresolved intent/reset recovery, and is never logged as successful execution.
+6. [ ] **Regression — Quantity conservation:** active, retained and dust quantities remain accounted for after every skipped/invalid replacement decision.
+
+**Acceptance:** no invalid exchange order, no repeated identical invalid retry, residual inventory remains explicitly accounted for, and expected rejection never mutates fill/accounting state.
+
+---
+
+### P0 release gate — Complete restart restore and exchange reconciliation before unattended resumption
+
+**Problem:** runtime startup currently creates fresh in-memory Position, RecoveryLedger and OrderRegistry; the offline restore path is not wired into runtime. Historical fills, fee valuations, unresolved intents and sticky blockers are not yet proven to survive restart. A fresh process with empty memory is not evidence of an empty exchange position.
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626).
+
+**Detailed nine-step plan:** see “Process-restart recovery — small-step delivery plan (#654)” at the top of this roadmap. Its Step 5 and Step 7 depend on the commission work above: preserve third-asset valuation and reconcile its asset balance. Keep domain pure and Journal observer-only unless a deliberate contract decision changes that boundary.
+
+**Acceptance before enabling restore:** complete chronological durable facts; exact DTO → projection → restore parity; explicit cycle outcomes; sticky blockers; all relevant balances/fees and owned orders reconciled; external orders remain unowned/untouched; ambiguous or missing history keeps readiness closed; crash/restart matrix and restart-twice idempotency pass. No exchange-connected validation without a separately approved bounded plan.
+
+### Cross-step review checklist
+
+- [ ] Confirm exact source path and existing test coverage before editing; roadmap paths are navigation aids, not proof.
+- [ ] Identify authoritative domain fact/owner before adding state or abstractions.
+- [ ] Add one narrowly scoped failing regression; record RED on exact test-only head.
+- [ ] Implement minimal correction; record GREEN on exact final head.
+- [ ] Assert complete immutable snapshots on failure paths, not just return values/logs.
+- [ ] Run focused tests, full Harvester suite, required repository CI and relevant package coverage.
+- [ ] Inspect final diff for unrelated refactors, config changes and unintended behavior.
+- [ ] Update roadmap and linked issue with merged PR, exact merge SHA and verified test/CI evidence.
+- [ ] Keep exchange-connected operations out of scope unless separately and explicitly authorized.
+
+---
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### Critical runtime reliability — order acknowledgement and shutdown ownership (2026-11-10)
@@ -141,7 +344,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
-- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed config enables only ZROFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed `config.json` enables only LINKFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -168,7 +371,8 @@ This section is the current operational status and supersedes older statements b
 ### Optional operational notifications
 
 - [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected lifecycle, pause, applied-fill, recovery-completion, and accounting-failure events; the notifier package owns formatting, bounded serialized delivery, and transport.
-- Notifications are disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
+- Telegram transport is constructed only when `notifications.telegram.enabled` is not false and both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
+- [~] Add Harvester-owned `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filtering, and non-disableable safety alerts through the single `config.json`; depend on the Notifiers event-selection contract tracked by [#996](https://github.com/45s/coinzilla/issues/996).
 - Delivery is best-effort, in-memory, and not a durable outbox. No trading behavior, exchange integration, or financial accounting rules are changed.
 
 ### Other active and deferred work
@@ -225,10 +429,10 @@ These items are intentionally recorded for future work. They are not current tra
 ### D. Optional Telegram notifications
 
 - [x] Integrate Harvester with the existing @coinzilla/notifiers package for optional Telegram notifications (PR #734; optional, bounded and failure-isolated).
-- [ ] Define a small allowlisted set of useful operational events (startup/connection status, trading pause or safety halt, order/fill lifecycle milestones, and shutdown) before implementation.
-- [ ] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
-- [ ] Reuse existing notifier and event-bus contracts; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
-- [ ] Define configuration, credential handling, message content, and tests when this feature is selected. Notifications remain disabled unless explicitly configured.
+- [x] Map low-volume Harvester lifecycle, broker, order, fill, recovery, and account-safety events to the shared notifier vocabulary; do not publish market ticks or routine strategy decisions. The expanded event contract is provided by Notifiers PR #997 and Harvester integration is tracked by [#998](https://github.com/45s/coinzilla/issues/998).
+- [x] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
+- [x] Reuse the Notifiers event-selection contract and event bus; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
+- [~] Configure `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filters, and non-disableable safety alerts in the single `config.json`; keep credentials environment-only. The default profile is `trader`, but Telegram transport is created only when both credentials are present and `notifications.telegram.enabled` is not false. Implementation and documentation are in [#998](https://github.com/45s/coinzilla/issues/998).
 
 ## Current work selection
 
@@ -236,13 +440,16 @@ These items are intentionally recorded for future work. They are not current tra
 - [x] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Implemented and merged in [PR #663](https://github.com/45s/coinzilla/pull/663).
 - [x] Account-integrity safety halt: after an unowned/invalid execution or accounting failure closes global readiness, reconcile Harvester-owned order identities and cancel only acknowledged BUY orders; preserve SELLs and external orders; keep the gate closed if any cancellation/fill reconciliation is unresolved. Tracking incident [#667](https://github.com/45s/coinzilla/issues/667), implementation PR [#669](https://github.com/45s/coinzilla/pull/669).
 
-The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
+The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. The #654 restriction against implementation applies only to restart-recovery work; the separately selected application-config/notification task must not alter restart recovery. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
+
+- [~] Unified application configuration and Telegram notification profiles: owner-selected implementation tracked by [#998](https://github.com/45s/coinzilla/issues/998), dependent on the shared Notifiers event-selection contract in [#996](https://github.com/45s/coinzilla/issues/996). This work does not change strategy, broker, exchange, order-execution, or restart-recovery behavior.
 
 Trading safety requirements remain in force: the operator selects TESTNET or LIVE explicitly through `TRADING_MODE`; `live` means real Binance order execution. Keep order-safety protections, exact-order ownership, and the existing mandatory Journal durability barriers intact. Journal evidence beyond those barriers is bounded, allowlisted, and best-effort. Journal is not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
 
 ## Strategy-scoped trading configuration
 
-- [x] Keep Harvester configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
+- [x] Keep strategy-owned trading configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs, within the single application-wide `config.json`.
+- [~] Keep application-wide notification policy in the sibling `notifications.telegram` section; do not mix Telegram credentials or delivery logic into strategy configuration.
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
 - [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together — completed in [PR #839](https://github.com/45s/coinzilla/pull/839).
 
@@ -256,7 +463,7 @@ Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independentl
 
 **Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
 
-**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `trading-config.json`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
+**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `config.json` under `strategies`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Application-wide notification policy is a sibling `notifications` section and does not change strategy or exchange selection. Architecture expansion, optional features, and optimization come after that.
 
 The paragraph below was an earlier audit snapshot and is superseded by the current implementation status and checklist in this roadmap. On `develop`, Harvester now composes the Conservative trading engine when TESTNET trading is explicitly enabled, submits strategy intents through the engine, tracks owned orders, processes canonical fills, updates Portfolio/RecoveryLedger, and has fake-broker coverage for a complete recovery cycle. A real Binance TESTNET cycle is still unverified; do not treat the offline simulation as exchange proof.
 
@@ -369,7 +576,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
 - [x] Implement minimum process readiness for the first TESTNET cycle. When `TRADING_MODE=testnet` is selected, startup requires at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite; genuine reconnect/reconciliation requirements still fail closed.
 - [x] Enable order execution after the selected `TRADING_MODE` is validated and strategy configuration, enabled-pair exchange filters, a fresh account snapshot, and an active user-data stream are ready. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
-- [x] Replace `trading-config.json` runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Completed on [PR #841](https://github.com/45s/coinzilla/pull/841), merged 2026-11-09: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings remain in `trading-config.json`. All six required exact-head CI contexts passed; the optional read-only Binance TESTNET integration check was skipped. This completes explicit mode/endpoint selection, not live-trading or TESTNET acceptance.
+- [x] Replace legacy runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Completed on [PR #841](https://github.com/45s/coinzilla/pull/841), merged 2026-11-09: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings were stored in the previous configuration file at the time; the current single application-wide filename is `config.json`. All six required exact-head CI contexts passed; the optional read-only Binance TESTNET integration check was skipped. This completes explicit mode/endpoint selection, not live-trading or TESTNET acceptance.
 - [x] Validate enabled pair configuration against exchange assets/filters at startup: `orderQuantity` is rounded down by the actual base-asset step and checked against supported min/max quantity; quote-asset `investment` is checked against minimum notional. The symbol must match the exchange market metadata. Actual price/quantity/notional validation remains at order submission.
 
 ### P0.3 — Order intent, safety checks, and reservations
@@ -444,7 +651,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ## P1 — Implement Aggressive after Conservative is proven
 
-- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `trading-config.json`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
+- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `config.json`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
 
 Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
 

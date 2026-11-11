@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
@@ -17,8 +17,9 @@ const createMarket = () => {
 }
 
 const market = createMarket()
+const feeAsset = new Asset({ id: "asset:BNB", code: "BNB" })
 
-const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY", price = "65000" }) => new Fill({
+const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY", price = "65000", commissions = [] }) => new Fill({
   tradeId,
   brokerOrderId: "broker-order-" + tradeId,
   market,
@@ -26,7 +27,7 @@ const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY", price = "6
   price: new Money({ amount: price, asset: market.quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: market.baseAsset }),
   quoteQuantity: new Money({ amount: quoteQuantity, asset: market.quoteAsset }),
-  commissions: [],
+  commissions,
   commissionStatus: "COMPLETE",
 })
 
@@ -36,6 +37,167 @@ const createWorkflow = () => createPortfolioWorkflow({
 })
 
 const test = (name, ...args) => nodeTest("[create-portfolio-workflow.test.js] " + name, ...args)
+
+test("captures the third-asset baseline before applying the fill to Portfolio and RecoveryLedger", async () => {
+  const baselineCalls = []
+  let workflow
+  workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    onCommissionAsset: async (asset) => {
+      assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }), undefined)
+      assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), undefined)
+      baselineCalls.push(asset)
+      return { ok: true, data: { sourceTime: 100 } }
+    },
+  })
+  const fill = createFill({
+    tradeId: "trade-third-fee",
+    quantity: "0.01",
+    quoteQuantity: "650",
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.001", asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+    })],
+  })
+
+  const result = await workflow.updateTradingAccounting({ fill })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(baselineCalls, [{ assetId: feeAsset.id, assetCode: feeAsset.code }])
+  assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }).spent.amount, "650.1")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "650.1")
+})
+
+test("keeps live third-asset BUY and SELL multi-fill accounting in parity", async () => {
+  const baselineCalls = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    onCommissionAsset: async (asset) => {
+      baselineCalls.push(asset)
+      return { ok: true, data: { sourceTime: 100 } }
+    },
+  })
+  const fills = [
+    createFill({
+      tradeId: "live-third-fee-buy-1",
+      quantity: "100",
+      quoteQuantity: "10",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.001", asset: feeAsset }), quoteValue: new Money({ amount: "0.02", asset: market.quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.002", asset: feeAsset }), quoteValue: new Money({ amount: "0.01", asset: market.quoteAsset }) }),
+      ],
+    }),
+    createFill({
+      tradeId: "live-third-fee-buy-2",
+      quantity: "50",
+      quoteQuantity: "5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.002", asset: feeAsset }), quoteValue: new Money({ amount: "0.03", asset: market.quoteAsset }) }),
+      ],
+    }),
+    createFill({
+      tradeId: "live-third-fee-sell-1",
+      side: "SELL",
+      quantity: "40",
+      quoteQuantity: "4.4",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.001", asset: feeAsset }), quoteValue: new Money({ amount: "0.02", asset: market.quoteAsset }) }),
+      ],
+    }),
+    createFill({
+      tradeId: "live-third-fee-sell-2",
+      side: "SELL",
+      quantity: "50",
+      quoteQuantity: "5.5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.001", asset: feeAsset }), quoteValue: new Money({ amount: "0.01", asset: market.quoteAsset }) }),
+      ],
+    }),
+  ]
+
+  for (const fill of fills) {
+    const result = await workflow.updateTradingAccounting({ fill })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+    assert.equal(result.data.applied, true)
+  }
+
+  const position = workflow.getPortfolio().getPosition({ marketId: market.id })
+  const ledger = workflow.getRecoveryLedger({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, "60")
+  assert.equal(position.spent.amount, "15.06")
+  assert.equal(position.quoteNetCashFlow.amount, "-5.19")
+  assert.equal(ledger.buyCost, "15.06")
+  assert.equal(ledger.netSellProceeds, "9.87")
+  assert.equal(ledger.outstandingRecoveryAmount, "5.19")
+  assert.equal(position.quoteNetCashFlow.amount, "-" + ledger.outstandingRecoveryAmount)
+  assert.deepEqual(baselineCalls, Array(4).fill({ assetId: feeAsset.id, assetCode: feeAsset.code }))
+})
+
+test("does not persist a commission baseline or mutate live accounting for contradictory fee identity", async () => {
+  const contradictoryFeeAsset = new Asset({ id: feeAsset.id, code: "BNB2" })
+  const baselineCalls = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    onCommissionAsset: async (asset) => {
+      baselineCalls.push(asset)
+      return { ok: true, data: { sourceTime: 100 } }
+    },
+  })
+  const originalPortfolio = workflow.getPortfolio().value
+  const result = await workflow.updateTradingAccounting({
+    fill: createFill({
+      tradeId: "live-contradictory-third-fee",
+      quantity: "0.01",
+      quoteQuantity: "650",
+      commissions: [
+        new Commission({
+          amount: new Money({ amount: "0.001", asset: feeAsset }),
+          quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+        }),
+        new Commission({
+          amount: new Money({ amount: "0.001", asset: contradictoryFeeAsset }),
+          quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+        }),
+      ],
+    }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(baselineCalls, [])
+  assert.deepEqual(workflow.getPortfolio().value, originalPortfolio)
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), undefined)
+})
+
+test("accounts a valid fill when optional third-asset baseline persistence fails and warns that audit will fail closed", async () => {
+  const warnings = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: { warning: (entry) => warnings.push(entry) },
+    onCommissionAsset: async () => {
+      throw new Error("PREFLIGHT fee-asset baseline is unavailable")
+    },
+  })
+  const fill = createFill({
+    tradeId: "trade-third-fee-baseline-failure",
+    quantity: "0.01",
+    quoteQuantity: "650",
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.001", asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+    })],
+  })
+
+  const result = await workflow.updateTradingAccounting({ fill })
+
+  assert.equal(result.ok, true)
+  assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }).spent.amount, "650.1")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "650.1")
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0].message, /account reconciliation will fail closed/)
+})
 
 test("serializes concurrent canonical fills and commits both accounting projections", async () => {
   const workflow = createWorkflow()

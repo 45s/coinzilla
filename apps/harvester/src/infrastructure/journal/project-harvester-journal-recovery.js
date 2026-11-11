@@ -119,6 +119,22 @@ function requireFill({ data }) {
     amount: requireDecimal({ value: commission?.amount, field: "commissions[" + index + "].amount" }),
     assetId: requireString({ value: commission?.assetId, field: "commissions[" + index + "].assetId" }),
     asset: requireString({ value: commission?.asset, field: "commissions[" + index + "].asset" }),
+    ...(commission?.quoteValue === undefined ? {} : {
+      quoteValue: {
+        amount: requireDecimal({
+          value: commission.quoteValue?.amount,
+          field: "commissions[" + index + "].quoteValue.amount",
+        }),
+        assetId: requireString({
+          value: commission.quoteValue?.assetId,
+          field: "commissions[" + index + "].quoteValue.assetId",
+        }),
+        asset: requireString({
+          value: commission.quoteValue?.asset,
+          field: "commissions[" + index + "].quoteValue.asset",
+        }),
+      },
+    }),
   }))
   if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
     throw new TypeError("fill duplicate marker must be a boolean")
@@ -237,7 +253,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.ACCOUNT_SNAPSHOT) {
-        if (!["PREFLIGHT", "OPENING", "CLOSING"].includes(data.phase)) throw new TypeError("Account snapshot phase is invalid")
+        if (!["PREFLIGHT", "OPENING", "CLOSING", "COMMISSION_BASELINE"].includes(data.phase)) {
+          throw new TypeError("Account snapshot phase is invalid")
+        }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
         }
@@ -273,6 +291,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         }
         const snapshot = Object.freeze({
           fileName,
+          sequence: currentSequence,
           phase: data.phase,
           sourceTime: data.sourceTime,
           auditStatus: data.auditStatus,
