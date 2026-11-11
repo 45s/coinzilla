@@ -252,9 +252,11 @@ function validateAndOrderSessions(sessions) {
 async function discoverSessionDirectories({
   sessionsRoot,
   maxDirectories,
+  maxSessions,
 }) {
   const discovered = []
   let directoriesVisited = 0
+  let sessionsDiscovered = 0
 
   async function walk(directory, { isRoot = false } = {}) {
     directoriesVisited += 1
@@ -308,6 +310,14 @@ async function discoverSessionDirectories({
     }
 
     if (journalEntries.length > 0) {
+      sessionsDiscovered += journalEntries.length
+      if (sessionsDiscovered > maxSessions) {
+        throw createHistoryError({
+          code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
+          message: "Harvester Journal history exceeds maxSessions during discovery",
+          details: { maxSessions, sessionsDiscovered, directory },
+        })
+      }
       discovered.push({
         directory,
         fileNames: journalEntries.map((entry) => entry.name).sort(),
@@ -348,7 +358,8 @@ async function discoverSessionDirectories({
  * This is a forensic history reader, not an ADR-0001 durable-fact reader.
  * It validates every discovered session before returning a flattened sequence.
  * When several sessions exist, their order must be established by unique
- * process-start metadata or unique first-record timestamps for legacy files.
+ * process-start metadata or unique first-record timestamps for legacy files;
+ * their persisted event ranges must also be strictly non-overlapping.
  * Random runtime IDs and second-resolution filenames are never ordering keys.
  *
  * @param {{
@@ -392,6 +403,7 @@ export async function readHarvesterJournalHistory({
       const discovered = await discoverSessionDirectories({
         sessionsRoot: rootDirectory,
         maxDirectories,
+        maxSessions,
       })
       sessionDirectories.push(...discovered.directories)
       directoriesVisited = discovered.directoriesVisited
@@ -424,6 +436,7 @@ export async function readHarvesterJournalHistory({
         const discovered = await discoverSessionDirectories({
           sessionsRoot: path.join(rootDirectory, "sessions"),
           maxDirectories,
+          maxSessions,
         })
         sessionDirectories.push(...discovered.directories)
         directoriesVisited = discovered.directoriesVisited

@@ -431,3 +431,33 @@ test("rejects overlapping session event ranges even when process-start timestamp
   }
 })
 
+test("enforces the total session-file limit during recursive discovery", async () => {
+  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-session-limit-"))
+
+  try {
+    await writeJournalSession({
+      directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-00-first-run"),
+      startedAt: "2026-11-09T12:00:00.100Z",
+      runtimeSessionId: "first-run",
+      processId: 1010,
+      eventName: "harvester.first_session",
+    })
+    await writeJournalSession({
+      directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-01-second-run"),
+      startedAt: "2026-11-09T12:00:01.100Z",
+      runtimeSessionId: "second-run",
+      processId: 1011,
+      eventName: "harvester.second_session",
+    })
+
+    const result = await readHarvesterJournalHistory({
+      directory: rootDirectory,
+      maxSessions: 1,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "JOURNAL_RECOVERY_LIMIT_EXCEEDED")
+  } finally {
+    await rm(rootDirectory, { recursive: true, force: true })
+  }
+})
+
