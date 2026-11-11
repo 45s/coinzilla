@@ -15,12 +15,11 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
           telegram-validation.js
           safe-error-message.js
           telegram-event-subscriber.js
-          format-telegram-notification.js
           *.test.js
         email/    (future; create when implemented)
         discord/  (future; create when implemented)
 
-Email and Discord are roadmap candidates, not implemented transports. Do not create empty placeholder folders or speculative shared abstractions. If another transport is added, keep its API, formatting, tests, and provider-specific behavior inside its own folder. Extract shared functionality only when multiple real transports need the same stable contract.
+Email and Discord are roadmap candidates, not implemented transports. Do not create empty placeholder folders or speculative shared abstractions. If another transport is added, keep its transport API, validation, tests, and provider-specific behavior inside its own folder; application message templates remain with consuming applications. Extract shared functionality only when multiple real transports need the same stable contract.
 
 ## Domain-driven boundaries
 
@@ -28,8 +27,8 @@ The package uses lightweight DDD boundaries organized around real responsibiliti
 
 | Responsibility | Owner | Boundary |
 | --- | --- | --- |
-| Notification policy | Pure formatter and validation functions | Selects supported events, allowlists and normalizes fields, and creates bounded message text without I/O |
-| Application integration | Telegram event subscriber | Coordinates injected EventBus and notifier ports; owns subscription lifecycle, serialized delivery, admission limits, diagnostics, and failure reporting |
+| Message presentation | Consuming application | Maps application events to bounded, sanitized plain-text messages; owns domain-specific wording and formatting |
+| Delivery coordination | Telegram event subscriber | Coordinates injected EventBus and notifier ports; owns subscription lifecycle, serialized delivery, admission limits, diagnostics, and failure reporting; receives a formatter function from the application |
 | Infrastructure | TelegramNotifier | Owns Telegram HTTP requests, credentials, timeouts, and provider response validation; uses injected fetch |
 | Composition | Consuming application | Loads environment/configuration and constructs the EventBus, notifier, and subscriber |
 | Public API | Package and provider index files | Re-exports supported contracts only; contains no implementation logic |
@@ -59,10 +58,8 @@ Architecture regression tests protect the dependency direction and keep composit
     } from "@coinzilla/notifiers"
 
 - TelegramNotifier: validates options and sends plain-text messages through Telegram's sendMessage Bot API method.
-- subscribeTelegramNotifications: subscribes to the full supported event allowlist by default, or to a validated `eventNames` subset selected by the consuming application; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
-- TELEGRAM_NOTIFICATION_EVENTS: immutable list of supported event names.
-- formatTelegramNotification: pure formatter for supported Telegram events.
-- formatNotification: backwards-compatible alias for formatTelegramNotification.
+- subscribeTelegramNotifications: subscribes to the application-provided `eventNames` list; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
+- `subscribeTelegramNotifications` requires a `formatMessage(event)` function from the consuming application. It never formats domain events itself.
 
 The package does not load environment variables. Applications own configuration and secret management.
 
@@ -99,20 +96,14 @@ Both values are required by the consuming application. Leave both unset to disab
       notifier: telegram,
       logger,
       maxPending: 1000,
-      // Optional: select a validated subset of supported notification events.
-      eventNames: ["bot.started", "fill.received", "bot.pair_paused"],
+      eventNames: ["notification.created"],
+      formatMessage: (event) => `${event.name}: ${event.data?.summary ?? ""}`,
     })
 
     eventBus.publish({
-      name: "order.filled",
-      source: "trading-bot",
-      data: {
-        orderId: "123",
-        symbol: "BTCUSDT",
-        side: "BUY",
-        price: "65000",
-        quantity: "0.01",
-      },
+      name: "notification.created",
+      source: "example-app",
+      data: { summary: "A notification for the consuming application." },
     })
 
     // Stop publishers first, then drain accepted deliveries.
@@ -121,32 +112,15 @@ Both values are required by the consuming application. Leave both unset to disab
     await notifications.close()
     await eventBus.close()
 
-## Supported events
+## Event and message ownership
 
-| Event | Supported message |
-| --- | --- |
-| order.filled | Completed order alert |
-| fill.received | Individual execution/fill alert |
-| bot.pair_paused | Critical pair pause alert |
-| bot.recovery_failed | Critical recovery failure alert |
-| bot.recovery_completed | Recovery completion alert |
-| bot.started | Bot started alert |
-| bot.stopped | Bot stopped alert |
-| bot.startup_failed | Startup failure alert |
-| broker.connected | Broker connection established |
-| broker.disconnected | Broker connection lost |
-| order.submitted | Broker-acknowledged order submission |
-| order.cancelled | Broker-confirmed order cancellation |
-| order.failed | Submission or cancellation failure |
-| account.safety_alert | Account, execution, or ownership safety alert |
-
-High-volume events such as order.execution_report are intentionally excluded. The exported allowlist contains every supported formatter event. Consumers may pass an `eventNames` array to subscribe to a unique subset; unknown names, duplicates, malformed values, and an empty selection are rejected before any subscription is registered. Omitting `eventNames` preserves the original full-allowlist behavior. The formatter still limits outbound data to explicitly selected fields.
+The notifier package does not define application event names, trading semantics, or message templates. The consuming application selects event names, maps domain events, and supplies a formatter function. The notifier validates the event-name list shape and serializes delivery of the resulting plain-text messages.
 
 ## Reliability and security contract
 
 - **Transport isolation:** Telegram is an event-bus side effect. It must never control trading state, order placement, reconciliation, or strategy decisions.
-- **No secret leakage:** the Telegram bot token is redacted from thrown transport errors. The formatter includes only explicitly selected fields; free-form `message`/`reason` strings remain caller-supplied text, so consuming applications must sanitize and bound them before publishing. Never forward raw errors, stack traces, credentials, API keys, raw exchange payloads, or arbitrary event fields.
-- **Bounded input:** event fields are normalized, control characters are removed, and each dynamic field is length-limited before formatting.
+- **No secret leakage:** the Telegram bot token is redacted from thrown transport errors. The consuming application formatter must include only explicitly selected fields and sanitize/bound free-form text before sending. Never forward raw errors, stack traces, credentials, API keys, raw exchange payloads, or arbitrary event fields.
+- **Bounded input:** the consuming application is responsible for normalizing fields, removing control characters, and length-limiting dynamic content before calling the notifier.
 - **Response validation:** HTTP response shape, Telegram's `ok` flag, and the returned `message_id` are validated. Non-2xx responses include Telegram's bounded, token-redacted `description` when available; malformed error bodies retain the HTTP status. Array-shaped or otherwise malformed success responses are failures, not false positives.
 - **Validation isolation:** configuration validation, message validation, and bounded credential-redacting error sanitization are pure functions in focused modules, independently testable without network access.
 - **Timeout:** requests use AbortSignal.timeout(); the default is 10 seconds. The timeout is configurable and validated.

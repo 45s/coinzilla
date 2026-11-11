@@ -20,15 +20,14 @@ test("package entry point remains a thin facade over the provider API", async ()
 })
 
 test("Telegram adapter depends on injected ports instead of application infrastructure", async () => {
-  const [subscriber, notifier, formatter, validation, safeErrors] = await Promise.all([
+  const [subscriber, notifier, validation, safeErrors] = await Promise.all([
     readSource("./telegram/telegram-event-subscriber.js"),
     readSource("./telegram/telegram-notifier.js"),
-    readSource("./telegram/format-telegram-notification.js"),
     readSource("./telegram/telegram-validation.js"),
     readSource("./telegram/safe-error-message.js"),
   ])
 
-  const providerSources = [subscriber, notifier, formatter, validation, safeErrors]
+  const providerSources = [subscriber, notifier, validation, safeErrors]
   for (const source of providerSources) {
     assert.doesNotMatch(
       source,
@@ -63,8 +62,8 @@ test("Telegram adapter depends on injected ports instead of application infrastr
     "The Telegram transport must not read application configuration or write unstructured console output.",
   )
   assert.doesNotMatch(
-    formatter,
-    /\bfetch\s*\(|process\.env|console\.(?:log|info|warn|error)/,
-    "Notification formatting must remain a deterministic domain policy with no network, environment, or logging side effects.",
+    subscriber,
+    /formatTelegramNotification/,
+    "The notifier subscriber must not own application-specific message formatting.",
   )
 })
