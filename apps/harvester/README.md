@@ -51,7 +51,7 @@ pnpm --filter @coinzilla/harvester test:coverage
 
 The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harness live in [`test/replays/`](./test/replays/). They exercise the real Harvester composition without connecting to Binance or placing exchange orders.
 
-The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @coinzilla/harvester recovery:market -- --context <evidence.json>`. Audit-only is the default; `--confirm` is an explicit durable-fact append and requires an already initialized ledger. The command does not connect to Binance, place/cancel orders, or enable startup restoration. See the [recovery operator guide](./docs/recovery/README.md) for the evidence schema and safety contract.
+The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @coinzilla/harvester recovery:market -- --context ./recovery-evidence/linkusdt.json`. Audit-only is the default; `--confirm` is an explicit durable-fact append and requires an already initialized ledger. The command does not connect to Binance, place/cancel orders, or enable startup restoration. See the [recovery operator guide](./docs/recovery/README.md) for the evidence schema and safety contract.
 
 ## Configuration
 
