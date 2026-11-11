@@ -240,6 +240,40 @@ const createBroker = (calls = [], {
     emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
   }
 }
+
+const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
+  const createCandle = ({ symbol, openTime } = {}) => ({
+    symbol,
+    interval: "1m",
+    openTime,
+    closeTime: openTime + 59_999,
+    open: "1",
+    high: "1.1",
+    low: "0.9",
+    close: "1",
+    volume: "1",
+    isClosed: true,
+  })
+  broker.getCandles = async ({ symbol, interval, limit } = {}) => ({
+    ok: true,
+    data: symbols.includes(symbol)
+      ? Array.from({ length: Math.min(limit ?? 100, 100) }, (_, index) =>
+        createCandle({ symbol, openTime: index * 60_000 }))
+      : [],
+  })
+  broker.subscribeForCandles = async ({ symbol, interval, onCandle } = {}) => {
+    if (symbols.includes(symbol)) {
+      for (const index of [100, 101, 102]) {
+        await onCandle(createCandle({ symbol, openTime: index * 60_000 }))
+      }
+    }
+    return {
+      ok: true,
+      data: { stream: symbol.toLowerCase() + "@kline_" + interval, unsubscribe: async () => {} },
+    }
+  }
+  return broker
+}
 const binanceEnv = {
   NODE_ENV: "test",
   TRADING_MODE: "testnet",
@@ -1455,6 +1489,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       return { ok: true, data: acknowledgedOrder }
     },
   }
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   const config = {
     strategies: {
       CG_coinGrabber: {
@@ -2404,6 +2439,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
       }),
     }
   }
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   const config = {
     ...appConfig,
     strategies: {
@@ -2954,6 +2990,7 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     return { ok: true, data: canceledOrder }
   }
 
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   const config = {
     ...appConfig,
     strategies: {
@@ -3082,6 +3119,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     return result
   }
 
+  makeVolatilityReadyBroker(broker, ["BTCUSDT", "ETHUSDT"])
   const appConfigWithRegularLimitBuys = {
     ...appConfig,
     strategies: {
