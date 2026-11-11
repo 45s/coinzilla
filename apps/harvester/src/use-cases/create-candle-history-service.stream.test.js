@@ -414,6 +414,7 @@ test("notifies the protection consumer after warm-up and each accepted live cand
     createCandle({ openTime: 100 * INTERVAL_MS, isClosed: true }),
   )
   assert.equal(observed.at(-1).snapshot.data.metrics.openTime, 100 * INTERVAL_MS)
+  await fixture.subscriptions[0].unsubscribe()
 })
 
 
