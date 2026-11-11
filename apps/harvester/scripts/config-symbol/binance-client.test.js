@@ -114,7 +114,7 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
         symbol: "ADAFDUSD",
         fetchImpl: async () => createResponse(createExchangeInfo({ filters })),
       }),
-      /filter|increment|notional|decimal/i,
+      /filter|increment|notional|decimal|positive/i,
       "Incomplete or malformed exchange filters must fail closed.",
     )
   }
@@ -131,7 +131,7 @@ test("uses the stricter minimum when Binance returns both MIN_NOTIONAL and NOTIO
     symbol: "ADAFDUSD",
     fetchImpl: async () => responses.shift(),
   })
-  assert.equal(metadata.minNotional, "10", "The stricter applicable minimum notional must be retained.")
+  assert.equal(metadata.minNotional, "10.00000000", "The stricter applicable minimum notional must be retained without losing the exchange decimal representation.")
 })
 
 test("reports Binance HTTP, malformed JSON, and network failures clearly", async () => {
