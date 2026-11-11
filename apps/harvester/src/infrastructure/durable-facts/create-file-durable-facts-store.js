@@ -560,6 +560,10 @@ export function createFileDurableFactsStore({
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
       if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+        const nowTime = now().getTime()
+        if (!Number.isSafeInteger(nowTime) || input.data.verifiedAt > nowTime) {
+          throw new Error("Market-history coverage verification timestamp cannot be in the future")
+        }
         const previousCoverageRecords = state.records.filter((record) =>
           record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
           record.data.symbol === input.data.symbol
