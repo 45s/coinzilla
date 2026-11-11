@@ -2,6 +2,43 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Adaptive price step — ATR-based volatility adjustment
+
+**Status: PROPOSED — DESIGN NOT YET FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStep` remains the baseline. Harvester may derive an effective step from a normalized volatility coefficient, with Average True Range (ATR) as the initial candidate volatility measure.
+
+### Intended behavior
+
+- In normal/reference volatility, the effective step equals the configured baseline.
+- When current volatility is higher than its reference level, widen the effective step proportionally (subject to defined bounds).
+- When current volatility is lower, reduce the effective step only if the agreed policy permits it; otherwise keep the baseline as a floor.
+- Example: baseline `priceStep = 0.5`; normalized volatility coefficient `1.5`; effective step `0.5 × 1.5 = 0.75`.
+- Apply the derived value consistently to the strategy's price-spacing decisions without mutating the configured baseline.
+
+### Design questions to resolve before implementation
+
+1. **Measure:** compare ATR in price units, normalized ATR (ATR divided by close price), or another volatility measure? Prefer normalized ATR for comparing volatility across symbols and price levels.
+2. **Reference:** define a stable per-symbol reference ATR/volatility (for example, a rolling baseline) rather than comparing unrelated absolute ATR values.
+3. **Timeframe and sampling:** choose candle interval, ATR period, closed-candle versus in-progress-candle input, and update cadence. Avoid noisy intrabar step changes.
+4. **Coefficient:** define the exact ratio/formula, neutral point (1.0), smoothing/hysteresis, and handling of sudden spikes.
+5. **Bounds:** define minimum/maximum coefficient and effective priceStep so volatility cannot produce unsafe or unusable order spacing.
+6. **Fallback:** define behavior for missing, stale, insufficient, invalid or discontinuous market data. Never silently treat unavailable volatility as zero.
+7. **Rounding and exchange constraints:** apply symbol tick-size/precision rules after calculation and ensure the result remains valid for the target market.
+8. **Strategy scope:** establish whether the adjustment applies to Conservative and Aggressive strategies, and whether it affects BUY spacing, recovery SELL pricing, or only specified price-step decisions.
+9. **Observability/configuration:** expose baseline, ATR inputs, reference, coefficient, effective step and fallback reason in diagnostics; keep the feature opt-in until validated.
+
+### Proposed delivery sequence
+
+1. [ ] Document and agree the mathematical definition and configuration contract; add representative numerical examples.
+2. [ ] Add pure, deterministic tests for normalization, coefficient calculation, bounds, smoothing and invalid/stale input behavior.
+3. [ ] Implement the volatility/ATR input port and adapter mapping without coupling domain logic to Binance candle DTOs.
+4. [ ] Integrate the derived effective step at the strategy decision boundary while preserving the configured baseline and existing behavior when disabled.
+5. [ ] Add multi-symbol, restart/recovery, precision/tick-size and regression coverage; update operator documentation.
+6. [ ] Validate with historical/offline market data and a separate explicitly approved TESTNET plan before considering enablement.
+
+**Safety constraints:** no automatic multiplier is assumed yet; no live/TESTNET trading behavior changes in this planning item. The feature must be bounded, deterministic, observable, independently testable and disabled by default until its design and acceptance criteria are approved.
+
+---
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
