@@ -146,6 +146,7 @@ test("does not persist a commission baseline or mutate live accounting for contr
       return { ok: true, data: { sourceTime: 100 } }
     },
   })
+  const originalPortfolio = workflow.getPortfolio().value
   const result = await workflow.updateTradingAccounting({
     fill: createFill({
       tradeId: "live-contradictory-third-fee",
@@ -166,7 +167,7 @@ test("does not persist a commission baseline or mutate live accounting for contr
 
   assert.equal(result.ok, false)
   assert.deepEqual(baselineCalls, [])
-  assert.equal(workflow.getPortfolio().positions.length, 0)
+  assert.deepEqual(workflow.getPortfolio().value, originalPortfolio)
   assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), undefined)
 })
 
