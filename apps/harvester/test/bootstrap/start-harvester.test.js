@@ -281,17 +281,14 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   });
 
   assert.equal(context.userDataReady, true);
-  assert.equal(broker.lastOrder, undefined, 'the startup ticker seed must not submit a BUY before candle warm-up');
   const volatility = context.getVolatilityData({ symbol: 'ZROUSDT' });
   assert.equal(volatility.ok, true);
   assert.equal(volatility.data.status.isReady, true, JSON.stringify({
     status: volatility.data.status,
     logs: userDataErrors.map(([entry]) => ({ ...entry, error: entry.error?.message, stack: entry.error?.stack })),
   }));
-  // The startup REST ticker seed precedes candle-history warm-up and must stay
-  // blocked. A fresh price after warm-up is the first eligible BUY evaluation.
-  await onPrice({ symbol: 'ZROUSDT', price: '1', timestamp: 10 });
-  assert.ok(broker.lastOrder, 'the first post-warm-up ticker should submit the first Conservative BUY');
+  // The startup REST ticker seed is deferred until candle warm-up reaches NORMAL.
+  assert.ok(broker.lastOrder, 'the startup ticker seed should be evaluated after volatility history becomes ready');
   assert.equal(accountSnapshotCalls, 1);
   assert.equal(openOrderSnapshotCalls, 1);
   assert.equal(typeof onPrice, 'function');
