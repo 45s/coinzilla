@@ -104,6 +104,7 @@ describe("calculateAtrSeries", () => {
     for (const candles of invalidCandles) {
       assert.throws(
         () => calculateAtrSeries({ candles, intervalMs, period: 2 }),
+        (error) => error instanceof TypeError || error instanceof RangeError,
         "ATR must reject unfinished candles, malformed prices, invalid OHLC relationships and unsafe timestamps",
       )
     }
