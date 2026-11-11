@@ -181,6 +181,28 @@ test("cancels safely when the operator declines the configuration preview", asyn
   assert.equal(writes, 0, "Declining the preview must not write or mutate configuration.")
 })
 
+test("refuses metadata for a different symbol or exchange environment", async () => {
+  for (const invalidMetadata of [
+    { ...metadata, symbol: "OTHER" },
+    { ...metadata, environment: "live" },
+  ]) {
+    let writes = 0
+    await assert.rejects(
+      runConfigSymbol({
+        ask: createAsk(["ADAFDUSD", "testnet", "100", "0.1", "0", "0.1", "", "", ""]),
+        loadConfig: async () => createAppConfig(),
+        metadataFetcher: async () => invalidMetadata,
+        writeConfig: async () => {
+          writes += 1
+        },
+      }),
+      /metadata symbol\/environment does not match/i,
+      "The generator must not combine operator input with exchange metadata for a different symbol or environment.",
+    )
+    assert.equal(writes, 0, "Mismatched metadata must never be written into config.json.")
+  }
+})
+
 test("does not write configuration when Binance metadata lookup fails", async () => {
   let writes = 0
   await assert.rejects(
