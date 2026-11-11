@@ -46,7 +46,7 @@ test("uses the approved compact icon and layout for each notification type", () 
     [{ name: "order.submitted", data: { side: "BUY", symbol: "LINKUSDT", price: "14.25", quantity: "2", orderId: "42" } }, "🟢 BUY LINK/USDT ORDER SUBMITTED @ 14.25 × 2\n#42"],
     [{ name: "order.submitted", data: { side: "SELL", symbol: "LINKFDUSD", price: "14.5", quantity: "1" } }, "🔴 SELL LINK/FDUSD ORDER SUBMITTED @ 14.5 × 1"],
     [{ name: "order.cancelled", data: { side: "BUY", symbol: "LINKFDUSD", executedQuantity: "0", orderId: "43" } }, "✖️ BUY LINK/FDUSD ORDER CANCELLED · Filled 0\n#43"],
-    [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BINANCE CONNECTED · TESTNET"],
+    [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BROKER CONNECTED · BINANCE · TESTNET"],
     [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "🟥 BINANCE DISCONNECTED · success"],
     [{ name: "bot.started", data: {} }, "🚀 BOT STARTED"],
     [{ name: "bot.stopped", data: { reason: "SIGINT" } }, "🔚 BOT STOPPED · SIGINT"],
@@ -107,7 +107,7 @@ test("validates event envelopes and safely defaults malformed data", () => {
 
 test("omits unavailable broker mode and preserves failed shutdown details", () => {
   const connected = formatHarvesterTelegramNotification({ name: "broker.connected", data: { broker: "binance" } })
-  assert.equal(connected, "🟩 BINANCE CONNECTED")
+  assert.equal(connected, "🟩 BROKER CONNECTED · BINANCE")
 
   const stopped = formatHarvesterTelegramNotification({
     name: "bot.stopped",
