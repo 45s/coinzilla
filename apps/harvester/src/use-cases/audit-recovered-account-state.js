@@ -146,6 +146,10 @@ export function auditRecoveredAccountState({
       if (!tradeHistoryAudit.ok) {
         throw tradeHistoryAudit.errors?.[0] ?? new Error("Complete account-wide trade history could not be verified")
       }
+      if (tradeHistoryAudit.data.scope === "MARKET" &&
+          tradeHistoryAudit.data.historyRetentionVerifiedAt > currentAccountSnapshot.sourceTime) {
+        throw new Error("Market-history retention baseline was verified after the current account snapshot")
+      }
     }
     const latestRecordedSourceTime = projection.data.accountSnapshots.reduce(
       (latest, snapshot) => Math.max(latest, snapshot.sourceTime),
