@@ -1393,3 +1393,12 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - **F-044 — HIGH:** DTOs and the same-process recovery handler emit account and open-order snapshots with phase `RECOVERY`, but the recovery projector rejects that phase in both validators. Any normal reconnect session can therefore make restart projection fail. Add phase-parity regression coverage and define RECOVERY snapshot ordering/semantics.
 - **Next audit gates:** inspect all remaining recovery DTO/domain projection parity, session ordering and schema migration paths; prove each accounting fact survives DTO → projection → restore without information loss. No source or test modifications are authorized. #654 remains OPEN; no TESTNET/LIVE validation is authorized by this audit.
 - **Baseline:** exact `develop` HEAD `3ffaaa21c6543cc042087307b01c40630320e903`; PR #974 merged documentation-only. This update is an audit proposal, not implementation acceptance.
+
+
+### External open-order strategy isolation — #985
+
+- [x] Preserve external open orders as unowned and untouched; retain their symbols only after the account-wide open-orders audit has been durably flushed.
+- [x] Defer Conservative strategy evaluation and broker submission for a symbol while an unowned open order exists for that symbol. Unrelated enabled symbols remain eligible.
+- [x] Replace the symbol set on each authoritative startup/reconnect snapshot, including clearing it only after a durable snapshot confirms the order is gone.
+- [x] Remove the unused `blockOnExistingOrders` recovery argument. Regression coverage is in `src/bootstrap/account/create-account-snapshot-manager.test.js` and `src/use-cases/conservative-trading-engine.test.js`.
+- [ ] Exact-head CI verification and merge of [PR #987](https://github.com/45s/coinzilla/pull/987); no live/TESTNET operations or process restart are part of this task.
