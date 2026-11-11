@@ -246,7 +246,7 @@ export function makeConservativeTradingEngine({
     volatilityProtection: new Map(Object.entries(pairs)
       .filter(([, pairConfig]) => pairConfig?.enabled === true)
       .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
-    volatilityCancellationAttemptCandleBySymbol: new Map(),
+    volatilityCancellationAttemptBySymbol: new Map(),
     volatilitySnapshotSignatureBySymbol: new Map(),
   }
   const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
@@ -2659,20 +2659,20 @@ export function makeConservativeTradingEngine({
           activeBuyOrderCount: activeBuyOrders.length,
         })
         state.volatilityProtection.set(symbol, transition.state)
-        const lastCancellationAttempt = state.volatilityCancellationAttemptCandleBySymbol.get(symbol)
+        const lastCancellationAttempt = state.volatilityCancellationAttemptBySymbol.get(symbol)
         const cancellationRetryDue = !lastCancellationAttempt ||
           lastCancellationAttempt.candleKey !== candleKey ||
           observedAt - lastCancellationAttempt.attemptedAt >= 5_000
         const shouldCancel = transition.state.mode === VOLATILITY_PROTECTION_MODES.PROTECTED &&
           hasCancellableBuy && cancellationRetryDue
         if (shouldCancel) {
-          state.volatilityCancellationAttemptCandleBySymbol.set(symbol, {
+          state.volatilityCancellationAttemptBySymbol.set(symbol, {
             candleKey,
             attemptedAt: observedAt,
           })
         }
         if (transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
-          state.volatilityCancellationAttemptCandleBySymbol.delete(symbol)
+          state.volatilityCancellationAttemptBySymbol.delete(symbol)
         }
 
         const metricChanged = current.volatilityRatio !== transition.state.volatilityRatio
