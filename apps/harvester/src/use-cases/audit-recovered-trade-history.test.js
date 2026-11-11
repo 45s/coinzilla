@@ -228,14 +228,21 @@ test("audits complete execution history for one market without claiming account-
   const result = auditRecoveredTradeHistory({
     journalFills: [journalFill(fill)],
     exchangeFills: [fill],
-    complete: true,
+    complete: false,
     marketUniverseComplete: false,
     scope: "MARKET",
     market,
+    historyEvidence: {
+      historyPagesComplete: true,
+      marketHistoryComplete: true,
+      historyScope: "MARKET",
+      marketsQueried: ["BTCUSDT"],
+    },
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.scope, "MARKET")
+  assert.equal(result.data.marketSymbol, "BTCUSDT")
   assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.fillsChecked, 1)
   assert.equal(result.data.journalFillsChecked, 1)
