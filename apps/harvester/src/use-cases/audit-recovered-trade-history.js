@@ -94,6 +94,7 @@ export function auditRecoveredTradeHistory({
   scope = "ACCOUNT",
   market,
   historyEvidence,
+  historyRetentionEvidence,
 } = {}) {
   try {
     if (!["ACCOUNT", "MARKET"].includes(scope)) {
@@ -113,12 +114,25 @@ export function auditRecoveredTradeHistory({
         throw new Error("Single-market trade history cannot prove account-wide market-universe completeness")
       }
       if (historyEvidence?.historyPagesComplete !== true ||
-          historyEvidence?.marketHistoryComplete !== true ||
+          historyEvidence?.marketHistoryPagesComplete !== true ||
           historyEvidence?.historyScope !== "MARKET" ||
           !Array.isArray(historyEvidence.marketsQueried) ||
           historyEvidence.marketsQueried.length !== 1 ||
-          historyEvidence.marketsQueried[0] !== market.symbol) {
-        throw new Error("Single-market trade-history evidence is missing or does not cover " + market.symbol)
+          historyEvidence.marketsQueried[0] !== market.symbol ||
+          !Number.isSafeInteger(historyEvidence.historyStartTime) ||
+          historyEvidence.historyStartTime < 0) {
+        throw new Error("Single-market trade-history pagination evidence is missing or does not cover " + market.symbol)
+      }
+      if (!historyRetentionEvidence ||
+          typeof historyRetentionEvidence.baselineFactId !== "string" ||
+          !historyRetentionEvidence.baselineFactId.trim() ||
+          historyRetentionEvidence.symbol !== market.symbol ||
+          !Number.isSafeInteger(historyRetentionEvidence.coveredFromTime) ||
+          historyRetentionEvidence.coveredFromTime < 0 ||
+          historyRetentionEvidence.coveredFromTime > historyEvidence.historyStartTime ||
+          !Number.isSafeInteger(historyRetentionEvidence.verifiedAt) ||
+          historyRetentionEvidence.verifiedAt < 0) {
+        throw new Error("Durable market-history retention evidence is missing or does not cover " + market.symbol)
       }
     }
     const allJournalRecords = requireArray({ value: journalFills, field: "journalFills" })
@@ -225,7 +239,11 @@ export function auditRecoveredTradeHistory({
         complete: true,
         scope,
         marketUniverseComplete: scope === "ACCOUNT",
-        ...(scope === "MARKET" ? { marketSymbol: market.symbol } : {}),
+        ...(scope === "MARKET" ? {
+          marketSymbol: market.symbol,
+          historyStartTime: historyEvidence.historyStartTime,
+          historyRetentionBaselineFactId: historyRetentionEvidence.baselineFactId,
+        } : {}),
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
         reconciledOwnedOrderFills,
