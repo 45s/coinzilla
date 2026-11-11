@@ -2,6 +2,7 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+
 ## Operator tooling — interactive trading-pair configuration generator
 
 **Status: IN PROGRESS — implementation and tests are included in [PR #1012](https://github.com/45s/coinzilla/pull/1012); exact-head CI and final review remain pending.**
@@ -36,7 +37,6 @@
 7. [ ] Run Harvester tests/coverage and all required repository CI on the exact PR head. No TESTNET/LIVE order activity is needed or authorized for this feature.
 
 **Acceptance:** the operator supplies strategy-owned inputs without guessing exchange filters; the generator obtains and validates Binance Spot metadata, creates a complete runtime-valid disabled pair in the canonical config, and cannot silently overwrite existing pair settings or leave a partial config after failure.
-
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
@@ -1439,3 +1439,11 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Refresh or clear the symbol guard only from authoritative startup/reconnect snapshots after their durable Journal barrier.
 - [x] Remove the unused `blockOnExistingOrders` recovery argument and cover snapshot lifecycle, symbol isolation, and the final submission race with offline regressions.
 - [ ] Merge after final-head CI passes.
+
+## 2026-11-11 — Exchange constraint safety / issue #957
+
+Implementation is in progress on a task branch targeting `develop`. The Binance adapter now has a path to preserve applicable dynamic, account-level, exchange-wide and unknown filters as exchange-neutral unvalidated constraints; the enabled-market readiness gate is intended to fail closed on those constraints. Authenticated `myFilters` retrieval is required so account-level `MAX_ASSET` data is not silently omitted.
+
+The detailed contract, currently supported static rules, deliberately excluded order-type-specific filters, known limitations and readiness flow are documented in [Exchange trading constraints](docs/exchange-trading-constraints.md).
+
+Do not mark #957 complete until the exact PR head has green broker and Harvester tests, full required CI, and review confirms all active Binance filter sources are covered. Dynamic price-band and account-state constraints remain blockers rather than implemented evaluators in this slice; this is intentional fail-closed behavior, not a claim that those constraints are supported.

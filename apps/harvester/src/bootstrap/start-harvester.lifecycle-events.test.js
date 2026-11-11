@@ -50,7 +50,7 @@ function createMarketMetadata() {
       { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"] }
+  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
 }
 
 function createBroker({
