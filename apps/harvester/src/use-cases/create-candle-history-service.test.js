@@ -721,17 +721,23 @@ test("drains accepted candle work before propagating a failed stream unsubscribe
   )
 })
 
-test("backfills a gap when the first post-reconnect update is still forming", async () => {
+test("backfills a gap and blocks readiness when the first post-reconnect update is still forming", async () => {
   const backfillCalls = []
+  let resolveBackfill
+  let signalBackfillStarted
+  const backfillStarted = new Promise((resolve) => { signalBackfillStarted = resolve })
+  const backfillGate = new Promise((resolve) => { resolveBackfill = resolve })
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 102 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
     },
     getCandles: async (input) => {
       if (input.startTime === undefined) {
         return { ok: true, data: createHistory(input.symbol, 100, true) }
       }
       backfillCalls.push(input)
+      signalBackfillStarted()
+      await backfillGate
       return {
         ok: true,
         data: [
@@ -743,13 +749,34 @@ test("backfills a gap when the first post-reconnect update is still forming", as
   })
 
   await fixture.start()
-  const snapshot = getSnapshot(fixture)
+  const handler = fixture.candleHandlers.get("BTCUSDT")
+  const acceptedCandleTask = handler(createCandle({ openTime: 102 * INTERVAL_MS, isClosed: false }))
 
+  await Promise.resolve()
+  await Promise.resolve()
   assert.equal(
     backfillCalls.length,
     1,
     "A forming candle beyond the last completed bar must trigger backfill before the market can remain data-ready.",
   )
+  await backfillStarted
+
+  const snapshotWhileBackfillIsPending = getSnapshot(fixture)
+  assert.equal(
+    snapshotWhileBackfillIsPending.status.isReady,
+    false,
+    "A market with a known candle gap must become unavailable while historical repair is still pending.",
+  )
+  assert.equal(
+    snapshotWhileBackfillIsPending.status.reason,
+    "GAP_DETECTED",
+    "The market snapshot must expose the gap while the reconnect backfill is unresolved.",
+  )
+
+  resolveBackfill()
+  await acceptedCandleTask
+  const snapshotAfterBackfill = getSnapshot(fixture)
+
   assert.deepEqual(
     {
       startTime: backfillCalls[0].startTime,
@@ -764,12 +791,12 @@ test("backfills a gap when the first post-reconnect update is still forming", as
     "The reconnect backfill must request every missing completed interval and exclude the current forming candle.",
   )
   assert.equal(
-    snapshot.candles.at(-1).openTime,
+    snapshotAfterBackfill.candles.at(-1).openTime,
     101 * INTERVAL_MS,
     "The trusted history must advance through the final missing completed candle without storing the forming bar.",
   )
   assert.equal(
-    snapshot.status.isReady,
+    snapshotAfterBackfill.status.isReady,
     true,
     "The market may become ready again only after the missing completed candles have been restored.",
   )
