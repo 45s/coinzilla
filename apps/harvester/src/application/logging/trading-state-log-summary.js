@@ -62,13 +62,11 @@ export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
 
 
 /**
- * Build a readable Portfolio Stats snapshot using exact domain decimal strings.
- * Exchange account balances are deliberately excluded; they are a separate
- * broker snapshot and are not part of Harvester's in-memory Portfolio.
+ * Build a readable Portfolio Stats snapshot using only exact Portfolio values.
+ * Exchange balances and RecoveryLedger accounting are intentionally excluded.
  *
  * @param {object} input
  * @param {object} input.position
- * @param {object} [input.recoveryLedger]
  * @returns {object|null}
  */
 export function createPortfolioStatsLogSummary({ position } = {}) {
