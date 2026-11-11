@@ -409,3 +409,66 @@ test("duplicate fills and stale order updates do not double-account across marke
   assert.equal(engine.getOrders().find((order) => order.market.symbol === "SOLUSDT").status, "PARTIALLY_FILLED")
   assert.deepEqual(pauses, [])
 })
+
+test("operator pause blocks new BUY orders only for the selected market without creating a safety pause", async () => {
+  const { engine, orders } = await createHarness()
+
+  const pauseResult = await engine.pauseMarket({ symbol: "DOGEUSDT" })
+
+  assert.equal(
+    pauseResult.ok,
+    true,
+    "An operator must be able to request a pause for a configured market through the serialized engine boundary.",
+  )
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "The selected market must retain an operator-owned pause reason independently of safety pause state.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "An operator pause must not be represented as or overwrite an engine safety pause.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [{ symbol: "SOLUSDT", side: "BUY" }],
+    "Operator pause must prevent new BUY exposure for DOGEUSDT while leaving an unrelated configured market eligible.",
+  )
+})
+
+test("operator pause leaves already acknowledged exchange orders untouched", async () => {
+  const { engine, orders } = await createHarness()
+  await startBothMarkets(engine)
+  const existingOrders = engine.getOrders().map(({ clientOrderId, status, market }) => ({
+    clientOrderId,
+    status,
+    symbol: market.symbol,
+  }))
+
+  const pauseResult = await engine.pauseMarket({ symbol: "DOGEUSDT" })
+
+  assert.equal(
+    pauseResult.ok,
+    true,
+    "Pausing a market with an acknowledged order must complete without requiring an exchange cancellation.",
+  )
+  assert.deepEqual(
+    engine.getOrders().map(({ clientOrderId, status, market }) => ({
+      clientOrderId,
+      status,
+      symbol: market.symbol,
+    })),
+    existingOrders,
+    "Operator pause must preserve every existing owned order identity and canonical status; it must not cancel or rewrite exchange orders.",
+  )
+  assert.equal(
+    orders.length,
+    2,
+    "Pausing one market must not submit replacement or cancellation requests for its already acknowledged order.",
+  )
+})
+

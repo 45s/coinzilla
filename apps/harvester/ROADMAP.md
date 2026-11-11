@@ -11,6 +11,16 @@
 - **Implementation gate:** once decisions are accepted, deliver TDD-first in separate steps: transport-neutral application contracts and safety tests; durable control state; read-only commands; then authorized pause/resume. Do not implement a Telegram-specific trading workflow or treat Journal notifications as durable control state.
 - **Scope boundary:** this is Harvester-owned work. The root roadmap remains a cross-workspace priority index and does not duplicate this domain proposal.
 
+## Operator control — first command: pause
+
+**Status: IN PROGRESS — test-first implementation in [PR #1011](https://github.com/45s/coinzilla/pull/1011).** The first inbound command is a single-market pause. The operator capability is Harvester-owned application functionality; Telegram is an inbound adapter, while outbound notifications remain separate.
+
+- **First behavior slice:** an operator pause is distinct from safety/recovery pauses, blocks new BUY exposure only for the selected market, leaves acknowledged exchange orders untouched, and preserves fill/accounting/reconciliation processing. Risk-reducing recovery SELLs remain eligible under the existing Conservative workflow.
+- **Hard dependency:** operator pause facts must use the ADR-0001 application-owned durable-fact stream and be restored before strategy evaluation. Journal events are not authoritative pause state. Do not enable inbound control until durable commit, restart restoration, authorization, idempotency and startup-gate tests pass.
+- **Transport scope:** Telegram Long Polling only; inbound control defaults disabled and is independent from `notifications.telegram`. No HTTP server or generic command framework.
+- **TDD sequence:** prove serialized engine pause semantics, then the durable application use case/actor authorization, then Telegram parsing/allowlisting/update deduplication/lifecycle. Keep the initial Telegram vocabulary to `/pause <SYMBOL>`; do not add other commands in this milestone.
+- **Safety boundary:** no automatic cancellation, no direct broker access, no safety-blocker clearing, and no exchange/testnet/live operations as part of this implementation.
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
