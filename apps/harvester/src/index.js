@@ -127,6 +127,9 @@ const describeError = (error) => {
   if (error instanceof Error) {
     return {
       name: error.name,
+      code: error.code,
+      symbol: error.symbol,
+      details: error.details,
       message: error.message,
       stack: error.stack,
       cause: error.cause ? describeError(error.cause) : undefined,
@@ -412,6 +415,11 @@ export async function main({
       logger.error({
         message: "startup failed.",
         error,
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_STARTUP_FAILED",
+        errorMessage: error?.message ?? String(error),
+        symbol: error?.symbol,
+        sourceFilterTypes: error?.constraints?.map((constraint) => constraint.sourceFilterType),
         errorDetails: describeError(error),
       })
     } catch {

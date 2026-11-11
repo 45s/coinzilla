@@ -84,7 +84,7 @@ test("rejects mismatched market symbols before storing metadata", async () => {
 })
 
 
-test("does not activate an enabled market with unvalidated exchange constraints", async () => {
+test("starts an enabled market with unsupported filters and retains their trace diagnostics", async () => {
   const metadata = {
     ...createMetadata("BTCUSDT"),
     unvalidatedConstraints: [
@@ -92,25 +92,34 @@ test("does not activate an enabled market with unvalidated exchange constraints"
     ],
   }
   const marketMetadata = new Map()
+  const traceEntries = []
+  const events = []
 
-  await assert.rejects(
-    loadMarketMetadata({
-      broker: { getSymbolFilters: async () => ({ ok: true, data: metadata }) },
-      pairs: {
-        BTCUSDT: {
-          enabled: true,
-          orderQuantity: 0.01,
-          investment: 100,
-          makerPercent: 0,
-          takerPercent: 0.1,
-        },
+  await loadMarketMetadata({
+    broker: { getSymbolFilters: async () => ({ ok: true, data: metadata }) },
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        orderQuantity: 0.01,
+        investment: 100,
+        makerPercent: 0,
+        takerPercent: 0.1,
       },
-      marketMetadata,
-      eventPublisher: { publish: () => ({ ok: true }) },
-      logger: {},
-    }),
-    /cannot validate: DYNAMIC_PRICE_BAND\/SYMBOL\/PERCENT_PRICE/,
-    "The bootstrap market loader must fail before strategy activation when an applicable exchange constraint has no domain evaluator.",
+    },
+    marketMetadata,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+    logger: { trace: (entry) => traceEntries.push(entry) },
+  })
+
+  assert.equal(marketMetadata.get("BTCUSDT").orderType, "LIMIT_MAKER", "A supported configured order type must become ready despite additional unsupported filter descriptors.")
+  assert.equal(events.length, 1, "The enabled market must publish its normal trading-rule capture event after readiness succeeds.")
+  assert.ok(
+    traceEntries.some((entry) =>
+      entry.operation === "validate-market-trading-readiness" &&
+      entry.symbol === "BTCUSDT" &&
+      entry.unvalidatedConstraints?.[0]?.sourceFilterType === "PERCENT_PRICE"
+    ),
+    "Trace diagnostics must retain the source filter descriptor even though it no longer blocks startup.",
   )
-  assert.equal(marketMetadata.size, 0, "A market rejected by exchange-constraint readiness must not be inserted into the active metadata map.")
 })
+
