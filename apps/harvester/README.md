@@ -295,6 +295,14 @@ See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the broker-connected 
 
 See [Logging](./docs/LOGGING.md) for development commands and structured output.
 
+## Durable-fact store initialization
+
+ADR-0001 defines the application-owned durable-fact store. Genesis creation is a separate, one-time administrative operation; application startup never creates or repairs a missing store.
+
+The explicit command is documented in [ADR-0001 — Application-owned recovery facts](./docs/architecture/decisions/0001-application-owned-recovery-facts.md). Do not run it against a production directory until the runtime-integration step explicitly instructs you to initialize the store.
+
+The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor.
+
 ## Process identity and build provenance
 
 See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for process identity, Journal session metadata and provenance.
