@@ -71,7 +71,7 @@ export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
  * @param {object} [input.recoveryLedger]
  * @returns {object|null}
  */
-export function createPortfolioStatsLogSummary({ position, recoveryLedger } = {}) {
+export function createPortfolioStatsLogSummary({ position } = {}) {
   if (!position) return null
 
   const baseAsset = position.market.baseAsset.code
@@ -81,15 +81,13 @@ export function createPortfolioStatsLogSummary({ position, recoveryLedger } = {}
     message: "Portfolio Stats",
     symbol: position.market.symbol,
     inventory: {
-      active: position.baseQuantity.amount + " " + baseAsset,
-      retained: position.freeBaseQuantity.amount + " " + baseAsset,
-      total: position.totalBaseQuantity.amount + " " + baseAsset,
+      activeBaseQuantity: position.baseQuantity.amount + " " + baseAsset,
+      freeBaseQuantity: position.freeBaseQuantity.amount + " " + baseAsset,
+      totalBaseQuantity: position.totalBaseQuantity.amount + " " + baseAsset,
     },
     accounting: {
-      cycleBuyCost: position.spent.amount + " " + quoteAsset,
-      netQuoteCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
-      outstandingRecovery: (recoveryLedger?.outstandingRecoveryAmount ?? "0") + " " + quoteAsset,
-      realizedNetProfit: (recoveryLedger?.realizedNetProfit ?? "0") + " " + quoteAsset,
+      spent: position.spent.amount + " " + quoteAsset,
+      quoteNetCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
     },
   }
 }
