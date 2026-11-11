@@ -61,10 +61,10 @@ Each record has a versioned envelope containing:
 The committed-head manifest records its format version, the last committed sequence, and the last committed digest. The genesis record is created only by an explicit one-time initialization operation; normal startup never creates a new empty ledger when files are missing. A write is acknowledged as durable only after:
 
 1. The complete canonical record has been appended and the log file has been synced.
-2. The committed-head manifest has been written to a temporary file, synced, atomically replaced, and its containing directory synced.
-3. The resulting log head and manifest agree.
+2. The matching committed-head checkpoint has been appended to the manifest journal and the manifest file synced.
+3. Startup/append verification confirms the fact-log head and final manifest checkpoint agree, including both digest chains.
 
-A record beyond the committed manifest, a missing or malformed log/manifest, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation relative to the committed head is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
+A fact record beyond the committed-head manifest journal, a checkpoint ahead of the fact log, a missing or malformed stream, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
 
 The global sequence and committed head avoid relying on directory enumeration, filename timestamps, or UUID lexical order for new authoritative history. The old Journal directory tree still needs explicit discovery when it is examined for legacy evidence or a one-time baseline assessment.
 
@@ -102,7 +102,7 @@ Every process starts with strategy evaluation and order submission disabled. Rec
 
 The gate may open only after all of the following succeed:
 
-1. Validate the complete durable-fact stream, committed manifest, schema versions, process boundaries, global ordering, stable identities, and configuration compatibility.
+1. Validate the complete durable-fact stream, committed-head manifest journal, schema versions, process boundaries, global ordering, stable identities, and configuration compatibility.
 2. Build a candidate projection deterministically and idempotently. Validate Position cost basis, RecoveryLedger, active/free inventory, completed-cycle outcomes, order ownership, reservations, strategy-control state, and sticky blockers before publishing any candidate state.
 3. Reconcile every restored owned order by durable `clientOrderId` and canonical exchange identity/status. Reconcile complete available execution history and exact fill/commission parity; never infer ownership from symbol/side/price/quantity shape alone.
 4. Reconcile current account-wide open orders and exact free/locked balances for all relevant assets, including third-asset commission assets. Compare outstanding commitments and reservations without double-counting snapshot-relative balances.
@@ -170,3 +170,23 @@ The diagram describes the accepted target contract, not current runtime behavior
 - [Harvester Journal Evidence Contract](../../JOURNAL_EVIDENCE_CONTRACT.md)
 - [Harvester Trading First](../../TRADING_FIRST.md)
 - [Findings register F-035–F-044](../../audits/reports/AUDIT_FINDINGS.md)
+
+## Filesystem durability support
+
+The filesystem adapter uses two append-only newline-delimited streams:
+
+1. `facts.jsonl`: append the canonical fact record and sync the file.
+2. `manifest.jsonl`: append a committed-head checkpoint that references the exact fact sequence/digest and chains to the previous checkpoint; sync this file before returning `durable: true`.
+
+The committed-head manifest is therefore an append-only checkpoint journal, not a replace-in-place JSON document. This refinement avoids relying on directory fsync or atomic rename for every append and uses regular-file sync operations on both POSIX and Windows. Startup verification syncs both existing streams before publishing the verified head. A fact without its matching checkpoint, a checkpoint ahead of the fact log, a partial tail, or either broken digest chain is unresolved and fails closed.
+
+Genesis is created only by the explicit one-time initialization operation. Normal startup, verification, reads, and append never create or repair a missing store. The two stream files are created only during genesis; if either file or the containing directory is missing later, startup fails closed rather than recreating an empty ledger. Store the directory on a local filesystem; network shares and cloud-synchronized folders are not a supported durability target.
+
+POSIX installations create the directory with mode `0700` and both streams with mode `0600`. The SHA-256 chains detect accidental corruption, truncation, duplication and reordering; they are not a cryptographic defense against a privileged local actor who can rewrite both streams and recompute their digests. One Harvester writer process per installation remains a runtime invariant; the bootstrap process-singleton gate is delivered in the later readiness step.
+
+The one-time genesis operation is exposed only through the explicit script `apps/harvester/scripts/initialize-durable-facts.js`. It requires an absolute `DURABLE_FACTS_DIRECTORY` and the `--confirm` flag; it refuses unknown arguments and non-empty directories. It is never called by application startup. Do not initialize a production directory until the runtime-integration step explicitly instructs the operator to do so.
+
+```powershell
+$env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
+node apps/harvester/scripts/initialize-durable-facts.js --confirm
+```
