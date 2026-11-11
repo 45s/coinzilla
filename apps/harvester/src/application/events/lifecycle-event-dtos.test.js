@@ -74,8 +74,9 @@ test("exports stable names and source for the initial operational lifecycle cont
     EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
     EXECUTION_DUPLICATE_FILL: "execution.duplicate_fill",
     RECOVERY_CYCLE_COMPLETED: "recovery.cycle_completed",
+    RECOVERY_CYCLE_NOT_COMPLETED: "recovery.cycle_not_completed",
     ACCOUNT_SNAPSHOT_CAPTURED: "account.snapshot_captured",
-  ACCOUNT_OPEN_ORDERS_CAPTURED: "account.open_orders_captured",
+    ACCOUNT_OPEN_ORDERS_CAPTURED: "account.open_orders_captured",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
