@@ -270,3 +270,27 @@ test("fails closed when the log is truncated below the committed manifest head",
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /manifest|committed|sequence|truncated|integrity/i)
 })
+
+test("rejects unknown envelope and manifest fields even when their JSON remains canonical", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  await store.append(operatorPause())
+  const logPath = path.join(directory, "facts.jsonl")
+  const originalLog = await readFile(logPath, "utf8")
+  const lines = originalLog.trimEnd().split("\n")
+  const record = JSON.parse(lines[1])
+  record.unrecognizedEnvelopeField = "must-fail"
+  record.digest = digestRecord(record)
+  lines[1] = canonicalStringify(record)
+  await writeFile(logPath, lines.join("\n") + "\n")
+  assert.equal((await store.verify()).ok, false)
+  await writeFile(logPath, originalLog)
+  const manifestPath = path.join(directory, "manifest.json")
+  const originalManifest = await readFile(manifestPath, "utf8")
+  const manifest = JSON.parse(originalManifest)
+  manifest.unrecognizedField = true
+  await writeFile(manifestPath, canonicalStringify(manifest) + "\n")
+  assert.equal((await store.verify()).ok, false)
+})
