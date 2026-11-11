@@ -143,14 +143,14 @@ export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
 
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
-  broker, strategyPolicy, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
+  broker, strategyPolicy, appConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   logger,
   initialState = {},
 } = {}) {
-  const strategyConfig = tradingConfig.strategies.CG_coinGrabber
+  const strategyConfig = appConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {

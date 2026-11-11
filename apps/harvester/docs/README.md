@@ -4,6 +4,10 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Start here
 
+- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the single `config.json`, profile behavior, event overrides, and environment-only credentials.
+
+- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the single `config.json`, profile behavior, event overrides, and environment-only credentials.
+
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
@@ -24,7 +28,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 
-- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the ZROFDUSD-only default config (PR #836). Reconcile scope before any future session.
+- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD-only default config. Reconcile scope before any future session.
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Error vocabulary](error-vocabulary.md) — stable operator-facing diagnostic identifiers and recovery procedures.
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)

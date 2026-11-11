@@ -416,7 +416,7 @@ Process-restart reconciliation is deferred to the final item in `ROADMAP.md`. It
  
 ## 2026-11-06 actual DOGE/ZRO Conservative conformance reconciliation
 
-**Decision-time configuration:** the audit-baseline `trading-config.json` at `4af3434f788b87139513921f220294ae90daf4d5` matches the current audit branch configuration: `minProfit=0.01`; DOGE `keepQuantity=1`, maker/taker reserve 0.1%; ZRO `keepQuantity=0.01`, maker/taker reserve 0.1%. Both submitted recovery orders were ordinary `LIMIT` orders, so the applicable planning reserve is 0.1%.
+**Decision-time configuration:** the audit-baseline configuration at `4af3434f788b87139513921f220294ae90daf4d5` matches the current audit branch configuration: `minProfit=0.01`; DOGE `keepQuantity=1`, maker/taker reserve 0.1%; ZRO `keepQuantity=0.01`, maker/taker reserve 0.1%. Both submitted recovery orders were ordinary `LIMIT` orders, so the applicable planning reserve is 0.1%.
 
 | Symbol / order | Expected under candidate filter steps vs actual SELL quantity and price | Exchange-side result | Strategy verdict |
 |---|---|---|---|
@@ -740,7 +740,7 @@ The user confirmed that legitimate pre-existing open orders must not block start
 
 ### 5. Confirmed snapshot allowlist scope defect — configured assets, not all exchange assets
 
-The user confirmed that PREFLIGHT/CLOSING snapshots must include every asset referenced by Harvester trading configuration, including pairs configured but disabled, and must exclude unrelated exchange-account assets.
+The user confirmed that PREFLIGHT/CLOSING snapshots must include every asset referenced by application configuration, including pairs configured but disabled, and must exclude unrelated exchange-account assets.
 
 The current bootstrap derives both accountAuditMarkets and the Journal configuredAssetCodes allowlist from enabled symbols only. The checked-in config also contains disabled SOLFDUSD and ZROFDUSD pairs, so FDUSD (and SOL where relevant) can be omitted even though those assets are configured.
 

@@ -125,7 +125,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     },
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrder.get(orderId) ?? [] }),
   }
-  const tradingConfig = {
+  const appConfig = {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -147,7 +147,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: conservativeStrategyPolicy,
-    tradingConfig,
+    appConfig,
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
     getMarketMetadata: () => marketMetadata,
