@@ -344,18 +344,26 @@ test("rejects unexplained external balance changes", () => {
   assert.match(result.errors[0].message, /does not match replayed Harvester ownership/)
 })
 
-test("rejects exchange open orders that are not owned by the recovered registry", () => {
+test("keeps a reconciled external open order unowned and reports its symbol conflict", () => {
   const { projection, restored } = restoreState()
+  const externalOrder = openBuyOrder()
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot(),
-    openOrders: [openBuyOrder()],
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    openOrders: [externalOrder],
     markets: [market],
+    targetMarket: market,
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /not owned by the recovered Harvester registry/)
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(result.data.blockedMarkets, ["BTCUSDT"])
+  assert.equal(result.data.targetMarketBlocked, true)
+  assert.equal(result.data.unownedOpenOrders.length, 1)
+  assert.equal(
+    restored.orderRegistry.orders.some(({ brokerOrderId }) => brokerOrderId === externalOrder.brokerOrderId),
+    false,
+  )
 })
 
 test("checks locked balances against exact open-order commitments", () => {
@@ -559,7 +567,10 @@ test("reports an unowned same-market open order as a narrow market blocker witho
   assert.equal(result.data.unownedOpenOrders[0].brokerOrderId, externalOrder.brokerOrderId)
   assert.equal(result.data.unownedOpenOrders[0].symbol, "BTCUSDT")
   assert.equal(result.data.openOrdersChecked, 1)
-  assert.equal(restored.orderRegistry.getByBrokerOrderId(externalOrder.brokerOrderId), undefined)
+  assert.equal(
+    restored.orderRegistry.orders.some(({ brokerOrderId }) => brokerOrderId === externalOrder.brokerOrderId),
+    false,
+  )
 })
 
 test("keeps an unrelated external order unowned and does not block the reconciled market", () => {
@@ -628,7 +639,8 @@ test("keeps an unrelated external order unowned and does not block the reconcile
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
-  assert.deepEqual(result.data.blockedMarkets, [])
+  assert.deepEqual(result.data.blockedMarkets, ["ETHUSDT"])
+  assert.equal(result.data.targetMarketBlocked, false)
   assert.equal(result.data.unownedOpenOrders.length, 1)
   assert.equal(result.data.unownedOpenOrders[0].symbol, "ETHUSDT")
 })
