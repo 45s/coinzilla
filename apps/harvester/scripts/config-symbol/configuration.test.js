@@ -6,6 +6,7 @@ import {
   createPairConfig,
   decimalPlaces,
   normalizeSymbolInput,
+  normalizePairInputs,
   parseDecimalInput,
 } from "./configuration.js"
 
@@ -79,6 +80,31 @@ test("parses financial input as exact decimal text and rejects invalid values", 
   }
 })
 
+test("validates every strategy-owned setting before making an exchange request", () => {
+  const validInputs = {
+    investment: "100",
+    keepQuantity: "0.1",
+    makerPercent: "0",
+    takerPercent: "0.1",
+    minProfit: "0.01",
+    priceStepPercent: "0.05",
+  }
+  assert.deepEqual(normalizePairInputs(validInputs), validInputs, "Valid strategy inputs must be normalized as exact decimal strings.")
+  for (const invalidInputs of [
+    { ...validInputs, makerPercent: "100" },
+    { ...validInputs, takerPercent: "-0.1" },
+    { ...validInputs, minProfit: "0.001" },
+    { ...validInputs, priceStepPercent: "100" },
+    { ...validInputs, keepQuantity: "-1" },
+  ]) {
+    assert.throws(
+      () => normalizePairInputs(invalidInputs),
+      /percent|profit|keepQuantity/i,
+      "Invalid strategy settings must be rejected before the Binance API is called.",
+    )
+  }
+})
+
 test("derives effective decimal precision from exchange increments, ignoring trailing zeroes", () => {
   assert.equal(decimalPlaces("1.00000000"), 0, "An integer tick size must require zero decimal places.")
   assert.equal(decimalPlaces("0.01000000"), 2, "Trailing zeroes must not inflate price precision.")
@@ -125,10 +151,10 @@ test("rejects order sizing that violates minimum quantity, maximum quantity, or 
     /MIN_QUANTITY/i,
     "A budget that cannot buy the exchange minimum quantity must be rejected.",
   )
-  assert.throws(
-    () => calculateOrderQuantity({ investment: "1000", price: "1", stepSize: "0.1", minQuantity: "0.1", maxQuantity: "100", minNotional: "5" }),
-    /MAX_QUANTITY/i,
-    "A calculated quantity above the exchange maximum must be rejected rather than silently clamped.",
+  assert.equal(
+    calculateOrderQuantity({ investment: "1000", price: "1", stepSize: "0.1", minQuantity: "0.1", maxQuantity: "100", minNotional: "5" }),
+    "100",
+    "The exchange maximum quantity must cap the calculated order size without exceeding the operator's budget.",
   )
 })
 
