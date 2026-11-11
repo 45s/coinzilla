@@ -17,6 +17,7 @@ function createBroker({ orderResponse, orderHandler, exchangeInfo } = {}) {
         { filterType: "LOT_SIZE", stepSize: "0.00001" },
       ],
     }] },
+    myFilters: () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] }),
   })
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
