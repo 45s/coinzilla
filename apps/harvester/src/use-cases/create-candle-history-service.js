@@ -140,9 +140,10 @@ function createCandleHistoryService({
       return toResult({ error: new Error("No candle history was started for " + (symbol ?? "unknown symbol")) })
     }
 
+    const observedAt = now()
     const isFresh = state.lastEventAt !== null && isMarketDataFresh({
       timestamp: state.lastEventAt,
-      now: now(),
+      now: observedAt,
     })
     const blockers = []
     if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
@@ -169,6 +170,7 @@ function createCandleHistoryService({
           historyCount: state.candles.length,
           requiredHistoryCount: REQUIRED_CANDLE_COUNT,
           lastEventAt: state.lastEventAt,
+          observedAt,
           lastClosedCandleOpenTime: state.candles.at(-1)?.openTime ?? null,
         }),
       }),
