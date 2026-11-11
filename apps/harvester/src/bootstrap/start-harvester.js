@@ -30,7 +30,7 @@ function logSystem(logger, data) {
 
 export async function startHarvester({
   configSource,
-  harvesterConfig: suppliedHarvesterConfig,
+  appConfig: suppliedHarvesterConfig,
   loadConfig = loadHarvesterConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
@@ -50,7 +50,7 @@ export async function startHarvester({
   now = Date.now,
 } = {}) {
   const {
-    harvesterConfig,
+    appConfig,
     settings,
     pairs,
     enabledSymbols,
@@ -58,7 +58,7 @@ export async function startHarvester({
     brokerName,
     tradingMode,
     tradingEnabled,
-  } = await resolveHarvesterOptions({ configSource, harvesterConfig: suppliedHarvesterConfig, loadConfig, env, eventPublisher, logger })
+  } = await resolveHarvesterOptions({ configSource, appConfig: suppliedHarvesterConfig, loadConfig, env, eventPublisher, logger })
 
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
   let recoveredState = Object.freeze({
@@ -207,7 +207,7 @@ export async function startHarvester({
       broker,
       strategyPolicy: conservativeStrategyPolicy,
       eventPublisher,
-      tradingConfig: harvesterConfig,
+      appConfig: appConfig,
       getPortfolio,
       getRecoveryLedger,
       getMarketMetadata,
@@ -320,7 +320,7 @@ export async function startHarvester({
   })
 
   return Object.freeze({
-    harvesterConfig,
+    appConfig,
     eventPublisher,
     environment,
     brokerName,

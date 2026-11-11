@@ -13,7 +13,7 @@ import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterSt
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 import { loadHarvesterConfig } from "./infrastructure/config/load-harvester-config.js"
-import { resolveHarvesterRuntimeConfig } from "./domain/harvester-config.js"
+import { resolveRuntimeConfig } from "./domain/harvester-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
@@ -174,8 +174,8 @@ export async function main({
   let runtimeStartAttempted = false
   try {
     eventBus = createEventBus({ logger })
-    const harvesterConfig = await loadConfig(configSource)
-    const runtimeConfig = resolveHarvesterRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
+    const appConfig = await loadConfig(configSource)
+    const runtimeConfig = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
     const processLockDirectory = resolveHostProcessLockDirectory()
     const lockResult = await acquireProcessLock({
       journalDirectory: processLockDirectory,
@@ -244,7 +244,7 @@ export async function main({
 
     const telegramToken = env.TELEGRAM_BOT_TOKEN?.trim()
     const telegramChatId = env.TELEGRAM_CHAT_ID?.trim()
-    const telegramConfig = harvesterConfig.notifications?.telegram ?? {}
+    const telegramConfig = appConfig.notifications?.telegram ?? {}
     if (telegramConfig.enabled !== false && telegramToken && telegramChatId) {
       try {
         const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
@@ -254,7 +254,7 @@ export async function main({
         logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
       }
     } else if (telegramConfig.enabled === false) {
-      logSystem(logger, "Telegram notifications disabled by Harvester configuration.")
+      logSystem(logger, "Telegram notifications disabled by app configuration.")
     } else if (telegramToken || telegramChatId) {
       logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
     }
@@ -270,8 +270,8 @@ export async function main({
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, harvesterConfig, env })
-    const configuredPairs = runtime.harvesterConfig?.strategies?.CG_coinGrabber?.pairs
+    const runtime = await start({ eventPublisher, appConfig, env })
+    const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
     const enabledMarkets = configuredPairs
       ? Object.entries(configuredPairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
