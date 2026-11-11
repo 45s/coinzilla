@@ -153,7 +153,7 @@ Portfolio
 Updated state available to the next strategy evaluation
 ~~~
 
-The diagram is a responsibility flow, not a mandated synchronous call sequence. Event delivery, serialization, persistence, and recovery contracts remain to be designed.
+The diagram is a responsibility flow, not a mandated synchronous call sequence. The accepted target contract for process-restart durable facts and readiness is defined in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md); runtime restoration and replay remain disabled until the roadmap's later implementation and verification steps are complete.
 
 ### Historical implementation snapshot — superseded
 
