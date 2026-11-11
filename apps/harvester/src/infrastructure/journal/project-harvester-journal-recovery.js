@@ -718,7 +718,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.EXECUTION_ACCOUNTING_FAILED,
       ].includes(name)) {
         const symbol = requireString({ value: data.symbol, field: name + " symbol" })
-        const reason = requireString({ value: data.reason ?? data.error ?? name, field: name + " reason" })
+        const reason = requireString({ value: data.reason ?? data.error?.message ?? data.error?.code ?? name, field: name + " reason" })
         stickySafetyBlockers.push(Object.freeze({
           eventName: name,
           symbol,
