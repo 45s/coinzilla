@@ -10,21 +10,23 @@
 
 ### Delivery sequence
 
-1. **[ ] Step 1 — Freeze the recovery contract (docs/design only).**
-   - Define exactly which state must survive restart: canonical owned orders and client IDs, every applied fill and fee valuation, Position/RecoveryLedger (including active/free inventory and cost basis), reservations/commitments, strategy control, sticky safety blockers, and the configuration/schema version.
-   - Define the startup rule: recovery is a separate gate; trading stays paused until local history is proven complete and exchange balances, open orders, and available order/trade history reconcile.
-   - Record external-order policy accurately: external orders may exist and remain unowned; never adopt, cancel, or modify them. Prove same-symbol interactions cannot cause duplicate commitments. A real unowned execution remains a safety blocker. Do not introduce a blanket startup rejection merely because an external order exists.
-   - Choose the smallest application-owned durable-fact contract. Keep domain code independent of Journal/EventBus; decide explicitly whether Journal remains observer-only.
+1. **[~] Step 1 — Freeze the recovery contract (docs/design only; PR #1003 pending merge).**
+   - **Accepted:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./docs/architecture/decisions/0001-application-owned-recovery-facts.md) defines the authoritative append-only fact stream, global sequence and committed-head integrity, minimum durable fact set, acknowledgement/failure boundary, candidate-state projection, closed readiness gate, external-order policy, and legacy Journal treatment.
+   - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
+   - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
+   - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. Mark this step complete only after PR #1003 merges. Step 2 is the next implementation-preparation item.
 
 2. **[ ] Step 2 — Build a deterministic recovery test harness (tests only).**
    - Create representative multi-session fixtures from real DTO shapes, without changing production behavior.
    - Add crash-point scenarios around order intent, broker acknowledgement, partial/final fill, accounting application, cycle completion, and pause/blocker publication.
    - Make every scenario assert the complete restored state, not only total wallet quantity.
 
-3. **[ ] Step 3 — Make session discovery and ordering deterministic (F-035, F-040).**
-   - Discover nested session directories and preserve legacy flat-file compatibility.
-   - Establish chronological order from explicit durable metadata, not random session IDs or second-resolution filenames.
+3. **[ ] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040).**
+   - Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment.
+   - Use explicit durable chronology where available; never use random session IDs or second-resolution filenames as ordering authority.
    - Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history.
+   - Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
 
 4. **[ ] Step 4 — Make replay understand every relevant fact (F-043, F-044).**
    - Classify known events as state facts, sticky safety blockers, or explicitly ignorable diagnostics; unknown stateful/safety events fail closed.

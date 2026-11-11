@@ -23,7 +23,9 @@ Journal is not wholly optional during trading. These existing durability barrier
 
 These are existing requirements, not permission to add more blocking Journal I/O. Additional investigation evidence in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md) remains best-effort and must not make strategy evaluation, market processing, broker-event handling, or fill accounting wait for Journal persistence. Any optional evidence loss must be observable as an evidence gap.
 
-Journal records are not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
+The accepted target design for restart-critical facts is defined in [ADR-0001 — Application-owned durable facts](./architecture/decisions/0001-application-owned-recovery-facts.md). It deliberately separates that future application-owned store from the Journal observer. This is a design decision only: the current runtime and every mandatory Journal barrier remain unchanged, and process-restart recovery stays disabled.
+
+Journal records are not trading-state authority. Replay and process-restart recovery remain disabled until the separate implementation, reconciliation, and crash-test gates are complete.
 
 ---
 

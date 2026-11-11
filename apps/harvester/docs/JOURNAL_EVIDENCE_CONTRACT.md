@@ -4,7 +4,7 @@
 
 The Journal is an investigation record of what Harvester decided, what it requested from the broker, what the broker reported, what executed, and what account state was observed. It is not trading-state authority and must never drive strategy decisions.
 
-This contract covers the current selected evidence work in [issue #650](https://github.com/45s/coinzilla/issues/650). It does not authorize replay, process-restart recovery, or changes to trading/accounting policy.
+This contract covers the current selected evidence work in [issue #650](https://github.com/45s/coinzilla/issues/650). It does not authorize replay, process-restart recovery, or changes to trading/accounting policy. The accepted target boundary for future restart-critical facts is separate and documented in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md); this Journal evidence contract remains unchanged.
 
 ## Safety and delivery
 

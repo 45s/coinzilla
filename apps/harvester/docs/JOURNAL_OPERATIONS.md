@@ -330,9 +330,11 @@ The engine's active-order and commitment guards read only the in-memory `OrderRe
 
 The shared Journal package supports bounded read/replay, but replay is at-least-once and requires an idempotent consumer. That capability is not wired into Harvester startup. The previous statement that Harvester reads all prior sessions and blocks trading startup when historical trading events exist was inaccurate for the inspected current source and is removed.
 
-**Operational restriction:** do not enable unattended process restarts until [#654](https://github.com/45s/coinzilla/issues/654) has a separately implemented and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
+**Accepted target contract:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./architecture/decisions/0001-application-owned-recovery-facts.md) defines a separate append-only, integrity-checked durable-fact stream and a closed startup reconciliation gate. The ADR is design-only; it does not wire Journal replay, alter current Journal durability barriers, or enable restart recovery.
 
-This is an investigation status, not an implementation proposal to be applied in the current phase. See [AUDIT.md](audits/reports/AUDIT.md), [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
+**Operational restriction:** do not enable unattended process restarts until the ADR's later delivery steps have a separately implemented, audited, and exact-head-tested restoration/reconciliation workflow. Keep trading fail-closed on missing or incomplete history, unknown ownership, duplicate/conflicting execution identities, unsupported commissions, or account/order discrepancies. Do not claim exactly-once transport delivery.
+
+See [AUDIT.md](audits/reports/AUDIT.md), [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) F-031, and [ROADMAP.md](../ROADMAP.md).
 
 ## Trading process ownership locks
 
