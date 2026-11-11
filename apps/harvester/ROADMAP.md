@@ -1395,3 +1395,11 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - **F-044 — HIGH:** DTOs and the same-process recovery handler emit account and open-order snapshots with phase `RECOVERY`, but the recovery projector rejects that phase in both validators. Any normal reconnect session can therefore make restart projection fail. Add phase-parity regression coverage and define RECOVERY snapshot ordering/semantics.
 - **Next audit gates:** inspect all remaining recovery DTO/domain projection parity, session ordering and schema migration paths; prove each accounting fact survives DTO → projection → restore without information loss. No source or test modifications are authorized. #654 remains OPEN; no TESTNET/LIVE validation is authorized by this audit.
 - **Baseline:** exact `develop` HEAD `3ffaaa21c6543cc042087307b01c40630320e903`; PR #974 merged documentation-only. This update is an audit proposal, not implementation acceptance.
+
+### External open-order strategy isolation — #985
+
+- [x] Keep unmatched account-wide open orders unowned and untouched; publish their symbols to the strategy guard only after the open-orders audit is durably flushed.
+- [x] Defer Conservative evaluation and broker submission only for affected symbols; unrelated enabled markets remain eligible.
+- [x] Refresh or clear the symbol guard only from authoritative startup/reconnect snapshots after their durable Journal barrier.
+- [x] Remove the unused `blockOnExistingOrders` recovery argument and cover snapshot lifecycle, symbol isolation, and the final submission race with offline regressions.
+- [ ] Merge after final-head CI passes.

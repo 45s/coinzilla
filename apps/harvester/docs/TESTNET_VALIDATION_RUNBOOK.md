@@ -282,3 +282,7 @@ attempt before broker acknowledgement. A later reminder starts a new attempt;
 it does not merely clear a flag or resume trading. These are offline code/test
 contracts, not TESTNET acceptance. The runbook execution gate remains
 **CLOSED / PAUSED** and no live or TESTNET order operation is authorized.
+
+## External open-order handling
+
+External/manual open orders remain unowned and untouched. Harvester defers strategy activity only for the affected trading symbol after the account-wide open-orders audit is durably recorded; unrelated enabled symbols continue normally. Reconnect reconciliation refreshes the symbol guard from its authoritative snapshot, and a symbol becomes eligible again only after the empty/changed snapshot is durably flushed. Do not cancel, modify, or adopt external orders. This is offline source/test behavior only; it does not authorize live/TESTNET operations or process restarts.
