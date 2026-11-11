@@ -181,10 +181,10 @@ function validateAndOrderSessions(sessions) {
   }
 
   const sources = new Set(sessions.map((session) => session.chronologySource))
-  if (sources.has("UNAVAILABLE") || sources.size !== 1) {
+  if (sources.has("UNAVAILABLE")) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS",
-      message: "Journal sessions do not share a comparable, explicit chronology source",
+      message: "One or more Journal sessions have no usable chronology evidence",
       details: {
         sessions: sessions.map(({ fileName, chronologySource, startedAt }) => ({
           fileName,
