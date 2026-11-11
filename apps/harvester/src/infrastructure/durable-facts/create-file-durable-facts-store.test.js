@@ -490,6 +490,26 @@ test("rejects malformed market-history coverage facts", async (t) => {
         verifiedBy: "operator:trader",
       },
     },
+    {
+      factId: "coverage:missing-verifier",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+      },
+    },
+    {
+      factId: "coverage:unsupported-field",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+        verifiedBy: "operator:trader",
+        apiKey: "must-not-be-stored",
+      },
+    },
   ]
   for (const invalid of invalidFacts) {
     const result = await store.append({
