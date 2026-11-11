@@ -5,7 +5,7 @@ import path from "node:path"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "@coinzilla/journal"
-import { mapHarvesterProcessStartedData } from "../events/lifecycle-event-dtos.js"
+import { mapHarvesterProcessStartedData } from "../../application/events/lifecycle-event-dtos.js"
 import { readHarvesterJournalHistory } from "./read-harvester-journal-history.js"
 
 function processStartedData({ startedAt, runtimeSessionId, processId }) {
