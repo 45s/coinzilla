@@ -101,5 +101,3 @@ export function formatHarvesterTelegramNotification(event) {
   return formatters[event.name]({ ...event, data })
 }
 
-// Preserve the original Telegram-only formatter export for existing consumers.
-export const formatNotification = formatHarvesterTelegramNotification
