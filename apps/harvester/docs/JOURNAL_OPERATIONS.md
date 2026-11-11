@@ -326,6 +326,14 @@ Therefore the Journal must not be described as a crash-consistent fill ledger or
 
 The repository retains tested offline helpers: `projectHarvesterJournalRecovery()`, `restoreHarvesterJournalState()`, `fetchAccountTradeHistory()`, `auditRecoveredTradeHistory()`, and `auditRecoveredAccountState()`. They can project Journal records, rehydrate Portfolio/RecoveryLedger/OrderRegistry and pause/intent state, scan trade history for supplied markets, and compare exact executions, balances, open orders and reservations.
 
+### One-market exchange audit semantics (offline only)
+
+`fetchAccountTradeHistory()` reports the exact canonical market symbols queried, query start time and whether every page for those markets was exhausted. Page exhaustion does not prove exchange-retention coverage. `auditRecoveredTradeHistory({ scope: "MARKET" })` therefore also requires a durable operator-verified history-retention baseline whose covered-from time is no later than the query start. The audit validates only the requested Market and does not claim account-wide completeness. The evidence reference must identify a `MARKET_HISTORY_COVERAGE_CONFIRMED` fact with a stable fact ID, matching symbol, covered-from time and verification time. This slice validates the reference shape and timing only; it does not yet resolve the fact ID against the durable-fact store. Tests use synthetic evidence. Durable-fact projection and provenance verification remain pending. Account-wide history remains fail-closed: a caller-supplied `marketUniverseComplete: true` boolean is not proof that delisted or otherwise unenumerated symbols are covered.
+
+`auditRecoveredAccountState()` requires every asset present in the durable baseline and current account snapshot to be present on both sides. Missing assets are not interpreted as zero. Account-wide open orders outside the restored OrderRegistry remain unowned and untouched; when canonical Market metadata is available, their exact remaining BUY/SELL commitments are included in locked-balance reconciliation and their symbols are returned as narrow blockers. An unowned order on an unrelated symbol does not by itself block the target market, but missing metadata or an unexplained reservation fails closed.
+
+These are offline audit primitives only. They are not wired into startup, do not publish runtime READY, and do not enable process-restart restoration or OPERATOR control.
+
 Current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not call this pipeline. Historical PR #606 did wire it, but passed `marketUniverseComplete: false` while `auditRecoveredTradeHistory()` requires true; that trading-enabled path therefore failed closed after prior trading activity. The current runtime bypasses that fail-closed gate rather than solving historical market-universe completeness. See F-031 and #654.
 
 ## Process-restart recovery status — 2026-11-09

@@ -1,4 +1,4 @@
-import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 
 function requireArray({ value, field }) {
@@ -78,12 +78,14 @@ function assertFillParity({ journalFill, exchangeFill }) {
 }
 
 /**
- * Prove that complete account-wide exchange trade history since the durable
- * baseline is exactly represented by Journal-applied fills.
+ * Prove that exchange trade history is represented by Journal-applied fills.
  *
- * The caller must only set complete=true after enumerating every relevant
- * exchange symbol and exhausting every history page. Partial history is never
- * accepted as evidence that no external/manual execution occurred.
+ * ACCOUNT scope remains fail-closed because the current exchange catalog cannot
+ * prove the historical market universe. MARKET scope proves only the requested
+ * canonical Market and requires exhausted-page evidence plus a reference to a
+ * durable MARKET_HISTORY_COVERAGE_CONFIRMED fact covering the query start.
+ * The caller must resolve that fact from the durable-fact projection; this
+ * function validates its shape and scope, not its storage provenance.
  */
 export function auditRecoveredTradeHistory({
   journalFills,
@@ -91,14 +93,81 @@ export function auditRecoveredTradeHistory({
   complete = false,
   marketUniverseComplete = false,
   ownedOrders = [],
+  scope = "ACCOUNT",
+  market,
+  historyEvidence,
+  historyRetentionEvidence,
 } = {}) {
   try {
-    if (complete !== true) {
+    if (!["ACCOUNT", "MARKET"].includes(scope)) {
+      throw new TypeError('scope must be "ACCOUNT" or "MARKET"')
+    }
+    if (scope === "ACCOUNT" && complete !== true) {
       throw new Error("Account-wide exchange trade history pages are incomplete; external execution ownership cannot be proven")
     }
-    const journalRecords = requireArray({ value: journalFills, field: "journalFills" })
-    const exchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
-    const ownedOrderRecords = requireArray({ value: ownedOrders, field: "ownedOrders" })
+    if (scope === "MARKET" && !(market instanceof Market)) {
+      throw new TypeError("MARKET trade-history scope requires a canonical Market")
+    }
+    if (scope === "ACCOUNT" && marketUniverseComplete === true) {
+      throw new Error("Caller-supplied marketUniverseComplete is not authoritative evidence; account-wide history cannot be certified from the current exchange catalog")
+    }
+    if (scope === "MARKET") {
+      if (marketUniverseComplete === true) {
+        throw new Error("Single-market trade history cannot prove account-wide market-universe completeness")
+      }
+      if (historyEvidence?.historyPagesComplete !== true ||
+          historyEvidence?.marketHistoryPagesComplete !== true ||
+          historyEvidence?.historyScope !== "MARKET" ||
+          !Array.isArray(historyEvidence.marketsQueried) ||
+          historyEvidence.marketsQueried.length !== 1 ||
+          historyEvidence.marketsQueried[0] !== market.symbol ||
+          !Number.isSafeInteger(historyEvidence.historyStartTime) ||
+          historyEvidence.historyStartTime < 0) {
+        throw new Error("Single-market trade-history pagination evidence is missing or does not cover " + market.symbol)
+      }
+      if (!historyRetentionEvidence ||
+          historyRetentionEvidence.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" ||
+          typeof historyRetentionEvidence.baselineFactId !== "string" ||
+          !historyRetentionEvidence.baselineFactId.trim() ||
+          historyRetentionEvidence.symbol !== market.symbol ||
+          !Number.isSafeInteger(historyRetentionEvidence.coveredFromTime) ||
+          historyRetentionEvidence.coveredFromTime < 0 ||
+          historyRetentionEvidence.coveredFromTime > historyEvidence.historyStartTime ||
+          !Number.isSafeInteger(historyRetentionEvidence.verifiedAt) ||
+          historyRetentionEvidence.verifiedAt < historyRetentionEvidence.coveredFromTime) {
+        throw new Error("Durable market-history retention evidence is missing or does not cover " + market.symbol)
+      }
+    }
+    const allJournalRecords = requireArray({ value: journalFills, field: "journalFills" })
+    const allExchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
+    const allOwnedOrderRecords = requireArray({ value: ownedOrders, field: "ownedOrders" })
+    if (scope === "MARKET") {
+      for (const [index, fill] of allJournalRecords.entries()) {
+        requireString({ value: fill?.symbol, field: "journalFills[" + index + "].symbol" })
+      }
+      for (const [index, fill] of allExchangeRecords.entries()) {
+        if (!(fill instanceof Fill)) {
+          throw new TypeError("exchangeFills[" + index + "] must be a canonical Fill")
+        }
+        if (fill.market.symbol !== market.symbol) {
+          throw new Error("Single-market exchange history contains a fill for another market: " + fill.market.symbol)
+        }
+      }
+      for (const [index, order] of allOwnedOrderRecords.entries()) {
+        if (!(order instanceof CanonicalOrder)) {
+          throw new TypeError("ownedOrders[" + index + "] must be a canonical order")
+        }
+      }
+    }
+    const journalRecords = scope === "MARKET"
+      ? allJournalRecords.filter((fill) => fill?.symbol === market.symbol)
+      : allJournalRecords
+    const exchangeRecords = scope === "MARKET"
+      ? allExchangeRecords.filter((fill) => fill?.market?.symbol === market.symbol)
+      : allExchangeRecords
+    const ownedOrderRecords = scope === "MARKET"
+      ? allOwnedOrderRecords.filter((order) => order?.market?.symbol === market.symbol)
+      : allOwnedOrderRecords
     const ownedOrdersByBrokerId = new Map()
     for (const [index, order] of ownedOrderRecords.entries()) {
       if (!(order instanceof CanonicalOrder) ||
@@ -164,14 +233,22 @@ export function auditRecoveredTradeHistory({
       }
     }
 
-    if (marketUniverseComplete !== true) {
+    if (scope === "ACCOUNT" && marketUniverseComplete !== true) {
       throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
     }
 
     return toResult({
       data: Object.freeze({
         complete: true,
-        marketUniverseComplete: true,
+        scope,
+        marketUniverseComplete: scope === "ACCOUNT",
+        ...(scope === "MARKET" ? {
+          marketSymbol: market.symbol,
+          historyStartTime: historyEvidence.historyStartTime,
+          historyRetentionBaselineFactId: historyRetentionEvidence.baselineFactId,
+          historyRetentionFactType: historyRetentionEvidence.factType,
+          historyRetentionVerifiedAt: historyRetentionEvidence.verifiedAt,
+        } : {}),
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
         reconciledOwnedOrderFills,
