@@ -777,7 +777,7 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
       side: fillValue.side,
       type: "LIMIT",
       price: fillValue.price.amount,
-      quantity: fillValue.quantity.amount,
+      quantity: fillValue.side === "SELL" ? "100" : fillValue.quantity.amount,
     }
     records.push(record("order.submission_requested", {
       ...orderFacts,
@@ -786,7 +786,7 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
     records.push(record("order.submitted", {
       ...orderFacts,
       brokerOrderId: fillValue.brokerOrderId,
-      status: "NEW",
+      status: fillValue.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
     }, "submitted-" + fillValue.tradeId))
     records.push(record("execution.fill_applied", dto.data, "fill-" + fillValue.tradeId))
   }
