@@ -200,7 +200,7 @@ test("rejects order sizing that violates minimum quantity, maximum quantity, or 
   )
 })
 
-test("creates a runtime-valid disabled pair using exchange-derived precision and operator fee assumptions", () => {
+test("creates a runtime-valid enabled pair using exchange-derived precision and operator fee assumptions", () => {
   const pair = createPairConfig({
     inputs: {
       investment: "100",
@@ -213,7 +213,7 @@ test("creates a runtime-valid disabled pair using exchange-derived precision and
     metadata,
   })
   assert.deepEqual(pair, {
-    enabled: false,
+    enabled: true,
     investment: 100,
     orderQuantity: 200,
     keepQuantity: 0.1,
@@ -223,7 +223,7 @@ test("creates a runtime-valid disabled pair using exchange-derived precision and
     quantityPrecision: 1,
     makerPercent: 0,
     takerPercent: 0.1,
-  }, "The generated pair must contain the complete runtime contract and remain disabled by default.")
+  }, "The generated pair must contain the complete runtime contract and be enabled as requested by the config:symbol workflow.")
 })
 
 test("rejects keepQuantity that is not aligned to the exchange quantity step", () => {
