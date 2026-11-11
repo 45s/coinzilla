@@ -182,6 +182,11 @@ export function makeConservativeTradingEngine({
       throw new TypeError("initialState." + field + " must contain non-empty strings")
     }
   }
+  for (const symbol of initialState.operatorPausedMarkets ?? []) {
+    if (!Object.hasOwn(pairs, symbol)) {
+      throw new TypeError("initialState.operatorPausedMarkets contains an unconfigured market: " + symbol)
+    }
+  }
   if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
     throw new TypeError("initialState.journalFills must be an array")
   }

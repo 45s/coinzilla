@@ -12,7 +12,7 @@
  */
 export function authorizeOperatorActor({ actor } = {}) {
   if (!actor || typeof actor !== "object" || Array.isArray(actor) ||
-      typeof actor.id !== "string" || actor.id.trim() === "") {
+      typeof actor.id !== "string" || actor.id.trim() === "" || actor.id !== actor.id.trim()) {
     const error = new TypeError("Operator actor requires a non-empty identity")
     error.code = "INVALID_OPERATOR_ACTOR"
     throw error

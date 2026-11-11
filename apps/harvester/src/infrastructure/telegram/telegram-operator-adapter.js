@@ -107,7 +107,7 @@ export function createTelegramOperatorAdapter({
     throw new RangeError("Telegram operator retry delay must be a positive integer")
   }
 
-  const allowedUsers = new Set(allowedUserIds)
+  const allowedUsers = new Set(allowedUserIds.map((value) => String(Number(value))))
   let botUsername
   let offset
   let controller
