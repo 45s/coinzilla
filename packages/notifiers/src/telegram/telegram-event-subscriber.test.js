@@ -491,7 +491,7 @@ test("rejects malformed, duplicate, empty, and unsupported Telegram event select
   const invalidSelections = [
     { eventNames: "bot.started", message: /eventNames/ },
     { eventNames: [], message: /at least one/ },
-    { eventNames: ["bot.started", "bot.started"], message: /duplicate/ },
+    { eventNames: ["bot.started", "bot.started"], message: /Duplicate/ },
     { eventNames: ["unknown.event"], message: /unsupported/ },
     { eventNames: [null], message: /event name/ },
   ]
