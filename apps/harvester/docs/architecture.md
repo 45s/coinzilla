@@ -669,3 +669,7 @@ single-flight reconciliation and durable audit barriers before readiness can
     M --> N[Matching global reconciled status]
     N --> O[Readiness may return]
 ```
+
+## External open-order strategy isolation
+
+Unmatched account-wide open orders remain external/unowned. Their symbols enter the Conservative strategy exclusion set only after the corresponding open-orders audit passes its durable Journal flush. The engine defers evaluation for an affected symbol and checks again at the final broker-submission boundary. Unrelated enabled markets remain eligible. Each authoritative startup or same-process recovery snapshot replaces the set; a symbol is released only after a durable snapshot confirms the external order is gone. External orders are never adopted, canceled, modified, or registered as owned. This is not a global startup gate and does not enable process-restart recovery.
