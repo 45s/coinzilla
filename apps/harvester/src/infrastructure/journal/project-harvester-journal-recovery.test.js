@@ -1897,6 +1897,9 @@ test("preserves an explicitly evaluated residual sell-through without resetting 
     marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
   })
   assert.equal(restored.ok, true)
+  assert.equal(restored.data.pausedMarkets.has("BTCUSDT"), false)
+  assert.equal(restored.data.durablePausedMarkets.has("BTCUSDT"), false)
+  assert.equal(restored.data.recoveryCycleEvaluations.length, 1)
   const position = restored.data.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0.0996")
   assert.equal(position.freeBaseQuantity.amount, "0")
