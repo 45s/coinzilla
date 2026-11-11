@@ -79,7 +79,7 @@ The read-only reconciliation sequence is:
 
 An unowned order on the target market blocks confirmation; external orders remain unowned and untouched. Unowned orders in another market remain a symbol-scoped blocker and do not automatically invalidate an otherwise-ready target market. Incomplete history, ambiguous owned-order identity/status, missing asset/market metadata, account-balance mismatch, invalid evidence or an unreadable durable-fact ledger all fail closed.
 
-The use cases are implemented in [PR #1047](https://github.com/45s/coinzilla/pull/1047). A concrete offline command/context adapter and the full deterministic end-to-end evidence matrix are still pending. This workflow is not invoked by runtime startup and does not add a Telegram command. It has no order-placement or cancellation dependency; no exchange writes are performed by the workflow.
+The orchestration and guarded confirmation use cases were merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047). The offline JSON context adapter, audit-only/explicit-confirmation CLI and production-audit evidence matrix are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053); exact-head CI remains pending. See the [Step 7 recovery operator guide](recovery/README.md) for the evidence-bundle contract and command. This workflow is not invoked by runtime startup and does not add a Telegram command. It has no order-placement or cancellation dependency; no exchange writes are performed by the workflow.
 
 ## Event inventory
 
