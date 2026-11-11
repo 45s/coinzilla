@@ -2639,84 +2639,97 @@ export function makeConservativeTradingEngine({
         task: async () => {
           const current = state.volatilityProtection.get(symbol) ??
             createVolatilityProtectionState({ symbol })
-        const activeBuyOrders = state.registry.getActiveOrders()
-          .filter((order) => order.market.symbol === symbol && order.side === "BUY")
-        const data = currentSnapshot?.ok ? currentSnapshot.data : currentSnapshot?.data
-        const candleKey = data?.metrics?.openTime ??
-          data?.status?.lastClosedCandleOpenTime ?? null
-        const hasCancellableBuy = activeBuyOrders.some((order) =>
-          ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-        const observedAt = Number.isSafeInteger(data?.status?.observedAt)
-          ? data.status.observedAt
-          : Date.now()
-        const signature = JSON.stringify({
-          ready: data?.status?.isReady === true,
-          fresh: data?.status?.isFresh === true,
-          reason: data?.status?.reason ?? null,
-          candleKey,
-          volatilityRatio: data?.metrics?.volatilityRatio ?? null,
-          activeBuyOrderCount: activeBuyOrders.length,
-          cancellationRetryWindow: hasCancellableBuy
-            ? Math.floor(observedAt / 5_000)
-            : null,
-        })
-        if (state.volatilitySnapshotSignatureBySymbol.get(symbol) === signature) {
-          return { skipped: true, mode: current.mode, reason: current.reason }
-        }
-        state.volatilitySnapshotSignatureBySymbol.set(symbol, signature)
-        const transition = transitionVolatilityProtection({
-          state: current,
-          snapshot: currentSnapshot,
-          activeBuyOrderCount: activeBuyOrders.length,
-        })
-        state.volatilityProtection.set(symbol, transition.state)
-        const lastCancellationAttempt = state.volatilityCancellationAttemptBySymbol.get(symbol)
-        const cancellationRetryDue = !lastCancellationAttempt ||
-          lastCancellationAttempt.candleKey !== candleKey ||
-          observedAt - lastCancellationAttempt.attemptedAt >= 5_000
-        const shouldCancel = transition.state.mode === VOLATILITY_PROTECTION_MODES.PROTECTED &&
-          hasCancellableBuy && cancellationRetryDue
-        if (shouldCancel) {
-          state.volatilityCancellationAttemptBySymbol.set(symbol, {
+          const activeBuyOrders = state.registry.getActiveOrders()
+            .filter((order) => order.market.symbol === symbol && order.side === "BUY")
+          const data = currentSnapshot?.ok === true
+            ? currentSnapshot.data
+            : currentSnapshot?.data ?? currentSnapshot
+          const candleKey = data?.metrics?.openTime ??
+            data?.status?.lastClosedCandleOpenTime ?? null
+          const hasCancellableBuy = activeBuyOrders.some((order) =>
+            ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+          const observedAt = Number.isSafeInteger(data?.status?.observedAt)
+            ? data.status.observedAt
+            : Date.now()
+          const signature = JSON.stringify({
+            ready: data?.status?.isReady === true,
+            fresh: data?.status?.isFresh === true,
+            reason: data?.status?.reason ?? null,
             candleKey,
-            attemptedAt: observedAt,
+            volatilityRatio: data?.metrics?.volatilityRatio ?? null,
+            activeBuyOrderCount: activeBuyOrders.length,
+            cancellationRetryWindow: hasCancellableBuy
+              ? Math.floor(observedAt / 5_000)
+              : null,
           })
-        }
-        if (transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
-          state.volatilityCancellationAttemptBySymbol.delete(symbol)
-        }
+          if (state.volatilitySnapshotSignatureBySymbol.get(symbol) === signature) {
+            return {
+              skipped: true,
+              mode: current.mode,
+              reason: current.reason,
+              state: current,
+            }
+          }
+          state.volatilitySnapshotSignatureBySymbol.set(symbol, signature)
 
-        const metricChanged = current.volatilityRatio !== transition.state.volatilityRatio
-        if (transition.changed || metricChanged) {
-          logSystem(logger, {
-            message: "Harvester volatility protection state changed",
-            symbol,
-            previousState: current.mode,
-            state: transition.state.mode,
-            reason: transition.state.reason,
-            stableCandleCount: transition.state.stableCandleCount,
-            volatilityRatio: transition.state.volatilityRatio,
-            natr: transition.state.natr,
-            referenceNatr: transition.state.referenceNatr,
-            atr: transition.state.atr,
-            ...(data?.status ? { dataStatus: data.status } : {}),
+          const transition = transitionVolatilityProtection({
+            state: current,
+            snapshot: currentSnapshot,
+            activeBuyOrderCount: activeBuyOrders.length,
           })
-        }
-        if (transition.warning && metricChanged && transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
-          logger?.warn?.({
-            message: "Harvester market volatility warning threshold reached",
-            symbol,
-            volatilityRatio: transition.state.volatilityRatio,
-            warningThreshold: VOLATILITY_PROTECTION_THRESHOLDS.warningRatio,
-            protectionThreshold: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio,
-          })
-        }
+          state.volatilityProtection.set(symbol, transition.state)
+
+          const lastCancellationAttempt = state.volatilityCancellationAttemptBySymbol.get(symbol)
+          const cancellationRetryDue = !lastCancellationAttempt ||
+            lastCancellationAttempt.candleKey !== candleKey ||
+            observedAt - lastCancellationAttempt.attemptedAt >= 5_000
+          const shouldCancel = transition.state.mode === VOLATILITY_PROTECTION_MODES.PROTECTED &&
+            hasCancellableBuy && cancellationRetryDue
+          if (shouldCancel) {
+            state.volatilityCancellationAttemptBySymbol.set(symbol, {
+              candleKey,
+              attemptedAt: observedAt,
+            })
+          }
+          if (transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
+            state.volatilityCancellationAttemptBySymbol.delete(symbol)
+          }
+
+          const metricChanged = current.volatilityRatio !== transition.state.volatilityRatio
+          if (transition.changed || metricChanged) {
+            logSystem(logger, {
+              message: "Harvester volatility protection state changed",
+              symbol,
+              previousState: current.mode,
+              state: transition.state.mode,
+              reason: transition.state.reason,
+              stableCandleCount: transition.state.stableCandleCount,
+              volatilityRatio: transition.state.volatilityRatio,
+              natr: transition.state.natr,
+              referenceNatr: transition.state.referenceNatr,
+              atr: transition.state.atr,
+              ...(data?.status ? { dataStatus: data.status } : {}),
+            })
+          }
+          if (transition.warning && metricChanged &&
+              transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
+            logger?.warn?.({
+              message: "Harvester market volatility warning threshold reached",
+              symbol,
+              volatilityRatio: transition.state.volatilityRatio,
+              warningThreshold: VOLATILITY_PROTECTION_THRESHOLDS.warningRatio,
+              protectionThreshold: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio,
+            })
+          }
 
           return {
             skipped: false,
             shouldCancel,
+            recovered: transition.recovered,
             mode: transition.state.mode,
             reason: transition.state.reason,
+            stableCandleCount: transition.state.stableCandleCount,
+            state: transition.state,
           }
         },
       })
@@ -2724,229 +2737,79 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
 
-    if (!update) return toResult({ error: new Error("Volatility protection transition returned no result") })
+    if (!update) {
+      return toResult({ error: new Error("Volatility protection transition returned no result") })
+    }
     if (update.skipped) return toResult({ data: update })
+
+    let settled = {
+      recovered: update.recovered,
+      state: update.state,
+    }
     if (update.shouldCancel) {
-      const cancellation = await cancelOwnedBuyOrders({
-        reason: "HIGH_VOLATILITY_PROTECTION",
-        symbol,
-        pauseOnFailure: false,
-      })
+      let cancellation
+      try {
+        cancellation = await cancelOwnedBuyOrders({
+          reason: "HIGH_VOLATILITY_PROTECTION",
+          symbol,
+          pauseOnFailure: false,
+        })
+      } catch (error) {
+        cancellation = toResult({ error })
+      }
       if (!cancellation?.ok) {
         logger?.warn?.({
           message: "Harvester volatility protection BUY cancellation remains unresolved",
           symbol,
           errors: cancellation?.errors,
+          error: cancellation?.error,
         })
+      }
+
+      try {
+        settled = await runTransition({
+          task: async () => {
+            const current = state.volatilityProtection.get(symbol) ??
+              createVolatilityProtectionState({ symbol })
+            const activeBuyOrderCount = state.registry.getActiveOrders()
+              .filter((order) => order.market.symbol === symbol && order.side === "BUY").length
+            const transition = transitionVolatilityProtection({
+              state: current,
+              snapshot: currentSnapshot,
+              activeBuyOrderCount,
+            })
+            state.volatilityProtection.set(symbol, transition.state)
+            return { recovered: transition.recovered, state: transition.state }
+          },
+        })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (!settled) {
+        return toResult({ error: new Error("Volatility protection settlement returned no result") })
       }
     }
 
-    let settled
-    try {
-      settled = await runTransition({
-        task: async () => {
-          const current = state.volatilityProtection.get(symbol) ??
-            createVolatilityProtectionState({ symbol })
-        const activeBuyOrderCount = state.registry.getActiveOrders()
-          .filter((order) => order.market.symbol === symbol && order.side === "BUY").length
-        const transition = transitionVolatilityProtection({
-          state: current,
-          snapshot: currentSnapshot,
-          activeBuyOrderCount,
-        })
-        state.volatilityProtection.set(symbol, transition.state)
-        if (transition.recovered) {
-          logSystem(logger, {
-            message: "Harvester volatility protection recovered",
-            symbol,
-            stableCandleCount: transition.state.stableCandleCount,
-            volatilityRatio: transition.state.volatilityRatio,
-          })
-        }
-          return { recovered: transition.recovered, state: transition.state }
-        },
+    const recovered = update.recovered || settled.recovered
+    if (recovered) {
+      logSystem(logger, {
+        message: "Harvester volatility protection recovered",
+        symbol,
+        stableCandleCount: update.recovered
+          ? update.stableCandleCount
+          : settled.state.stableCandleCount,
+        volatilityRatio: settled.state.volatilityRatio,
       })
-    } catch (error) {
-      return toResult({ error })
-    }
-    if (!settled) return toResult({ error: new Error("Volatility protection settlement returned no result") })
-    if (settled.recovered) {
       const resumed = await evaluateLatest({ symbol })
       if (!resumed?.ok) return resumed
     }
-    return toResult({ data: settled })
-  }
-
-  const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
-    const initialOrdersResult = await runTransition({
-      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
-    })
-    if (!initialOrdersResult?.ok) return initialOrdersResult
-    const pendingOrders = initialOrdersResult.data.ownedOrders.filter((order) => !order.brokerOrderId)
-
-    for (const pendingOrder of pendingOrders) {
-      try {
-        let lookupResult
-        try {
-          lookupResult = await broker.getCanonicalOrder({
-            symbol: pendingOrder.market.symbol,
-            clientOrderId: pendingOrder.clientOrderId,
-          })
-        } catch (error) {
-          throw recoveryFailureError(error, "ACCOUNTING_INTEGRITY", "PENDING_ORDER_LOOKUP_EXCEPTION", false)
-        }
-        if (lookupResult?.ok !== false && lookupResult?.ok !== true) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup response is missing an explicit success flag"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_RESPONSE",
-            false,
-          )
-        }
-        if (lookupResult.ok === false) {
-          throw recoveryFailureError(
-            lookupResult?.errors?.[0] ?? new Error("Unable to resolve order by clientOrderId"),
-            "REST_RECONCILIATION",
-            "PENDING_ORDER_LOOKUP",
-            true,
-          )
-        }
-        const acknowledgedOrder = lookupResult.data
-        if (!(acknowledgedOrder instanceof CanonicalOrder)) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup did not return a CanonicalOrder"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_SHAPE",
-            false,
-          )
-        }
-        if (typeof acknowledgedOrder.brokerOrderId !== "string" || !acknowledgedOrder.brokerOrderId.trim()) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup returned an order without a brokerOrderId"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_SHAPE",
-            false,
-          )
-        }
-        if (acknowledgedOrder.clientOrderId !== pendingOrder.clientOrderId ||
-            acknowledgedOrder.market?.id !== pendingOrder.market.id ||
-            acknowledgedOrder.market?.symbol !== pendingOrder.market.symbol ||
-            acknowledgedOrder.side !== pendingOrder.side ||
-            acknowledgedOrder.type !== pendingOrder.type) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup returned an order that does not match the pending order identity"),
-            "OWNERSHIP_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_IDENTITY",
-            false,
-          )
-        }
-        const quantityMatches = compareDecimal({
-          left: acknowledgedOrder.originalQuantity.amount,
-          right: pendingOrder.originalQuantity.amount,
-        }) === 0
-        const limitPriceMatches = acknowledgedOrder.limitPrice === undefined
-          ? pendingOrder.limitPrice === undefined
-          : pendingOrder.limitPrice !== undefined &&
-            compareDecimal({
-              left: acknowledgedOrder.limitPrice.amount,
-              right: pendingOrder.limitPrice.amount,
-            }) === 0
-        if (!quantityMatches || !limitPriceMatches) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup returned immutable order facts that conflict with the pending submission"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_PARITY",
-            false,
-          )
-        }
-
-        const attachmentResult = await runTransition({
-          task: async () => {
-            const currentOrder = state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId })
-            if (!currentOrder) {
-              throw recoveryFailureError(
-                new Error("Pending order disappeared before clientOrderId reconciliation"),
-                "OWNERSHIP_INTEGRITY",
-                "PENDING_ORDER_ATTACHMENT",
-                false,
-              )
-            }
-            if (currentOrder.brokerOrderId !== undefined) {
-              if (currentOrder.brokerOrderId !== acknowledgedOrder.brokerOrderId) {
-                throw recoveryFailureError(
-                  new Error("Client-order-ID lookup conflicts with the brokerOrderId already attached to the order"),
-                  "OWNERSHIP_INTEGRITY",
-                  "PENDING_ORDER_ATTACHMENT",
-                  false,
-                )
-              }
-              return toResult({ data: { order: currentOrder } })
-            }
-            const attached = state.registry.attachAcknowledgedBrokerOrderId({ order: acknowledgedOrder })
-            state.registry = attached.registry
-            return toResult({
-              data: { order: state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId }) },
-            })
-          },
-        })
-        if (!attachmentResult?.ok) {
-          throw recoveryFailureError(
-            attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId"),
-            "OWNERSHIP_INTEGRITY",
-            "PENDING_ORDER_ATTACHMENT",
-            false,
-          )
-        }
-      } catch (error) {
-        return runTransition({
-          task: async () => {
-            await pause({
-              symbol: pendingOrder.market.symbol,
-              reason: "RECONCILIATION_PENDING_ORDER_OUTCOME",
-              error,
-            })
-            const failure = error?.recoveryFailure ?? {
-              category: "ACCOUNTING_INTEGRITY",
-              stage: "UNCLASSIFIED_PENDING_ORDER_RECONCILIATION",
-              retryable: false,
-            }
-            return failureResult({ error, ...failure })
-          },
-        })
-      }
-    }
-
-    const ownedOrdersResult = await runTransition({
-      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
-    })
-    if (!ownedOrdersResult?.ok) return ownedOrdersResult
-    const ownedOrders = ownedOrdersResult.data.ownedOrders
-    const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
-    if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
-
-    let snapshots
-    try {
-      snapshots = await collectOwnedOrderSnapshots({ ownedOrders })
-      if (typeof beforeApply === "function") await beforeApply()
-    } catch (error) {
-      return runTransition({
-        task: async () => {
-          await pause({
-            symbol: error.reconciliationSymbol ?? symbols[0],
-            reason: "REST_STREAM_RECONCILIATION_FAILED",
-            error,
-          })
-          return failureResult({
-            error,
-            category: error.recoveryFailure?.category ?? "ACCOUNTING_INTEGRITY",
-            stage: error.recoveryFailure?.stage ?? "UNCLASSIFIED_OWNED_ORDER_RECONCILIATION",
-            retryable: error.recoveryFailure?.retryable ?? false,
-          })
-        },
-      })
-    }
-    return runTransition({
-      task: () => applyOwnedOrderSnapshotsTransition({ ...snapshots, recoveryMode }),
+    return toResult({
+      data: {
+        state: settled.state,
+        mode: settled.state.mode,
+        reason: settled.state.reason,
+        recovered,
+      },
     })
   }
 
