@@ -136,6 +136,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,
+        minProfit: 0.01,
         makerPercent: 0,
         takerPercent: 0,
         investment: 1000,
