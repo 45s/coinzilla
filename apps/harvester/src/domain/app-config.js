@@ -1,5 +1,5 @@
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
-const fail = (path, expectation) => { throw new TypeError(`Invalid Harvester config at "${path}": expected ${expectation}`) }
+const fail = (path, expectation) => { throw new TypeError(`Invalid app config at "${path}": expected ${expectation}`) }
 const requireRecord = (value, path) => { if (!isRecord(value)) fail(path, "an object") }
 const requireBoolean = (value, path) => { if (typeof value !== "boolean") fail(path, "a boolean") }
 const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false } = {}) => {
@@ -54,7 +54,7 @@ function validateTelegramNotificationConfig(config) {
 }
 
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
-export function validateHarvesterConfig(config) {
+export function validateAppConfig(config) {
   requireRecord(config, "root")
   validateTelegramNotificationConfig(config)
   if (config.runtime !== undefined) fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")
@@ -93,7 +93,7 @@ export function validateHarvesterConfig(config) {
 }
 
 /** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
-export function resolveHarvesterRuntimeConfig({ tradingMode, environment } = {}) {
+export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
   if (tradingMode !== "testnet" && tradingMode !== "live") throw new Error('TRADING_MODE must be set to "testnet" or "live"')
   return Object.freeze({ environment: environment ?? "unspecified", brokerName: "binance", tradingMode, tradingEnabled: true })
 }
