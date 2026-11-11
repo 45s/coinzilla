@@ -63,6 +63,8 @@ export function createAccountSnapshotManager({
   let preflightSourceTime
   let preflightBalancesByCode = new Map()
   const commissionBaselineAssetIds = new Map()
+  // Updated only after the corresponding account-wide open-orders audit is durable.
+  let unownedOpenOrderSymbols = new Set()
   const commissionBaselineAssetCodesById = new Map()
 
   const refreshAccountSnapshot = async ({ capturePreflightBaseline = false } = {}) => {
@@ -274,6 +276,10 @@ export function createAccountSnapshotManager({
         "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY", false,
       )
     }
+    // A snapshot becomes authoritative for strategy gating only after its audit flush succeeds.
+    unownedOpenOrderSymbols = new Set(unownedOrders
+      .map((order) => order?.market?.symbol ?? order?.symbol)
+      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
     logger.info?.({
       message: readiness === "READY"
         ? "Account-wide open-orders audit complete; no open orders found"
@@ -440,6 +446,8 @@ export function createAccountSnapshotManager({
 
   return Object.freeze({
     getAccountSnapshot: () => accountSnapshot,
+    hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
+      typeof symbol === "string" && unownedOpenOrderSymbols.has(symbol),
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
     publishAccountSnapshot,
