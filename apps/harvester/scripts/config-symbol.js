@@ -97,8 +97,10 @@ export async function runConfigSymbol({
       minNotional: metadata.minNotional,
       maxNotional: metadata.maxNotional,
     },
+    unvalidatedConstraints: metadata.unvalidatedConstraints,
     pairConfig,
   }, null, 2))
+  writeLine("Unsupported active filters are retained for diagnostics, not treated as locally validated; Binance remains authoritative when orders are submitted.")
   writeLine("Account-specific myFilters are not queried by this credential-free tool; Harvester performs its normal authenticated metadata checks at startup before trading.")
 
   const confirmation = (await ask("Add this pair to apps/harvester/config.json? [Y/n]: ")).trim().toLowerCase()
