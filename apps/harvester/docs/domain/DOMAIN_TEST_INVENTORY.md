@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-10
+last_verified: 2026-11-11
 ---
 
 # Harvester domain logic test inventory
@@ -23,14 +23,26 @@ All test improvements in this initiative must remain deterministic and offline. 
 | --- | --- | --- |
 | Account | `account/account-snapshot.test.js`, `account/calculate-account-snapshot-baselines.test.js`, `account/reconcile-account-snapshot-deltas.test.js` | Canonical balance snapshots, duplicate/missing/negative balances, quote cash-flow and total Portfolio base (active plus retained free)/BUY/SELL commitment baselines, shared-asset aggregation, post-snapshot partial BUY net-base credit and partial SELL delta reconciliation, unpriceable active BUY fail-closed behavior, market-asset coverage, exact per-asset delta reconciliation and invalid snapshot ordering |
 | Fill identity and fees | `fills/fill-fingerprint.test.js`, `portfolio/portfolio.test.js`, `strategies/conservative/recovery-ledger.test.js` | Stable fingerprints across commission ordering; Portfolio rejects same-ID changed commission amounts; RecoveryLedger rejects same-ID changed commission assets; both preserve the complete accepted projection; complete fee data, fee assets, quote valuation and aggregate commission bounds |
-| Market | `market-price.test.js`, `market/is-market-data-fresh.test.js`, `market/validate-market-trading-readiness.test.js` | Positive exact-decimal prices, symbol/timestamp validation, inclusive freshness boundaries, required exchange rules, order-type support, configured quantity and investment constraints |
+| Market | `market-price.test.js`, `market/is-market-data-fresh.test.js`, `market/validate-market-trading-readiness.test.js`, `market/volatility-candle.test.js` | Positive exact-decimal prices, symbol/timestamp validation, inclusive freshness boundaries, exchange/order constraints, exact normalized candle fields and UTC alignment, contiguous candle history, ATR/NATR and previous-reference ratio inputs |
 | Orders | `orders/allocate-order-commitments.test.js`, `orders/create-pending-canonical-order.test.js`, `orders/order-registry.test.js`, `orders/validate-cancellation-eligibility.test.js`, `orders/validate-order-against-trading-rules.test.js` | Sequential BUY allocation, aggregate SELL limits, pair-versus-account inventory/commitment consistency, post-snapshot net BUY base credit, shared base/quote commitments, PENDING construction, broker/client identity, duplicate and stale reports, partial/terminal/UNKNOWN transitions, cancellation eligibility and exchange filters |
 | Portfolio | `portfolio/portfolio.test.js`, `portfolio/position.test.js` | Immutable fill application, BUY/SELL accounting, base/quote/third-asset commissions, free inventory isolation, duplicate/conflicting fill identity, market isolation and recovery-basis reset |
 | Conservative policy | `strategies/conservative/helpers.test.js`, `initial-buy-price.test.js`, `recovery-completion.test.js`, `recovery-completion.dust.test.js`, `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `sell-fee-rate.test.js`, `strategy.test.js`, `trailing-buy-repricing.test.js` | BUY/SELL intents, duplicate suppression, recovery economics, fee reserves, exact tick/step rounding, actual fill accounting, dust/completion, residual sell-through and trailing price thresholds |
 | Aggressive policy | `strategies/aggressive-strategy.test.js` | Current contract is explicitly non-executable: NO_ACTION blockers, active-position gating and exclusion of retained free inventory |
 | Configuration | `app-config.test.js` | Strategy/pair configuration validation and explicit TESTNET/LIVE mode selection |
 
+The current PR #1021 source checkpoint contains 31 domain production JavaScript files and 28 domain test files. The new `market/volatility-candle.js` owns normalized candle validation, contiguous-series invariants and Harvester's ATR/NATR metric composition; its focused test file is included in the Market row above.
+
 The domain suite is supplemented by application-level engine and use-case tests for serialized lifecycle ordering, multi-market composition, cancellation/fill races and broker interaction. Those tests are not substitutes for pure domain-policy tests, but they provide distinct integration protection.
+
+### Candle-history use-case coverage (supplemental)
+
+The new `src/use-cases/create-candle-history-service.js` is covered by 32 deterministic test declarations split by responsibility:
+
+- `create-candle-history-service.test.js` — startup, per-market readiness and historical indicator warm-up.
+- `create-candle-history-service.stream.test.js` — live candle updates, stale events, forming-candle gap detection, exact reconnect backfill and fail-closed readiness during repair.
+- `create-candle-history-service.lifecycle.test.js` — subscription validation, warm-up buffering, shutdown and accepted-work drain when unsubscribe fails.
+
+This service collects data and exposes snapshots only. It does not activate volatility protection or authorize/cancel trading orders.
 
 ## Application-level orchestration coverage (supplemental; not included in the 26 domain test files)
 
