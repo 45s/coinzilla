@@ -119,26 +119,9 @@ Both values are required by the consuming application. Leave both unset to disab
     await notifications.close()
     await eventBus.close()
 
-## Supported events
+## Event and message ownership
 
-| Event | Supported message |
-| --- | --- |
-| order.filled | Completed order alert |
-| fill.received | Individual execution/fill alert |
-| bot.pair_paused | Critical pair pause alert |
-| bot.recovery_failed | Critical recovery failure alert |
-| bot.recovery_completed | Recovery completion alert |
-| bot.started | Bot started alert |
-| bot.stopped | Bot stopped alert |
-| bot.startup_failed | Startup failure alert |
-| broker.connected | Broker connection established |
-| broker.disconnected | Broker connection lost |
-| order.submitted | Broker-acknowledged order submission |
-| order.cancelled | Broker-confirmed order cancellation |
-| order.failed | Submission or cancellation failure |
-| account.safety_alert | Account, execution, or ownership safety alert |
-
-High-volume events such as order.execution_report are intentionally excluded. The exported allowlist contains every supported formatter event. Consumers may pass an `eventNames` array to subscribe to a unique subset; duplicates, malformed values, and an empty selection are rejected before any subscription is registered. The notifier package does not define application event names. The application-supplied formatter controls outbound content; the notifier subscriber only delivers its returned string.
+The notifier package does not define application event names, trading semantics, or message templates. The consuming application selects event names, maps domain events, and supplies a formatter function. The notifier validates the event-name list shape and serializes delivery of the resulting plain-text messages.
 
 ## Reliability and security contract
 
