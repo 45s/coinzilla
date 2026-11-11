@@ -38,6 +38,7 @@ const metadata = {
   minQuantity: "0.1",
   maxQuantity: "100000",
   minNotional: "5",
+  maxNotional: "50",
   supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
 }
 
@@ -73,6 +74,7 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
   assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
   assert.equal(writes[0].pairConfig.enabled, false, "The generated pair must remain disabled until an operator enables it.")
+  assert.equal(writes[0].pairConfig.orderQuantity, 100, "Order sizing must also respect the active maximum-notional filter.")
   assert.equal(writes[0].pairConfig.minProfit, 0.01, "The documented minimum-profit default must be applied.")
   assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The documented price-step default must be applied.")
   assert.equal(result.written, true, "The CLI result must report a successful write only after the writer resolves.")

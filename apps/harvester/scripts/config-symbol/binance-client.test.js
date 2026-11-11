@@ -109,6 +109,7 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
     [...valid, valid[2]],
     valid.map((filter) => filter.filterType === "LOT_SIZE" ? { ...filter, stepSize: "0" } : filter),
     valid.map((filter) => filter.filterType === "MIN_NOTIONAL" ? { ...filter, minNotional: "NaN" } : filter),
+    [...valid, { filterType: "NOTIONAL", minNotional: "5", maxNotional: "NaN" }],
   ]
 
   for (const filters of invalidFilters) {
