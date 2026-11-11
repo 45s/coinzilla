@@ -58,7 +58,7 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 
 ## Application configuration
 
-- The app has one application-wide configuration file: `apps/harvester/config.json`. Do not create feature-specific config files or reintroduce `trading-config.json`.
+- The app has one application-wide configuration file: `apps/harvester/config.json`. Do not create feature-specific configuration files.
 - Keep strategy-owned settings and pairs under `strategies.CG_coinGrabber`; keep application-wide concerns such as Telegram notification policy in sibling root sections.
 - Use `loadAppConfig` and `validateAppConfig` for the application configuration boundary. Update their tests and all docs/examples when the contract changes.
 - Telegram bot tokens and chat IDs are environment-only secrets. `notifications.telegram` contains only the enabled switch, profile, market filter, and event overrides.
