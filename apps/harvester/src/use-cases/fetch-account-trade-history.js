@@ -42,8 +42,9 @@ export async function fetchAccountTradeHistory({
     if (!broker || typeof broker.getFills !== "function") {
       throw new TypeError("fetchAccountTradeHistory requires broker.getFills")
     }
-    if (!Array.isArray(markets) || markets.some((market) => !(market instanceof Market))) {
-      throw new TypeError("fetchAccountTradeHistory markets must contain canonical Market values")
+    if (!Array.isArray(markets) || markets.length === 0 ||
+        markets.some((market) => !(market instanceof Market))) {
+      throw new TypeError("fetchAccountTradeHistory markets must contain at least one canonical Market")
     }
     if (new Set(markets.map((market) => market.symbol)).size !== markets.length) {
       throw new Error("Account trade-history market catalog contains duplicate symbols")
