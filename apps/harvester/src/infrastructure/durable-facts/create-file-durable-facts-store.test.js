@@ -20,6 +20,7 @@ const digestRecord = (record) => {
   const { digest, ...body } = record
   return createHash("sha256").update(canonicalStringify(body), "utf8").digest("hex")
 }
+const supportsDirectorySync = process.platform !== "win32"
 const createStore = (directory, options = {}) => createFileDurableFactsStore({
   directory,
   runtimeSessionId: "runtime-session-1",
@@ -44,7 +45,7 @@ test("normal verification and append never initialize a missing durable-fact sto
   await assert.rejects(readdir(directory), { code: "ENOENT" })
 })
 
-test("explicit initialization writes a genesis fact and matching committed-head manifest", async (t) => {
+test("explicit initialization writes a genesis fact and matching committed-head manifest", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -64,7 +65,7 @@ test("explicit initialization writes a genesis fact and matching committed-head 
   assert.equal(verification.data.lastCommittedSequence, "0")
 })
 
-test("initialization is explicit and cannot overwrite an existing ledger", async (t) => {
+test("initialization is explicit and cannot overwrite an existing ledger", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -75,7 +76,7 @@ test("initialization is explicit and cannot overwrite an existing ledger", async
   assert.equal(await readFile(path.join(directory, "facts.jsonl"), "utf8"), before)
 })
 
-test("appends exact facts with global monotonic sequences across runtime sessions", async (t) => {
+test("appends exact facts with global monotonic sequences across runtime sessions", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const firstStore = createStore(directory)
@@ -99,7 +100,7 @@ test("appends exact facts with global monotonic sequences across runtime session
   assert.deepEqual(read.data.records.map(({ sequence }) => sequence), ["0", "1", "2"])
 })
 
-test("treats an exact duplicate fact identity and payload as idempotent", async (t) => {
+test("treats an exact duplicate fact identity and payload as idempotent", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -115,7 +116,7 @@ test("treats an exact duplicate fact identity and payload as idempotent", async 
   assert.equal(records.data.records.length, 2)
 })
 
-test("rejects reuse of a fact identity with changed economic or control payload", async (t) => {
+test("rejects reuse of a fact identity with changed economic or control payload", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -126,7 +127,7 @@ test("rejects reuse of a fact identity with changed economic or control payload"
   assert.match(conflict.errors[0].message, /factId.*different payload|identity.*payload/i)
 })
 
-test("serializes concurrent appends into one gap-free global sequence", async (t) => {
+test("serializes concurrent appends into one gap-free global sequence", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -145,7 +146,7 @@ test("serializes concurrent appends into one gap-free global sequence", async (t
   assert.deepEqual(read.data.records.map(({ sequence }) => sequence), ["0", "1", "2", "3", "4", "5", "6", "7", "8"])
 })
 
-test("preserves exact decimal strings and canonical key ordering", async (t) => {
+test("preserves exact decimal strings and canonical key ordering", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -165,7 +166,7 @@ test("preserves exact decimal strings and canonical key ordering", async (t) => 
   assert.equal(record.digest, digestRecord(record))
 })
 
-test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized payloads", async (t) => {
+test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized payloads", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -186,7 +187,7 @@ test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized
   assert.equal(accessor.ok, false)
 })
 
-test("detects tampered record digests", async (t) => {
+test("detects tampered record digests", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -198,7 +199,7 @@ test("detects tampered record digests", async (t) => {
   assert.equal((await store.verify()).ok, false)
 })
 
-test("detects missing committed-head manifests and missing log files", async (t) => {
+test("detects missing committed-head manifests and missing log files", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -209,7 +210,7 @@ test("detects missing committed-head manifests and missing log files", async (t)
   assert.equal((await store.readAll()).ok, false)
 })
 
-test("detects a validly re-digested sequence gap", async (t) => {
+test("detects a validly re-digested sequence gap", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -227,7 +228,7 @@ test("detects a validly re-digested sequence gap", async (t) => {
   assert.match(verification.errors[0].message, /sequence|gap|integrity/i)
 })
 
-test("detects a partial or torn final record", async (t) => {
+test("detects a partial or torn final record", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -240,7 +241,7 @@ test("detects a partial or torn final record", async (t) => {
   assert.match(verification.errors[0].message, /partial|torn|canonical|json|newline/i)
 })
 
-test("does not acknowledge an append when the manifest commit is uncertain", async (t) => {
+test("does not acknowledge an append when the manifest commit is uncertain", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   let failManifestRename = false
@@ -264,7 +265,7 @@ test("does not acknowledge an append when the manifest commit is uncertain", asy
   assert.match(verification.errors[0].message, /manifest|committed|sequence|integrity/i)
 })
 
-test("fails closed when the log is truncated below the committed manifest head", async (t) => {
+test("fails closed when the log is truncated below the committed manifest head", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
@@ -278,7 +279,7 @@ test("fails closed when the log is truncated below the committed manifest head",
   assert.match(verification.errors[0].message, /manifest|committed|sequence|truncated|integrity/i)
 })
 
-test("rejects unknown envelope and manifest fields even when their JSON remains canonical", async (t) => {
+test("rejects unknown envelope and manifest fields even when their JSON remains canonical", { skip: !supportsDirectorySync }, async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
