@@ -26,3 +26,17 @@ The application-level `resumeMarket` use case exists for a future trusted adapte
 ## Ownership
 
 The operator facade and use cases belong to `apps/harvester`. Do not create a shared `packages/operator` package until another application demonstrates the same transport-independent actor, authorization and request semantics.
+
+
+## Implementation status
+
+| Slice | Status |
+| --- | --- |
+| Engine pause/resume boundary and market-scoped behavior | Implemented in PR #1045; regression-tested |
+| Actor authorization and durable-before-apply application use cases | Implemented in PR #1045; port-tested |
+| Telegram /pause SYMBOL parser, private-chat allowlist and serial polling | Implemented in PR #1045; mocked-transport tested |
+| ADR-0001 operator-fact projection and startup restoration | Pending |
+| Recovery Steps 7–9 and closed readiness gate | Pending |
+| Disabled-by-default runtime configuration and lifecycle wiring | Pending |
+
+The code in this PR is not a production inbound-control release. The Telegram adapter is not instantiated or started by the Harvester runtime, and no environment variable or config flag enables it yet. Merge of this foundation does not authorize a TESTNET or LIVE session.
