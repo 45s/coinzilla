@@ -45,7 +45,16 @@ Examples:
 
 **Do not create permanent per-domain branches** such as `feature/entities` or `feature/brokers`. Domain ownership is permanent; task branches are temporary. Branch names describe a task, not a team or a long-lived code line.
 
-Every task branch must start from the latest `develop`. Every task PR targets `develop`. Only the final release PR targets `main`.
+**Absolute target-branch rule — no exceptions for task work:**
+
+- Every feature, bug fix, refactor, maintenance change, and documentation task MUST start from the latest `develop` and its PR MUST target `develop`.
+- A task PR targeting `main` is invalid. Do not create it, retarget it, or merge it. Do not use `main` as the base for task branches.
+- The ONLY permitted PR targeting `main` is the final release PR whose source/head is `develop` and whose target/base is `main`.
+- Therefore the only permitted integration direction into `main` is `develop` → `main`. All ongoing work flows into `develop` first.
+- This applies to urgent fixes too: implement and validate them through `develop`; include them in the next user-approved `develop` → `main` release. Do not invent hotfix exceptions.
+- Before creating a PR, explicitly verify both refs: task PR = `<task-branch> → develop`; release PR = `develop → main`. If the pair does not match one of these two forms, stop and correct it before opening/updating the PR.
+
+Every task branch must start from the latest `develop`. Every task PR targets `develop`. Only the final release PR from `develop` targets `main`.
 
 ### Reserved branch-name protection — mandatory
 
