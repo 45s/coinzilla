@@ -154,7 +154,7 @@ This fixture represents a trading-enabled Journal session with a complete PREFLI
 
 ## Current implementation status
 
-**Status: IN PROGRESS — offline CLI/context composition and production-audit evidence matrix are in [PR #1053](https://github.com/45s/coinzilla/pull/1053); exact-head CI is pending.**
+**Status: IMPLEMENTED AND VERIFIED IN REVIEW — offline CLI/context composition and the production-audit evidence matrix are in draft [PR #1053](https://github.com/45s/coinzilla/pull/1053). All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`. The PR is not merged; Step 7 remains in progress on `develop` until user review and integration.**
 
 PR #1047 delivered the read-only orchestration and guarded confirmation use cases. PR #1053 adds the offline JSON context adapter, explicit audit-only/confirmation CLI modes, canonical entity construction, and end-to-end tests using the production account audit and filesystem durable-fact store. No exchange write, broker connection, startup replay, Telegram command or runtime readiness wiring is introduced.
 
