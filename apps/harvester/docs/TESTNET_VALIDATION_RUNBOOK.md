@@ -28,7 +28,7 @@ Previous plan values (historical only; not current configuration or approved run
 | Taker fee assumption | 0.1% |
 | Other pairs (SOLFDUSD, ZROFDUSD) | disabled |
 
-These values preserve the previous plan for provenance; they are not current repository configuration or approved run limits. The current committed `config.json` enables only `LINKFDUSD`: `investment: 200` FDUSD, `orderQuantity: 2` LINK, `keepQuantity: 0.01` LINK, `priceStepPercent: 0.3`, `makerPercent: 0`, and `takerPercent: 0.075`. The strategy `minProfit` is `0.01` in the pair's quote asset (FDUSD). These config values do not approve a TESTNET session. No replacement pair scope is recorded; keep the execution gate closed.
+These values preserve the previous plan for provenance; they are not current repository configuration or approved run limits. The current committed `config.json` enables only `LINKFDUSD`: `investment: 200` FDUSD, `orderQuantity: 2` LINK, `keepQuantity: 0.01` LINK, `priceStepPercent: 0.3`, `makerPercent: 0`, and `takerPercent: 0.075`. The `LINKFDUSD` pair's `minProfit` is configured on that pair and is `0.01` FDUSD. These config values do not approve a TESTNET session. No replacement pair scope is recorded; keep the execution gate closed.
 
 Hard operational limits for any future session (none is currently approved):
 

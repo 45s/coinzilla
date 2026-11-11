@@ -26,10 +26,11 @@ const pairConfig = {
   priceStepPercent: 0.05,
   orderQuantity: 100,
   keepQuantity: 1,
+  minProfit: 0.01,
   makerPercent: 0,
   takerPercent: 0.075,
 }
-const settings = { minProfit: 0.01 }
+const settings = {}
 const marketPrice = { symbol: "DOGEUSDT", price: "0.100", timestamp: 100 }
 
 function makeBoughtState({ quoteCommission = "0" } = {}) {
@@ -68,6 +69,26 @@ test("creates the initial BUY below last traded price and rounds down to tick", 
     quantity: "100",
     reason: "INITIAL_BUY",
   }])
+})
+
+
+test("uses the market-specific minimum profit when planning its recovery SELL", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, minProfit: 0.1 },
+    settings: {},
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(
+    decision.actions.find((action) => action.side === "SELL")?.price,
+    "0.103",
+    "A 0.1 quote-unit threshold must produce a higher recovery price than the unrelated global 0.01 threshold.",
+  )
 })
 
 test("does not duplicate an already active BUY on repeated price events", () => {
@@ -850,10 +871,11 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
       priceStepPercent: 0.05,
       orderQuantity: 400,
       keepQuantity: 1,
+      minProfit: 0.01,
       makerPercent: 0.1,
       takerPercent: 0.1,
     },
-    settings: { minProfit: 0.01 },
+    settings: {},
     portfolio,
     recoveryLedger,
     marketMetadata: metadata,
@@ -957,10 +979,11 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
       priceStepPercent: 0.05,
       orderQuantity: 5,
       keepQuantity: 0.01,
+      minProfit: 0.01,
       makerPercent: 0.1,
       takerPercent: 0.1,
     },
-    settings: { minProfit: 0.01 },
+    settings: {},
     portfolio,
     recoveryLedger,
     marketMetadata: metadata,

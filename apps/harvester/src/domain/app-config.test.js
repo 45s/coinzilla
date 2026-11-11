@@ -10,7 +10,6 @@ const createAppConfig = () => ({
     CG_coinGrabber: {
       enabled: true,
       settings: {
-        minProfit: 0.01,
         conservative: { enabled: true },
         aggressive: { enabled: false },
       },
@@ -20,6 +19,7 @@ const createAppConfig = () => ({
           investment: 100,
           orderQuantity: 5,
           keepQuantity: 0.01,
+          minProfit: 0.01,
           priceStepPercent: 0.05,
           pricePrecision: 3,
           quantityPrecision: 1,
@@ -36,6 +36,31 @@ test("validates strategy-owned pairs without requiring exchange-mode configurati
   assert.equal(validateAppConfig(config), config, "Strategy and pair settings must remain valid without a runtime profile block.")
   assert.equal(Object.hasOwn(config, "runtime"), false, "Exchange selection must not be stored in config.json.")
   assert.equal(config.strategies.CG_coinGrabber.pairs.ZROFDUSD.investment, 100, "The pair investment setting must remain part of strategy configuration.")
+})
+
+
+test("requires a minimum-profit threshold on every pair", () => {
+  const config = createAppConfig()
+  delete config.strategies.CG_coinGrabber.pairs.ZROFDUSD.minProfit
+  assert.throws(() => validateAppConfig(config), /pairs.*ZROFDUSD.*minProfit/)
+})
+
+test("accepts independent minimum-profit thresholds for each market", () => {
+  const config = createAppConfig()
+  const strategyConfig = config.strategies.CG_coinGrabber
+  delete strategyConfig.settings.minProfit
+  strategyConfig.pairs.ZROFDUSD.minProfit = 0.01
+  strategyConfig.pairs.LINKUSDT = {
+    ...strategyConfig.pairs.ZROFDUSD,
+    investment: 200,
+    orderQuantity: 2,
+    keepQuantity: 0,
+    minProfit: 0.1,
+  }
+
+  assert.equal(validateAppConfig(config), config)
+  assert.equal(strategyConfig.pairs.ZROFDUSD.minProfit, 0.01)
+  assert.equal(strategyConfig.pairs.LINKUSDT.minProfit, 0.1)
 })
 
 test("selects Binance TESTNET from TRADING_MODE even when NODE_ENV says production", () => {

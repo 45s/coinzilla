@@ -16,8 +16,8 @@ This glossary defines terms used by the Conservative domain. It separates strate
 |---|---|---|
 | Market | Canonical base/quote asset pair, with a stable market identity. | Shared entity supplied to domain |
 | Market price | Validated latest traded price used as a strategy input. It is not a fill price. | Application/boundary input |
-| Pair configuration | Strategy settings for one market: step percent, order quantity, keep quantity, configured maker/taker rates, Harvester's current required per-pair investment limit. | Validated application input; semantics owned by strategy |
-| Strategy settings | Global Conservative settings, including quote-denominated `minProfit`. | Validated application input; semantics owned by strategy |
+| Pair configuration | Strategy settings for one market: step percent, order quantity, keep quantity, minimum quote profit, configured maker/taker rates, and per-pair investment limit. | Validated application input; semantics owned by strategy |
+| Strategy settings | Global Conservative mode toggles; market economics belong to pair configuration. | Validated application input; semantics owned by strategy |
 | BUY intent | Pure proposal to submit a BUY limit order at a calculated price and quantity. It is not an accepted order or an execution. | Domain output |
 | SELL intent | Pure proposal to submit a recovery SELL. It is not proof of a sale or proceeds. | Domain output |
 | Active order | Application-supplied order state that is pending, open, partially filled, or unknown. It prevents duplicate intents on that side. | Application/broker fact |
@@ -36,7 +36,7 @@ This glossary defines terms used by the Conservative domain. It separates strate
 | Third-asset commission | Commission charged in an asset other than the market base or quote asset. It must have a reliable quote-currency valuation; otherwise accounting fails closed. | Canonical fill fact; see canonical specification |
 | Outstanding recovery amount | `max(0, buyCost - netSellProceeds)`. It is a quote-currency shortfall, not a base-quantity obligation. | Derived domain value |
 | Realized net profit | `netSellProceeds - buyCost`. | Derived domain value |
-| `minProfit` | Required minimum quote-currency profit for a completed recovery cycle. | Strategy setting |
+| `minProfit` | Required minimum quote-currency profit for a completed recovery cycle; configured independently on each pair and denominated in that pair's quote asset. | Pair setting |
 | `keepQuantity` | Exact configured base quantity retained after successful recovery. It is the only retained-quantity setting; see canonical specification. | Strategy setting |
 | Fee reserve | Order-type-specific planning estimate only; it is never an actual commission debit. Rates and selection are defined in the canonical specification. | Strategy vocabulary |
 | Actual commission rate | Effective quote-equivalent commission rate calculated from a confirmed fill. | Derived domain observation |

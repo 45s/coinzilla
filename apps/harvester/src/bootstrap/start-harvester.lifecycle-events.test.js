@@ -22,7 +22,7 @@ const config = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
         BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
       },

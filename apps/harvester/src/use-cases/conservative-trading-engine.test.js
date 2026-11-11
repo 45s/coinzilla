@@ -45,13 +45,14 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
     DOGEUSDT: {
       enabled: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
+      minProfit: 0.01,
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
@@ -1652,17 +1653,25 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
 })
 
 
-test("publishes recovery completion only after the cycle reset succeeds", async () => {
+test("publishes the market-specific profit threshold after recovery completion succeeds", async () => {
   const events = []
+  const completionInputs = []
+  const configuredAppConfig = structuredClone(appConfig)
+  configuredAppConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT.minProfit = 0.1
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
+    appConfig: configuredAppConfig,
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
+    completeRecoveryCycle: async (input) => {
+      completionInputs.push(input)
+      return { ok: true, data: { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } }
+    },
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "recovery.cycle_completed") {
-        assert.ok(harness.completedCycles.includes(market.id))
+        assert.equal(completionInputs.length, 1, "The pair-specific completion input must be delivered before the completion event.")
       }
       return { ok: true }
     } },
@@ -1683,7 +1692,9 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(completedCycles, [market.id])
+  assert.deepEqual(completedCycles, [], "The injected completion boundary owns completion in this test.")
+  assert.equal(completionInputs.length, 1)
+  assert.equal(completionInputs[0].minProfit, "0.1", "The engine must pass this market's threshold to recovery completion.")
   const completed = events.find(({ name }) => name === "recovery.cycle_completed")
   assert.ok(completed)
   assert.deepEqual(completed.data, {
@@ -1691,7 +1702,7 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
     marketId: market.id,
     freeQuantity: "0.1",
     keepQuantity: "0.1",
-    minProfit: "0.01",
+    minProfit: "0.1",
     realizedNetProfit: "1.5",
   })
 })
