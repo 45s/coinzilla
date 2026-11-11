@@ -334,19 +334,11 @@ The repository retains tested offline helpers: `projectHarvesterJournalRecovery(
 
 ### Durable market-history coverage facts
 
-
-
 `recordMarketHistoryCoverage()` appends a `MARKET_HISTORY_COVERAGE_CONFIRMED` fact only to an already initialized, integrity-verified ADR-0001 store. Its strict payload contains the canonical symbol, `coveredFromTime`, `verifiedAt`, the SHA-256 digest of the reviewed evidence artifact, and a non-secret `verifiedBy` identity. The store rejects malformed payloads, unsupported fields, coverage-window narrowing, and verification-time regression.
-
-
 
 `readMarketHistoryCoverage()` calls the store's integrity-verifying `readAll()` path, validates the per-symbol monotonic sequence, and projects the latest fact into the exact evidence shape consumed by the one-market audit. A valid interval must cover the query start: `coveredFromTime <= historyStartTime <= verifiedAt`; the current account snapshot must not predate `verifiedAt`.
 
-
-
 The fact writer is an application use case, not a Telegram command. This slice does not add a CLI or startup integration; creating a coverage fact still requires an explicit offline operator review and a reviewed evidence artifact. A missing fact leaves the market audit blocked.
-
-
 
 These are offline audit primitives only. They are not wired into startup, do not publish runtime READY, and do not enable process-restart restoration or OPERATOR control.
 
