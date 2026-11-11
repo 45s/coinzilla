@@ -129,6 +129,9 @@ export function auditRecoveredTradeHistory({
         if (!(fill instanceof Fill)) {
           throw new TypeError("exchangeFills[" + index + "] must be a canonical Fill")
         }
+        if (fill.market.symbol !== market.symbol) {
+          throw new Error("Single-market exchange history contains a fill for another market: " + fill.market.symbol)
+        }
       }
       for (const [index, order] of allOwnedOrderRecords.entries()) {
         if (!(order instanceof CanonicalOrder)) {
