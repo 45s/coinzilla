@@ -1,4 +1,7 @@
 import assert from "node:assert/strict"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { test } from "node:test"
 
 import { calculateVolatilityMetrics } from "../src/domain/market/volatility-candle.js"
@@ -7,6 +10,7 @@ import {
   mergeAndValidateCandles,
   parseBinanceSpotKlineCsv,
   parseCalibrationArguments,
+  runCalibrationCli,
   validateCalibrationThresholds,
 } from "./calibrate-volatility-thresholds.js"
 
@@ -257,4 +261,29 @@ test("rejects malformed Binance CSV rows with source context", () => {
     /broken.csv line 1.*12/i,
     "Malformed archive rows must fail with the source filename and row number.",
   )
+})
+
+test("runs the offline CLI and writes a reproducible report without network access", () => {
+  const directory = mkdtempSync(join(tmpdir(), "harvester-volatility-calibration-"))
+  const inputPath = join(directory, "BTCUSDT-1m-2023-11.csv")
+  const outputPath = join(directory, "calibration-report.json")
+  const firstOpenTime = 1_700_000_040_000
+  const csv = Array.from({ length: 100 }, (_, index) => {
+    const openTime = firstOpenTime + index * INTERVAL_MS
+    return makeKlineRow({ openTime, closeTime: openTime + INTERVAL_MS - 1 })
+  }).join("\n")
+
+  try {
+    writeFileSync(inputPath, csv, "utf8")
+    runCalibrationCli(["--input", inputPath, "--output", outputPath])
+
+    const report = JSON.parse(readFileSync(outputPath, "utf8"))
+    assert.equal(report.dataSource, "Binance Spot Public Data archive (data.binance.vision)")
+    assert.equal(report.markets.length, 1, "The CLI must report the input symbol exactly once.")
+    assert.equal(report.markets[0].symbol, "BTCUSDT", "The CLI must derive the symbol from the official archive filename.")
+    assert.equal(report.markets[0].candleCount, 100, "The CLI must include all validated source candles.")
+    assert.match(report.files[0].sha256, /^[a-f0-9]{64}$/, "The report must include a SHA-256 hash for every input CSV.")
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
