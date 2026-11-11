@@ -25,7 +25,8 @@
 5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
 7. [~] Synchronize living documentation and roadmaps — this closeout PR.
-8. [ ] Validate provisional thresholds against representative offline historical market data before treating them as production-calibrated.
+8. [~] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — implementation in [PR #1046](https://github.com/45s/coinzilla/pull/1046); exact-head CI and merge remain pending.
+9. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
 
