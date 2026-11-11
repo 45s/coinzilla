@@ -152,6 +152,33 @@ test("getCandles uses public klines and returns normalized, ordered exact-string
   assert.equal(Object.isFrozen(result.data), true)
 })
 
+test("getCandles uses Binance server time rather than the local clock for candle completion", async () => {
+  const row = [
+    1_700_000_000_000,
+    "1.0000",
+    "2.0000",
+    "0.5000",
+    "1.5000",
+    "10.0000",
+    1_700_000_059_999,
+    "15.0000",
+    10,
+    "5.0000",
+    "7.5000",
+    "0",
+  ]
+  const { broker, rpc } = createBroker({
+    time: () => ({ serverTime: 1_700_000_059_998 }),
+    klines: () => [row],
+  })
+
+  const result = await broker.getCandles({ symbol: "BTCUSDT", interval: "1m", limit: 1 })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data[0].isClosed, false)
+  assert.deepEqual(rpc.calls.map(({ method }) => method), ["time", "klines"])
+})
+
 test("getCandles passes optional time bounds and accepts an empty history", async () => {
   const { broker, rpc } = createBroker({ klines: () => [] })
   const result = await broker.getCandles({
