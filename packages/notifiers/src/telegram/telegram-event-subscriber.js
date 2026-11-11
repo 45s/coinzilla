@@ -1,12 +1,5 @@
 const DEFAULT_MAX_PENDING = 1000
 
-export const TELEGRAM_NOTIFICATION_EVENTS = Object.freeze([
-  "order.filled", "fill.received", "bot.pair_paused", "bot.recovery_failed",
-  "bot.recovery_completed", "bot.startup_failed", "broker.connected",
-  "broker.disconnected", "order.submitted", "order.cancelled", "order.failed",
-  "account.safety_alert", "bot.started", "bot.stopped",
-])
-
 function validateEventNames(eventNames) {
   if (!Array.isArray(eventNames)) {
     throw new TypeError("eventNames must be an array of supported Telegram event names")
@@ -19,9 +12,6 @@ function validateEventNames(eventNames) {
   for (const eventName of eventNames) {
     if (typeof eventName !== "string" || !eventName.trim()) {
       throw new TypeError("Every event name must be a non-empty string")
-    }
-    if (!TELEGRAM_NOTIFICATION_EVENTS.includes(eventName)) {
-      throw new TypeError(`Unsupported Telegram notification event: ${eventName}`)
     }
     if (seen.has(eventName)) {
       throw new TypeError(`Duplicate Telegram notification event: ${eventName}`)
@@ -109,7 +99,7 @@ export function subscribeTelegramNotifications({
   notifier,
   logger,
   maxPending = DEFAULT_MAX_PENDING,
-  eventNames = TELEGRAM_NOTIFICATION_EVENTS,
+  eventNames,
   formatMessage,
 } = {}) {
   const selectedEventNames = validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames })
