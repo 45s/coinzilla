@@ -3,6 +3,11 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
 
+function isAbsoluteLocalDirectory(directory) {
+  if (process.platform === "win32") return /^[A-Za-z]:[\\/]/.test(directory)
+  return path.isAbsolute(directory)
+}
+
 export async function runInitializeDurableFacts({
   env = process.env,
   argv = process.argv.slice(2),
@@ -21,7 +26,8 @@ export async function runInitializeDurableFacts({
     return 1
   }
   const directory = env.DURABLE_FACTS_DIRECTORY
-  if (typeof directory !== "string" || directory.trim() === "" || !path.isAbsolute(directory)) {
+  if (typeof directory !== "string" || directory.trim() === "" ||
+      directory !== directory.trim() || !isAbsoluteLocalDirectory(directory)) {
     stderr("DURABLE_FACTS_DIRECTORY must be an absolute local directory path.")
     return 1
   }
