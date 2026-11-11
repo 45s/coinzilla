@@ -41,7 +41,7 @@ const marketMetadata = {
     ],
   }),
 }
-const tradingConfig = {
+const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -61,7 +61,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -234,7 +234,7 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
     isMarketPriceFresh,
     isMarketBookFresh,
     eventPublisher: effectiveEventPublisher,
-    tradingConfig: suppliedTradingConfig ?? tradingConfig,
+    appConfig: suppliedAppConfig ?? appConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
     getMarketMetadata: () => getMarketMetadataOverride ? getMarketMetadataOverride() : (suppliedMarketMetadata ?? marketMetadata),
@@ -1989,16 +1989,16 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
     })
   }
 
-  const zeroFeeTradingConfig = {
-    ...tradingConfig,
+  const zeroFeeAppConfig = {
+    ...appConfig,
     strategies: {
-      ...tradingConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
-        ...tradingConfig.strategies.CG_coinGrabber,
+        ...appConfig.strategies.CG_coinGrabber,
         pairs: {
-          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
-            ...tradingConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
+            ...appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
             keepQuantity,
             makerPercent: 0,
             takerPercent: 0,
@@ -2008,7 +2008,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
     },
   }
   const harness = await createHarness({
-    tradingConfig: zeroFeeTradingConfig,
+    appConfig: zeroFeeAppConfig,
     baseFreeBalance: "2",
     quoteFreeBalance: "1000",
     cancelWithFill: true,
