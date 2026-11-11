@@ -31,6 +31,8 @@ jobs:
             has_coverage_script: true
           - package: "@coinzilla/entities"
             has_coverage_script: false
+          - package: "@coinzilla/indicators"
+            has_coverage_script: true
           - package: "@coinzilla/event-bus"
             has_coverage_script: true
           - package: "@coinzilla/journal"

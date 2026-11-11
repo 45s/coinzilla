@@ -65,6 +65,7 @@ pnpm --filter @coinzilla/utils test:watch
 - `apps/*` — application workspaces
 - `packages/*` — shared packages
 - `packages/utils` — shared utility functions and Node.js tests
+- `packages/indicators` — reusable technical indicators over normalized market candles
 
 ## Utilities package
 
