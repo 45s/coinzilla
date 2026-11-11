@@ -1402,3 +1402,12 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Replace the symbol set on each authoritative startup/reconnect snapshot, including clearing it only after a durable snapshot confirms the order is gone.
 - [x] Remove the unused `blockOnExistingOrders` recovery argument. Regression coverage is in `src/bootstrap/account/create-account-snapshot-manager.test.js` and `src/use-cases/conservative-trading-engine.test.js`.
 - [ ] Exact-head CI verification and merge of [PR #987](https://github.com/45s/coinzilla/pull/987); no live/TESTNET operations or process restart are part of this task.
+
+
+### External open-order strategy isolation — #985
+
+- [x] Preserve external open orders as unowned and untouched; retain their symbols only after the account-wide open-orders audit has been durably flushed.
+- [x] Defer Conservative strategy evaluation and broker submission for a symbol while an unowned open order exists for that symbol. Unrelated enabled symbols remain eligible.
+- [x] Replace the symbol set on each authoritative startup/reconnect snapshot, including clearing it only after a durable snapshot confirms the order is gone.
+- [x] Remove the unused `blockOnExistingOrders` recovery argument. Regression coverage is in `src/bootstrap/account/create-account-snapshot-manager.test.js` and `src/use-cases/conservative-trading-engine.test.js`.
+- [ ] Exact-head CI verification and merge of [PR #987](https://github.com/45s/coinzilla/pull/987); no live/TESTNET operations or process restart are part of this task.
