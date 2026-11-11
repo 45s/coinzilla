@@ -38,6 +38,25 @@ test("validates strategy-owned pairs without requiring exchange-mode configurati
   assert.equal(config.strategies.CG_coinGrabber.pairs.ZROFDUSD.investment, 100, "The pair investment setting must remain part of strategy configuration.")
 })
 
+
+test("accepts independent minimum-profit thresholds for each market", () => {
+  const config = createAppConfig()
+  const strategyConfig = config.strategies.CG_coinGrabber
+  delete strategyConfig.settings.minProfit
+  strategyConfig.pairs.ZROFDUSD.minProfit = 0.01
+  strategyConfig.pairs.LINKUSDT = {
+    ...strategyConfig.pairs.ZROFDUSD,
+    investment: 200,
+    orderQuantity: 2,
+    keepQuantity: 0,
+    minProfit: 0.1,
+  }
+
+  assert.equal(validateAppConfig(config), config)
+  assert.equal(strategyConfig.pairs.ZROFDUSD.minProfit, 0.01)
+  assert.equal(strategyConfig.pairs.LINKUSDT.minProfit, 0.1)
+})
+
 test("selects Binance TESTNET from TRADING_MODE even when NODE_ENV says production", () => {
   const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: "testnet", environment: "production" })
   assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for TESTNET.")
