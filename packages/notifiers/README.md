@@ -58,8 +58,7 @@ Architecture regression tests protect the dependency direction and keep composit
     } from "@coinzilla/notifiers"
 
 - TelegramNotifier: validates options and sends plain-text messages through Telegram's sendMessage Bot API method.
-- subscribeTelegramNotifications: subscribes to the full supported event allowlist by default, or to a validated `eventNames` subset selected by the consuming application; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
-- TELEGRAM_NOTIFICATION_EVENTS: immutable list of Telegram subscriber event names supported by the current integration.
+- subscribeTelegramNotifications: subscribes to the full supported event allowlist by default, to the application-provided `eventNames` list; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
 - `subscribeTelegramNotifications` requires a `formatMessage(event)` function from the consuming application. It never formats domain events itself.
 
 The package does not load environment variables. Applications own configuration and secret management.
@@ -98,8 +97,8 @@ Both values are required by the consuming application. Leave both unset to disab
       formatMessage: (event) => `${event.name}: ${event.data?.summary ?? ""}`,
       logger,
       maxPending: 1000,
-      // Optional: select a validated subset of supported notification events.
       eventNames: ["bot.started", "fill.received", "bot.pair_paused"],
+      formatMessage: (event) => `${event.name}: ${event.data?.summary ?? ""}`,
     })
 
     eventBus.publish({
@@ -139,7 +138,7 @@ Both values are required by the consuming application. Leave both unset to disab
 | order.failed | Submission or cancellation failure |
 | account.safety_alert | Account, execution, or ownership safety alert |
 
-High-volume events such as order.execution_report are intentionally excluded. The exported allowlist contains every supported formatter event. Consumers may pass an `eventNames` array to subscribe to a unique subset; unknown names, duplicates, malformed values, and an empty selection are rejected before any subscription is registered. Omitting `eventNames` preserves the original full-allowlist behavior. The application-supplied formatter controls outbound content; the notifier subscriber only delivers its returned string.
+High-volume events such as order.execution_report are intentionally excluded. The exported allowlist contains every supported formatter event. Consumers may pass an `eventNames` array to subscribe to a unique subset; duplicates, malformed values, and an empty selection are rejected before any subscription is registered. The notifier package does not define application event names. The application-supplied formatter controls outbound content; the notifier subscriber only delivers its returned string.
 
 ## Reliability and security contract
 
