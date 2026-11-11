@@ -1737,3 +1737,33 @@ test("restores sticky safety blockers into durable and effective market pauses",
   assert.equal(restored.data.durablePausedMarkets.has("BTCUSDT"), true)
   assert.equal(restored.data.stickySafetyBlockers.length, 1)
 })
+
+test("ignores explicitly classified Harvester diagnostics without treating them as recovery facts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      harvesterRecord("harvester.process_started", { runtimeSessionId: "session-1" }),
+      harvesterRecord("broker.connected", { broker: "binance" }),
+      harvesterRecord("strategy.decision", { symbol: "BTCUSDT" }),
+      harvesterRecord("execution.duplicate_fill", { symbol: "BTCUSDT" }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.stickySafetyBlockers, [])
+  assert.deepEqual(result.data.orders, [])
+})
+
+test("rejects a RECOVERY snapshot that appears before the Journal session starts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("account.snapshot_captured", {
+      phase: "RECOVERY",
+      sourceTime: 100,
+      auditStatus: "COMPLETE",
+      balances: [],
+      auditReasons: [],
+    })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /RECOVERY account snapshot requires a started Journal session/)
+})
