@@ -76,3 +76,9 @@ flowchart TD
 ```
 
 The prose safety contract above is authoritative. The diagram summarizes the metadata-to-readiness boundary.
+
+
+## Official Binance references
+
+- [Spot symbol, exchange and asset filters](https://github.com/binance/binance-spot-api-docs/blob/master/filters.md) — definitions and applicability of the public filters.
+- [Spot WebSocket API: Query Relevant Filters (`myFilters`)](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) — authenticated, symbol-specific account filter source, including `MAX_ASSET`.
