@@ -138,6 +138,8 @@ Use the existing Harvester-owned order registry and durable cancellation workflo
 5. Require canonical terminal order facts and reconcile all fills, including fills racing with cancellation.
 6. If cancellation outcome, terminal status, fill history or accounting is uncertain, remain protected. Never assume the BUY was canceled and never blindly retry an uncertain request.
 
+Volatility-specific cancellation behavior: a definite NOT_SENT result leaves the owned order OPEN and may be retried no more than once per five seconds (or on a new completed candle). An unconfirmed outcome is recorded as UNKNOWN and is not blindly retried; the market stays protected until authoritative reconciliation resolves it. If the registry cannot record UNKNOWN, or fill/accounting reconciliation fails, the existing full account-integrity pause remains in force. Otherwise, volatility protection does not activate the global pause, so known recovery SELL management can continue.
+
 ### Recovery SELL exception
 
 - Existing recovery SELL orders remain resting at their current exchange price and quantity. Volatility protection alone does not cancel, replace or reprice them.
@@ -192,11 +194,12 @@ Volatility state is process-local in the first implementation. It is not a subst
 
 ## 9. Delivery order
 
-1. **Brokers:** add the normalized historical-candle and live-candle public contract, Binance adapters, and offline protocol/normalization tests.
-2. **Indicators:** implement the reusable ATR, NATR and volatility-ratio API — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
-3. **Harvester market data:** fetch startup history, subscribe to live candles, maintain a bounded completed-candle series, detect stale/gapped data and backfill after reconnect.
-4. **Harvester protection:** implement per-market states, thresholds/hysteresis, the central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation.
-5. **Verification/docs:** complete the regression matrix, update operational guidance and roadmaps, and pass exact-head CI.
+1. [x] **Brokers:** normalized historical-candle and live-candle public contract, Binance adapters, and offline protocol/normalization tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
+2. [x] **Indicators:** reusable ATR, NATR and volatility-ratio API — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+3. [x] **Harvester broker port:** application-owned historical/live candle methods — [PR #1019](https://github.com/45s/coinzilla/pull/1019).
+4. [x] **Harvester market data:** startup history, bounded completed-candle series, freshness/gap detection and reconnect backfill — [PR #1037](https://github.com/45s/coinzilla/pull/1037).
+5. [~] **Harvester protection:** per-market states, thresholds/hysteresis, freshness monitor, central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation — [PR #1038](https://github.com/45s/coinzilla/pull/1038), pending exact-head CI and review.
+6. [ ] **Verification and calibration:** complete the full regression matrix and validate the initial thresholds against representative offline historical market data before unattended production use.
 
 No TESTNET/LIVE order, cancellation, restart or other exchange operation is authorized by these implementation steps. A separate controlled validation requires explicit operator approval.
 
