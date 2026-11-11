@@ -52,7 +52,6 @@ test("paginates each market from the durable baseline with strictly advancing tr
     limit: 2,
     requestDelayMs: 5,
     sleep: async (input) => sleeps.push(input),
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, true)
@@ -63,8 +62,8 @@ test("paginates each market from the durable baseline with strictly advancing tr
   assert.equal(result.data.marketHistoryComplete, true)
   assert.equal(result.data.historyScope, "MARKET")
   assert.deepEqual(result.data.marketsQueried, ["BTCUSDT"])
-  assert.equal(result.data.marketUniverseComplete, true)
-  assert.equal(result.data.complete, true)
+  assert.equal(result.data.marketUniverseComplete, false)
+  assert.equal(result.data.complete, false)
   assert.deepEqual(calls, [
     { symbol: "BTCUSDT", limit: 2, startTime: 50 },
     { symbol: "BTCUSDT", limit: 2, fromId: 3 },
@@ -89,6 +88,9 @@ test("enumerates every supplied market and does not claim the universe is comple
 
   assert.equal(result.ok, true)
   assert.equal(result.data.marketsChecked, 2)
+  assert.equal(result.data.marketHistoryComplete, true)
+  assert.equal(result.data.historyScope, "MARKETS")
+  assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.complete, false)
   assert.deepEqual(calls, [
     { symbol: "BTCUSDT", limit: 1000, startTime: 50 },
@@ -221,4 +223,18 @@ test("rejects an empty market catalog instead of treating an empty scan as compl
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /at least one canonical Market/)
+})
+
+
+test("rejects caller-supplied account-wide market-universe completeness", async () => {
+  const result = await fetchAccountTradeHistory({
+    broker: { getFills: async () => ({ ok: true, data: [] }) },
+    markets: [market],
+    startTime: 50,
+    requestDelayMs: 0,
+    marketUniverseComplete: true,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /cannot certify the historical market universe/)
 })
