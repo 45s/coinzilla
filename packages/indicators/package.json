@@ -1,0 +1,17 @@
+{
+  "name": "@coinzilla/indicators",
+  "version": "1.0.0",
+  "description": "Exchange-neutral technical indicator calculations",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/*.js --test-coverage-exclude=src/*.test.js --test-coverage-lines=90 --test-coverage-branches=85"
+  },
+  "dependencies": {
+    "@coinzilla/utils": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
