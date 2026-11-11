@@ -429,7 +429,7 @@ export function auditRecoveredAccountState({
       const expected = expectedByBrokerId.get(brokerOrderId)
       if (!expected) {
         if (recoveredByBrokerId.has(brokerOrderId)) {
-          throw new Error("Exchange reports a terminal recovered order as open: " + brokerOrderId)
+          throw new Error("Exchange reports a non-active recovered order as open: " + brokerOrderId)
         }
         if (recoveredByClientOrderId.has(identity.clientOrderId)) {
           throw new Error("Unowned exchange order clientOrderId conflicts with recovered order ownership: " + identity.clientOrderId)
