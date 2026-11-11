@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-11
-**Last source-verified develop checkpoint:** `8964b34ab80073beb1aa507c5b4fcb2b454abc30` (after PR #1049: Harvester candle-stream freshness correction)
+**Last reviewed:** 2026-11-12
+**Last source-verified develop checkpoint:** `397127e2360b5b3dcab05f22e73c9be2cf108e91` (PR #1047 merged; ADR-0001 Step 7 orchestration/confirmation is now on develop)
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -25,8 +25,9 @@
 2. **Process-restart reconciliation (#654) — ADR-0001 and durable-fact foundation implemented; startup restoration remains disabled.**
    - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.
    - **Completed:** ADR-0001 was accepted in [PR #1003](https://github.com/45s/coinzilla/pull/1003); recovery Steps 1–6 and the durable-fact store/coverage primitives are merged through [PR #1036](https://github.com/45s/coinzilla/pull/1036).
-   - **In progress:** [PR #1047](https://github.com/45s/coinzilla/pull/1047) composes canonical owned-order reconciliation, account-wide balances/open orders and complete one-market fill history, then gates the first MARKET_HISTORY_COVERAGE_CONFIRMED append on a READY audit.
-   - **Remaining:** complete the offline command/context composition and full one-market end-to-end evidence matrix; then implement Step 8 closed-gate candidate restoration and Step 9 crash/restart proof.
+   - **Completed:** [PR #1047](https://github.com/45s/coinzilla/pull/1047) merged the read-only one-market orchestration and READY-gated MARKET_HISTORY_COVERAGE_CONFIRMED append/readback.
+   - **In review:** [PR #1053](https://github.com/45s/coinzilla/pull/1053) implements the offline JSON context/CLI adapter and production-audit end-to-end evidence matrix. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the PR remains draft/unmerged pending user review.
+   - **Remaining:** complete Step 7 verification, then implement Step 8 closed-gate candidate restoration and Step 9 crash/restart proof.
    - **Safety:** unattended restart readiness remains blocked. The Journal is not the recovery authority; do not wire runtime replay or claim legacy Journal history is complete.
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
