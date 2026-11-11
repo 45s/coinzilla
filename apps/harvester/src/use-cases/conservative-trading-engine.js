@@ -145,6 +145,7 @@ export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
 export function makeConservativeTradingEngine({
   broker, strategyPolicy, appConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
+  hasUnownedOpenOrdersForSymbol = () => false,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   logger,
@@ -163,6 +164,9 @@ export function makeConservativeTradingEngine({
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
+  if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
+    throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
+  }
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
   if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
     throw new TypeError("initialState must be an object")
@@ -516,7 +520,8 @@ export function makeConservativeTradingEngine({
     canSubmit: ({ order } = {}) => {
       const symbol = order.market.symbol
       const marketPrice = state.prices.get(symbol)
-      if (state.paused.has(symbol) || !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
+      if (state.paused.has(symbol) || hasUnownedOpenOrdersForSymbol({ symbol }) ||
+          !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
       if (order.type !== "LIMIT_MAKER") return true
       const marketBook = state.books.get(symbol)
       return Boolean(marketBook && isMarketBookFresh(marketBook) &&
@@ -990,6 +995,10 @@ export function makeConservativeTradingEngine({
   } = {}) => {
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
+    }
+    if (hasUnownedOpenOrdersForSymbol({ symbol })) {
+      state.deferredEvaluations.add(symbol)
+      return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
     }
     if (!canTrade({ symbol })) {
       state.deferredEvaluations.add(symbol)
