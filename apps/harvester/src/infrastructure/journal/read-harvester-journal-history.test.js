@@ -88,11 +88,12 @@ test("recursively discovers nested process sessions together with legacy flat fi
   )
 
   try {
-    await writeLegacyFlatSession({
+    await writeJournalSession({
       directory: rootDirectory,
-      fileName: "2026-11-08_12-00-00.jsonl",
-      id: "legacy-flat",
-      timestamp: "2026-11-08T12:00:00.000Z",
+      startedAt: "2026-11-08T12:00:00.000Z",
+      runtimeSessionId: "legacy-run",
+      processId: 1000,
+      eventName: "harvester.legacy_session",
     })
     await writeJournalSession({
       directory: nestedSessionDirectory,
@@ -107,17 +108,18 @@ test("recursively discovers nested process sessions together with legacy flat fi
     assert.deepEqual(
       result.records.map((record) => record.payload.name),
       [
+        "harvester.process_started",
         "harvester.legacy_session",
         "harvester.process_started",
         "harvester.current_session",
       ],
       "Legacy flat history and nested process history must be returned in validated chronological order",
     )
-    assert.equal(result.count, 3)
+    assert.equal(result.count, 4)
     assert.equal(result.sessions.length, 2)
     assert.deepEqual(
       result.sessions.map((session) => session.chronologySource),
-      ["FIRST_RECORD_TIMESTAMP", "PROCESS_STARTED"],
+      ["PROCESS_STARTED", "PROCESS_STARTED"],
     )
   } finally {
     await rm(rootDirectory, { recursive: true, force: true })
