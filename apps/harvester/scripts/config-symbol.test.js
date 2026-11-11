@@ -76,7 +76,7 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
   assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
   assert.equal(writes[0].pairConfig.enabled, true, "The generated pair must match the enabled config entry expected by the operator.")
-  assert.equal(writes[0].pairConfig.orderQuantity, 100, "Order sizing must also respect the active maximum-notional filter.")
+  assert.equal(writes[0].pairConfig.orderQuantity, 20, "The operator-selected quantity must be used for each individual order.")
   assert.equal(writes[0].pairConfig.minProfit, 0.01, "The operator-supplied minimum profit must be preserved.")
   assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The operator-supplied price step must be preserved.")
   assert.equal(result.written, true, "The CLI result must report a successful write only after the writer resolves.")
@@ -91,7 +91,7 @@ test("rejects invalid operator input before making any Binance request", async (
   let writes = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "testnet", "100", "0.1", "100", "0.1", "0.01", "0.05", ""]),
+      ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "100", "0.1", "0.01", "0.05", ""]),
       loadConfig: async () => createAppConfig(),
       metadataFetcher: async () => {
         metadataCalls += 1
