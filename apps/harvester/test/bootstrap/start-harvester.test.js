@@ -174,6 +174,9 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   const fillsByOrderId = new Map();
   let onPrice;
   let onUserDataEvent;
+  const candleHistoryRequests = [];
+  const candleSubscriptions = new Map();
+  const candleUnsubscriptions = [];
   let observedTrade;
   const tradeObserved = new Promise((resolve) => { observedTrade = resolve; });
   const broker = {
