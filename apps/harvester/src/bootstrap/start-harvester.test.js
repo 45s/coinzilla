@@ -46,7 +46,7 @@ async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_
   }
 }
 
-const harvesterConfig = {
+const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -261,17 +261,17 @@ const createFill = ({ tradeId = "trade-1", quantity = "0.01" } = {}) => {
 test("requires an explicit TRADING_MODE before connecting to Binance", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { TRADING_MODE: undefined },
     brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
   }), /TRADING_MODE must be set to "testnet" or "live"/)
   assert.equal(brokerFactoryCalled, false)
 })
 
-test("rejects enabling the deferred Aggressive strategy in Harvester config", async () => {
+test("rejects enabling the deferred Aggressive strategy in app config", async () => {
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => ({ ...harvesterConfig, strategies: { ...harvesterConfig.strategies, CG_coinGrabber: { ...harvesterConfig.strategies.CG_coinGrabber, settings: { ...harvesterConfig.strategies.CG_coinGrabber.settings, aggressive: { enabled: true } } } } }),
+      loadConfig: async () => ({ ...appConfig, strategies: { ...appConfig.strategies, CG_coinGrabber: { ...appConfig.strategies.CG_coinGrabber, settings: { ...appConfig.strategies.CG_coinGrabber.settings, aggressive: { enabled: true } } } } }),
       env: binanceEnv,
       brokerAdapterFactory: () => createBroker(),
       logger: { info() {}, error() {} },
@@ -284,7 +284,7 @@ test("subscribes only enabled pairs for Binance trading", async () => {
   const calls = []
   const broker = createBroker(calls)
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -336,7 +336,7 @@ test("keeps external open orders audit-blocked but does not block startup or can
   }
   const logs = []
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -392,11 +392,11 @@ test("subscribes every enabled market before waiting for the first market's REST
     placeOrderCalls += 1
     return { ok: true }
   }
-  const strategy = harvesterConfig.strategies.CG_coinGrabber
+  const strategy = appConfig.strategies.CG_coinGrabber
   const config = {
-    ...harvesterConfig,
+    ...appConfig,
     strategies: {
-      ...harvesterConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
         ...strategy,
         pairs: {
@@ -444,7 +444,7 @@ test("subscribes every enabled market before waiting for the first market's REST
 
 test("starts the Conservative trading engine and applies fills to Portfolio", async () => {
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => createBroker(),
     logger: { info() {}, error() {} },
@@ -463,7 +463,7 @@ test("starts the Conservative trading engine and applies fills to Portfolio", as
 })
 
 test("serializes concurrent Portfolio updates without losing fills", async () => {
-  const result = await startHarvesterForTest({ loadConfig: async () => harvesterConfig, env: {} })
+  const result = await startHarvesterForTest({ loadConfig: async () => appConfig, env: {} })
   const [first, second] = await Promise.all([
     result.updatePortfolio({ fill: createFill({ tradeId: "trade-1" }) }),
     result.updatePortfolio({ fill: createFill({ tradeId: "trade-2" }) }),
@@ -481,7 +481,7 @@ test("disconnects when a market price subscription fails", async () => {
   })
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {} },
@@ -510,13 +510,13 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
     },
   })
   const config = {
-    ...harvesterConfig,
+    ...appConfig,
     strategies: {
-      ...harvesterConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
-        ...harvesterConfig.strategies.CG_coinGrabber,
+        ...appConfig.strategies.CG_coinGrabber,
         pairs: {
-          ...harvesterConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies.CG_coinGrabber.pairs,
           ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
         },
       },
@@ -552,7 +552,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
 test("passes live TRADING_MODE to the Binance broker factory during startup", async () => {
   let brokerConfig
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "test", TRADING_MODE: "live" },
     brokerAdapterFactory: ({ config }) => {
       brokerConfig = config
@@ -569,7 +569,7 @@ test("passes live TRADING_MODE to the Binance broker factory during startup", as
 test("rejects an invalid TRADING_MODE before connecting to Binance", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { TRADING_MODE: "production" },
     brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
   }), /TRADING_MODE must be set to "testnet" or "live"/)
@@ -585,7 +585,7 @@ test("disconnects after a failed broker connection", async () => {
   }
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
     }),
@@ -598,7 +598,7 @@ test("does not adopt unowned execution events into strategy accounting", async (
   const broker = createBroker()
   const fill = createFill({ tradeId: "user-data-trade-1" })
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -626,7 +626,7 @@ test("does not clear a genuine startup stream-recovery gate with only the initia
 
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: {
         ...binanceEnv,
         NODE_ENV: "development",
@@ -652,7 +652,7 @@ test("does not adopt an external order report received before the ownership regi
 
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: {
         ...binanceEnv,
         NODE_ENV: "development",
@@ -707,7 +707,7 @@ test("starts application reconciliation on transport recovery and acknowledges o
   }
 
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -796,7 +796,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
     }
   }
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -825,7 +825,7 @@ test("logs stack and cause details when a user-data RPC error has an empty messa
   const broker = createBroker()
   const diagnostics = []
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: {
@@ -875,7 +875,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   }
 
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -935,7 +935,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
   }
 
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -975,7 +975,7 @@ test("fails startup when user-data recovery is required during subscription setu
   }
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {} },
@@ -987,7 +987,7 @@ test("fails startup when user-data recovery is required during subscription setu
 test("marks trading ready only after the mandatory account preflight audit", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -1003,7 +1003,7 @@ test("marks trading ready only after the mandatory account preflight audit", asy
 test("blocks trading after execution accounting failure", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     onUserDataEvent: async () => {},
@@ -1032,7 +1032,7 @@ test("fails startup closed when user-data subscription cannot be established", a
 
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {} },
@@ -1045,7 +1045,7 @@ test("fails startup closed when user-data subscription cannot be established", a
 test("does not expose a broker port that could bypass the trading engine", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -1060,7 +1060,7 @@ test("fails closed on malformed external TRADE reports", async () => {
   const broker = createBroker()
   let observed = false
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -1103,7 +1103,7 @@ test("fails startup before opening streams when required minimum notional is una
 
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {} },
@@ -1129,7 +1129,7 @@ test("fails startup when the configured post-only order type is unsupported", as
 
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {} },
@@ -1149,7 +1149,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
     return { ok: false, errors: [new Error("account endpoint unavailable")] }
   }
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -1192,7 +1192,7 @@ test("fails startup when the exchange snapshot omits a configured market asset",
 
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {} },
@@ -1214,7 +1214,7 @@ test("fails startup when the exchange snapshot omits a configured market asset",
 test("does not clear the ownership gate after stream recovery acknowledgement", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -1917,7 +1917,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   const broker = createBroker()
   broker.getOpenOrders = async () => ({ ok: true, data: [] })
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -1957,7 +1957,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.equal(targetMarketEvaluation.price, "65000.12")
   assert.ok(typeof targetMarketEvaluation.action === "string" && targetMarketEvaluation.action.length > 0)
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
-  assert.ok(systemMessages.includes("Harvester configuration validated"))
+  assert.ok(systemMessages.includes("app configuration validated"))
   assert.ok(systemMessages.includes("User-data stream connected"))
   assert.ok(systemMessages.includes("Exchange account snapshot loaded"))
   assert.ok(systemMessages.includes("Conservative TESTNET trading engine activated"))
@@ -1991,7 +1991,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
 test("retains an explicitly injected application event publisher in TESTNET runtime", async () => {
   const eventPublisher = { publish: () => ({ ok: true }) }
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {},
     eventPublisher,
   })
@@ -2062,7 +2062,7 @@ test("stops broker intake before draining queued user-data and disconnects after
   const queueStarted = new Promise((resolve) => { signalQueueStarted = resolve })
   let queuedEvents = 0
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -2103,7 +2103,7 @@ test("logs safe correlation details when an execution report is not owned", asyn
   const broker = createBroker()
   const errors = []
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -2195,7 +2195,7 @@ test("reconciles the in-memory order registry before reopening trading after str
     }
   }
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -2227,7 +2227,7 @@ test("reconciles the in-memory order registry before reopening trading after str
 test("fails closed when TRADING_MODE is missing, before broker construction", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { TRADING_MODE: undefined },
     brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
     logger: { info() {}, error() {} },
@@ -2283,7 +2283,7 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
 test("emits per-execution debug audit records with commission and before/after accounting", async () => {
   const debugRecords = []
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {},
     logger: {
       info() {},
@@ -2332,7 +2332,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   const events = []
   let flushCount = 0
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
@@ -2396,15 +2396,15 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
     }
   }
   const config = {
-    ...harvesterConfig,
+    ...appConfig,
     strategies: {
-      ...harvesterConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
-        ...harvesterConfig.strategies.CG_coinGrabber,
+        ...appConfig.strategies.CG_coinGrabber,
         pairs: {
-          ...harvesterConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies.CG_coinGrabber.pairs,
           BTCUSDT: {
-            ...harvesterConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
             investment: 2000,
           },
         },
@@ -2481,7 +2481,7 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
     },
   }
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     eventPublisher,
@@ -2525,7 +2525,7 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
   const calls = []
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
@@ -2571,14 +2571,14 @@ test("journals pre-existing account-wide orders and allows trading startup witho
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => ({
-      ...harvesterConfig,
+      ...appConfig,
       strategies: {
-        ...harvesterConfig.strategies,
+        ...appConfig.strategies,
         CG_coinGrabber: {
-          ...harvesterConfig.strategies.CG_coinGrabber,
+          ...appConfig.strategies.CG_coinGrabber,
           pairs: {
-            ...harvesterConfig.strategies.CG_coinGrabber.pairs,
-            BTCUSDT: { ...harvesterConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, enabled: true },
+            ...appConfig.strategies.CG_coinGrabber.pairs,
+            BTCUSDT: { ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, enabled: true },
           },
         },
       },
@@ -2615,7 +2615,7 @@ test("fails closed before market subscriptions when the account-wide open-order 
     errors: [new Error("Binance openOrders.status unavailable")],
   })
   await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
@@ -2663,7 +2663,7 @@ test("captures and durably journals balances and account-wide open orders on tra
   const events = []
   let flushCount = 0
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     eventPublisher: {
@@ -2722,7 +2722,7 @@ test("records pre-existing account-wide orders without adopting or changing them
   broker.placeOrder = async () => { placeCalls += 1; return { ok: true } }
   const events = []
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     eventPublisher: {
@@ -2754,7 +2754,7 @@ test("blocks trading startup when either account audit query fails", async () =>
     }
 
     await assert.rejects(startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       logger: { info() {}, error() {}, debug() {} },
@@ -2774,7 +2774,7 @@ test("blocks trading startup when either PREFLIGHT audit event cannot be durably
     const events = []
     let flushCount = 0
     await assert.rejects(startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       eventPublisher: {
@@ -2807,7 +2807,7 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
     const broker = createBroker(calls)
     const events = []
     await assert.rejects(startHarvesterForTest({
-      loadConfig: async () => harvesterConfig,
+      loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       eventPublisher: {
@@ -2851,7 +2851,7 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   }
 
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -2946,15 +2946,15 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   }
 
   const config = {
-    ...harvesterConfig,
+    ...appConfig,
     strategies: {
-      ...harvesterConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
-        ...harvesterConfig.strategies.CG_coinGrabber,
+        ...appConfig.strategies.CG_coinGrabber,
         pairs: {
-          ...harvesterConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies.CG_coinGrabber.pairs,
           BTCUSDT: {
-            ...harvesterConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
             orderQuantity: 0.001,
           },
         },
@@ -3073,16 +3073,16 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     return result
   }
 
-  const harvesterConfigWithRegularLimitBuys = {
-    ...harvesterConfig,
+  const appConfigWithRegularLimitBuys = {
+    ...appConfig,
     strategies: {
-      ...harvesterConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
-        ...harvesterConfig.strategies.CG_coinGrabber,
+        ...appConfig.strategies.CG_coinGrabber,
         pairs: {
-          ...harvesterConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies.CG_coinGrabber.pairs,
           BTCUSDT: {
-            ...harvesterConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
             makerPercent: 0.1,
             takerPercent: 0.1,
           },
@@ -3092,7 +3092,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
   }
   const journalEvents = []
   const result = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfigWithRegularLimitBuys,
+    loadConfig: async () => appConfigWithRegularLimitBuys,
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -3218,13 +3218,13 @@ test("account snapshots include every configured pair asset, including disabled 
   const broker = createBroker(calls)
   const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
   const snapshotConfig = {
-    ...harvesterConfig,
+    ...appConfig,
     strategies: {
-      ...harvesterConfig.strategies,
+      ...appConfig.strategies,
       CG_coinGrabber: {
-        ...harvesterConfig.strategies.CG_coinGrabber,
+        ...appConfig.strategies.CG_coinGrabber,
         pairs: {
-          ...harvesterConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
             enabled: false, investment: 100, orderQuantity: 400, keepQuantity: 1,
             priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
@@ -3364,7 +3364,7 @@ test("identifies user-data events received during application recovery as recove
   }
 
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
