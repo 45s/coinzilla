@@ -84,7 +84,7 @@ test("rejects mismatched market symbols before storing metadata", async () => {
 })
 
 
-test("does not activate an enabled market with unvalidated exchange constraints", async () => {
+test("traces complete exchange-filter evidence before blocking an enabled market", async () => {
   const metadata = {
     ...createMetadata("BTCUSDT"),
     unvalidatedConstraints: [
@@ -92,6 +92,7 @@ test("does not activate an enabled market with unvalidated exchange constraints"
     ],
   }
   const marketMetadata = new Map()
+  const traceEntries = []
 
   await assert.rejects(
     loadMarketMetadata({
@@ -107,10 +108,23 @@ test("does not activate an enabled market with unvalidated exchange constraints"
       },
       marketMetadata,
       eventPublisher: { publish: () => ({ ok: true }) },
-      logger: {},
+      logger: { trace: (entry) => traceEntries.push(entry) },
     }),
-    /cannot validate: DYNAMIC_PRICE_BAND\/SYMBOL\/PERCENT_PRICE/,
+    (error) => {
+      assert.equal(error.name, "UnvalidatedMarketExchangeConstraintsError", "Bootstrap must preserve the named readiness error.")
+      assert.equal(error.symbol, "BTCUSDT", "The startup failure must retain the exact configured market.")
+      return true
+    },
     "The bootstrap market loader must fail before strategy activation when an applicable exchange constraint has no domain evaluator.",
   )
-  assert.equal(marketMetadata.size, 0, "A market rejected by exchange-constraint readiness must not be inserted into the active metadata map.")
+  assert.equal(marketMetadata.size, 0, "A rejected market must never be inserted into the active metadata map.")
+  assert.ok(
+    traceEntries.some((entry) =>
+      entry.operation === "validate-market-trading-readiness" &&
+      entry.symbol === "BTCUSDT" &&
+      entry.unvalidatedConstraints?.[0]?.sourceFilterType === "PERCENT_PRICE"
+    ),
+    "Trace diagnostics must record the source filter descriptor before the readiness gate rejects the market.",
+  )
 })
+

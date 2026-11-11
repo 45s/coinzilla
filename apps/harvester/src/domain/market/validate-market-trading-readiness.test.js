@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { validateMarketTradingReadiness } from "./validate-market-trading-readiness.js"
+import { UnvalidatedMarketExchangeConstraintsError } from "./errors/unvalidated-market-exchange-constraints-error.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
@@ -220,7 +221,7 @@ test("enforces MIN_NOTIONAL at exact equality and immediately below the configur
 })
 
 
-test("blocks an enabled market when any applicable exchange constraint remains unvalidated", () => {
+test("blocks an enabled market with a named error that retains every unvalidated exchange constraint", () => {
   const metadata = {
     ...makeMetadata(),
     unvalidatedConstraints: [
@@ -235,7 +236,15 @@ test("blocks an enabled market when any applicable exchange constraint remains u
       pairConfig,
       marketMetadata: metadata,
     }),
-    /DYNAMIC_PRICE_BAND\/SYMBOL\/PERCENT_PRICE_BY_SIDE.*BASE_ASSET_POSITION_LIMIT\/ACCOUNT\/MAX_POSITION/,
+    (error) => {
+      assert.ok(error instanceof UnvalidatedMarketExchangeConstraintsError, "An enabled market with unvalidated filters must fail with its named domain error.")
+      assert.equal(error.name, "UnvalidatedMarketExchangeConstraintsError", "The error name must identify the exact readiness failure.")
+      assert.equal(error.code, "HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS", "The readiness error must expose a stable machine-readable code.")
+      assert.equal(error.symbol, "DOGEUSDT", "The readiness error must identify the blocked market.")
+      assert.deepEqual(error.constraints, metadata.unvalidatedConstraints, "The readiness error must retain every canonical blocker and source filter type.")
+      assert.match(error.message, /DOGEUSDT.*DYNAMIC_PRICE_BAND.*PERCENT_PRICE_BY_SIDE.*BASE_ASSET_POSITION_LIMIT.*MAX_POSITION/, "The message must name the blocked market and all filters preventing startup.")
+      return true
+    },
     "An enabled market must not become tradable while dynamic price or account position constraints are not validated.",
   )
 })
