@@ -144,3 +144,11 @@ test("rejects duplicate or malformed Telegram market filters", () => {
     "An empty Telegram market symbol must be rejected rather than matching no market accidentally.",
   )
 })
+
+test("uses generic app config wording for validation errors", () => {
+  assert.throws(
+    () => validateAppConfig(null),
+    (error) => error instanceof TypeError && error.message.startsWith("Invalid app config"),
+    "Configuration validation errors must identify the generic app config, not the application name or trading domain.",
+  )
+})
