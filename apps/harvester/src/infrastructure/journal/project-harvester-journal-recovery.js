@@ -813,7 +813,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
     for (const [symbol, pendingSell] of lastFullyFilledSellBySymbol) {
       if (pendingSell.outcome === undefined) {
-        throw new Error("Fully filled SELL has no explicit recovery-cycle outcome for " + symbol)
+        throw new Error("fully filled SELL has no explicit recovery-cycle outcome for " + symbol)
       }
     }
 
