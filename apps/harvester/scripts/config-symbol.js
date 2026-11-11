@@ -60,7 +60,9 @@ export async function runConfigSymbol({
   })
 
   const existingConfig = await loadConfig(configPath)
-  if (Object.hasOwn(existingConfig.strategies.CG_coinGrabber.pairs, symbol)) {
+  const existingSymbol = Object.keys(existingConfig.strategies.CG_coinGrabber.pairs)
+    .find((candidate) => candidate.trim().toUpperCase() === symbol)
+  if (existingSymbol) {
     throw new Error("Pair " + symbol + " already exists in config.json; refusing to overwrite it")
   }
 

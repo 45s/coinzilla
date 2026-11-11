@@ -121,6 +121,25 @@ test("refuses an existing symbol before making an exchange request", async () =>
   assert.equal(metadataCalls, 0, "An existing symbol must not trigger unnecessary external requests.")
 })
 
+test("detects a case-insensitive existing pair before calling Binance", async () => {
+  const config = createAppConfig()
+  config.strategies.CG_coinGrabber.pairs.adafdusd = config.strategies.CG_coinGrabber.pairs.LINKFDUSD
+  let metadataCalls = 0
+  await assert.rejects(
+    runConfigSymbol({
+      ask: createAsk(["ADAFDUSD", "100", "0.1", "0", "0.1", "", "", ""]),
+      loadConfig: async () => config,
+      metadataFetcher: async () => {
+        metadataCalls += 1
+        return metadata
+      },
+    }),
+    /already exists/i,
+    "The CLI must not create a second pair whose symbol differs only by case.",
+  )
+  assert.equal(metadataCalls, 0, "Case-insensitive duplicates must be rejected before contacting Binance.")
+})
+
 test("cancels safely when the operator declines the configuration preview", async () => {
   let writes = 0
   const result = await runConfigSymbol({

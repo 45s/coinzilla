@@ -220,6 +220,18 @@ test("adds a new pair without mutating or replacing existing application configu
   assert.deepEqual(updated.notifications, original.notifications, "Unrelated application-wide settings must be preserved.")
 })
 
+test("refuses case-insensitive duplicates in the canonical pair map", () => {
+  const original = createAppConfig()
+  const existingPair = original.strategies.CG_coinGrabber.pairs.LINKFDUSD
+  delete original.strategies.CG_coinGrabber.pairs.LINKFDUSD
+  original.strategies.CG_coinGrabber.pairs.linkfdusd = existingPair
+  assert.throws(
+    () => addPairToAppConfig({ appConfig: original, symbol: "LINKFDUSD", pairConfig: existingPair }),
+    /already exists/i,
+    "A differently cased existing key must not be duplicated by the uppercase generator input.",
+  )
+})
+
 test("refuses to overwrite an existing symbol", () => {
   const original = createAppConfig()
   assert.throws(
