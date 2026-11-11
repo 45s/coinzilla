@@ -267,7 +267,8 @@ test("detects partial or torn final records in either append-only stream", async
   const manifestPath = path.join(directory, "manifest.jsonl")
   const manifestLog = await readFile(manifestPath, "utf8")
   await writeFile(manifestPath, manifestLog + "{")
-  assert.equal((await store.verify()).ok, false)
+  const freshStore = createStore(directory)
+  assert.equal((await freshStore.verify()).ok, false)
 })
 
 test("rejects unknown fact and manifest fields even when their JSON remains canonical", async (t) => {
@@ -286,6 +287,7 @@ test("rejects unknown fact and manifest fields even when their JSON remains cano
   await writeFile(factPath, factLines.join("\n") + "\n")
   assert.equal((await store.verify()).ok, false)
   await writeFile(factPath, originalFacts)
+  const freshStore = createStore(directory)
   const manifestPath = path.join(directory, "manifest.jsonl")
   const originalManifest = await readFile(manifestPath, "utf8")
   const manifestLines = originalManifest.trimEnd().split("\n")
@@ -294,7 +296,7 @@ test("rejects unknown fact and manifest fields even when their JSON remains cano
   manifest.digest = digestRecord(manifest)
   manifestLines[1] = canonicalStringify(manifest)
   await writeFile(manifestPath, manifestLines.join("\n") + "\n")
-  assert.equal((await store.verify()).ok, false)
+  assert.equal((await freshStore.verify()).ok, false)
 })
 
 test("detects a broken committed-head manifest digest chain", async (t) => {
