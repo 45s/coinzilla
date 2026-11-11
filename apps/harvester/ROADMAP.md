@@ -185,7 +185,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
    - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
    - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
-   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior; exact-head CI is pending.
+   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the draft PR remains unmerged and awaits review, so Step 7 remains in progress on `develop`.
 
 8. **[ ] Step 8 — Restore behind a closed readiness gate.**
    - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
