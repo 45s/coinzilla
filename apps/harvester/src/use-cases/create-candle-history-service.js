@@ -149,9 +149,6 @@ function calculateMetrics({ candles } = {}) {
   const natrSeries = calculateNatrSeries(indicatorInput)
   const currentNatr = natrSeries.at(-1)
   const reference = natrSeries.slice(-REFERENCE_OBSERVATIONS - 1, -1)
-  if (reference.length !== REFERENCE_OBSERVATIONS) {
-    return { metrics: null, reason: "INSUFFICIENT_HISTORY" }
-  }
 
   const referenceTotal = reference.reduce(
     (total, observation) => addDecimal({ left: total, right: observation.value }),
@@ -196,12 +193,18 @@ function createMarketState(symbol) {
     lastEventAt: null,
     bufferOverflow: false,
     bufferedEvents: [],
+    fatalReason: null,
     queue: Promise.resolve(),
   }
 }
 
 function updateMetrics({ state, logger } = {}) {
   try {
+    if (state.fatalReason) {
+      state.metrics = null
+      logUnavailable(logger, state, state.fatalReason)
+      return
+    }
     const result = calculateMetrics({ candles: state.candles })
     state.metrics = result.metrics
     if (result.reason) {
@@ -276,7 +279,8 @@ function createCandleHistoryService({
         symbol,
         interval: CANDLE_INTERVAL,
         candles: Object.freeze([...state.candles]),
-        metrics: state.metrics,
+        metrics: isReady ? state.metrics : null,
+        lastMetrics: state.metrics,
         status: Object.freeze({
           isReady,
           isFresh,
@@ -292,19 +296,16 @@ function createCandleHistoryService({
     })
   }
 
-  function failMarket({ state, reason, error } = {}) {
+  function failMarket({ state, reason, error, fatal = false } = {}) {
+    if (fatal && !state.fatalReason) state.fatalReason = reason
     state.metrics = null
-    logUnavailable(logger, state, reason, error)
+    logUnavailable(logger, state, state.fatalReason ?? reason, error)
   }
 
   async function backfillGap({ state, incomingCandle } = {}) {
     const latest = state.candles.at(-1)
     const expectedOpenTime = latest.openTime + CANDLE_INTERVAL_MS
     const missingCount = (incomingCandle.openTime - expectedOpenTime) / CANDLE_INTERVAL_MS
-    if (!Number.isSafeInteger(missingCount) || missingCount <= 0) {
-      failMarket({ state, reason: "INVALID_CANDLE_GAP" })
-      return false
-    }
     if (missingCount > MAX_BACKFILL_CANDLES) {
       failMarket({ state, reason: "GAP_TOO_LARGE" })
       return false
@@ -355,7 +356,7 @@ function createCandleHistoryService({
     if (!validated.isClosed) {
       const existing = state.candles.find((item) => item.openTime === validated.openTime)
       if (existing?.isClosed) {
-        failMarket({ state, reason: "CANDLE_CONFLICT" })
+        failMarket({ state, reason: "CANDLE_CONFLICT", fatal: true })
       }
       return
     }
@@ -368,7 +369,7 @@ function createCandleHistoryService({
     const existing = state.candles.find((item) => item.openTime === validated.openTime)
     if (existing) {
       if (!areCandlesEqual(existing, validated)) {
-        failMarket({ state, reason: "CANDLE_CONFLICT" })
+        failMarket({ state, reason: "CANDLE_CONFLICT", fatal: true })
       }
       return
     }
@@ -377,15 +378,11 @@ function createCandleHistoryService({
     const latest = state.candles.at(-1)
     if (validated.openTime < latest.openTime) {
       if (validated.openTime < oldest.openTime) return
-      failMarket({ state, reason: "OUT_OF_ORDER_CANDLE" })
+      failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
       return
     }
 
     const difference = validated.openTime - latest.openTime
-    if (difference % CANDLE_INTERVAL_MS !== 0) {
-      failMarket({ state, reason: "INVALID_CANDLE_GAP" })
-      return
-    }
     const missingCount = difference / CANDLE_INTERVAL_MS - 1
     if (missingCount > 0) {
       await backfillGap({ state, incomingCandle: validated })
@@ -412,7 +409,7 @@ function createCandleHistoryService({
 
     state.queue = state.queue
       .then(() => processLiveCandle({ state, candle }))
-      .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error }))
+      .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
     return state.queue
   }
 
@@ -493,7 +490,7 @@ function createCandleHistoryService({
     for (const event of bufferedEvents) {
       state.queue = state.queue
         .then(() => processLiveCandle({ state, candle: event }))
-        .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error }))
+        .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
     }
     await state.queue
   }

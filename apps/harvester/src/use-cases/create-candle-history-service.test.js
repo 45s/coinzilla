@@ -31,19 +31,23 @@ function createCandle({
   })
 }
 
-function createHistory(symbol, count = 100, includeForming = false) {
+function createHistoryFrom(symbol, startIndex, count, includeForming = false) {
   const candles = Array.from({ length: count }, (_, index) => createCandle({
     symbol,
-    openTime: index * INTERVAL_MS,
+    openTime: (startIndex + index) * INTERVAL_MS,
   }))
   if (includeForming) {
     candles.push(createCandle({
       symbol,
-      openTime: count * INTERVAL_MS,
+      openTime: (startIndex + count) * INTERVAL_MS,
       isClosed: false,
     }))
   }
   return candles
+}
+
+function createHistory(symbol, count = 100, includeForming = false) {
+  return createHistoryFrom(symbol, 0, count, includeForming)
 }
 
 function createFixture({
@@ -377,6 +381,271 @@ test("fails closed when live Kline updates overflow the warm-up buffer", async (
   assert.equal(snapshot.status.isReady, false, "A dropped live update during history warm-up must invalidate readiness.")
   assert.equal(snapshot.status.reason, "LIVE_BUFFER_OVERFLOW", "The status must preserve the fact that the warm-up buffer overflowed.")
   assert.equal(snapshot.metrics, null, "A buffer overflow must not expose measurements based on a potentially incomplete live series.")
+})
+
+test("validates broker, clock, pair and subscription inputs at composition time", () => {
+  assert.throws(
+    () => createCandleHistoryService(),
+    /requires a broker port/,
+    "The service must reject a missing broker port before startup.",
+  )
+  assert.throws(
+    () => createCandleHistoryService({ broker: { subscribeForCandles() {} } }),
+    /requires broker.getCandles/,
+    "Historical retrieval is a required broker capability, not an optional fallback.",
+  )
+  assert.throws(
+    () => createCandleHistoryService({ broker: { getCandles() {} } }),
+    /requires broker.subscribeForCandles/,
+    "Live candle updates are a required broker capability, not an optional fallback.",
+  )
+  const broker = { getCandles() {}, subscribeForCandles() {} }
+  assert.throws(
+    () => createCandleHistoryService({ broker, now: 10 }),
+    /now must be a function/,
+    "Freshness must use an injectable clock function.",
+  )
+
+  const fixture = createFixture()
+  assert.throws(
+    () => fixture.service.start({ pairs: [] }),
+    /pairs must be an object/,
+    "The service must reject invalid pair configuration before subscribing.",
+  )
+  assert.throws(
+    () => fixture.service.start({ pairs: {}, subscriptions: {} }),
+    /subscriptions must be an array/,
+    "Subscription cleanup handles must be collected in an array.",
+  )
+})
+
+test("starts only once and performs no market requests when no pair is enabled", async () => {
+  const fixture = createFixture({
+    pairs: { BTCUSDT: { enabled: false }, DOGEUSDT: { enabled: false } },
+  })
+  const firstStart = fixture.start()
+  const secondStart = fixture.start()
+
+  assert.equal(firstStart, secondStart, "Concurrent or repeated startup calls must share one initialization task.")
+  await firstStart
+  assert.deepEqual(fixture.calls, [], "Disabled markets must not receive candle subscriptions or historical requests.")
+})
+
+test("keeps a failed candle subscription unavailable even when historical metrics exist", async () => {
+  const fixture = createFixture({
+    subscribeForCandles: async () => { throw new Error("stream setup failed") },
+  })
+  await fixture.start()
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.subscriptionReady, false, "A thrown stream setup must not be reported as a live subscription.")
+  assert.equal(snapshot.status.reason, "SUBSCRIPTION_FAILED", "A stream setup exception must have an explicit readiness reason.")
+  assert.equal(snapshot.metrics, null, "Historical-only metrics must not be exposed as ready without a live feed.")
+  assert.ok(snapshot.lastMetrics, "The last calculated measurement may remain available separately for diagnostics.")
+})
+
+test("rejects a success-shaped candle subscription without an unsubscribe handle", async () => {
+  const fixture = createFixture({
+    subscribeForCandles: async () => ({ ok: true, data: { stream: "btcusdt@kline_1m" } }),
+  })
+  await fixture.start()
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.isReady, false, "A subscription without a cleanup handle is not a valid lifecycle.")
+  assert.equal(snapshot.status.reason, "SUBSCRIPTION_FAILED", "The broker contract must fail closed when unsubscribe is absent.")
+  assert.equal(fixture.subscriptions.length, 0, "An invalid subscription must not enter shutdown cleanup as if it were active.")
+})
+
+test("keeps history unavailable when the historical request throws or returns an invalid result", async () => {
+  const failures = [
+    async () => { throw new Error("history transport failed") },
+    async () => ({ ok: false, errors: [new Error("history rejected")] }),
+    async () => ({ ok: true, data: {} }),
+  ]
+
+  for (const getCandles of failures) {
+    const fixture = createFixture({ getCandles })
+    await fixture.start()
+    const snapshot = getSnapshot(fixture)
+
+    assert.equal(snapshot.status.isReady, false, "A failed or malformed historical response must not become a ready series.")
+    assert.equal(snapshot.status.reason, "HISTORY_UNAVAILABLE", "Historical transport and result-shape failures must remain explicit.")
+    assert.equal(snapshot.metrics, null, "Unavailable history must not expose a volatility ratio.")
+  }
+})
+
+test("rejects forming candles anywhere except the final historical position", async () => {
+  const history = createHistory("BTCUSDT", 100)
+  history[20] = createCandle({ openTime: 20 * INTERVAL_MS, isClosed: false })
+  const fixture = createFixture({ historyBySymbol: { BTCUSDT: history } })
+
+  await fixture.start()
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.isReady, false, "A forming candle inside completed history must invalidate the whole series.")
+  assert.equal(snapshot.status.reason, "INVALID_HISTORY", "A misplaced forming candle must be identified as invalid history.")
+})
+
+test("rejects malformed live candle fields and keeps the market fail-closed", async () => {
+  const invalidCases = [
+    ["missing candle", () => null],
+    ["wrong symbol", (candle) => ({ ...candle, symbol: "DOGEUSDT" })],
+    ["wrong interval", (candle) => ({ ...candle, interval: "5m" })],
+    ["unaligned open time", (candle) => ({ ...candle, openTime: candle.openTime + 1 })],
+    ["invalid close time", (candle) => ({ ...candle, closeTime: candle.closeTime + 1 })],
+    ["non-boolean closed flag", (candle) => ({ ...candle, isClosed: "true" })],
+    ["invalid OHLCV decimal", (candle) => ({ ...candle, high: "not-a-price" })],
+    ["non-positive open", (candle) => ({ ...candle, open: "0" })],
+    ["non-positive high", (candle) => ({ ...candle, high: "0" })],
+    ["non-positive low", (candle) => ({ ...candle, low: "0" })],
+    ["non-positive close", (candle) => ({ ...candle, close: "0" })],
+    ["negative volume", (candle) => ({ ...candle, volume: "-1" })],
+    ["high below low", (candle) => ({ ...candle, high: "8" })],
+    ["open outside range", (candle) => ({ ...candle, open: "12" })],
+    ["close outside range", (candle) => ({ ...candle, close: "12" })],
+  ]
+
+  for (const [label, mutate] of invalidCases) {
+    const fixture = createFixture()
+    await fixture.start()
+    const candle = mutate(createCandle({ openTime: 100 * INTERVAL_MS }))
+    await fixture.candleHandlers.get("BTCUSDT")(candle)
+    const snapshot = getSnapshot(fixture)
+
+    assert.equal(snapshot.status.isReady, false, label + " must not be accepted as valid live market data.")
+    assert.equal(snapshot.status.reason, "INVALID_CANDLE", label + " must produce an explicit invalid-candle blocker.")
+    assert.equal(snapshot.metrics, null, label + " must invalidate the metrics exposed to the future order gate.")
+  }
+})
+
+test("keeps conflicting closed-candle facts invalid even after later valid candles arrive", async () => {
+  const fixture = createFixture()
+  await fixture.start()
+  const handler = fixture.candleHandlers.get("BTCUSDT")
+
+  await handler(createCandle({ openTime: 99 * INTERVAL_MS, close: "10.5" }))
+  const conflict = getSnapshot(fixture)
+  assert.equal(conflict.status.reason, "CANDLE_CONFLICT", "A second, conflicting fact for a closed candle must invalidate the series.")
+
+  await handler(createCandle({ openTime: 100 * INTERVAL_MS }))
+  const afterNextBar = getSnapshot(fixture)
+  assert.equal(afterNextBar.status.isReady, false, "A later valid bar must not silently erase an earlier conflicting execution-market fact.")
+  assert.equal(afterNextBar.status.reason, "CANDLE_CONFLICT", "Conflicting candle history must remain blocked until a fresh validated history is loaded.")
+  assert.equal(afterNextBar.metrics, null, "A fatal candle conflict must not leave a usable volatility measurement.")
+})
+
+test("treats identical closed-candle repeats as idempotent", async () => {
+  const fixture = createFixture()
+  await fixture.start()
+  const latest = createHistory("BTCUSDT", 100).at(-1)
+
+  await fixture.candleHandlers.get("BTCUSDT")(latest)
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.isReady, true, "An identical duplicate closed-candle event must not invalidate an otherwise ready series.")
+  assert.equal(snapshot.candles.length, 100, "An identical duplicate must not append a second copy of the same candle.")
+})
+
+test("ignores valid live candle events older than the retained 100-candle window", async () => {
+  const fixture = createFixture({
+    historyBySymbol: { BTCUSDT: createHistoryFrom("BTCUSDT", 100, 100) },
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 0, isClosed: false }))
+    },
+  })
+  await fixture.start()
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.isReady, true, "An old event outside the retained history must not invalidate a current contiguous series.")
+  assert.equal(snapshot.candles.at(-1).openTime, 199 * INTERVAL_MS, "An out-of-window event must not move the current history cursor backward.")
+})
+
+test("does not restore readiness from a candle callback after shutdown", async () => {
+  const fixture = createFixture({
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+    },
+  })
+  await fixture.start()
+  await fixture.subscriptions[0].unsubscribe()
+  await fixture.candleHandlers.get("BTCUSDT")(createCandle({ openTime: 100 * INTERVAL_MS }))
+
+  const snapshot = getSnapshot(fixture)
+  assert.equal(snapshot.status.isReady, false, "A callback received after unsubscribe must not reopen candle readiness.")
+  assert.equal(snapshot.status.reason, "STOPPED", "Shutdown must be visible in the per-market readiness snapshot.")
+  assert.equal(snapshot.candles.at(-1).openTime, 99 * INTERVAL_MS, "Post-shutdown events must not mutate the retained candle history.")
+})
+
+test("rejects oversized candle gaps without issuing an unbounded historical request", async () => {
+  const fixture = createFixture()
+  await fixture.start()
+  await fixture.candleHandlers.get("BTCUSDT")(createCandle({ openTime: 1_101 * INTERVAL_MS }))
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.isReady, false, "A gap larger than the broker backfill bound must remain unavailable.")
+  assert.equal(snapshot.status.reason, "GAP_TOO_LARGE", "Oversized reconnect gaps must have a distinct diagnostic reason.")
+  assert.equal(
+    fixture.calls.filter((call) => call.method === "getCandles" && call.startTime !== undefined).length,
+    0,
+    "The service must not request more than 1000 missing candles in one backfill operation.",
+  )
+})
+
+test("keeps a market unavailable when backfill throws or returns an incomplete range", async () => {
+  const backfillFailures = [
+    async () => { throw new Error("backfill transport failed") },
+    async () => ({ ok: true, data: [] }),
+    async () => ({ ok: true, data: [createCandle({ openTime: 100 * INTERVAL_MS })] }),
+  ]
+
+  for (const backfill of backfillFailures) {
+    const fixture = createFixture({
+      getCandles: async (input) => input.startTime === undefined
+        ? { ok: true, data: createHistory(input.symbol, 100, true) }
+        : backfill(),
+    })
+    await fixture.start()
+    await fixture.candleHandlers.get("BTCUSDT")(createCandle({ openTime: 102 * INTERVAL_MS }))
+    const snapshot = getSnapshot(fixture)
+
+    assert.equal(snapshot.status.isReady, false, "Incomplete backfill must never make the market ready.")
+    assert.equal(snapshot.status.reason, "GAP_DETECTED", "Backfill transport and continuity failures must remain explicit.")
+    assert.equal(snapshot.candles.at(-1).openTime, 99 * INTERVAL_MS, "The incoming candle must not be appended across a missing range.")
+  }
+})
+
+test("reports one warning per repeated unavailable state and logs successful indicator calculation", async () => {
+  const warnings = []
+  const systems = []
+  const fixture = createFixture({
+    logger: {
+      warn: (entry) => warnings.push(entry),
+      system: (entry) => systems.push(entry),
+    },
+  })
+  await fixture.start()
+  assert.equal(systems.length, 1, "The first successful indicator calculation must produce one system-level record.")
+
+  const invalid = { ...createCandle({ openTime: 100 * INTERVAL_MS }), volume: "-1" }
+  await fixture.candleHandlers.get("BTCUSDT")(invalid)
+  await fixture.candleHandlers.get("BTCUSDT")(invalid)
+
+  assert.equal(warnings.length, 1, "Repeated invalid updates in the same unavailable state must not flood logs.")
+  assert.equal(warnings[0].reason, "INVALID_CANDLE")
+})
+
+test("uses the ordinary info logger when no system-level logger method is available", async () => {
+  const infos = []
+  const fixture = createFixture({
+    logger: { info: (entry) => infos.push(entry) },
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+    },
+  })
+  await fixture.start()
+
+  assert.equal(infos.length, 1, "The service must retain a useful logging fallback when the shared logger has no system() method.")
+  assert.equal(infos[0].message, "Volatility candle indicators calculated")
 })
 
 test("reports unknown symbols without inventing a candle-history snapshot", async () => {
