@@ -50,7 +50,7 @@ function validateDependencies({ eventBus, notifier, logger, maxPending, eventNam
   if (!Number.isSafeInteger(maxPending) || maxPending < 1) {
     throw new RangeError("maxPending must be a positive safe integer")
   }
-  validateEventNames(eventNames)
+  return validateEventNames(eventNames)
 }
 
 function emitWarningSafely(message, error) {
@@ -108,8 +108,7 @@ export function subscribeTelegramNotifications({
   maxPending = DEFAULT_MAX_PENDING,
   eventNames = TELEGRAM_NOTIFICATION_EVENTS,
 } = {}) {
-  validateDependencies({ eventBus, notifier, logger, maxPending, eventNames })
-  const selectedEventNames = validateEventNames(eventNames)
+  const selectedEventNames = validateDependencies({ eventBus, notifier, logger, maxPending, eventNames })
 
   let deliveryTail = Promise.resolve()
   let pendingCount = 0

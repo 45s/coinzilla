@@ -60,7 +60,7 @@ Architecture regression tests protect the dependency direction and keep composit
 
 - TelegramNotifier: validates options and sends plain-text messages through Telegram's sendMessage Bot API method.
 - subscribeTelegramNotifications: subscribes to the full supported event allowlist by default, or to a validated `eventNames` subset selected by the consuming application; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
-- TELEGRAM_NOTIFICATION_EVENTS: immutable list of subscribed event names.
+- TELEGRAM_NOTIFICATION_EVENTS: immutable list of supported event names.
 - formatTelegramNotification: pure formatter for supported Telegram events.
 - formatNotification: backwards-compatible alias for formatTelegramNotification.
 
@@ -123,7 +123,7 @@ Both values are required by the consuming application. Leave both unset to disab
 
 ## Supported events
 
-| Event | Default behavior |
+| Event | Supported message |
 | --- | --- |
 | order.filled | Completed order alert |
 | fill.received | Individual execution/fill alert |
