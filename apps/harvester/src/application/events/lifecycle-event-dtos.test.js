@@ -25,6 +25,7 @@ import {
   mapFillAppliedData,
   mapDuplicateFillData,
   mapRecoveryCycleCompletedData,
+  mapRecoveryCycleNotCompletedData,
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
   mapExecutionAccountingFailedData,
@@ -1272,4 +1273,37 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
     false,
     "A negative-zero numeric status code must be rejected.",
   )
+})
+
+test("maps explicit residual sell-through and blocked recovery-cycle outcomes", () => {
+  const base = {
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    sellOrderClientId: "harvester-sell-1",
+    sellOrderBrokerOrderId: "9002",
+    realizedNetProfit: "-8.9",
+    activeQuantity: "0.0996",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
+  }
+  const continuing = mapRecoveryCycleNotCompletedData({
+    ...base,
+    outcome: "CONTINUE_SELL_THROUGH",
+    reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  })
+  assert.equal(continuing.ok, true)
+  assert.equal(continuing.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(continuing.data.sellOrderClientId, "harvester-sell-1")
+
+  const blocked = mapRecoveryCycleNotCompletedData({
+    ...base,
+    outcome: "BLOCKED",
+    reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
+  })
+  assert.equal(blocked.ok, true)
+  assert.equal(blocked.data.outcome, "BLOCKED")
+
+  assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT" }).ok, false)
+  assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", activeQuantity: "0.01" }).ok, false)
+  assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "BLOCKED", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" }).ok, false)
 })
