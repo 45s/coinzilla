@@ -109,13 +109,47 @@ function parseProcessStarted({ records, directory }) {
 
 function resolveSessionChronology({ records, directory }) {
   const processStarted = parseProcessStarted({ records, directory })
-  if (processStarted) return processStarted
+  const eventTimestamps = records.map((record) => parseTimestamp(record.payload?.timestamp))
+  const timestampsAreValid = eventTimestamps.every((timestamp) => timestamp !== undefined)
+  const timestampsAreMonotonic = timestampsAreValid && eventTimestamps.every(
+    (timestamp, index) => index === 0 || timestamp >= eventTimestamps[index - 1],
+  )
 
-  const firstRecordTimestamp = parseTimestamp(records[0]?.payload?.timestamp)
+  if (!timestampsAreMonotonic) {
+    return Object.freeze({
+      chronologySource: "UNAVAILABLE",
+      chronologyTimestamp: undefined,
+      firstRecordTimestamp: undefined,
+      lastRecordTimestamp: undefined,
+      startedAt: processStarted?.startedAt ?? null,
+      runtimeSessionId: processStarted?.runtimeSessionId ?? null,
+      processId: processStarted?.processId ?? null,
+    })
+  }
+
+  const firstRecordTimestamp = eventTimestamps[0]
+  const lastRecordTimestamp = eventTimestamps.at(-1)
+  if (processStarted) {
+    if (eventTimestamps.some((timestamp) => timestamp < processStarted.chronologyTimestamp)) {
+      throw createHistoryError({
+        code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
+        message: "A Journal event timestamp precedes its process-start timestamp: " + directory,
+        details: { directory, startedAt: processStarted.startedAt },
+      })
+    }
+    return Object.freeze({
+      ...processStarted,
+      firstRecordTimestamp,
+      lastRecordTimestamp,
+    })
+  }
+
   if (firstRecordTimestamp === undefined) {
     return Object.freeze({
       chronologySource: "UNAVAILABLE",
       chronologyTimestamp: undefined,
+      firstRecordTimestamp: undefined,
+      lastRecordTimestamp: undefined,
       startedAt: null,
       runtimeSessionId: null,
       processId: null,
@@ -125,6 +159,8 @@ function resolveSessionChronology({ records, directory }) {
   return Object.freeze({
     chronologySource: "FIRST_RECORD_TIMESTAMP",
     chronologyTimestamp: firstRecordTimestamp,
+    firstRecordTimestamp,
+    lastRecordTimestamp,
     startedAt: null,
     runtimeSessionId: null,
     processId: null,
@@ -182,7 +218,30 @@ function validateAndOrderSessions(sessions) {
     }
   }
 
-  return sessions.sort((left, right) => left.chronologyTimestamp - right.chronologyTimestamp)
+  sessions.sort((left, right) => left.chronologyTimestamp - right.chronologyTimestamp)
+
+  for (let index = 1; index < sessions.length; index += 1) {
+    const previous = sessions[index - 1]
+    const current = sessions[index]
+    if (
+      previous.lastRecordTimestamp === undefined ||
+      current.chronologyTimestamp === undefined ||
+      previous.lastRecordTimestamp >= current.chronologyTimestamp
+    ) {
+      throw createHistoryError({
+        code: "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS",
+        message: "Journal session event ranges overlap; a safe flattened chronology cannot be established",
+        details: {
+          previousSession: previous.fileName,
+          previousLastRecordTimestamp: previous.lastRecordTimestamp,
+          nextSession: current.fileName,
+          nextChronologyTimestamp: current.chronologyTimestamp,
+        },
+      })
+    }
+  }
+
+  return sessions
 }
 
 async function discoverSessionDirectories({

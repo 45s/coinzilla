@@ -134,6 +134,8 @@ test("orders same-second process sessions by millisecond process-start evidence,
       runtimeSessionId: "z-session",
       processId: 1002,
       eventName: "harvester.earlier_session",
+      processStartedLast: true,
+      processStartedEventAt: "2026-11-09T12:00:00.103Z",
     })
     await writeJournalSession({
       directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-00-a-session"),
@@ -395,6 +397,37 @@ test("reports a missing history root instead of returning an empty snapshot", as
     assert.equal(result.errors[0].code, "JOURNAL_DIRECTORY_NOT_FOUND")
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
+test("rejects overlapping session event ranges even when process-start timestamps are distinct", async () => {
+  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-overlap-"))
+
+  try {
+    await writeJournalSession({
+      directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-00-first-run"),
+      startedAt: "2026-11-09T12:00:00.100Z",
+      runtimeSessionId: "first-run",
+      processId: 1008,
+      eventName: "harvester.first_session",
+      processStartedEventAt: "2026-11-09T12:00:00.101Z",
+      markerEventAt: "2026-11-09T12:00:00.500Z",
+    })
+    await writeJournalSession({
+      directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-00-second-run"),
+      startedAt: "2026-11-09T12:00:00.300Z",
+      runtimeSessionId: "second-run",
+      processId: 1009,
+      eventName: "harvester.second_session",
+      processStartedEventAt: "2026-11-09T12:00:00.301Z",
+      markerEventAt: "2026-11-09T12:00:00.400Z",
+    })
+
+    const result = await readHarvesterJournalHistory({ directory: rootDirectory })
+    assert.equal(result.ok, false, "Session start order alone is insufficient when persisted event ranges overlap")
+    assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS")
+  } finally {
+    await rm(rootDirectory, { recursive: true, force: true })
   }
 })
 
