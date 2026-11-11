@@ -10,6 +10,7 @@ import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 
 const CANDLE_INTERVAL = "1m"
 const CANDLE_INTERVAL_MS = 60_000
+// Candle readiness tolerates one quiet interval; price and book gates remain independently strict.
 const CANDLE_STREAM_FRESHNESS_GRACE_MS = 5_000
 const CANDLE_STREAM_MAX_AGE_MS = CANDLE_INTERVAL_MS + CANDLE_STREAM_FRESHNESS_GRACE_MS
 const HISTORY_SIZE = 100
