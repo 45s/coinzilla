@@ -325,6 +325,9 @@ test("refuses to claim durable writes on platforms without directory fsync suppo
   if (process.platform === "win32") return
   const supportedStore = createStore(directory, { platform: "linux" })
   assert.equal((await supportedStore.initialize()).ok, true)
+  const readOnlyVerification = await windowsStore.verify()
+  assert.equal(readOnlyVerification.ok, true)
+  assert.equal(readOnlyVerification.data.durableWriteSupported, false)
   const before = await readFile(path.join(directory, "facts.jsonl"), "utf8")
   const refusedAppend = await windowsStore.append(operatorPause())
   assert.equal(refusedAppend.ok, false)
