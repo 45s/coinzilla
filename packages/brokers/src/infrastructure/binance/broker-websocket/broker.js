@@ -629,8 +629,22 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new TypeError("getSymbolFilters requires a symbol")
       }
 
-      const response = await this.tradingConnection.request("exchangeInfo", { symbol })
-      const data = adaptSymbolFiltersResponse({ symbol, exchangeInfo: response.data })
+      const [response, accountFiltersResponse] = await Promise.all([
+        this.tradingConnection.request("exchangeInfo", { symbol }),
+        this.tradingConnection.request("myFilters", { symbol }, { signed: true }),
+      ])
+      const accountFilters = accountFiltersResponse?.data
+      if (!accountFilters ||
+          !Array.isArray(accountFilters.symbolFilters) ||
+          !Array.isArray(accountFilters.exchangeFilters) ||
+          !Array.isArray(accountFilters.assetFilters)) {
+        throw new TypeError("Binance myFilters response is incomplete; account trading constraints cannot be validated")
+      }
+      const data = adaptSymbolFiltersResponse({
+        symbol,
+        exchangeInfo: response.data,
+        accountFilters,
+      })
       this.canonicalMarkets.set(symbol, createCanonicalMarket({ symbolInfo: data }))
       return toResult({ data })
     } catch (error) {

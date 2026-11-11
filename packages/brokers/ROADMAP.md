@@ -893,3 +893,10 @@ Cross-domain request [#702](https://github.com/45s/coinzilla/issues/702) include
 - Added a second regression proving that when the first subscriber has acknowledged and the second disconnects, the remaining active subscriber receives exactly one terminal `reconciled` status while the removed subscriber receives none.
 - No broker source, public API, Harvester consumer, or acknowledgement return semantics changed. The additive result-shape proposal remains pending owner agreement.
 - Exact-head CI verification is pending; do not mark the cross-domain contract issue complete until the agreed public acknowledgement semantics and consumer compatibility work are resolved.
+
+
+## 2026-11-11 — Binance account filter coverage / Harvester #957
+
+The Binance `getSymbolFilters` path now retrieves authenticated `myFilters` alongside public `exchangeInfo` and passes account symbol, exchange and asset filters to the adapter. Retrieval failure or incomplete response shape is fail-closed. Applicable constraints not yet evaluated by the trading domain are surfaced as exchange-neutral metadata for the Harvester readiness gate.
+
+This work is in an open task PR targeting `develop`; do not mark it complete until exact-head broker tests, workspace CI and the linked Harvester readiness regressions pass. See [Harvester exchange trading constraints](../../apps/harvester/docs/exchange-trading-constraints.md) for the cross-domain contract.

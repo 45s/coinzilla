@@ -3,14 +3,17 @@ import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-function createBroker(handler) {
+function createBroker(handler, myFiltersHandler = () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] })) {
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
       tradingMode: "testnet",
     logger: { error() {}, info() {}, debug() {}, warn() {} },
   })
-  const rpc = createFakeRpcClient({ exchangeInfo: handler })
+  const rpc = createFakeRpcClient({
+    exchangeInfo: handler,
+    myFilters: myFiltersHandler,
+  })
   broker.tradingConnection = rpc
   return { broker, rpc }
 }
@@ -41,9 +44,13 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
         minQuantity: "0.001", maxQuantity: "1000",
         minNotional: "5",
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+        unvalidatedConstraints: [],
       },
     })
-    assert.deepEqual(rpc.calls[0], { method: "exchangeInfo", params: { symbol: "BTCUSDT" }, options: {} })
+    assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method, params, options })), [
+      { method: "exchangeInfo", params: { symbol: "BTCUSDT" }, options: {} },
+      { method: "myFilters", params: { symbol: "BTCUSDT" }, options: { signed: true } },
+    ], "Market metadata loading must include authenticated account-specific filter data before declaring the symbol constraints complete.")
   })
 
   it("returns an error when the symbol is absent from exchangeInfo", async () => {
@@ -128,4 +135,56 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
 
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /minPrice is invalid/)
+  })
+
+
+  it("fails closed when authenticated account filters cannot be retrieved", async () => {
+    const { broker } = createBroker(
+      () => ({
+        symbols: [{
+          symbol: "BTCUSDT",
+          baseAsset: "BTC",
+          quoteAsset: "USDT",
+          orderTypes: ["LIMIT", "LIMIT_MAKER"],
+          filters: [
+            { filterType: "PRICE_FILTER", tickSize: "0.01" },
+            { filterType: "LOT_SIZE", stepSize: "0.001" },
+            { filterType: "MIN_NOTIONAL", minNotional: "5" },
+          ],
+        }],
+      }),
+      () => {
+        throw new Error("account filters permission denied")
+      },
+    )
+
+    const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, false, "Missing private account-filter evidence must prevent the broker from returning apparently complete market metadata.")
+    assert.match(result.errors[0].message, /account filters permission denied/, "The original account-filter retrieval failure must remain diagnosable.")
+  })
+
+
+  it("fails closed when the private filter response omits a required filter collection", async () => {
+    const { broker } = createBroker(
+      () => ({
+        symbols: [{
+          symbol: "BTCUSDT",
+          baseAsset: "BTC",
+          quoteAsset: "USDT",
+          orderTypes: ["LIMIT", "LIMIT_MAKER"],
+          filters: [
+            { filterType: "PRICE_FILTER", tickSize: "0.01" },
+            { filterType: "LOT_SIZE", stepSize: "0.001" },
+            { filterType: "MIN_NOTIONAL", minNotional: "5" },
+          ],
+        }],
+      }),
+      () => ({ symbolFilters: [], exchangeFilters: [] }),
+    )
+
+    const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, false, "An incomplete private filter payload must not be interpreted as an account with no account-level restrictions.")
+    assert.match(result.errors[0].message, /myFilters response is incomplete/, "The failure must identify the missing authoritative account-filter response.")
   })
