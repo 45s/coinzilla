@@ -115,7 +115,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 
 ## Volatility protection
 
-Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). It is **not implemented yet**. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection is **not active in the runtime**. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), and the Harvester BrokerPort/adapter exposes it in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Startup history loading, live Kline intake, gap/freshness handling and the trading protection gate remain pending. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
 
 ## Runtime and safety
 

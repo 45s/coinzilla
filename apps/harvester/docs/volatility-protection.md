@@ -94,7 +94,7 @@ NATR is retained in diagnostics as well as the ratio. Raw ATR values must never 
 
 ### Broker capability delivered
 
-The public @coinzilla/brokers API now exposes historical and live candles through PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter still do **not** expose them; that is the next consumer integration step. The normalized methods are:
+The public @coinzilla/brokers API exposes historical and live candles through merged PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter expose the same methods through PR #1019. Bootstrap does **not** yet fetch candle history or subscribe to Kline streams; that is the next consumer integration step. The normalized methods are:
 
 - **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical data.
 - **subscribeForCandles({ symbol, interval, onCandle })** for live updates.
