@@ -3065,7 +3065,8 @@ export function makeConservativeTradingEngine({
         return toResult({ error })
       }
       const volatilityState = state.volatilityProtection.get(symbol)
-      const volatilityBlocked = volatilityState !== undefined &&
+      const volatilityBlocked = volatilityProtectionEnabled &&
+        volatilityState !== undefined &&
         volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
       const safetyBlocked =
         state.paused.has(symbol) ||

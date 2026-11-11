@@ -48,7 +48,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map() } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false } = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -151,6 +151,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     isMarketBookFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
+    volatilityProtectionEnabled,
     initialState,
   })
 
@@ -776,5 +777,42 @@ test("failed durable resume leaves the operator pause active", async () => {
     engine.getOperatorPausedMarkets(),
     ["DOGEUSDT"],
     "A failed durable resume commit must leave the operator pause unchanged.",
+  )
+})
+
+
+test("resume remains blocked while enabled high-volatility protection is in startup warmup", async () => {
+  const { engine } = await createHarness({
+    initialState: { operatorPausedMarkets: ["DOGEUSDT"] },
+    volatilityProtectionEnabled: true,
+  })
+  let durableCommits = 0
+  const result = await engine.resumeMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => {
+      durableCommits += 1
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "Operator resume must not bypass the enabled high-volatility startup-warmup protection.",
+  )
+  assert.equal(
+    result.errors[0].code,
+    "SAFETY_BLOCKER_ACTIVE",
+    "The enabled volatility protection state must be reported as an independent safety blocker.",
+  )
+  assert.equal(
+    durableCommits,
+    0,
+    "The resume fact must not be appended while high-volatility protection is still active.",
+  )
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "The operator pause must remain active until the independent volatility blocker clears.",
   )
 })
