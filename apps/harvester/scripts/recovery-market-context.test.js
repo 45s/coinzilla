@@ -91,6 +91,24 @@ test("offline context adapter runs the production audit from a complete offline 
   assert.equal(result.data.reconciliation.audit.tradeHistory.complete, true, "The production trade-history audit must verify the selected market and coverage baseline.")
 })
 
+test("offline context adapter rejects history that starts after the reviewed coverage boundary", async () => {
+  const result = await runOfflineMarketRecovery({
+    context: {
+      ...readyContext,
+      exchange: {
+        ...readyContext.exchange,
+        tradeHistory: {
+          ...readyContext.exchange.tradeHistory,
+          historyStartTime: 101,
+        },
+      },
+    },
+  })
+
+  assert.equal(result.ok, false, "History beginning after the reviewed boundary must not certify the missing interval.")
+  assert.match(result.errors[0].message, /coverage start/i, "The evidence mismatch must identify the unproven coverage boundary.")
+})
+
 test("offline context adapter refuses confirmation without a durable-fact store", async () => {
   const result = await runOfflineMarketRecovery({ context, confirm: true })
 
