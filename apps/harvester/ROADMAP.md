@@ -25,6 +25,16 @@
 5. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
 6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
 
+## Submission deferral diagnostics — issue #1025
+
+**Status: IMPLEMENTED ON PR #1026 — NOT YET MERGED.** The Conservative submission gate now preserves structured reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).
+
+- Preserve `ok` as execution-use-case success, not proof of broker submission; callers and logs distinguish `deferred`, `deferralReason`, and acknowledged `submittedOrders`.
+- Recheck readiness after durable PENDING registration; if readiness changes, remove the local PENDING record and do not call the broker.
+- Keep `LIMIT_MAKER` fail-closed for missing/stale book data and crossing prices. No bypass or fallback taker submission.
+- Regression tests cover the structured gate reasons, the post-registration race, no-broker-call guarantees, and post-only crossing.
+- Merge status and exact-head CI evidence remain tracked in [PR #1026](https://github.com/45s/coinzilla/pull/1026) and [issue #1025](https://github.com/45s/coinzilla/issues/1025).
+
 ---
 
 ## Adaptive price step — volatility-adjusted spacing
