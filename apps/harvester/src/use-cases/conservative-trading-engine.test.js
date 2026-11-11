@@ -6465,3 +6465,25 @@ test("keeps the standing BUY open when refreshed metadata contains an unvalidate
   assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The original standing BUY must remain open.")
   assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE"), "The market must pause when a newly discovered constraint cannot be evaluated.")
 });
+
+
+test("definite Binance filter rejection removes PENDING without marking the order UNKNOWN", async () => {
+  const events = []
+  const rejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: -1013 })
+  const { engine, orders, pauses } = await createHarness({
+    placeOrderFailureCount: 1,
+    placeOrderFailureError: rejection,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false, "A definite exchange filter rejection must be reported to the caller.")
+  assert.equal(orders.length, 1, "The rejected order must have exactly one broker submission attempt.")
+  assert.deepEqual(pauses, [], "A definite filter rejection must not be treated as an ambiguous transport outcome.")
+  assert.equal(engine.getOrders().length, 0, "The definitely rejected PENDING order must be removed instead of becoming a phantom active order.")
+  assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED", "The Journal must record a definite rejection, not UNKNOWN.")
+});
