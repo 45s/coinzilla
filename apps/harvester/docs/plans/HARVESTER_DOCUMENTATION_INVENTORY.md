@@ -126,7 +126,6 @@ PR #1021 updates existing Harvester README, roadmap, Volatility Protection, arch
 - [ ] Record final disposition and rationale for each REVIEW row.
 - [ ] Update this inventory and all indexes after each approved migration.
 
-
 ## Source-verified documentation updates — PR #1041
 
 Merged PR #1041 implements and wires the per-market protection state machine, central order-submission gate, explicit recovery-SELL purpose, owned-BUY cancellation/reconciliation and freshness monitoring. The regression matrix and all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`. The initial warning/protection/recovery thresholds remain provisional pending representative offline historical market-data validation. No TESTNET/LIVE exchange operation was performed or authorized.
