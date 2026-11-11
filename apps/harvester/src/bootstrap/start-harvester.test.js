@@ -3160,6 +3160,15 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     logger: { info() {}, debug() {}, error() {} },
   })
 
+  // The initial REST ticker seed arrives before candle warm-up. Submit a fresh
+  // price after the market's volatility snapshot becomes ready to exercise the
+  // ownership-failure cancellation path rather than bypassing the safety gate.
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: Date.now(),
+  })
+
   await waitForTestSignal(
     ownedBuyAcknowledged,
     "acknowledged Harvester BUY before the ownership failure",
