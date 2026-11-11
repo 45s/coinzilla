@@ -7,7 +7,7 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -147,8 +147,15 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     for (const evaluation of recoveryCycleEvaluations) {
       if (!evaluation || typeof evaluation.symbol !== "string" || !evaluation.symbol.trim() ||
           typeof evaluation.marketId !== "string" || !evaluation.marketId.trim() ||
-          !["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(evaluation.outcome)) {
+          typeof evaluation.sellOrderClientId !== "string" || !evaluation.sellOrderClientId.trim() ||
+          typeof evaluation.sellOrderBrokerOrderId !== "string" || !evaluation.sellOrderBrokerOrderId.trim() ||
+          typeof evaluation.reason !== "string" || !evaluation.reason.trim() ||
+          !["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(evaluation.outcome) ||
+          !Number.isSafeInteger(evaluation.sequence) || evaluation.sequence < 0) {
         throw new TypeError("Recovery projection contains an invalid recovery-cycle evaluation")
+      }
+      for (const field of ["realizedNetProfit", "activeQuantity", "keepQuantity", "minProfit"]) {
+        assertDecimalString({ value: evaluation[field], field: "recoveryCycleEvaluation." + field })
       }
       const market = requireMarket({ marketMetadata, symbol: evaluation.symbol })
       if (market.id !== evaluation.marketId) {
