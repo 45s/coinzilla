@@ -4,6 +4,7 @@ import { Asset, Market } from "@coinzilla/entities"
 import { reconcileRecoveredMarketState } from "./reconcile-recovered-market-state.js"
 
 const market = new Market({
+  venue: "BINANCE",
   id: "binance:LINKUSDT",
   symbol: "LINKUSDT",
   baseAsset: new Asset({ id: "binance:LINK", code: "LINK" }),
