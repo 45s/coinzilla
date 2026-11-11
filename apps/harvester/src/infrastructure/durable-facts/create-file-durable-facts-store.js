@@ -42,6 +42,7 @@ const FACT_TYPES = new Set([
 const FACTS_FILE_NAME = "facts.jsonl"
 const MANIFEST_FILE_NAME = "manifest.jsonl"
 const operationQueues = new Map()
+const supportsPosixModeBits = process.platform !== "win32"
 
 function createError(message, code) {
   const error = new Error(message)
@@ -370,7 +371,8 @@ export function createFileDurableFactsStore({
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
       throw new Error("Durable-fact directory must be a real directory, not a symlink")
     }
-    if ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700) {
+    if (supportsPosixModeBits &&
+        ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)) {
       throw new Error("Durable-fact directory permissions must be private (0700)")
     }
     const entries = await fileSystem.readdir(absoluteDirectory)
@@ -386,7 +388,7 @@ export function createFileDurableFactsStore({
         manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
       throw new Error("Durable-fact streams must be regular files, not symlinks")
     }
-    if ([logStat, manifestStat].some((stat) =>
+    if (supportsPosixModeBits && [logStat, manifestStat].some((stat) =>
       (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
       throw new Error("Durable-fact streams must use private file permissions (0600)")
     }
@@ -449,7 +451,7 @@ export function createFileDurableFactsStore({
       }
       const entries = await fileSystem.readdir(absoluteDirectory)
       if (entries.length > 0) throw new Error("Durable-fact initialization refuses to overwrite an existing directory")
-      await fileSystem.chmod(absoluteDirectory, 0o700)
+      if (supportsPosixModeBits) await fileSystem.chmod(absoluteDirectory, 0o700)
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
@@ -507,11 +509,15 @@ export function createFileDurableFactsStore({
   const append = (fact) => serialize(async () => {
     let factWriteStarted = false
     let manifestWriteStarted = false
-    let syncAttempted = false
+    let syncFailed = false
     try {
       assertNoUncertainWrite()
-      syncAttempted = true
-      await syncStreams()
+      try {
+        await syncStreams()
+      } catch (error) {
+        if (error.code !== "ENOENT") syncFailed = true
+        throw error
+      }
       const state = await verifyState()
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
       const existing = state.records.find((record) => record.factId === input.factId)
@@ -574,7 +580,7 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (factWriteStarted || manifestWriteStarted || (syncAttempted && error.code !== "ENOENT")) {
+      if (factWriteStarted || manifestWriteStarted || syncFailed) {
         writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
