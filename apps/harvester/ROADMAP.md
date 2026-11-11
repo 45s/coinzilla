@@ -128,7 +128,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–2 complete; restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–4 complete; restart restoration remains disabled pending Steps 5–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -139,7 +139,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
-   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 was completed as a tests-only harness in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3 is next.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2's deterministic harness is merged in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3's recursive legacy-session discovery and chronology validation are merged in [PR #1015](https://github.com/45s/coinzilla/pull/1015).
 
 2. **[x] Step 2 — Build a deterministic recovery test harness (tests only; PR #1014).**
    - Added `apps/harvester/test-support/recovery/recovery-crash-fixtures.js`, building deterministic two-session fixtures with canonical entities and the same lifecycle DTO mappers used by production publication.
@@ -148,16 +148,17 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fixtures intentionally use the legacy Journal observer envelope to exercise the retained offline projector/restore path. They are **not** ADR-0001 durable facts and do not make Journal the recovery authority. No production source or runtime behavior changed.
    - Exact PR-head verification: Harvester unit and coverage jobs each report 991 passed, 0 failed; targeted Harvester tests, JavaScript syntax, dependency audit and the remaining required checks must pass on the final PR head.
 
-3. **[ ] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040).**
-   - Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment.
-   - Use explicit durable chronology where available; never use random session IDs or second-resolution filenames as ordering authority.
-   - Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history.
-   - Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
+3. **[x] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040; PR #1015 merged).**
+   - [x] Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
+   - [x] Use explicit durable chronology where available; never use random session IDs or second-resolution filenames as ordering authority ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
+   - [x] Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
+   - [x] Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
 
-4. **[ ] Step 4 — Make replay understand every relevant fact (F-043, F-044).**
-   - Classify known events as state facts, sticky safety blockers, or explicitly ignorable diagnostics; unknown stateful/safety events fail closed.
-   - Accept and correctly order valid `RECOVERY` account/open-order snapshots emitted by normal reconnect handling.
-   - Add DTO → projection → restore parity tests for every recovery-relevant event.
+4. **[x] Step 4 — Make replay understand every relevant fact (F-043, F-044; [PR #1023](https://github.com/45s/coinzilla/pull/1023)).**
+   - [x] Classify all 30 declared Harvester event names as replay facts or explicitly ignorable diagnostics; preserve unowned-order, invalid-fill, and accounting-failure facts as sticky blockers. Unknown or source-unclassified events fail closed; blockers are restored as durable/effective market pauses.
+   - [x] Accept `RECOVERY` account/open-order snapshots only after `harvester.started`, preserving PREFLIGHT → RECOVERY → CLOSING order and existing timestamp monotonicity.
+   - [x] Add DTO → projection → restore parity tests for all three execution safety events, plus fail-closed, diagnostic allowlist, pre-start snapshot and reconnect phase regressions.
+   - Exact PR head `f06304f9`: **1,019 Harvester tests passed, 0 failed**; all seven required workflows passed, including package/workspace coverage and external documentation links. TESTNET integration was skipped.
 
 5. **[ ] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041).**
    - Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation.
