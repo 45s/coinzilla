@@ -1783,3 +1783,12 @@ test("rejects a RECOVERY open-order snapshot that appears before the Journal ses
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /RECOVERY open-order snapshot requires a started Journal session/)
 })
+
+test("fails closed when an unknown recovery event has no source classification", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("execution.future_safety_event", { symbol: "BTCUSDT" })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /unknown Harvester recovery event/)
+})
