@@ -131,6 +131,15 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     for (const field of ["orders", "fills", "recoveryCycles", "pausedMarkets"]) {
       if (!Array.isArray(data[field])) throw new TypeError("Recovery projection " + field + " must be an array")
     }
+    const stickySafetyBlockers = data.stickySafetyBlockers ?? []
+    if (!Array.isArray(stickySafetyBlockers)) {
+      throw new TypeError("Recovery projection stickySafetyBlockers must be an array")
+    }
+    for (const blocker of stickySafetyBlockers) {
+      if (!blocker || typeof blocker.symbol !== "string" || !blocker.symbol.trim()) {
+        throw new TypeError("Recovery projection contains an invalid sticky safety blocker")
+      }
+    }
 
     const portfolioEvents = [
       ...data.fills.map((fill) => ({ type: "fill", sequence: fill.sequence, value: fill })),
@@ -218,7 +227,10 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
-    const durablePausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
+    const durablePausedMarkets = new Set([
+      ...data.pausedMarkets.map(({ symbol }) => symbol),
+      ...stickySafetyBlockers.map(({ symbol }) => symbol),
+    ])
     const pausedMarkets = new Set(durablePausedMarkets)
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
@@ -292,6 +304,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         recoveryLedgers,
         orderRegistry,
         journalFills: Object.freeze([...data.fills]),
+        stickySafetyBlockers: Object.freeze([...stickySafetyBlockers]),
         pausedMarkets,
         durablePausedMarkets,
         recoveryManagedPausedMarkets,

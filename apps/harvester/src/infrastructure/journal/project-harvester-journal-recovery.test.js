@@ -1,9 +1,14 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery.js"
 import { restoreHarvesterJournalState } from "../../use-cases/restore-harvester-journal-state.js"
-import { mapFillAppliedData } from "../../application/events/lifecycle-event-dtos.js"
+import {
+  mapExecutionAccountingFailedData,
+  mapExecutionInvalidFillData,
+  mapExecutionUnownedOrderData,
+  mapFillAppliedData,
+} from "../../application/events/lifecycle-event-dtos.js"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
@@ -1568,4 +1573,283 @@ test("rejects a PREFLIGHT open-order baseline written after trading activity", (
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /PREFLIGHT open-order snapshot must precede trading activity/)
+})
+
+
+const harvesterRecord = (name, data, id = name) => ({
+  ...record(name, data, id),
+  payload: { id, source: "harvester", name, data },
+})
+
+test("projects unowned-order evidence as a sticky safety blocker without a separate pause event", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [harvesterRecord("execution.unowned_order", {
+      clientOrderId: "external-client",
+      brokerOrderId: "external-broker",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      status: "FILLED",
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    })],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.stickySafetyBlockers, [{
+    eventName: "execution.unowned_order",
+    symbol: "BTCUSDT",
+    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    clientOrderId: "external-client",
+    brokerOrderId: "external-broker",
+    sequence: 0,
+  }])
+  assert.deepEqual(result.data.pausedMarkets, [])
+})
+
+test("projects invalid-fill and accounting-failure evidence as sticky blockers without pause events", () => {
+  for (const [eventName, data] of [
+    ["execution.invalid_fill", {
+      clientOrderId: "h-BTCUSDT-1",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      status: "NEW",
+      reason: "IDENTITY_MISMATCH",
+    }],
+    ["execution.accounting_failed", {
+      clientOrderId: "h-BTCUSDT-1",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      status: "FILLED",
+      fillId: "binance:BTCUSDT:trade-1",
+      reason: "FILL_ACCOUNTING",
+    }],
+  ]) {
+    const result = projectHarvesterJournalRecovery({
+      records: [harvesterRecord(eventName, data)],
+    })
+
+    assert.equal(result.ok, true, eventName + " must be retained as safety evidence")
+    assert.equal(result.data.stickySafetyBlockers.length, 1)
+    assert.equal(result.data.stickySafetyBlockers[0].eventName, eventName)
+    assert.equal(result.data.stickySafetyBlockers[0].symbol, "BTCUSDT")
+    assert.equal(result.data.pausedMarkets.length, 0)
+  }
+})
+
+test("rejects an unknown Harvester event instead of silently skipping potentially stateful evidence", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [harvesterRecord("execution.future_safety_event", { symbol: "BTCUSDT" })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /unknown Harvester recovery event/)
+})
+
+test("ignores unknown events from other sources without treating them as Harvester recovery facts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [{
+      ...record("external.future_event", { symbol: "BTCUSDT" }),
+      payload: { id: "external.future_event", source: "external", name: "external.future_event", data: { symbol: "BTCUSDT" } },
+    }],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.stickySafetyBlockers, [])
+})
+
+test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
+  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("account.snapshot_captured", {
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 100,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+      record("harvester.started", {
+        broker: "binance",
+        strategyMode: "conservative",
+        enabledMarkets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }),
+      record("account.snapshot_captured", {
+        phase: "RECOVERY",
+        sourceTime: 200,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("account.open_orders_captured", {
+        phase: "RECOVERY",
+        observedAt: 200,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+      record("account.snapshot_captured", {
+        phase: "CLOSING",
+        sourceTime: 300,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.accountSnapshots.map(({ phase }) => phase), [
+    "PREFLIGHT",
+    "RECOVERY",
+    "CLOSING",
+  ])
+  assert.deepEqual(result.data.openOrderSnapshots.map(({ phase }) => phase), [
+    "PREFLIGHT",
+    "RECOVERY",
+  ])
+})
+
+
+test("restores sticky safety blockers into durable and effective market pauses", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [harvesterRecord("execution.unowned_order", {
+      clientOrderId: "external-client",
+      brokerOrderId: "external-broker",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      status: "FILLED",
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    })],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map(),
+  })
+
+  assert.equal(restored.ok, true)
+  assert.equal(restored.data.pausedMarkets.has("BTCUSDT"), true)
+  assert.equal(restored.data.durablePausedMarkets.has("BTCUSDT"), true)
+  assert.equal(restored.data.stickySafetyBlockers.length, 1)
+})
+
+test("ignores explicitly classified Harvester diagnostics without treating them as recovery facts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      harvesterRecord("harvester.process_started", { runtimeSessionId: "session-1" }),
+      harvesterRecord("broker.connected", { broker: "binance" }),
+      harvesterRecord("strategy.decision", { symbol: "BTCUSDT" }),
+      harvesterRecord("execution.duplicate_fill", { symbol: "BTCUSDT" }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.stickySafetyBlockers, [])
+  assert.deepEqual(result.data.orders, [])
+})
+
+test("rejects a RECOVERY snapshot that appears before the Journal session starts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("account.snapshot_captured", {
+      phase: "RECOVERY",
+      sourceTime: 100,
+      auditStatus: "COMPLETE",
+      balances: [],
+      auditReasons: [],
+    })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /RECOVERY account snapshot requires a started Journal session/)
+})
+
+test("rejects a RECOVERY open-order snapshot that appears before the Journal session starts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("account.open_orders_captured", {
+      phase: "RECOVERY",
+      observedAt: 100,
+      readiness: "READY",
+      orderCount: 0,
+      orders: [],
+      blockReasons: [],
+    })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /RECOVERY open-order snapshot requires a started Journal session/)
+})
+
+test("fails closed when an unknown recovery event has no source classification", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("execution.future_safety_event", { symbol: "BTCUSDT" })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /unknown Harvester recovery event/)
+})
+
+test("preserves execution safety DTOs through projection and restoration", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const order = new CanonicalOrder({
+    clientOrderId: "harvester-client-1",
+    brokerOrderId: "broker-order-1",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+  })
+  const fill = new Fill({
+    tradeId: "trade-1",
+    brokerOrderId: "broker-order-1",
+    clientOrderId: "harvester-client-1",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "99.95", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 2,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const facts = [
+    ["execution.unowned_order", mapExecutionUnownedOrderData({ order })],
+    ["execution.invalid_fill", mapExecutionInvalidFillData({ order, fill, reason: "IDENTITY_MISMATCH" })],
+    ["execution.accounting_failed", mapExecutionAccountingFailedData({ order, fill, error: new Error("accounting mismatch") })],
+  ]
+  const records = facts.map(([name, result]) => {
+    assert.equal(result.ok, true)
+    return harvesterRecord(name, result.data)
+  })
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true)
+  assert.deepEqual(projection.data.stickySafetyBlockers.map(({ eventName, symbol }) => [eventName, symbol]), [
+    ["execution.unowned_order", "DOGEUSDT"],
+    ["execution.invalid_fill", "DOGEUSDT"],
+    ["execution.accounting_failed", "DOGEUSDT"],
+  ])
+
+  const restored = restoreHarvesterJournalState({ projection, marketMetadata: new Map() })
+  assert.equal(restored.ok, true)
+  assert.equal(restored.data.pausedMarkets.has("DOGEUSDT"), true)
+  assert.equal(restored.data.durablePausedMarkets.has("DOGEUSDT"), true)
+  assert.equal(restored.data.stickySafetyBlockers.length, 3)
 })
