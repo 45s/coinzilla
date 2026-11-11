@@ -66,9 +66,11 @@ test("explicit initialization writes a genesis fact and committed-head manifest 
   const directoryMode = (await fsPromises.lstat(directory)).mode & 0o777
   const logMode = (await fsPromises.lstat(path.join(directory, "facts.jsonl"))).mode & 0o777
   const manifestMode = (await fsPromises.lstat(path.join(directory, "manifest.jsonl"))).mode & 0o777
-  assert.equal(directoryMode & 0o077, 0)
-  assert.equal(logMode & 0o077, 0)
-  assert.equal(manifestMode & 0o077, 0)
+  if (process.platform !== "win32") {
+    assert.equal(directoryMode & 0o077, 0)
+    assert.equal(logMode & 0o077, 0)
+    assert.equal(manifestMode & 0o077, 0)
+  }
   const verification = await store.verify()
   assert.equal(verification.ok, true)
   assert.equal(verification.data.lastCommittedSequence, "0")
