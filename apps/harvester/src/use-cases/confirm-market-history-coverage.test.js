@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { confirmMarketHistoryCoverage } from "./confirm-market-history-coverage.js"
 
 const evidence = {
-  factId: "coverage:LINKUSDT:" + "a".repeat(64),
+  factId: "market-history-coverage:LINKUSDT:baseline",
   symbol: "LINKUSDT",
   coveredFromTime: 100,
   verifiedAt: 200,
@@ -55,7 +55,7 @@ function createOptions(overrides = {}) {
             symbol: "LINKUSDT",
             ready: true,
             status: "READY",
-            audit: { targetMarketBlocked: false, tradeHistory: { complete: true } },
+            audit: { targetMarketBlocked: false, tradeHistory: { complete: true, historyRetentionBaselineFactId: evidence.factId } },
           },
         }
       },
@@ -107,7 +107,7 @@ test("does not append coverage when reconciliation reports a target-market block
         symbol: "LINKUSDT",
         ready: false,
         status: "BLOCKED",
-        audit: { targetMarketBlocked: true, blockedMarkets: ["LINKUSDT"] },
+        audit: { targetMarketBlocked: true, blockedMarkets: ["LINKUSDT"], tradeHistory: { complete: true, historyRetentionBaselineFactId: evidence.factId } },
       },
     }),
   })
