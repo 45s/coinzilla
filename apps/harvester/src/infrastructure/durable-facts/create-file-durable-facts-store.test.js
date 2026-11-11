@@ -406,3 +406,17 @@ test("verification flushes both committed streams before declaring the ledger va
   assert.ok(syncPaths.includes(path.join(directory, "manifest.jsonl")))
 })
 
+
+test("fails closed when the fact log is truncated below the committed-head journal", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  await store.append(operatorPause())
+  const factPath = path.join(directory, "facts.jsonl")
+  const lines = await readLines(factPath)
+  await writeFile(factPath, lines[0] + "\n")
+  const verification = await createStore(directory).verify()
+  assert.equal(verification.ok, false)
+  assert.match(verification.errors[0].message, /manifest.*ahead|truncated|fact log/i)
+})
