@@ -78,7 +78,7 @@ Domain-neutral shared helpers, including exact decimal arithmetic, result/valida
 
 Proposed exchange-neutral technical-indicator calculations over normalized market candles. This is not currently a workspace package: there is no package manifest, source implementation or published API. The first selected consumer is Harvester high-volatility protection (#1016); adaptive price-step planning (#1013) is a later consumer. The proposal separates reusable calculations from consumer-owned strategy decisions.
 
-- Proposal and boundary: [Indicators README](../packages/indicators/README.md)
+- Proposal and boundary: [Indicators README](../packages/indicators/README.md)\n- Proposed domain instructions: [Indicators AGENTS](../packages/indicators/AGENTS.md)
 - Proposed delivery plan: [Indicators roadmap](../packages/indicators/ROADMAP.md)
 
 ## Choosing where a change belongs

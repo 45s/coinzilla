@@ -4,7 +4,7 @@
 - Proposed package name: `@coinzilla/indicators`
 - Proposed path: `packages/indicators/`
 - Initial consumer: Harvester high-volatility protection ([issue #1016](https://github.com/45s/coinzilla/issues/1016)); adaptive price-step planning is a later consumer ([PR #1013](https://github.com/45s/coinzilla/pull/1013))
-- Delivery plan: [ROADMAP.md](./ROADMAP.md)
+- Agent instructions: [AGENTS.md](./AGENTS.md)\n- Delivery plan: [ROADMAP.md](./ROADMAP.md)
 
 ## Purpose
 

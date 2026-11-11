@@ -4,7 +4,7 @@
 - Type: Proposed package roadmap
 - Proposed owner: Indicators
 - Proposed package: `@coinzilla/indicators`
-- Scope authority: [README.md](./README.md)
+- Scope authority: [README.md](./README.md)\n- Agent instructions: [AGENTS.md](./AGENTS.md)
 - First consumer: [Harvester volatility protection, issue #1016](../../apps/harvester/docs/volatility-protection.md)\n- Later consumer: [Harvester adaptive price step, PR #1013](../../apps/harvester/ROADMAP.md)
 
 ## Current status

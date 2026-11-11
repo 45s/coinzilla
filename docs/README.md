@@ -51,7 +51,7 @@ Each active application/package owns its local README, agent instructions, roadm
 
 ## Proposed future package
 
-- [Indicators proposal](../packages/indicators/README.md) — proposed exchange-neutral technical indicators; not yet an installed workspace package.
+- [Indicators proposal](../packages/indicators/README.md) — proposed exchange-neutral technical indicators; see its README, AGENTS and roadmap. Not yet an installed workspace package.
 
 ## Shared package entry points
 

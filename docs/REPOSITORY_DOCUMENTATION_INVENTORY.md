@@ -79,10 +79,10 @@ The open [PR #1013](https://github.com/45s/coinzilla/pull/1013) proposes two mai
 
 | Proposed path | Purpose |
 | --- | --- |
-| `packages/indicators/README.md` | Defines the proposed package purpose, ownership boundary, exchange-neutral inputs and non-goals. |
+| `packages/indicators/README.md` | Defines the proposed package purpose, ownership boundary, exchange-neutral inputs and non-goals. |\n| `packages/indicators/AGENTS.md` | Defines proposal-only domain scope and implementation constraints for the future package. |
 | `packages/indicators/ROADMAP.md` | Tracks the staged proposal and implementation gates; no package implementation is claimed. |\n| `apps/harvester/docs/volatility-protection.md` | Accepted per-market high-volatility safety design, candle-data contract, recovery-SELL exception and implementation/test plan for issue #1016. |
 
-If merged, these three additions will increase the current 119-file Markdown/MDX inventory to 122 (60 Harvester files and 62 elsewhere). Update the recursive-tree checkpoint with the actual merge commit during PR closeout; do not pre-record an unverified tree SHA.
+If merged, these four additions will increase the current 119-file Markdown/MDX inventory to 123 (60 Harvester files and 63 elsewhere). Update the recursive-tree checkpoint with the actual merge commit during PR closeout; do not pre-record an unverified tree SHA.
 
 ## Source-verified content reviews (post-baseline)
 
