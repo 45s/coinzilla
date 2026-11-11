@@ -124,6 +124,7 @@ export function auditRecoveredTradeHistory({
         throw new Error("Single-market trade-history pagination evidence is missing or does not cover " + market.symbol)
       }
       if (!historyRetentionEvidence ||
+          historyRetentionEvidence.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" ||
           typeof historyRetentionEvidence.baselineFactId !== "string" ||
           !historyRetentionEvidence.baselineFactId.trim() ||
           historyRetentionEvidence.symbol !== market.symbol ||
@@ -131,7 +132,7 @@ export function auditRecoveredTradeHistory({
           historyRetentionEvidence.coveredFromTime < 0 ||
           historyRetentionEvidence.coveredFromTime > historyEvidence.historyStartTime ||
           !Number.isSafeInteger(historyRetentionEvidence.verifiedAt) ||
-          historyRetentionEvidence.verifiedAt < 0) {
+          historyRetentionEvidence.verifiedAt < historyRetentionEvidence.coveredFromTime) {
         throw new Error("Durable market-history retention evidence is missing or does not cover " + market.symbol)
       }
     }
@@ -243,6 +244,8 @@ export function auditRecoveredTradeHistory({
           marketSymbol: market.symbol,
           historyStartTime: historyEvidence.historyStartTime,
           historyRetentionBaselineFactId: historyRetentionEvidence.baselineFactId,
+          historyRetentionFactType: historyRetentionEvidence.factType,
+          historyRetentionVerifiedAt: historyRetentionEvidence.verifiedAt,
         } : {}),
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
