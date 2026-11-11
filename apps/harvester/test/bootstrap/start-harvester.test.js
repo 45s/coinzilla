@@ -222,17 +222,15 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
     getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
-    getCandles: async ({ symbol, interval, limit } = {}) => {
-      candleHistoryRequests.push({ symbol, interval, limit })
-      return toResult({ data: Array.from({ length: 100 }, (_, index) =>
-        createTestCandle({ symbol, openTime: index * 60_000 })) })
-    },
+    getCandles: async ({ symbol } = {}) => toResult({
+      data: Array.from({ length: 100 }, (_, index) =>
+        createTestCandle({ symbol, openTime: index * 60_000 })),
+    }),
     subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
-      candleSubscriptions.set(symbol, { interval, onCandle })
       await onCandle(createTestCandle({ symbol, openTime: 100 * 60_000 }))
       await onCandle(createTestCandle({ symbol, openTime: 101 * 60_000 }))
       await onCandle(createTestCandle({ symbol, openTime: 102 * 60_000 }))
-      return toResult({ data: { unsubscribe: async () => candleUnsubscriptions.push(symbol) } })
+      return toResult({ data: { unsubscribe: async () => {} } })
     },
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
