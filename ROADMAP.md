@@ -31,6 +31,8 @@
 
 - **Conservative order/accounting hardening (#985, #654/F-041) — IN PROGRESS.** Same-symbol external-order protection is tracked by [#985](https://github.com/45s/coinzilla/issues/985); [PR #987](https://github.com/45s/coinzilla/pull/987) remains a test-only RED stage, with no production guard yet. F-039 third-asset commission accounting, fee-asset reconciliation, live/DTO/replay parity and invalid-fee atomicity are complete in merged [PR #1002](https://github.com/45s/coinzilla/pull/1002) (956 Harvester tests; seven workflows passed on its exact final head). Recovery SELL cycle-completion proof (F-041) remains open under [#654](https://github.com/45s/coinzilla/issues/654). See the [Harvester roadmap](apps/harvester/ROADMAP.md); do not mark remaining work complete until implementation and exact-head checks pass.
 
+- **Harvester high-volatility protection (#1016) — ACCEPTED DESIGN, implementation not started.** Per-market protection will block new BUY and non-recovery actions, cancel only Harvester-owned active BUYs, and preserve recovery SELL execution/accounting. The implementation is staged across Brokers candle history/live Kline contracts, the proposed Indicators package, and Harvester's central order-submission gate. Initial thresholds remain provisional pending offline historical validation. See [Harvester Volatility Protection](apps/harvester/docs/volatility-protection.md), [Harvester roadmap](apps/harvester/ROADMAP.md), [Brokers roadmap](packages/brokers/ROADMAP.md) and [Indicators roadmap](packages/indicators/ROADMAP.md).
+
 ## IMPORTANT — active product and shared-package work
 
 3. **Consolidated Harvester trading-session statistics (C).**

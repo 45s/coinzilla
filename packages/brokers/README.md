@@ -131,6 +131,19 @@ The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `
 
 These reconnect guarantees apply to the public stream subscription set; they do not imply user-data event replay or reconciliation.
 
+### Historical and live candles — planned, not yet public
+
+Harvester issue [#1016](https://github.com/45s/coinzilla/issues/1016) requires normalized historical candles and live Kline updates. The current public broker API does **not** expose either capability. The proposed exchange-neutral methods are:
+
+- **getCandles({ symbol, interval, limit, startTime?, endTime? })** — return normalized historical candles in ascending open-time order.
+- **subscribeForCandles({ symbol, interval, onCandle })** — deliver normalized Kline updates and an unsubscribe handle.
+
+The normalized candle should include symbol, interval, openTime, closeTime (Unix milliseconds), exact decimal-string open, high, low, close, volume, and an isClosed flag. Historical and live payloads must map to the same shape. A forming live candle may be delivered with isClosed false; consumers decide whether to retain it for display, while indicator history must use completed candles only.
+
+The Binance implementation should use the native WebSocket API klines request for history and the public Kline stream for live updates. The Streams protocol already validates Kline stream names internally, but the public broker method and normalized adapter do not exist yet. Keep this capability inside the existing native WebSocket architecture; do not add a REST fallback or third-party SDK.
+
+Protocol references: [Binance Spot WebSocket API — Klines](https://developers.binance.me/en/docs/products/spot/testnet/web-socket-api) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
+
 ## Offline tests and coverage
 
 The default broker test suite is deterministic and offline:

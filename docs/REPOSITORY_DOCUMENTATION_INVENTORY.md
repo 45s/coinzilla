@@ -75,14 +75,14 @@ At the current source-verified develop checkpoint `bbd80b93cc0b8ab09172119c0d2d8
 
 ## Pending documentation additions — PR #1013
 
-The open [PR #1013](https://github.com/45s/coinzilla/pull/1013) proposes two maintained planning documents for a future Indicators package. They are not part of the current `develop` inventory until the PR is merged.
+The open [PR #1013](https://github.com/45s/coinzilla/pull/1013) proposes two maintained planning documents for a future Indicators package and adds the accepted Harvester volatility-protection design document. None are part of the current `develop` inventory until the PR is merged.
 
 | Proposed path | Purpose |
 | --- | --- |
 | `packages/indicators/README.md` | Defines the proposed package purpose, ownership boundary, exchange-neutral inputs and non-goals. |
-| `packages/indicators/ROADMAP.md` | Tracks the staged proposal and unresolved design decisions; no implementation is claimed. |
+| `packages/indicators/ROADMAP.md` | Tracks the staged proposal and implementation gates; no package implementation is claimed. |\n| `apps/harvester/docs/volatility-protection.md` | Accepted per-market high-volatility safety design, candle-data contract, recovery-SELL exception and implementation/test plan for issue #1016. |
 
-If merged, these two additions will increase the current 119-file Markdown/MDX inventory to 121. Update the recursive-tree checkpoint with the actual merge commit during PR closeout; do not pre-record an unverified tree SHA.
+If merged, these three additions will increase the current 119-file Markdown/MDX inventory to 122 (60 Harvester files and 62 elsewhere). Update the recursive-tree checkpoint with the actual merge commit during PR closeout; do not pre-record an unverified tree SHA.
 
 ## Source-verified content reviews (post-baseline)
 

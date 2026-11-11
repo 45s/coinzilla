@@ -3,7 +3,7 @@
 - Status: Proposal only; not yet a workspace package
 - Proposed package name: `@coinzilla/indicators`
 - Proposed path: `packages/indicators/`
-- Initial consumer: Harvester adaptive price-step planning ([PR #1013](https://github.com/45s/coinzilla/pull/1013))
+- Initial consumer: Harvester high-volatility protection ([issue #1016](https://github.com/45s/coinzilla/issues/1016)); adaptive price-step planning is a later consumer ([PR #1013](https://github.com/45s/coinzilla/pull/1013))
 - Delivery plan: [ROADMAP.md](./ROADMAP.md)
 
 ## Purpose
@@ -32,7 +32,7 @@ Consumers provide normalized candles and decide how indicator outputs affect the
 
 ## Initial capability proposal
 
-The first concrete use case is volatility measurement for Harvester's adaptive `priceStepPercent`.
+The first concrete use case is volatility measurement for Harvester's high-volatility protection (#1016). Adaptive priceStepPercent planning (#1013) is a later consumer of the same reusable calculations.\n\nThe Harvester consumer initially selects 1-minute completed candles, ATR period 14 with Wilder smoothing, NATR, and a ratio against a 60-observation reference window. These are **consumer policy parameters**, not hard-coded defaults in this package. The public calculation API must accept explicit periods/options so other applications can reuse the same calculations with different intervals and windows.
 
 Candidate calculations:
 
@@ -50,7 +50,7 @@ Illustrative model:
 
 Example: if configured `priceStepPercent = 0.5`, current normalized volatility is 1.5 times its reference, and the illustrative coefficient is 1.5, the derived step is `0.75%`.
 
-This is a design example only. ATR period/smoothing, candle timeframe, reference window, coefficient bounds, smoothing, fallback and low-volatility behavior are not decided. Do not treat this formula or example as an approved public API.
+This is a mathematical example for the later adaptive-step consumer. It does not define the volatility-protection thresholds or any trading policy. The indicator package returns calculations only; Harvester decides how to pause/resume trading and how a later adaptive step is bounded.
 
 ## Candidate future catalogue
 
@@ -78,7 +78,7 @@ Add capabilities based on real use cases and an agreed public contract, not beca
 ## Related documents
 
 - [Indicators roadmap](./ROADMAP.md)
-- [Harvester adaptive price-step proposal](../../apps/harvester/ROADMAP.md)
+- [Harvester Volatility Protection](../../apps/harvester/docs/volatility-protection.md)\n- [Harvester adaptive price-step proposal](../../apps/harvester/ROADMAP.md)
 - [Domain ownership](../../docs/engineering/DOMAIN_OWNERSHIP.md)
 - [Workspace package map](../../docs/workspace-package-map.md)
 - [Shared-utilities policy](../../docs/engineering/SHARED_UTILITIES_POLICY.md)

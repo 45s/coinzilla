@@ -16,7 +16,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 
 ## Proposed domain — not yet a workspace package
 
-`packages/indicators/` is the proposed home for a future `@coinzilla/indicators` package. It is a planning/documentation area only at this stage: no workspace manifest, source API or runtime capability exists yet. If the proposal is accepted, this domain will own exchange-neutral technical-indicator calculations and their tests, public contract and roadmap. Harvester and other applications will remain consumers and retain their strategy/business policies. The proposal is documented in [the Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
+`packages/indicators/` is the proposed home for a future `@coinzilla/indicators` package. It is a planning/documentation area only at this stage: no workspace manifest, source API or runtime capability exists yet. If the proposal is accepted, this domain will own exchange-neutral technical-indicator calculations and their tests, public contract and roadmap. The first selected Harvester consumer is high-volatility protection (#1016), followed by adaptive price-step planning (#1013). Harvester retains all strategy/risk policy; Brokers retains exchange-specific candle retrieval and normalization. Applications remain consumers of indicator calculations. The proposal is documented in [the Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
 
 ## Shared infrastructure
 

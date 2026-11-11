@@ -5,7 +5,7 @@
 - Proposed owner: Indicators
 - Proposed package: `@coinzilla/indicators`
 - Scope authority: [README.md](./README.md)
-- Initial consumer request: [Harvester adaptive price step, PR #1013](../../apps/harvester/ROADMAP.md)
+- First consumer: [Harvester volatility protection, issue #1016](../../apps/harvester/docs/volatility-protection.md)\n- Later consumer: [Harvester adaptive price step, PR #1013](../../apps/harvester/ROADMAP.md)
 
 ## Current status
 
@@ -15,7 +15,7 @@ No package manifest, source implementation, dependencies, public exports, tests 
 
 Provide reusable, deterministic, exchange-neutral technical indicators and market-analysis calculations over normalized caller-supplied data. Keep indicator mathematics in this package; keep strategy, risk, order and execution policy in consuming applications.
 
-## Proposed phases
+## Prioritized initial consumer — Harvester volatility protection (#1016)\n\nThe first release should support the volatility measurements required by Harvester protection. Keep the package reusable: Harvester selects 1-minute candles, ATR period 14, Wilder smoothing and a 60-observation reference window; those values must be caller-supplied options, not package-wide strategy defaults. The package does not implement thresholds, hysteresis, order blocking or recovery SELL policy.\n\n## Proposed phases
 
 1. [ ] **Agree package boundary and API conventions.**
    - Confirm the package name/path and whether the package should support current-value and historical-series APIs.
@@ -24,12 +24,12 @@ Provide reusable, deterministic, exchange-neutral technical indicators and marke
    - Define error/result conventions, validation limits, JSDoc, public exports and compatibility policy.
    - Inspect existing packages and consumers before adding dependencies or abstractions.
 
-2. [ ] **Implement the first volatility capability: ATR.**
+2. [ ] **Implement parameterized ATR (first consumer uses period 14 and Wilder smoothing).**
    - Freeze the ATR definition, including True Range, period, smoothing method and warm-up behavior.
    - Add deterministic tests for known reference series, edge cases, malformed candles, gaps, unsorted input, insufficient history and precision boundaries.
    - Keep input exchange-neutral and supplied by the caller; do not add broker/network access.
 
-3. [ ] **Add normalized volatility and comparison tools.**
+3. [ ] **Add NATR and a reusable current/reference volatility ratio.**
    - Define normalized ATR (ATR relative to close price) and its zero/invalid-close behavior.
    - Define the current-versus-reference volatility ratio for one market and compatible timeframe.
    - Keep reference-window selection, coefficient bounds, smoothing/hysteresis and fallback policy with the consuming strategy unless a genuinely generic mathematical operation is identified.
@@ -39,7 +39,7 @@ Provide reusable, deterministic, exchange-neutral technical indicators and marke
    - Do not build a backtesting engine or market-data storage layer into this package.
 
 5. [ ] **Integrate consumers separately.**
-   - Harvester integration is a separate consumer-owned change: it selects candle timeframe/history, configuration, coefficient policy, strategy touchpoints, diagnostics and order lifecycle behavior.
+   - Harvester integration is a separate consumer-owned change: it selects candle timeframe/history, configuration, warning/pause/resume thresholds, hysteresis, data-quality fallback, strategy touchpoints, diagnostics and order lifecycle behavior. Issue #1016 is the first consumer; adaptive price-step planning in PR #1013 follows separately.
    - Future applications request and integrate the public API; they do not modify this package's internals.
    - Add consumer regression tests and keep existing behavior unchanged when the feature is disabled.
 

@@ -2,6 +2,30 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## High-volatility protection — issue #1016
+
+**Status: ACCEPTED DESIGN — NOT IMPLEMENTED.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+
+- Per-market protection; one volatile pair must not stop another.
+- Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
+- Load approximately 100 completed candles per enabled market at startup; maintain the series from live Kline updates and backfill gaps after reconnect.
+- Missing, stale, invalid, insufficient or discontinuous candle data blocks new strategy activity. It is never treated as low volatility.
+- While protected, block all new BUY and non-recovery strategy actions. Cancel only Harvester-owned, acknowledged active BUYs through the existing durable cancellation and fill-reconciliation path.
+- Preserve resting recovery SELLs without volatility-driven cancellation or repricing. Continue SELL fills/accounting and permit only recovery SELL lifecycle actions needed to recover invested capital.
+- Enforce protection centrally immediately before broker submission; identify recovery SELL intent explicitly rather than allowing every SELL.
+- Initial ratio thresholds (warning 1.5, protect 2.0, recover 1.3 for 3 completed candles) are provisional pending offline historical validation.
+- Do not alter Conservative recovery economics or imply process-restart recovery is complete. No exchange operations are authorized.
+
+### Delivery order
+
+1. [ ] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests.
+2. [ ] Indicators: create @coinzilla/indicators; implement parameterized ATR, NATR and volatility-ratio calculations with reference tests.
+3. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
+4. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
+5. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+
+---
+
 ## Adaptive price step — volatility-adjusted spacing
 
 **Status: PROPOSED — DESIGN NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the proposed shared [Indicators package](../../packages/indicators/README.md). Average True Range (ATR) is the leading candidate measure, but the package API and calculation contract are not yet approved.

@@ -65,6 +65,15 @@ Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` u
 
 `getOpenOrders({ symbol })` currently returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
 
+## Planned candle capability — issue #1016
+
+The current Harvester broker port does **not** expose historical or live candles. High-volatility protection requires an application-owned port extension, proposed as:
+
+- **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical candles.
+- **subscribeForCandles({ symbol, interval, onCandle })** for live candle updates.
+
+These methods are a design proposal, not current runtime APIs. The Harvester adapter will map the normalized Candle contract supplied by @coinzilla/brokers; domain and application policy must not import Binance DTOs or use the concrete broker directly. See [Volatility Protection](../volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016).
+
 ## Implemented infrastructure adapter
 
 The implementation lives in `src/infrastructure/brokers/binance-broker-adapter.js`. It constructs `BinanceWebSocketBroker`, validates the concrete broker methods, and returns the application-owned port. Its `placeOrder({ order })` method maps to the package's `createOrder(order)` method. The adapter preserves the broker's result objects and error behavior.
