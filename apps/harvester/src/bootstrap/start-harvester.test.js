@@ -240,6 +240,40 @@ const createBroker = (calls = [], {
     emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
   }
 }
+
+const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
+  const createCandle = ({ symbol, openTime } = {}) => ({
+    symbol,
+    interval: "1m",
+    openTime,
+    closeTime: openTime + 59_999,
+    open: "1",
+    high: "1.1",
+    low: "0.9",
+    close: "1",
+    volume: "1",
+    isClosed: true,
+  })
+  broker.getCandles = async ({ symbol, interval, limit } = {}) => ({
+    ok: true,
+    data: symbols.includes(symbol)
+      ? Array.from({ length: Math.min(limit ?? 100, 100) }, (_, index) =>
+        createCandle({ symbol, openTime: index * 60_000 }))
+      : [],
+  })
+  broker.subscribeForCandles = async ({ symbol, interval, onCandle } = {}) => {
+    if (symbols.includes(symbol)) {
+      for (const index of [100, 101, 102]) {
+        await onCandle(createCandle({ symbol, openTime: index * 60_000 }))
+      }
+    }
+    return {
+      ok: true,
+      data: { stream: symbol.toLowerCase() + "@kline_" + interval, unsubscribe: async () => {} },
+    }
+  }
+  return broker
+}
 const binanceEnv = {
   NODE_ENV: "test",
   TRADING_MODE: "testnet",
