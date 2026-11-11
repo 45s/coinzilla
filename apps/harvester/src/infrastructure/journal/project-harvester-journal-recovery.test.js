@@ -1709,3 +1709,28 @@ test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CL
     "RECOVERY",
   ])
 })
+
+
+test("restores sticky safety blockers into durable and effective market pauses", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [harvesterRecord("execution.unowned_order", {
+      clientOrderId: "external-client",
+      brokerOrderId: "external-broker",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      status: "FILLED",
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    })],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map(),
+  })
+
+  assert.equal(restored.ok, true)
+  assert.equal(restored.data.pausedMarkets.has("BTCUSDT"), true)
+  assert.equal(restored.data.durablePausedMarkets.has("BTCUSDT"), true)
+  assert.equal(restored.data.stickySafetyBlockers.length, 1)
+})
