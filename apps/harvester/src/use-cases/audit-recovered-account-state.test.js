@@ -766,6 +766,7 @@ test("integrates structured one-market history evidence with account balance and
     historyStartTime: 1000,
     marketUniverseComplete: false,
     historyRetentionEvidence: {
+      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
       baselineFactId: "history-baseline-btc-1",
       symbol: "BTCUSDT",
       coveredFromTime: 1000,
@@ -839,4 +840,39 @@ test("fails closed when an unowned open order reuses a recovered clientOrderId",
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /clientOrderId conflicts with recovered order ownership/)
+})
+
+
+test("rejects a market-history baseline verified after the current account snapshot", () => {
+  const { projection, restored } = restoreState()
+  const exchangeTradeHistory = {
+    fills: [],
+    historyPagesComplete: true,
+    marketHistoryPagesComplete: true,
+    historyScope: "MARKET",
+    marketsQueried: ["BTCUSDT"],
+    historyStartTime: 1000,
+    marketUniverseComplete: false,
+    historyRetentionEvidence: {
+      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+      baselineFactId: "history-baseline-btc-future",
+      symbol: "BTCUSDT",
+      coveredFromTime: 1000,
+      verifiedAt: 4000,
+    },
+  }
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ sourceTime: 3000 }),
+    openOrders: [],
+    markets: [market],
+    targetMarket: market,
+    exchangeTradeHistory,
+    requireCompleteTradeHistory: true,
+    tradeHistoryScope: "MARKET",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /verified after the current account snapshot/)
 })
