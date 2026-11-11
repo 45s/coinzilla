@@ -31,10 +31,10 @@ function validateUniqueFilterTypes(filters, label) {
   }
 }
 
-function rejectUnvalidatedFilters(filters, label) {
+function rejectUnvalidatedFilters(filters, label, knownFilters = KNOWN_SYMBOL_FILTERS) {
   const unsupported = [...new Set(filters
     .map((filter) => filter.filterType)
-    .filter((type) => !KNOWN_SYMBOL_FILTERS.has(type) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(type)))]
+    .filter((type) => !knownFilters.has(type) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(type)))]
   if (unsupported.length > 0) {
     throw new Error("Binance " + label + " contains constraints not validated by Harvester's current LIMIT/LIMIT_MAKER workflow: " + unsupported.join(", "))
   }
@@ -87,11 +87,20 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
     }
   }
 
-  if (!Array.isArray(symbolInfo.filters)) {
+  const filters = symbolInfo.filters
+  if (!Array.isArray(filters)) {
     throw new TypeError("Binance symbol " + requestedSymbol + " has malformed exchange filters")
   }
-  const priceFilter = readExactlyOneFilter(symbolInfo.filters, "PRICE_FILTER")
-  const lotSizeFilter = readExactlyOneFilter(symbolInfo.filters, "LOT_SIZE")
+  validateUniqueFilterTypes(filters, "symbol filters for " + requestedSymbol)
+  rejectUnvalidatedFilters(filters, "symbol " + requestedSymbol)
+  const exchangeFilters = exchangeInfo.exchangeFilters
+  if (!Array.isArray(exchangeFilters)) {
+    throw new TypeError("Binance exchangeInfo response is missing its exchangeFilters array")
+  }
+  validateUniqueFilterTypes(exchangeFilters, "exchange filters")
+  rejectUnvalidatedFilters(exchangeFilters, "exchange", new Set())
+  const priceFilter = readExactlyOneFilter(filters, "PRICE_FILTER")
+  const lotSizeFilter = readExactlyOneFilter(filters, "LOT_SIZE")
   const tickSize = normalizePositiveExchangeDecimal(priceFilter.tickSize, "PRICE_FILTER.tickSize")
   const stepSize = normalizePositiveExchangeDecimal(lotSizeFilter.stepSize, "LOT_SIZE.stepSize")
   const minQuantity = normalizePositiveExchangeDecimal(lotSizeFilter.minQty, "LOT_SIZE.minQty")
@@ -109,11 +118,11 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
   }
 
   for (const filterType of ["MIN_NOTIONAL", "NOTIONAL"]) {
-    if (symbolInfo.filters.filter((filter) => filter?.filterType === filterType).length > 1) {
+    if (filters.filter((filter) => filter?.filterType === filterType).length > 1) {
       throw new Error("Binance exchangeInfo contains duplicate " + filterType + " filters")
     }
   }
-  const notionalFilters = symbolInfo.filters.filter(
+  const notionalFilters = filters.filter(
     (filter) => filter?.filterType === "MIN_NOTIONAL" || filter?.filterType === "NOTIONAL",
   )
   if (notionalFilters.length === 0) {
