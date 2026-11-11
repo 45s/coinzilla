@@ -263,6 +263,10 @@ test("does not acknowledge an append when the manifest commit is uncertain", { s
   const verification = await store.verify()
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /manifest|commit|sequence|integrity|uncertain/i)
+  const freshInstance = createStore(directory)
+  const recoveredVerification = await freshInstance.verify()
+  assert.equal(recoveredVerification.ok, false)
+  assert.match(recoveredVerification.errors[0].message, /committed manifest head|manifest/i)
 })
 
 test("fails closed when the log is truncated below the committed manifest head", { skip: !supportsDirectorySync }, async (t) => {
