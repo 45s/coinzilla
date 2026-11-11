@@ -56,7 +56,6 @@ const marketHistoryEvidence = Object.freeze({
 })
 
 const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
-  ...input,
   complete: false,
   marketUniverseComplete: false,
   scope: "MARKET",
@@ -71,6 +70,7 @@ const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
     evidenceDigest: "a".repeat(64),
     verifiedBy: "operator:trader",
   },
+  ...input,
 })
 
 test("rejects a caller-supplied market-universe boolean as account-wide completeness evidence", () => {
