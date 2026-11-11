@@ -23,6 +23,23 @@ const ORDER_SIDES = new Set(["BUY", "SELL"])
 const SUBMISSION_OUTCOMES = new Set(["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
 const CANCEL_OUTCOMES = new Set(["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"])
 
+const IGNORABLE_HARVESTER_EVENTS = new Set([
+  "harvester.process_started",
+  "harvester.startup_failed",
+  "config.validated",
+  "broker.connected",
+  "broker.connection_failed",
+  "broker.disconnected",
+  "broker.status_changed",
+  "broker.subscription_established",
+  "broker.subscription_failed",
+  "strategy.decision",
+  "market.trading_rules_captured",
+  "broker.execution_report",
+  "order.updated",
+  "execution.duplicate_fill",
+])
+
 function requireObject({ value, field }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(field + " must be an object")
@@ -200,7 +217,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       const name = payload.name
       if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
       if (!Object.values(EVENT).includes(name)) {
-        if (payload.source === "harvester") {
+        if (payload.source === "harvester" && !IGNORABLE_HARVESTER_EVENTS.has(name)) {
           throw new Error("unknown Harvester recovery event: " + name)
         }
         continue
