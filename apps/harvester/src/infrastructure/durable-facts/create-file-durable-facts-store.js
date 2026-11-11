@@ -73,6 +73,10 @@ function canonicalize(value, depth = 0) {
   }
   if (Array.isArray(value)) {
     if (value.length > MAX_ARRAY_LENGTH) throw new RangeError("Durable fact array exceeds the maximum length")
+    if (Object.keys(value).length !== value.length) throw new TypeError("Durable fact arrays must not contain holes or custom properties")
+    for (let index = 0; index < value.length; index += 1) {
+      if (!(index in value)) throw new TypeError("Durable fact arrays must not contain sparse entries")
+    }
     return value.map((item) => canonicalize(item, depth + 1))
   }
   if (typeof value === "object") {
@@ -90,8 +94,12 @@ function canonicalize(value, depth = 0) {
       if (SECRET_KEY_PATTERN.test(key)) {
         throw new TypeError("Durable fact payload must not contain credentials or secrets")
       }
-      if (value[key] === undefined) throw new TypeError("Durable fact payload must not contain undefined values")
-      result[key] = canonicalize(value[key], depth + 1)
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
+        throw new TypeError("Durable fact payload must not contain accessor properties")
+      }
+      if (descriptor.value === undefined) throw new TypeError("Durable fact payload must not contain undefined values")
+      result[key] = canonicalize(descriptor.value, depth + 1)
     }
     return result
   }
