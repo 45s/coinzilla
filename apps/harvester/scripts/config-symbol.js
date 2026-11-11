@@ -1,9 +1,10 @@
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout, stderr } from "node:process"
 import { pathToFileURL, fileURLToPath } from "node:url"
-import { normalizeSymbolInput, parseDecimalInput, createPairConfig } from "./config-symbol/configuration.js"
+import { normalizeSymbolInput, parseDecimalInput, normalizePairInputs, createPairConfig } from "./config-symbol/configuration.js"
 import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
 import { writePairConfigAtomically } from "./config-symbol/write-config.js"
+import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config.json", import.meta.url))
 
@@ -18,6 +19,7 @@ export async function runConfigSymbol({
   fetchImpl = globalThis.fetch,
   metadataFetcher = fetchBinanceSpotMetadata,
   configPath = DEFAULT_CONFIG_PATH,
+  loadConfig = loadAppConfig,
   writeConfig = writePairConfigAtomically,
 } = {}) {
   if (typeof ask !== "function") {
@@ -27,7 +29,7 @@ export async function runConfigSymbol({
   writeLine("Harvester — add a Binance Spot trading pair")
   writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
   const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
-  const inputs = {
+  const inputs = normalizePairInputs({
     investment: parseDecimalInput(await ask("Investment / quote budget: "), "investment", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
     makerPercent: parseDecimalInput(await ask("Maker commission percent (for example 0): "), "makerPercent"),
@@ -42,6 +44,11 @@ export async function runConfigSymbol({
       "priceStepPercent",
       { exclusiveMin: true },
     ),
+  })
+
+  const existingConfig = await loadConfig(configPath)
+  if (Object.hasOwn(existingConfig.strategies.CG_coinGrabber.pairs, symbol)) {
+    throw new Error("Pair " + symbol + " already exists in config.json; refusing to overwrite it")
   }
 
   writeLine("Fetching current public Binance Spot exchange information...")
