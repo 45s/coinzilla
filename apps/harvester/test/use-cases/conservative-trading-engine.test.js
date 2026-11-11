@@ -296,8 +296,8 @@ test("defers an executable LIMIT_MAKER intent when market-price data is stale", 
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
 
-  assert.equal(result.data.deferred, true)
-  assert.equal(result.data.reason, "MARKET_PRICE_STALE")
+  assert.equal(result.data.skipped, true, "A stale incoming price is rejected before strategy evaluation.")
+  assert.equal(result.data.reason, "STALE_MARKET_PRICE")
   assert.equal(fixture.submittedIntents.length, 0)
 })
 
@@ -334,8 +334,8 @@ test("defers an executable intent for a paused market", async () => {
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
 
-  assert.equal(result.data.deferred, true)
-  assert.equal(result.data.reason, "MARKET_PAUSED")
+  assert.equal(result.data.skipped, true, "A paused market does not generate a strategy intent.")
+  assert.equal(result.data.reason, "PAIR_PAUSED")
   assert.equal(fixture.submittedIntents.length, 0)
 })
 
@@ -346,8 +346,8 @@ test("defers an executable intent while unowned open orders exist for its market
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
 
-  assert.equal(result.data.deferred, true)
-  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT")
+  assert.equal(result.data.skipped, true, "Unowned orders suppress strategy evaluation before submission.")
+  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDER")
   assert.equal(fixture.submittedIntents.length, 0)
 })
 
