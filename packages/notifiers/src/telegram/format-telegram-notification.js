@@ -43,7 +43,7 @@ function compactOrder(data, icon, status = "") {
 }
 
 const formatters = Object.freeze({
-  "order.filled": ({ data }) => compactOrder(data, "💰", "FILLED"),
+  "order.filled": ({ data }) => compactOrder(data, "💰", "ORDER FILLED"),
   "fill.received": ({ data }) => {
     const fill = data.fill && typeof data.fill === "object" && !Array.isArray(data.fill) ? data.fill : {}
     const price = text(fill.price, "n/a", 96)
@@ -63,7 +63,7 @@ const formatters = Object.freeze({
     ...(data.tradingMode === undefined ? [] : [text(data.tradingMode, "n/a", 24).toUpperCase()]),
   ].join(" · "),
   "broker.disconnected": ({ data }) => `🟥 ${text(data.broker, "BROKER", 64).toUpperCase()} DISCONNECTED · ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
-  "order.submitted": ({ data }) => compactOrder(data),
+  "order.submitted": ({ data }) => compactOrder(data, null, "ORDER SUBMITTED"),
   "order.cancelled": ({ data }) => [
     `✖️ ${side(data.side).label} ${symbol(data.symbol)} CANCELLED · Filled ${text(data.executedQuantity, "0", 96)}`,
     orderId(data),
