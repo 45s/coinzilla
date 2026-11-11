@@ -91,7 +91,7 @@ function unsubscribeAll(subscriptions) {
 }
 
 /**
- * Attach a Telegram notifier to a fixed allowlist of low-volume operational events.
+ * Deliver application-formatted messages for application-selected events through Telegram.
  * Sends are serialized and admission-controlled; flush the event bus before close().
  */
 export function subscribeTelegramNotifications({
