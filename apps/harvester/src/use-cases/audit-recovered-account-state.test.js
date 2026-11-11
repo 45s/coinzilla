@@ -760,10 +760,17 @@ test("integrates structured one-market history evidence with account balance and
   const exchangeTradeHistory = {
     fills: exchangeFills,
     historyPagesComplete: true,
-    marketHistoryComplete: true,
+    marketHistoryPagesComplete: true,
     historyScope: "MARKET",
     marketsQueried: ["BTCUSDT"],
+    historyStartTime: 1000,
     marketUniverseComplete: false,
+    historyRetentionEvidence: {
+      baselineFactId: "history-baseline-btc-1",
+      symbol: "BTCUSDT",
+      coveredFromTime: 1000,
+      verifiedAt: 1100,
+    },
   }
   const result = auditRecoveredAccountState({
     projection,
