@@ -19,7 +19,7 @@ const createMetadata = (symbol = "BTCUSDT") => {
       { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"] }
+  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
 }
 
 test("loads every configured market and validates/emits trading rules only for enabled pairs", async () => {
@@ -82,3 +82,44 @@ test("rejects mismatched market symbols before storing metadata", async () => {
   )
   assert.equal(marketMetadata.size, 0, "Rejected metadata must not be added to the market map.")
 })
+
+
+test("starts an enabled market with unsupported filters and retains their trace diagnostics", async () => {
+  const metadata = {
+    ...createMetadata("BTCUSDT"),
+    unvalidatedConstraints: [
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" },
+    ],
+  }
+  const marketMetadata = new Map()
+  const traceEntries = []
+  const events = []
+
+  await loadMarketMetadata({
+    broker: { getSymbolFilters: async () => ({ ok: true, data: metadata }) },
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        orderQuantity: 0.01,
+        investment: 100,
+        makerPercent: 0,
+        takerPercent: 0.1,
+      },
+    },
+    marketMetadata,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+    logger: { trace: (entry) => traceEntries.push(entry) },
+  })
+
+  assert.equal(marketMetadata.get("BTCUSDT").orderType, "LIMIT_MAKER", "A supported configured order type must become ready despite additional unsupported filter descriptors.")
+  assert.equal(events.length, 1, "The enabled market must publish its normal trading-rule capture event after readiness succeeds.")
+  assert.ok(
+    traceEntries.some((entry) =>
+      entry.operation === "validate-market-trading-readiness" &&
+      entry.symbol === "BTCUSDT" &&
+      entry.unvalidatedConstraints?.[0]?.sourceFilterType === "PERCENT_PRICE"
+    ),
+    "Trace diagnostics must retain the source filter descriptor even though it no longer blocks startup.",
+  )
+})
+

@@ -50,15 +50,17 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
         BTCUSDT: {
           enabled: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
+          minProfit: 0.01,
           priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
           makerPercent: 0, takerPercent: 0,
         },
         ETHUSDT: {
           enabled: false, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
+          minProfit: 0.01,
           priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
           makerPercent: 0, takerPercent: 0,
         },
@@ -91,6 +93,7 @@ const createMarketMetadata = (symbol) => {
     market,
     tradingRules,
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    unvalidatedConstraints: [],
   }
 }
 const createOpenOrderSnapshot = ({ order }) => {
@@ -182,6 +185,8 @@ const createBroker = (calls = [], {
       return { ok: true, data: createMarketMetadata(symbol) }
     },
     getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
+    getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ symbol, onPrice }) => {
       calls.push("subscribe:" + symbol)
       subscriptions.set(symbol, onPrice)
@@ -1309,6 +1314,8 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       }
     },
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
+    getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     cancelOrder: async ({ order }) => {
       if (order.side === "BUY") buyCancellationCount.value += 1
       const canceledOrder = new CanonicalOrder({
@@ -1452,13 +1459,14 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: {
       BTCUSDT: {
         enabled: true,
         investment: 2000,
         orderQuantity: 0.01,
         keepQuantity: 0.001,
+        minProfit: 0.01,
         priceStepPercent: 0.05,
         pricePrecision: 2,
         quantityPrecision: 3,
@@ -2243,7 +2251,8 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
     getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }), getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
     getExchangeMarkets: async () => ({ ok: true, data: [] }),
-    getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
+    getPrices: async () => ({ ok: true }), getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForPrices: async () => ({ ok: true }), subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
   }
   const broker = createBinanceBrokerAdapter({
@@ -3227,16 +3236,19 @@ test("account snapshots include every configured pair asset, including disabled 
           ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
             enabled: false, investment: 100, orderQuantity: 400, keepQuantity: 1,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
             makerPercent: 0, takerPercent: 0.1,
           },
           ZROFDUSD: {
             enabled: false, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
+            minProfit: 0.01,
             priceStepPercent: 0.5, pricePrecision: 3, quantityPrecision: 1,
             makerPercent: 0, takerPercent: 0.1,
           },
           SOLFDUSD: {
             enabled: false, investment: 100, orderQuantity: 1, keepQuantity: 0.01,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
             makerPercent: 0, takerPercent: 0.1,
           },

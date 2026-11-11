@@ -20,6 +20,12 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Repository documentation entry point | [docs/README.md](docs/README.md) |
 | Harvester execution priority | [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md) |
 
+## Branch and PR target — absolute rule
+
+**`develop` is the only target for feature, fix, refactor, maintenance, and documentation task PRs. `main` is not a task branch or a task-PR target. The only permitted PR into `main` is the final release PR with source `develop` and target `main`. Never create, retarget, or merge a task PR directly into `main`, even for a small fix or an urgent change. Start every task branch from the latest `develop`.
+
+The authoritative detailed rules are in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#2-branch-model). This is a hard rule for every AI agent, coding assistant, human contributor, and automation.
+
 JavaScript control-flow style (including braces on all control statements and no nested ternary operators) is defined in [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md#javascript-control-flow). Follow that canonical rule in all applications and packages.
 
 ## Mandatory documentation and requirements preflight — hard gate

@@ -48,6 +48,22 @@ excludes its `/logs/` directory.
 
 There is no automatic file rotation, retention, compression, or deletion. Session files accumulate until an operator archives or removes them. Protect the directory with appropriate OS permissions because event records include market, order, and error identifiers.
 
+## Legacy history discovery and chronology (forensic only)
+
+Use Harvester's `readHarvesterJournalHistory({ directory })` for historical inspection. Pass either the Harvester log root or the `logs/sessions` directory itself. Do not call `Journal.read()` on the `logs/sessions` parent and treat an empty result as proof that no process sessions exist: the package-level Journal reader reads files in one directory; Harvester's history reader performs the recursive process-session discovery.
+
+The Harvester reader:
+
+- Reads legacy root-level flat JSONL files and recursively discovers nested per-process session directories.
+- Rejects unreadable directories, symbolic links, discovered process directories without a JSONL session file, malformed session entries, duplicate record IDs, and configured directory/session/record/byte limit violations.
+- Returns record positions relative to the supplied history root so equal timestamp-only filenames in different process directories remain distinguishable.
+- For multiple process sessions with `harvester.process_started` metadata, orders by the canonical millisecond `data.startedAt` and validates that the directory's timestamp/runtime-session suffix agrees with that identity.
+- For multiple legacy sessions without process-start metadata, uses unique first-record event timestamps only when the event ranges are monotonic and strictly non-overlapping. A single legacy flat session remains readable without process-start metadata.
+- Allows legacy first-record timestamps and process-start timestamps to coexist only when their persisted event ranges establish a strict, non-overlapping total order. Rejects duplicate process identities, timestamp ties, overlapping event ranges, backwards event timestamps, or missing chronology. Runtime-session IDs and second-resolution directory/filename strings are never tie-breakers.
+- Treats `harvester.process_started` as best-effort process identity metadata. It may be appended after `harvester.started`; its payload `startedAt` remains the process-entry timestamp, so the event's append timestamp is not used as the session activity-range boundary.
+
+A successful scan means the discovered forensic files were readable and could be ordered under these legacy rules. It does **not** make Journal authoritative restart state, prove that missing exchange fills did not occur, establish a complete historical baseline, or open the ADR-0001 startup readiness gate. Multiple-session ambiguity and any missing/unreadable session remain hard failures. Any one-time baseline still requires the explicit operator-assisted reconciliation rules in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md).
+
 ## Event inventory
 
 All events use source `harvester`. Payloads are created by Harvester-owned allowlist mappers; fields not listed below are not copied into the event DTO.
@@ -81,6 +97,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
 | `execution.duplicate_fill` | Fill facts plus `duplicate: true` |
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
+| `recovery.cycle_not_completed` | exact SELL client/broker identity, `CONTINUE_SELL_THROUGH` or `BLOCKED` outcome, reason, realized profit, active/keep quantities, configured minimum profit |
 | `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING or targeted COMMISSION_BASELINE phase, audit status, exchange source timestamp, allowlisted exact free/locked/total balances, audit reasons |
 | `account.open_orders_captured` | PREFLIGHT/OPENING phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
@@ -353,7 +370,7 @@ Both Harvester process locks are local to one OS user's home directory; they do 
 
 - **Third-asset commission valuation (F-039):** PR #990 preserves exact commission amount/asset identity and historical quoteValue through the applied-fill DTO, journal projection and offline restoration. Legacy records without quoteValue fail closed; no current-price reconstruction is permitted. Wallet reconciliation for unconfigured commission assets remains outstanding. See [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 - **Same-second session chronology:** process start times have millisecond precision, but session paths and Journal filenames retain only seconds. The reader breaks same-second ties by random session ID, not chronological start time. See F-040 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
-- **Recovery-cycle outcome durability:** the engine resets in-memory recovery basis before best-effort publication of `recovery.cycle_completed`. The projection does not reject an unmatched fully filled SELL at end-of-input, so a missing completion event can restore stale cost basis without a wallet-balance mismatch. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+- **Recovery-cycle outcome evidence:** the engine records `recovery.cycle_completed` for a reset or `recovery.cycle_not_completed` for an explicit residual sell-through/blocked result. The projection requires a completed or explicit non-completed outcome for every fully filled SELL, ties the outcome to the exact SELL order identity, permits another SELL only after `CONTINUE_SELL_THROUGH`, and restores `BLOCKED` outcomes as market pauses. A missing Journal event fails closed at projection time. Journal remains observer-only and this is not the ADR-0001 durable-fact store; restart restoration stays disabled until the durable store and reconciliation steps are complete. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 
 **Record completeness:** current Journal events carry random IDs and timestamps but no monotonic sequence or integrity chain. The reader can detect malformed/truncated lines and duplicate IDs, but a whole valid middle line can disappear without a structural error. Do not treat successful JSONL parsing as proof of a complete event history. See F-042 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md).
 
@@ -399,3 +416,7 @@ broker generation.
 
 This is same-process recovery only. It does not enable Journal replay or
 process-restart recovery. TESTNET acceptance remains PAUSED / UNVERIFIED.
+
+## External open orders and strategy eligibility
+
+Account-wide open-orders audits classify unmatched orders as external/unowned. Their symbols are retained as a strategy-only exclusion set only after the audit event is durably flushed. The Conservative engine defers evaluation and checks again before broker submission for those symbols; unrelated markets remain eligible. A later authoritative reconnect audit replaces the set and clears a symbol only after the no-longer-present state is durably recorded. Do not adopt, cancel, or modify external orders. This guard is same-process only and does not restore trading state after a process restart.

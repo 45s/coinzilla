@@ -59,11 +59,24 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Account snapshot | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
+| Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` |
+| Live candle subscription | `subscribeForCandles({ symbol, interval, onCandle })` |
 | User-data subscription | `subscribeForUserData({ onEvent, onStatus })` |
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
 
 `getOpenOrders({ symbol })` currently returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
+
+## Candle market-data capability — issue #1016
+
+Harvester's application-owned broker port now requires both candle capabilities, and the Binance infrastructure adapter validates and forwards them to the concrete @coinzilla/brokers client. This integration is delivered in [PR #1019](https://github.com/45s/coinzilla/pull/1019), following the shared broker implementation in [PR #1017](https://github.com/45s/coinzilla/pull/1017).
+
+- **getCandles({ symbol, interval, limit, startTime?, endTime? })** returns the broker package's normalized historical candle result unchanged.
+- **subscribeForCandles({ symbol, interval, onCandle })** forwards normalized live candle callbacks and preserves the broker subscription result and unsubscribe handle.
+
+The normalized candle contains symbol, interval, millisecond open/close timestamps, exact decimal-string OHLCV values and an `isClosed` flag. Domain policies and use cases consume only this Harvester-owned contract; they must not import Binance DTOs or use the concrete broker directly.
+
+This PR exposes the capability only. Bootstrap does not yet fetch candle history or subscribe to Kline streams; startup warm-up, live history maintenance, gap/freshness handling and protection policy are later steps. See [Volatility Protection](../volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016).
 
 ## Implemented infrastructure adapter
 
@@ -90,7 +103,9 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
     getExchangeMarkets: () => client.getExchangeMarkets(),
+    getCandles: (input) => client.getCandles(input),
     subscribeForPrices: ({ symbol, onPrice }) => client.subscribeForPrices({ symbol, onPrice }),
+    subscribeForCandles: (input) => client.subscribeForCandles(input),
     subscribeForUserData: ({ onEvent, onStatus }) => client.subscribeForUserData({ onEvent, onStatus }),
   })
 }
@@ -98,7 +113,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
 
 The package-specific `createOrder` name stays inside the adapter. A simulator or another exchange adapter can implement the same Harvester-facing port without changing use cases. Do not invent request-field transformations; use the canonical shared contracts.
 
-**Trading-rule freshness:** each Harvester `getSymbolFilters({ symbol })` call fetches current exchange metadata; the adapter does not retain a process-lifetime filter cache. Before replacing a standing Conservative trailing BUY, the engine fetches these rules again, checks that they still identify the active market, and uses that refreshed metadata for both preflight validation and the subsequent replacement submission. A failed, incomplete, or mismatched refresh pauses the pair before cancellation, leaving the standing BUY untouched.
+**Trading-rule freshness and completeness:** each Harvester `getSymbolFilters({ symbol })` call fetches public Binance `exchangeInfo` and authenticated, symbol-scoped `myFilters`; the adapter does not retain a process-lifetime filter cache. It returns static canonical rules plus an explicit `unvalidatedConstraints` inventory. Harvester blocks an enabled market if any applicable dynamic, account-level, exchange-wide, or unknown constraint remains unvalidated. Missing or malformed private filter data is a metadata failure, not an empty constraint set. Before replacing a standing Conservative trailing BUY, the engine fetches these rules again, checks that they still identify the active market, and uses that refreshed metadata for both preflight validation and the subsequent replacement submission. A failed, incomplete, mismatched, or blocked refresh pauses the pair before cancellation, leaving the standing BUY untouched. See [Exchange trading constraints](../exchange-trading-constraints.md) for the full contract and current Binance mapping.
 
 ## Implemented application use case
 

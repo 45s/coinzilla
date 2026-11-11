@@ -7,7 +7,7 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -131,6 +131,37 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     for (const field of ["orders", "fills", "recoveryCycles", "pausedMarkets"]) {
       if (!Array.isArray(data[field])) throw new TypeError("Recovery projection " + field + " must be an array")
     }
+    const stickySafetyBlockers = data.stickySafetyBlockers ?? []
+    if (!Array.isArray(stickySafetyBlockers)) {
+      throw new TypeError("Recovery projection stickySafetyBlockers must be an array")
+    }
+    for (const blocker of stickySafetyBlockers) {
+      if (!blocker || typeof blocker.symbol !== "string" || !blocker.symbol.trim()) {
+        throw new TypeError("Recovery projection contains an invalid sticky safety blocker")
+      }
+    }
+    const recoveryCycleEvaluations = data.recoveryCycleEvaluations ?? []
+    if (!Array.isArray(recoveryCycleEvaluations)) {
+      throw new TypeError("Recovery projection recoveryCycleEvaluations must be an array")
+    }
+    for (const evaluation of recoveryCycleEvaluations) {
+      if (!evaluation || typeof evaluation.symbol !== "string" || !evaluation.symbol.trim() ||
+          typeof evaluation.marketId !== "string" || !evaluation.marketId.trim() ||
+          typeof evaluation.sellOrderClientId !== "string" || !evaluation.sellOrderClientId.trim() ||
+          typeof evaluation.sellOrderBrokerOrderId !== "string" || !evaluation.sellOrderBrokerOrderId.trim() ||
+          typeof evaluation.reason !== "string" || !evaluation.reason.trim() ||
+          !["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(evaluation.outcome) ||
+          !Number.isSafeInteger(evaluation.sequence) || evaluation.sequence < 0) {
+        throw new TypeError("Recovery projection contains an invalid recovery-cycle evaluation")
+      }
+      for (const field of ["realizedNetProfit", "activeQuantity", "keepQuantity", "minProfit"]) {
+        assertDecimalString({ value: evaluation[field], field: "recoveryCycleEvaluation." + field })
+      }
+      const market = requireMarket({ marketMetadata, symbol: evaluation.symbol })
+      if (market.id !== evaluation.marketId) {
+        throw new Error("Recovery-cycle evaluation market identity conflicts with canonical exchange metadata for " + evaluation.symbol)
+      }
+    }
 
     const portfolioEvents = [
       ...data.fills.map((fill) => ({ type: "fill", sequence: fill.sequence, value: fill })),
@@ -218,7 +249,11 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
-    const durablePausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
+    const durablePausedMarkets = new Set([
+      ...data.pausedMarkets.map(({ symbol }) => symbol),
+      ...stickySafetyBlockers.map(({ symbol }) => symbol),
+      ...recoveryCycleEvaluations.filter(({ outcome }) => outcome === "BLOCKED").map(({ symbol }) => symbol),
+    ])
     const pausedMarkets = new Set(durablePausedMarkets)
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
@@ -292,6 +327,8 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         recoveryLedgers,
         orderRegistry,
         journalFills: Object.freeze([...data.fills]),
+        stickySafetyBlockers: Object.freeze([...stickySafetyBlockers]),
+        recoveryCycleEvaluations: Object.freeze([...recoveryCycleEvaluations]),
         pausedMarkets,
         durablePausedMarkets,
         recoveryManagedPausedMarkets,

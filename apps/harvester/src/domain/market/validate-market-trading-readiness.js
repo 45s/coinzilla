@@ -27,7 +27,7 @@ export function validateMarketTradingReadiness({
     throw new TypeError("validateMarketTradingReadiness requires marketMetadata")
   }
 
-  const { market, tradingRules, supportedOrderTypes } = marketMetadata
+  const { market, tradingRules, supportedOrderTypes, unvalidatedConstraints } = marketMetadata
   if (!(market instanceof Market)) {
     throw new TypeError("Market metadata must contain a canonical Market")
   }
@@ -41,6 +41,9 @@ export function validateMarketTradingReadiness({
     throw new TypeError("Market metadata supportedOrderTypes must be an array")
   }
 
+  if (!Array.isArray(unvalidatedConstraints)) {
+    throw new TypeError("Market metadata unvalidatedConstraints must be an array")
+  }
   for (const type of REQUIRED_RULE_TYPES) {
     const constraint = tradingRules.constraints.find((item) => item.type === type)
     if (!constraint || constraint.status !== "SUPPORTED") {
@@ -116,6 +119,9 @@ export function validateMarketTradingReadiness({
     market,
     tradingRules,
     supportedOrderTypes: Object.freeze([...supportedOrderTypes]),
+    unvalidatedConstraints: Object.freeze(unvalidatedConstraints.map((constraint) =>
+      Object.freeze({ ...constraint })
+    )),
     orderType,
   })
 }

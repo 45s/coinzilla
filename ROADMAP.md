@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-10 23:12 +02:00
-**Last source-verified develop checkpoint:** `597b01d3836d74d1c4a409005c844d76102e4a34` (after PR #977)
+**Last reviewed:** 2026-11-11
+**Last source-verified develop checkpoint:** `452b19bbb13ee4bbe86df23c3d1da6f4566039d6` (after PR #1018)
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -30,6 +30,8 @@
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
 - **Conservative order/accounting hardening (#985, #654/F-041) — IN PROGRESS.** Same-symbol external-order protection is tracked by [#985](https://github.com/45s/coinzilla/issues/985); [PR #987](https://github.com/45s/coinzilla/pull/987) remains a test-only RED stage, with no production guard yet. F-039 third-asset commission accounting, fee-asset reconciliation, live/DTO/replay parity and invalid-fee atomicity are complete in merged [PR #1002](https://github.com/45s/coinzilla/pull/1002) (956 Harvester tests; seven workflows passed on its exact final head). Recovery SELL cycle-completion proof (F-041) remains open under [#654](https://github.com/45s/coinzilla/issues/654). See the [Harvester roadmap](apps/harvester/ROADMAP.md); do not mark remaining work complete until implementation and exact-head checks pass.
+
+- **Harvester high-volatility protection (#1016) — ACCEPTED DESIGN, implementation in progress.** Per-market protection will block new BUY and non-recovery actions, cancel only Harvester-owned active BUYs, and preserve recovery SELL execution/accounting. Brokers candle history/live Kline support is merged in [PR #1017](https://github.com/45s/coinzilla/pull/1017); the reusable Indicators package's ATR/NATR/ratio implementation is in [PR #1018](https://github.com/45s/coinzilla/pull/1018). Harvester's BrokerPort/adapter integration is in [PR #1019](https://github.com/45s/coinzilla/pull/1019); runtime candle-history lifecycle, central order gate and cancellation/recovery behavior remain pending. Initial thresholds remain provisional pending offline historical validation. See [Harvester Volatility Protection](apps/harvester/docs/volatility-protection.md), [Harvester roadmap](apps/harvester/ROADMAP.md), [Brokers roadmap](packages/brokers/ROADMAP.md) and [Indicators roadmap](packages/indicators/ROADMAP.md).
 
 ## IMPORTANT — active product and shared-package work
 
@@ -69,6 +71,12 @@
    - **Why:** SQLite lifecycle support is implemented, but no application-owned persistence workflow currently proves the end-to-end contract.
    - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
+
+10. **Domain-owned custom error classes and typed error handling ([#1028](https://github.com/45s/coinzilla/issues/1028)) — PLANNED.**
+   - **Why:** generic `Error` instances and message-based classification make failure handling and tests brittle; callers need reliable semantic categories at selected boundaries.
+   - **Plan:** audit concrete throw/catch sites; define package ownership and a minimal convention; introduce specific subclasses (for example `ConfigValidationError`) only where consumers need typed distinction; preserve `cause`, stack traces and structured diagnostic context; migrate incrementally with tests and documentation.
+   - **Safety:** no blanket conversion of all errors, no premature global error framework/shared package, and no message parsing when typed classification is available. Keep ordinary control flow out of exceptions.
+   - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
 
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
 

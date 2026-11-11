@@ -65,7 +65,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 test('loads configuration before returning the startup context', async () => {
   const appConfig = {
-    strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
   const configSource = '/etc/harvester/config.json';
   const calls = [];
@@ -126,6 +126,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     market,
     tradingRules,
     supportedOrderTypes: ['LIMIT_MAKER'],
+    unvalidatedConstraints: [],
   };
   const balances = [
     new Balance({
@@ -138,12 +139,13 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     }),
   ];
   const appConfig = {
-    strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,
+        minProfit: 0.01,
         makerPercent: 0,
         takerPercent: 0,
         investment: 1000,
@@ -204,6 +206,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
     getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
+    getCandles: async () => toResult({ data: [] }),
+    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
       return toResult({ data: { unsubscribe: async () => {} } });
@@ -335,7 +339,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
         { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
       ],
     })
-    return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"] }
+    return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"], unvalidatedConstraints: [] }
   }
   const metadataBySymbol = new Map([
     ["DOGEUSDT", createMetadata({ symbol: "DOGEUSDT", baseCode: "DOGE" })],
@@ -357,19 +361,19 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: {
-          minProfit: 0.01,
-          conservative: { enabled: true },
+        settings: { conservative: { enabled: true },
           aggressive: { enabled: false },
         },
         pairs: {
           DOGEUSDT: {
             enabled: true, investment: 100, orderQuantity: 100, keepQuantity: 1,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
           },
           ZROUSDT: {
             enabled: true, investment: 100, orderQuantity: 10, keepQuantity: 0.01,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
           },
@@ -445,6 +449,8 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     getPrices: async ({ symbol } = {}) => toResult({
       data: { symbol, price: symbol === "DOGEUSDT" ? "0.1" : "1" },
     }),
+    getCandles: async () => toResult({ data: [] }),
+    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ symbol, onPrice } = {}) => {
       priceSubscriptions.set(symbol, onPrice)
       return toResult({ data: { unsubscribe: async () => {} } })

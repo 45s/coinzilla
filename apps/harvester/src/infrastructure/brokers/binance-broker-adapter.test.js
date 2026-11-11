@@ -19,7 +19,9 @@ const createClient = () => {
     getSymbolFilters: async (input) => { calls.push(["getSymbolFilters", input]); return result },
     getExchangeMarkets: async () => { calls.push(["getExchangeMarkets"]); return result },
     getPrices: async (input) => { calls.push(["getPrices", input]); return result },
+    getCandles: async (input) => { calls.push(["getCandles", input]); return result },
     subscribeForPrices: async (input) => { calls.push(["subscribeForPrices", input]); return result },
+    subscribeForCandles: async (input) => { calls.push(["subscribeForCandles", input]); return result },
     subscribeForBookTicker: async (input) => { calls.push(["subscribeForBookTicker", input]); return result },
     subscribeForUserData: async (input) => { calls.push(["subscribeForUserData", input]); return result },
   }
@@ -76,6 +78,7 @@ test("maps object-shaped application inputs to the broker package methods", asyn
         minQuantity: "0.0001",
         minNotional: "5",
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+        unvalidatedConstraints: [],
       },
     }
   }
@@ -92,6 +95,14 @@ test("maps object-shaped application inputs to the broker package methods", asyn
   assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
   assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
+  const candleRequest = { symbol: "BTCUSDT", interval: "1m", limit: 100 }
+  assert.equal(await broker.getCandles(candleRequest), result, "Historical candle results must pass through the Harvester adapter unchanged.")
+  const onCandle = () => {}
+  assert.equal(
+    await broker.subscribeForCandles({ symbol: "BTCUSDT", interval: "1m", onCandle }),
+    result,
+    "The live candle subscription result and its unsubscribe handle must pass through the adapter unchanged.",
+  )
 
   assert.deepEqual(calls, [
     ["cancelOrder", { symbol: "BTCUSDT", orderId: "7" }],
@@ -101,6 +112,8 @@ test("maps object-shaped application inputs to the broker package methods", asyn
     ["getExchangeMarkets"],
     ["getSymbolFilters", { symbol: "BTCUSDT" }],
     ["getPrices", { symbol: "BTCUSDT" }],
+    ["getCandles", candleRequest],
+    ["subscribeForCandles", { symbol: "BTCUSDT", interval: "1m", onCandle }],
   ])
 })
 
@@ -232,6 +245,7 @@ test("fetches current exchange filters for every metadata request instead of reu
         minQuantity: "0.0001",
         minNotional,
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+        unvalidatedConstraints: [],
       },
     }
   }
@@ -268,3 +282,28 @@ test("preserves the broker NOT_SENT cancellation outcome for Harvester", async (
   assert.equal(result, brokerNotSentResult, "Harvester's adapter must preserve the broker's explicit proof that cancellation was not sent")
   assert.deepEqual(calls, [["cancelOrder", { symbol: "BTCUSDT", orderId: "77" }]], "The adapter must forward the exact normalized broker cancellation request")
 })
+
+
+test("normalizes only definite Binance filter rejections and preserves uncertain outcomes", async () => {
+  const { client } = createClient()
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const filterRejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: -1013 })
+  client.createOrder = async () => ({ ok: false, errors: [filterRejection] })
+
+  const rejected = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  assert.equal(rejected.errors[0].code, "DEFINITE_EXCHANGE_FILTER_REJECTED", "A definite -1013 filter rejection must be normalized into the venue-neutral definite-rejection signal used by Harvester.")
+  assert.equal(rejected.errors[0].cause, filterRejection, "The original Binance error must remain available as the normalized error cause.")
+
+  const uncertainFilterError = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), {
+    code: -1013,
+    outcomeUnknown: true,
+  })
+  client.createOrder = async () => ({ ok: false, errors: [uncertainFilterError] })
+  const uncertain = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  assert.equal(uncertain.errors[0], uncertainFilterError, "An explicitly uncertain result must never be downgraded to a definite rejection.")
+
+  const unrelatedError = Object.assign(new Error("Invalid message"), { code: -1013 })
+  client.createOrder = async () => ({ ok: false, errors: [unrelatedError] })
+  const unrelated = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  assert.equal(unrelated.errors[0], unrelatedError, "An unrelated -1013 response must not be assumed to be a filter rejection.");
+});

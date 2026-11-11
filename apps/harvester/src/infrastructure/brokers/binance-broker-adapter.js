@@ -8,11 +8,25 @@ const normalizePlaceOrderResult = (result, { order } = {}) => {
   if (result?.ok !== false || !Array.isArray(result.errors) || result.errors.length !== 1) return result
   const [error] = result.errors
   // Binance Spot's exact -2010 matching-engine response is a definite LIMIT_MAKER rejection.
-  if (order?.type !== "LIMIT_MAKER" || error?.outcomeUnknown === true ||
-      error?.code !== -2010 || error.message !== "Order would immediately match and take.") return result
-  const normalizedError = new Error(error.message, { cause: error })
-  normalizedError.code = "POST_ONLY_WOULD_TAKE"
-  return { ...result, errors: [normalizedError] }
+  if (error?.outcomeUnknown === true) return result
+
+  if (order?.type === "LIMIT_MAKER" &&
+      error?.code === -2010 &&
+      error.message === "Order would immediately match and take.") {
+    const normalizedError = new Error(error.message, { cause: error })
+    normalizedError.code = "POST_ONLY_WOULD_TAKE"
+    return { ...result, errors: [normalizedError] }
+  }
+
+  if (error?.code === -1013 &&
+      typeof error.message === "string" &&
+      error.message.startsWith("Filter failure:")) {
+    const normalizedError = new Error(error.message, { cause: error })
+    normalizedError.code = "DEFINITE_EXCHANGE_FILTER_REJECTED"
+    return { ...result, errors: [normalizedError] }
+  }
+
+  return result
 }
 
 const createBroker = ({ config, logger }) =>
@@ -81,7 +95,9 @@ export function createBinanceBrokerAdapter({
     "getSymbolFilters",
     "getExchangeMarkets",
     "getPrices",
+    "getCandles",
     "subscribeForPrices",
+    "subscribeForCandles",
     "subscribeForBookTicker",
     "subscribeForUserData",
   ]
@@ -156,8 +172,10 @@ export function createBinanceBrokerAdapter({
       }
     },
     getPrices: ({ symbol }) => client.getPrices({ symbol }),
+    getCandles: (input) => client.getCandles(input),
     subscribeForPrices: ({ symbol, onPrice }) =>
       client.subscribeForPrices({ symbol, onPrice }),
+    subscribeForCandles: (input) => client.subscribeForCandles(input),
     subscribeForBookTicker: ({ symbol, onBookTicker }) =>
       client.subscribeForBookTicker({ symbol, onBookTicker }),
     subscribeForUserData: ({ onEvent, onStatus }) =>

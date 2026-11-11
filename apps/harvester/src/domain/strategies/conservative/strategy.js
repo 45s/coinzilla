@@ -164,7 +164,7 @@ export function evaluateConservativeStrategy({
       keepQuantity: String(pairConfig.keepQuantity),
       positionSpent,
       saleProceeds: ledger.netSellProceeds,
-      minProfit: String(settings.minProfit),
+      minProfit: String(pairConfig.minProfit),
       feeRate,
       priceTickSize,
       quantityStepSize,

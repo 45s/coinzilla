@@ -13,12 +13,36 @@ const EVENT = Object.freeze({
   CANCEL_FAILED: "order.cancel_failed",
   FILL_APPLIED: "execution.fill_applied",
   RECOVERY_COMPLETED: "recovery.cycle_completed",
+  RECOVERY_NOT_COMPLETED: "recovery.cycle_not_completed",
   STRATEGY_PAUSED: "strategy.paused",
+  EXECUTION_UNOWNED_ORDER: "execution.unowned_order",
+  EXECUTION_INVALID_FILL: "execution.invalid_fill",
+  EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
 })
 
 const ORDER_SIDES = new Set(["BUY", "SELL"])
 const SUBMISSION_OUTCOMES = new Set(["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
 const CANCEL_OUTCOMES = new Set(["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"])
+
+// Explicitly non-authoritative telemetry/lifecycle diagnostics. Canonical order,
+// fill and safety transitions are represented by the replay facts below; keep
+// this allowlist aligned with HARVESTER_EVENT_NAMES and fail closed otherwise.
+const IGNORABLE_HARVESTER_EVENTS = new Set([
+  "harvester.process_started",
+  "harvester.startup_failed",
+  "config.validated",
+  "broker.connected",
+  "broker.connection_failed",
+  "broker.disconnected",
+  "broker.status_changed",
+  "broker.subscription_established",
+  "broker.subscription_failed",
+  "strategy.decision",
+  "market.trading_rules_captured",
+  "broker.execution_report",
+  "order.updated",
+  "execution.duplicate_fill",
+])
 
 function requireObject({ value, field }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -40,6 +64,12 @@ function requireDecimal({ value, field, positive = false }) {
   if (compareDecimal({ left: value, right: "0" }) < (positive ? 1 : 0)) {
     throw new RangeError(field + (positive ? " must be positive" : " must be non-negative"))
   }
+  return value
+}
+
+function requireSignedDecimal({ value, field }) {
+  if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
+  assertDecimalString({ value, field })
   return value
 }
 
@@ -176,7 +206,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     const fillsById = new Map()
     const tradeIdBySymbol = new Map()
     const cycles = []
+    const recoveryCycleEvaluations = []
     const pausedMarkets = new Map()
+    const stickySafetyBlockers = []
     const sessionsByFile = new Map()
     const accountSnapshots = []
     const openOrderSnapshots = []
@@ -195,7 +227,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       const payload = requireObject({ value: record?.payload, field: "Journal record payload" })
       const name = payload.name
       if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
-      if (!Object.values(EVENT).includes(name)) continue
+      if (!Object.values(EVENT).includes(name)) {
+        if ((payload.source === "harvester" || payload.source === undefined) && !IGNORABLE_HARVESTER_EVENTS.has(name)) {
+          throw new Error("unknown Harvester recovery event: " + name)
+        }
+        continue
+      }
       const data = requireObject({ value: payload.data, field: name + " data" })
       const fileName = requireString({
         value: record.position?.fileName,
@@ -247,14 +284,21 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.CANCEL_FAILED,
         EVENT.FILL_APPLIED,
         EVENT.RECOVERY_COMPLETED,
+        EVENT.RECOVERY_NOT_COMPLETED,
         EVENT.STRATEGY_PAUSED,
+        EVENT.EXECUTION_UNOWNED_ORDER,
+        EVENT.EXECUTION_INVALID_FILL,
+        EVENT.EXECUTION_ACCOUNTING_FAILED,
       ].includes(name)) {
         session.hasTradingActivity = true
       }
 
       if (name === EVENT.ACCOUNT_SNAPSHOT) {
-        if (!["PREFLIGHT", "OPENING", "CLOSING", "COMMISSION_BASELINE"].includes(data.phase)) {
+        if (!["PREFLIGHT", "OPENING", "RECOVERY", "CLOSING", "COMMISSION_BASELINE"].includes(data.phase)) {
           throw new TypeError("Account snapshot phase is invalid")
+        }
+        if (data.phase === "RECOVERY" && !session.started) {
+          throw new Error("RECOVERY account snapshot requires a started Journal session " + fileName)
         }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
@@ -311,7 +355,10 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
-        if (!["OPENING", "PREFLIGHT"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (data.phase === "RECOVERY" && !session.started) {
+          throw new Error("RECOVERY open-order snapshot requires a started Journal session " + fileName)
+        }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT open-order snapshot must precede trading activity in Journal session " + fileName)
         }
@@ -637,8 +684,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           left: cumulativeFillQuantity,
           right: order.quantity,
         }) === 0) {
-          if (lastFullyFilledSellBySymbol.has(order.symbol)) {
-            throw new Error("Multiple fully filled Harvester SELL orders precede a recovery-cycle completion for " + order.symbol)
+          const previousFullyFilledSell = lastFullyFilledSellBySymbol.get(order.symbol)
+          if (previousFullyFilledSell && previousFullyFilledSell.outcome !== "CONTINUE_SELL_THROUGH") {
+            throw new Error("Multiple fully filled Harvester SELL orders require an explicit continue-sell-through outcome for " + order.symbol)
           }
           lastFullyFilledSellBySymbol.set(order.symbol, {
             clientOrderId: order.clientOrderId,
@@ -671,6 +719,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (!completedSellOrder) {
           throw new Error("Recovery-cycle completion has no preceding fully filled Harvester SELL order for " + symbol)
         }
+        if (completedSellOrder.outcome === "BLOCKED") {
+          throw new Error("Recovery-cycle completion follows a blocked non-completion outcome for " + symbol)
+        }
         cycles.push({
           symbol,
           marketId,
@@ -687,10 +738,87 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         continue
       }
 
+      if (name === EVENT.RECOVERY_NOT_COMPLETED) {
+        const symbol = requireString({ value: data.symbol, field: "symbol" })
+        const marketId = requireString({ value: data.marketId, field: "marketId" })
+        const sellOrderClientId = requireString({ value: data.sellOrderClientId, field: "sellOrderClientId" })
+        const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" })
+        if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
+          throw new TypeError("Recovery-cycle non-completion outcome is invalid")
+        }
+        const reason = requireString({ value: data.reason, field: "reason" })
+        const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
+        const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
+        const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
+        if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
+        if (data.outcome === "CONTINUE_SELL_THROUGH") {
+          if (!["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
+            throw new Error("CONTINUE_SELL_THROUGH has an unsupported reason")
+          }
+          if (compareDecimal({ left: activeQuantity, right: keepQuantity }) <= 0) {
+            throw new Error("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
+          }
+          if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+            throw new Error("Profit-target continuation requires realized profit below minProfit")
+          }
+          if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+            throw new Error("Residual sell-through requires realized profit to meet minProfit")
+          }
+        } else if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
+          throw new Error("BLOCKED cannot use a residual sell-through reason")
+        } else if (reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+          throw new Error("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
+        }
+        const pendingSell = lastFullyFilledSellBySymbol.get(symbol)
+        if (!pendingSell || pendingSell.clientOrderId !== sellOrderClientId || pendingSell.brokerOrderId !== sellOrderBrokerOrderId) {
+          throw new Error("Recovery-cycle non-completion does not match the latest fully filled SELL order for " + symbol)
+        }
+        if (pendingSell.outcome === "BLOCKED") throw new Error("Recovery-cycle SELL already has a terminal BLOCKED outcome for " + symbol)
+        const evaluation = Object.freeze({
+          symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome: data.outcome, reason,
+          realizedNetProfit, activeQuantity, keepQuantity, minProfit, sequence: currentSequence,
+        })
+        recoveryCycleEvaluations.push(evaluation)
+        pendingSell.outcome = data.outcome
+        continue
+      }
+
       if (name === EVENT.STRATEGY_PAUSED) {
         const symbol = requireString({ value: data.symbol, field: "symbol" })
         const reason = requireString({ value: data.reason, field: "reason" })
         pausedMarkets.set(symbol, reason)
+        continue
+      }
+
+      if ([
+        EVENT.EXECUTION_UNOWNED_ORDER,
+        EVENT.EXECUTION_INVALID_FILL,
+        EVENT.EXECUTION_ACCOUNTING_FAILED,
+      ].includes(name)) {
+        const symbol = requireString({ value: data.symbol, field: name + " symbol" })
+        const reason = requireString({ value: data.reason ?? data.error?.message ?? data.error?.code ?? name, field: name + " reason" })
+        stickySafetyBlockers.push(Object.freeze({
+          eventName: name,
+          symbol,
+          reason,
+          ...(data.clientOrderId === undefined ? {} : {
+            clientOrderId: requireString({ value: data.clientOrderId, field: name + " clientOrderId" }),
+          }),
+          ...(data.brokerOrderId === undefined ? {} : {
+            brokerOrderId: requireString({ value: data.brokerOrderId, field: name + " brokerOrderId" }),
+          }),
+          ...(data.fillId === undefined ? {} : {
+            fillId: requireString({ value: data.fillId, field: name + " fillId" }),
+          }),
+          sequence: currentSequence,
+        }))
+      }
+    }
+
+    for (const [symbol, pendingSell] of lastFullyFilledSellBySymbol) {
+      if (pendingSell.outcome === undefined) {
+        throw new Error("fully filled SELL has no explicit recovery-cycle outcome for " + symbol)
       }
     }
 
@@ -721,7 +849,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         orders: Object.freeze(orders),
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
+        recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),
         pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
+        stickySafetyBlockers: Object.freeze(stickySafetyBlockers),
         sessions: Object.freeze(sessions),
         accountSnapshots: Object.freeze(accountSnapshots),
         openOrderSnapshots: Object.freeze(openOrderSnapshots),

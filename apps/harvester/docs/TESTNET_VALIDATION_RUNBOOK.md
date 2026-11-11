@@ -28,7 +28,7 @@ Previous plan values (historical only; not current configuration or approved run
 | Taker fee assumption | 0.1% |
 | Other pairs (SOLFDUSD, ZROFDUSD) | disabled |
 
-These values preserve the previous plan for provenance; they are not current repository configuration or approved run limits. The current committed `config.json` enables only `LINKFDUSD`: `investment: 200` FDUSD, `orderQuantity: 2` LINK, `keepQuantity: 0.01` LINK, `priceStepPercent: 0.3`, `makerPercent: 0`, and `takerPercent: 0.075`. The strategy `minProfit` is `0.01` in the pair's quote asset (FDUSD). These config values do not approve a TESTNET session. No replacement pair scope is recorded; keep the execution gate closed.
+These values preserve the previous plan for provenance; they are not current repository configuration or approved run limits. The current committed `config.json` enables only `LINKFDUSD`: `investment: 200` FDUSD, `orderQuantity: 2` LINK, `keepQuantity: 0.01` LINK, `priceStepPercent: 0.3`, `makerPercent: 0`, and `takerPercent: 0.075`. The `LINKFDUSD` pair's `minProfit` is configured on that pair and is `0.01` FDUSD. These config values do not approve a TESTNET session. No replacement pair scope is recorded; keep the execution gate closed.
 
 Hard operational limits for any future session (none is currently approved):
 
@@ -282,3 +282,7 @@ attempt before broker acknowledgement. A later reminder starts a new attempt;
 it does not merely clear a flag or resume trading. These are offline code/test
 contracts, not TESTNET acceptance. The runbook execution gate remains
 **CLOSED / PAUSED** and no live or TESTNET order operation is authorized.
+
+## External open-order handling
+
+External/manual open orders remain unowned and untouched. Harvester defers strategy activity only for the affected trading symbol after the account-wide open-orders audit is durably recorded; unrelated enabled symbols continue normally. Reconnect reconciliation refreshes the symbol guard from its authoritative snapshot, and a symbol becomes eligible again only after the empty/changed snapshot is durably flushed. Do not cancel, modify, or adopt external orders. This is offline source/test behavior only; it does not authorize live/TESTNET operations or process restarts.

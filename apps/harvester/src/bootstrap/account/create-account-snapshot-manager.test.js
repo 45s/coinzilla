@@ -342,6 +342,37 @@ test("records unowned open orders as blocked without adopting them", async () =>
 })
 
 
+test("records unowned open orders as blocked and scopes the strategy gate to their symbol", async () => {
+  const externalOrder = {
+    id: "external-order-1",
+    symbol: "DOGEUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    originalPrice: "65000",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
+    clientOrderId: "manual-order-1",
+  }
+  const openOrders = [externalOrder]
+  const fixture = createFixture({ openOrders })
+
+  const orders = await fixture.manager.publishOpenOrdersSnapshot()
+
+  assert.equal(orders.length, 1, "The account-wide audit must retain the observed external open order.")
+  assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED", "An unowned open order must be recorded as blocked in the audit event.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true)
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "ZROUSDT" }), false)
+  assert.deepEqual(fixture.manager.getAccountSnapshot(), undefined)
+  assert.equal(fixture.getFlushCount(), 1)
+
+  openOrders.length = 0
+  await fixture.manager.publishOpenOrdersSnapshot({ phase: "RECOVERY", ownershipReconciled: true })
+
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false)
+  assert.equal(fixture.getFlushCount(), 2, "The reconnect snapshot must be durable before the symbol guard clears.")
+})
+
 test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
   const market = createFixture().market
   const timeout = Object.assign(

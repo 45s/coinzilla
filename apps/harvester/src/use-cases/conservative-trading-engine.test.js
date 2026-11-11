@@ -31,6 +31,7 @@ const marketMetadata = {
   market,
   orderType: "LIMIT_MAKER",
   supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+  unvalidatedConstraints: [],
   tradingRules: new TradingRules({
     market,
     constraints: [
@@ -45,13 +46,14 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
     DOGEUSDT: {
       enabled: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
+      minProfit: 0.01,
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
@@ -61,7 +63,7 @@ const appConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -131,6 +133,9 @@ async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isM
       if (cancelNotSentOnSuccess) return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       canceledOrders.set(order.brokerOrderId, order)
+      const executedQuantity = typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order })
+        : cancelExecutedQuantity
       return {
       ok: true,
       data: new CanonicalOrder({
@@ -142,10 +147,10 @@ async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isM
         limitPrice: order.limitPrice,
         originalQuantity: order.originalQuantity,
         executedQuantity: new Quantity({
-          amount: cancelExecutedQuantity,
+          amount: executedQuantity,
           asset: baseAsset,
         }),
-        status: "CANCELED",
+        status: cancelOrderStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
         updatedAt: 2,
@@ -160,6 +165,9 @@ async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isM
         return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
+      const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order: canceledOrder })
+        : cancelExecutedQuantity)
       const cancelFill = cancelWithFill && canceledOrder
         ? [new Fill({
             tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase() + "-" + orderId,
@@ -168,9 +176,9 @@ async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isM
             market,
             side: canceledOrder.side,
             price: canceledOrder.limitPrice,
-            quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+            quantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
             quoteQuantity: new Money({
-              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: "0.1" }),
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: executedQuantity }),
               asset: quoteAsset,
             }),
             commissions: [],
@@ -231,6 +239,7 @@ async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isM
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
+    hasUnownedOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     eventPublisher: effectiveEventPublisher,
@@ -277,6 +286,50 @@ async function createHarness({ strategyPolicy, appConfig: suppliedAppConfig, isM
     },
   }
 }
+
+test("defers strategy activity only for the symbol with an unowned open order", async () => {
+  const sameSymbolHarness = await createHarness({
+    hasUnownedOpenOrdersForSymbol: ({ symbol }) => symbol === "DOGEUSDT",
+  })
+  await sameSymbolHarness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+  assert.equal(sameSymbolHarness.orders.length, 0)
+
+  const unrelatedSymbolHarness = await createHarness({
+    hasUnownedOpenOrdersForSymbol: ({ symbol }) => symbol === "BTCUSDT",
+  })
+  await unrelatedSymbolHarness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+  assert.equal(unrelatedSymbolHarness.orders.length, 1)
+})
+
+test("rechecks external-order ownership after the durable order intent and before broker submission", async () => {
+  let hasExternalOrder = false
+  const harness = await createHarness({
+    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => {
+        hasExternalOrder = true
+        return { ok: true, durable: true }
+      },
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [])
+  assert.equal(harness.engine.getOrders().length, 0)
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+})
 
 test("subtracts only shared BUY commitments created after the account snapshot", async () => {
   const ethAsset = new Asset({ id: "eth", code: "ETH" })
@@ -1607,17 +1660,25 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
 })
 
 
-test("publishes recovery completion only after the cycle reset succeeds", async () => {
+test("publishes the market-specific profit threshold after recovery completion succeeds", async () => {
   const events = []
+  const completionInputs = []
+  const configuredAppConfig = structuredClone(appConfig)
+  configuredAppConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT.minProfit = 0.1
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
+    appConfig: configuredAppConfig,
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
+    completeRecoveryCycle: async (input) => {
+      completionInputs.push(input)
+      return { ok: true, data: { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } }
+    },
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "recovery.cycle_completed") {
-        assert.ok(harness.completedCycles.includes(market.id))
+        assert.equal(completionInputs.length, 1, "The pair-specific completion input must be delivered before the completion event.")
       }
       return { ok: true }
     } },
@@ -1638,7 +1699,9 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(completedCycles, [market.id])
+  assert.deepEqual(completedCycles, [], "The injected completion boundary owns completion in this test.")
+  assert.equal(completionInputs.length, 1)
+  assert.equal(completionInputs[0].minProfit, "0.1", "The engine must pass this market's threshold to recovery completion.")
   const completed = events.find(({ name }) => name === "recovery.cycle_completed")
   assert.ok(completed)
   assert.deepEqual(completed.data, {
@@ -1646,7 +1709,7 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
     marketId: market.id,
     freeQuantity: "0.1",
     keepQuantity: "0.1",
-    minProfit: "0.01",
+    minProfit: "0.1",
     realizedNetProfit: "1.5",
   })
 })
@@ -2361,6 +2424,10 @@ test("does not publish recovery completion when the cycle is ineligible", async 
   })
   assert.equal(result.ok, false)
   assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "BLOCKED")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
 })
 
 
@@ -3991,8 +4058,13 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
+  const continuedEvent = events.find((event) => event.name === "recovery.cycle_not_completed")
+  assert.ok(continuedEvent)
+  assert.equal(continuedEvent.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(continuedEvent.data.sellOrderClientId, recoverySell.clientOrderId)
   const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
   assert.ok(completedEvent)
+  assert.ok(events.indexOf(continuedEvent) < events.indexOf(completedEvent))
   assert.deepEqual(completedEvent.data.dust, {
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: dust.quantity,
@@ -6372,4 +6444,127 @@ test("does not trust NOT_SENT metadata on a successful noncanonical cancellation
   assert.ok(events.some((event) =>
     event.name === "strategy.paused" && event.data.reason === "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
   ), "A malformed cancellation result must keep the pair safety-paused")
+})
+
+
+test("allows trailing BUY replacement when refreshed metadata contains unsupported exchange filters", async () => {
+  const refreshedMetadata = {
+    ...marketMetadata,
+    unvalidatedConstraints: [
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    ],
+  }
+  let refreshedRuleReads = 0
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    getMarketMetadata: () => marketMetadata,
+    getSymbolFilters: async () => {
+      refreshedRuleReads += 1
+      return { ok: true, data: refreshedMetadata }
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, true, "A refreshed unsupported filter must not block a replacement that passes all supported static checks.")
+  assert.equal(result.data.trailingBuyReplaced, true, "The engine must continue the normal trailing replacement after supported rules pass.")
+  assert.equal(refreshedRuleReads, 1, "The engine must still refresh exchange metadata before replacing the standing BUY.")
+  assert.equal(harness.cancellationIds.length, 1, "The engine must cancel the prior owned BUY before submitting its replacement.")
+  assert.equal(harness.orders.length, 2, "The engine must submit exactly one replacement order after the old BUY is canceled.")
+  assert.equal(harness.engine.getOrders().at(-1).status, "OPEN", "The replacement order must remain tracked as OPEN after acknowledgement.")
+});
+
+
+test("definite Binance filter rejection removes PENDING without marking the order UNKNOWN", async () => {
+  const events = []
+  const rejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: "DEFINITE_EXCHANGE_FILTER_REJECTED" })
+  const { engine, orders, pauses } = await createHarness({
+    placeOrderFailureCount: 1,
+    placeOrderFailureError: rejection,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false, "A definite exchange filter rejection must be reported to the caller.")
+  assert.equal(orders.length, 1, "The rejected order must have exactly one broker submission attempt.")
+  assert.deepEqual(pauses, [], "A definite filter rejection must not be treated as an ambiguous transport outcome.")
+  assert.equal(engine.getOrders().length, 0, "The definitely rejected PENDING order must be removed instead of becoming a phantom active order.")
+  assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED", "The Journal must record a definite rejection, not UNKNOWN.")
+});
+
+test("publishes a CONTINUE_SELL_THROUGH outcome for a fully filled SELL below the profit target", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "continue-sell-through" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
+})
+
+test("publishes an explicit cycle outcome when the recovery SELL fills during cancellation", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelWithFill: true,
+    cancelExecutedQuantity: ({ order }) => order.originalQuantity.amount,
+    cancelOrderStatus: "FILLED",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "cancel-race-buy", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
 })

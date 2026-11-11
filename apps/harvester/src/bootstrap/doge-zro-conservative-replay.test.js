@@ -21,9 +21,7 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: {
-        minProfit: 0.01,
-        conservative: { enabled: true },
+      settings: { conservative: { enabled: true },
         aggressive: { enabled: false },
       },
       pairs: {
@@ -32,6 +30,7 @@ const appConfig = {
           investment: 200,
           orderQuantity: 400,
           keepQuantity: 1,
+          minProfit: 0.01,
           priceStepPercent: 0.05,
           pricePrecision: 5,
           quantityPrecision: 0,

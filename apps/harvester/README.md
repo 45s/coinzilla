@@ -54,10 +54,12 @@ pnpm --filter @coinzilla/harvester test:coverage
 Harvester uses one application-wide `config.json`. The root contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. The active strategy key is `CG_coinGrabber`.
 
 - `strategies.CG_coinGrabber.enabled`: enables the strategy.
-- `strategies.CG_coinGrabber.settings.minProfit`: minimum required net profit per completed recovery sale, in the pair's quote currency.
+- `strategies.CG_coinGrabber.pairs.<SYMBOL>.minProfit`: minimum required net profit per completed recovery cycle, in that pair's quote currency (minimum `0.01`).
 - `strategies.CG_coinGrabber.settings.conservative.enabled`: must remain `true`; Conservative is the first executable mode.
 - `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
-- `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, precision, and fee settings.
+- `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, minimum profit, precision, and fee settings.
+
+`minProfit` is required on every pair and must be at least `0.01` in that pair's quote asset. The former global `settings.minProfit` is rejected; migrate it explicitly to each pair rather than relying on an implicit default.
 
 Trading settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Application-wide settings such as `notifications` are sibling root sections. Strategy availability is not configured through environment variables.
 
@@ -65,7 +67,29 @@ Trading settings and pairs belong to their strategy. Future strategies can be si
 
 The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. Strategy and pair settings remain in `config.json` under `strategies`.
 
-`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity.
+### Generate a new trading pair
+
+Use the interactive generator instead of manually guessing Binance precision and trading filters:
+
+```sh
+# From the repository root:
+pnpm --filter @coinzilla/harvester config:symbol
+
+# Or from apps/harvester:
+pnpm run config:symbol
+```
+
+The command asks for the Binance Spot symbol, total quote investment budget for the pair, the base-asset `orderQuantity` for each individual order, `keepQuantity`, maker commission percentage and taker commission percentage. It also requires the minimum profit per recovery cycle (in quote units) and price-step percentage. These two values are Conservative strategy settings, not exchange filters, so the generator does not guess them or apply market-independent defaults. The Binance environment is taken from the existing `TRADING_MODE` setting; when it is unset or is not `live`, the generator uses `testnet`. It does not prompt for an environment. `testnet` and `live` use their corresponding Binance Spot public API hosts; choose the same `TRADING_MODE` Harvester will use because exchange symbols and filters can differ between environments. The generator verifies that the returned metadata identifies the exact requested symbol and environment before creating the pair. The preview prints the exact symbol-keyed pair entry that will be written.
+
+The generator then uses public, read-only Binance Spot endpoints to retrieve `exchangeInfo` and the current `ticker/price`. It derives `pricePrecision` from `PRICE_FILTER.tickSize`, `quantityPrecision` from `LOT_SIZE.stepSize`, and validates `LOT_SIZE.minQty/maxQty` plus the stricter available `MIN_NOTIONAL`/`NOTIONAL` minimum. `orderQuantity` is entered by the operator as the size of each individual order; it is not calculated by spending the whole pair allocation in one order. The generator validates the chosen quantity against Binance `LOT_SIZE` step/min/max and minimum/maximum notional filters. It also requires one order's reference notional to be smaller than the total `investment`, ensuring the pair allocation can be split across multiple orders. The strategy's `investment` remains the total quote-currency allocation cap for that pair. The reference price is checked against any active minimum/maximum price bounds, and the selected `orderQuantity` is rejected if it exceeds `NOTIONAL.maxNotional`.
+
+Maker and taker percentages are supplied by the operator and stored independently; Binance's public exchange-info endpoint does not provide the account's commission schedule. A zero maker percentage requires the symbol to support `LIMIT_MAKER`; a non-zero maker percentage uses `LIMIT`.
+
+The generator validates the complete result with the same `validateAppConfig` contract used by Harvester, then merges the pair into `strategies.CG_coinGrabber.pairs` in this existing `config.json`. It does not create a second pair-config format. It validates supported static public filters and records applicable filters it does not evaluate as `unvalidatedConstraints` diagnostics; their presence alone does not abort pair generation. This is deliberate: dynamic price bands require Binance reference-price semantics, while order-count, position and asset limits require current account/exchange state that this credential-free generator cannot authoritatively establish. Silently pretending those constraints were checked would be unsafe, but blocking every pair because they exist would also be incorrect: Binance remains authoritative when an order is submitted, and a definite filter rejection is handled as `DEFINITE_EXCHANGE_FILTER_REJECTED` (not an ambiguous/UNKNOWN outcome). Unknown active filters are preserved as diagnostics rather than discarded. Filters exclusive to unsupported order types/features may be excluded; the rationale is documented in [Exchange trading constraints](./docs/exchange-trading-constraints.md). Because the command deliberately uses no credentials, it does not query account-specific Binance `myFilters`; Harvester performs authenticated account-filter checks at startup before an enabled pair can trade. New pairs are written with `enabled: true`, matching the normal pair-entry shape in `config.json`. The preview prints only the symbol-keyed pair object so it can be reviewed and copied directly; exchange-filter diagnostics remain internal metadata and are not mixed into the pair config. Existing symbols are rejected case-insensitively rather than overwritten. The generator uses the retrieved exchange limits internally to validate the pair entry; the CLI preview stays focused on the copyable `config.json` shape. Missing required fields or malformed metadata abort generation instead of producing a partial pair; optional price bounds and `NOTIONAL.maxNotional` are validated and applied when Binance supplies them; omitted optional bounds are not invented. File replacement is atomic and protected by an exclusive generator lock. The lock file records the owning process ID and creation timestamp. If the process is interrupted and leaves a `config.json.config-symbol.lock` file, inspect it and first confirm that no generator is running before removing a stale lock; the next successful locked run cleans abandoned generator temporary files.
+
+This is configuration tooling only: it requires no Binance API credentials and never places, cancels or modifies orders. The reference ticker price is a sizing snapshot, not a guaranteed execution price; Harvester's normal startup exchange-rule validation remains in force.
+
+`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` is the base-asset size of each individual order; multiple orders can be placed over time while staying within the pair's total investment allocation. `keepQuantity` remains the retained base-asset quantity; `minProfit` is the minimum net profit in that pair's quote asset.
 
 **Important — `keepQuantity` is retained per completed recovery cycle, not a total-balance cap.** Harvester sells all legally sellable strategy inventory above this amount, then retains the configured quantity when that recovery cycle completes. Each later completed cycle retains another `keepQuantity`, so the free/retained balance accumulates. Example: with `keepQuantity = 0.01 LINK`, four completed cycles retain 0.04 LINK in total; 100 cycles retain 1.00 LINK, assuming no dust bonus. Validated exchange-constrained dust is retained in addition to that cycle's `keepQuantity`. See the [canonical Conservative specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for the full rule and completion conditions. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup requests any missing initial ticker snapshot through Binance WebSocket API `ticker.price` or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
 
@@ -85,7 +109,6 @@ Example (illustrative only; it does not identify the currently enabled default p
     "CG_coinGrabber": {
       "enabled": true,
       "settings": {
-        "minProfit": 0.01,
         "conservative": { "enabled": true },
         "aggressive": { "enabled": false }
       },
@@ -95,6 +118,7 @@ Example (illustrative only; it does not identify the currently enabled default p
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
+          "minProfit": 0.01,
           "priceStepPercent": 0.05,
           "pricePrecision": 3,
           "quantityPrecision": 1,
@@ -111,6 +135,10 @@ Example (illustrative only; it does not identify the currently enabled default p
 
 The strategy configuration remains in `config.json` under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 
+## Volatility protection
+
+Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection is **not active in the runtime**. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), and the Harvester BrokerPort/adapter exposes it in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Startup history loading, live Kline intake, gap/freshness handling and the trading protection gate remain pending. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+
 ## Runtime and safety
 
 - Journal is enabled by default and writes its JSONL session into the process-specific `logs/sessions/<timestamp>-<runtime-session-id>/` directory. Cumulative diagnostics live under `logs/cumulative/`. The process entrypoint requires a ready Journal and a `flush()` capability before invoking the runtime in both TESTNET and LIVE. Broker-connected trading startup must durably complete the PREFLIGHT account audit before market subscriptions; order-intent and cancellation durability barriers use the same Journal flush contract in both modes. A failed flush is retryable only when Journal status confirms an active, open writer with no recorded write failures; a poisoned writer or unclassified health state fails closed. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md).
@@ -124,6 +152,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 - [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
 - [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
 - [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
+- [Volatility Protection](./docs/volatility-protection.md) — accepted design and staged implementation plan; not yet implemented.
 - [Domain documentation](./docs/domain/README.md) — Conservative specification, accounting invariants, glossary and Portfolio.
 - [Infrastructure](./docs/infrastructure/README.md) — broker port and adapter.
 - [Audits and historical evidence](./docs/audits/README.md).
@@ -265,6 +294,14 @@ See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the broker-connected 
 ## Development logging
 
 See [Logging](./docs/LOGGING.md) for development commands and structured output.
+
+## Durable-fact store initialization
+
+ADR-0001 defines the application-owned durable-fact store. Genesis creation is a separate, one-time administrative operation; application startup never creates or repairs a missing store.
+
+The explicit command is documented in [ADR-0001 — Application-owned recovery facts](./docs/architecture/decisions/0001-application-owned-recovery-facts.md). Do not run it against a production directory until the runtime-integration step explicitly instructs you to initialize the store.
+
+The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor.
 
 ## Process identity and build provenance
 

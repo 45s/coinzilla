@@ -10,7 +10,9 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal(validateAppConfig(validConfig), validConfig);
   assert.equal(Object.hasOwn(validConfig, 'runtime'), false, 'exchange selection must not be stored in config.json');
   assert.equal(strategy(validConfig).enabled, true);
-  assert.equal(strategy(validConfig).settings.minProfit, 0.01);
+  assert.equal(strategy(validConfig).settings.minProfit, undefined);
+  assert.equal(strategy(validConfig).pairs.LINKUSDT.minProfit, 0.1);
+  assert.equal(strategy(validConfig).pairs.ZROUSDT.minProfit, 0.01);
   assert.equal(strategy(validConfig).settings.conservative.enabled, true);
   assert.equal(strategy(validConfig).settings.aggressive.enabled, false);
   assert.ok(strategy(validConfig).pairs.ZROUSDT);
@@ -24,15 +26,21 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal('pairs' in validConfig, false);
 });
 
-test('requires at least 0.01 net quote profit', () => {
-  for (const minProfit of [0, 0.009, -0.01]) {
+test('requires at least 0.01 quote units of minimum profit on every pair', () => {
+  for (const minProfit of [0, 0.009, -0.01, NaN, Infinity]) {
     const config = structuredClone(validConfig);
-    strategy(config).settings.minProfit = minProfit;
-    assert.throws(() => validateAppConfig(config), /minProfit.*greater than or equal to 0.01/);
+    strategy(config).pairs.LINKUSDT.minProfit = minProfit;
+    assert.throws(() => validateAppConfig(config), /minProfit/);
   }
   const boundary = structuredClone(validConfig);
-  strategy(boundary).settings.minProfit = 0.01;
+  strategy(boundary).pairs.LINKUSDT.minProfit = 0.01;
   assert.equal(validateAppConfig(boundary), boundary);
+});
+
+test('rejects the removed global minimum-profit setting', () => {
+  const config = structuredClone(validConfig);
+  strategy(config).settings.minProfit = 0.01;
+  assert.throws(() => validateAppConfig(config), /settings.*minProfit.*configured on each market pair/);
 });
 
 test('rejects enabling the deferred Aggressive mode', () => {

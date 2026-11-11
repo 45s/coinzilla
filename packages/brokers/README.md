@@ -131,6 +131,21 @@ The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `
 
 These reconnect guarantees apply to the public stream subscription set; they do not imply user-data event replay or reconciliation.
 
+### Historical and live candles
+
+The Binance WebSocket broker now exposes normalized historical candles and live Kline updates for Harvester issue [#1016](https://github.com/45s/coinzilla/issues/1016):
+
+- **getCandles({ symbol, interval, limit = 500, startTime?, endTime? })** — uses the unsigned WebSocket API time and klines methods, returns immutable candles in strictly ascending open-time order, and supports 1–1000 rows.
+- **subscribeForCandles({ symbol, interval, onCandle })** — subscribes to the public Kline stream and returns an unsubscribe handle.
+
+The normalized immutable candle contains symbol, interval, openTime, closeTime (Unix milliseconds), exact decimal-string open, high, low, close and volume, plus isClosed. Historical isClosed is determined using Binance server time fetched immediately before the klines request, not the local machine clock. A current candle can be returned with isClosed false. Live updates preserve Binance's Kline close flag.
+
+Malformed rows, invalid timestamps/prices/volume, inconsistent OHLC values, duplicate/out-of-order history, unsupported intervals and invalid time bounds return an unsuccessful broker result. The broker does not sort or invent missing candles; gap detection and backfill policy belong to the consumer.
+
+The implementation uses the existing native WebSocket API klines request and public Kline Streams subscription. It adds no REST fallback or third-party SDK. The Streams protocol already recognized Kline stream names; PR #1017 adds the public normalized adapter and broker methods.
+
+Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md#klines) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
+
 ## Offline tests and coverage
 
 The default broker test suite is deterministic and offline:

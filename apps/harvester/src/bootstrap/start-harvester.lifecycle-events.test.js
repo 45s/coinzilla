@@ -22,7 +22,7 @@ const config = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
         BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
       },
@@ -50,7 +50,7 @@ function createMarketMetadata() {
       { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"] }
+  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
 }
 
 function createBroker({
@@ -90,6 +90,8 @@ function createBroker({
     getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
     getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
     getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
+    getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForUserData: async (input) => {
       handlers = input
       if (userDataError) throw userDataError

@@ -12,7 +12,7 @@ const priceEvent = {
 
 test("passes validated price, pair settings, and Portfolio to a plain strategy function", () => {
   const pairConfig = { enabled: true, orderQuantity: 0.01 }
-  const settings = { minProfit: 0.01 }
+  const settings = {}
   const portfolio = new Portfolio()
   let received
   const processMarketPrice = makeProcessMarketPrice({

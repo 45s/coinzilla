@@ -17,6 +17,7 @@ function createBroker({ orderResponse, orderHandler, exchangeInfo } = {}) {
         { filterType: "LOT_SIZE", stepSize: "0.00001" },
       ],
     }] },
+    myFilters: () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] }),
   })
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
@@ -145,3 +146,25 @@ test("requests RESULT details when placing LIMIT_MAKER instead of accepting Bina
   assert.equal(result.data.limitPrice.amount, "65000.1", "The canonical acknowledgement must preserve the exact limit price.")
   assert.equal(rpc.calls[0].method, "order.place", "Canonical order placement must remain a single state-changing Binance RPC.")
 })
+
+
+test("returns a definite Binance filter rejection without fabricating a canonical order", async () => {
+  const rejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: -1013 })
+  const { broker, rpc } = createBroker({
+    orderHandler: async () => { throw rejection },
+  })
+
+  const result = await broker.createCanonicalOrder({
+    symbol: "BTCUSDT",
+    clientOrderId: "h-12345678901234567890123456789032",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "0.01",
+    price: "70000.00",
+  })
+
+  assert.equal(result.ok, false, "A definite Binance filter rejection must remain a failed submission result.")
+  assert.equal(result.errors[0], rejection, "The exchange rejection code and cause must be preserved for the application.")
+  assert.equal(result.errors[0].outcomeUnknown, undefined, "A definite filter rejection must not be mislabeled as an unknown outcome.")
+  assert.deepEqual(rpc.calls.map(({ method }) => method), ["order.place"], "No canonical order metadata lookup or follow-up order action is allowed after Binance definitively rejects the request.")
+});
