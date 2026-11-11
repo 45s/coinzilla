@@ -1401,6 +1401,3 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Replace the symbol set on each authoritative startup/reconnect snapshot, including clearing it only after a durable snapshot confirms the order is gone.
 - [x] Remove the unused `blockOnExistingOrders` recovery argument. Regression coverage is in `src/bootstrap/account/create-account-snapshot-manager.test.js` and `src/use-cases/conservative-trading-engine.test.js`.
 - [ ] Exact-head CI verification and merge of this implementation PR; no live/TESTNET operations or process restart are part of this task.
-
-
-
