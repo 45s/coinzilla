@@ -53,6 +53,7 @@ There is no automatic file rotation, retention, compression, or deletion. Sessio
 Use Harvester's `readHarvesterJournalHistory({ directory })` for historical inspection. Pass either the Harvester log root or the `logs/sessions` directory itself. Do not call `Journal.read()` on the `logs/sessions` parent and treat an empty result as proof that no process sessions exist: the package-level Journal reader reads files in one directory; Harvester's history reader performs the recursive process-session discovery.
 
 The Harvester reader:
+
 - Reads legacy root-level flat JSONL files and recursively discovers nested per-process session directories.
 - Rejects unreadable directories, symbolic links, discovered process directories without a JSONL session file, malformed session entries, duplicate record IDs, and configured directory/session/record/byte limit violations.
 - Returns record positions relative to the supplied history root so equal timestamp-only filenames in different process directories remain distinguishable.
