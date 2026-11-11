@@ -33,7 +33,7 @@ ATR and NATR accept an array of completed candles with this minimum shape:
 }
 ```
 
-The caller supplies `intervalMs` so the package can reject duplicate, unordered or missing bars. Candle timestamps must be non-negative safe integers and consecutive candles must be exactly one interval apart. `high`, `low` and `close` must be exact positive decimal strings; close must lie within the high-low range. Forming candles are rejected.
+Each call must contain candles from one market and one timeframe; the caller owns that grouping. The caller supplies `intervalMs` so the package can reject duplicate, unordered or missing bars. Candle timestamps must be non-negative safe integers and consecutive candles must be exactly one interval apart. `high`, `low` and `close` must be exact positive decimal strings; close must lie within the high-low range. Forming candles are rejected.
 
 ### ATR
 
