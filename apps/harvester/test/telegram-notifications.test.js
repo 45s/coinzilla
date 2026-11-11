@@ -275,11 +275,11 @@ test("applies custom Telegram event overrides and market filters while preservin
     "The enabled fillReceived override must deliver fills for the selected LINKUSDT market.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("PAUSED") && message.includes("ETHUSDT")),
+    sentMessages.some((message) => message.includes("PAUSED") && message.includes("ETH/USDT")),
     "A critical pair-pause alert must bypass both an explicit false override and the LINKUSDT-only market filter.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("ACCOUNT SAFETY") && message.includes("ETHUSDT")),
+    sentMessages.some((message) => message.includes("ACCOUNT SAFETY") && message.includes("ETH/USDT")),
     "An execution-accounting safety alert must bypass custom event exclusions and market filters.",
   )
   assert.ok(
@@ -326,17 +326,17 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
   const scenarios = [
     {
       profile: "minimal",
-      expected: ["TRADING PAIR PAUSED"],
-      excluded: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "EXECUTION RECEIVED", "BOT RECOVERY COMPLETED", "BOT STOPPED", "BROKER CONNECTED"],
+      expected: ["PAUSED"],
+      excluded: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "FILL RECEIVED", "BOT RECOVERY COMPLETED", "BOT STOPPED", "BROKER CONNECTED"],
     },
     {
       profile: "trader",
-      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "EXECUTION RECEIVED", "BOT RECOVERY COMPLETED", "TRADING PAIR PAUSED", "BOT STOPPED"],
+      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "FILL RECEIVED", "BOT RECOVERY COMPLETED", "PAUSED", "BOT STOPPED"],
       excluded: ["BROKER CONNECTED"],
     },
     {
       profile: "verbose",
-      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "EXECUTION RECEIVED", "BOT RECOVERY COMPLETED", "TRADING PAIR PAUSED", "BOT STOPPED", "BROKER CONNECTED"],
+      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "FILL RECEIVED", "BOT RECOVERY COMPLETED", "PAUSED", "BOT STOPPED", "BROKER CONNECTED"],
       excluded: [],
     },
   ]
@@ -467,7 +467,7 @@ test("delivers startup, broker, order, and execution safety failures in custom m
     ["BOT STARTUP FAILED", "startup failure"],
     ["BROKER DISCONNECTED", "broker connection failure"],
     ["broker-subscription-failed", "broker subscription failure"],
-    ["ORDER FAILED", "order submission/cancellation failure"],
+    ["FAILED", "order submission/cancellation failure"],
     ["unowned-order", "unowned external order"],
     ["invalid-fill", "invalid execution fill"],
   ]) {
