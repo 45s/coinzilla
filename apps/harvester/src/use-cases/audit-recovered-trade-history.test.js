@@ -244,7 +244,7 @@ test("rejects market-scoped history when structured pagination evidence is absen
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /structured evidence is missing/)
+  assert.match(result.errors[0].message, /trade-history evidence is missing/)
 })
 
 test("rejects cross-market executions in a single-market history response", () => {
