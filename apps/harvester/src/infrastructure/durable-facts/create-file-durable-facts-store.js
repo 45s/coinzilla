@@ -283,7 +283,7 @@ export function createFileDurableFactsStore({
     throw new TypeError("Durable-fact schemaVersion must be a positive safe integer")
   }
   if (typeof now !== "function") throw new TypeError("Durable-fact now must be a function")
-  for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "rename"]) {
+  for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "rename", "chmod"]) {
     if (typeof fileSystem?.[method] !== "function") throw new TypeError("Durable-fact fileSystem requires " + method)
   }
 
@@ -345,6 +345,9 @@ export function createFileDurableFactsStore({
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
       throw new Error("Durable-fact directory must be a real directory, not a symlink")
     }
+    if (platform !== "win32" && ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)) {
+      throw new Error("Durable-fact directory permissions must be private (0700)")
+    }
     const entries = await fileSystem.readdir(absoluteDirectory)
     const unexpectedEntries = entries.filter((entry) =>
       ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry))
@@ -357,6 +360,10 @@ export function createFileDurableFactsStore({
     ])
     if (logStat.isSymbolicLink() || !logStat.isFile() || manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
       throw new Error("Durable-fact log and manifest must be regular files, not symlinks")
+    }
+    if (platform !== "win32" &&
+        [logStat, manifestStat].some((stat) => (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
+      throw new Error("Durable-fact log and manifest permissions must be private (0600)")
     }
     const [rawLog, rawManifest] = await Promise.all([
       fileSystem.readFile(logPath, "utf8"),
@@ -429,6 +436,7 @@ export function createFileDurableFactsStore({
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
         throw new Error("Durable-fact initialization requires a real directory")
       }
+      await fileSystem.chmod(absoluteDirectory, 0o700)
       const entries = await fileSystem.readdir(absoluteDirectory)
       if (entries.length > 0) throw new Error("Durable-fact initialization refuses to overwrite an existing directory")
       const genesisBody = {
