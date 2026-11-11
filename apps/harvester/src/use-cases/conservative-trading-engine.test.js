@@ -133,6 +133,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
       if (cancelNotSentOnSuccess) return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       canceledOrders.set(order.brokerOrderId, order)
+      const executedQuantity = typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order })
+        : cancelExecutedQuantity
       return {
       ok: true,
       data: new CanonicalOrder({
@@ -144,7 +147,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         limitPrice: order.limitPrice,
         originalQuantity: order.originalQuantity,
         executedQuantity: new Quantity({
-          amount: cancelExecutedQuantity,
+          amount: executedQuantity,
           asset: baseAsset,
         }),
         status: cancelOrderStatus,
@@ -170,9 +173,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
             market,
             side: canceledOrder.side,
             price: canceledOrder.limitPrice,
-            quantity: new Quantity({ amount: cancelExecutedQuantity, asset: baseAsset }),
+            quantity: new Quantity({ amount: canceledOrder.executedQuantity.amount, asset: baseAsset }),
             quoteQuantity: new Money({
-              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: cancelExecutedQuantity }),
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: canceledOrder.executedQuantity.amount }),
               asset: quoteAsset,
             }),
             commissions: [],
@@ -6537,7 +6540,7 @@ test("publishes an explicit cycle outcome when the recovery SELL fills during ca
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     cancelWithFill: true,
-    cancelExecutedQuantity: "1",
+    cancelExecutedQuantity: ({ order }) => order.originalQuantity.amount,
     cancelOrderStatus: "FILLED",
     recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
