@@ -220,3 +220,22 @@ test("rejects an unjournaled account execution whose broker order identity is no
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /absent from the Harvester Journal and recovered order registry/)
 })
+
+
+test("audits complete execution history for one market without claiming account-wide universe completeness", () => {
+  const fill = makeFill()
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    complete: true,
+    marketUniverseComplete: false,
+    scope: "MARKET",
+    market,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.scope, "MARKET")
+  assert.equal(result.data.marketUniverseComplete, false)
+  assert.equal(result.data.fillsChecked, 1)
+  assert.equal(result.data.journalFillsChecked, 1)
+})
