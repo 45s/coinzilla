@@ -18,7 +18,7 @@ test("formats filled orders as compact profit notifications", () => {
         event: { apiKey: "must-not-leak" },
       },
     }),
-    "💰 BUY BTC/USDT FILLED @ 65000 × 0.1\n#42",
+    "💰 BUY BTC/USDT ORDER FILLED @ 65000 × 0.1\n#42",
   )
 })
 
@@ -43,8 +43,8 @@ test("formats execution fills and safely handles missing nested fill data", () =
 
 test("uses the approved compact icon and layout for each notification type", () => {
   const examples = [
-    [{ name: "order.submitted", data: { side: "BUY", symbol: "LINKUSDT", price: "14.25", quantity: "2", orderId: "42" } }, "🟢 BUY LINK/USDT @ 14.25 × 2\n#42"],
-    [{ name: "order.submitted", data: { side: "SELL", symbol: "LINKFDUSD", price: "14.5", quantity: "1" } }, "🔴 SELL LINK/FDUSD @ 14.5 × 1"],
+    [{ name: "order.submitted", data: { side: "BUY", symbol: "LINKUSDT", price: "14.25", quantity: "2", orderId: "42" } }, "🟢 BUY LINK/USDT ORDER SUBMITTED @ 14.25 × 2\n#42"],
+    [{ name: "order.submitted", data: { side: "SELL", symbol: "LINKFDUSD", price: "14.5", quantity: "1" } }, "🔴 SELL LINK/FDUSD ORDER SUBMITTED @ 14.5 × 1"],
     [{ name: "order.cancelled", data: { side: "BUY", symbol: "LINKFDUSD", executedQuantity: "0", orderId: "43" } }, "✖️ BUY LINK/FDUSD CANCELLED · Filled 0\n#43"],
     [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BINANCE CONNECTED · TESTNET"],
     [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "🟥 BINANCE DISCONNECTED · success"],
