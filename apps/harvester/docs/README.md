@@ -4,6 +4,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Start here
 
+- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the single `config.json`, profile behavior, event overrides, and environment-only credentials.
+
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
