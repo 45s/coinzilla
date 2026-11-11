@@ -320,3 +320,33 @@ test("refuses to claim durable writes on platforms without directory fsync suppo
   assert.match(refusedAppend.errors[0].message, /directory fsync/i)
   assert.equal(await readFile(path.join(directory, "facts.jsonl"), "utf8"), before)
 })
+
+test("poisons the current store after a post-rename directory-sync failure", { skip: !supportsDirectorySync }, async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  let failDirectorySync = false
+  const fileSystem = {
+    ...fsPromises,
+    open: async (target, ...args) => {
+      const handle = await fsPromises.open(target, ...args)
+      if (target === directory && failDirectorySync) {
+        Object.defineProperty(handle, "sync", { value: async () => { throw new Error("simulated directory sync failure") } })
+      }
+      return handle
+    },
+  }
+  const store = createStore(directory, { fileSystem })
+  assert.equal((await store.initialize()).ok, true)
+  failDirectorySync = true
+  const appended = await store.append(operatorPause())
+  assert.equal(appended.ok, false)
+  assert.equal(appended.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN")
+  const sameInstanceVerify = await store.verify()
+  assert.equal(sameInstanceVerify.ok, false)
+  assert.equal(sameInstanceVerify.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN")
+  const retry = await store.append(operatorPause())
+  assert.equal(retry.ok, false)
+  assert.equal(retry.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN")
+  const freshInstance = createStore(directory)
+  assert.equal((await freshInstance.verify()).ok, true)
+})
