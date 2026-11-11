@@ -12,7 +12,7 @@ import { publishLifecycleEvent } from "./application/events/publish-lifecycle-ev
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
-import { loadHarvesterConfig } from "./infrastructure/config/load-app-config.js"
+import { loadAppConfig } from "./infrastructure/config/load-app-config.js"
 import { resolveRuntimeConfig } from "./domain/app-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
@@ -144,7 +144,7 @@ export async function main({
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
   acquireProcessLock = acquireHarvesterProcessLocks,
-  loadConfig = loadHarvesterConfig,
+  loadConfig = loadAppConfig,
   configSource,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),

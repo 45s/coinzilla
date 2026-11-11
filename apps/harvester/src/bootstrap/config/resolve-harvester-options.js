@@ -3,8 +3,8 @@ import { publishLifecycleEvent } from "../../application/events/publish-lifecycl
 import { mapConfigValidatedData } from "../../application/events/lifecycle-event-dtos.js"
 import { resolveRuntimeConfig } from "../../domain/app-config.js"
 
-export async function resolveHarvesterOptions({ configSource, appConfig: suppliedHarvesterConfig, loadConfig, env = process.env, eventPublisher, logger } = {}) {
-  const appConfig = suppliedHarvesterConfig ?? await loadConfig(configSource)
+export async function resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env = process.env, eventPublisher, logger } = {}) {
+  const appConfig = suppliedAppConfig ?? await loadConfig(configSource)
   const strategyConfig = appConfig.strategies?.CG_coinGrabber
   if (strategyConfig?.enabled !== true) throw new Error("CG_coinGrabber strategy must remain enabled in app config")
   if (strategyConfig.settings?.conservative?.enabled !== true) throw new Error("Conservative strategy must remain enabled in CG_coinGrabber settings")
