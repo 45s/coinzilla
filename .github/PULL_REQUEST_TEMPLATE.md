@@ -45,7 +45,7 @@
 
 - [ ] I read `AI_AGENT_WORKFLOW.md` and the owning domain's `AGENTS.md`.
 - [ ] This PR changes only the owning domain, or explicitly coordinates every affected domain.
-- [ ] This PR targets `develop` for task work, or `main` only for a final release.
+- [ ] **Target is correct:** task PR = `<task-branch> → develop`; final release PR = `develop → main`. No task PR may target `main`.
 - [ ] The PR branch contains the latest target branch and CI passed on the exact head SHA.
 - [ ] Relevant domain roadmap and documentation are updated.
 - [ ] Any cross-domain request or dependency is linked below.
