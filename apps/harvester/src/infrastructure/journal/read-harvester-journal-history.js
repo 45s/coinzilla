@@ -109,7 +109,12 @@ function parseProcessStarted({ records, directory }) {
 
 function resolveSessionChronology({ records, directory }) {
   const processStarted = parseProcessStarted({ records, directory })
-  const eventTimestamps = records.map((record) => parseTimestamp(record.payload?.timestamp))
+  // process_started is best-effort and may be appended after runtime startup;
+  // its payload.startedAt is chronology metadata, not a trading-event boundary.
+  const chronologyRecords = processStarted
+    ? records.filter((record) => record.payload?.name !== "harvester.process_started")
+    : records
+  const eventTimestamps = chronologyRecords.map((record) => parseTimestamp(record.payload?.timestamp))
   const timestampsAreValid = eventTimestamps.every((timestamp) => timestamp !== undefined)
   const timestampsAreMonotonic = timestampsAreValid && eventTimestamps.every(
     (timestamp, index) => index === 0 || timestamp >= eventTimestamps[index - 1],
@@ -139,8 +144,8 @@ function resolveSessionChronology({ records, directory }) {
     }
     return Object.freeze({
       ...processStarted,
-      firstRecordTimestamp,
-      lastRecordTimestamp,
+      firstRecordTimestamp: firstRecordTimestamp ?? processStarted.chronologyTimestamp,
+      lastRecordTimestamp: lastRecordTimestamp ?? processStarted.chronologyTimestamp,
     })
   }
 

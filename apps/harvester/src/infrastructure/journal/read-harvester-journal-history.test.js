@@ -135,7 +135,7 @@ test("orders same-second process sessions by millisecond process-start evidence,
       processId: 1002,
       eventName: "harvester.earlier_session",
       processStartedLast: true,
-      processStartedEventAt: "2026-11-09T12:00:00.103Z",
+      processStartedEventAt: "2026-11-09T12:00:00.950Z",
     })
     await writeJournalSession({
       directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-00-a-session"),
