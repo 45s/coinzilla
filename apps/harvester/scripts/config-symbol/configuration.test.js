@@ -84,6 +84,7 @@ test("parses financial input as exact decimal text and rejects invalid values", 
 test("validates every strategy-owned setting before making an exchange request", () => {
   const validInputs = {
     investment: "100",
+    orderQuantity: "20",
     keepQuantity: "0.1",
     makerPercent: "0",
     takerPercent: "0.1",
@@ -151,8 +152,8 @@ test("rejects per-order quantities that violate Binance limits or cannot split t
   }
   assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "5.05" }), /stepSize/i)
   assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "0.1" }), /MIN_NOTIONAL/i)
-  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "30" }), /MAX_NOTIONAL/i)
-  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "30", maxNotional: undefined, investment: "120", price: "4" }), /smaller than the total investment/i)
+  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "13", maxNotional: "50" }), /MAX_NOTIONAL/i)
+  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "30" }), /smaller than the total investment/i)
 })
 
 test("creates a runtime-valid enabled pair using exchange-derived precision and operator fee assumptions", () => {
@@ -171,7 +172,7 @@ test("creates a runtime-valid enabled pair using exchange-derived precision and 
   assert.deepEqual(pair, {
     enabled: true,
     investment: 100,
-    orderQuantity: 200,
+    orderQuantity: 20,
     keepQuantity: 0.1,
     minProfit: 0.01,
     priceStepPercent: 0.05,
