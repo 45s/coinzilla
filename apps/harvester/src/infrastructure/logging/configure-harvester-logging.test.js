@@ -514,3 +514,30 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test("retains the market symbol and source filter types in compact fatal console summaries", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output })
+
+  transport.write({
+    timestamp: "2026-11-11T12:00:00.000Z",
+    level: "error",
+    data: {
+      message: "startup failed.",
+      errorCode: "HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS",
+      errorName: "UnvalidatedMarketExchangeConstraintsError",
+      symbol: "LINKFDUSD",
+      sourceFilterTypes: ["PERCENT_PRICE_BY_SIDE", "MAX_ASSET"],
+      errorMessage: "Market LINKFDUSD cannot start because exchange constraints are not validated.",
+    },
+  })
+
+  assert.match(written, /HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS/, "The compact fatal console line must preserve the stable machine-readable failure code.")
+  assert.match(written, /LINKFDUSD/, "The compact fatal console line must identify the blocked market.")
+  assert.match(written, /PERCENT_PRICE_BY_SIDE/, "The compact fatal console line must retain the leading source filter that caused the block.")
+  assert.ok(written.trim().length <= 200, "The compact fatal console line must remain within its documented output bound.")
+  output.destroy()
+})

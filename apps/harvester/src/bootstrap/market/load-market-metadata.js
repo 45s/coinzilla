@@ -29,6 +29,16 @@ export async function loadMarketMetadata({
         )
       }
       const market = filtersResult.data.market
+      logger?.trace?.({
+        message: "Exchange market metadata received",
+        component: "market-metadata-bootstrap",
+        operation: "validate-market-trading-readiness",
+        symbol,
+        enabled: pairConfig.enabled === true,
+        supportedOrderTypes: filtersResult.data.supportedOrderTypes,
+        unvalidatedConstraintCount: filtersResult.data.unvalidatedConstraints?.length,
+        unvalidatedConstraints: filtersResult.data.unvalidatedConstraints,
+      })
       if (
         !market ||
         market.symbol !== symbol ||

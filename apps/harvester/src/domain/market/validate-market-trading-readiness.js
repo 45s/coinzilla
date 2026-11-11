@@ -1,4 +1,5 @@
 import { Market, TradingRules } from "@coinzilla/entities"
+import { UnvalidatedMarketExchangeConstraintsError } from "./errors/unvalidated-market-exchange-constraints-error.js"
 import { compareDecimal, roundDecimalToIncrement } from "@coinzilla/utils"
 
 const REQUIRED_RULE_TYPES = Object.freeze([
@@ -45,13 +46,10 @@ export function validateMarketTradingReadiness({
     throw new TypeError("Market metadata unvalidatedConstraints must be an array")
   }
   if (unvalidatedConstraints.length > 0) {
-    const blockers = unvalidatedConstraints.map(({ type, scope, sourceFilterType }) =>
-      [type, scope, sourceFilterType].filter(Boolean).join("/")
-    )
-    throw new Error(
-      "Market " + symbol + " has exchange constraints that Harvester cannot validate: " +
-      blockers.join(", "),
-    )
+    throw new UnvalidatedMarketExchangeConstraintsError({
+      symbol,
+      constraints: unvalidatedConstraints,
+    })
   }
 
   for (const type of REQUIRED_RULE_TYPES) {

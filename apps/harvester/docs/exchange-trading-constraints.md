@@ -84,3 +84,10 @@ The prose safety contract above is authoritative. The diagram summarizes the met
 
 - [Spot symbol, exchange and asset filters](https://github.com/binance/binance-spot-api-docs/blob/master/filters.md) — definitions and applicability of the public filters.
 - [Spot WebSocket API: Query Relevant Filters (`myFilters`)](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account) — authenticated, symbol-specific account filter source, including `MAX_ASSET`.
+
+
+## Startup failure diagnostics
+
+When an enabled market is blocked by an unvalidated exchange filter, Harvester throws `UnvalidatedMarketExchangeConstraintsError` with code `HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS`. The error retains the market symbol and every canonical constraint descriptor (`type`, `scope`, and `sourceFilterType`). The process-startup logger preserves the error name, code, symbol, complete structured details, and stack in the DEBUG session log; market metadata bootstrap emits the normalized filter inventory at TRACE before readiness validation.
+
+Inspect the current process session under `logs/sessions/<session-id>/harvester.log` and `trace.log`, or cumulative `logs/harvester.log` and `logs/trace.log`. The compact console line is a summary only; it retains the stable error code, market symbol, and leading source filter types. Do not remove the readiness gate to make an unsupported market start. Implement and test an evaluator for each reported constraint before enabling that market.

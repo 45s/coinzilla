@@ -64,3 +64,12 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 - Telegram bot tokens and chat IDs are environment-only secrets. `notifications.telegram` contains only the enabled switch, profile, market filter, and event overrides.
 - Notification profiles are `minimal`, `trader`, `verbose`, and `custom`. Critical safety alerts are non-disableable and bypass event overrides and market filters.
 - Notification formatting, bounded queueing, transport, and delivery remain owned by `@coinzilla/notifiers`; Harvester owns profile resolution and mapping of Harvester events.
+
+
+## Actionable errors and diagnostics
+
+- AI agents MUST NOT introduce a generic `Error` for a known Harvester/domain failure when a specific failure type can be named. Use a domain-specific class extending `Error`, with a precise `name` and stable machine-readable `code`.
+- Every operational error MUST identify the failing component/operation and affected entity (for example, market symbol), preserve the original cause, and expose safe structured details needed to act. The message must state what failed and why; include concrete remediation when known.
+- At external-data boundaries, emit structured DEBUG/TRACE evidence before validation can reject the data. Include source/filter identifiers and normalized descriptors; never log credentials, signatures, or secret payloads.
+- Fatal startup logs MUST preserve the typed error name, code, concise message, safe entity identifiers, structured details, and stack/cause in the DEBUG log. Console summaries may be compact, but MUST retain the stable error code and affected entity. Never truncate the only copy of diagnostic evidence.
+- Add regression tests proving error identity/code/details and that the relevant diagnostic hook receives the failure context. Keep safety gates intact; diagnostics are not a reason to bypass validation.
