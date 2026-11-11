@@ -156,6 +156,35 @@ const restoreState = (options) => {
   return { projection, restored: restored.data }
 }
 
+const exchangeFillsFromJournal = (journalFills) => journalFills.map((entry) => new Fill({
+  tradeId: entry.tradeId,
+  brokerOrderId: entry.brokerOrderId,
+  clientOrderId: entry.clientOrderId,
+  market,
+  side: entry.side,
+  price: new Money({ amount: entry.price, asset: market.quoteAsset }),
+  quantity: new Quantity({ amount: entry.quantity, asset: market.baseAsset }),
+  quoteQuantity: new Money({ amount: entry.quoteQuantity, asset: market.quoteAsset }),
+  liquidityRole: entry.liquidityRole,
+  ...(entry.executedAt === undefined ? {} : { executedAt: entry.executedAt }),
+  commissions: entry.commissions.map((commission) => new Commission({
+    amount: new Money({
+      amount: commission.amount,
+      asset: new Asset({ id: commission.assetId, code: commission.asset }),
+    }),
+    ...(commission.quoteValue === undefined ? {} : {
+      quoteValue: new Money({
+        amount: commission.quoteValue.amount,
+        asset: new Asset({
+          id: commission.quoteValue.assetId,
+          code: commission.quoteValue.asset,
+        }),
+      }),
+    }),
+  })),
+  commissionStatus: entry.commissionStatus,
+}))
+
 test("replays recovery completion only after all sellable inventory is sold and keepQuantity is retained", () => {
   const { restored } = restoreState()
   const position = restored.portfolio.getPosition({ marketId: market.id })
@@ -729,34 +758,7 @@ test("fails closed when an unowned open order has no canonical market metadata",
 
 test("integrates structured one-market history evidence with account balance and order reconciliation", () => {
   const { projection, restored } = restoreState()
-  const exchangeFills = restored.journalFills.map((entry) => new Fill({
-    tradeId: entry.tradeId,
-    brokerOrderId: entry.brokerOrderId,
-    clientOrderId: entry.clientOrderId,
-    market,
-    side: entry.side,
-    price: new Money({ amount: entry.price, asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: entry.quantity, asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: entry.quoteQuantity, asset: market.quoteAsset }),
-    liquidityRole: entry.liquidityRole,
-    ...(entry.executedAt === undefined ? {} : { executedAt: entry.executedAt }),
-    commissions: entry.commissions.map((commission) => new Commission({
-      amount: new Money({
-        amount: commission.amount,
-        asset: new Asset({ id: commission.assetId, code: commission.asset }),
-      }),
-      ...(commission.quoteValue === undefined ? {} : {
-        quoteValue: new Money({
-          amount: commission.quoteValue.amount,
-          asset: new Asset({
-            id: commission.quoteValue.assetId,
-            code: commission.quoteValue.asset,
-          }),
-        }),
-      }),
-    })),
-    commissionStatus: entry.commissionStatus,
-  }))
+  const exchangeFills = exchangeFillsFromJournal(restored.journalFills)
   const exchangeTradeHistory = {
     fills: exchangeFills,
     historyPagesComplete: true,
@@ -846,7 +848,7 @@ test("fails closed when an unowned open order reuses a recovered clientOrderId",
 test("rejects a market-history baseline verified after the current account snapshot", () => {
   const { projection, restored } = restoreState()
   const exchangeTradeHistory = {
-    fills: [],
+    fills: exchangeFillsFromJournal(restored.journalFills),
     historyPagesComplete: true,
     marketHistoryPagesComplete: true,
     historyScope: "MARKET",
