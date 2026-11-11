@@ -73,7 +73,9 @@ function canonicalize(value, depth = 0) {
   }
   if (Array.isArray(value)) {
     if (value.length > MAX_ARRAY_LENGTH) throw new RangeError("Durable fact array exceeds the maximum length")
-    if (Object.keys(value).length !== value.length) throw new TypeError("Durable fact arrays must not contain holes or custom properties")
+    if (Object.keys(value).length !== value.length || Object.getOwnPropertySymbols(value).length > 0) {
+      throw new TypeError("Durable fact arrays must not contain holes, symbols or custom properties")
+    }
     for (let index = 0; index < value.length; index += 1) {
       if (!(index in value)) throw new TypeError("Durable fact arrays must not contain sparse entries")
     }
@@ -84,7 +86,9 @@ function canonicalize(value, depth = 0) {
     if (prototype !== Object.prototype && prototype !== null) {
       throw new TypeError("Durable fact payloads must contain only plain JSON objects")
     }
+    const ownKeys = Reflect.ownKeys(value)
     const keys = Object.keys(value).sort()
+    if (ownKeys.length !== keys.length) throw new TypeError("Durable fact objects must not contain symbols or non-enumerable properties")
     if (keys.length > MAX_OBJECT_KEYS) throw new RangeError("Durable fact object exceeds the maximum key count")
     const result = {}
     for (const key of keys) {
