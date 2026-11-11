@@ -136,6 +136,8 @@ export async function fetchAccountTradeHistory({
         marketsChecked: markets.length,
         pagesChecked: requestCount,
         historyPagesComplete: true,
+        marketHistoryComplete: true,
+        historyScope: markets.length === 1 ? "MARKET" : "MARKETS",
         marketUniverseComplete: marketUniverseComplete === true,
         complete: marketUniverseComplete === true,
       }),
