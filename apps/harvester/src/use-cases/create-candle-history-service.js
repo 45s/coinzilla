@@ -56,6 +56,7 @@ function createMarketState(symbol) {
     bufferedEvents: [],
     fatalReason: null,
     queue: Promise.resolve(),
+    observerQueue: Promise.resolve(),
   }
 }
 
@@ -173,16 +174,17 @@ function createCandleHistoryService({
     })
   }
 
-  async function notifySnapshot({ state } = {}) {
-    try {
-      await onSnapshot({ symbol: state.symbol, snapshot: snapshot({ symbol: state.symbol }) })
-    } catch (error) {
-      logger.error?.({
-        message: "Volatility snapshot observer failed",
-        symbol: state.symbol,
-        error,
+  function notifySnapshot({ state } = {}) {
+    const currentSnapshot = snapshot({ symbol: state.symbol })
+    state.observerQueue = state.observerQueue
+      .then(() => onSnapshot({ symbol: state.symbol, snapshot: currentSnapshot }))
+      .catch((error) => {
+        logger.error?.({
+          message: "Volatility snapshot observer failed",
+          symbol: state.symbol,
+          error,
+        })
       })
-    }
   }
 
   function failMarket({ state, reason, error, fatal = false } = {}) {
@@ -386,6 +388,7 @@ function createCandleHistoryService({
 
         try {
           await state.queue
+          await state.observerQueue
         } catch (error) {
           errors.push(error)
         }
@@ -457,7 +460,8 @@ function createCandleHistoryService({
         .then(() => notifySnapshot({ state }))
     }
     await state.queue
-    await notifySnapshot({ state })
+    notifySnapshot({ state })
+    await state.observerQueue
   }
 
   function start({ pairs, subscriptions = [] } = {}) {
