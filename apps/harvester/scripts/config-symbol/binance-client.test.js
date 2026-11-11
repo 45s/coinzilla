@@ -153,18 +153,21 @@ test("reports Binance HTTP, malformed JSON, and network failures clearly", async
 })
 
 test("rejects a ticker response for a different symbol or invalid price", async () => {
-  let requests = 0
   for (const ticker of [
     { symbol: "OTHER", price: "0.5" },
     { symbol: "ADAFDUSD", price: "0" },
     { symbol: "ADAFDUSD", price: "NaN" },
   ]) {
+    let requestIndex = 0
     await assert.rejects(
       fetchBinanceSpotMetadata({
         symbol: "ADAFDUSD",
-        fetchImpl: async () => createResponse(ticker.symbol === "OTHER" ? createExchangeInfo() : createExchangeInfo()) && (
-          requests++ === 0 ? createResponse(createExchangeInfo()) : createResponse(ticker)
-        ),
+        fetchImpl: async () => {
+          requestIndex += 1
+          return requestIndex === 1
+            ? createResponse(createExchangeInfo())
+            : createResponse(ticker)
+        },
       }),
       /ticker|price|symbol/i,
       "A malformed ticker price must not be used to calculate the configured order quantity.",
