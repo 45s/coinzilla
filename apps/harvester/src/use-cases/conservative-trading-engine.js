@@ -2616,6 +2616,7 @@ export function makeConservativeTradingEngine({
   const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
 
   const processVolatilitySnapshot = async ({ symbol, snapshot } = {}) => {
+    if (isStopping()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
     if (!volatilityProtectionEnabled) {
       return toResult({ data: { skipped: true, reason: "VOLATILITY_PROTECTION_NOT_CONFIGURED" } })
     }
