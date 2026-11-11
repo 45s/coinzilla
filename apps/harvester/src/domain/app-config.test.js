@@ -10,7 +10,6 @@ const createAppConfig = () => ({
     CG_coinGrabber: {
       enabled: true,
       settings: {
-        minProfit: 0.01,
         conservative: { enabled: true },
         aggressive: { enabled: false },
       },
@@ -20,6 +19,7 @@ const createAppConfig = () => ({
           investment: 100,
           orderQuantity: 5,
           keepQuantity: 0.01,
+          minProfit: 0.01,
           priceStepPercent: 0.05,
           pricePrecision: 3,
           quantityPrecision: 1,
