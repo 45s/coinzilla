@@ -129,7 +129,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { minProfit: "0.01", conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: {
       ZROUSDT: {
         enabled: true,
