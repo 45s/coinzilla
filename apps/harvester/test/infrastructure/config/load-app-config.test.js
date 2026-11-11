@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadHarvesterConfig } from '../../../src/infrastructure/config/load-harvester-config.js';
+import { loadAppConfig } from '../../../src/infrastructure/config/load-app-config.js';
 
-function assertTradingConfigStructure(config) {
-  assert.ok(config && typeof config === 'object' && !Array.isArray(config), 'The Harvester configuration must be a JSON object.');
-  assert.ok(config.strategies && typeof config.strategies === 'object', 'The Harvester configuration must contain strategy-owned settings.');
+function assertAppConfigStructure(config) {
+  assert.ok(config && typeof config === 'object' && !Array.isArray(config), 'The app configuration must be a JSON object.');
+  assert.ok(config.strategies && typeof config.strategies === 'object', 'The app configuration must contain strategy-owned settings.');
   assert.ok(config.strategies.CG_coinGrabber, 'The config contains the CG_coinGrabber strategy');
   assert.equal(Object.hasOwn(config, 'runtime'), false, 'Exchange-mode profiles must not be stored in config.json.');
 
@@ -35,24 +35,24 @@ function assertTradingConfigStructure(config) {
   }
 }
 
-test('loads and validates the default Harvester config structure', async () => {
-  const config = await loadHarvesterConfig();
-  assertTradingConfigStructure(config);
+test('loads and validates the default app config structure', async () => {
+  const config = await loadAppConfig();
+  assertAppConfigStructure(config);
 });
 
 test('loads a config from a supplied path', async () => {
-  const config = await loadHarvesterConfig(new URL('../../../config.json', import.meta.url));
-  assertTradingConfigStructure(config);
+  const config = await loadAppConfig(new URL('../../../config.json', import.meta.url));
+  assertAppConfigStructure(config);
 });
 
 test('reports the source path when JSON is malformed', async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'harvester-config-'));
+  const directory = await mkdtemp(join(tmpdir(), 'app-config-'));
   const path = join(directory, 'invalid.json');
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(path, '{ invalid json');
 
   await assert.rejects(
-    loadHarvesterConfig(path),
+    loadAppConfig(path),
     (error) => error instanceof SyntaxError
       && error.message.includes(path)
       && error.cause instanceof SyntaxError,
@@ -62,20 +62,20 @@ test('reports the source path when JSON is malformed', async (t) => {
 
 test('reports a useful error when the file does not exist', async () => {
   await assert.rejects(
-    loadHarvesterConfig('/path/that/does/not/exist.json'),
-    /Unable to read Harvester config/,
+    loadAppConfig('/path/that/does/not/exist.json'),
+    /Unable to read app config/,
     'A missing config file must produce a path-specific load error.',
   );
 });
 
 test('rejects structurally invalid JSON after parsing', async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'harvester-config-'));
+  const directory = await mkdtemp(join(tmpdir(), 'app-config-'));
   const path = join(directory, 'invalid-shape.json');
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(path, JSON.stringify({ strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {} } } }));
 
   await assert.rejects(
-    loadHarvesterConfig(path),
+    loadAppConfig(path),
     /at least one pair/,
     'A structurally incomplete strategy must fail configuration validation.',
   );
