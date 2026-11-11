@@ -2,6 +2,54 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+
+## Operator tooling — interactive trading-pair configuration generator
+
+**Status: PLANNED — NOT IMPLEMENTED.** Add a safe, interactive command for creating a new Harvester pair configuration without manually looking up or guessing Binance exchange filters and precision values.
+
+**Problem:** adding a market currently requires the operator to know the configuration schema and manually supply exchange-specific values such as price tick size, quantity step size, minimum quantity and minimum notional. Guessing or copying these values can create invalid configurations and repeated exchange order rejections.
+
+**Desired command:** `pnpm run config:symbol` (registered in the Harvester package scripts).
+
+**Example operator flow:**
+
+1. Prompt for the trading symbol (for example, `ADAFDUSD`).
+2. Prompt for the strategy-owned values:
+   - Planned invested amount / quote budget (example: `100`).
+   - `keepQuantity` (example: `0.1`).
+   - Maker commission percentage (example: `0`).
+   - Taker commission percentage (example: `0.1`).
+3. Validate and normalize the inputs, then request the symbol's public exchange metadata from Binance.
+4. Verify that the symbol exists and is eligible for the intended Spot trading use; retrieve and parse the applicable exchange filters and trading rules.
+5. Generate the pair configuration using the repository's existing canonical schema and conventions, combining operator-supplied strategy values with exchange-sourced technical metadata.
+6. Write the generated configuration under `config/strategies/CG/pair/` using the symbol as its pair identifier (example: `config/strategies/CG/pair/ADAFDUSD`, with the exact filename/extension following existing repository conventions).
+7. Print a clear summary of the generated values and the output path.
+
+**Validation and safety requirements:**
+
+- Reject malformed symbols, unsupported characters, empty values, non-finite numbers, negative values and invalid percentage ranges. Require positive invested amount; validate `keepQuantity` as non-negative and compatible with the symbol's quantity precision/step constraints.
+- Use decimal-safe parsing/validation for financial values; do not introduce floating-point rounding into persisted configuration values.
+- Validate the symbol's status and relevant trading permissions, and require the exchange response to contain the filters needed by the existing pair-config schema. Missing, duplicated, malformed or unsupported filters must stop generation with an actionable error.
+- Derive technical values (for example, `tickSize`, `stepSize`, minimum quantity and minimum notional) from the current Binance response. Do not ask the operator to enter or guess these values.
+- Maker and taker commission percentages are explicit operator inputs, stored separately. Do not assume Binance's public exchange-info endpoint provides account-specific commission rates, and do not silently replace the supplied values with broker-reported fill rates.
+- The command is configuration tooling only: it must use public/read-only exchange metadata, never place/cancel orders, and must not require API credentials for this metadata lookup.
+- Never overwrite an existing pair configuration silently. Detect the target before writing and require an explicit, safe overwrite decision (or abort).
+- Write atomically so an interrupted generation cannot leave a partial configuration. Validate the complete generated document against the same schema used by runtime configuration loading before it is committed to disk.
+- Keep the command deterministic apart from the external metadata snapshot and interactive input; report which exchange metadata was used so the generated configuration can be reviewed.
+
+**Implementation sequence (small PRs):**
+
+1. [ ] **Inspect the existing configuration contract:** identify current CG pair files, schema/loader, package scripts, Binance public metadata client already available in the repository, and exact output naming conventions. Do not invent a parallel schema.
+2. [ ] **RED — Input validation tests:** cover symbol syntax, required values, decimal precision, positive budget, non-negative keep quantity, separate commission percentages, and invalid numeric input.
+3. [ ] **GREEN — Interactive prompt flow:** implement the CLI prompts and pure input parsing/validation helpers; test helpers without terminal interaction.
+4. [ ] **RED/GREEN — Binance metadata adapter:** test valid symbols, unknown symbols, non-trading status, missing/duplicate filters, malformed exchange responses and network/API failures. Use mocked HTTP responses in unit tests.
+5. [ ] **RED/GREEN — Configuration generation:** map operator inputs and exchange filters into the existing canonical pair-config shape; validate the generated document with the runtime schema.
+6. [ ] **RED/GREEN — Safe file creation:** test destination naming, existing-file refusal/explicit overwrite, atomic write behavior and cleanup after write failures.
+7. [ ] **Integration and documentation:** register `pnpm run config:symbol`, document usage/examples and failure behavior, and verify that a generated sample configuration is accepted by the normal configuration loader. No order placement or TESTNET/LIVE trading is required for acceptance.
+
+**Acceptance:** an operator can add a valid pair by supplying only the symbol and strategy-owned values; Binance-derived exchange constraints are fetched and validated automatically; the generated file matches the existing runtime schema; invalid input/API data cannot produce a file; and existing configurations cannot be accidentally overwritten.
+
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
