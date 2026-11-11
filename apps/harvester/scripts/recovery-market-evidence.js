@@ -292,5 +292,6 @@ export {
   createCanonicalEvidence,
   createAccountSnapshot,
   createCanonicalFill,
+  createCanonicalOrder,
   reconcileOfflineOwnedOrders,
 }
