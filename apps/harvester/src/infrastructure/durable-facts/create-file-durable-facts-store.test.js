@@ -103,8 +103,8 @@ test("appends exact facts with global monotonic sequences across runtime session
   const secondStore = createStore(directory, { runtimeSessionId: "runtime-session-2" })
   const second = await secondStore.append({
     factId: "operator-control:request-2",
-    factType: "OPERATOR_MARKET_RESUMED",
-    data: { requestId: "request-2", actorId: "telegram-actor-1", symbol: "BTCUSDT" },
+    factType: "OPERATOR_MARKET_PAUSED",
+    data: { requestId: "request-2", actorId: "telegram-actor-1", symbol: "ETHUSDT" },
   })
   assert.equal(second.ok, true)
   assert.equal(second.data.durable, true)
