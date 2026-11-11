@@ -392,7 +392,7 @@ test("deferred strategy evaluation resumes without another market-price tick", a
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
-  assert.equal(deferred.data.reason, "TRADING_DISABLED")
+  assert.equal(deferred.data.reason, "TRADING_NOT_READY")
   assert.equal(submittedIntents.length, 0)
 
   setReady({ value: true })
