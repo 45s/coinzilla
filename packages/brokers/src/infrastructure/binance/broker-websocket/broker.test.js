@@ -9,7 +9,7 @@ const logger = { debug() {}, error() {}, info() {}, system(message) { loggerCall
 const config = { apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet", logger }
 
 function createBroker(handlers = {}) {
-  const rpc = createFakeRpcClient(handlers)
+  const rpc = createFakeRpcClient({ time: () => ({ serverTime: Date.now() }), ...handlers })
   const streams = createFakeStreamsClient()
   const broker = new BinanceSdkBroker(config, {
     apiClientFactory: () => rpc,
@@ -131,11 +131,10 @@ test("getCandles uses public klines and returns normalized, ordered exact-string
   const result = await broker.getCandles({ symbol: "btcusdt", interval: "1m", limit: 100 })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(rpc.calls[0], {
-    method: "klines",
-    params: { symbol: "BTCUSDT", interval: "1m", limit: 100 },
-    options: {},
-  })
+  assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method, params, options })), [
+    { method: "time", params: {}, options: {} },
+    { method: "klines", params: { symbol: "BTCUSDT", interval: "1m", limit: 100 }, options: {} },
+  ])
   assert.deepEqual(result.data.map(({ symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed }) => ({
     symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed,
   })), [
@@ -163,11 +162,10 @@ test("getCandles passes optional time bounds and accepts an empty history", asyn
   })
 
   assert.deepEqual(result, { ok: true, data: [] })
-  assert.deepEqual(rpc.calls[0], {
-    method: "klines",
-    params: { symbol: "BTCUSDT", interval: "1m", limit: 500, startTime: 100, endTime: 200 },
-    options: {},
-  })
+  assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method, params, options })), [
+    { method: "time", params: {}, options: {} },
+    { method: "klines", params: { symbol: "BTCUSDT", interval: "1m", limit: 500, startTime: 100, endTime: 200 }, options: {} },
+  ])
 })
 
 test("getCandles rejects invalid query arguments before making an RPC request", async () => {
@@ -186,6 +184,14 @@ test("getCandles rejects invalid query arguments before making an RPC request", 
     assert.equal(result.ok, false, JSON.stringify(input))
     assert.equal(rpc.calls.length, 0, JSON.stringify(input))
   }
+})
+
+test("getCandles fails closed when Binance server time is unavailable", async () => {
+  const { broker, rpc } = createBroker({ time: () => ({ serverTime: "not-a-number" }) })
+  const result = await broker.getCandles({ symbol: "BTCUSDT", interval: "1m" })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(rpc.calls, [{ method: "time", params: {}, options: {} }])
 })
 
 test("getCandles rejects malformed and non-ascending Binance responses", async () => {

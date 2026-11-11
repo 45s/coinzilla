@@ -624,17 +624,22 @@ export class BinanceWebSocketBroker extends CoreBroker {
       if (startTime !== undefined) params.startTime = startTime
       if (endTime !== undefined) params.endTime = endTime
 
+      const timeResponse = await this.tradingConnection.request("time")
+      const serverTime = timeResponse.data?.serverTime
+      if (!Number.isSafeInteger(serverTime) || serverTime < 0) {
+        throw new TypeError("Binance time response is missing a valid serverTime")
+      }
+
       const response = await this.tradingConnection.request("klines", params)
       if (!Array.isArray(response?.data)) {
         throw new TypeError("Binance klines response must be an array")
       }
 
-      const now = Date.now()
       const candles = response.data.map((row) => adaptKlineHistoryRow({
         row,
         symbol: normalizedSymbol,
         interval,
-        now,
+        now: serverTime,
       }))
       let previousOpenTime = -1
       for (const candle of candles) {

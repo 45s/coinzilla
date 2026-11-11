@@ -71,7 +71,6 @@ test("normalizes Kline events through the shared candle adapter", () => {
 test("passes through other public market-data events unchanged", () => {
   for (const event of [
     { e: "trade", s: "BTCUSDT", p: "1.00" },
-
     { e: "24hrMiniTicker", s: "BTCUSDT", c: "1.00" },
     { e: "bookTicker", s: "BTCUSDT", b: "1.00" },
     { e: "depthUpdate", s: "BTCUSDT", b: [], a: [] },
