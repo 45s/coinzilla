@@ -51,20 +51,20 @@ The smallest accepted storage shape is one append-only durable-fact stream per H
 
 Each record has a versioned envelope containing:
 
-- A global monotonically increasing `sequence` across process restarts, represented without JavaScript number-rounding risk.
+- A global monotonically increasing `sequence` across process restarts, encoded as a canonical base-10 string (no leading zeroes except `0`) so JavaScript number rounding cannot change ordering.
 - A stable `factId`; execution facts additionally retain the canonical fill identity (market plus exchange trade ID).
 - `schemaVersion` and the originating `runtimeSessionId`.
 - A recorded-at timestamp for diagnostics only; timestamps and random session IDs are never the ordering authority.
 - A typed, allowlisted `factType` and bounded `data` payload.
-- The previous record digest and the current record digest, calculated over a versioned canonical serialization.
+- The previous record digest and the current record digest, calculated with SHA-256 over a versioned canonical UTF-8 JSON serialization. Object keys are recursively sorted, array order is preserved, and exact decimal amounts remain strings.
 
-The committed-head manifest records the last committed sequence and digest. A write is acknowledged as durable only after:
+The committed-head manifest records its format version, the last committed sequence, and the last committed digest. The genesis record is created only by an explicit one-time initialization operation; normal startup never creates a new empty ledger when files are missing. A write is acknowledged as durable only after:
 
 1. The complete canonical record has been appended and the log file has been synced.
 2. The committed-head manifest has been written to a temporary file, synced, atomically replaced, and its containing directory synced.
 3. The resulting log head and manifest agree.
 
-A record beyond the committed manifest, a missing or malformed manifest, a partial/torn record, a sequence gap, a digest mismatch, or an unexplained truncation is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
+A record beyond the committed manifest, a missing or malformed log/manifest, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation relative to the committed head is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
 
 The global sequence and committed head avoid relying on directory enumeration, filename timestamps, or UUID lexical order for new authoritative history. The old Journal directory tree still needs explicit discovery when it is examined for legacy evidence or a one-time baseline assessment.
 
