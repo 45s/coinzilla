@@ -87,9 +87,9 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
       pollRequests.push(params)
       pollCount += 1
       if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => {
-          finishSecondPoll()
           reject(new Error("poll aborted"))
         }, { once: true })
       })
