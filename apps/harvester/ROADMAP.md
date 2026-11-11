@@ -1404,7 +1404,6 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Remove the unused `blockOnExistingOrders` recovery argument and cover snapshot lifecycle, symbol isolation, and the final submission race with offline regressions.
 - [ ] Merge after final-head CI passes.
 
-
 ## 2026-11-11 — Exchange constraint safety / issue #957
 
 Implementation is in progress on a task branch targeting `develop`. The Binance adapter now has a path to preserve applicable dynamic, account-level, exchange-wide and unknown filters as exchange-neutral unvalidated constraints; the enabled-market readiness gate is intended to fail closed on those constraints. Authenticated `myFilters` retrieval is required so account-level `MAX_ASSET` data is not silently omitted.
