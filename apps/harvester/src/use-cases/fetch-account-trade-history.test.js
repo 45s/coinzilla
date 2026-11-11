@@ -209,3 +209,16 @@ test("rejects account trade fills without an exchange execution timestamp", asyn
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /timestamps are missing/)
 })
+
+
+test("rejects an empty market catalog instead of treating an empty scan as complete history", async () => {
+  const result = await fetchAccountTradeHistory({
+    broker: { getFills: async () => ({ ok: true, data: [] }) },
+    markets: [],
+    startTime: 50,
+    requestDelayMs: 0,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /at least one canonical Market/)
+})
