@@ -75,14 +75,15 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   assert.equal(metadataCalls[0].environment, "testnet", "Exchange metadata must be fetched from the selected trading environment.")
   assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
   assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
-  assert.equal(writes[0].pairConfig.enabled, false, "The generated pair must remain disabled until an operator enables it.")
+  assert.equal(writes[0].pairConfig.enabled, true, "The generated pair must match the enabled config entry expected by the operator.")
   assert.equal(writes[0].pairConfig.orderQuantity, 100, "Order sizing must also respect the active maximum-notional filter.")
   assert.equal(writes[0].pairConfig.minProfit, 0.01, "The operator-supplied minimum profit must be preserved.")
   assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The operator-supplied price step must be preserved.")
   assert.equal(result.written, true, "The CLI result must report a successful write only after the writer resolves.")
   assert.ok(output.some((line) => line.includes("Configuration preview")), "The operator must see the generated configuration before confirming.")
-  assert.ok(output.some((line) => line.includes("maxNotional")), "The preview must expose any active maximum-notional exchange filter.")
-  assert.ok(output.some((line) => line.includes("Account-specific myFilters")), "The operator must be told that account-specific exchange constraints are checked later by Harvester at startup.")
+  assert.ok(output.some((line) => line.includes('"ADAFDUSD"')), "The preview must be a copyable symbol-keyed config entry.").concat("")
+  assert.ok(output.some((line) => line.includes('"enabled": true')), "The preview must show the generated pair as enabled.")
+  assert.ok(!output.some((line) => line.includes("unvalidatedConstraints") || line.includes("myFilters")), "Internal exchange diagnostics must not clutter the pair-config preview.")
 })
 
 test("rejects invalid operator input before making any Binance request", async () => {
