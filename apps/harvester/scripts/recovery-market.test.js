@@ -1,5 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { access, mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
 import {
   parseRecoveryMarketArguments,
   runRecoveryMarketCommand,
@@ -33,6 +37,47 @@ const context = {
       marketsQueried: ["LINKUSDT"],
       historyStartTime: 100,
       marketUniverseComplete: false,
+    },
+  },
+}
+
+const readyContext = {
+  ...context,
+  journalRecords: [
+    {
+      position: { fileName: "legacy/session" },
+      payload: {
+        source: "harvester",
+        name: "account.snapshot_captured",
+        data: {
+          phase: "PREFLIGHT",
+          sourceTime: 100,
+          auditStatus: "COMPLETE",
+          auditReasons: [],
+          balances: [
+            { asset: "LINK", free: "0", locked: "0", total: "0" },
+            { asset: "USDT", free: "100", locked: "0", total: "100" },
+          ],
+        },
+      },
+    },
+    {
+      position: { fileName: "legacy/session" },
+      payload: {
+        source: "harvester",
+        name: "harvester.started",
+        data: { tradingEnabled: true },
+      },
+    },
+  ],
+  exchange: {
+    ...context.exchange,
+    currentAccountSnapshot: {
+      sourceTime: 300,
+      balances: [
+        { assetId: "binance:LINK", asset: "LINK", free: "0", locked: "0" },
+        { assetId: "binance:USDT", asset: "USDT", free: "100", locked: "0" },
+      ],
     },
   },
 }
@@ -97,3 +142,48 @@ test("CLI help is available without reading evidence or touching the durable-fac
   assert.match(output[0], /never connects to Binance/i)
   assert.match(output[0], /--confirm/)
 })
+
+test("CLI explicitly confirms a READY offline audit against an already initialized durable ledger", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-cli-confirm-"))
+  try {
+    const store = createFileDurableFactsStore({
+      directory,
+      runtimeSessionId: readyContext.runtimeSessionId,
+    })
+    const initialized = await store.initialize()
+    assert.equal(initialized.ok, true)
+    const output = []
+    const exitCode = await runRecoveryMarketCommand({
+      args: ["--context", "evidence.json", "--confirm"],
+      env: { DURABLE_FACTS_DIRECTORY: directory },
+      readContext: async () => JSON.stringify(readyContext),
+      writeOutput: (value) => output.push(value),
+      writeError: (value) => assert.fail(value),
+    })
+
+    assert.equal(exitCode, 0, "The explicit CLI confirmation must succeed only after a READY production audit and durable readback.")
+    const result = JSON.parse(output[0])
+    assert.equal(result.data.confirmation.confirmed, true)
+    assert.equal(result.data.confirmation.alreadyConfirmed, false)
+    const readback = await store.readAll()
+    assert.equal(readback.ok, true)
+    assert.equal(readback.data.records.filter((record) => record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED").length, 1)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("CLI never initializes a missing durable-fact directory during confirmation", async () => {
+  const directory = path.join(tmpdir(), "coinzilla-recovery-cli-missing-" + process.pid)
+  const exitCode = await runRecoveryMarketCommand({
+    args: ["--context", "evidence.json", "--confirm"],
+    env: { DURABLE_FACTS_DIRECTORY: directory },
+    readContext: async () => JSON.stringify(readyContext),
+    writeOutput: () => assert.fail("A missing ledger must not produce a confirmation result."),
+    writeError: () => {},
+  })
+
+  assert.equal(exitCode, 1, "The CLI must fail closed when the ledger has not been explicitly initialized.")
+  await assert.rejects(access(directory), { code: "ENOENT" }, "The CLI must not create the missing ledger directory.")
+})
+
