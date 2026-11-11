@@ -42,7 +42,7 @@ See [Harvester Architecture](../architecture.md) for the distinction between dom
 8. The use case applies the fill to the matching position and returns the updated portfolio (or an explicit failure). The strategy/engine then observes the updated portfolio when making subsequent decisions.
 
 ```text
-trading-config.json
+config.json
        |
        v
     Bootstrap
