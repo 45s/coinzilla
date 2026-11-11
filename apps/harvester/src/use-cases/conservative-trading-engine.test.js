@@ -31,6 +31,7 @@ const marketMetadata = {
   market,
   orderType: "LIMIT_MAKER",
   supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+  unvalidatedConstraints: [],
   tradingRules: new TradingRules({
     market,
     constraints: [
@@ -6429,3 +6430,38 @@ test("does not trust NOT_SENT metadata on a successful noncanonical cancellation
     event.name === "strategy.paused" && event.data.reason === "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
   ), "A malformed cancellation result must keep the pair safety-paused")
 })
+
+
+test("keeps the standing BUY open when refreshed metadata contains an unvalidated exchange constraint", async () => {
+  const refreshedMetadata = {
+    ...marketMetadata,
+    unvalidatedConstraints: [
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    ],
+  }
+  let refreshedRuleReads = 0
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    getMarketMetadata: () => marketMetadata,
+    getSymbolFilters: async () => {
+      refreshedRuleReads += 1
+      return { ok: true, data: refreshedMetadata }
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false, "A dynamic price filter discovered during refresh must block the replacement before any order mutation.")
+  assert.match(result.errors[0].message, /DYNAMIC_PRICE_BAND/, "The exact unvalidated constraint must remain visible to the caller.")
+  assert.equal(refreshedRuleReads, 1, "The engine must inspect current exchange constraints before replacing the standing BUY.")
+  assert.deepEqual(harness.cancellationIds, [], "The existing BUY must not be canceled when refreshed metadata contains an unsupported constraint.")
+  assert.equal(harness.orders.length, 1, "No replacement order may be submitted while the dynamic filter is unvalidated.")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The original standing BUY must remain open.")
+  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE"), "The market must pause when a newly discovered constraint cannot be evaluated.")
+});
