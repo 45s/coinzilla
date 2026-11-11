@@ -481,6 +481,16 @@ test("rejects malformed market-history coverage facts", async (t) => {
       },
     },
     {
+      factId: "coverage:future-verification",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 1_700_000_000_000,
+        verifiedAt: 1_800_000_000_000,
+        evidenceDigest: "a".repeat(64),
+        verifiedBy: "operator:trader",
+      },
+    },
+    {
       factId: "coverage:bad-symbol",
       data: {
         symbol: "btc/usdt",
