@@ -276,6 +276,9 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   });
 
   assert.equal(context.userDataReady, true);
+  const volatility = context.getVolatilityData({ symbol: 'ZROUSDT' });
+  assert.equal(volatility.ok, true);
+  assert.equal(volatility.data.status.isReady, true, JSON.stringify(volatility.data.status));
   // The startup REST ticker seed precedes candle-history warm-up and must stay
   // blocked. A fresh price after warm-up is the first eligible BUY evaluation.
   await onPrice({ symbol: 'ZROUSDT', price: '1', timestamp: 10 });
