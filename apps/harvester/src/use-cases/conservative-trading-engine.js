@@ -749,7 +749,7 @@ export function makeConservativeTradingEngine({
         const completion = await completeRecoveryCycle({
           marketId: canceledOrder.market.id,
           keepQuantity: String(pairs[symbol].keepQuantity),
-          minProfit: String(settings.minProfit),
+          minProfit: String(pairs[symbol].minProfit),
         })
         if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
@@ -1048,7 +1048,7 @@ export function makeConservativeTradingEngine({
       })
       if (decision.inventoryDisposition?.status === "EXCHANGE_CONSTRAINED_DUST" && state.completedRecoverySellSymbols.has(symbol)) {
         const completion = await completeRecoveryCycle({ marketId: metadata.market.id,
-          keepQuantity: String(pairs[symbol].keepQuantity), minProfit: String(settings.minProfit),
+          keepQuantity: String(pairs[symbol].keepQuantity), minProfit: String(pairs[symbol].minProfit),
           inventoryDisposition: decision.inventoryDisposition })
         if (!completion?.ok) {
           await pause({ symbol, reason: "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
@@ -1058,7 +1058,7 @@ export function makeConservativeTradingEngine({
           publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
             dataResult: mapRecoveryCycleCompletedData({ symbol, marketId: metadata.market.id,
               freeQuantity: completion.data.freeQuantity, keepQuantity: String(pairs[symbol].keepQuantity),
-              minProfit: String(settings.minProfit), realizedNetProfit: completion.data.realizedNetProfit,
+              minProfit: String(pairs[symbol].minProfit), realizedNetProfit: completion.data.realizedNetProfit,
               dust: completion.data.dust }) })
           state.completedRecoverySellSymbols.delete(symbol)
           state.trailingBuy.set(symbol, true)
@@ -1219,7 +1219,7 @@ export function makeConservativeTradingEngine({
             priceStepPercent: String(pairs[symbol].priceStepPercent),
             makerPercent: String(pairs[symbol].makerPercent),
             takerPercent: String(pairs[symbol].takerPercent),
-            minProfit: String(settings.minProfit),
+            minProfit: String(pairs[symbol].minProfit),
           },
           actions: executableActions,
         }),
@@ -1847,7 +1847,7 @@ export function makeConservativeTradingEngine({
         const completion = await completeRecoveryCycle({
           marketId: order.market.id,
           keepQuantity: String(pairs[symbol].keepQuantity),
-          minProfit: String(settings.minProfit),
+          minProfit: String(pairs[symbol].minProfit),
         })
         if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
@@ -1891,7 +1891,7 @@ export function makeConservativeTradingEngine({
             marketId: order.market.id,
             freeQuantity: completion.data.freeQuantity,
             keepQuantity: String(pairs[symbol].keepQuantity),
-            minProfit: String(settings.minProfit),
+            minProfit: String(pairs[symbol].minProfit),
             realizedNetProfit: completion.data.realizedNetProfit,
             ...(completion.data.dust === undefined ? {} : { dust: completion.data.dust }),
           }),
