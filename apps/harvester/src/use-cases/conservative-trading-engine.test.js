@@ -4052,8 +4052,13 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
+  const continuedEvent = events.find((event) => event.name === "recovery.cycle_not_completed")
+  assert.ok(continuedEvent)
+  assert.equal(continuedEvent.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(continuedEvent.data.sellOrderClientId, recoverySell.clientOrderId)
   const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
   assert.ok(completedEvent)
+  assert.ok(events.indexOf(continuedEvent) < events.indexOf(completedEvent))
   assert.deepEqual(completedEvent.data.dust, {
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: dust.quantity,
