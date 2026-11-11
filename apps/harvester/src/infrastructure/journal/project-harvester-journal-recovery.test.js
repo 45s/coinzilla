@@ -1,9 +1,14 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery.js"
 import { restoreHarvesterJournalState } from "../../use-cases/restore-harvester-journal-state.js"
-import { mapFillAppliedData } from "../../application/events/lifecycle-event-dtos.js"
+import {
+  mapExecutionAccountingFailedData,
+  mapExecutionInvalidFillData,
+  mapExecutionUnownedOrderData,
+  mapFillAppliedData,
+} from "../../application/events/lifecycle-event-dtos.js"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
@@ -1791,4 +1796,60 @@ test("fails closed when an unknown recovery event has no source classification",
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /unknown Harvester recovery event/)
+})
+
+test("preserves execution safety DTOs through projection and restoration", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const order = new CanonicalOrder({
+    clientOrderId: "harvester-client-1",
+    brokerOrderId: "broker-order-1",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+  })
+  const fill = new Fill({
+    tradeId: "trade-1",
+    brokerOrderId: "broker-order-1",
+    clientOrderId: "harvester-client-1",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "99.95", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 2,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const facts = [
+    ["execution.unowned_order", mapExecutionUnownedOrderData({ order })],
+    ["execution.invalid_fill", mapExecutionInvalidFillData({ order, fill, reason: "IDENTITY_MISMATCH" })],
+    ["execution.accounting_failed", mapExecutionAccountingFailedData({ order, fill, error: new Error("accounting mismatch") })],
+  ]
+  const records = facts.map(([name, result]) => {
+    assert.equal(result.ok, true)
+    return harvesterRecord(name, result.data)
+  })
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true)
+  assert.deepEqual(projection.data.stickySafetyBlockers.map(({ eventName, symbol }) => [eventName, symbol]), [
+    ["execution.unowned_order", "DOGEUSDT"],
+    ["execution.invalid_fill", "DOGEUSDT"],
+    ["execution.accounting_failed", "DOGEUSDT"],
+  ])
+
+  const restored = restoreHarvesterJournalState({ projection, marketMetadata: new Map() })
+  assert.equal(restored.ok, true)
+  assert.equal(restored.data.pausedMarkets.has("DOGEUSDT"), true)
+  assert.equal(restored.data.durablePausedMarkets.has("DOGEUSDT"), true)
+  assert.equal(restored.data.stickySafetyBlockers.length, 3)
 })
