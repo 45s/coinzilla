@@ -303,6 +303,15 @@ export function createFileDurableFactsStore({
   const logPath = path.join(absoluteDirectory, FACTS_FILE_NAME)
   const manifestPath = path.join(absoluteDirectory, MANIFEST_FILE_NAME)
   const manifestTempPath = path.join(absoluteDirectory, MANIFEST_TEMP_FILE_NAME)
+  let writeUncertain = false
+  const assertNoUncertainWrite = () => {
+    if (writeUncertain) {
+      throw createError(
+        "A previous durable-fact write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
+        "DURABLE_FACTS_COMMIT_UNCERTAIN",
+      )
+    }
+  }
   const serialize = (task) => {
     const previous = operationQueues.get(absoluteDirectory) ?? Promise.resolve()
     const next = previous.then(task, task)
@@ -411,7 +420,9 @@ export function createFileDurableFactsStore({
   }
 
   const initialize = () => serialize(async () => {
+    let genesisSynced = false
     try {
+      assertNoUncertainWrite()
       assertDirectorySyncSupported()
       await fileSystem.mkdir(absoluteDirectory, { recursive: true, mode: 0o700 })
       const directoryStat = await fileSystem.lstat(absoluteDirectory)
@@ -436,6 +447,7 @@ export function createFileDurableFactsStore({
       try {
         await handle.writeFile(canonicalStringify(record) + "\n", "utf8")
         await handle.sync()
+        genesisSynced = true
       } finally {
         await handle.close()
       }
@@ -451,7 +463,10 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (!error.code) error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
+      if (genesisSynced) writeUncertain = true
+      if (!error.code) error.code = genesisSynced
+        ? "DURABLE_FACTS_COMMIT_UNCERTAIN"
+        : "DURABLE_FACTS_INITIALIZATION_FAILED"
       return toResult({ error })
     }
   })
@@ -459,6 +474,7 @@ export function createFileDurableFactsStore({
   const append = (fact) => serialize(async () => {
     let logSynced = false
     try {
+      assertNoUncertainWrite()
       assertDirectorySyncSupported()
       const state = await verifyState()
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
@@ -507,6 +523,7 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
+      if (logSynced) writeUncertain = true
       if (!error.code) {
         error.code = logSynced ? "DURABLE_FACTS_COMMIT_UNCERTAIN" : "DURABLE_FACTS_APPEND_FAILED"
       }
@@ -516,6 +533,7 @@ export function createFileDurableFactsStore({
 
   const verify = () => serialize(async () => {
     try {
+      assertNoUncertainWrite()
       const state = await verifyState()
       return toResult({
         data: {
@@ -532,6 +550,7 @@ export function createFileDurableFactsStore({
 
   const readAll = () => serialize(async () => {
     try {
+      assertNoUncertainWrite()
       const state = await verifyState()
       return toResult({
         data: {
