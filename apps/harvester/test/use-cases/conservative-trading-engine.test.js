@@ -375,6 +375,80 @@ test("preserves post-only safety and reports a crossing LIMIT_MAKER intent as de
   assert.equal(fixture.submittedIntents.length, 0, "A crossing post-only order must never be submitted.")
 })
 
+test("structured submission deferrals preserve the exact guard reason and details without broker I/O", async () => {
+  const reasons = [
+    ["MARKET_PAUSED", { symbol: "ZROUSDT" }],
+    ["TRADING_DISABLED", { symbol: "ZROUSDT" }],
+    ["MARKET_PRICE_UNAVAILABLE", { symbol: "ZROUSDT" }],
+    ["MARKET_PRICE_STALE", { symbol: "ZROUSDT", priceTimestamp: 1 }],
+    ["MARKET_BOOK_UNAVAILABLE", { symbol: "ZROUSDT" }],
+    ["MARKET_BOOK_STALE", { symbol: "ZROUSDT", bookTimestamp: 1 }],
+    ["POST_ONLY_WOULD_CROSS", { symbol: "ZROUSDT", bestAskPrice: "1.01" }],
+  ]
+  for (const [reason, details] of reasons) {
+    let brokerCalls = 0
+    let deferred
+    const execute = makeExecuteStrategyDecision({
+      broker: {
+        placeOrder: async () => {
+          brokerCalls += 1
+          return toResult({ error: new Error("A deferred intent must not reach the broker") })
+        },
+      },
+      canSubmit: () => ({ allowed: false, reason, details }),
+      onPendingOrder: async () => {},
+      onAcknowledgedOrder: async () => {},
+      onSubmissionFailure: async () => {},
+      onSubmissionDeferred: async (context) => { deferred = context },
+    })
+    const result = await execute({
+      decision: { actions: [{ side: "BUY", type: "LIMIT_MAKER", quantity: "10", price: "1" }] },
+      marketMetadata: createFixture().marketMetadata,
+    })
+
+    assert.equal(result.ok, true, reason + " should be an explicit deferral, not a submission error.")
+    assert.equal(result.data.deferred, true)
+    assert.equal(result.data.reason, reason)
+    assert.deepEqual(result.data.details, details)
+    assert.equal(deferred.reason, reason)
+    assert.deepEqual(deferred.details, details)
+    assert.equal(deferred.registered, false)
+    assert.equal(brokerCalls, 0, reason + " must not call broker.placeOrder.")
+  }
+})
+
+test("a readiness change after PENDING registration preserves its structured deferral reason", async () => {
+  const fixture = createFixture()
+  let checks = 0
+  let deferred
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return toResult({ error: new Error("A deferred intent must not reach the broker") })
+      },
+    },
+    canSubmit: () => ++checks === 1
+      ? { allowed: true }
+      : { allowed: false, reason: "MARKET_BOOK_STALE", details: { symbol: "ZROUSDT", bookTimestamp: 1 } },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+    onSubmissionDeferred: async (context) => { deferred = context },
+  })
+  const result = await execute({
+    decision: { actions: [{ side: "BUY", type: "LIMIT_MAKER", quantity: "10", price: "1" }] },
+    marketMetadata: fixture.marketMetadata,
+  })
+
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "MARKET_BOOK_STALE")
+  assert.equal(deferred.registered, true)
+  assert.equal(deferred.details.bookTimestamp, 1)
+  assert.equal(brokerCalls, 0)
+})
+
 test("PENDING orders remain explicitly uncancellable", () => {
   const result = validateCancellationEligibility({
     order: { status: "PENDING", brokerOrderId: undefined },
