@@ -1767,3 +1767,19 @@ test("rejects a RECOVERY snapshot that appears before the Journal session starts
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /RECOVERY account snapshot requires a started Journal session/)
 })
+
+test("rejects a RECOVERY open-order snapshot that appears before the Journal session starts", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("account.open_orders_captured", {
+      phase: "RECOVERY",
+      observedAt: 100,
+      readiness: "READY",
+      orderCount: 0,
+      orders: [],
+      blockReasons: [],
+    })],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /RECOVERY open-order snapshot requires a started Journal session/)
+})
