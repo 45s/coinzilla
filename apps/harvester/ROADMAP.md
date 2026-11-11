@@ -91,7 +91,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–3 complete; Step 4 implementation is under review; restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–4 complete; restart restoration remains disabled pending Steps 5–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -117,10 +117,11 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
    - [x] Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
 
-4. **[ ] Step 4 — Make replay understand every relevant fact (F-043, F-044; implementation in [PR #1023](https://github.com/45s/coinzilla/pull/1023)).**
-   - [ ] Classify known events as state facts, sticky safety blockers, or explicitly ignorable diagnostics; unknown Harvester-sourced events fail closed. PR #1023 adds projector classification and carries blockers into restored market pauses.
-   - [ ] Accept and correctly order valid `RECOVERY` account/open-order snapshots emitted by normal reconnect handling. PR #1023 adds lifecycle-order validation and phase parity.
-   - [ ] Add DTO → projection → restore parity tests for every recovery-relevant event; remaining event-family coverage stays in scope before Step 4 closeout.
+4. **[x] Step 4 — Make replay understand every relevant fact (F-043, F-044; [PR #1023](https://github.com/45s/coinzilla/pull/1023)).**
+   - [x] Classify all 30 declared Harvester event names as replay facts or explicitly ignorable diagnostics; preserve unowned-order, invalid-fill, and accounting-failure facts as sticky blockers. Unknown or source-unclassified events fail closed; blockers are restored as durable/effective market pauses.
+   - [x] Accept `RECOVERY` account/open-order snapshots only after `harvester.started`, preserving PREFLIGHT → RECOVERY → CLOSING order and existing timestamp monotonicity.
+   - [x] Add DTO → projection → restore parity tests for all three execution safety events, plus fail-closed, diagnostic allowlist, pre-start snapshot and reconnect phase regressions.
+   - Exact PR head `f06304f9`: **1,019 Harvester tests passed, 0 failed**; all seven required workflows passed, including package/workspace coverage and external documentation links. TESTNET integration was skipped.
 
 5. **[ ] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041).**
    - Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation.
