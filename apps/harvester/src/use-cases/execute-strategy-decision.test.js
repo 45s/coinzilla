@@ -185,6 +185,11 @@ test("preserves explicit strategy purpose through both submission-gate checks wi
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
   })
 
+  const validation = await execute.validate({ decision: sellDecision, marketMetadata })
+  assert.equal(validation.ok, true)
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL"])
+  gatePurposes.length = 0
+
   const result = await execute({ decision: sellDecision, marketMetadata })
   assert.equal(result.ok, true)
   assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL"])
