@@ -12,8 +12,9 @@ created: 2026-11-11
 
 **Accepted — target architecture contract.** This decision freezes the recovery boundary and minimum durable-fact guarantees. It does not implement startup restoration, enable replay, or authorize unattended process restart.
 
-**Owner:** Harvester  
-**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626)  
+**Owner:** Harvester
+
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626)
 **Evidence:** findings F-035 through F-044 in [AUDIT_FINDINGS.md](../../audits/reports/AUDIT_FINDINGS.md) and the [2026-11-10 restart-recovery audit](../../audits/reports/2026-11-10_18-44-49_restart-recovery-audit.md).
 
 ## Context
