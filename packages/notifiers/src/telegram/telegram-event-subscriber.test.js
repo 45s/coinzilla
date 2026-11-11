@@ -2,9 +2,14 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { EventBus } from "../../../event-bus/src/event-bus.js"
 import {
-  subscribeTelegramNotifications,
+  subscribeTelegramNotifications as subscribeTelegramNotificationsRaw,
   TELEGRAM_NOTIFICATION_EVENTS,
 } from "./telegram-event-subscriber.js"
+
+const subscribeTelegramNotifications = (options = {}) => subscribeTelegramNotificationsRaw({
+  formatMessage: (event) => event.name.replaceAll(".", " ").toUpperCase(),
+  ...options,
+})
 
 function createEventBus({ failAt, throwOnUnsubscribe = [] } = {}) {
   const handlers = new Map()
