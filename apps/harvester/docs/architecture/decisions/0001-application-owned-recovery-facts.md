@@ -173,8 +173,13 @@ The diagram describes the accepted target contract, not current runtime behavior
 
 ## Filesystem durability support
 
-The first filesystem adapter uses the ordered commit protocol: append and sync the fact record, write and sync a temporary committed-head manifest, atomically replace the manifest, then sync the containing directory before returning `durable: true`.
+The filesystem adapter uses two append-only newline-delimited streams:
 
-This writer protocol is enabled only on filesystems/platforms where the containing-directory sync can be confirmed. Stock Node.js does not provide a portable Windows directory-flush guarantee; on `win32`, initialization and append therefore fail closed with `DURABLE_FACTS_DIRECTORY_SYNC_UNSUPPORTED`. Read-only verification remains available. Do not downgrade this to best-effort directory sync or acknowledge an append as durable without the commit guarantee. Windows write support requires a separately reviewed platform-specific commit protocol or native adapter.
+1. `facts.jsonl`: append the canonical fact record and sync the file.
+2. `manifest.jsonl`: append a committed-head checkpoint that references the exact fact sequence/digest and chains to the previous checkpoint; sync this file before returning `durable: true`.
 
-This restriction is intentional: an unavailable operator control is safer than acknowledging a pause/resume fact whose committed-head update cannot be confirmed.
+The committed-head manifest is therefore an append-only checkpoint journal, not a replace-in-place JSON document. This refinement avoids relying on directory fsync or atomic rename for every append and uses regular-file sync operations on both POSIX and Windows. Startup verification syncs both existing streams before publishing the verified head. A fact without its matching checkpoint, a checkpoint ahead of the fact log, a partial tail, or either broken digest chain is unresolved and fails closed.
+
+Genesis is created only by the explicit one-time initialization operation. Normal startup, verification, reads, and append never create or repair a missing store. The two stream files are created only during genesis; if either file or the containing directory is missing later, startup fails closed rather than recreating an empty ledger. Store the directory on a local filesystem; network shares and cloud-synchronized folders are not a supported durability target.
+
+POSIX installations create the directory with mode `0700` and both streams with mode `0600`. The SHA-256 chains detect accidental corruption, truncation, duplication and reordering; they are not a cryptographic defense against a privileged local actor who can rewrite both streams and recompute their digests. One Harvester writer process per installation remains a runtime invariant; the bootstrap process-singleton gate is delivered in the later readiness step.
