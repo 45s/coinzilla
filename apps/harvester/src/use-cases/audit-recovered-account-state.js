@@ -141,6 +141,7 @@ export function auditRecoveredAccountState({
         scope: tradeHistoryScope,
         market: targetMarket,
         historyEvidence: exchangeTradeHistory,
+        historyRetentionEvidence: exchangeTradeHistory?.historyRetentionEvidence,
       })
       if (!tradeHistoryAudit.ok) {
         throw tradeHistoryAudit.errors?.[0] ?? new Error("Complete account-wide trade history could not be verified")
