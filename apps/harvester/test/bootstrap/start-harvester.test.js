@@ -281,6 +281,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   });
 
   assert.equal(context.userDataReady, true);
+  assert.equal(broker.lastOrder, undefined, 'the startup ticker seed must not submit a BUY before candle warm-up');
   const volatility = context.getVolatilityData({ symbol: 'ZROUSDT' });
   assert.equal(volatility.ok, true);
   assert.equal(volatility.data.status.isReady, true, JSON.stringify({
