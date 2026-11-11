@@ -59,6 +59,8 @@ Harvester uses one application-wide `config.json`. The root contains `strategies
 - `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
 - `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, minimum profit, precision, and fee settings.
 
+`minProfit` is required on every pair and must be at least `0.01` in that pair's quote asset. The former global `settings.minProfit` is rejected; migrate it explicitly to each pair rather than relying on an implicit default.
+
 Trading settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Application-wide settings such as `notifications` are sibling root sections. Strategy availability is not configured through environment variables.
 
 **Runtime environment contract:** `TRADING_MODE` is the only operator-facing exchange-mode setting and accepts exactly `testnet` or `live`. Binance is the only broker, so there is no broker selector or exchange-mode profile selector. Trading is enabled in either selected mode; there is no trading-enable flag. Telegram notification profiles are independent and never select the exchange environment. Missing or invalid `TRADING_MODE` must fail startup rather than silently choose an exchange environment. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
