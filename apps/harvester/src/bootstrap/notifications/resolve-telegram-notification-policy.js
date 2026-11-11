@@ -1,5 +1,5 @@
 import { TELEGRAM_NOTIFICATION_EVENT_KEYS } from "../../domain/app-config.js"
-import { HARVESTER_HARVESTER_TELEGRAM_NOTIFICATION_EVENTS } from "./format-telegram-notification.js"
+import { HARVESTER_TELEGRAM_NOTIFICATION_EVENTS } from "./format-telegram-notification.js"
 
 const EVENT_NAME_BY_KEY = Object.freeze({
   orderSubmitted: "order.submitted",
