@@ -160,6 +160,9 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
       if (method === "exchangeInfo") {
         return { data: { symbols: [dogeExchangeInfo] } }
       }
+      if (method === "myFilters") {
+        return { data: { symbolFilters: [], exchangeFilters: [], assetFilters: [] } }
+      }
       if (method === "ticker.price") {
         return { data: { symbol: marketSymbol, price: scenarioExpectations.initialPrice } }
       }
