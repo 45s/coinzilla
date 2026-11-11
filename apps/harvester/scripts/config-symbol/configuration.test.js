@@ -215,7 +215,7 @@ test("adds a new pair without mutating or replacing existing application configu
   const updated = addPairToAppConfig({ appConfig: original, symbol: "ADAFDUSD", pairConfig: pair })
 
   assert.equal(Object.hasOwn(original.strategies.CG_coinGrabber.pairs, "ADAFDUSD"), false, "Adding a pair must not mutate the caller's existing config object.")
-  assert.equal(updated.strategies.CG_coinGrabber.pairs.ADAFDUSD, pair, "The new pair must be added under the canonical strategy pair map.")
+  assert.deepEqual(updated.strategies.CG_coinGrabber.pairs.ADAFDUSD, pair, "The new pair must be added under the canonical strategy pair map.")
   assert.deepEqual(updated.strategies.CG_coinGrabber.pairs.LINKFDUSD, original.strategies.CG_coinGrabber.pairs.LINKFDUSD, "Existing pair settings must remain unchanged.")
   assert.equal(updated.notifications, original.notifications, "Unrelated application-wide settings must be preserved.")
 })
