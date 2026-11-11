@@ -549,6 +549,18 @@ export function createFileDurableFactsStore({
         }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
+      if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+        const previousCoverage = state.records.filter((record) =>
+          record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
+          record.data.symbol === input.data.symbol
+        ).at(-1)
+        if (previousCoverage && input.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
+          throw new Error("Market-history coverage must not narrow the verified history window for " + input.data.symbol)
+        }
+        if (previousCoverage && input.data.verifiedAt < previousCoverage.data.verifiedAt) {
+          throw new Error("Market-history coverage verification timestamp must be monotonic for " + input.data.symbol)
+        }
+      }
       const sequence = (BigInt(state.manifest.sequence) + 1n).toString()
       const body = {
         formatVersion: FORMAT_VERSION,
