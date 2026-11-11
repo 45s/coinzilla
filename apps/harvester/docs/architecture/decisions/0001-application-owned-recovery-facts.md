@@ -170,3 +170,11 @@ The diagram describes the accepted target contract, not current runtime behavior
 - [Harvester Journal Evidence Contract](../../JOURNAL_EVIDENCE_CONTRACT.md)
 - [Harvester Trading First](../../TRADING_FIRST.md)
 - [Findings register F-035–F-044](../../audits/reports/AUDIT_FINDINGS.md)
+
+## Filesystem durability support
+
+The first filesystem adapter uses the ordered commit protocol: append and sync the fact record, write and sync a temporary committed-head manifest, atomically replace the manifest, then sync the containing directory before returning `durable: true`.
+
+This writer protocol is enabled only on filesystems/platforms where the containing-directory sync can be confirmed. Stock Node.js does not provide a portable Windows directory-flush guarantee; on `win32`, initialization and append therefore fail closed with `DURABLE_FACTS_DIRECTORY_SYNC_UNSUPPORTED`. Read-only verification remains available. Do not downgrade this to best-effort directory sync or acknowledge an append as durable without the commit guarantee. Windows write support requires a separately reviewed platform-specific commit protocol or native adapter.
+
+This restriction is intentional: an unavailable operator control is safer than acknowledging a pause/resume fact whose committed-head update cannot be confirmed.
