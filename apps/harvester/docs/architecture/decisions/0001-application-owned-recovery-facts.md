@@ -162,10 +162,10 @@ The diagram describes the accepted target contract, not current runtime behavior
 
 ## References
 
-- [Harvester process-restart roadmap](../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654)
+- [Harvester process-restart roadmap](../../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654)
 - [Process-restart reconciliation issue #654](https://github.com/45s/coinzilla/issues/654)
 - [Recovery reliability issue #626](https://github.com/45s/coinzilla/issues/626)
-- [Harvester Journal Operations](../JOURNAL_OPERATIONS.md)
-- [Harvester Journal Evidence Contract](../JOURNAL_EVIDENCE_CONTRACT.md)
+- [Harvester Journal Operations](../../JOURNAL_OPERATIONS.md)
+- [Harvester Journal Evidence Contract](../../JOURNAL_EVIDENCE_CONTRACT.md)
 - [Harvester Trading First](../../TRADING_FIRST.md)
 - [Findings register F-035–F-044](../../audits/reports/AUDIT_FINDINGS.md)
