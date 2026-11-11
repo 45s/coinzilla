@@ -18,7 +18,7 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
     eventPublisher, eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
     dataResult: mapConfigValidatedData({ enabledMarkets: enabledSymbols, strategyMode: "conservative", tradingEnabled: true }),
   })
-  const log = { message: "app configuration validated", environment, broker: brokerName, tradingMode, enabledSymbols, strategyMode: "conservative-" + tradingMode }
+  const log = { message: "App configuration validated", environment, broker: brokerName, tradingMode, enabledSymbols, strategyMode: "conservative-" + tradingMode }
   if (typeof logger?.system === "function") logger.system(log)
   else logger?.info?.(log)
   return Object.freeze({ appConfig, settings, pairs, enabledSymbols: Object.freeze(enabledSymbols), environment, brokerName, tradingMode, tradingEnabled })

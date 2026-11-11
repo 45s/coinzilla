@@ -207,7 +207,7 @@ export async function startHarvester({
       broker,
       strategyPolicy: conservativeStrategyPolicy,
       eventPublisher,
-      appConfig: appConfig,
+      appConfig,
       getPortfolio,
       getRecoveryLedger,
       getMarketMetadata,
