@@ -53,6 +53,7 @@ export async function runConfigSymbol({
 
   writeLine("Fetching current public Binance Spot exchange information...")
   const metadata = await metadataFetcher({ symbol, fetchImpl })
+  const metadataFetchedAt = new Date().toISOString()
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
   writeLine("Configuration preview (new pair will be disabled):")
@@ -60,6 +61,8 @@ export async function runConfigSymbol({
     symbol,
     baseAsset: metadata.baseAsset,
     quoteAsset: metadata.quoteAsset,
+    metadataSource: "Binance Spot public REST API",
+    metadataFetchedAt,
     referencePrice: metadata.price,
     exchangeFilters: {
       tickSize: metadata.tickSize,
@@ -70,6 +73,7 @@ export async function runConfigSymbol({
     },
     pairConfig,
   }, null, 2))
+  writeLine("Account-specific myFilters are not queried by this credential-free tool; Harvester performs its normal authenticated metadata checks at startup before trading.")
 
   const confirmation = (await ask("Add this pair to apps/harvester/config.json? [Y/n]: ")).trim().toLowerCase()
   if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
