@@ -510,6 +510,7 @@ export function createFileDurableFactsStore({
     let factWriteStarted = false
     let manifestWriteStarted = false
     let syncFailed = false
+    let integrityFailed = false
     try {
       assertNoUncertainWrite()
       try {
@@ -518,7 +519,13 @@ export function createFileDurableFactsStore({
         if (error.code !== "ENOENT") syncFailed = true
         throw error
       }
-      const state = await verifyState()
+      let state
+      try {
+        state = await verifyState()
+      } catch (error) {
+        integrityFailed = true
+        throw error
+      }
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
       const existing = state.records.find((record) => record.factId === input.factId)
       if (existing) {
@@ -580,7 +587,7 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (factWriteStarted || manifestWriteStarted || syncFailed) {
+      if (factWriteStarted || manifestWriteStarted || syncFailed || integrityFailed) {
         writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
