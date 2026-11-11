@@ -167,9 +167,12 @@ test("rejects unknown fact types, unsafe numeric amounts, secrets, and oversized
   const store = createStore(directory)
   await store.initialize()
   assert.equal((await store.append({ ...operatorPause(), factType: "UNKNOWN_FACT" })).ok, false)
-  assert.equal((await store.append(operatorPause({ data: { requestId: "r2", actorId: "a", symbol: "BTCUSDT", quantity: 0.01 } })).ok, false)
-  assert.equal((await store.append(operatorPause({ data: { requestId: "r3", actorId: "a", symbol: "BTCUSDT", apiKey: "must-not-persist" } })).ok, false)
-  assert.equal((await store.append(operatorPause({ data: { requestId: "r4", actorId: "a", symbol: "BTCUSDT", note: "x".repeat(70_000) } })).ok, false)
+  const unsafeNumber = await store.append(operatorPause({ data: { requestId: "r2", actorId: "a", symbol: "BTCUSDT", quantity: 0.01 } }))
+  assert.equal(unsafeNumber.ok, false)
+  const secret = await store.append(operatorPause({ data: { requestId: "r3", actorId: "a", symbol: "BTCUSDT", apiKey: "must-not-persist" } }))
+  assert.equal(secret.ok, false)
+  const oversized = await store.append(operatorPause({ data: { requestId: "r4", actorId: "a", symbol: "BTCUSDT", note: "x".repeat(70_000) } }))
+  assert.equal(oversized.ok, false)
 })
 
 test("detects tampered record digests", async (t) => {
