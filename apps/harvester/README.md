@@ -155,6 +155,10 @@ Telegram policy lives in `config.json` under `notifications.telegram`; bot crede
 
 See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md) for the event vocabulary and delivery contract.
 
+### Operator control — design proposal only
+
+Telegram currently sends outbound notifications only; it does not receive commands. The proposed transport-independent operator-control architecture (Telegram first, future web adapter later) is documented in [Operator control interface — design proposal](./docs/architecture/OPERATOR_CONTROL_DESIGN.md). This is discussion material only: no command receiver, web server, or pause/resume API is implemented.
+
 ### Operational event journal
 
 See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) and the [Journal evidence contract](./docs/JOURNAL_EVIDENCE_CONTRACT.md).
