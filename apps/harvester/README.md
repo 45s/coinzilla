@@ -49,6 +49,8 @@ pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
 
+The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harness live in [`test/replays/`](./test/replays/). They exercise the real Harvester composition without connecting to Binance or placing exchange orders.
+
 ## Configuration
 
 Harvester uses one application-wide `config.json`. The root contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. The active strategy key is `CG_coinGrabber`.
@@ -137,7 +139,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 
 ## Volatility protection
 
-Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection is **not active in the runtime**. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), the Harvester BrokerPort/adapter in [PR #1019](https://github.com/45s/coinzilla/pull/1019), and the per-market candle-history/indicator service in [PR #1021](https://github.com/45s/coinzilla/pull/1021). The remaining work is the trading protection state machine and central order gate. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection implementation is under review in [PR #1041](https://github.com/45s/coinzilla/pull/1041); do not treat it as active until that PR is merged and threshold validation is complete. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), the Harvester BrokerPort/adapter in [PR #1019](https://github.com/45s/coinzilla/pull/1019), and the per-market candle-history/indicator service in merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). PR #1041 implements the trading protection state machine, central order gate, owned-BUY cancellation and recovery-SELL exception; exact-head CI and review remain before merge. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
 
 ## Runtime and safety
 

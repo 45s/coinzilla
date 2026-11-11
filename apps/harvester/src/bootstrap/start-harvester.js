@@ -105,6 +105,22 @@ export async function startHarvester({
   const bookSubscriptions = []
   let userDataSubscription
   let candleHistoryService
+  candleHistoryService = createCandleHistoryService({
+    broker,
+    logger,
+    now,
+    onSnapshot: async ({ symbol, snapshot }) => {
+      const result = await tradingEngine?.processVolatilitySnapshot({ symbol, snapshot })
+      if (result && !result.ok) {
+        logger.error?.({
+          message: "Harvester volatility protection update failed",
+          symbol,
+          error: result.error,
+          errors: result.errors,
+        })
+      }
+    },
+  })
   // One explicit state object makes user-data readiness and queue ownership visible.
   const userDataState = {
     stopped: false,
@@ -226,6 +242,7 @@ export async function startHarvester({
       hasUnownedOpenOrdersForSymbol: accountSnapshotManager.hasUnownedOpenOrdersForSymbol,
       isMarketPriceFresh,
       isMarketBookFresh,
+      getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
@@ -293,7 +310,6 @@ export async function startHarvester({
       marketPriceIntake,
     })
 
-    candleHistoryService = createCandleHistoryService({ broker, logger, now })
     await candleHistoryService.start({ pairs, subscriptions })
   } catch (error) {
     logger.error?.({

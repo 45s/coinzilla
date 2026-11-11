@@ -27,6 +27,20 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
+import {
+  createVolatilityProtectionState,
+  transitionVolatilityProtection,
+  VOLATILITY_PROTECTION_MODES,
+  VOLATILITY_PROTECTION_THRESHOLDS,
+} from "../domain/market/volatility-protection-state.js"
+
+function logSystem(logger, data) {
+  if (typeof logger?.system === "function") {
+    logger.system(data)
+    return
+  }
+  logger?.info?.(data)
+}
 
 const failureResult = ({ error, errors, category, stage, retryable }) => {
   const result = {
@@ -149,11 +163,16 @@ export function makeConservativeTradingEngine({
   hasUnownedOpenOrdersForSymbol = () => false,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
+  getVolatilityData,
   logger,
   initialState = {},
 } = {}) {
   const strategyConfig = appConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
+  const volatilityProtectionEnabled = typeof getVolatilityData === "function"
+  if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
+    throw new TypeError("getVolatilityData must be a function when provided")
+  }
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
     throw new TypeError("strategyPolicy must provide evaluate and evaluateTrailingBuyRepricing functions")
@@ -232,6 +251,11 @@ export function makeConservativeTradingEngine({
     completedRecoverySellOrdersBySymbol: new Map(),
     reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
+    volatilityProtection: new Map(Object.entries(pairs)
+      .filter(([, pairConfig]) => pairConfig?.enabled === true)
+      .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
+    volatilityCancellationAttemptBySymbol: new Map(),
+    volatilitySnapshotSignatureBySymbol: new Map(),
   }
   const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
     [...state.recoveryManagedCancellationClientOrderIds].some((clientOrderId) => {
@@ -513,7 +537,7 @@ export function makeConservativeTradingEngine({
     eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
     dataResult: mapOrderCancelFailedData({ order, outcome, error }),
   })
-  const markCancellationUnknown = async ({ symbol, order, reason, error } = {}) => {
+  const markCancellationUnknown = async ({ symbol, order, reason, error, pauseOnFailure = true } = {}) => {
     const result = state.registry.markCancellationUnknown({ clientOrderId: order.clientOrderId })
     if (!result.ok) {
       const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
@@ -526,14 +550,14 @@ export function makeConservativeTradingEngine({
       outcome: "UNCONFIRMED",
       error,
     })
-    await pause({ symbol, reason, error })
+    if (pauseOnFailure) await pause({ symbol, reason, error })
     return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
   }
 
-  const markCancellationNotSent = async ({ symbol, order, reason, error } = {}) => {
+  const markCancellationNotSent = async ({ symbol, order, reason, error, pauseOnFailure = true } = {}) => {
     publishOrderCancelFailed({ order, outcome: "NOT_SENT", error })
     const notSentReason = reason.replace(/_UNCONFIRMED$/, "_NOT_SENT")
-    await pause({ symbol, reason: notSentReason, error })
+    if (pauseOnFailure) await pause({ symbol, reason: notSentReason, error })
     return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
   }
 
@@ -544,29 +568,47 @@ export function makeConservativeTradingEngine({
     error,
     cancellationResultOk,
     cancellationOutcome,
+    pauseOnFailure = true,
   } = {}) => {
     if (cancellationResultOk === false && cancellationOutcome === "NOT_SENT") {
-      return markCancellationNotSent({ symbol, order, reason, error })
+      return markCancellationNotSent({ symbol, order, reason, error, pauseOnFailure })
     }
-    return markCancellationUnknown({ symbol, order, reason, error })
+    return markCancellationUnknown({ symbol, order, reason, error, pauseOnFailure })
   }
 
-  const ensureCancellationEligible = async ({ symbol, order, reason }) => {
+  const ensureCancellationEligible = async ({ symbol, order, reason, pauseOnFailure = true }) => {
     const result = validateCancellationEligibility({ order })
     if (result.ok) return result
     const error = result.errors[0]
     publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
-    await pause({ symbol, reason, error })
+    if (pauseOnFailure) await pause({ symbol, reason, error })
     return result
   }
 
   const submit = makeExecuteStrategyDecision({
     broker,
-    canSubmit: ({ order } = {}) => {
+    canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
       const marketPrice = state.prices.get(symbol)
       if (state.paused.has(symbol) || hasUnownedOpenOrdersForSymbol({ symbol }) ||
           !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
+      if (volatilityProtectionEnabled) {
+        let volatility
+        try {
+          const volatilityResult = getVolatilityData({ symbol })
+          volatility = volatilityResult?.ok ? volatilityResult.data : null
+        } catch {
+          volatility = null
+        }
+        const protection = state.volatilityProtection.get(symbol) ??
+          createVolatilityProtectionState({ symbol })
+        const latestRatio = volatility?.metrics?.volatilityRatio
+        const latestRatioProtected = typeof latestRatio === "string" &&
+          compareDecimal({ left: latestRatio, right: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio }) >= 0
+        const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
+        if ((!volatility?.status?.isReady || protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL ||
+            latestRatioProtected) && !recoverySell) return false
+      }
       if (order.type !== "LIMIT_MAKER") return true
       const marketBook = state.books.get(symbol)
       return Boolean(marketBook && isMarketBookFresh(marketBook) &&
@@ -2336,12 +2378,15 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const cancelOwnedBuyOrders = ({ reason = "PROCESS_SHUTDOWN" } = {}) => runTransition({
+  const cancelOwnedBuyOrders = ({ reason = "PROCESS_SHUTDOWN", symbol: onlySymbol, pauseOnFailure = true } = {}) => runTransition({
     task: async () => {
-      const reasonPrefix = reason === "PROCESS_SHUTDOWN" ? "SHUTDOWN" : "ACCOUNT_INTEGRITY_HALT"
+      const reasonPrefix = reason === "PROCESS_SHUTDOWN" ? "SHUTDOWN"
+        : reason === "HIGH_VOLATILITY_PROTECTION" ? "VOLATILITY_PROTECTION"
+          : "ACCOUNT_INTEGRITY_HALT"
       const activeBuyOrders = state.registry.getActiveOrders()
         .filter((order) =>
-          order.side === "BUY" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)
+          order.side === "BUY" && (!onlySymbol || order.market.symbol === onlySymbol) &&
+          ["OPEN", "PARTIALLY_FILLED"].includes(order.status)
         )
       const errors = []
       let canceled = 0
@@ -2353,6 +2398,7 @@ export function makeConservativeTradingEngine({
           symbol,
           order,
           reason: reasonPrefix + "_BUY_CANCELLATION_INELIGIBLE",
+          pauseOnFailure,
         })
         if (!eligibility.ok) {
           errors.push(...eligibility.errors)
@@ -2368,7 +2414,7 @@ export function makeConservativeTradingEngine({
         })
         if (!cancelIntent.ok) {
           const error = cancelIntent.errors?.[0] ?? new Error("BUY cancellation intent was not durably journaled during " + reasonPrefix)
-          await pause({ symbol, reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE", error })
+          if (pauseOnFailure) await pause({ symbol, reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE", error })
           errors.push(error)
           continue
         }
@@ -2382,6 +2428,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
+            pauseOnFailure,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
@@ -2396,6 +2443,7 @@ export function makeConservativeTradingEngine({
             error,
             cancellationResultOk: cancelResult?.ok,
             cancellationOutcome: cancelResult?.cancellationOutcome,
+            pauseOnFailure,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
@@ -2414,6 +2462,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_IDENTITY_MISMATCH",
             error,
+            pauseOnFailure,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
@@ -2426,6 +2475,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
+            pauseOnFailure,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
@@ -2440,6 +2490,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_RECONCILIATION_FAILED",
             error,
+            pauseOnFailure,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
@@ -2451,6 +2502,7 @@ export function makeConservativeTradingEngine({
             order,
             reason: reasonPrefix + "_BUY_CANCELLATION_NOT_REGISTERED",
             error,
+            pauseOnFailure,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
@@ -2736,10 +2788,237 @@ export function makeConservativeTradingEngine({
     })
   }
 
-  const processMarketPrice = ({ symbol, priceEvent } = {}) =>
-    runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
-  const processBookTicker = ({ symbol, bookTicker } = {}) =>
-    runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
+
+  const processVolatilitySnapshot = async ({ symbol, snapshot } = {}) => {
+    if (isStopping()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+    if (!volatilityProtectionEnabled) {
+      return toResult({ data: { skipped: true, reason: "VOLATILITY_PROTECTION_NOT_CONFIGURED" } })
+    }
+    if (typeof symbol !== "string" || !symbol.trim()) {
+      return toResult({ error: new TypeError("processVolatilitySnapshot requires a symbol") })
+    }
+
+    let currentSnapshot = snapshot
+    if (!currentSnapshot) {
+      try {
+        currentSnapshot = getVolatilityData({ symbol })
+      } catch (error) {
+        currentSnapshot = toResult({ error })
+      }
+    }
+
+    let update
+    try {
+      update = await runTransition({
+        task: async () => {
+          const current = state.volatilityProtection.get(symbol) ??
+            createVolatilityProtectionState({ symbol })
+          const activeBuyOrders = state.registry.getActiveOrders()
+            .filter((order) => order.market.symbol === symbol && order.side === "BUY")
+          const data = currentSnapshot?.ok === true
+            ? currentSnapshot.data
+            : currentSnapshot?.data ?? currentSnapshot
+          const candleKey = data?.metrics?.openTime ??
+            data?.status?.lastClosedCandleOpenTime ?? null
+          const hasCancellableBuy = activeBuyOrders.some((order) =>
+            ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+          const observedAt = Number.isSafeInteger(data?.status?.observedAt)
+            ? data.status.observedAt
+            : Date.now()
+          const signature = JSON.stringify({
+            ready: data?.status?.isReady === true,
+            fresh: data?.status?.isFresh === true,
+            reason: data?.status?.reason ?? null,
+            candleKey,
+            volatilityRatio: data?.metrics?.volatilityRatio ?? null,
+            activeBuyOrderCount: activeBuyOrders.length,
+            cancellationRetryWindow: hasCancellableBuy
+              ? Math.floor(observedAt / 5_000)
+              : null,
+          })
+          if (state.volatilitySnapshotSignatureBySymbol.get(symbol) === signature) {
+            return {
+              skipped: true,
+              mode: current.mode,
+              reason: current.reason,
+              state: current,
+            }
+          }
+          state.volatilitySnapshotSignatureBySymbol.set(symbol, signature)
+
+          const transition = transitionVolatilityProtection({
+            state: current,
+            snapshot: currentSnapshot,
+            activeBuyOrderCount: activeBuyOrders.length,
+          })
+          state.volatilityProtection.set(symbol, transition.state)
+
+          const lastCancellationAttempt = state.volatilityCancellationAttemptBySymbol.get(symbol)
+          const cancellationRetryDue = !lastCancellationAttempt ||
+            lastCancellationAttempt.candleKey !== candleKey ||
+            observedAt - lastCancellationAttempt.attemptedAt >= 5_000
+          const shouldCancel = transition.state.mode === VOLATILITY_PROTECTION_MODES.PROTECTED &&
+            hasCancellableBuy && cancellationRetryDue
+          if (shouldCancel) {
+            state.volatilityCancellationAttemptBySymbol.set(symbol, {
+              candleKey,
+              attemptedAt: observedAt,
+            })
+          }
+          if (transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
+            state.volatilityCancellationAttemptBySymbol.delete(symbol)
+          }
+
+          const metricChanged = current.volatilityRatio !== transition.state.volatilityRatio
+          if (transition.changed || metricChanged) {
+            logSystem(logger, {
+              message: "Harvester volatility protection state changed",
+              symbol,
+              previousState: current.mode,
+              state: transition.state.mode,
+              reason: transition.state.reason,
+              stableCandleCount: transition.state.stableCandleCount,
+              volatilityRatio: transition.state.volatilityRatio,
+              natr: transition.state.natr,
+              referenceNatr: transition.state.referenceNatr,
+              atr: transition.state.atr,
+              ...(data?.status ? { dataStatus: data.status } : {}),
+            })
+          }
+          if (transition.warning && metricChanged &&
+              transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
+            logger?.warn?.({
+              message: "Harvester market volatility warning threshold reached",
+              symbol,
+              volatilityRatio: transition.state.volatilityRatio,
+              warningThreshold: VOLATILITY_PROTECTION_THRESHOLDS.warningRatio,
+              protectionThreshold: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio,
+            })
+          }
+
+          return {
+            skipped: false,
+            shouldCancel,
+            recovered: transition.recovered,
+            mode: transition.state.mode,
+            reason: transition.state.reason,
+            stableCandleCount: transition.state.stableCandleCount,
+            state: transition.state,
+          }
+        },
+      })
+    } catch (error) {
+      return toResult({ error })
+    }
+
+    if (!update) {
+      return toResult({ error: new Error("Volatility protection transition returned no result") })
+    }
+    if (update.skipped) return toResult({ data: update })
+
+    let settled = {
+      recovered: update.recovered,
+      state: update.state,
+    }
+    if (update.shouldCancel) {
+      let cancellation
+      try {
+        cancellation = await cancelOwnedBuyOrders({
+          reason: "HIGH_VOLATILITY_PROTECTION",
+          symbol,
+          pauseOnFailure: false,
+        })
+      } catch (error) {
+        cancellation = toResult({ error })
+      }
+      if (!cancellation?.ok) {
+        logger?.warn?.({
+          message: "Harvester volatility protection BUY cancellation remains unresolved",
+          symbol,
+          errors: cancellation?.errors,
+          error: cancellation?.error,
+        })
+      }
+
+      try {
+        settled = await runTransition({
+          task: async () => {
+            const current = state.volatilityProtection.get(symbol) ??
+              createVolatilityProtectionState({ symbol })
+            const activeBuyOrderCount = state.registry.getActiveOrders()
+              .filter((order) => order.market.symbol === symbol && order.side === "BUY").length
+            const transition = transitionVolatilityProtection({
+              state: current,
+              snapshot: currentSnapshot,
+              activeBuyOrderCount,
+            })
+            state.volatilityProtection.set(symbol, transition.state)
+            return { recovered: transition.recovered, state: transition.state }
+          },
+        })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (!settled) {
+        return toResult({ error: new Error("Volatility protection settlement returned no result") })
+      }
+    }
+
+    const recovered = update.recovered || settled.recovered
+    if (recovered) {
+      logSystem(logger, {
+        message: "Harvester volatility protection recovered",
+        symbol,
+        stableCandleCount: update.recovered
+          ? update.stableCandleCount
+          : settled.state.stableCandleCount,
+        volatilityRatio: settled.state.volatilityRatio,
+      })
+      const resumed = await evaluateLatest({ symbol })
+      if (!resumed?.ok) return resumed
+    }
+    return toResult({
+      data: {
+        state: settled.state,
+        mode: settled.state.mode,
+        reason: settled.state.reason,
+        recovered,
+      },
+    })
+  }
+
+  const refreshVolatilityProtectionIfNeeded = async ({ symbol } = {}) => {
+    if (!volatilityProtectionEnabled) return toResult({ data: { skipped: true } })
+    let snapshot
+    try {
+      snapshot = getVolatilityData({ symbol })
+    } catch (error) {
+      snapshot = toResult({ error })
+    }
+    const data = snapshot?.ok ? snapshot.data : null
+    const unavailableReason = !data?.status?.isReady
+      ? data?.status?.reason ?? "VOLATILITY_DATA_UNAVAILABLE"
+      : null
+    const candleOpenTime = data?.metrics?.openTime ?? null
+    const current = state.volatilityProtection.get(symbol) ??
+      createVolatilityProtectionState({ symbol })
+    const needsRefresh = unavailableReason
+      ? current.reason !== unavailableReason
+      : current.lastEvaluatedCandleOpenTime !== candleOpenTime
+    if (!needsRefresh) return toResult({ data: { skipped: true, state: current } })
+    return processVolatilitySnapshot({ symbol, snapshot })
+  }
+
+  const processMarketPrice = async ({ symbol, priceEvent } = {}) => {
+    const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
+    if (!protection?.ok) return protection
+    return runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
+  }
+  const processBookTicker = async ({ symbol, bookTicker } = {}) => {
+    const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
+    if (!protection?.ok) return protection
+    return runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
+  }
   const processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
     runTransition({ task: () => processUserDataEventTransition({ event, recoveryMode }) })
   const evaluateLatest = ({ symbol } = {}) =>
@@ -2762,6 +3041,8 @@ export function makeConservativeTradingEngine({
     reconcileOwnedOrders,
     cancelOwnedBuyOrdersForShutdown,
     cancelOwnedBuyOrdersForSafetyHalt,
+    processVolatilitySnapshot,
+    getVolatilityProtectionState: ({ symbol } = {}) => state.volatilityProtection.get(symbol),
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,

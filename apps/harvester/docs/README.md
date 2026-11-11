@@ -15,7 +15,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Volatility Protection](volatility-protection.md) — accepted per-market high-volatility safety design; candle history and ATR/NATR measurement collection are implemented in PR #1021, but the trading protection gate is not active
+- [Volatility Protection](volatility-protection.md) — accepted per-market high-volatility safety design; candle history and ATR/NATR measurement collection are implemented in merged PR #1037; the protection state machine and order gate are under review in PR #1041 and are not active until merged
 - [Exchange trading constraints](exchange-trading-constraints.md) — canonical exchange-neutral constraint contract, Binance's non-blocking diagnostic policy, and local-versus-venue enforcement boundary
 - [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
