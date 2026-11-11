@@ -39,6 +39,12 @@ test("validates strategy-owned pairs without requiring exchange-mode configurati
 })
 
 
+test("requires a minimum-profit threshold on every pair", () => {
+  const config = createAppConfig()
+  delete config.strategies.CG_coinGrabber.pairs.ZROFDUSD.minProfit
+  assert.throws(() => validateAppConfig(config), /pairs.*ZROFDUSD.*minProfit/)
+})
+
 test("accepts independent minimum-profit thresholds for each market", () => {
   const config = createAppConfig()
   const strategyConfig = config.strategies.CG_coinGrabber
