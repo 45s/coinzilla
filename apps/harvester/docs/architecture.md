@@ -48,7 +48,7 @@ These are responsibility boundaries, not a requirement that every concept must b
 
 The runtime composes `createCandleHistoryService` after the existing price intake. It subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles, retains up to 100 completed candles, buffers live events during warm-up, and backfills detected gaps through the application broker port. It computes ATR(14), NATR and the current/reference ratio using the previous 60 NATR observations. The per-market snapshot is available through runtime `getVolatilityData({ symbol })`.
 
-This service reports measurement and data readiness only. The high-volatility protection state machine, BUY submission gate, owned-BUY cancellation and recovery-SELL exception remain unimplemented; do not treat the snapshot as permission to trade.
+The candle-history service allows one 1-minute interval plus a 5-second grace before marking its Kline feed stale. This timeout is separate from the trading engine's 5-second market-price and order-book freshness gates. The runtime sends snapshots to the per-market volatility protection state machine; PROTECTED and RECOVERING block ordinary strategy actions, the central submission gate permits only explicitly marked recovery SELLs, and only Harvester-owned active BUYs are eligible for protection cancellation. Existing recovery SELLs and their accounting remain active. Initial ratio thresholds are provisional pending offline historical validation.
 
 ## Operational notifications
 
