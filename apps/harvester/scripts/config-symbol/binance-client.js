@@ -3,6 +3,42 @@ import { normalizeSymbolInput } from "./configuration.js"
 
 const DEFAULT_BINANCE_SPOT_BASE_URL = "https://api.binance.com"
 const REQUEST_TIMEOUT_MS = 10_000
+const FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS = new Set([
+  "MARKET_LOT_SIZE",
+  "MAX_NUM_ALGO_ORDERS",
+  "MAX_NUM_ICEBERG_ORDERS",
+  "ICEBERG_PARTS",
+  "TRAILING_DELTA",
+  "EXCHANGE_MAX_NUM_ALGO_ORDERS",
+  "EXCHANGE_MAX_NUM_ICEBERG_ORDERS",
+  "EXCHANGE_MAX_NUM_ORDER_LISTS",
+  "MAX_NUM_ORDER_LISTS",
+  "MAX_NUM_ORDER_AMENDS",
+])
+const KNOWN_SYMBOL_FILTERS = new Set(["PRICE_FILTER", "LOT_SIZE", "MIN_NOTIONAL", "NOTIONAL"])
+
+function validateUniqueFilterTypes(filters, label) {
+  const seen = new Set()
+  for (const filter of filters) {
+    if (!filter || typeof filter !== "object" || Array.isArray(filter) ||
+        typeof filter.filterType !== "string" || !filter.filterType.trim()) {
+      throw new TypeError("Binance " + label + " contains a malformed filter without filterType")
+    }
+    if (seen.has(filter.filterType)) {
+      throw new Error("Binance " + label + " contains duplicate " + filter.filterType + " filters")
+    }
+    seen.add(filter.filterType)
+  }
+}
+
+function rejectUnvalidatedFilters(filters, label) {
+  const unsupported = [...new Set(filters
+    .map((filter) => filter.filterType)
+    .filter((type) => !KNOWN_SYMBOL_FILTERS.has(type) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(type)))]
+  if (unsupported.length > 0) {
+    throw new Error("Binance " + label + " contains constraints not validated by Harvester's current LIMIT/LIMIT_MAKER workflow: " + unsupported.join(", "))
+  }
+}
 
 function readExactlyOneFilter(filters, filterType) {
   const matches = filters.filter((filter) => filter?.filterType === filterType)
