@@ -34,6 +34,14 @@ import {
   VOLATILITY_PROTECTION_THRESHOLDS,
 } from "../domain/market/volatility-protection-state.js"
 
+function logSystem(logger, data) {
+  if (typeof logger?.system === "function") {
+    logger.system(data)
+    return
+  }
+  logger?.info?.(data)
+}
+
 const failureResult = ({ error, errors, category, stage, retryable }) => {
   const result = {
     failure: { category, stage, retryable },
