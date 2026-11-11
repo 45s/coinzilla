@@ -11,7 +11,7 @@ This document is the behavior and safety contract for Harvester's volatility pro
 
 When volatility becomes unusually high, Harvester must stop all new strategy activity for that market except the recovery SELL lifecycle.
 
-It must: 
+It must:
 
 1. Block new BUY orders and every non-recovery strategy action.
 2. Cancel only Harvester-owned, acknowledged active BUY orders.
@@ -36,7 +36,7 @@ A market starts protected until its required candle history is loaded, validated
 
 ## 3. Initial volatility model
 
-The first Harvester consumer uses: 
+The first Harvester consumer uses:
 
 - Candle interval: **1 minute, UTC**.
 - Closed candles only for indicator calculations and state transitions. Updates to the currently forming candle are not decision inputs.
@@ -94,7 +94,7 @@ NATR is retained in diagnostics as well as the ratio. Raw ATR values must never 
 
 ### Broker capability proposed for implementation
 
-The current public Brokers and Harvester broker-port APIs do not expose candles. The planned normalized capability is: 
+The current public Brokers and Harvester broker-port APIs do not expose candles. The planned normalized capability is:
 
 - **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical data.
 - **subscribeForCandles({ symbol, interval, onCandle })** for live updates.
@@ -138,7 +138,7 @@ This means "pause trading" is not "stop managing risk": only the recovery SELL l
 
 ## 6. Central submission gate
 
-Protection must be checked in the shared order-execution path: 
+Protection must be checked in the shared order-execution path:
 
 - Check before pending-order registration.
 - Check again immediately before broker submission.
@@ -150,7 +150,7 @@ A strategy decision created before protection activates must not bypass the gate
 
 ## 7. Resume rules
 
-A protected market can return to NORMAL only when all conditions hold: 
+A protected market can return to NORMAL only when all conditions hold:
 
 1. Candle history is sufficiently warmed up, current, valid and gap-free.
 2. Three consecutive completed 1-minute candles have a volatility ratio at or below 1.3.
