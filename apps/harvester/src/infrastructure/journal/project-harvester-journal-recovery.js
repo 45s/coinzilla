@@ -23,6 +23,9 @@ const ORDER_SIDES = new Set(["BUY", "SELL"])
 const SUBMISSION_OUTCOMES = new Set(["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
 const CANCEL_OUTCOMES = new Set(["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"])
 
+// Explicitly non-authoritative telemetry/lifecycle diagnostics. Canonical order,
+// fill and safety transitions are represented by the replay facts below; keep
+// this allowlist aligned with HARVESTER_EVENT_NAMES and fail closed otherwise.
 const IGNORABLE_HARVESTER_EVENTS = new Set([
   "harvester.process_started",
   "harvester.startup_failed",
