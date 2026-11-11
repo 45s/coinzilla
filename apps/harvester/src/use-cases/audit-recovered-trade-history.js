@@ -1,6 +1,8 @@
 import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 
+const SHA256_PATTERN = /^[a-f0-9]{64}$/
+
 function requireArray({ value, field }) {
   if (!Array.isArray(value)) throw new TypeError(field + " must be an array")
   return value
@@ -134,7 +136,11 @@ export function auditRecoveredTradeHistory({
           historyRetentionEvidence.coveredFromTime < 0 ||
           historyRetentionEvidence.coveredFromTime > historyEvidence.historyStartTime ||
           !Number.isSafeInteger(historyRetentionEvidence.verifiedAt) ||
-          historyRetentionEvidence.verifiedAt < historyRetentionEvidence.coveredFromTime) {
+          historyRetentionEvidence.verifiedAt < historyRetentionEvidence.coveredFromTime ||
+          typeof historyRetentionEvidence.evidenceDigest !== "string" ||
+          !SHA256_PATTERN.test(historyRetentionEvidence.evidenceDigest) ||
+          typeof historyRetentionEvidence.verifiedBy !== "string" ||
+          !historyRetentionEvidence.verifiedBy.trim()) {
         throw new Error("Durable market-history retention evidence is missing or does not cover " + market.symbol)
       }
     }
@@ -248,6 +254,8 @@ export function auditRecoveredTradeHistory({
           historyRetentionBaselineFactId: historyRetentionEvidence.baselineFactId,
           historyRetentionFactType: historyRetentionEvidence.factType,
           historyRetentionVerifiedAt: historyRetentionEvidence.verifiedAt,
+          historyRetentionEvidenceDigest: historyRetentionEvidence.evidenceDigest,
+          historyRetentionVerifiedBy: historyRetentionEvidence.verifiedBy,
         } : {}),
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
