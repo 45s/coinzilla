@@ -363,6 +363,22 @@ test("waits for in-flight backfill work before the candle subscription is consid
   assert.equal(unsubscribeSettled, true, "Candle intake may be considered stopped only after its accepted work has drained.")
 })
 
+test("fails closed when live Kline updates overflow the warm-up buffer", async () => {
+  const fixture = createFixture({
+    onSubscribe: async ({ onCandle }) => {
+      for (let index = 0; index <= 500; index += 1) {
+        await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      }
+    },
+  })
+  await fixture.start()
+  const snapshot = getSnapshot(fixture)
+
+  assert.equal(snapshot.status.isReady, false, "A dropped live update during history warm-up must invalidate readiness.")
+  assert.equal(snapshot.status.reason, "LIVE_BUFFER_OVERFLOW", "The status must preserve the fact that the warm-up buffer overflowed.")
+  assert.equal(snapshot.metrics, null, "A buffer overflow must not expose measurements based on a potentially incomplete live series.")
+})
+
 test("reports unknown symbols without inventing a candle-history snapshot", async () => {
   const fixture = createFixture()
   await fixture.start()

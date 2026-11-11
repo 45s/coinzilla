@@ -194,6 +194,7 @@ function createMarketState(symbol) {
     subscriptionReady: false,
     stopped: false,
     lastEventAt: null,
+    bufferOverflow: false,
     bufferedEvents: [],
     queue: Promise.resolve(),
   }
@@ -211,7 +212,7 @@ function updateMetrics({ state, logger } = {}) {
     state.reason = null
     if (becameReady) {
       logSystem(logger, {
-        message: "Volatility candle history ready",
+        message: "Volatility candle indicators calculated",
         symbol: state.symbol,
         interval: CANDLE_INTERVAL,
         historyCount: state.candles.length,
@@ -227,6 +228,7 @@ function updateMetrics({ state, logger } = {}) {
 function appendCompletedCandles({ state, candles, logger } = {}) {
   const merged = [...state.candles, ...candles]
   state.candles = Object.freeze(merged.slice(-HISTORY_SIZE))
+  state.bufferOverflow = false
   updateMetrics({ state, logger })
 }
 
@@ -261,11 +263,13 @@ function createCandleHistoryService({
       timestamp: state.lastEventAt,
       now: now(),
     })
-    let reason = state.reason
-    if (!reason && !state.subscriptionReady) reason = "SUBSCRIPTION_FAILED"
-    if (!reason && state.stopped) reason = "STOPPED"
-    if (!reason && !isFresh) reason = state.lastEventAt === null ? "AWAITING_LIVE_DATA" : "STALE_STREAM"
-    const isReady = reason === null && state.metrics !== null && state.subscriptionReady && !state.stopped && isFresh
+    const blockers = []
+    if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
+    if (state.reason) blockers.push(state.reason)
+    if (state.stopped) blockers.push("STOPPED")
+    if (!isFresh) blockers.push(state.lastEventAt === null ? "AWAITING_LIVE_DATA" : "STALE_STREAM")
+    const reason = blockers[0] ?? null
+    const isReady = blockers.length === 0 && state.metrics !== null
 
     return toResult({
       data: Object.freeze({
@@ -277,6 +281,7 @@ function createCandleHistoryService({
           isReady,
           isFresh,
           reason,
+          blockers: Object.freeze(blockers),
           subscriptionReady: state.subscriptionReady,
           historyCount: state.candles.length,
           requiredHistoryCount: REQUIRED_CANDLE_COUNT,
@@ -397,10 +402,11 @@ function createCandleHistoryService({
 
     if (!state.initialized) {
       if (state.bufferedEvents.length >= MAX_BUFFERED_LIVE_EVENTS) {
+        state.bufferOverflow = true
         failMarket({ state, reason: "LIVE_BUFFER_OVERFLOW" })
         return Promise.resolve()
       }
-      state.bufferedEvents.push({ candle, receivedAt })
+      state.bufferedEvents.push(candle)
       return Promise.resolve()
     }
 
@@ -472,6 +478,10 @@ function createCandleHistoryService({
       state.candles = Object.freeze(completed)
       state.initialized = true
       updateMetrics({ state, logger })
+      if (state.bufferOverflow) {
+        state.metrics = null
+        logUnavailable(logger, state, "LIVE_BUFFER_OVERFLOW")
+      }
     } catch (error) {
       state.candles = Object.freeze([])
       state.initialized = true
@@ -482,7 +492,7 @@ function createCandleHistoryService({
     state.bufferedEvents = []
     for (const event of bufferedEvents) {
       state.queue = state.queue
-        .then(() => processLiveCandle({ state, candle: event.candle, receivedAt: event.receivedAt }))
+        .then(() => processLiveCandle({ state, candle: event }))
         .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error }))
     }
     await state.queue
