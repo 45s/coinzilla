@@ -21,7 +21,7 @@ function symbol(value) {
 
   const quote = QUOTE_ASSETS.find((asset) => normalized.length > asset.length && normalized.endsWith(asset))
   const base = quote ? normalized.slice(0, -quote.length) : ""
-  return quote && base && !/\\s/.test(base) ? `${base}/${quote}` : normalized
+  return quote && base && !/\s/.test(base) ? `${base}/${quote}` : normalized
 }
 
 function side(value) {
