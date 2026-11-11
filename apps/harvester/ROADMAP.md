@@ -20,8 +20,8 @@
 
 1. [x] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
 2. [x] Indicators: parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
-3. [~] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — [PR #1019](https://github.com/45s/coinzilla/pull/1019). This adds no runtime subscriptions or trading behavior.
-4. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
+3. [x] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — merged [PR #1019](https://github.com/45s/coinzilla/pull/1019).
+4. [~] Harvester: startup warm-up, live candle maintenance, freshness/gap detection, bounded reconnect backfill and ATR/NATR measurement snapshots — [PR #1021](https://github.com/45s/coinzilla/pull/1021). This is data collection only; it does not gate trading.
 5. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
 6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
 

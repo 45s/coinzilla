@@ -76,7 +76,9 @@ Harvester's application-owned broker port now requires both candle capabilities,
 
 The normalized candle contains symbol, interval, millisecond open/close timestamps, exact decimal-string OHLCV values and an `isClosed` flag. Domain policies and use cases consume only this Harvester-owned contract; they must not import Binance DTOs or use the concrete broker directly.
 
-This PR exposes the capability only. Bootstrap does not yet fetch candle history or subscribe to Kline streams; startup warm-up, live history maintenance, gap/freshness handling and protection policy are later steps. See [Volatility Protection](../volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016).
+Bootstrap now composes `createCandleHistoryService` after the existing price intake. For each enabled market it establishes the live Kline subscription first, requests 101 one-minute candles, filters the still-forming final bar, and retains up to 100 completed candles. Live updates are buffered during warm-up; a later candle gap triggers a bounded historical backfill. The service calculates ATR(14), NATR and the ratio against the previous 60 NATR observations, then exposes a per-market snapshot through runtime `getVolatilityData({ symbol })`.
+
+This is market-data collection only. The high-volatility policy, central BUY gate, owned-BUY cancellation and recovery-SELL exception are **not active yet**. See [Volatility Protection](../volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016).
 
 ## Implemented infrastructure adapter
 

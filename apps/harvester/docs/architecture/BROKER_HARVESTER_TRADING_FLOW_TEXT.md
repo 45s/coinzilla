@@ -23,7 +23,7 @@ The broker boundary owns exchange communication and translates exchange-specific
 
 `createCanonicalOrder()` and `createOrder()` belong to the shared Binance client, not the Harvester application port. Harvester submits only through `broker.placeOrder({ order })`.
 
-The historical/live candle methods are required by the Harvester port and forwarded by its Binance adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)). They are available capabilities only; the startup sequence below remains the current runtime and does not fetch candle history or subscribe to Kline streams yet.
+The historical/live candle methods are required by the Harvester port and forwarded by its Binance adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)). The startup sequence now composes the candle-history service ([PR #1021](https://github.com/45s/coinzilla/pull/1021)); this remains separate from the strategy order-decision path.
 
 ### Harvester
 
@@ -46,6 +46,10 @@ The historical/live candle methods are required by the Harvester port and forwar
 5. When TESTNET trading is enabled, bootstrap also establishes `subscribeForBookTicker({ symbol, onBookTicker })`. The engine caches the best bid / ask for fresh LIMIT_MAKER crossing checks. This is a safety input, not the strategy's market-price input.
 6. Bootstrap establishes `subscribeForPrices({ symbol, onPrice })` for each enabled symbol.
 7. After subscriptions are established, bootstrap calls `getPrices({ symbol })` to obtain an initial ticker snapshot. It seeds the engine only if no fresh WebSocket price was received for that symbol. The current Binance implementation uses a `ticker.price` request/response over its WebSocket API; it is not an HTTP REST request.
+8. Bootstrap then subscribes to one-minute Kline streams for every enabled market before requesting candle history.
+9. It requests 101 historical candles, filters the forming final bar, retains up to 100 completed candles, and merges live events buffered during warm-up.
+10. On a detected gap, the service requests the exact missing time range and keeps that market unavailable if backfill cannot restore continuity.
+11. It calculates ATR(14), NATR and the ratio against the previous 60 NATR observations. The per-market data/readiness snapshot is exposed through runtime `getVolatilityData({ symbol })`; no trading gate consumes it yet.
 
 ### 2. Market price to strategy decision
 

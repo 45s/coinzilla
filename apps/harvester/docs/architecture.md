@@ -44,6 +44,12 @@ Before changing an execution path, compare it with the approved Conservative Dom
 
 These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy policy is implemented as a plain pure function when its decision is deterministic. Calling it a domain policy describes its business responsibility; it does not imply a class or stateful strategy object.
 
+## Volatility market-data intake (current implementation)
+
+The runtime composes `createCandleHistoryService` after the existing price intake. It subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles, retains up to 100 completed candles, buffers live events during warm-up, and backfills detected gaps through the application broker port. It computes ATR(14), NATR and the current/reference ratio using the previous 60 NATR observations. The per-market snapshot is available through runtime `getVolatilityData({ symbol })`.
+
+This service reports measurement and data readiness only. The high-volatility protection state machine, BUY submission gate, owned-BUY cancellation and recovery-SELL exception remain unimplemented; do not treat the snapshot as permission to trade.
+
 ## Operational notifications
 
 Telegram is an optional outbound observer composed at the process boundary. The single `apps/harvester/config.json` owns the `notifications.telegram` profile, per-event overrides, market filter, and enabled switch. Harvester resolves that policy and maps application events to the stable notification vocabulary; `@coinzilla/notifiers` owns bounded formatting, event subscription selection, serialized queueing, delivery, and transport validation. The domain and trading engine must not depend on Telegram or its credentials.
