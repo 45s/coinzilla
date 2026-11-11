@@ -322,13 +322,29 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
         })),
       }
     }
-    broker.subscribeForCandles = async ({ symbol: requestedSymbol, interval } = {}) => ({
-      ok: true,
-      data: {
-        stream: requestedSymbol.toLowerCase() + "@kline_" + interval,
-        unsubscribe: async () => {},
-      },
-    })
+    broker.subscribeForCandles = async ({ symbol: requestedSymbol, interval, onCandle } = {}) => {
+      for (const index of [100, 101, 102]) {
+        await onCandle({
+          symbol: requestedSymbol,
+          interval,
+          openTime: index * 60_000,
+          closeTime: index * 60_000 + 59_999,
+          open: "1",
+          high: "1.1",
+          low: "0.9",
+          close: "1",
+          volume: "1",
+          isClosed: true,
+        })
+      }
+      return {
+        ok: true,
+        data: {
+          stream: requestedSymbol.toLowerCase() + "@kline_" + interval,
+          unsubscribe: async () => {},
+        },
+      }
+    }
     broker.subscribeForPrices = async ({
       subscribedSymbol,
       symbol: requestedSymbol,
