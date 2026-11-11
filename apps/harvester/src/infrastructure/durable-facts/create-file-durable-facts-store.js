@@ -166,6 +166,13 @@ function validateRecordEnvelope({ record, schemaVersion, expectedSequence, previ
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     throw new TypeError("Durable fact record must be an object")
   }
+  const expectedKeys = [
+    "data", "digest", "factId", "factType", "formatVersion", "previousDigest",
+    "recordedAt", "runtimeSessionId", "schemaVersion", "sequence",
+  ]
+  if (canonicalStringify(Object.keys(record).sort()) !== canonicalStringify(expectedKeys)) {
+    throw new Error("Durable fact record contains missing or unknown envelope fields")
+  }
   if (record.formatVersion !== FORMAT_VERSION || record.schemaVersion !== schemaVersion) {
     throw new Error("Durable fact record format/schema version is unsupported")
   }
@@ -189,7 +196,9 @@ function validateRecordEnvelope({ record, schemaVersion, expectedSequence, previ
     throw new Error("Durable fact recorded-at timestamp is not canonical ISO-8601")
   }
   if (index === 0) {
-    if (record.sequence !== "0" || record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null) {
+    if (record.sequence !== "0" || record.factId !== "durable-facts:genesis" ||
+        record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null ||
+        canonicalStringify(record.data) !== canonicalStringify({ schemaVersion })) {
       throw new Error("Durable fact stream must begin with its explicit genesis record")
     }
   } else {
@@ -343,6 +352,12 @@ export function createFileDurableFactsStore({
       previousDigest = record.digest
     }
     const manifest = parseCanonicalJson({ source: rawManifest, label: "Durable-fact manifest" })
+    const expectedManifestKeys = [
+      "formatVersion", "lastCommittedDigest", "lastCommittedSequence", "recordCount", "schemaVersion",
+    ]
+    if (canonicalStringify(Object.keys(manifest).sort()) !== canonicalStringify(expectedManifestKeys)) {
+      throw new Error("Durable-fact manifest contains missing or unknown fields")
+    }
     if (manifest.formatVersion !== FORMAT_VERSION || manifest.schemaVersion !== schemaVersion) {
       throw new Error("Durable-fact manifest format/schema version is unsupported")
     }
