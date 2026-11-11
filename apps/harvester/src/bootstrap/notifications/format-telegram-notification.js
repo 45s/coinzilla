@@ -60,7 +60,7 @@ const formatters = Object.freeze({
   "bot.recovery_completed": ({ data }) => `✅ BOT RECOVERY COMPLETED · ${text(data.message ?? data.summary, "Recovery completed")}`,
   "bot.startup_failed": ({ data }) => `⚠️ BOT STARTUP FAILED · ${text(data.stage, "n/a", 64)} · ${text(data.error?.message ?? data.message)}`,
   "broker.connected": ({ data }) => [
-    `🟩 ${text(data.broker, "BROKER", 64).toUpperCase()} CONNECTED`,
+    `🟩 BROKER CONNECTED · ${text(data.broker, "UNKNOWN", 64).toUpperCase()}`,
     ...(data.tradingMode === undefined ? [] : [text(data.tradingMode, "n/a", 24).toUpperCase()]),
   ].join(" · "),
   "broker.disconnected": ({ data }) => `🟥 ${text(data.broker, "BROKER", 64).toUpperCase()} DISCONNECTED · ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
