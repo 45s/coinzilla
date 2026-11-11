@@ -61,6 +61,78 @@ The adapter verifies that the history is scoped to exactly the target market and
 
 The bundle is evidence, not a trust shortcut: an operator must verify its provenance, exchange export completeness, account snapshot timestamp, market metadata, fee-asset valuations, and digest before confirmation. The CLI cannot independently prove that the supplied offline export came from Binance or that an operator reviewed it correctly.
 
+### Minimal complete example
+
+This fixture represents a trading-enabled Journal session with a complete PREFLIGHT snapshot, no recovered orders/fills, and a complete target-market history export. Real evidence must replace every timestamp, balance, identity and digest; never copy these sample values into an actual baseline.
+
+```json
+{
+  "symbol": "LINKUSDT",
+  "runtimeSessionId": "offline-review-2026-11-12",
+  "journalRecords": [
+    {
+      "position": { "fileName": "session-001" },
+      "payload": {
+        "source": "harvester",
+        "name": "account.snapshot_captured",
+        "data": {
+          "phase": "PREFLIGHT",
+          "sourceTime": 100,
+          "auditStatus": "COMPLETE",
+          "auditReasons": [],
+          "balances": [
+            { "asset": "LINK", "free": "0", "locked": "0", "total": "0" },
+            { "asset": "USDT", "free": "100", "locked": "0", "total": "100" }
+          ]
+        }
+      }
+    },
+    {
+      "position": { "fileName": "session-001" },
+      "payload": {
+        "source": "harvester",
+        "name": "harvester.started",
+        "data": { "tradingEnabled": true }
+      }
+    }
+  ],
+  "markets": [
+    {
+      "venue": "BINANCE",
+      "symbol": "LINKUSDT",
+      "baseAsset": { "id": "binance:LINK", "code": "LINK" },
+      "quoteAsset": { "id": "binance:USDT", "code": "USDT" }
+    }
+  ],
+  "coverage": {
+    "coveredFromTime": 100,
+    "verifiedAt": 200,
+    "evidenceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "verifiedBy": "operator-review"
+  },
+  "exchange": {
+    "currentAccountSnapshot": {
+      "sourceTime": 300,
+      "balances": [
+        { "assetId": "binance:LINK", "asset": "LINK", "free": "0", "locked": "0" },
+        { "assetId": "binance:USDT", "asset": "USDT", "free": "100", "locked": "0" }
+      ]
+    },
+    "ownedOrderHistory": [],
+    "openOrders": [],
+    "tradeHistory": {
+      "fills": [],
+      "historyPagesComplete": true,
+      "marketHistoryPagesComplete": true,
+      "historyScope": "MARKET",
+      "marketsQueried": ["LINKUSDT"],
+      "historyStartTime": 100,
+      "marketUniverseComplete": false
+    }
+  }
+}
+```
+
 ## Required sequence
 
 1. Discover and validate the complete Journal session history; project and restore only a candidate state.
