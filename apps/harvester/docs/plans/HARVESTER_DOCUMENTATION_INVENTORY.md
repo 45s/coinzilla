@@ -85,7 +85,7 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` | Source-driven behavior-to-test map, regression evidence and prioritized domain test-quality improvements (added in PR #917). | **KEEP** |
 | `apps/harvester/docs/error-vocabulary.md` | Maintained source-verified error vocabulary and recovery classifications. | **KEEP** |
 | `apps/harvester/docs/exchange-trading-constraints.md` | Canonical exchange-neutral trading-constraint contract and Binance fail-closed mapping (PR #1013). | **KEEP** |
-| `apps/harvester/docs/volatility-protection.md` | Accepted per-market protection contract, candle data requirements, recovery-SELL exception and implementation roadmap (PR #1013; data collection delivered in PR #1021, protection gate still pending). | **KEEP** |
+| `apps/harvester/docs/volatility-protection.md` | Per-market protection contract, candle data requirements, recovery-SELL exception and implementation roadmap; data collection is merged in PR #1037 and runtime protection in PR #1041. Historical threshold calibration remains open. | **KEEP** |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. | **KEEP** |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. | **KEEP** |
 | `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures and runbooks. | **KEEP** |
@@ -125,3 +125,8 @@ PR #1021 updates existing Harvester README, roadmap, Volatility Protection, arch
 - [ ] Create dated successor/addendum records where historical findings need correction; do not rewrite originals.
 - [ ] Record final disposition and rationale for each REVIEW row.
 - [ ] Update this inventory and all indexes after each approved migration.
+
+
+## Source-verified documentation updates — PR #1041
+
+Merged PR #1041 implements and wires the per-market protection state machine, central order-submission gate, explicit recovery-SELL purpose, owned-BUY cancellation/reconciliation and freshness monitoring. The regression matrix and all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`. The initial warning/protection/recovery thresholds remain provisional pending representative offline historical market-data validation. No TESTNET/LIVE exchange operation was performed or authorized.
