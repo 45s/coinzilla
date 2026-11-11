@@ -67,7 +67,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
-      minProfit: 0.01,
+      minProfit: market.symbol === "DOGEUSDT" ? 0.1 : 0.01,
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
