@@ -221,6 +221,7 @@ export async function startHarvester({
       updateTradingAccounting,
       completeRecoveryCycle,
       canTrade: () => userDataState.ready,
+      hasUnownedOpenOrdersForSymbol: accountSnapshotManager.hasUnownedOpenOrdersForSymbol,
       isMarketPriceFresh,
       isMarketBookFresh,
       logger,
