@@ -1,5 +1,5 @@
-import { subscribeTelegramNotifications, TELEGRAM_NOTIFICATION_EVENTS } from "@coinzilla/notifiers"
-import { formatHarvesterTelegramNotification } from "./format-telegram-notification.js"
+import { subscribeTelegramNotifications } from "@coinzilla/notifiers"
+import { formatHarvesterTelegramNotification, HARVESTER_TELEGRAM_NOTIFICATION_EVENTS } from "./format-telegram-notification.js"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "../../application/events/event-names.js"
 import { resolveTelegramNotificationPolicy } from "./resolve-telegram-notification-policy.js"
 
@@ -178,6 +178,6 @@ export async function subscribeHarvesterTelegramNotifications({
       if (errors.length > 0) throw new AggregateError(errors, "Telegram notification shutdown was incomplete")
     },
     getDiagnostics: notificationSubscriber.getDiagnostics,
-    supportedEventNames: TELEGRAM_NOTIFICATION_EVENTS,
+    supportedEventNames: HARVESTER_TELEGRAM_NOTIFICATION_EVENTS,
   })
 }
