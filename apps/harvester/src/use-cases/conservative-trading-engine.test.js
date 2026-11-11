@@ -6619,6 +6619,60 @@ test("high volatility cancels only acknowledged owned BUYs and keeps the market 
   assert.deepEqual(harness.pauses, [], "A confirmed volatility cancellation must not activate the global strategy pause.")
 })
 
+
+test("high-volatility BUY cancellation preserves an existing recovery SELL order", async () => {
+  const ownedBuyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "volatility-preserved-sell-owned-buy",
+    brokerOrderId: "broker-volatility-preserved-sell-owned-buy",
+  })
+  const recoverySellOrder = makeShutdownOrder({
+    side: "SELL",
+    clientOrderId: "volatility-preserved-recovery-sell",
+    brokerOrderId: "broker-volatility-preserved-recovery-sell",
+  })
+  const highVolatility = {
+    ok: true,
+    data: {
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [ownedBuyOrder, recoverySellOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    getVolatilityData: () => highVolatility,
+  })
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot: highVolatility,
+  })
+
+  assert.equal(result.ok, true, "A high-volatility snapshot must complete its owned-BUY cancellation workflow.")
+  assert.deepEqual(
+    harness.cancellationIds,
+    [ownedBuyOrder.brokerOrderId],
+    "Volatility protection must send cancellation only for the acknowledged owned BUY, never the resting recovery SELL.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === ownedBuyOrder.clientOrderId).status,
+    "CANCELED",
+    "The owned BUY must reach its broker-confirmed terminal state after volatility protection activates.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === recoverySellOrder.clientOrderId).status,
+    "OPEN",
+    "The existing recovery SELL must remain resting and unchanged when volatility protection activates.",
+  )
+  assert.equal(
+    harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }).mode,
+    "PROTECTED",
+    "The market must remain protected after its owned BUY is canceled.",
+  )
+})
+
+
 test("an unconfirmed volatility BUY cancellation stays protected without blocking recovery management globally", async () => {
   const buyOrder = makeShutdownOrder({
     side: "BUY",

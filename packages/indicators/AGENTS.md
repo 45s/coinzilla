@@ -2,7 +2,7 @@
 
 - Status: Initial calculation capability merged in [PR #1018](https://github.com/45s/coinzilla/pull/1018); active package.
 - Owner: Indicators domain under `packages/indicators/`.
-- First consumer: Harvester's per-market ATR/NATR measurement service in [PR #1021](https://github.com/45s/coinzilla/pull/1021), under issue #1016. That PR collects measurements only; the protection policy remains Harvester-owned and is not active yet. Adaptive price-step planning, PR #1013, is a separate later consumer.
+- First consumer: Harvester's per-market ATR/NATR measurement service in merged [PR #1037](https://github.com/45s/coinzilla/pull/1037), under issue #1016. Harvester's protection policy and order gate are implemented in merged [PR #1041](https://github.com/45s/coinzilla/pull/1041); provisional thresholds still require offline historical calibration. Adaptive price-step planning, PR #1013, is a separate later consumer.
 
 ## Scope
 
