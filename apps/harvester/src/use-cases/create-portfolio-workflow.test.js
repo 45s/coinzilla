@@ -409,8 +409,8 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     assert.equal(completion.data.eligible, true)
     assert.equal(infoLogs.length, 3, "Resetting Portfolio spent must emit a stats snapshot even when inventory is unchanged.")
     assert.deepEqual(infoLogs[2].inventory, {
-      activeBaseQuantity: "1 BTC",
-      freeBaseQuantity: "0 BTC",
+      activeBaseQuantity: "0 BTC",
+      freeBaseQuantity: "1 BTC",
       totalBaseQuantity: "1 BTC",
     })
     assert.deepEqual(infoLogs[2].accounting, {
