@@ -139,6 +139,122 @@ test("includes reliable third-asset commission valuation in Position.spent and R
   assert.equal(result.data.recoveryLedger.buyCost, "10.02")
 })
 
+test("preserves third-asset commission accounting across multiple BUY and SELL fills", () => {
+  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const fills = [
+    makeFill({
+      tradeId: "third-fee-buy-1",
+      quantity: "100",
+      quoteQuantity: "10",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }), quoteValue: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.002", asset: thirdAsset }), quoteValue: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "third-fee-buy-2",
+      quantity: "50",
+      quoteQuantity: "5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.002", asset: thirdAsset }), quoteValue: new Money({ amount: "0.03", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "third-fee-sell-1",
+      side: "SELL",
+      quantity: "40",
+      quoteQuantity: "4.4",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }), quoteValue: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "third-fee-sell-2",
+      side: "SELL",
+      quantity: "50",
+      quoteQuantity: "5.5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }), quoteValue: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+  ]
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market })
+
+  for (const fill of fills) {
+    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+    assert.equal(result.data.applied, true)
+    portfolio = result.data.portfolio
+    recoveryLedger = result.data.recoveryLedger
+  }
+
+  const position = portfolio.getPosition({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, "60")
+  assert.equal(position.spent.amount, "15.05")
+  assert.equal(position.quoteNetCashFlow.amount, "-5.18")
+  assert.equal(recoveryLedger.buyCost, "15.05")
+  assert.equal(recoveryLedger.netSellProceeds, "9.87")
+  assert.equal(recoveryLedger.outstandingRecoveryAmount, "5.18")
+  assert.equal(position.quoteNetCashFlow.amount, "-" + recoveryLedger.outstandingRecoveryAmount)
+  assert.equal(portfolio.appliedFillIds.length, 4)
+  assert.equal(recoveryLedger.appliedFillIds.length, 4)
+})
+
+test("rejects contradictory third-asset identities atomically across both accounting projections", () => {
+  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const contradictoryAsset = new Asset({ id: "bnb", code: "BNB2" })
+  const portfolio = new Portfolio()
+  const recoveryLedger = RecoveryLedger.empty({ market })
+  const result = updateTradingAccounting({
+    portfolio,
+    recoveryLedger,
+    fill: makeFill({
+      commissions: [
+        new Commission({
+          amount: new Money({ amount: "0.001", asset: thirdAsset }),
+          quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+        }),
+        new Commission({
+          amount: new Money({ amount: "0.001", asset: contradictoryAsset }),
+          quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+        }),
+      ],
+    }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(portfolio.positions.length, 0)
+  assert.deepEqual(portfolio.appliedFillIds, [])
+  assert.equal(recoveryLedger.buyCost, "0")
+  assert.equal(recoveryLedger.netSellProceeds, "0")
+  assert.deepEqual(recoveryLedger.appliedFillIds, [])
+})
+
+test("rejects a third-asset quote valuation whose asset code contradicts the market quote asset", () => {
+  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const contradictoryQuoteAsset = new Asset({ id: quoteAsset.id, code: "USDC" })
+  const portfolio = new Portfolio()
+  const recoveryLedger = RecoveryLedger.empty({ market })
+  const result = updateTradingAccounting({
+    portfolio,
+    recoveryLedger,
+    fill: makeFill({
+      commissions: [new Commission({
+        amount: new Money({ amount: "0.001", asset: thirdAsset }),
+        quoteValue: new Money({ amount: "0.02", asset: contradictoryQuoteAsset }),
+      })],
+    }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(portfolio.positions.length, 0)
+  assert.deepEqual(portfolio.appliedFillIds, [])
+  assert.equal(recoveryLedger.buyCost, "0")
+  assert.equal(recoveryLedger.netSellProceeds, "0")
+  assert.deepEqual(recoveryLedger.appliedFillIds, [])
+})
+
 test("rejects invalid application inputs", () => {
   assert.equal(updateTradingAccounting({
     portfolio: {},
