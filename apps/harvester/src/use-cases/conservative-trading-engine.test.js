@@ -6680,3 +6680,42 @@ test("explicit recovery SELL intent may submit while volatility protection block
   assert.deepEqual(harness.orders.map((order) => order.side), ["SELL"])
   assert.equal(harness.orders[0].side, "SELL", "Only the explicitly marked recovery SELL may pass the protected-market submission gate.")
 })
+
+
+test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
+  const position = new Position({
+    market,
+    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
+    spent: new Money({ amount: "10", asset: quoteAsset }),
+  })
+  const unavailable = {
+    ok: true,
+    data: { status: { isReady: false, reason: "STALE_STREAM" }, metrics: null },
+  }
+  const harness = await createHarness({
+    initialPortfolio: new Portfolio({ positions: [position] }),
+    initialRecoveryLedger: new RecoveryLedger({ market, buyCost: "10" }),
+    baseFreeBalance: "100",
+    getVolatilityData: () => unavailable,
+    strategyPolicy: {
+      name: "UNTRUSTED_SELL_TEST",
+      evaluate: () => ({
+        strategy: "UNTRUSTED_SELL_TEST",
+        action: "PLACE_ORDERS",
+        actions: [{ side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "1" }],
+        reason: "SELL_WITHOUT_RECOVERY_PURPOSE",
+      }),
+      evaluateTrailingBuyRepricing: () => ({ actions: [] }),
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [], "A SELL side alone must not bypass volatility protection.")
+})
