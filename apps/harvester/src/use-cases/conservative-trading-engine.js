@@ -366,8 +366,9 @@ export function makeConservativeTradingEngine({
     const data = completion?.data
     if (!data) return
     const marketId = order.market.id
-    const position = getPortfolio()?.getPosition({ marketId })
-    const recoveryLedger = getRecoveryLedger({ marketId })
+    const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
+    const position = portfolio?.getPosition({ marketId })
+    const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
     const realizedNetProfit = data.realizedNetProfit ??
       (position && recoveryLedger
         ? subtractDecimal({ left: recoveryLedger.netSellProceeds, right: position.spent.amount })
