@@ -420,3 +420,113 @@ test("fails closed when the fact log is truncated below the committed-head journ
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /manifest.*ahead|truncated|fact log/i)
 })
+
+
+test("accepts a verified market-history coverage fact with exact durable evidence", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  const appended = await store.append({
+    factId: "market-history-coverage:BTCUSDT:baseline-1",
+    factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+    data: {
+      symbol: "BTCUSDT",
+      coveredFromTime: 1_700_000_000_000,
+      verifiedAt: 1_700_000_100_000,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
+    },
+  })
+
+  assert.equal(appended.ok, true, appended.errors?.map(({ message }) => message).join("; "))
+  assert.equal(appended.data.durable, true)
+  assert.equal(appended.data.record.factType, "MARKET_HISTORY_COVERAGE_CONFIRMED")
+  assert.equal(appended.data.record.data.coveredFromTime, 1_700_000_000_000)
+})
+
+test("rejects malformed market-history coverage facts", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  const invalidFacts = [
+    {
+      factId: "coverage:missing-digest",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        verifiedBy: "operator:trader",
+      },
+    },
+    {
+      factId: "coverage:invalid-digest",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "not-a-sha256",
+        verifiedBy: "operator:trader",
+      },
+    },
+    {
+      factId: "coverage:future-start",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 201,
+        verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+        verifiedBy: "operator:trader",
+      },
+    },
+    {
+      factId: "coverage:future-verification",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 1_700_000_000_000,
+        verifiedAt: 1_800_000_000_000,
+        evidenceDigest: "a".repeat(64),
+        verifiedBy: "operator:trader",
+      },
+    },
+    {
+      factId: "coverage:bad-symbol",
+      data: {
+        symbol: "btc/usdt",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+        verifiedBy: "operator:trader",
+      },
+    },
+    {
+      factId: "coverage:missing-verifier",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+      },
+    },
+    {
+      factId: "coverage:unsupported-field",
+      data: {
+        symbol: "BTCUSDT",
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+        verifiedBy: "operator:trader",
+        apiKey: "must-not-be-stored",
+      },
+    },
+  ]
+  for (const invalid of invalidFacts) {
+    const result = await store.append({
+      factId: invalid.factId,
+      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+      data: invalid.data,
+    })
+    assert.equal(result.ok, false, invalid.factId)
+  }
+})

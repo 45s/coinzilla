@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
 import { auditRecoveredTradeHistory } from "./audit-recovered-trade-history.js"
+import { readMarketHistoryCoverage } from "./read-market-history-coverage.js"
+import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js"
 
 const baseAsset = new Asset({ id: "binance:BTC", code: "BTC" })
 const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
@@ -56,7 +62,6 @@ const marketHistoryEvidence = Object.freeze({
 })
 
 const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
-  ...input,
   complete: false,
   marketUniverseComplete: false,
   scope: "MARKET",
@@ -68,7 +73,10 @@ const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
     symbol: "BTCUSDT",
     coveredFromTime: 50,
     verifiedAt: 60,
+    evidenceDigest: "a".repeat(64),
+    verifiedBy: "operator:trader",
   },
+  ...input,
 })
 
 test("rejects a caller-supplied market-universe boolean as account-wide completeness evidence", () => {
@@ -315,9 +323,70 @@ test("rejects a durable market-history baseline that starts after the queried hi
       symbol: "BTCUSDT",
       coveredFromTime: 51,
       verifiedAt: 60,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
     },
   })
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /does not cover BTCUSDT/)
+})
+
+
+test("rejects a history-coverage fact verified before the requested history start", () => {
+  const fill = makeFill()
+  const result = auditMarketHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    historyRetentionEvidence: {
+      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+      baselineFactId: "history-baseline-btc-stale",
+      symbol: "BTCUSDT",
+      coveredFromTime: 40,
+      verifiedAt: 49,
+      evidenceDigest: "c".repeat(64),
+      verifiedBy: "operator:trader",
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /does not cover BTCUSDT/)
+})
+
+
+test("feeds integrity-verified durable coverage projection into the market history audit", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-market-history-audit-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const durableFactsStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "market-history-audit-test",
+    now: () => new Date("2026-11-11T12:00:00.000Z"),
+  })
+  const initialized = await durableFactsStore.initialize()
+  assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
+  const recorded = await recordMarketHistoryCoverage({
+    durableFactsStore,
+    factId: "coverage:BTCUSDT:audit",
+    symbol: "BTCUSDT",
+    coveredFromTime: 40,
+    verifiedAt: 60,
+    evidenceDigest: "d".repeat(64),
+    verifiedBy: "operator:trader",
+  })
+  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
+  const projected = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+  assert.equal(projected.ok, true, projected.errors?.map(({ message }) => message).join("; "))
+  const fill = makeFill()
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    scope: "MARKET",
+    market,
+    historyEvidence: marketHistoryEvidence,
+    historyRetentionEvidence: projected.data,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.historyRetentionBaselineFactId, "coverage:BTCUSDT:audit")
+  assert.equal(result.data.historyRetentionEvidenceDigest, "d".repeat(64))
 })
