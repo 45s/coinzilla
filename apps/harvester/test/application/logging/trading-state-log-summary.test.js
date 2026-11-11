@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   createPortfolioLogSummary,
+  createPortfolioStatsLogSummary,
   createPositionLogSummary,
   createRecoveryLedgerLogSummary,
 } from "../../../src/application/logging/trading-state-log-summary.js"
@@ -98,4 +99,36 @@ test("missing portfolio positions and ledgers are represented as null", () => {
   assert.deepEqual(createPortfolioLogSummary({
     portfolio: { appliedFillIds: [], getPosition: () => { throw new Error("must not query without market id") } },
   }), { position: null, appliedFillCount: 0 })
+})
+
+
+test("Portfolio Stats contains only Portfolio inventory and accounting values", () => {
+  const summary = createPortfolioStatsLogSummary({
+    position: {
+      market: {
+        symbol: "ZROUSDT",
+        baseAsset: { code: "ZRO" },
+        quoteAsset: { code: "USDT" },
+      },
+      baseQuantity: { amount: "25" },
+      freeBaseQuantity: { amount: "0.15" },
+      totalBaseQuantity: { amount: "25.15" },
+      spent: { amount: "0" },
+      quoteNetCashFlow: { amount: "0" },
+    },
+  })
+
+  assert.deepEqual(summary, {
+    message: "Portfolio Stats",
+    symbol: "ZROUSDT",
+    inventory: {
+      activeBaseQuantity: "25 ZRO",
+      freeBaseQuantity: "0.15 ZRO",
+      totalBaseQuantity: "25.15 ZRO",
+    },
+    accounting: {
+      spent: "0 USDT",
+      quoteNetCashFlow: "0 USDT",
+    },
+  })
 })
