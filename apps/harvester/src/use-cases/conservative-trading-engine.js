@@ -2633,6 +2633,11 @@ export function makeConservativeTradingEngine({
         const data = currentSnapshot?.ok ? currentSnapshot.data : currentSnapshot?.data
         const candleKey = data?.metrics?.openTime ??
           data?.status?.lastClosedCandleOpenTime ?? null
+        const hasCancellableBuy = activeBuyOrders.some((order) =>
+          ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        const observedAt = Number.isSafeInteger(data?.status?.observedAt)
+          ? data.status.observedAt
+          : Date.now()
         const signature = JSON.stringify({
           ready: data?.status?.isReady === true,
           fresh: data?.status?.isFresh === true,
@@ -2640,6 +2645,9 @@ export function makeConservativeTradingEngine({
           candleKey,
           volatilityRatio: data?.metrics?.volatilityRatio ?? null,
           activeBuyOrderCount: activeBuyOrders.length,
+          cancellationRetryWindow: hasCancellableBuy
+            ? Math.floor(observedAt / 5_000)
+            : null,
         })
         if (state.volatilitySnapshotSignatureBySymbol.get(symbol) === signature) {
           return { skipped: true, mode: current.mode, reason: current.reason }
@@ -2651,12 +2659,18 @@ export function makeConservativeTradingEngine({
           activeBuyOrderCount: activeBuyOrders.length,
         })
         state.volatilityProtection.set(symbol, transition.state)
-        const hasCancellableBuy = activeBuyOrders.some((order) =>
-          ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-        const lastCancellationCandle = state.volatilityCancellationAttemptCandleBySymbol.get(symbol)
+        const lastCancellationAttempt = state.volatilityCancellationAttemptCandleBySymbol.get(symbol)
+        const cancellationRetryDue = !lastCancellationAttempt ||
+          lastCancellationAttempt.candleKey !== candleKey ||
+          observedAt - lastCancellationAttempt.attemptedAt >= 5_000
         const shouldCancel = transition.state.mode === VOLATILITY_PROTECTION_MODES.PROTECTED &&
-          hasCancellableBuy && lastCancellationCandle !== candleKey
-        if (shouldCancel) state.volatilityCancellationAttemptCandleBySymbol.set(symbol, candleKey)
+          hasCancellableBuy && cancellationRetryDue
+        if (shouldCancel) {
+          state.volatilityCancellationAttemptCandleBySymbol.set(symbol, {
+            candleKey,
+            attemptedAt: observedAt,
+          })
+        }
         if (transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
           state.volatilityCancellationAttemptCandleBySymbol.delete(symbol)
         }
