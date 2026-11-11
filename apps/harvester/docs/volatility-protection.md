@@ -1,6 +1,6 @@
 # Harvester Volatility Protection
 
-- Status: **Data collection merged in PR #1037; protection implementation under review in PR #1041**
+- Status: **Protection implementation merged in PR #1041; initial ratio thresholds remain provisional pending offline historical validation**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
 - Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
@@ -112,7 +112,7 @@ The Indicators package provides `calculateAtrSeries`, `calculateNatrSeries` and 
 
 - Deduplicate by market, interval and candle open time. Identical repeats are idempotent; conflicting facts for one candle identity fail closed.
 - Require consecutive 1-minute open times. A gap or out-of-order sequence blocks new strategy activity until authoritative history backfills the gap.
-- On stream disconnect, silence beyond the configured freshness limit, malformed candle, or failed backfill, enter PROTECTED.
+- On stream disconnect, candle silence longer than one 1-minute interval plus a 5-second grace, malformed candle, or failed backfill, enter PROTECTED. This candle-feed window is separate from the 5-second market-price and order-book freshness gates; an order still requires fresh price and book data.
 - After reconnect, backfill from the last accepted completed candle before treating the series as current.
 - Never replace missing candles with zeros, interpolate OHLC values, or treat unavailable history as low volatility.
 - Re-evaluate protection only on completed candles. A forming candle cannot count toward the three-candle recovery requirement.
@@ -121,9 +121,9 @@ The Indicators package provides `calculateAtrSeries`, `calculateNatrSeries` and 
 
 The current Harvester data service (merged PR #1037) subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles. It accepts only completed bars into the bounded 100-candle history and buffers live events during warm-up. A market needs 74 contiguous completed candles to produce 61 NATR observations: the current observation plus the 60-observation reference. The reference is the arithmetic mean of the previous 60 NATR values; the ratio is current NATR divided by that reference.
 
-A valid current partial Kline update refreshes stream freshness but never enters indicator history. It can still reveal a missing completed interval: the service immediately marks that market unavailable, requests the exact bounded backfill, and restores readiness only after every missing completed candle is present. The forming candle itself is never appended. Closed candles are appended idempotently. Delayed events older than the retained history are ignored without refreshing freshness. Invalid history, a conflicting duplicate, unresolved gap, insufficient history, zero reference NATR, missing subscription or a stream older than five seconds produces an unavailable per-market snapshot. Runtime consumers read it through `getVolatilityData({ symbol })`. During shutdown, the service stops accepting new callbacks and drains already-accepted candle/backfill work before broker disconnect; an unsubscribe error is still propagated, but cannot skip that drain.
+A valid current partial Kline update refreshes stream freshness but never enters indicator history. It can still reveal a missing completed interval: the service immediately marks that market unavailable, requests the exact bounded backfill, and restores readiness only after every missing completed candle is present. The forming candle itself is never appended. Closed candles are appended idempotently. Delayed events older than the retained history are ignored without refreshing freshness. Invalid history, a conflicting duplicate, unresolved gap, insufficient history, zero reference NATR, missing subscription or a candle stream older than one 1-minute interval plus a 5-second grace produces an unavailable per-market snapshot. The candle timeout is intentionally distinct from the 5-second price/book freshness checks used by the trading engine. Runtime consumers read it through `getVolatilityData({ symbol })`. During shutdown, the service stops accepting new callbacks and drains already-accepted candle/backfill work before broker disconnect; an unsubscribe error is still propagated, but cannot skip that drain.
 
-The candle-history phase by itself only collects measurements. PR #1041 adds the per-market protection state machine, central submission gate, recovery-SELL purpose marker, owned-BUY cancellation/reconciliation and one-second freshness monitor. Until PR #1041 is merged and the initial thresholds are validated against representative offline history, do not describe protection as active or enable unattended trading based on it.
+Merged PR #1041 adds the per-market protection state machine, central submission gate, recovery-SELL purpose marker, owned-BUY cancellation/reconciliation and one-second freshness monitor. The candle-history service allows one 1-minute interval plus a 5-second grace before declaring the Kline feed stale; the independent 5-second market-price and order-book gates remain unchanged. The protection implementation is active in the runtime, but its initial ratio thresholds still require validation against representative offline history before unattended trading.
 
 ## 5. Order and accounting behavior while protected
 
