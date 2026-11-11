@@ -72,7 +72,7 @@ test('rejects structurally invalid JSON after parsing', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'app-config-'));
   const path = join(directory, 'invalid-shape.json');
   t.after(() => rm(directory, { recursive: true, force: true }));
-  await writeFile(path, JSON.stringify({ strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {} } } }));
+  await writeFile(path, JSON.stringify({ strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {} } } }));
 
   await assert.rejects(
     loadAppConfig(path),

@@ -13,9 +13,7 @@ const config = ({
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: {
-        minProfit: 0.01,
-        conservative: { enabled: conservative },
+      settings: { conservative: { enabled: conservative },
         aggressive: { enabled: aggressive },
       },
       pairs: Object.fromEntries(enabledSymbols.map((symbol) => [symbol, { enabled: true }])),
