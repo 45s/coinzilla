@@ -193,13 +193,18 @@ export function makeConservativeTradingEngine({
   }
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
   if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
-  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
+  for (const field of ["pausedMarkets", "operatorPausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
     const values = initialState[field]
     if (values !== undefined && (
       !(Array.isArray(values) || values instanceof Set) ||
       [...values].some((value) => typeof value !== "string" || !value.trim())
     )) {
       throw new TypeError("initialState." + field + " must contain non-empty strings")
+    }
+  }
+  for (const symbol of initialState.operatorPausedMarkets ?? []) {
+    if (!Object.hasOwn(pairs, symbol)) {
+      throw new TypeError("initialState.operatorPausedMarkets contains an unconfigured market: " + symbol)
     }
   }
   if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
@@ -239,6 +244,7 @@ export function makeConservativeTradingEngine({
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
     paused: new Set(initialState.pausedMarkets ?? []),
+    operatorPausedMarkets: new Set(initialState.operatorPausedMarkets ?? []),
     durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
     recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
     recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
@@ -590,7 +596,9 @@ export function makeConservativeTradingEngine({
     canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
       const marketPrice = state.prices.get(symbol)
-      if (state.paused.has(symbol) || hasUnownedOpenOrdersForSymbol({ symbol }) ||
+      if (state.paused.has(symbol) ||
+          (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") ||
+          hasUnownedOpenOrdersForSymbol({ symbol }) ||
           !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
       if (volatilityProtectionEnabled) {
         let volatility
@@ -1157,6 +1165,13 @@ export function makeConservativeTradingEngine({
         pairConfig: pairs[symbol],
       })
       const decision = strategyPolicy.evaluate(evaluationInput)
+      const operatorPaused = state.operatorPausedMarkets.has(symbol)
+      const operatorSuppressedActions = operatorPaused
+        ? decision.actions.filter((action) => action.side === "BUY")
+        : []
+      const effectiveActions = operatorPaused
+        ? decision.actions.filter((action) => action.side === "SELL")
+        : decision.actions
       logger?.debug?.({
         message: "Harvester Conservative evaluation decided",
         evaluationId,
@@ -1165,6 +1180,8 @@ export function makeConservativeTradingEngine({
         action: decision.action,
         reason: decision.reason,
         actions: decision.actions,
+        operatorPaused,
+        operatorSuppressedActions,
         position: decision.position,
         portfolio: portfolioBefore.value,
         recoveryLedger: recoveryLedgerBefore?.value ?? null,
@@ -1191,7 +1208,7 @@ export function makeConservativeTradingEngine({
           state.completedRecoverySellSymbols.delete(symbol)
           state.completedRecoverySellOrdersBySymbol.delete(symbol)
           state.trailingBuy.set(symbol, true)
-          if (decision.actions.length > 0) return evaluateLatestTransition({ symbol })
+          if (effectiveActions.length > 0) return evaluateLatestTransition({ symbol })
         } else {
           publishRecoveryCycleNotCompleted({ order: completedSellOrder, completion })
           if (completion.data?.pause !== false) {
@@ -1200,11 +1217,11 @@ export function makeConservativeTradingEngine({
           }
         }
       }
-      if (decision.actions.length === 0) {
+      if (effectiveActions.length === 0) {
         if (preflightOnly) return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_ACTION" } })
         logger?.debug?.({ message: "Harvester Conservative evaluation submitted no orders",
           evaluationId, symbol, reason: decision.reason, activeOrders: activeOrdersBefore.map((order) => order.value) })
-        return toResult({ data: { decision, submittedOrders: [] } })
+        return toResult({ data: { decision, submittedOrders: [], operatorSuppressedActions } })
       }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
@@ -1261,7 +1278,7 @@ export function makeConservativeTradingEngine({
         throw new Error("Current account snapshot is missing an enabled market asset balance")
       }
       const allocation = allocateOrderCommitments({
-        actions: decision.actions,
+        actions: effectiveActions,
         quoteFreeBalance: quoteBalance.amount,
         baseFreeBalance: baseBalance.amount,
         quoteCashFlow,
@@ -1317,6 +1334,7 @@ export function makeConservativeTradingEngine({
             decision,
             submittedOrders: [],
             deferredActions,
+            operatorSuppressedActions,
             waitingForAvailableQuoteBalance: deferredActions.some(({ reason }) => reason === "INSUFFICIENT_QUOTE_BALANCE"),
             waitingForInvestmentLimit: deferredActions.some(({ reason }) => reason === "PAIR_INVESTMENT_LIMIT"),
           },
@@ -1414,6 +1432,7 @@ export function makeConservativeTradingEngine({
             submittedOrders: result.data.submittedOrders ?? [],
             deferred: true,
             reason: "TRADING_NOT_READY",
+            operatorSuppressedActions,
           },
         })
       }
@@ -1424,7 +1443,7 @@ export function makeConservativeTradingEngine({
         )
         state.buyReferenceOverrides.delete(symbol)
       }
-      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders, deferredActions } })
+      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders, deferredActions, operatorSuppressedActions } })
     } catch (error) {
       await pause({ symbol, reason: "STRATEGY_EVALUATION_FAILED", error })
       return toResult({ error })
@@ -1485,7 +1504,7 @@ export function makeConservativeTradingEngine({
       if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
       const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
         .find((order) => order.side === "BUY")
-      if (activeBuy && state.trailingBuy.get(symbol) !== false) {
+      if (activeBuy && state.trailingBuy.get(symbol) !== false && !state.operatorPausedMarkets.has(symbol)) {
         return maybeReplaceTrailingBuy({ symbol, marketPrice: price })
       }
       return evaluateLatestTransition({ symbol })
@@ -3009,6 +3028,80 @@ export function makeConservativeTradingEngine({
     return processVolatilitySnapshot({ symbol, snapshot })
   }
 
+  const pauseMarket = ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
+        const error = new TypeError("Operator pause requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      if (typeof beforeApply !== "function") {
+        return toResult({ error: new TypeError("Operator pause requires a durable-fact commit callback") })
+      }
+      if (state.operatorPausedMarkets.has(symbol)) {
+        return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: true } })
+      }
+      let committed
+      try {
+        committed = await beforeApply({ symbol, action: "PAUSE" })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (committed?.ok !== true || committed?.data?.durable !== true) {
+        return committed?.ok === false
+          ? committed
+          : toResult({ error: new Error("Operator pause fact was not durably committed") })
+      }
+      state.operatorPausedMarkets.add(symbol)
+      return toResult({ data: { symbol, paused: true, alreadyPaused: false, durable: true } })
+    },
+  })
+
+  const resumeMarket = ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
+        const error = new TypeError("Operator resume requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      const volatilityState = state.volatilityProtection.get(symbol)
+      const volatilityBlocked = volatilityState !== undefined &&
+        volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
+      const safetyBlocked =
+        state.paused.has(symbol) ||
+        state.durablePausedMarkets.has(symbol) ||
+        state.recoveryManagedPausedMarkets.has(symbol) ||
+        state.replacementIntents.has(symbol) ||
+        state.trailingBuyRepriceIntents.has(symbol) ||
+        hasPendingRecoveryManagedCancellation({ symbol }) ||
+        volatilityBlocked
+      if (safetyBlocked) {
+        const error = new Error("Market cannot be resumed while a safety or recovery blocker is active")
+        error.code = "SAFETY_BLOCKER_ACTIVE"
+        return toResult({ error })
+      }
+      if (!state.operatorPausedMarkets.has(symbol)) {
+        return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
+      }
+      if (typeof beforeApply !== "function") {
+        return toResult({ error: new TypeError("Operator resume requires a durable-fact commit callback") })
+      }
+      let committed
+      try {
+        committed = await beforeApply({ symbol, action: "RESUME" })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (committed?.ok !== true || committed?.data?.durable !== true) {
+        return committed?.ok === false
+          ? committed
+          : toResult({ error: new Error("Operator resume fact was not durably committed") })
+      }
+      state.operatorPausedMarkets.delete(symbol)
+      return toResult({ data: { symbol, resumed: true, durable: true } })
+    },
+  })
+
   const processMarketPrice = async ({ symbol, priceEvent } = {}) => {
     const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
     if (!protection?.ok) return protection
@@ -3049,11 +3142,15 @@ export function makeConservativeTradingEngine({
     getActiveOrders: () => state.registry.getActiveOrders(),
     getRecoveryIntents: () => Object.freeze({
       pausedMarkets: Object.freeze([...state.paused]),
+      operatorPausedMarkets: Object.freeze([...state.operatorPausedMarkets]),
       replacementIntents: Object.freeze([...state.replacementIntents]),
       trailingBuyRepriceIntents: Object.freeze([...state.trailingBuyRepriceIntents]),
       deferredEvaluations: Object.freeze([...state.deferredEvaluations]),
     }),
     getPausedMarkets: () => [...state.paused],
+    getOperatorPausedMarkets: () => [...state.operatorPausedMarkets],
+    pauseMarket,
+    resumeMarket,
     getLastBuyPrice: ({ symbol } = {}) => state.lastBuyPrices.get(symbol),
   })
 }
