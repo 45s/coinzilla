@@ -773,6 +773,8 @@ test("integrates structured one-market history evidence with account balance and
       symbol: "BTCUSDT",
       coveredFromTime: 1000,
       verifiedAt: 1100,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
     },
   }
   const result = auditRecoveredAccountState({
@@ -861,6 +863,8 @@ test("rejects a market-history baseline verified after the current account snaps
       symbol: "BTCUSDT",
       coveredFromTime: 1000,
       verifiedAt: 4000,
+      evidenceDigest: "b".repeat(64),
+      verifiedBy: "operator:trader",
     },
   }
   const result = auditRecoveredAccountState({

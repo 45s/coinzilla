@@ -68,6 +68,8 @@ const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
     symbol: "BTCUSDT",
     coveredFromTime: 50,
     verifiedAt: 60,
+    evidenceDigest: "a".repeat(64),
+    verifiedBy: "operator:trader",
   },
 })
 
@@ -315,6 +317,29 @@ test("rejects a durable market-history baseline that starts after the queried hi
       symbol: "BTCUSDT",
       coveredFromTime: 51,
       verifiedAt: 60,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /does not cover BTCUSDT/)
+})
+
+
+test("rejects a history-coverage fact verified before the requested history start", () => {
+  const fill = makeFill()
+  const result = auditMarketHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    historyRetentionEvidence: {
+      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+      baselineFactId: "history-baseline-btc-stale",
+      symbol: "BTCUSDT",
+      coveredFromTime: 40,
+      verifiedAt: 49,
+      evidenceDigest: "c".repeat(64),
+      verifiedBy: "operator:trader",
     },
   })
 
