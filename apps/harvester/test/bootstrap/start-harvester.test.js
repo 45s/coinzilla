@@ -64,7 +64,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 
 test('loads configuration before returning the startup context', async () => {
-  const harvesterConfig = {
+  const appConfig = {
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
   const configSource = '/etc/harvester/config.json';
@@ -75,17 +75,17 @@ test('loads configuration before returning the startup context', async () => {
     env: { TRADING_MODE: 'testnet' },
     loadConfig: async (source) => {
       calls.push(source);
-      return harvesterConfig;
+      return appConfig;
     },
   });
 
   assert.deepEqual(calls, [configSource]);
-  assert.equal(context.harvesterConfig, harvesterConfig);
+  assert.equal(context.appConfig, appConfig);
   assert.equal(Object.isFrozen(context), true);
 });
 
 test('fails startup when configuration loading or validation fails', async () => {
-  const startupError = new TypeError('Invalid Harvester config');
+  const startupError = new TypeError('Invalid app config');
 
   await assert.rejects(
     startHarvesterForTest({
@@ -137,7 +137,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       locked: new Quantity({ amount: '0', asset: quoteAsset }),
     }),
   ];
-  const harvesterConfig = {
+  const appConfig = {
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
@@ -233,7 +233,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     },
   };
   const context = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     brokerAdapterFactory: () => broker,
     env: {
       NODE_ENV: 'development',
@@ -353,7 +353,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
       locked: new Quantity({ amount: "0", asset: quoteAsset }),
     }),
   ]
-  const harvesterConfig = {
+  const appConfig = {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -466,7 +466,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   }
 
   const context = await startHarvesterForTest({
-    loadConfig: async () => harvesterConfig,
+    loadConfig: async () => appConfig,
     brokerAdapterFactory: () => broker,
     env: {
       NODE_ENV: "development",
