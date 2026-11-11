@@ -111,6 +111,7 @@ function createCandleHistoryService({
   broker,
   logger = {},
   now = Date.now,
+  onSnapshot = async () => {},
 } = {}) {
   if (!broker || typeof broker !== "object") {
     throw new TypeError("candle history service requires a broker port")
@@ -123,6 +124,9 @@ function createCandleHistoryService({
   }
   if (typeof now !== "function") {
     throw new TypeError("candle history service now must be a function")
+  }
+  if (typeof onSnapshot !== "function") {
+    throw new TypeError("candle history service onSnapshot must be a function")
   }
 
   const markets = new Map()
@@ -167,6 +171,18 @@ function createCandleHistoryService({
         }),
       }),
     })
+  }
+
+  async function notifySnapshot({ state } = {}) {
+    try {
+      await onSnapshot({ symbol: state.symbol, snapshot: snapshot({ symbol: state.symbol }) })
+    } catch (error) {
+      logger.error?.({
+        message: "Volatility snapshot observer failed",
+        symbol: state.symbol,
+        error,
+      })
+    }
   }
 
   function failMarket({ state, reason, error, fatal = false } = {}) {
@@ -306,7 +322,7 @@ function createCandleHistoryService({
       if (state.bufferedEvents.length >= MAX_BUFFERED_LIVE_EVENTS) {
         state.bufferOverflow = true
         failMarket({ state, reason: "LIVE_BUFFER_OVERFLOW" })
-        return Promise.resolve()
+        return notifySnapshot({ state })
       }
       state.bufferedEvents.push({ candle, receivedAt })
       return Promise.resolve()
@@ -329,6 +345,7 @@ function createCandleHistoryService({
     state.queue = state.queue
       .then(() => processLiveCandle({ state, candle, receivedAt }))
       .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
+      .then(() => notifySnapshot({ state }))
     return state.queue
   }
 
@@ -437,8 +454,10 @@ function createCandleHistoryService({
           receivedAt: event.receivedAt,
         }))
         .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
+        .then(() => notifySnapshot({ state }))
     }
     await state.queue
+    await notifySnapshot({ state })
   }
 
   function start({ pairs, subscriptions = [] } = {}) {
