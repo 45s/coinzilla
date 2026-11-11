@@ -1,6 +1,8 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 
+import { createCandleHistoryService } from "./create-candle-history-service.js"
+
 import {
   INTERVAL_MS,
   createCandle,
