@@ -2,7 +2,6 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
-
 ## Operator tooling — interactive trading-pair configuration generator
 
 **Status: PLANNED — NOT IMPLEMENTED.** Add a safe, interactive command for creating a new Harvester pair configuration without manually looking up or guessing Binance exchange filters and precision values.
