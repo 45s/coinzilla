@@ -356,23 +356,10 @@ function createCandleHistoryService({
   }
 
   function stopFreshnessMonitorIfIdle() {
-    if (freshnessMonitor && [...markets.values()].every((state) => state.stopped)) {
+    if (freshnessMonitor && [...markets.values()].filter((state) => state.subscriptionReady).every((state) => state.stopped)) {
       clearInterval(freshnessMonitor)
       freshnessMonitor = undefined
     }
-  }
-
-  function registerFailedSubscriptionCleanup({ state, subscriptions } = {}) {
-    subscriptions.push({
-      symbol: state.symbol,
-      kind: "candle",
-      unsubscribe: async () => {
-        state.stopped = true
-        stopFreshnessMonitorIfIdle()
-        await state.queue
-        await state.observerQueue
-      },
-    })
   }
 
   async function subscribeMarket({ state, subscriptions } = {}) {
@@ -385,7 +372,6 @@ function createCandleHistoryService({
       })
     } catch (error) {
       failMarket({ state, reason: "SUBSCRIPTION_FAILED", error })
-      registerFailedSubscriptionCleanup({ state, subscriptions })
       return
     }
     if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
@@ -394,7 +380,6 @@ function createCandleHistoryService({
         reason: "SUBSCRIPTION_FAILED",
         error: result?.errors?.[0] ?? new Error("candle subscription did not return an unsubscribe handle"),
       })
-      registerFailedSubscriptionCleanup({ state, subscriptions })
       return
     }
 
@@ -517,7 +502,7 @@ function createCandleHistoryService({
       if (enabledSymbols.length > 0 && onSnapshot && !freshnessMonitor) {
         freshnessMonitor = setInterval(() => {
           for (const state of markets.values()) {
-            if (!state.stopped) notifySnapshot({ state })
+            if (state.subscriptionReady && !state.stopped) notifySnapshot({ state })
           }
         }, 1_000)
         freshnessMonitor.unref?.()
