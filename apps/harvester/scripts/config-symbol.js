@@ -78,7 +78,7 @@ export async function runConfigSymbol({
   const metadataFetchedAt = new Date().toISOString()
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
-  writeLine("Generated pair configuration:")
+  writeLine("Configuration preview — config.json pair entry:")
   writeLine(JSON.stringify({ [symbol]: pairConfig }, null, 2))
 
   const confirmation = (await ask("Add this pair to apps/harvester/config.json? [Y/n]: ")).trim().toLowerCase()
