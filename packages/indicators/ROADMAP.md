@@ -21,8 +21,8 @@ The implementation uses `@coinzilla/utils` exact decimal-string arithmetic. It d
 ## Remaining work
 
 1. [x] **Deliver the first package capability.** ATR, NATR and volatility-ratio calculations, exact decimal behavior, input validation, immutable outputs, offline tests and package coverage were merged in [PR #1018](https://github.com/45s/coinzilla/pull/1018).
-2. [~] **Harvester candle lifecycle.** The BrokerPort and adapter are merged in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Per-market startup history, live Kline maintenance, freshness/gap handling, bounded backfill and ATR/NATR measurement snapshots are in [PR #1021](https://github.com/45s/coinzilla/pull/1021). This remains data collection only; it does not activate the protection policy.
-3. [ ] **Harvester protection policy.** Consume ATR/NATR/ratio per market; keep period/timeframe/reference-window choices, thresholds, hysteresis, fallback, Journal diagnostics, central BUY gate, owned-BUY cancellation and recovery-SELL exception in Harvester.
+2. [x] **Harvester candle lifecycle.** The BrokerPort and adapter are merged in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Per-market startup history, live Kline maintenance, freshness/gap handling, bounded backfill and ATR/NATR measurement snapshots were merged in [PR #1037](https://github.com/45s/coinzilla/pull/1037). This remains the data-collection foundation.
+3. [~] **Harvester protection policy.** Per-market states, thresholds/hysteresis, fail-closed freshness, central order gate, owned-BUY cancellation and explicit recovery-SELL exception are implemented in [PR #1038](https://github.com/45s/coinzilla/pull/1038), pending exact-head CI and review. Historical threshold validation remains required.
 4. [ ] **Adaptive price step.** Treat PR #1013 as a separate strategy consumer. Keep baseline config unchanged; define coefficient bounds, floor behavior, affected strategies and order-replacement policy before implementation.
 5. [ ] **Expand indicators only for concrete consumers.** EMA, SMA, RSI, MACD, Fibonacci and other candidates remain deferred until a consumer and calculation contract justify them.
 
