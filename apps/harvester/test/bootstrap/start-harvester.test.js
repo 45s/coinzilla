@@ -458,8 +458,14 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     getPrices: async ({ symbol } = {}) => toResult({
       data: { symbol, price: symbol === "DOGEUSDT" ? "0.1" : "1" },
     }),
-    getCandles: async () => toResult({ data: [] }),
-    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
+    getCandles: async ({ symbol, interval, limit } = {}) => {
+      candleHistoryRequests.push({ symbol, interval, limit })
+      return toResult({ data: [] })
+    },
+    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+      candleSubscriptions.set(symbol, { interval, onCandle })
+      return toResult({ data: { unsubscribe: async () => candleUnsubscriptions.push(symbol) } })
+    },
     subscribeForPrices: async ({ symbol, onPrice } = {}) => {
       priceSubscriptions.set(symbol, onPrice)
       return toResult({ data: { unsubscribe: async () => {} } })
