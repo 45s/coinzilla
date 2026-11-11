@@ -82,13 +82,13 @@ At the current source-verified develop checkpoint `b5fc236987833da4374258da876b4
 
 | Added path | Purpose |
 | --- | --- |
-| `packages/indicators/README.md` | Defines the exchange-neutral indicator package boundary and public API; records Harvester as its first runtime consumer of ATR/NATR measurements in PR #1021 (data collection only). |
+| `packages/indicators/README.md` | Defines the exchange-neutral indicator package boundary and public API; records Harvester as its first runtime consumer of ATR/NATR measurements in merged PR #1037 (data collection only). |
 | `packages/indicators/AGENTS.md` | Defines Indicators domain ownership and implementation constraints. |
 | `packages/indicators/ROADMAP.md` | Tracks the delivered ATR/NATR/ratio capability, Harvester candle-data consumer and remaining protection/adaptive-price-step work. |
-| `apps/harvester/docs/volatility-protection.md` | Defines per-market protection, candle data, the recovery-SELL exception and Harvester implementation/test plan; PR #1021 delivers the data-collection foundation while the protection gate remains pending. |
+| `apps/harvester/docs/volatility-protection.md` | Defines per-market protection, candle data, the recovery-SELL exception and Harvester implementation/test plan; PR #1037 delivers the data-collection foundation; PR #1038 implements the protection gate and owned-BUY cancellation, pending exact-head CI and review. |
 | `apps/harvester/docs/exchange-trading-constraints.md` | Records exchange trading constraints and their application-level handling. |
 
-The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths. PR #1021 updates existing Harvester/Indicators documentation and test support without adding Markdown/MDX paths; the 124-file count remains unchanged.
+The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths. PR #1037 updates existing Harvester/Indicators documentation and test support without adding Markdown/MDX paths; the 124-file count remains unchanged.
 
 ## Source-verified content reviews (post-baseline)
 
@@ -123,7 +123,7 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 | `apps/harvester/docs/JOURNAL_OPERATIONS.md`; `apps/harvester/docs/TRADING_FIRST.md`; Harvester/root roadmaps | Verified authoritative `NEW` user-data identity recovery (`UNKNOWN → OPEN`), duplicate/conflicting identity handling, shutdown cancellation boundaries, and propagation of validated `TRADING_MODE` into startup status against source/tests. | [PR #964](https://github.com/45s/coinzilla/pull/964) |
 | `apps/harvester/docs/README.md`; `docs/README.md`; `docs/REPOSITORY_DOCUMENTATION_INVENTORY.md`; `packages/brokers/ROADMAP.md`; `ROADMAP.md` | Removed duplicate Harvester archive navigation, reconciled the 117-file count/checkpoints, and closed the stale Brokers `RESULT` acknowledgement roadmap item against merged PR #961 and issue #960. | [PR #967](https://github.com/45s/coinzilla/pull/967) |
 | `apps/harvester/ROADMAP.md`; `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md`; `DOMAIN_TEST_INVENTORY.md`; `portfolio.md` | Recorded the merged snapshot-relative account balance/commitment baseline, its eight scenario families, fail-closed invalid-order handling, and exact-head offline verification. | [PR #968](https://github.com/45s/coinzilla/pull/968) |
-| `apps/harvester/docs/volatility-protection.md`; Harvester architecture/flow and BrokerPort guidance; `packages/indicators/README.md` and `ROADMAP.md` | Verified the implemented per-market candle-history service, ATR/NATR measurement contract, freshness and reconnect-gap behavior, unsubscribe drain guarantees, and explicit boundary that trading protection/order gating is still not active. | [PR #1021](https://github.com/45s/coinzilla/pull/1021) |
+| `apps/harvester/docs/volatility-protection.md`; Harvester architecture/flow and BrokerPort guidance; `packages/indicators/README.md` and `ROADMAP.md` | Verified the implemented per-market candle-history service, ATR/NATR measurement contract, freshness and reconnect-gap behavior, unsubscribe drain guarantees, and explicit boundary that trading protection/order gating is still not active. | [PR #1037](https://github.com/45s/coinzilla/pull/1037) |
 
 ## Disposition vocabulary
 
