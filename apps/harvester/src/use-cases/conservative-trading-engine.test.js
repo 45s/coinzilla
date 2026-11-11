@@ -1626,7 +1626,7 @@ test("publishes the market-specific profit threshold after recovery completion s
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "recovery.cycle_completed") {
-        assert.ok(harness.completedCycles.includes(market.id))
+        assert.equal(completionInputs.length, 1, "The pair-specific completion input must be delivered before the completion event.")
       }
       return { ok: true }
     } },
