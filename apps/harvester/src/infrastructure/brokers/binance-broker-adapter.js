@@ -22,7 +22,7 @@ const normalizePlaceOrderResult = (result, { order } = {}) => {
       typeof error.message === "string" &&
       error.message.startsWith("Filter failure:")) {
     const normalizedError = new Error(error.message, { cause: error })
-    normalizedError.code = "BINANCE_FILTER_REJECTED"
+    normalizedError.code = "DEFINITE_EXCHANGE_FILTER_REJECTED"
     return { ...result, errors: [normalizedError] }
   }
 
