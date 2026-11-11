@@ -86,6 +86,7 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
   assert.ok(sentMessages.some((message) => message.includes("BOT STARTED")), "A successful Harvester startup must produce a Telegram lifecycle notification")
   assert.ok(sentMessages.some((message) => message.includes("PAUSED") && message.includes("DOGE/USDT")), "A paused market must produce a Telegram safety notification with its symbol")
   assert.ok(sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
+  assert.ok(sentMessages.includes("💰 FILL RECEIVED · DOGE/USDT @ 0.075 × 400\\n#trade-123"), "Harvester must deliver the exact compact, normalized fill message from its application-owned formatter")
   assert.ok(sentMessages.some((message) => message.includes("BOT RECOVERY COMPLETED") && message.includes("0.25")), "A completed recovery cycle must produce a Telegram completion notification")
   assert.ok(sentMessages.some((message) => message.includes("BOT STOPPED")), "A completed Harvester shutdown must produce a Telegram lifecycle notification")
   assert.deepEqual(loggerErrors, [], "Successful optional Telegram delivery must not create application error diagnostics")
