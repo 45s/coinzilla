@@ -2632,10 +2632,12 @@ export function makeConservativeTradingEngine({
       }
     }
 
-    const update = await runTransition({
-      task: async () => {
-        const current = state.volatilityProtection.get(symbol) ??
-          createVolatilityProtectionState({ symbol })
+    let update
+    try {
+      update = await runTransition({
+        task: async () => {
+          const current = state.volatilityProtection.get(symbol) ??
+            createVolatilityProtectionState({ symbol })
         const activeBuyOrders = state.registry.getActiveOrders()
           .filter((order) => order.market.symbol === symbol && order.side === "BUY")
         const data = currentSnapshot?.ok ? currentSnapshot.data : currentSnapshot?.data
@@ -2709,17 +2711,21 @@ export function makeConservativeTradingEngine({
           })
         }
 
-        return {
-          shouldCancel,
-          mode: transition.state.mode,
-          reason: transition.state.reason,
-        }
-      },
-    })
+          return {
+            skipped: false,
+            shouldCancel,
+            mode: transition.state.mode,
+            reason: transition.state.reason,
+          }
+        },
+      })
+    } catch (error) {
+      return toResult({ error })
+    }
 
-    if (!update?.ok) return update
-    if (update.data.skipped) return toResult({ data: update.data })
-    if (update.data.shouldCancel) {
+    if (!update) return toResult({ error: new Error("Volatility protection transition returned no result") })
+    if (update.skipped) return toResult({ data: update })
+    if (update.shouldCancel) {
       const cancellation = await cancelOwnedBuyOrders({
         reason: "HIGH_VOLATILITY_PROTECTION",
         symbol,
@@ -2734,10 +2740,12 @@ export function makeConservativeTradingEngine({
       }
     }
 
-    const settled = await runTransition({
-      task: async () => {
-        const current = state.volatilityProtection.get(symbol) ??
-          createVolatilityProtectionState({ symbol })
+    let settled
+    try {
+      settled = await runTransition({
+        task: async () => {
+          const current = state.volatilityProtection.get(symbol) ??
+            createVolatilityProtectionState({ symbol })
         const activeBuyOrderCount = state.registry.getActiveOrders()
           .filter((order) => order.market.symbol === symbol && order.side === "BUY").length
         const transition = transitionVolatilityProtection({
@@ -2754,15 +2762,18 @@ export function makeConservativeTradingEngine({
             volatilityRatio: transition.state.volatilityRatio,
           })
         }
-        return { recovered: transition.recovered, state: transition.state }
-      },
-    })
-    if (!settled?.ok) return settled
-    if (settled.data.recovered) {
+          return { recovered: transition.recovered, state: transition.state }
+        },
+      })
+    } catch (error) {
+      return toResult({ error })
+    }
+    if (!settled) return toResult({ error: new Error("Volatility protection settlement returned no result") })
+    if (settled.recovered) {
       const resumed = await evaluateLatest({ symbol })
       if (!resumed?.ok) return resumed
     }
-    return toResult({ data: settled.data })
+    return toResult({ data: settled })
   }
 
   const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
