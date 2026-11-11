@@ -60,6 +60,7 @@ test("fetches public Spot exchange filters and current ticker price without cred
     maxQuantity: "100000.00000000",
     minNotional: "5.00000000",
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    unvalidatedConstraints: [],
     environment: "testnet",
   }, "The normalized metadata must preserve exact exchange decimal strings.")
 })
@@ -192,34 +193,22 @@ test("reports Binance HTTP, malformed JSON, and network failures clearly", async
   )
 })
 
-test("rejects unvalidated active symbol and exchange filters but ignores filters exclusive to unsupported order types", async () => {
+test("preserves unsupported active filters as non-blocking diagnostics and ignores filters exclusive to unsupported order types", async () => {
   const base = createExchangeInfo()
-  await assert.rejects(
-    fetchBinanceSpotMetadata({
-      symbol: "ADAFDUSD",
-      fetchImpl: async () => createResponse({
-        ...base,
-        symbols: [{ ...base.symbols[0], filters: [...base.symbols[0].filters, { filterType: "PERCENT_PRICE", multiplierUp: "1.2" }] }],
-      }),
-    }),
-    /not validated.*PERCENT_PRICE/i,
-    "A dynamic price-band filter must not be silently ignored by a generator that cannot validate it.",
-  )
-  await assert.rejects(
-    fetchBinanceSpotMetadata({
-      symbol: "ADAFDUSD",
-      fetchImpl: async () => createResponse({
-        ...base,
-        exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 }],
-      }),
-    }),
-    /not validated.*EXCHANGE_MAX_NUM_ORDERS/i,
-    "An exchange-wide order constraint must be reported as unsupported.",
-  )
   const responses = [
     createResponse({
       ...base,
-      symbols: [{ ...base.symbols[0], filters: [...base.symbols[0].filters, { filterType: "MARKET_LOT_SIZE", minQty: "0", maxQty: "0", stepSize: "0" }] }],
+      symbols: [{
+        ...base.symbols[0],
+        filters: [
+          ...base.symbols[0].filters,
+          { filterType: "PERCENT_PRICE_BY_SIDE", bidMultiplierUp: "1.2", bidMultiplierDown: "0.8", askMultiplierUp: "1.2", askMultiplierDown: "0.8", avgPriceMins: 5 },
+          { filterType: "MAX_NUM_ORDERS", maxNumOrders: 25 },
+          { filterType: "FUTURE_ACTIVE_FILTER", enabled: true },
+          { filterType: "MARKET_LOT_SIZE", minQty: "0", maxQty: "0", stepSize: "0" },
+        ],
+      }],
+      exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 }],
     }),
     createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
   ]
@@ -227,9 +216,15 @@ test("rejects unvalidated active symbol and exchange filters but ignores filters
     symbol: "ADAFDUSD",
     fetchImpl: async () => responses.shift(),
   })
-  assert.equal(metadata.symbol, "ADAFDUSD", "Filters exclusive to unsupported MARKET orders must not block the current LIMIT/LIMIT_MAKER configuration.")
-})
 
+  assert.equal(metadata.symbol, "ADAFDUSD", "Unsupported active filters must not block generating a pair configuration.")
+  assert.deepEqual(metadata.unvalidatedConstraints, [
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "OPEN_ORDER_COUNT_PER_MARKET", scope: "ACCOUNT", sourceFilterType: "MAX_NUM_ORDERS" },
+    { type: "UNMODELED_EXCHANGE_CONSTRAINT", scope: "SYMBOL", sourceFilterType: "FUTURE_ACTIVE_FILTER" },
+    { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE", scope: "EXCHANGE", sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
+  ], "Unsupported active filters must remain visible as canonical diagnostics without being treated as locally validated.")
+})
 test("accepts omitted optional price and maximum-notional bounds without inventing values", async () => {
   const responses = [
     createResponse(createExchangeInfo({
