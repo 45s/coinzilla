@@ -56,6 +56,7 @@ function createMarketState(symbol) {
     bufferedEvents: [],
     fatalReason: null,
     queue: Promise.resolve(),
+    observerQueue: Promise.resolve(),
   }
 }
 
@@ -111,6 +112,7 @@ function createCandleHistoryService({
   broker,
   logger = {},
   now = Date.now,
+  onSnapshot,
 } = {}) {
   if (!broker || typeof broker !== "object") {
     throw new TypeError("candle history service requires a broker port")
@@ -124,9 +126,14 @@ function createCandleHistoryService({
   if (typeof now !== "function") {
     throw new TypeError("candle history service now must be a function")
   }
+  if (onSnapshot !== undefined && typeof onSnapshot !== "function") {
+    throw new TypeError("candle history service onSnapshot must be a function when provided")
+  }
+  const snapshotObserver = onSnapshot ?? (async () => {})
 
   const markets = new Map()
   let startPromise
+  let freshnessMonitor
 
   function snapshot({ symbol } = {}) {
     const state = markets.get(symbol)
@@ -134,9 +141,10 @@ function createCandleHistoryService({
       return toResult({ error: new Error("No candle history was started for " + (symbol ?? "unknown symbol")) })
     }
 
+    const observedAt = now()
     const isFresh = state.lastEventAt !== null && isMarketDataFresh({
       timestamp: state.lastEventAt,
-      now: now(),
+      now: observedAt,
     })
     const blockers = []
     if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
@@ -163,10 +171,24 @@ function createCandleHistoryService({
           historyCount: state.candles.length,
           requiredHistoryCount: REQUIRED_CANDLE_COUNT,
           lastEventAt: state.lastEventAt,
+          observedAt,
           lastClosedCandleOpenTime: state.candles.at(-1)?.openTime ?? null,
         }),
       }),
     })
+  }
+
+  function notifySnapshot({ state } = {}) {
+    const currentSnapshot = snapshot({ symbol: state.symbol })
+    state.observerQueue = state.observerQueue
+      .then(() => snapshotObserver({ symbol: state.symbol, snapshot: currentSnapshot }))
+      .catch((error) => {
+        logger.error?.({
+          message: "Volatility snapshot observer failed",
+          symbol: state.symbol,
+          error,
+        })
+      })
   }
 
   function failMarket({ state, reason, error, fatal = false } = {}) {
@@ -306,7 +328,7 @@ function createCandleHistoryService({
       if (state.bufferedEvents.length >= MAX_BUFFERED_LIVE_EVENTS) {
         state.bufferOverflow = true
         failMarket({ state, reason: "LIVE_BUFFER_OVERFLOW" })
-        return Promise.resolve()
+        return notifySnapshot({ state })
       }
       state.bufferedEvents.push({ candle, receivedAt })
       return Promise.resolve()
@@ -329,7 +351,15 @@ function createCandleHistoryService({
     state.queue = state.queue
       .then(() => processLiveCandle({ state, candle, receivedAt }))
       .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
+      .then(() => notifySnapshot({ state }))
     return state.queue
+  }
+
+  function stopFreshnessMonitorIfIdle() {
+    if (freshnessMonitor && [...markets.values()].filter((state) => state.subscriptionReady).every((state) => state.stopped)) {
+      clearInterval(freshnessMonitor)
+      freshnessMonitor = undefined
+    }
   }
 
   async function subscribeMarket({ state, subscriptions } = {}) {
@@ -359,6 +389,7 @@ function createCandleHistoryService({
       kind: "candle",
       unsubscribe: async () => {
         state.stopped = true
+        stopFreshnessMonitorIfIdle()
         const errors = []
 
         try {
@@ -369,6 +400,7 @@ function createCandleHistoryService({
 
         try {
           await state.queue
+          await state.observerQueue
         } catch (error) {
           errors.push(error)
         }
@@ -437,8 +469,11 @@ function createCandleHistoryService({
           receivedAt: event.receivedAt,
         }))
         .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
+        .then(() => notifySnapshot({ state }))
     }
     await state.queue
+    notifySnapshot({ state })
+    await state.observerQueue
   }
 
   function start({ pairs, subscriptions = [] } = {}) {
@@ -464,6 +499,14 @@ function createCandleHistoryService({
       await Promise.all(enabledSymbols.map((symbol) =>
         loadInitialHistory({ state: markets.get(symbol) })
       ))
+      if (enabledSymbols.some((symbol) => markets.get(symbol)?.subscriptionReady) && onSnapshot && !freshnessMonitor) {
+        freshnessMonitor = setInterval(() => {
+          for (const state of markets.values()) {
+            if (state.subscriptionReady && !state.stopped) notifySnapshot({ state })
+          }
+        }, 1_000)
+        freshnessMonitor.unref?.()
+      }
       return toResult({ data: Object.freeze({ symbols: Object.freeze(enabledSymbols) }) })
     })()
     return startPromise
