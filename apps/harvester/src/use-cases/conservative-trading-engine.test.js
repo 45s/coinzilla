@@ -2418,6 +2418,10 @@ test("does not publish recovery completion when the cycle is ineligible", async 
   })
   assert.equal(result.ok, false)
   assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "BLOCKED")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
 })
 
 
