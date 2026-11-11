@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
 import { createCandleHistoryService } from "../src/use-cases/create-candle-history-service.js"
 
-const INTERVAL_MS = 60_000
+export const INTERVAL_MS = 60_000
 
-function createCandle({
+export function createCandle({
   symbol = "BTCUSDT",
   openTime,
   isClosed = true,
@@ -27,7 +27,7 @@ function createCandle({
   })
 }
 
-function createHistoryFrom(symbol, startIndex, count, includeForming = false) {
+export function createHistoryFrom(symbol, startIndex, count, includeForming = false) {
   const candles = Array.from({ length: count }, (_, index) => createCandle({
     symbol,
     openTime: (startIndex + index) * INTERVAL_MS,
@@ -42,11 +42,11 @@ function createHistoryFrom(symbol, startIndex, count, includeForming = false) {
   return candles
 }
 
-function createHistory(symbol, count = 100, includeForming = false) {
+export function createHistory(symbol, count = 100, includeForming = false) {
   return createHistoryFrom(symbol, 0, count, includeForming)
 }
 
-function createFixture({
+export function createFixture({
   pairs = { BTCUSDT: { enabled: true }, DOGEUSDT: { enabled: false } },
   historyBySymbol = {},
   onSubscribe,
@@ -90,7 +90,7 @@ function createFixture({
   return { service, broker, calls, candleHandlers, subscriptions, clock, start }
 }
 
-function getSnapshot(fixture, symbol = "BTCUSDT") {
+export function getSnapshot(fixture, symbol = "BTCUSDT") {
   const result = fixture.service.getSnapshot({ symbol })
   assert.equal(result.ok, true, "A started market must return its candle-history snapshot.")
   return result.data
