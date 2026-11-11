@@ -145,9 +145,7 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
     [...valid, valid[2]],
     valid.map((filter) => filter.filterType === "LOT_SIZE" ? { ...filter, stepSize: "0" } : filter),
     valid.map((filter) => filter.filterType === "MIN_NOTIONAL" ? { ...filter, minNotional: "NaN" } : filter),
-    valid.map((filter) => filter.filterType === "PRICE_FILTER" ? { filterType: "PRICE_FILTER", tickSize: filter.tickSize } : filter),
     [...valid, { filterType: "NOTIONAL", minNotional: "5", maxNotional: "NaN" }],
-    [...valid, { filterType: "NOTIONAL", minNotional: "5" }],
   ]
 
   for (const filters of invalidFilters) {
@@ -230,6 +228,26 @@ test("rejects unvalidated active symbol and exchange filters but ignores filters
     fetchImpl: async () => responses.shift(),
   })
   assert.equal(metadata.symbol, "ADAFDUSD", "Filters exclusive to unsupported MARKET orders must not block the current LIMIT/LIMIT_MAKER configuration.")
+})
+
+test("accepts omitted optional price and maximum-notional bounds without inventing values", async () => {
+  const responses = [
+    createResponse(createExchangeInfo({
+      filters: [
+        { filterType: "PRICE_FILTER", tickSize: "0.0001" },
+        { filterType: "LOT_SIZE", minQty: "0.1", maxQty: "100000", stepSize: "0.1" },
+        { filterType: "NOTIONAL", minNotional: "5" },
+      ],
+    })),
+    createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+  ]
+  const metadata = await fetchBinanceSpotMetadata({
+    symbol: "ADAFDUSD",
+    fetchImpl: async () => responses.shift(),
+  })
+  assert.equal(metadata.minPrice, undefined, "An omitted optional minimum price must remain absent.")
+  assert.equal(metadata.maxPrice, undefined, "An omitted optional maximum price must remain absent.")
+  assert.equal(metadata.maxNotional, undefined, "An omitted optional NOTIONAL maximum must remain absent.")
 })
 
 test("validates current reference price against active PRICE_FILTER bounds", async () => {

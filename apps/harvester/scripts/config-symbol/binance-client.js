@@ -51,11 +51,8 @@ function readExactlyOneFilter(filters, filterType) {
   return matches[0]
 }
 
-function normalizeOptionalNonNegativeExchangeDecimal(value, field, { required = false } = {}) {
-  if (value === undefined || value === null) {
-    if (required) throw new TypeError("Binance " + field + " is required")
-    return undefined
-  }
+function normalizeOptionalNonNegativeExchangeDecimal(value, field) {
+  if (value === undefined || value === null) return undefined
   if (typeof value !== "string" || value.trim() !== value) {
     throw new TypeError("Binance " + field + " must be a decimal string")
   }
@@ -113,17 +110,17 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
   }
   validateUniqueFilterTypes(filters, "symbol filters for " + requestedSymbol)
   rejectUnvalidatedFilters(filters, "symbol " + requestedSymbol)
-  const exchangeFilters = exchangeInfo.exchangeFilters
+  const exchangeFilters = exchangeInfo.exchangeFilters ?? []
   if (!Array.isArray(exchangeFilters)) {
-    throw new TypeError("Binance exchangeInfo response is missing its exchangeFilters array")
+    throw new TypeError("Binance exchangeInfo response has malformed exchangeFilters")
   }
   validateUniqueFilterTypes(exchangeFilters, "exchange filters")
   rejectUnvalidatedFilters(exchangeFilters, "exchange", new Set())
   const priceFilter = readExactlyOneFilter(filters, "PRICE_FILTER")
   const lotSizeFilter = readExactlyOneFilter(filters, "LOT_SIZE")
   const tickSize = normalizePositiveExchangeDecimal(priceFilter.tickSize, "PRICE_FILTER.tickSize")
-  const minPrice = normalizeOptionalNonNegativeExchangeDecimal(priceFilter.minPrice, "PRICE_FILTER.minPrice", { required: true })
-  const maxPrice = normalizeOptionalNonNegativeExchangeDecimal(priceFilter.maxPrice, "PRICE_FILTER.maxPrice", { required: true })
+  const minPrice = normalizeOptionalNonNegativeExchangeDecimal(priceFilter.minPrice, "PRICE_FILTER.minPrice")
+  const maxPrice = normalizeOptionalNonNegativeExchangeDecimal(priceFilter.maxPrice, "PRICE_FILTER.maxPrice")
   if (minPrice && maxPrice && compareDecimal({ left: minPrice, right: maxPrice }) > 0) {
     throw new Error("Binance PRICE_FILTER.minPrice exceeds PRICE_FILTER.maxPrice")
   }
@@ -166,7 +163,6 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
     ? normalizeOptionalNonNegativeExchangeDecimal(
       notionalFilter.maxNotional,
       "NOTIONAL.maxNotional",
-      { required: true },
     )
     : undefined
 
