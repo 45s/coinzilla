@@ -60,6 +60,7 @@ test("fetches public Spot exchange filters and current ticker price without cred
     maxQuantity: "100000.00000000",
     minNotional: "5.00000000",
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    environment: "testnet",
   }, "The normalized metadata must preserve exact exchange decimal strings.")
 })
 
