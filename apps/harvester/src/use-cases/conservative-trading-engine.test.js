@@ -6487,3 +6487,35 @@ test("definite Binance filter rejection removes PENDING without marking the orde
   assert.equal(engine.getOrders().length, 0, "The definitely rejected PENDING order must be removed instead of becoming a phantom active order.")
   assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED", "The Journal must record a definite rejection, not UNKNOWN.")
 });
+
+test("publishes a CONTINUE_SELL_THROUGH outcome for a fully filled SELL below the profit target", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "continue-sell-through" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
+})
