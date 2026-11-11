@@ -1,78 +1,45 @@
 # Indicators roadmap
 
-- Status: Proposed; package not yet created as a workspace project
-- Type: Proposed package roadmap
-- Proposed owner: Indicators
-- Proposed package: `@coinzilla/indicators`
-- Scope authority: [README.md](./README.md)\n- Agent instructions: [AGENTS.md](./AGENTS.md)
-- First consumer: [Harvester volatility protection, issue #1016](../../apps/harvester/docs/volatility-protection.md)\n- Later consumer: [Harvester adaptive price step, PR #1013](../../apps/harvester/ROADMAP.md)
+- Status: In progress
+- Owner: Indicators domain
+- Package: `@coinzilla/indicators`
+- First consumer: [Harvester volatility protection #1016](../../apps/harvester/docs/volatility-protection.md)
+- Later consumer: [Harvester adaptive price step #1013](../../apps/harvester/ROADMAP.md)
 
-## Current status
+## Current delivery
 
-No package manifest, source implementation, dependencies, public exports, tests or runtime behavior exist yet. This roadmap records a proposal and discussion backlog only. Do not describe the Indicators package or any indicator as implemented until a dedicated implementation PR adds the workspace package and exact-head CI verifies it.
+The first package capability is implemented in the open [PR #1018](https://github.com/45s/coinzilla/pull/1018). The package provides:
 
-## Proposed mission
+- Parameterized ATR series with standard initial simple-average seed and Wilder smoothing.
+- NATR series, normalized against each matching candle close.
+- A reusable exact current/reference volatility ratio.
+- Strict completed-candle, OHLC, ordering, interval-continuity and precision validation.
+- Immutable outputs, public exports, offline tests and enforced package coverage.
 
-Provide reusable, deterministic, exchange-neutral technical indicators and market-analysis calculations over normalized caller-supplied data. Keep indicator mathematics in this package; keep strategy, risk, order and execution policy in consuming applications.
+The implementation uses `@coinzilla/utils` exact decimal-string arithmetic. It does not use JavaScript Number for price/indicator values and introduces no exchange/network dependency.
 
-## Prioritized initial consumer — Harvester volatility protection (#1016)\n\nThe first release should support the volatility measurements required by Harvester protection. Keep the package reusable: Harvester selects 1-minute candles, ATR period 14, Wilder smoothing and a 60-observation reference window; those values must be caller-supplied options, not package-wide strategy defaults. The package does not implement thresholds, hysteresis, order blocking or recovery SELL policy.\n\n## Proposed phases
+## Remaining work
 
-1. [ ] **Agree package boundary and API conventions.**
-   - Confirm the package name/path and whether the package should support current-value and historical-series APIs.
-   - Define normalized candle shape, timestamp/interval units, ordering, gaps, duplicate timestamps, invalid values and insufficient-history results.
-   - Decide decimal/precision policy and whether calculations use decimal strings, integer-scaled values or a documented numeric representation.
-   - Define error/result conventions, validation limits, JSDoc, public exports and compatibility policy.
-   - Inspect existing packages and consumers before adding dependencies or abstractions.
+1. [~] **Finish first capability and merge PR #1018.** Keep exact reference examples, error-path tests, package metadata, README/AGENTS and workspace CI synchronized.
+2. [ ] **Harvester candle lifecycle.** Add the normalized candle methods to Harvester's application-owned BrokerPort and adapter; load startup history, subscribe to live Kline events, retain completed candles, detect stale/gapped data and backfill after reconnect.
+3. [ ] **Harvester protection policy.** Consume ATR/NATR/ratio per market; keep period/timeframe/reference-window choices, thresholds, hysteresis, fallback, Journal diagnostics, central BUY gate, owned-BUY cancellation and recovery-SELL exception in Harvester.
+4. [ ] **Adaptive price step.** Treat PR #1013 as a separate strategy consumer. Keep baseline config unchanged; define coefficient bounds, floor behavior, affected strategies and order-replacement policy before implementation.
+5. [ ] **Expand indicators only for concrete consumers.** EMA, SMA, RSI, MACD, Fibonacci and other candidates remain deferred until a consumer and calculation contract justify them.
 
-2. [ ] **Implement parameterized ATR (first consumer uses period 14 and Wilder smoothing).**
-   - Freeze the ATR definition, including True Range, period, smoothing method and warm-up behavior.
-   - Add deterministic tests for known reference series, edge cases, malformed candles, gaps, unsorted input, insufficient history and precision boundaries.
-   - Keep input exchange-neutral and supplied by the caller; do not add broker/network access.
+## Calculation contract
 
-3. [ ] **Add NATR and a reusable current/reference volatility ratio.**
-   - Define normalized ATR (ATR relative to close price) and its zero/invalid-close behavior.
-   - Define the current-versus-reference volatility ratio for one market and compatible timeframe.
-   - Keep reference-window selection, coefficient bounds, smoothing/hysteresis and fallback policy with the consuming strategy unless a genuinely generic mathematical operation is identified.
+- Inputs are caller-supplied completed candles with `openTime` in Unix milliseconds and exact decimal-string `high`, `low`, and `close` values.
+- The caller supplies `intervalMs`; the package rejects duplicate, unordered or discontinuous candles rather than silently filling gaps.
+- ATR's first True Range is high-low; the first ATR is the simple average of the first `period` True Ranges. Subsequent values use Wilder's recurrence.
+- ATR/NATR output defaults to 18 fractional digits; volatility ratio defaults to 8. Both use half-up rounding unless the caller selects another supported mode.
+- Division rounds to the configured scale at each operation. This is a deterministic decimal contract, not an exact rational-number representation.
+- Insufficient history, invalid periods/scales, malformed OHLC, unfinished candles and invalid reference values fail with `TypeError` or `RangeError`.
 
-4. [ ] **Validate historical-series use.**
-   - Ensure deterministic historical outputs can be consumed by offline analysis/backtesting without importing a simulator or application.
-   - Do not build a backtesting engine or market-data storage layer into this package.
+## Ownership boundary
 
-5. [ ] **Integrate consumers separately.**
-   - Harvester integration is a separate consumer-owned change: it selects candle timeframe/history, configuration, warning/pause/resume thresholds, hysteresis, data-quality fallback, strategy touchpoints, diagnostics and order lifecycle behavior. Issue #1016 is the first consumer; adaptive price-step planning in PR #1013 follows separately.
-   - Future applications request and integrate the public API; they do not modify this package's internals.
-   - Add consumer regression tests and keep existing behavior unchanged when the feature is disabled.
+- Indicators owns pure calculations and their input/output contracts.
+- Brokers owns venue-specific candle retrieval, stream lifecycle and DTO normalization.
+- Harvester owns market-data history/freshness, trading policy, order lifecycle and operational fallbacks.
+- Utils owns domain-neutral exact decimal arithmetic; it must not absorb indicator or strategy concepts.
 
-6. [ ] **Expand the catalogue only when demanded.**
-   - Evaluate EMA/SMA, MACD, RSI, stochastic, Fibonacci and other tools only against a concrete consumer requirement and a stable, testable contract.
-   - Avoid speculative indicator frameworks, plugin registries or large dependency bundles.
-
-## Ownership and dependency rules
-
-- This package owns indicator calculations, input contracts, tests, documentation and its roadmap.
-- Applications own trading decisions, risk policy, configuration, order placement/replacement and operational fallbacks.
-- Brokers own venue-specific data retrieval and DTO mapping.
-- Entities own canonical financial/domain values and invariants.
-- Utils remains the home for genuinely generic primitives; do not move indicator/strategy concepts into `@coinzilla/utils`.
-- Consumers use public exports only; no imports from private package source paths.
-- Keep runtime dependencies at zero unless a specific calculation justifies one and its precision, maintenance and security impact are reviewed.
-
-## Acceptance gates for the first release
-
-- [ ] Public API and normalized candle contract are agreed and documented.
-- [ ] ATR outputs match independently verified reference examples.
-- [ ] Invalid, insufficient, discontinuous and adversarial inputs fail deterministically and safely.
-- [ ] Current-value and historical-series behavior is consistent, or one is explicitly deferred with a reason.
-- [ ] Package tests and meaningful line/branch coverage pass in required CI.
-- [ ] Public exports, package metadata, README, AGENTS and roadmap agree.
-- [ ] No exchange SDK, broker, Harvester or other application dependency is introduced.
-- [ ] Harvester consumer integration is separate and does not change existing behavior when disabled.
-- [ ] Repository package map, domain ownership and documentation inventory are updated when the package is actually created.
-
-## Explicit non-goals for the initial capability
-
-- Trading signals, BUY/SELL decisions or recommendations.
-- Automatic order placement, cancellation or repricing.
-- Exchange candle fetching, subscriptions or broker adapters.
-- Strategy-specific coefficient limits, timeframe selection or fallback policy.
-- A complete technical-analysis framework or every commonly known indicator.
+No exchange operations are part of this package. It must never place, cancel or reprice orders.

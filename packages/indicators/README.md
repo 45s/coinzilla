@@ -1,84 +1,88 @@
-# Indicators — proposed shared package
+# @coinzilla/indicators
 
-- Status: Proposal only; not yet a workspace package
-- Proposed package name: `@coinzilla/indicators`
-- Proposed path: `packages/indicators/`
-- Initial consumer: Harvester high-volatility protection ([issue #1016](https://github.com/45s/coinzilla/issues/1016)); adaptive price-step planning is a later consumer ([PR #1013](https://github.com/45s/coinzilla/pull/1013))
-- Agent instructions: [AGENTS.md](./AGENTS.md)\n- Delivery plan: [ROADMAP.md](./ROADMAP.md)
+Reusable, deterministic, exchange-neutral technical indicator calculations over caller-supplied completed market candles.
 
-## Purpose
+- Owner: Indicators domain
+- First consumer: Harvester high-volatility protection ([issue #1016](https://github.com/45s/coinzilla/issues/1016))
+- Later consumer: Harvester adaptive price-step planning ([PR #1013](https://github.com/45s/coinzilla/pull/1013))
+- Runtime dependencies: `@coinzilla/utils` for exact decimal-string arithmetic; no exchange SDK or network dependency
 
-Create a reusable, exchange-neutral library of technical indicators and market-analysis calculations. The long-term idea is a small, well-tested collection of trading indicators/tools that multiple applications can use without copying formulas or depending on exchange SDKs.
+## Public API
 
-This directory currently contains planning documents only. There is no package manifest, source code, public API, dependency or runtime behavior yet. The package name and exact scope remain proposals until the design discussion is complete.
+Import supported functions from the package entry point:
 
-## Ownership boundary
+```js
+import {
+  calculateAtrSeries,
+  calculateNatrSeries,
+  calculateVolatilityRatio,
+} from "@coinzilla/indicators"
+```
 
-The proposed package owns:
+### Candle input
 
-- Deterministic indicator calculations over normalized, caller-supplied market data.
-- Clearly documented calculation definitions, input validation, warm-up requirements, precision and result/error semantics.
-- Unit tests for normal, boundary, insufficient-history, malformed and discontinuous inputs.
-- Historical-series calculations where they are useful for backtesting and analysis, as well as current-value calculations for live consumers.
+ATR and NATR accept an array of completed candles with this minimum shape:
 
-The proposed package does **not** own:
+```js
+{
+  openTime: 1_700_000_000_000, // Unix milliseconds
+  high: "12.50",
+  low: "12.00",
+  close: "12.25",
+  isClosed: true,
+}
+```
 
-- Exchange API calls, WebSocket subscriptions, broker DTOs or exchange-specific candle retrieval.
-- Trading strategies, BUY/SELL decisions, order planning or repricing policy.
-- Harvester configuration, portfolio/accounting state, risk limits or order lifecycle.
-- Backtest execution engines or application-specific market-data storage.
+The caller supplies `intervalMs` so the package can reject duplicate, unordered or missing bars. Candle timestamps must be non-negative safe integers and consecutive candles must be exactly one interval apart. `high`, `low` and `close` must be exact positive decimal strings; close must lie within the high-low range. Forming candles are rejected.
 
-Consumers provide normalized candles and decide how indicator outputs affect their own behavior. Brokers or application adapters may retrieve and normalize exchange data, but the indicator library must remain independent of those integrations.
+### ATR
 
-## Initial capability proposal
+`calculateAtrSeries({ candles, intervalMs, period, outputScale = 18, rounding = "half-up" })` returns an immutable series of `{ openTime, value }` observations.
 
-The first concrete use case is volatility measurement for Harvester's high-volatility protection (#1016). Adaptive priceStepPercent planning (#1013) is a later consumer of the same reusable calculations.\n\nThe Harvester consumer initially selects 1-minute completed candles, ATR period 14 with Wilder smoothing, NATR, and a ratio against a 60-observation reference window. These are **consumer policy parameters**, not hard-coded defaults in this package. The public calculation API must accept explicit periods/options so other applications can reuse the same calculations with different intervals and windows.
+- True Range is the maximum of high-low, absolute high-to-previous-close and absolute low-to-previous-close.
+- The first candle's True Range is high-low because no previous close exists.
+- The first ATR is the simple average of the first `period` True Ranges.
+- Later observations use Wilder smoothing: `((previous ATR × (period - 1)) + current TR) / period`.
+- The first result is timestamped at candle `period - 1`; later results are timestamped at their corresponding candle.
 
-Candidate calculations:
+Example with period 2:
 
-1. **ATR (Average True Range):** a measure of absolute true-range movement over a configured period.
-2. **NATR / normalized ATR:** ATR expressed relative to close price, making volatility more comparable across different price levels.
-3. **Volatility ratio/coefficient:** current normalized volatility divided by a same-market reference volatility.
+```js
+const atr = calculateAtrSeries({
+  candles,
+  intervalMs: 60_000,
+  period: 2,
+  outputScale: 8,
+})
+// [{ openTime: 60000, value: "2.5" }, { openTime: 120000, value: "2.75" }]
+```
 
-Illustrative model:
+### NATR and volatility ratio
 
-`ATR% = ATR / Close × 100`
+`calculateNatrSeries(options)` uses the matching candle close for each ATR observation and returns `ATR / Close × 100` as a percentage.
 
-`VolatilityCoefficient = CurrentATR% / ReferenceATR%`
+`calculateVolatilityRatio({ current, reference, outputScale = 8, rounding = "half-up" })` returns the exact decimal-string ratio `current / reference`. Current volatility may be zero; the reference must be positive. Selecting a reference window or averaging its observations is consumer policy, not part of this calculation.
 
-`EffectivePriceStepPercent = ConfiguredPriceStepPercent × VolatilityCoefficient`
+## Precision and errors
 
-Example: if configured `priceStepPercent = 0.5`, current normalized volatility is 1.5 times its reference, and the illustrative coefficient is 1.5, the derived step is `0.75%`.
+- Price inputs and all returned measurements are decimal strings; JavaScript Number inputs are rejected.
+- Division uses `@coinzilla/utils` exact decimal arithmetic with an explicit output scale (0–100) and rounding mode: `toward-zero`, `away-from-zero` or `half-up`.
+- ATR and NATR default to 18 fractional digits and half-up rounding. The volatility ratio defaults to 8 fractional digits and half-up rounding.
+- Wilder's recursive ATR calculation rounds each division to the requested output scale; later values use that rounded prior ATR.
+- Invalid options, malformed OHLC values, unfinished candles, non-contiguous history and insufficient history throw `TypeError` or `RangeError`. No missing candle is fabricated or interpolated.
+- Returned arrays and observations are frozen.
 
-This is a mathematical example for the later adaptive-step consumer. It does not define the volatility-protection thresholds or any trading policy. The indicator package returns calculations only; Harvester decides how to pause/resume trading and how a later adaptive step is bounded.
+## Ownership and non-goals
 
-## Candidate future catalogue
+Indicators owns mathematical calculations only. Brokers owns exchange data retrieval and normalization. Harvester owns candle-history lifecycle, reference-window selection, thresholds, hysteresis, fallbacks, configuration, order gates and recovery SELL policy.
 
-These are ideas, not a commitment to implement every indicator:
+This package does not fetch market data, persist history, generate trading signals, place/cancel/reprice orders, or define strategy defaults. Harvester's initial use of 1-minute candles, ATR period 14 and a 60-observation reference is caller policy, not a package-wide default.
 
-- **Volatility:** ATR, NATR, historical volatility, volatility ratio.
-- **Trend:** EMA, SMA, MACD and trend-strength measures.
-- **Momentum:** RSI, stochastic oscillator and rate of change.
-- **Price levels:** Fibonacci retracements/extensions, percentage distances and price ranges.
-- **Derived tools:** adaptive thresholds and reusable indicator combinations, only where a concrete consumer requires them.
+## Development
 
-Add capabilities based on real use cases and an agreed public contract, not because an indicator appears on a generic checklist.
+```sh
+pnpm --filter @coinzilla/indicators test
+pnpm --filter @coinzilla/indicators run test:coverage
+```
 
-## Design principles
-
-- Pure, deterministic functions; no hidden network, filesystem, clock, environment or mutable-global dependencies.
-- Exchange-neutral normalized candle inputs; no Binance/Bybit/other venue SDK dependencies.
-- Explicit timestamp, interval, ordering, gap, warm-up and insufficient-history semantics.
-- Preserve exact decimal-string inputs where source data is decimal text; document any numerical method/precision constraints rather than silently converting financial values through binary floating point.
-- Support both a single latest result and a historical result series when justified by the same coherent contract.
-- Small cohesive modules and explicit public exports; no generic `common` dumping ground.
-- No strategy policy: the consumer decides how an indicator result affects orders.
-- Tests and documentation are part of every delivered capability.
-
-## Related documents
-
-- [Indicators roadmap](./ROADMAP.md)
-- [Harvester Volatility Protection](../../apps/harvester/docs/volatility-protection.md)\n- [Harvester adaptive price-step proposal](../../apps/harvester/ROADMAP.md)
-- [Domain ownership](../../docs/engineering/DOMAIN_OWNERSHIP.md)
-- [Workspace package map](../../docs/workspace-package-map.md)
-- [Shared-utilities policy](../../docs/engineering/SHARED_UTILITIES_POLICY.md)
+The package coverage command enforces at least 90% line and 85% branch coverage. Tests are deterministic, offline and credential-free.

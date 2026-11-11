@@ -92,7 +92,7 @@ NATR is retained in diagnostics as well as the ratio. Raw ATR values must never 
                         - thresholds / hysteresis
                         - central order-submission gate
 
-### Broker capability proposed for implementation
+### Broker capability delivered
 
 The public @coinzilla/brokers API now exposes historical and live candles through PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter still do **not** expose them; that is the next consumer integration step. The normalized methods are:
 
@@ -102,6 +102,10 @@ The public @coinzilla/brokers API now exposes historical and live candles throug
 The Brokers implementation uses the existing native WebSocket API klines request for history and the public Kline Streams subscription for live data. It uses Binance server time to determine whether a historical candle was closed at query time. No REST fallback or third-party SDK is used.
 
 The normalized candle contract preserves symbol, interval, open/close timestamps in milliseconds, exact OHLCV decimal strings, and an isClosed flag. Historical completion is determined using Binance server time fetched immediately before the history request, not the local machine clock. Historical results must be validated and returned in ascending time order. The live stream may update a forming candle; Harvester commits it to indicator history only when Binance marks it closed.
+
+### Indicators calculation capability
+
+The Indicators package provides `calculateAtrSeries`, `calculateNatrSeries` and `calculateVolatilityRatio`. ATR uses a high-low first True Range, a simple-average seed and Wilder smoothing; NATR is ATR divided by the matching candle close times 100. Inputs are completed contiguous candles, with exact decimal-string prices and explicit interval milliseconds. Output scale and rounding are caller-configurable. The package does not select Harvester's reference window or thresholds. See the [Indicators API contract](../../../packages/indicators/README.md) and [roadmap](../../../packages/indicators/ROADMAP.md).
 
 ### Data integrity rules
 
@@ -180,7 +184,7 @@ Volatility state is process-local in the first implementation. It is not a subst
 ## 9. Delivery order
 
 1. **Brokers:** add the normalized historical-candle and live-candle public contract, Binance adapters, and offline protocol/normalization tests.
-2. **Indicators:** create the workspace package and implement parameterized ATR, NATR and volatility-ratio calculations with independent reference tests.
+2. **Indicators:** implement the reusable ATR, NATR and volatility-ratio API — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
 3. **Harvester market data:** fetch startup history, subscribe to live candles, maintain a bounded completed-candle series, detect stale/gapped data and backfill after reconnect.
 4. **Harvester protection:** implement per-market states, thresholds/hysteresis, the central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation.
 5. **Verification/docs:** complete the regression matrix, update operational guidance and roadmaps, and pass exact-head CI.

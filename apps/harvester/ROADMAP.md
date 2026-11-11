@@ -19,7 +19,7 @@
 ### Delivery order
 
 1. [x] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
-2. [ ] Indicators: create @coinzilla/indicators; implement parameterized ATR, NATR and volatility-ratio calculations with reference tests.
+2. [~] Indicators: implement parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
 3. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
 4. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
 5. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
@@ -28,7 +28,7 @@
 
 ## Adaptive price step — volatility-adjusted spacing
 
-**Status: PROPOSED — DESIGN NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the proposed shared [Indicators package](../../packages/indicators/README.md). Average True Range (ATR) is the leading candidate measure, but the package API and calculation contract are not yet approved.
+**Status: PROPOSED — STRATEGY POLICY NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the shared [Indicators package](../../packages/indicators/README.md). The package now provides parameterized ATR, NATR and volatility-ratio calculations; adaptive-step reference-window, coefficient bounds, baseline-floor and order-replacement policy remain open.
 
 ### Intended behavior
 
@@ -57,7 +57,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ### Ownership boundary
 
-- The proposed `@coinzilla/indicators` package owns exchange-neutral, deterministic indicator calculations over normalized candle data (for example ATR, normalized ATR and a volatility ratio).
+- The `@coinzilla/indicators` package owns exchange-neutral, deterministic indicator calculations over normalized candle data (ATR, NATR and volatility ratio).
 - Harvester owns the policy: candle timeframe and history requirements, reference window, coefficient bounds/smoothing, fallback behavior, configuration, which strategy decisions use the value, and when orders may be recalculated.
 - Brokers owns exchange-specific market-data retrieval and DTO adaptation. Indicator code must not import broker or exchange SDKs.
 - Existing orders must not be silently repriced when a new indicator value arrives. Any order replacement policy must be separately specified and tested.
@@ -65,8 +65,8 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ### Design questions to resolve before implementation
 
-1. **Indicator contract:** normalized candle shape, timestamp/interval semantics, missing-candle handling, precision and result/error shape.
-2. **ATR definition:** period, smoothing variant (for example Wilder's), warm-up/history requirements and closed-candle policy.
+1. **Consumer reference:** rolling reference window and how the baseline adapts across market regimes.
+2. **Timeframe and cadence:** candle interval, refresh frequency and whether the coefficient is stable between closed candles.
 3. **Reference:** rolling reference window and how the baseline adapts across market regimes.
 4. **Timeframe and cadence:** candle interval, refresh frequency and whether the coefficient is stable between closed candles.
 5. **Coefficient policy:** exact ratio, neutral point, smoothing/hysteresis and treatment of sudden volatility spikes.
@@ -78,10 +78,9 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ### Proposed delivery sequence
 
-1. [ ] Discuss and freeze the package boundary, candle contract and mathematical definition before implementation.
-2. [ ] Create the proposed Indicators package foundation and its own public API, tests, README and roadmap.
-3. [ ] Implement and validate ATR, normalized ATR and the volatility-ratio calculation in the owning package.
-4. [ ] Submit a separate Harvester consumer change for configuration, strategy policy and effective-step integration.
+1. [x] Define the package boundary, completed-candle contract and exact-decimal calculation behavior in the Indicators package.
+2. [x] Create the Indicators workspace package and public API for ATR, NATR and volatility ratio — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+3. [ ] Submit a separate Harvester consumer change for configuration, strategy policy and effective-step integration.
 5. [ ] Add regression coverage for multiple markets, invalid/stale history, bounds, smoothing, order lifecycle and unchanged behavior when disabled.
 6. [ ] Validate against historical/offline market data; consider TESTNET only under a separately approved bounded plan.
 

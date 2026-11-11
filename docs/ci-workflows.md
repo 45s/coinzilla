@@ -30,6 +30,8 @@ The two Harvester workflows and External Documentation Links run as additional c
 
 The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
 
+The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
+
 ## Markdown and documentation checks
 
 The required JavaScript Syntax workflow runs these documentation checks:

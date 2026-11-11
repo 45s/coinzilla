@@ -72,14 +72,13 @@ Domain-neutral shared helpers, including exact decimal arithmetic, result/valida
 
 - Roadmap: [packages/utils/ROADMAP.md](../packages/utils/ROADMAP.md)
 
-## Proposed future package (not in the workspace yet)
+### `packages/indicators/` — `@coinzilla/indicators`
 
-### `packages/indicators/` — proposed `@coinzilla/indicators`
+Exchange-neutral technical indicator calculations over caller-supplied completed candles. The package owns ATR, NATR and volatility-ratio calculations; it does not retrieve market data or define trading policy.
 
-Proposed exchange-neutral technical-indicator calculations over normalized market candles. This is not currently a workspace package: there is no package manifest, source implementation or published API. The first selected consumer is Harvester high-volatility protection (#1016); adaptive price-step planning (#1013) is a later consumer. The proposal separates reusable calculations from consumer-owned strategy decisions.
-
-- Proposal and boundary: [Indicators README](../packages/indicators/README.md)\n- Proposed domain instructions: [Indicators AGENTS](../packages/indicators/AGENTS.md)
-- Proposed delivery plan: [Indicators roadmap](../packages/indicators/ROADMAP.md)
+- README: [Indicators package contract](../packages/indicators/README.md)
+- Roadmap: [Indicators roadmap](../packages/indicators/ROADMAP.md)
+- Agent instructions: [Indicators AGENTS](../packages/indicators/AGENTS.md)
 
 ## Choosing where a change belongs
 

@@ -8,15 +8,16 @@ Coinzilla is a monorepo with independently maintained application and package do
 | Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
 | Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
 | Brokers | `packages/brokers/` | Broker contracts/adapters, exchange API integration, normalization, market/account/order I/O |
+| Indicators | `packages/indicators/` | Exchange-neutral technical-indicator calculations over normalized caller-supplied market data |
 | Utils | `packages/utils/` | Domain-neutral reusable helpers, logging and generic utilities |
 | Event bus | `packages/event-bus/` | Event publication, subscription, delivery and event-bus reliability |
 | Journal | `packages/journal/` | Journal records, persistence boundaries and journal-specific behavior |
 | Database Infrastructure | `packages/db/` | Provider-neutral database lifecycle/transaction boundary and concrete database infrastructure adapters |
 | Notifiers | `packages/notifiers/` | Telegram notification formatting, delivery and lifecycle safety |
 
-## Proposed domain — not yet a workspace package
+## Indicators domain
 
-`packages/indicators/` is the proposed home for a future `@coinzilla/indicators` package. It is a planning/documentation area only at this stage: no workspace manifest, source API or runtime capability exists yet. If the proposal is accepted, this domain will own exchange-neutral technical-indicator calculations and their tests, public contract and roadmap. The first selected Harvester consumer is high-volatility protection (#1016), followed by adaptive price-step planning (#1013). Harvester retains all strategy/risk policy; Brokers retains exchange-specific candle retrieval and normalization. Applications remain consumers of indicator calculations. The proposal is documented in [the Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
+`packages/indicators/` owns the `@coinzilla/indicators` workspace package: pure, deterministic, exchange-neutral technical-indicator calculations over normalized caller-supplied market data. It owns its public API, tests, documentation and roadmap. The first consumer is Harvester high-volatility protection (#1016); adaptive price-step planning (#1013) is a later consumer. Harvester retains strategy/risk policy; Brokers retains exchange-specific candle retrieval and normalization. See the [Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
 
 ## Shared infrastructure
 
