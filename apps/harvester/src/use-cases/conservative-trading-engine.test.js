@@ -165,6 +165,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
+      const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order: canceledOrder })
+        : cancelExecutedQuantity)
       const cancelFill = cancelWithFill && canceledOrder
         ? [new Fill({
             tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase() + "-" + orderId,
@@ -173,9 +176,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
             market,
             side: canceledOrder.side,
             price: canceledOrder.limitPrice,
-            quantity: new Quantity({ amount: canceledOrder.executedQuantity.amount, asset: baseAsset }),
+            quantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
             quoteQuantity: new Money({
-              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: canceledOrder.executedQuantity.amount }),
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: executedQuantity }),
               asset: quoteAsset,
             }),
             commissions: [],
