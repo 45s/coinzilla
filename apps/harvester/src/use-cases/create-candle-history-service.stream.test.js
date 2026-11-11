@@ -90,7 +90,7 @@ test("keeps a market unavailable when a candle gap cannot be backfilled", async 
   assert.equal(snapshot.candles.at(-1).openTime, 99 * INTERVAL_MS, "A live candle beyond an unresolved gap must not be appended to the trusted history.")
 })
 
-test("marks the live candle feed stale after the existing five-second freshness window", async () => {
+test("keeps a quiet one-minute candle fresh for one interval and marks it stale after the interval plus grace", async () => {
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
       await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
@@ -101,9 +101,14 @@ test("marks the live candle feed stale after the existing five-second freshness 
   const freshSnapshot = getSnapshot(fixture)
   assert.equal(freshSnapshot.status.isFresh, true, "A recently received Kline update must satisfy the stream freshness check.")
   fixture.clock.now += 5_001
+  const quietSnapshot = getSnapshot(fixture)
+  assert.equal(quietSnapshot.status.isFresh, true, "A quiet one-minute candle feed must remain fresh during a short no-trade interval.")
+  assert.equal(quietSnapshot.status.isReady, true, "A short no-trade interval must not block otherwise valid completed-candle volatility data.")
+
+  fixture.clock.now += INTERVAL_MS
   const staleSnapshot = getSnapshot(fixture)
 
-  assert.equal(staleSnapshot.status.isFresh, false, "A Kline feed older than the five-second limit must be marked stale.")
+  assert.equal(staleSnapshot.status.isFresh, false, "A Kline feed older than one candle interval plus the five-second grace must be marked stale.")
   assert.equal(staleSnapshot.status.isReady, false, "Stale candle data must not be advertised as ready for volatility decisions.")
   assert.equal(staleSnapshot.status.reason, "STALE_STREAM", "The snapshot must explain why an otherwise complete history is not ready.")
 })
@@ -176,7 +181,7 @@ test("ignores valid live candle events older than the retained 100-candle window
     },
   })
   await fixture.start()
-  fixture.clock.now += 5_001
+  fixture.clock.now += INTERVAL_MS + 5_001
   await fixture.candleHandlers.get("BTCUSDT")(createCandle({ openTime: 0 }))
   const snapshot = getSnapshot(fixture)
 
