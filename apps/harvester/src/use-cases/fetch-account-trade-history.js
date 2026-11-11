@@ -25,9 +25,9 @@ function requireSafeTradeId({ fill, symbol }) {
  * The first page is anchored at startTime; full pages continue from the next
  * inclusive Binance trade ID. Calls are sequential and rate-limited by default.
  *
- * marketUniverseComplete is an explicit caller assertion. Binance exchangeInfo
- * only describes its current catalog; callers must not claim completeness when
- * symbols delisted after the baseline could contain unobserved executions.
+ * Exhausting the pages proves only the supplied symbols were queried. Binance
+ * exchangeInfo describes its current catalog and cannot prove that delisted
+ * symbols are absent from the historical account universe.
  */
 export async function fetchAccountTradeHistory({
   broker,
@@ -51,6 +51,9 @@ export async function fetchAccountTradeHistory({
     }
     if (!Number.isSafeInteger(startTime) || startTime < 0) {
       throw new TypeError("Account trade-history startTime must be a non-negative safe integer")
+    }
+    if (marketUniverseComplete === true) {
+      throw new Error("fetchAccountTradeHistory cannot certify the historical market universe from a caller-supplied boolean")
     }
     if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_PAGE_SIZE) {
       throw new TypeError("Account trade-history limit must be between 1 and 1000")
@@ -140,8 +143,8 @@ export async function fetchAccountTradeHistory({
         marketHistoryComplete: true,
         historyScope: markets.length === 1 ? "MARKET" : "MARKETS",
         marketsQueried: Object.freeze(markets.map((market) => market.symbol)),
-        marketUniverseComplete: marketUniverseComplete === true,
-        complete: marketUniverseComplete === true,
+        marketUniverseComplete: false,
+        complete: false,
       }),
     })
   } catch (error) {
