@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout, stderr } from "node:process"
 import { pathToFileURL, fileURLToPath } from "node:url"
-import { normalizeSymbolInput, parseDecimalInput, normalizePairInputs, createPairConfig } from "./config-symbol/configuration.js"
+import { normalizeSymbolInput, normalizeTradingEnvironment, parseDecimalInput, normalizePairInputs, createPairConfig } from "./config-symbol/configuration.js"
 import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
 import { writePairConfigAtomically } from "./config-symbol/write-config.js"
 import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
@@ -32,6 +32,7 @@ export async function runConfigSymbol({
   fetchImpl = globalThis.fetch,
   metadataFetcher = fetchBinanceSpotMetadata,
   configPath = DEFAULT_CONFIG_PATH,
+  defaultEnvironment = process.env.TRADING_MODE === "live" ? "live" : "testnet",
   loadConfig = loadAppConfig,
   writeConfig = writePairConfigAtomically,
 } = {}) {
@@ -42,6 +43,9 @@ export async function runConfigSymbol({
   writeLine("Harvester — add a Binance Spot trading pair")
   writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
   const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
+  const environment = normalizeTradingEnvironment(
+    askWithDefault(await ask("Binance environment [testnet/live] (default " + defaultEnvironment + "): "), defaultEnvironment),
+  )
   const inputs = normalizePairInputs({
     investment: parseDecimalInput(await ask("Investment / quote budget: "), "investment", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
@@ -67,16 +71,17 @@ export async function runConfigSymbol({
   }
 
   writeLine("Fetching current public Binance Spot exchange information...")
-  const metadata = await metadataFetcher({ symbol, fetchImpl })
+  const metadata = await metadataFetcher({ symbol, environment, fetchImpl })
   const metadataFetchedAt = new Date().toISOString()
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
   writeLine("Configuration preview (new pair will be disabled):")
   writeLine(JSON.stringify({
     symbol,
+    environment,
     baseAsset: metadata.baseAsset,
     quoteAsset: metadata.quoteAsset,
-    metadataSource: "Binance Spot public REST API",
+    metadataSource: "Binance Spot " + environment + " public REST API",
     metadataFetchedAt,
     referencePrice: metadata.price,
     exchangeFilters: {

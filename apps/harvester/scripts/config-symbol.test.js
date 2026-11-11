@@ -30,6 +30,7 @@ const createAppConfig = () => ({
 
 const metadata = {
   symbol: "ADAFDUSD",
+  environment: "testnet",
   baseAsset: "ADA",
   quoteAsset: "FDUSD",
   price: "0.5",
@@ -55,7 +56,7 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   const metadataCalls = []
   const writes = []
   const result = await runConfigSymbol({
-    ask: createAsk([" adafdusd ", "100", "0.1", "0", "0.1", "", "", ""]),
+    ask: createAsk([" adafdusd ", "testnet", "100", "0.1", "0", "0.1", "", "", ""]),
     writeLine: (line) => output.push(line),
     loadConfig: async () => createAppConfig(),
     metadataFetcher: async (args) => {
@@ -71,9 +72,11 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
 
   assert.equal(metadataCalls.length, 1, "Valid operator input must trigger one public exchange metadata lookup.")
   assert.equal(metadataCalls[0].symbol, "ADAFDUSD", "The normalized symbol must be sent to Binance.")
+  assert.equal(metadataCalls[0].environment, "testnet", "Exchange metadata must be fetched from the selected trading environment.")
   assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
   assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
   assert.equal(writes[0].pairConfig.enabled, false, "The generated pair must remain disabled until an operator enables it.")
+  assert.equal(writes[0].pairConfig.orderQuantity, 100, "Order sizing must also respect the active maximum-notional filter.")
   assert.equal(writes[0].pairConfig.orderQuantity, 100, "Order sizing must also respect the active maximum-notional filter.")
   assert.equal(writes[0].pairConfig.minProfit, 0.01, "The documented minimum-profit default must be applied.")
   assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The documented price-step default must be applied.")
@@ -88,7 +91,7 @@ test("rejects invalid operator input before making any Binance request", async (
   let writes = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "100", "0.1", "100", "0.1", "", "", ""]),
+      ask: createAsk(["ADAFDUSD", "testnet", "100", "0.1", "100", "0.1", "", "", ""]),
       loadConfig: async () => createAppConfig(),
       metadataFetcher: async () => {
         metadataCalls += 1
@@ -111,7 +114,7 @@ test("refuses an existing symbol before making an exchange request", async () =>
   config.strategies.CG_coinGrabber.pairs.ADAFDUSD = config.strategies.CG_coinGrabber.pairs.LINKFDUSD
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "100", "0.1", "0", "0.1", "", "", ""]),
+      ask: createAsk(["ADAFDUSD", "testnet", "100", "0.1", "0", "0.1", "", "", ""]),
       loadConfig: async () => config,
       metadataFetcher: async () => {
         metadataCalls += 1

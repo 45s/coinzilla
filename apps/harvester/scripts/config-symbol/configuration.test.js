@@ -6,6 +6,7 @@ import {
   createPairConfig,
   decimalPlaces,
   normalizeSymbolInput,
+  normalizeTradingEnvironment,
   normalizePairInputs,
   parseDecimalInput,
 } from "./configuration.js"
@@ -101,6 +102,18 @@ test("validates every strategy-owned setting before making an exchange request",
       () => normalizePairInputs(invalidInputs),
       /percent|profit|keepQuantity/i,
       "Invalid strategy settings must be rejected before the Binance API is called.",
+    )
+  }
+})
+
+test("accepts only Binance testnet and live environment names", () => {
+  assert.equal(normalizeTradingEnvironment(" testnet "), "testnet", "The testnet environment must normalize safely.")
+  assert.equal(normalizeTradingEnvironment("LIVE"), "live", "The live environment must normalize case-insensitively.")
+  for (const value of ["", "paper", "production", null, 42]) {
+    assert.throws(
+      () => normalizeTradingEnvironment(value),
+      /environment.*testnet or live/i,
+      "Unsupported exchange environments must be rejected before any network request.",
     )
   }
 })

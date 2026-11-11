@@ -55,6 +55,24 @@ export function parseDecimalInput(value, field, { exclusiveMin = false } = {}) {
   return normalized
 }
 
+/**
+ * Normalize the exchange environment used to retrieve Binance metadata.
+ *
+ * @param {unknown} value - Raw environment prompt input.
+ * @returns {"testnet"|"live"} Selected Binance Spot environment.
+ * @throws {TypeError} If the environment is not testnet or live.
+ */
+export function normalizeTradingEnvironment(value) {
+  if (typeof value !== "string") {
+    throw new TypeError("environment must be either testnet or live")
+  }
+  const environment = value.trim().toLowerCase()
+  if (environment !== "testnet" && environment !== "live") {
+    throw new TypeError("environment must be either testnet or live")
+  }
+  return environment
+}
+
 /** Return the effective decimal places required by a positive exchange increment. */
 export function decimalPlaces(value) {
   let normalized
