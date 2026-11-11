@@ -365,6 +365,20 @@ export function makeConservativeTradingEngine({
   const publishRecoveryCycleNotCompleted = ({ order, completion }) => {
     const data = completion?.data
     if (!data) return
+    const marketId = order.market.id
+    const position = getPortfolio()?.getPosition({ marketId })
+    const recoveryLedger = getRecoveryLedger({ marketId })
+    const realizedNetProfit = data.realizedNetProfit ??
+      (position && recoveryLedger
+        ? subtractDecimal({ left: recoveryLedger.netSellProceeds, right: position.spent.amount })
+        : undefined)
+    const activeQuantity = data.activeQuantity ?? position?.baseQuantity.amount
+    const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
+    const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
+    if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
+      // Missing evaluation evidence must remain unresolved in the Journal projection.
+      return
+    }
     const continueReasons = [
       "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
       "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
@@ -377,15 +391,15 @@ export function makeConservativeTradingEngine({
       eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED,
       dataResult: mapRecoveryCycleNotCompletedData({
         symbol: order.market.symbol,
-        marketId: order.market.id,
+        marketId,
         sellOrderClientId: order.clientOrderId,
         sellOrderBrokerOrderId: order.brokerOrderId,
         outcome,
         reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
-        realizedNetProfit: data.realizedNetProfit,
-        activeQuantity: data.activeQuantity,
-        keepQuantity: data.keepQuantity,
-        minProfit: data.minProfit,
+        realizedNetProfit,
+        activeQuantity,
+        keepQuantity,
+        minProfit,
       }),
     })
   }
