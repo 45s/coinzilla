@@ -31,6 +31,7 @@ import {
   createVolatilityProtectionState,
   transitionVolatilityProtection,
   VOLATILITY_PROTECTION_MODES,
+  VOLATILITY_PROTECTION_THRESHOLDS,
 } from "../domain/market/volatility-protection-state.js"
 
 const failureResult = ({ error, errors, category, stage, retryable }) => {
@@ -595,7 +596,7 @@ export function makeConservativeTradingEngine({
           createVolatilityProtectionState({ symbol })
         const latestRatio = volatility?.metrics?.volatilityRatio
         const latestRatioProtected = typeof latestRatio === "string" &&
-          compareDecimal({ left: latestRatio, right: "2" }) >= 0
+          compareDecimal({ left: latestRatio, right: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio }) >= 0
         const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
         if ((!volatility?.status?.isReady || protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL ||
             latestRatioProtected) && !recoverySell) return false
@@ -2681,8 +2682,8 @@ export function makeConservativeTradingEngine({
             message: "Harvester market volatility warning threshold reached",
             symbol,
             volatilityRatio: transition.state.volatilityRatio,
-            warningThreshold: "1.5",
-            protectionThreshold: "2",
+            warningThreshold: VOLATILITY_PROTECTION_THRESHOLDS.warningRatio,
+            protectionThreshold: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio,
           })
         }
 
