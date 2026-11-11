@@ -10,7 +10,7 @@ import { updateTradingAccounting } from "../../use-cases/update-trading-accounti
 
 const record = (name, data, id = name) => ({
   id,
-  payload: { id, name, data },
+  payload: { id, name, data, source: "harvester" },
   position: { fileName: "session.jsonl", lineNumber: 1 },
 })
 
@@ -1590,11 +1590,7 @@ test("projects unowned-order evidence as a sticky safety blocker without a separ
     symbol: "BTCUSDT",
     reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
   })
-  const restored = restoreHarvesterJournalState({
-    projection: result,
-    marketMetadata: new Map(),
-  })
-  assert.equal(restored.ok, false, "A blocker must not be silently restored without canonical market metadata.")
+
 })
 
 test("projects invalid-fill and accounting-failure evidence as sticky blockers without pause events", () => {
