@@ -114,3 +114,24 @@ test("warns at 1.5 without protecting until the 2.0 threshold", () => {
   assert.equal(result.warning, true)
   assert.equal(result.state.mode, VOLATILITY_PROTECTION_MODES.NORMAL)
 })
+
+
+test("keeps protection state isolated between markets", () => {
+  let doge = createVolatilityProtectionState({ symbol: "DOGEUSDT" })
+  let zro = createVolatilityProtectionState({ symbol: "ZROUSDT" })
+
+  doge = transitionVolatilityProtection({
+    state: doge,
+    snapshot: snapshot({ ratio: "2.4", openTime: 60_000 }),
+  }).state
+  for (const openTime of [60_000, 120_000, 180_000]) {
+    zro = transitionVolatilityProtection({
+      state: zro,
+      snapshot: snapshot({ ratio: "1", openTime }),
+    }).state
+  }
+
+  assert.equal(doge.mode, VOLATILITY_PROTECTION_MODES.PROTECTED)
+  assert.equal(doge.reason, "HIGH_VOLATILITY")
+  assert.equal(zro.mode, VOLATILITY_PROTECTION_MODES.NORMAL)
+})
