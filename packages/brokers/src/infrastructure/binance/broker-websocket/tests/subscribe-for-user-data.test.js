@@ -9,6 +9,7 @@ function createBroker(handler, exchangeInfoHandler = () => ({ symbols: [] })) {
     "userDataStream.subscribe.signature": handler,
     "userDataStream.unsubscribe": () => ({}),
     exchangeInfo: exchangeInfoHandler,
+    myFilters: () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] }),
   })
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
