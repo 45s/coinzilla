@@ -62,7 +62,7 @@ export function makeExecuteStrategyDecision({
           if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
           throw error
         }
-        if (!canSubmit({ order: pendingOrder, purpose })) {
+        if (!canSubmit({ order: pendingOrder, purpose: action.purpose ?? null })) {
           return toResult({ data: { deferred: true, validatedOrders: [] } })
         }
         validatedOrders.push(pendingOrder)
