@@ -52,6 +52,7 @@ export function createFixture({
   onSubscribe,
   getCandles,
   subscribeForCandles,
+  onSnapshot,
   logger = {},
 } = {}) {
   const calls = []
@@ -85,6 +86,7 @@ export function createFixture({
     broker,
     logger,
     now: () => clock.now,
+    onSnapshot,
   })
   const start = () => service.start({ pairs, subscriptions })
   return { service, broker, calls, candleHandlers, subscriptions, clock, start }
