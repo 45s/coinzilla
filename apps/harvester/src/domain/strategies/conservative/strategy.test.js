@@ -120,6 +120,7 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
     lastBuyPrice: "0.1",
   })
   assert.equal(decision.actions.length, 2)
+  assert.equal(decision.actions.find((action) => action.side === "SELL").purpose, "RECOVERY_SELL")
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
     side, price, quantity,
   })), [
