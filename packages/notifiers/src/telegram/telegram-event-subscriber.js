@@ -2,10 +2,10 @@ const DEFAULT_MAX_PENDING = 1000
 
 function validateEventNames(eventNames) {
   if (!Array.isArray(eventNames)) {
-    throw new TypeError("eventNames must be an array of supported Telegram event names")
+    throw new TypeError("eventNames must be an array of application event names")
   }
   if (eventNames.length === 0) {
-    throw new RangeError("eventNames must contain at least one supported Telegram event")
+    throw new RangeError("eventNames must contain at least one application event")
   }
 
   const seen = new Set()
@@ -14,7 +14,7 @@ function validateEventNames(eventNames) {
       throw new TypeError("Every event name must be a non-empty string")
     }
     if (seen.has(eventName)) {
-      throw new TypeError(`Duplicate Telegram notification event: ${eventName}`)
+      throw new TypeError(`Duplicate notification event: ${eventName}`)
     }
     seen.add(eventName)
   }
