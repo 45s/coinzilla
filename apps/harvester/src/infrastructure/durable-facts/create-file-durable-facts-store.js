@@ -154,6 +154,16 @@ function validateFactData({ factType, data }) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
   }
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+    const allowedFields = new Set([
+      "symbol",
+      "coveredFromTime",
+      "verifiedAt",
+      "evidenceDigest",
+      "verifiedBy",
+    ])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Market-history coverage fact contains unsupported fields")
+    }
     requireNonEmptyString({ value: canonicalData.symbol, field: "data.symbol" })
     if (!/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
