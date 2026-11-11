@@ -206,6 +206,8 @@ test("rejects contradictory third-asset identities atomically across both accoun
   const contradictoryAsset = new Asset({ id: "bnb", code: "BNB2" })
   const portfolio = new Portfolio()
   const recoveryLedger = RecoveryLedger.empty({ market })
+  const originalPortfolio = portfolio.value
+  const originalRecoveryLedger = recoveryLedger.value
   const result = updateTradingAccounting({
     portfolio,
     recoveryLedger,
@@ -224,11 +226,8 @@ test("rejects contradictory third-asset identities atomically across both accoun
   })
 
   assert.equal(result.ok, false)
-  assert.equal(portfolio.positions.length, 0)
-  assert.deepEqual(portfolio.appliedFillIds, [])
-  assert.equal(recoveryLedger.buyCost, "0")
-  assert.equal(recoveryLedger.netSellProceeds, "0")
-  assert.deepEqual(recoveryLedger.appliedFillIds, [])
+  assert.deepEqual(portfolio.value, originalPortfolio)
+  assert.deepEqual(recoveryLedger.value, originalRecoveryLedger)
 })
 
 test("rejects a third-asset quote valuation whose asset code contradicts the market quote asset", () => {
@@ -236,6 +235,8 @@ test("rejects a third-asset quote valuation whose asset code contradicts the mar
   const contradictoryQuoteAsset = new Asset({ id: quoteAsset.id, code: "USDC" })
   const portfolio = new Portfolio()
   const recoveryLedger = RecoveryLedger.empty({ market })
+  const originalPortfolio = portfolio.value
+  const originalRecoveryLedger = recoveryLedger.value
   const result = updateTradingAccounting({
     portfolio,
     recoveryLedger,
@@ -248,11 +249,8 @@ test("rejects a third-asset quote valuation whose asset code contradicts the mar
   })
 
   assert.equal(result.ok, false)
-  assert.equal(portfolio.positions.length, 0)
-  assert.deepEqual(portfolio.appliedFillIds, [])
-  assert.equal(recoveryLedger.buyCost, "0")
-  assert.equal(recoveryLedger.netSellProceeds, "0")
-  assert.deepEqual(recoveryLedger.appliedFillIds, [])
+  assert.deepEqual(portfolio.value, originalPortfolio)
+  assert.deepEqual(recoveryLedger.value, originalRecoveryLedger)
 })
 
 test("rejects invalid application inputs", () => {
