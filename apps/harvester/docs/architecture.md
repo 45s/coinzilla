@@ -671,6 +671,3 @@ single-flight reconciliation and durable audit barriers before readiness can
 ## External open-order strategy isolation
 
 The account snapshot manager classifies unmatched account-wide open orders as external/unowned and records their symbols only after the matching open-orders audit has passed its durable Journal flush. The Conservative engine checks this symbol-scoped predicate before evaluating strategy policy and again at the final submission boundary. A blocked symbol is deferred for later evaluation; other enabled symbols remain eligible. Each authoritative startup or same-process recovery snapshot replaces the set, so a symbol is released only after a durable snapshot confirms no unowned open order remains. External orders are never registered as owned, adopted, canceled, or modified. This is not a global startup gate and does not enable process-restart recovery.
-
-
-
