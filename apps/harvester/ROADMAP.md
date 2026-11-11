@@ -91,7 +91,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–2 complete; restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -102,12 +102,14 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
-   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 is the next implementation-preparation item.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 was completed as a tests-only harness in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3 is next.
 
-2. **[ ] Step 2 — Build a deterministic recovery test harness (tests only).**
-   - Create representative multi-session fixtures from real DTO shapes, without changing production behavior.
-   - Add crash-point scenarios around order intent, broker acknowledgement, partial/final fill, accounting application, cycle completion, and pause/blocker publication.
-   - Make every scenario assert the complete restored state, not only total wallet quantity.
+2. **[x] Step 2 — Build a deterministic recovery test harness (tests only; PR #1014).**
+   - Added `apps/harvester/test-support/recovery/recovery-crash-fixtures.js`, building deterministic two-session fixtures with canonical entities and the same lifecycle DTO mappers used by production publication.
+   - Added `apps/harvester/test/recovery/recovery-crash-matrix.test.js` for crash cuts after order intent, broker acknowledgement, partial/final BUY fills, recovery SELL fill, cycle completion, unowned-order evidence, and strategy-pause publication.
+   - Every crash cut asserts complete restored state: order identities/status/executed quantities, active/free/total inventory, Position cost basis and quote cash flow, RecoveryLedger totals and fill identities, applied fills, completed-cycle identity, pauses, reconciliation requirement, and session cleanliness.
+   - The fixtures intentionally use the legacy Journal observer envelope to exercise the retained offline projector/restore path. They are **not** ADR-0001 durable facts and do not make Journal the recovery authority. No production source or runtime behavior changed.
+   - Exact PR-head verification: Harvester unit and coverage jobs each report 991 passed, 0 failed; targeted Harvester tests, JavaScript syntax, dependency audit and the remaining required checks must pass on the final PR head.
 
 3. **[ ] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040).**
    - Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment.

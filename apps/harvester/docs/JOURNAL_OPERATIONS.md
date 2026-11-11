@@ -48,6 +48,22 @@ excludes its `/logs/` directory.
 
 There is no automatic file rotation, retention, compression, or deletion. Session files accumulate until an operator archives or removes them. Protect the directory with appropriate OS permissions because event records include market, order, and error identifiers.
 
+## Legacy history discovery and chronology (forensic only)
+
+Use Harvester's `readHarvesterJournalHistory({ directory })` for historical inspection. Pass either the Harvester log root or the `logs/sessions` directory itself. Do not call `Journal.read()` on the `logs/sessions` parent and treat an empty result as proof that no process sessions exist: the package-level Journal reader reads files in one directory; Harvester's history reader performs the recursive process-session discovery.
+
+The Harvester reader:
+
+- Reads legacy root-level flat JSONL files and recursively discovers nested per-process session directories.
+- Rejects unreadable directories, symbolic links, discovered process directories without a JSONL session file, malformed session entries, duplicate record IDs, and configured directory/session/record/byte limit violations.
+- Returns record positions relative to the supplied history root so equal timestamp-only filenames in different process directories remain distinguishable.
+- For multiple process sessions with `harvester.process_started` metadata, orders by the canonical millisecond `data.startedAt` and validates that the directory's timestamp/runtime-session suffix agrees with that identity.
+- For multiple legacy sessions without process-start metadata, uses unique first-record event timestamps only when the event ranges are monotonic and strictly non-overlapping. A single legacy flat session remains readable without process-start metadata.
+- Allows legacy first-record timestamps and process-start timestamps to coexist only when their persisted event ranges establish a strict, non-overlapping total order. Rejects duplicate process identities, timestamp ties, overlapping event ranges, backwards event timestamps, or missing chronology. Runtime-session IDs and second-resolution directory/filename strings are never tie-breakers.
+- Treats `harvester.process_started` as best-effort process identity metadata. It may be appended after `harvester.started`; its payload `startedAt` remains the process-entry timestamp, so the event's append timestamp is not used as the session activity-range boundary.
+
+A successful scan means the discovered forensic files were readable and could be ordered under these legacy rules. It does **not** make Journal authoritative restart state, prove that missing exchange fills did not occur, establish a complete historical baseline, or open the ADR-0001 startup readiness gate. Multiple-session ambiguity and any missing/unreadable session remain hard failures. Any one-time baseline still requires the explicit operator-assisted reconciliation rules in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md).
+
 ## Event inventory
 
 All events use source `harvester`. Payloads are created by Harvester-owned allowlist mappers; fields not listed below are not copied into the event DTO.
