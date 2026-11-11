@@ -105,6 +105,7 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
   const invalidFilters = [
     valid.filter((filter) => filter.filterType !== "PRICE_FILTER"),
     [...valid, valid[0]],
+    [...valid, valid[2]],
     valid.map((filter) => filter.filterType === "LOT_SIZE" ? { ...filter, stepSize: "0" } : filter),
     valid.map((filter) => filter.filterType === "MIN_NOTIONAL" ? { ...filter, minNotional: "NaN" } : filter),
   ]
@@ -163,7 +164,7 @@ test("rejects unvalidated active symbol and exchange filters but ignores filters
         symbols: [{ ...base.symbols[0], filters: [...base.symbols[0].filters, { filterType: "PERCENT_PRICE", multiplierUp: "1.2" }] }],
       }),
     }),
-    /PERCENT_PRICE.*not validated/i,
+    /not validated.*PERCENT_PRICE/i,
     "A dynamic price-band filter must not be silently ignored by a generator that cannot validate it.",
   )
   await assert.rejects(
@@ -174,7 +175,7 @@ test("rejects unvalidated active symbol and exchange filters but ignores filters
         exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 }],
       }),
     }),
-    /EXCHANGE_MAX_NUM_ORDERS.*not validated/i,
+    /not validated.*EXCHANGE_MAX_NUM_ORDERS/i,
     "An exchange-wide order constraint must be reported as unsupported.",
   )
   const responses = [
