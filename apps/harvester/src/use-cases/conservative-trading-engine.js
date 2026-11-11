@@ -162,6 +162,9 @@ export function makeConservativeTradingEngine({
   const strategyConfig = appConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
+  if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
+    throw new TypeError("getVolatilityData must be a function when provided")
+  }
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
     throw new TypeError("strategyPolicy must provide evaluate and evaluateTrailingBuyRepricing functions")
@@ -177,9 +180,6 @@ export function makeConservativeTradingEngine({
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
   }
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
-  if (volatilityProtectionEnabled && typeof getVolatilityData !== "function") {
-    throw new TypeError("getVolatilityData must be a function when volatility protection is enabled")
-  }
   if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
     throw new TypeError("initialState must be an object")
   }
@@ -2737,7 +2737,8 @@ export function makeConservativeTradingEngine({
     })
     if (!settled?.ok) return settled
     if (settled.data.recovered) {
-      await evaluateLatest({ symbol })
+      const resumed = await evaluateLatest({ symbol })
+      if (!resumed?.ok) return resumed
     }
     return toResult({ data: settled.data })
   }
