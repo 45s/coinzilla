@@ -230,3 +230,50 @@ test("audits complete execution history for one market without claiming account-
   assert.equal(result.data.fillsChecked, 1)
   assert.equal(result.data.journalFillsChecked, 1)
 })
+
+
+test("rejects market-scoped history when structured pagination evidence is absent", () => {
+  const fill = makeFill()
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    scope: "MARKET",
+    market,
+    complete: true,
+    marketUniverseComplete: false,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /structured evidence is missing/)
+})
+
+test("rejects cross-market executions in a single-market history response", () => {
+  const fill = makeFill()
+  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethMarket = new Market({
+    venue: "binance",
+    symbol: "ETHUSDT",
+    baseAsset: ethAsset,
+    quoteAsset,
+  })
+  const otherMarketFill = new Fill({
+    tradeId: "eth-trade-1",
+    brokerOrderId: "eth-order-1",
+    clientOrderId: "manual-eth",
+    market: ethMarket,
+    side: "BUY",
+    price: new Money({ amount: "10", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: ethAsset }),
+    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const result = auditMarketHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill, otherMarketFill],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /contains a fill for another market/)
+})
