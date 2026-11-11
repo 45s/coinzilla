@@ -35,7 +35,7 @@ const createFixture = ({
   initiallyReady = true,
   deferFirstSell = false,
   deferCancellation = false,
-  marketPriceFresh = true,
+  isMarketPriceFresh = () => true,
   isMarketBookFresh = () => true,
   pausedMarkets = [],
   hasUnownedOpenOrders = false,
@@ -171,7 +171,7 @@ const createFixture = ({
     },
     completeRecoveryCycle: ({} = {}) => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: ({} = {}) => ready,
-    isMarketPriceFresh: () => marketPriceFresh,
+    isMarketPriceFresh,
     isMarketBookFresh,
     hasUnownedOpenOrdersForSymbol: () => hasUnownedOpenOrders,
     initialState: { pausedMarkets },
@@ -289,7 +289,8 @@ test("defers an executable LIMIT_MAKER intent with a specific reason when its ma
 })
 
 test("defers an executable LIMIT_MAKER intent when market-price data is stale", async () => {
-  const fixture = createFixture({ marketPriceFresh: false })
+  let freshnessChecks = 0
+  const fixture = createFixture({ isMarketPriceFresh: () => ++freshnessChecks === 1 })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
