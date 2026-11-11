@@ -1,7 +1,5 @@
-import {
-  subscribeTelegramNotifications,
-  TELEGRAM_NOTIFICATION_EVENTS,
-} from "@coinzilla/notifiers"
+import { subscribeTelegramNotifications, TELEGRAM_NOTIFICATION_EVENTS } from "@coinzilla/notifiers"
+import { formatHarvesterTelegramNotification } from "./format-telegram-notification.js"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "../../application/events/event-names.js"
 import { resolveTelegramNotificationPolicy } from "./resolve-telegram-notification-policy.js"
 
@@ -101,8 +99,8 @@ const EVENT_MAPPINGS = Object.freeze({
 
 /**
  * Bridge Harvester-owned application events to the notifier package's stable
- * notification vocabulary. Harvester owns policy; Notifiers owns formatting,
- * bounded queueing, transport and delivery.
+ * notification vocabulary. Harvester owns message formatting and policy;
+ * Notifiers owns bounded queueing, transport and delivery.
  */
 export async function subscribeHarvesterTelegramNotifications({
   eventBus,
@@ -125,6 +123,7 @@ export async function subscribeHarvesterTelegramNotifications({
     notifier,
     logger,
     eventNames: policy.eventNames,
+    formatMessage: formatHarvesterTelegramNotification,
   })
   const subscriptions = []
 
