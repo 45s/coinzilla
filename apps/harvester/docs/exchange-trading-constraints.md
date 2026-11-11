@@ -52,6 +52,7 @@ The current Conservative execution path submits ordinary `LIMIT` or `LIMIT_MAKER
 ## Adding another exchange later
 
 A future adapter must:
+
 1. fetch all authoritative public instrument/exchange constraints and private account constraints needed for the supported order types;
 2. map supported static rules to the shared canonical entities;
 3. emit immutable `unvalidatedConstraints` for every applicable rule not yet evaluated by domain logic;
@@ -77,7 +78,6 @@ flowchart TD
 ```
 
 The prose safety contract above is authoritative. The diagram summarizes the metadata-to-readiness boundary.
-
 
 ## Official Binance references
 
