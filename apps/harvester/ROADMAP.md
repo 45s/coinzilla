@@ -10,12 +10,12 @@
 
 ### Delivery sequence
 
-1. **[x] Step 1 — Freeze the recovery contract (docs/design only).**
+1. **[~] Step 1 — Freeze the recovery contract (docs/design only; PR #1003 pending merge).**
    - **Accepted:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./docs/architecture/decisions/0001-application-owned-recovery-facts.md) defines the authoritative append-only fact stream, global sequence and committed-head integrity, minimum durable fact set, acknowledgement/failure boundary, candidate-state projection, closed readiness gate, external-order policy, and legacy Journal treatment.
    - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
-   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. Step 2 is the next implementation-preparation item.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. Mark this step complete only after PR #1003 merges. Step 2 is the next implementation-preparation item.
 
 2. **[ ] Step 2 — Build a deterministic recovery test harness (tests only).**
    - Create representative multi-session fixtures from real DTO shapes, without changing production behavior.
