@@ -63,6 +63,7 @@ const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
   market,
   historyEvidence: marketHistoryEvidence,
   historyRetentionEvidence: {
+    factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
     baselineFactId: "history-baseline-btc-1",
     symbol: "BTCUSDT",
     coveredFromTime: 50,
@@ -309,6 +310,7 @@ test("rejects a durable market-history baseline that starts after the queried hi
     market,
     historyEvidence: marketHistoryEvidence,
     historyRetentionEvidence: {
+      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
       baselineFactId: "history-baseline-btc-late",
       symbol: "BTCUSDT",
       coveredFromTime: 51,
