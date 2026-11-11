@@ -49,6 +49,8 @@ pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
 
+The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harness live in [`test/replays/`](./test/replays/). They exercise the real Harvester composition without connecting to Binance or placing exchange orders.
+
 ## Configuration
 
 Harvester uses one application-wide `config.json`. The root contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. The active strategy key is `CG_coinGrabber`.

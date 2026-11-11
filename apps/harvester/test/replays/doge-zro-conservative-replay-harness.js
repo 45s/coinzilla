@@ -5,8 +5,8 @@ import {
   multiplyDecimal,
   percentageToRate,
 } from "@coinzilla/utils"
-import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
-import { startHarvester } from "./start-harvester.js"
+import { createBinanceBrokerAdapter } from "../../src/infrastructure/brokers/binance-broker-adapter.js"
+import { startHarvester } from "../../src/bootstrap/start-harvester.js"
 
 function createOpenOrderSnapshot({ order }) {
   const openOrder = new Order({
