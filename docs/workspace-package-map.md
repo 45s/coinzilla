@@ -72,6 +72,14 @@ Domain-neutral shared helpers, including exact decimal arithmetic, result/valida
 
 - Roadmap: [packages/utils/ROADMAP.md](../packages/utils/ROADMAP.md)
 
+### `packages/indicators/` — `@coinzilla/indicators`
+
+Exchange-neutral technical indicator calculations over caller-supplied completed candles. The package owns ATR, NATR and volatility-ratio calculations; it does not retrieve market data or define trading policy.
+
+- README: [Indicators package contract](../packages/indicators/README.md)
+- Roadmap: [Indicators roadmap](../packages/indicators/ROADMAP.md)
+- Agent instructions: [Indicators AGENTS](../packages/indicators/AGENTS.md)
+
 ## Choosing where a change belongs
 
 1. Put business invariants and strategy behavior in the bounded context that owns them.

@@ -19,7 +19,9 @@ const createClient = () => {
     getSymbolFilters: async (input) => { calls.push(["getSymbolFilters", input]); return result },
     getExchangeMarkets: async () => { calls.push(["getExchangeMarkets"]); return result },
     getPrices: async (input) => { calls.push(["getPrices", input]); return result },
+    getCandles: async (input) => { calls.push(["getCandles", input]); return result },
     subscribeForPrices: async (input) => { calls.push(["subscribeForPrices", input]); return result },
+    subscribeForCandles: async (input) => { calls.push(["subscribeForCandles", input]); return result },
     subscribeForBookTicker: async (input) => { calls.push(["subscribeForBookTicker", input]); return result },
     subscribeForUserData: async (input) => { calls.push(["subscribeForUserData", input]); return result },
   }
@@ -93,6 +95,14 @@ test("maps object-shaped application inputs to the broker package methods", asyn
   assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
   assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
+  const candleRequest = { symbol: "BTCUSDT", interval: "1m", limit: 100 }
+  assert.equal(await broker.getCandles(candleRequest), result, "Historical candle results must pass through the Harvester adapter unchanged.")
+  const onCandle = () => {}
+  assert.equal(
+    await broker.subscribeForCandles({ symbol: "BTCUSDT", interval: "1m", onCandle }),
+    result,
+    "The live candle subscription result and its unsubscribe handle must pass through the adapter unchanged.",
+  )
 
   assert.deepEqual(calls, [
     ["cancelOrder", { symbol: "BTCUSDT", orderId: "7" }],
@@ -102,6 +112,8 @@ test("maps object-shaped application inputs to the broker package methods", asyn
     ["getExchangeMarkets"],
     ["getSymbolFilters", { symbol: "BTCUSDT" }],
     ["getPrices", { symbol: "BTCUSDT" }],
+    ["getCandles", candleRequest],
+    ["subscribeForCandles", { symbol: "BTCUSDT", interval: "1m", onCandle }],
   ])
 })
 

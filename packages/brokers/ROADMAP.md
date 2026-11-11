@@ -10,6 +10,20 @@ owner: brokers
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
 
+### Historical candle and live Kline capability — Harvester issue #1016
+
+**Status: IMPLEMENTED in PR #1017.** The Binance WebSocket broker now exposes a normalized candle contract:
+
+- [x] Add the immutable, exchange-neutral candle shape and strict Binance history/stream adapters.
+- [x] Expose getCandles using the unsigned WebSocket API time and klines methods. Validate symbol, interval, limit (1–1000), optional time bounds, response shape, exact OHLCV strings, timestamps, OHLC invariants and strict ascending order.
+- [x] Expose subscribeForCandles through the existing public Streams client using the Kline stream; preserve the exchange isClosed flag and return an unsubscribe handle.
+- [x] Add offline adapter, broker contract, malformed-response, history-order, subscription and unsubscribe tests.
+- [x] Preserve the native WebSocket architecture; no REST transport, third-party SDK or order mutation is added.
+
+Historical completion uses Binance server time sampled immediately before the klines query, avoiding local-clock assumptions. The broker deliberately does not sort, interpolate or backfill gaps; those are consumer-owned market-data responsibilities.
+
+**Next consumer phase:** add the narrow methods to Harvester's application-owned BrokerPort and adapter, then implement history warm-up, gap/freshness handling and protection state.
+
 ### Canonical order acknowledgement completeness — issue #960
 
 - [x] **Request complete Binance RESULT acknowledgements for canonical order placement — issue [#960](https://github.com/45s/coinzilla/issues/960), implemented in merged [PR #961](https://github.com/45s/coinzilla/pull/961).** Binance's default response for `LIMIT_MAKER` is minimal `ACK`, which omits the order facts required by `adaptCanonicalOrder()`. Canonical placement explicitly requests `newOrderRespType: "RESULT"`, returning the canonical order fields without the optional fills array.

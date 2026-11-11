@@ -7,6 +7,17 @@ test("accepts an implementation of the complete Harvester broker port", () => {
   assert.equal(assertBrokerPort({ broker }), broker)
 })
 
+test("requires the historical and live candle capabilities for market-data consumers", () => {
+  assert.ok(
+    BROKER_PORT_METHODS.includes("getCandles"),
+    "The application broker port must require historical candle retrieval before Harvester can consume volatility history.",
+  )
+  assert.ok(
+    BROKER_PORT_METHODS.includes("subscribeForCandles"),
+    "The application broker port must require live candle subscriptions before Harvester can maintain volatility history.",
+  )
+})
+
 test("reports missing port methods at composition time", () => {
   assert.throws(
     () => assertBrokerPort({ broker: { connect() {} } }),

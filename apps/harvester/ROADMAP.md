@@ -2,9 +2,96 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## High-volatility protection — issue #1016
+
+**Status: ACCEPTED DESIGN — NOT IMPLEMENTED.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+
+- Per-market protection; one volatile pair must not stop another.
+- Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
+- Load approximately 100 completed candles per enabled market at startup; maintain the series from live Kline updates and backfill gaps after reconnect.
+- Missing, stale, invalid, insufficient or discontinuous candle data blocks new strategy activity. It is never treated as low volatility.
+- While protected, block all new BUY and non-recovery strategy actions. Cancel only Harvester-owned, acknowledged active BUYs through the existing durable cancellation and fill-reconciliation path.
+- Preserve resting recovery SELLs without volatility-driven cancellation or repricing. Continue SELL fills/accounting and permit only recovery SELL lifecycle actions needed to recover invested capital.
+- Enforce protection centrally immediately before broker submission; identify recovery SELL intent explicitly rather than allowing every SELL.
+- Initial ratio thresholds (warning 1.5, protect 2.0, recover 1.3 for 3 completed candles) are provisional pending offline historical validation.
+- Do not alter Conservative recovery economics or imply process-restart recovery is complete. No exchange operations are authorized.
+
+### Delivery order
+
+1. [x] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
+2. [x] Indicators: parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+3. [~] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — [PR #1019](https://github.com/45s/coinzilla/pull/1019). This adds no runtime subscriptions or trading behavior.
+4. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
+5. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
+6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+
+---
+
+## Adaptive price step — volatility-adjusted spacing
+
+**Status: PROPOSED — STRATEGY POLICY NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the shared [Indicators package](../../packages/indicators/README.md). The package now provides parameterized ATR, NATR and volatility-ratio calculations; adaptive-step reference-window, coefficient bounds, baseline-floor and order-replacement policy remain open.
+
+### Intended behavior
+
+- At reference volatility, the coefficient is neutral (`1.0`) and the effective step equals the configured baseline.
+- When current volatility is 1.5 times its reference level, the illustrative coefficient is `1.5`; a baseline of `0.5%` therefore produces an effective step of `0.75%`.
+- The configured baseline is never overwritten. The strategy consumes a derived effective value for the decisions explicitly included in the final scope.
+- Whether lower volatility may reduce the baseline, or whether the baseline is a hard floor, remains an open policy decision.
+- Calculate volatility independently for each market. Do not compare raw ATR values across symbols with different price scales.
+- The indicator calculation must not know about Binance DTOs, order placement, Harvester positions, fees or strategy policy.
+
+### Proposed calculation model (illustrative, not yet accepted)
+
+Normalize ATR to the instrument's price level:
+
+`ATR% = ATR / Close × 100`
+
+Compare a current normalized ATR value with a reference value for the same market and timeframe:
+
+`VolatilityCoefficient = CurrentATR% / ReferenceATR%`
+
+Then derive:
+
+`EffectivePriceStepPercent = ConfiguredPriceStepPercent × VolatilityCoefficient`
+
+Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coefficient `1.5`, effective step `0.75%`. This is an example of the intended relationship, not a frozen formula or parameter set. Raw ATR is an absolute price movement and must not be multiplied directly into a percentage-based `priceStepPercent`.
+
+### Ownership boundary
+
+- The `@coinzilla/indicators` package owns exchange-neutral, deterministic indicator calculations over normalized candle data (ATR, NATR and volatility ratio).
+- Harvester owns the policy: candle timeframe and history requirements, reference window, coefficient bounds/smoothing, fallback behavior, configuration, which strategy decisions use the value, and when orders may be recalculated.
+- Brokers owns exchange-specific market-data retrieval and DTO adaptation. Indicator code must not import broker or exchange SDKs.
+- Existing orders must not be silently repriced when a new indicator value arrives. Any order replacement policy must be separately specified and tested.
+- Exchange tick/step filters remain authoritative after strategy spacing is calculated.
+
+### Design questions to resolve before implementation
+
+1. **Consumer reference:** rolling reference window and how the baseline adapts across market regimes.
+2. **Timeframe and cadence:** candle interval, refresh frequency and whether the coefficient is stable between closed candles.
+3. **Reference:** rolling reference window and how the baseline adapts across market regimes.
+4. **Timeframe and cadence:** candle interval, refresh frequency and whether the coefficient is stable between closed candles.
+5. **Coefficient policy:** exact ratio, neutral point, smoothing/hysteresis and treatment of sudden volatility spikes.
+6. **Bounds:** minimum/maximum coefficient and effective step; decide whether low volatility can reduce the configured baseline.
+7. **Fallback:** behavior for missing, stale, insufficient, invalid or discontinuous market data. Never silently treat unavailable volatility as zero.
+8. **Strategy scope:** Conservative/Aggressive applicability and the exact BUY/SELL decisions affected.
+9. **Observability/configuration:** diagnostics for baseline, indicator inputs, reference, coefficient, effective step and fallback reason; opt-in/disabled-by-default rollout.
+10. **Validation:** historical/offline evidence, multi-symbol behavior, restart/recovery interaction, precision/tick-size and a separately approved TESTNET plan.
+
+### Proposed delivery sequence
+
+1. [x] Define the package boundary, completed-candle contract and exact-decimal calculation behavior in the Indicators package.
+2. [x] Create the Indicators workspace package and public API for ATR, NATR and volatility ratio — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+3. [ ] Submit a separate Harvester consumer change for configuration, strategy policy and effective-step integration.
+5. [ ] Add regression coverage for multiple markets, invalid/stale history, bounds, smoothing, order lifecycle and unchanged behavior when disabled.
+6. [ ] Validate against historical/offline market data; consider TESTNET only under a separately approved bounded plan.
+
+**Safety constraints:** this roadmap item changes no runtime behavior. No coefficient, timeframe, period, bound or fallback is finalized. The feature remains unimplemented and disabled until the design, tests and acceptance criteria are agreed. No TESTNET/LIVE operation is authorized by this planning work.
+
+---
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–2 complete; restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -15,12 +102,14 @@
    - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
-   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 is the next implementation-preparation item.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 was completed as a tests-only harness in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3 is next.
 
-2. **[ ] Step 2 — Build a deterministic recovery test harness (tests only).**
-   - Create representative multi-session fixtures from real DTO shapes, without changing production behavior.
-   - Add crash-point scenarios around order intent, broker acknowledgement, partial/final fill, accounting application, cycle completion, and pause/blocker publication.
-   - Make every scenario assert the complete restored state, not only total wallet quantity.
+2. **[x] Step 2 — Build a deterministic recovery test harness (tests only; PR #1014).**
+   - Added `apps/harvester/test-support/recovery/recovery-crash-fixtures.js`, building deterministic two-session fixtures with canonical entities and the same lifecycle DTO mappers used by production publication.
+   - Added `apps/harvester/test/recovery/recovery-crash-matrix.test.js` for crash cuts after order intent, broker acknowledgement, partial/final BUY fills, recovery SELL fill, cycle completion, unowned-order evidence, and strategy-pause publication.
+   - Every crash cut asserts complete restored state: order identities/status/executed quantities, active/free/total inventory, Position cost basis and quote cash flow, RecoveryLedger totals and fill identities, applied fills, completed-cycle identity, pauses, reconciliation requirement, and session cleanliness.
+   - The fixtures intentionally use the legacy Journal observer envelope to exercise the retained offline projector/restore path. They are **not** ADR-0001 durable facts and do not make Journal the recovery authority. No production source or runtime behavior changed.
+   - Exact PR-head verification: Harvester unit and coverage jobs each report 991 passed, 0 failed; targeted Harvester tests, JavaScript syntax, dependency audit and the remaining required checks must pass on the final PR head.
 
 3. **[ ] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040).**
    - Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment.

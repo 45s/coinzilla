@@ -10,6 +10,10 @@ The former blanket TESTNET acceptance gate is removed. Explicitly selected user 
 
 This does not authorize exchange writes during documentation or engineering preparation, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. The operator explicitly selects the exchange environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice. Keep all order-safety protections, exact-order ownership safeguards, and Journal durability barriers intact.
 
+## Selected safety work — high-volatility protection (#1016)
+
+The selected next safety feature is [Harvester Volatility Protection](./volatility-protection.md). It is separate from the Conservative strategy specification: it blocks all new BUY and non-recovery strategy actions per affected market, cancels only Harvester-owned active BUY orders, and preserves recovery SELL execution/accounting. Recovery SELL is the only strategy order lifecycle allowed while protection is active. The implementation must use the existing durable order/cancellation barriers and must not change recovery economics. This selected work does not authorize exchange operations and does not close process-restart recovery issue #654.
+
 ## Journal contract boundary
 
 Journal is not wholly optional during trading. These existing durability barriers remain mandatory and fail closed:

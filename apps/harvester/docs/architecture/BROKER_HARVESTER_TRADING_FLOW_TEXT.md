@@ -12,6 +12,8 @@ The broker boundary owns exchange communication and translates exchange-specific
 | --- | --- | --- |
 | Live market price | `subscribeForPrices({ symbol, onPrice })` | Streams normalized market-price events to Harvester. |
 | Startup price snapshot | `getPrices({ symbol })` | Requests a ticker snapshot when no fresh stream price arrived during startup. |
+| Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` | Exposes normalized candle history through the port; bootstrap does not yet call it. |
+| Live candle updates | `subscribeForCandles({ symbol, interval, onCandle })` | Exposes normalized Kline updates and unsubscribe lifecycle; bootstrap does not yet subscribe. |
 | Market constraints | `getSymbolFilters({ symbol })` | Loads and normalizes the enabled symbol's trading filters. |
 | Best bid / ask | `subscribeForBookTicker({ symbol, onBookTicker })` | Streams order-book top-of-book data for LIMIT_MAKER safety checks. |
 | Submit an order | Harvester port: `placeOrder({ order })` | Submits an application order through the adapter. |
@@ -20,6 +22,8 @@ The broker boundary owns exchange communication and translates exchange-specific
 | Execution history | `getFills({ symbol, orderId })` | Retrieves canonical fills for immediate reconciliation when submission already reports FILLED. |
 
 `createCanonicalOrder()` and `createOrder()` belong to the shared Binance client, not the Harvester application port. Harvester submits only through `broker.placeOrder({ order })`.
+
+The historical/live candle methods are required by the Harvester port and forwarded by its Binance adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)). They are available capabilities only; the startup sequence below remains the current runtime and does not fetch candle history or subscribe to Kline streams yet.
 
 ### Harvester
 
