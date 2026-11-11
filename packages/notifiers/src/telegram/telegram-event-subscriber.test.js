@@ -452,3 +452,59 @@ test("lets the real EventBus observe delivery failures when no subscriber logger
   await subscriber.close()
   await eventBus.close()
 })
+
+
+test("subscribes only to the explicitly selected supported notification events", async () => {
+  const eventBus = createEventBus()
+  const messages = []
+  const selectedEvents = ["bot.started", "order.submitted"]
+  const subscriber = subscribeTelegramNotifications({
+    eventBus,
+    notifier: { async sendMessage(message) { messages.push(message) } },
+    eventNames: selectedEvents,
+  })
+
+  assert.deepEqual(
+    [...eventBus.handlers.keys()],
+    selectedEvents,
+    "An explicit event selection must register only the selected supported Telegram event handlers.",
+  )
+  await eventBus.handlers.get("order.submitted")({
+    name: "order.submitted",
+    data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2" },
+  })
+  assert.match(
+    messages[0],
+    /ORDER SUBMITTED/,
+    "A selected order-submitted event must reach the existing serialized Telegram delivery path.",
+  )
+
+  await subscriber.close()
+  assert.deepEqual(
+    eventBus.unsubscribed,
+    selectedEvents,
+    "Closing a filtered subscriber must release exactly the subscriptions it created.",
+  )
+})
+
+test("rejects malformed, duplicate, empty, and unsupported Telegram event selections", () => {
+  const invalidSelections = [
+    { eventNames: "bot.started", message: /eventNames/ },
+    { eventNames: [], message: /at least one/ },
+    { eventNames: ["bot.started", "bot.started"], message: /duplicate/ },
+    { eventNames: ["unknown.event"], message: /unsupported/ },
+    { eventNames: [null], message: /event name/ },
+  ]
+
+  for (const { eventNames, message } of invalidSelections) {
+    assert.throws(
+      () => subscribeTelegramNotifications({
+        eventBus: createEventBus(),
+        notifier: { sendMessage() {} },
+        eventNames,
+      }),
+      message,
+      "Invalid event selections must be rejected before the subscriber registers any handlers.",
+    )
+  }
+})
