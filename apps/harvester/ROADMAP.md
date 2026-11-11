@@ -4,7 +4,7 @@
 
 ## Operator control interface — design before implementation
 
-**Status: DISCUSSION / PLANNED — no runtime implementation.** The [operator-control design proposal](./docs/architecture/OPERATOR_CONTROL_DESIGN.md) describes a transport-independent application boundary, with Telegram as the first optional adapter and a future web/HTTP adapter reusing the same use cases.
+**Status: DISCUSSION / PLANNED — no runtime implementation.** Tracking: [PR #1011](https://github.com/45s/coinzilla/pull/1011). The [operator-control design proposal](./docs/architecture/OPERATOR_CONTROL_DESIGN.md) describes a transport-independent application boundary, with Telegram as the first optional adapter and a future web/HTTP adapter reusing the same use cases.
 
 - **Current baseline:** Telegram is outbound-notification-only. No inbound command receiver, public control API, or web server exists.
 - **Next:** resolve the proposal's pause/order semantics, layered safety-state ownership, durable control-fact dependency, authorization model, configuration naming, idempotency and lifecycle questions before implementation.
