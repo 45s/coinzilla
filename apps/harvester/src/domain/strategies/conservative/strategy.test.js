@@ -70,6 +70,26 @@ test("creates the initial BUY below last traded price and rounds down to tick", 
   }])
 })
 
+
+test("uses the market-specific minimum profit when planning its recovery SELL", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, minProfit: 0.1 },
+    settings: { minProfit: 0.01 },
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(
+    decision.actions.find((action) => action.side === "SELL")?.price,
+    "0.103",
+    "A 0.1 quote-unit threshold must produce a higher recovery price than the unrelated global 0.01 threshold.",
+  )
+})
+
 test("does not duplicate an already active BUY on repeated price events", () => {
   const decision = evaluateConservativeStrategy({
     marketPrice,
