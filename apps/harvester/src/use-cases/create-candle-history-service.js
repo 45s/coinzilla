@@ -440,8 +440,26 @@ function createCandleHistoryService({
       kind: "candle",
       unsubscribe: async () => {
         state.stopped = true
-        await result.data.unsubscribe()
-        await state.queue
+        const errors = []
+
+        try {
+          await result.data.unsubscribe()
+        } catch (error) {
+          errors.push(error)
+        }
+
+        try {
+          await state.queue
+        } catch (error) {
+          errors.push(error)
+        }
+
+        if (errors.length === 1) {
+          throw errors[0]
+        }
+        if (errors.length > 1) {
+          throw new AggregateError(errors, "Candle unsubscribe and accepted-work drain both failed")
+        }
       },
     })
   }
