@@ -1489,6 +1489,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       return { ok: true, data: acknowledgedOrder }
     },
   }
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   const config = {
     strategies: {
       CG_coinGrabber: {
@@ -2438,6 +2439,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
       }),
     }
   }
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   const config = {
     ...appConfig,
     strategies: {
@@ -2988,6 +2990,7 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     return { ok: true, data: canceledOrder }
   }
 
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   const config = {
     ...appConfig,
     strategies: {
@@ -3116,6 +3119,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     return result
   }
 
+  makeVolatilityReadyBroker(broker, ["BTCUSDT", "ETHUSDT"])
   const appConfigWithRegularLimitBuys = {
     ...appConfig,
     strategies: {
