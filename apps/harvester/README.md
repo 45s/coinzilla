@@ -67,6 +67,28 @@ Trading settings and pairs belong to their strategy. Future strategies can be si
 
 The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. Strategy and pair settings remain in `config.json` under `strategies`.
 
+### Generate a new trading pair
+
+Use the interactive generator instead of manually guessing Binance precision and trading filters:
+
+```sh
+# From the repository root:
+pnpm --filter @coinzilla/harvester config:symbol
+
+# Or from apps/harvester:
+pnpm run config:symbol
+```
+
+The command asks for the Binance Spot symbol, quote investment budget, `keepQuantity`, maker commission percentage and taker commission percentage. It also asks for the minimum profit per recovery cycle (default `0.01` quote units) and price-step percentage (default `0.05`%). These two values are Conservative strategy settings, not exchange filters.
+
+The generator then uses public, read-only Binance Spot endpoints to retrieve `exchangeInfo` and the current `ticker/price`. It derives `pricePrecision` from `PRICE_FILTER.tickSize`, `quantityPrecision` from `LOT_SIZE.stepSize`, and validates `LOT_SIZE.minQty/maxQty` plus the stricter available `MIN_NOTIONAL`/`NOTIONAL` minimum. `orderQuantity` is calculated from the quote budget and reference ticker price, rounded down to the exchange quantity step and capped at the exchange maximum. The calculated quantity must still satisfy minimum quantity and notional.
+
+Maker and taker percentages are supplied by the operator and stored independently; Binance's public exchange-info endpoint does not provide the account's commission schedule. A zero maker percentage requires the symbol to support `LIMIT_MAKER`; a non-zero maker percentage uses `LIMIT`.
+
+The generator validates the complete result with the same `validateAppConfig` contract used by Harvester, then merges the pair into `strategies.CG_coinGrabber.pairs` in this existing `config.json`. It does not create a second pair-config format. New pairs are always written with `enabled: false`; review the generated settings and enable the pair manually only when ready. Existing symbols are rejected rather than overwritten. File replacement is atomic and protected by an exclusive generator lock. If the process is interrupted and leaves a `config.json.config-symbol.lock` file, first confirm that no generator is running before removing a stale lock.
+
+This is configuration tooling only: it requires no Binance API credentials and never places, cancels or modifies orders. The reference ticker price is a sizing snapshot, not a guaranteed execution price; Harvester's normal startup exchange-rule validation remains in force.
+
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity; `minProfit` is the minimum net profit in that pair's quote asset.
 
 **Important — `keepQuantity` is retained per completed recovery cycle, not a total-balance cap.** Harvester sells all legally sellable strategy inventory above this amount, then retains the configured quantity when that recovery cycle completes. Each later completed cycle retains another `keepQuantity`, so the free/retained balance accumulates. Example: with `keepQuantity = 0.01 LINK`, four completed cycles retain 0.04 LINK in total; 100 cycles retain 1.00 LINK, assuming no dust bonus. Validated exchange-constrained dust is retained in addition to that cycle's `keepQuantity`. See the [canonical Conservative specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for the full rule and completion conditions. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup requests any missing initial ticker snapshot through Binance WebSocket API `ticker.price` or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
