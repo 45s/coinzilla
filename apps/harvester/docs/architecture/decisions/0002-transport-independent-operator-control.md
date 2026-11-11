@@ -15,6 +15,7 @@ created: 2026-11-11
 **Owner:** Harvester
 
 **Related decisions and work:**
+
 - [ADR-0001 — Application-owned durable facts](./0001-application-owned-recovery-facts.md)
 - [Harvester operator-control implementation contract](../OPERATOR_CONTROL_DESIGN.md)
 - [Harvester roadmap](../../../ROADMAP.md)
