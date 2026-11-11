@@ -319,8 +319,6 @@ test("rejects a durable market-history baseline that starts after the queried hi
       verifiedAt: 60,
       evidenceDigest: "a".repeat(64),
       verifiedBy: "operator:trader",
-    evidenceDigest: "a".repeat(64),
-    verifiedBy: "operator:trader",
     },
   })
 
