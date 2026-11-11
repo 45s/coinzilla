@@ -279,7 +279,9 @@ test("keeps readiness isolated per market when one symbol has insufficient histo
       DOGEUSDT: createHistory("DOGEUSDT", 73),
     },
     onSubscribe: async ({ symbol, onCandle }) => {
-      await onCandle(createCandle({ symbol, openTime: 100 * INTERVAL_MS, isClosed: false }))
+      if (symbol === "BTCUSDT") {
+        await onCandle(createCandle({ symbol, openTime: 100 * INTERVAL_MS, isClosed: false }))
+      }
     },
   })
   await fixture.start()

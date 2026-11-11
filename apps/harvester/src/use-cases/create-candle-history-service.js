@@ -190,7 +190,6 @@ function createMarketState(symbol) {
     candles: [],
     metrics: null,
     reason: "HISTORY_NOT_LOADED",
-    historyLoaded: false,
     initialized: false,
     subscriptionReady: false,
     stopped: false,
@@ -228,7 +227,6 @@ function updateMetrics({ state, logger } = {}) {
 function appendCompletedCandles({ state, candles, logger } = {}) {
   const merged = [...state.candles, ...candles]
   state.candles = Object.freeze(merged.slice(-HISTORY_SIZE))
-  state.historyLoaded = state.candles.length > 0
   updateMetrics({ state, logger })
 }
 
@@ -347,7 +345,7 @@ function createCandleHistoryService({
     }
   }
 
-  async function processLiveCandle({ state, candle, receivedAt } = {}) {
+  async function processLiveCandle({ state, candle } = {}) {
     const validated = validateCandle({ candle, symbol: state.symbol })
     if (!validated.isClosed) {
       const existing = state.candles.find((item) => item.openTime === validated.openTime)
@@ -407,7 +405,7 @@ function createCandleHistoryService({
     }
 
     state.queue = state.queue
-      .then(() => processLiveCandle({ state, candle, receivedAt }))
+      .then(() => processLiveCandle({ state, candle }))
       .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error }))
     return state.queue
   }
@@ -472,12 +470,10 @@ function createCandleHistoryService({
       const historical = validateCandleSeries({ candles: result.data, symbol: state.symbol })
       const completed = historical.filter((candle) => candle.isClosed).slice(-HISTORY_SIZE)
       state.candles = Object.freeze(completed)
-      state.historyLoaded = completed.length > 0
       state.initialized = true
       updateMetrics({ state, logger })
     } catch (error) {
       state.candles = Object.freeze([])
-      state.historyLoaded = false
       state.initialized = true
       failMarket({ state, reason: "INVALID_HISTORY", error })
     }

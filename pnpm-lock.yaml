@@ -180,6 +180,9 @@ importers:
       '@coinzilla/event-bus':
         specifier: workspace:*
         version: link:../../packages/event-bus
+      '@coinzilla/indicators':
+        specifier: workspace:*
+        version: link:../../packages/indicators
       '@coinzilla/journal':
         specifier: workspace:*
         version: link:../../packages/journal
