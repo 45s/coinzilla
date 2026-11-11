@@ -354,7 +354,21 @@ export function auditRecoveredAccountState({
 
     const expectedOpenOrders = recoveredState.orderRegistry.getActiveOrders({})
     const expectedByBrokerId = new Map()
+    const recoveredByBrokerId = new Map()
+    const recoveredByClientOrderId = new Map()
     const expectedLocked = new Map()
+    for (const order of recoveredState.orderRegistry.orders) {
+      if (recoveredByClientOrderId.has(order.clientOrderId)) {
+        throw new Error("Recovered OrderRegistry contains duplicate clientOrderId " + order.clientOrderId)
+      }
+      recoveredByClientOrderId.set(order.clientOrderId, order)
+      if (typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()) {
+        if (recoveredByBrokerId.has(order.brokerOrderId)) {
+          throw new Error("Recovered OrderRegistry contains duplicate brokerOrderId " + order.brokerOrderId)
+        }
+        recoveredByBrokerId.set(order.brokerOrderId, order)
+      }
+    }
     for (const order of expectedOpenOrders) {
       if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
         throw new Error("Recovered active order remains unresolved and cannot pass account audit: " + order.clientOrderId)
@@ -414,6 +428,12 @@ export function auditRecoveredAccountState({
       seenOpenOrderIds.add(brokerOrderId)
       const expected = expectedByBrokerId.get(brokerOrderId)
       if (!expected) {
+        if (recoveredByBrokerId.has(brokerOrderId)) {
+          throw new Error("Exchange reports a terminal recovered order as open: " + brokerOrderId)
+        }
+        if (recoveredByClientOrderId.has(identity.clientOrderId)) {
+          throw new Error("Unowned exchange order clientOrderId conflicts with recovered order ownership: " + identity.clientOrderId)
+        }
         const externalMarket = marketsBySymbol.get(symbol)
         if (!externalMarket) {
           throw new Error("Canonical Market metadata is missing for unowned open order " + symbol)
