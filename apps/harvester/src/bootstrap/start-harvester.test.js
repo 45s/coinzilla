@@ -1957,7 +1957,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.equal(targetMarketEvaluation.price, "65000.12")
   assert.ok(typeof targetMarketEvaluation.action === "string" && targetMarketEvaluation.action.length > 0)
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
-  assert.ok(systemMessages.includes("app configuration validated"))
+  assert.ok(systemMessages.includes("App configuration validated"))
   assert.ok(systemMessages.includes("User-data stream connected"))
   assert.ok(systemMessages.includes("Exchange account snapshot loaded"))
   assert.ok(systemMessages.includes("Conservative TESTNET trading engine activated"))
