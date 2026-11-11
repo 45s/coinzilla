@@ -61,10 +61,10 @@ Each record has a versioned envelope containing:
 The committed-head manifest records its format version, the last committed sequence, and the last committed digest. The genesis record is created only by an explicit one-time initialization operation; normal startup never creates a new empty ledger when files are missing. A write is acknowledged as durable only after:
 
 1. The complete canonical record has been appended and the log file has been synced.
-2. The committed-head manifest has been written to a temporary file, synced, atomically replaced, and its containing directory synced.
-3. The resulting log head and manifest agree.
+2. The matching committed-head checkpoint has been appended to the manifest journal and the manifest file synced.
+3. Startup/append verification confirms the fact-log head and final manifest checkpoint agree, including both digest chains.
 
-A record beyond the committed manifest, a missing or malformed log/manifest, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation relative to the committed head is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
+A fact record beyond the committed-head manifest journal, a checkpoint ahead of the fact log, a missing or malformed stream, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
 
 The global sequence and committed head avoid relying on directory enumeration, filename timestamps, or UUID lexical order for new authoritative history. The old Journal directory tree still needs explicit discovery when it is examined for legacy evidence or a one-time baseline assessment.
 
@@ -102,7 +102,7 @@ Every process starts with strategy evaluation and order submission disabled. Rec
 
 The gate may open only after all of the following succeed:
 
-1. Validate the complete durable-fact stream, committed manifest, schema versions, process boundaries, global ordering, stable identities, and configuration compatibility.
+1. Validate the complete durable-fact stream, committed-head manifest journal, schema versions, process boundaries, global ordering, stable identities, and configuration compatibility.
 2. Build a candidate projection deterministically and idempotently. Validate Position cost basis, RecoveryLedger, active/free inventory, completed-cycle outcomes, order ownership, reservations, strategy-control state, and sticky blockers before publishing any candidate state.
 3. Reconcile every restored owned order by durable `clientOrderId` and canonical exchange identity/status. Reconcile complete available execution history and exact fill/commission parity; never infer ownership from symbol/side/price/quantity shape alone.
 4. Reconcile current account-wide open orders and exact free/locked balances for all relevant assets, including third-asset commission assets. Compare outstanding commitments and reservations without double-counting snapshot-relative balances.
