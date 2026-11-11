@@ -999,6 +999,7 @@ test("restores Portfolio, RecoveryLedger, free inventory, and order ownership fr
   assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.01")
   assert.equal(position.totalBaseQuantity.amount, "0.01")
+  assert.equal(position.spent.amount, "0", "A completed cycle must reset the restored Position cost basis.")
   const ledger = restored.data.recoveryLedgers.get(canonicalMarket.id)
   assert.equal(ledger.buyCost, "0")
   assert.equal(ledger.netSellProceeds, "0")
