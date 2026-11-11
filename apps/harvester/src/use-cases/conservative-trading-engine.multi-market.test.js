@@ -151,7 +151,9 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     isMarketBookFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
-    volatilityProtectionEnabled,
+    getVolatilityData: volatilityProtectionEnabled
+      ? () => ({ ok: false, error: new Error("test volatility snapshot unavailable") })
+      : undefined,
     initialState,
   })
 
