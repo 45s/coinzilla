@@ -59,9 +59,10 @@ test("paginates each market from the durable baseline with strictly advancing tr
   assert.equal(result.data.marketsChecked, 1)
   assert.equal(result.data.pagesChecked, 2)
   assert.equal(result.data.historyPagesComplete, true)
-  assert.equal(result.data.marketHistoryComplete, true)
+  assert.equal(result.data.marketHistoryPagesComplete, true)
   assert.equal(result.data.historyScope, "MARKET")
   assert.deepEqual(result.data.marketsQueried, ["BTCUSDT"])
+  assert.equal(result.data.historyStartTime, 50)
   assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.complete, false)
   assert.deepEqual(calls, [
@@ -88,7 +89,7 @@ test("enumerates every supplied market and does not claim the universe is comple
 
   assert.equal(result.ok, true)
   assert.equal(result.data.marketsChecked, 2)
-  assert.equal(result.data.marketHistoryComplete, true)
+  assert.equal(result.data.marketHistoryPagesComplete, true)
   assert.equal(result.data.historyScope, "MARKETS")
   assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.complete, false)
