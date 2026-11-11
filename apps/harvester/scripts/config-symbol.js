@@ -78,30 +78,8 @@ export async function runConfigSymbol({
   const metadataFetchedAt = new Date().toISOString()
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
-  writeLine("Configuration preview (new pair will be disabled):")
-  writeLine(JSON.stringify({
-    symbol,
-    environment,
-    baseAsset: metadata.baseAsset,
-    quoteAsset: metadata.quoteAsset,
-    metadataSource: "Binance Spot " + environment + " public REST API",
-    metadataFetchedAt,
-    referencePrice: metadata.price,
-    exchangeFilters: {
-      tickSize: metadata.tickSize,
-      minPrice: metadata.minPrice,
-      maxPrice: metadata.maxPrice,
-      stepSize: metadata.stepSize,
-      minQuantity: metadata.minQuantity,
-      maxQuantity: metadata.maxQuantity,
-      minNotional: metadata.minNotional,
-      maxNotional: metadata.maxNotional,
-    },
-    unvalidatedConstraints: metadata.unvalidatedConstraints,
-    pairConfig,
-  }, null, 2))
-  writeLine("Unsupported active filters are retained for diagnostics, not treated as locally validated; Binance remains authoritative when orders are submitted.")
-  writeLine("Account-specific myFilters are not queried by this credential-free tool; Harvester performs its normal authenticated metadata checks at startup before trading.")
+  writeLine("Generated pair configuration:")
+  writeLine(JSON.stringify({ [symbol]: pairConfig }, null, 2))
 
   const confirmation = (await ask("Add this pair to apps/harvester/config.json? [Y/n]: ")).trim().toLowerCase()
   if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
@@ -111,7 +89,7 @@ export async function runConfigSymbol({
 
   const writtenPath = await writeConfig({ configPath, symbol, pairConfig })
   writeLine("Pair configuration added successfully: " + writtenPath)
-  writeLine("The new pair is disabled. Review it and enable it manually when ready.")
+  writeLine("The pair was added with enabled: true.")
   return Object.freeze({ written: true, symbol, pairConfig, path: writtenPath })
 }
 
