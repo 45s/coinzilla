@@ -1,4 +1,4 @@
-import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 
 function requireArray({ value, field }) {
@@ -91,14 +91,34 @@ export function auditRecoveredTradeHistory({
   complete = false,
   marketUniverseComplete = false,
   ownedOrders = [],
+  scope = "ACCOUNT",
+  market,
 } = {}) {
   try {
     if (complete !== true) {
       throw new Error("Account-wide exchange trade history pages are incomplete; external execution ownership cannot be proven")
     }
-    const journalRecords = requireArray({ value: journalFills, field: "journalFills" })
-    const exchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
-    const ownedOrderRecords = requireArray({ value: ownedOrders, field: "ownedOrders" })
+    if (!["ACCOUNT", "MARKET"].includes(scope)) {
+      throw new TypeError('scope must be "ACCOUNT" or "MARKET"')
+    }
+    if (scope === "MARKET" && !(market instanceof Market)) {
+      throw new TypeError("MARKET trade-history scope requires a canonical Market")
+    }
+    if (scope === "MARKET" && marketUniverseComplete === true) {
+      throw new Error("Single-market trade history cannot prove account-wide market-universe completeness")
+    }
+    const allJournalRecords = requireArray({ value: journalFills, field: "journalFills" })
+    const allExchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
+    const allOwnedOrderRecords = requireArray({ value: ownedOrders, field: "ownedOrders" })
+    const journalRecords = scope === "MARKET"
+      ? allJournalRecords.filter((fill) => fill?.symbol === market.symbol)
+      : allJournalRecords
+    const exchangeRecords = scope === "MARKET"
+      ? allExchangeRecords.filter((fill) => fill?.market?.symbol === market.symbol)
+      : allExchangeRecords
+    const ownedOrderRecords = scope === "MARKET"
+      ? allOwnedOrderRecords.filter((order) => order?.market?.symbol === market.symbol)
+      : allOwnedOrderRecords
     const ownedOrdersByBrokerId = new Map()
     for (const [index, order] of ownedOrderRecords.entries()) {
       if (!(order instanceof CanonicalOrder) ||
@@ -164,14 +184,15 @@ export function auditRecoveredTradeHistory({
       }
     }
 
-    if (marketUniverseComplete !== true) {
+    if (scope === "ACCOUNT" && marketUniverseComplete !== true) {
       throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
     }
 
     return toResult({
       data: Object.freeze({
         complete: true,
-        marketUniverseComplete: true,
+        scope,
+        marketUniverseComplete: scope === "ACCOUNT",
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
         reconciledOwnedOrderFills,
