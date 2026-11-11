@@ -40,9 +40,42 @@ function getInitialTradingSnapshot({ projection }) {
     session.tradingEnabled || session.hasTradingActivity
   )
   if (!firstTradingSession) return undefined
-  return projection.data.accountSnapshots.find((snapshot) =>
-    snapshot.fileName === firstTradingSession.fileName && snapshot.phase === "PREFLIGHT"
+  const snapshots = projection.data.accountSnapshots.filter((snapshot) =>
+    snapshot.fileName === firstTradingSession.fileName &&
+    ["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)
   )
+  if (snapshots.length === 0) return undefined
+
+  const initial = snapshots[0]
+  const balancesByAsset = new Map()
+  const auditReasons = new Set()
+  let auditStatus = "COMPLETE"
+  for (const snapshot of snapshots) {
+    if (snapshot.sourceTime !== initial.sourceTime) {
+      throw new Error("PREFLIGHT commission-asset baseline must retain the original account snapshot time")
+    }
+    if (snapshot.auditStatus !== "COMPLETE" || snapshot.auditReasons.length > 0) {
+      auditStatus = "INCOMPLETE"
+      for (const reason of snapshot.auditReasons) auditReasons.add(reason)
+    }
+    for (const balance of snapshot.balances) {
+      const previous = balancesByAsset.get(balance.asset)
+      if (previous && (
+        previous.free !== balance.free ||
+        previous.locked !== balance.locked ||
+        previous.total !== balance.total
+      )) {
+        throw new Error("PREFLIGHT account snapshots contain contradictory baseline balances for " + balance.asset)
+      }
+      balancesByAsset.set(balance.asset, balance)
+    }
+  }
+  return {
+    ...initial,
+    auditStatus,
+    auditReasons: [...auditReasons],
+    balances: [...balancesByAsset.values()].sort((left, right) => left.asset.localeCompare(right.asset)),
+  }
 }
 
 /**
@@ -79,6 +112,9 @@ export function auditRecoveredAccountState({
     if (!projection.data.requiresExchangeReconciliation) {
       return toResult({ data: Object.freeze({ skipped: true, reason: "NO_PRIOR_TRADING_STATE" }) })
     }
+    if (!Array.isArray(recoveredState.journalFills)) {
+      throw new TypeError("auditRecoveredAccountState requires restored Journal fill facts")
+    }
 
     const baseline = getInitialTradingSnapshot({ projection })
     if (!baseline) {
@@ -108,7 +144,21 @@ export function auditRecoveredAccountState({
       throw new Error("Current exchange account snapshot is older than the latest durable Journal account snapshot")
     }
 
-    const baselineByAsset = new Map(baseline.balances.map((balance) => [balance.asset, balance.total]))
+    const baselineByAsset = new Map(baseline.balances.map((balance) => [balance.asset, {
+      total: balance.total,
+      locked: balance.locked,
+    }]))
+    const baselineSequenceByAsset = new Map()
+    for (const snapshot of projection.data.accountSnapshots) {
+      if (snapshot.fileName !== baseline.fileName ||
+          !["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)) continue
+      for (const balance of snapshot.balances) {
+        const previousSequence = baselineSequenceByAsset.get(balance.asset)
+        if (previousSequence === undefined || snapshot.sequence < previousSequence) {
+          baselineSequenceByAsset.set(balance.asset, snapshot.sequence)
+        }
+      }
+    }
     const currentByAsset = new Map()
     for (const balance of currentAccountSnapshot.balances) {
       const code = balance.asset.code
@@ -121,6 +171,7 @@ export function auditRecoveredAccountState({
 
     const expectedDeltas = new Map()
     const marketsById = new Map()
+    const marketsBySymbol = new Map()
     for (const position of recoveredState.portfolio.value.positions) {
       if (!markets.some((market) => market.id === position.market.id)) {
         throw new Error("Canonical Market metadata is missing for restored Position " + position.market.symbol)
@@ -136,7 +187,9 @@ export function auditRecoveredAccountState({
         throw new TypeError("markets must contain canonical Market values")
       }
       if (marketsById.has(market.id)) throw new Error("Duplicate canonical Market metadata for " + market.id)
+      if (marketsBySymbol.has(market.symbol)) throw new Error("Duplicate canonical Market symbol " + market.symbol)
       marketsById.set(market.id, market)
+      marketsBySymbol.set(market.symbol, market)
       const position = recoveredState.portfolio.getPosition({ marketId: market.id })
       if (!position) continue
       addAmount({
@@ -151,13 +204,109 @@ export function auditRecoveredAccountState({
       })
     }
 
+    const commissionAssetIdByCode = new Map()
+    const commissionAssetCodeById = new Map()
+    const thirdAssetCommissionCodes = new Set()
+    for (const market of markets) {
+      for (const asset of [market.baseAsset, market.quoteAsset]) {
+        const knownId = commissionAssetIdByCode.get(asset.code)
+        const knownCode = commissionAssetCodeById.get(asset.id)
+        if ((knownId !== undefined && knownId !== asset.id) ||
+            (knownCode !== undefined && knownCode !== asset.code)) {
+          throw new Error("Canonical Market metadata contains contradictory asset identity for " + asset.code)
+        }
+        commissionAssetIdByCode.set(asset.code, asset.id)
+        commissionAssetCodeById.set(asset.id, asset.code)
+      }
+    }
+    for (const fill of recoveredState.journalFills) {
+      if (typeof fill?.symbol !== "string" || !Array.isArray(fill.commissions)) {
+        throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
+      }
+      const market = marketsBySymbol.get(fill.symbol)
+      if (!market) throw new Error("Canonical Market metadata is missing for recovered fill " + fill.symbol)
+      for (const commission of fill.commissions) {
+        const amount = requireAmount({
+          value: commission?.amount,
+          field: fill.symbol + ".commission.amount",
+        })
+        if (compareDecimal({ left: amount, right: "0" }) < 0) {
+          throw new Error("Recovered commission amount cannot be negative for " + fill.symbol)
+        }
+        const assetId = commission?.assetId
+        const asset = commission?.asset
+        if (typeof assetId !== "string" || !assetId.trim() ||
+            typeof asset !== "string" || !asset.trim()) {
+          throw new TypeError("Recovered commission requires exact asset ID and code for " + fill.symbol)
+        }
+        if (assetId === market.baseAsset.id) {
+          if (asset !== market.baseAsset.code) {
+            throw new Error("Recovered commission asset code contradicts market base asset identity for " + fill.symbol)
+          }
+          continue
+        }
+        if (assetId === market.quoteAsset.id) {
+          if (asset !== market.quoteAsset.code) {
+            throw new Error("Recovered commission asset code contradicts market quote asset identity for " + fill.symbol)
+          }
+          continue
+        }
+        if (asset === market.baseAsset.code || asset === market.quoteAsset.code) {
+          throw new Error("Recovered commission asset ID contradicts a market asset code for " + fill.symbol)
+        }
+        const knownId = commissionAssetIdByCode.get(asset)
+        const knownCode = commissionAssetCodeById.get(assetId)
+        if ((knownId !== undefined && knownId !== assetId) ||
+            (knownCode !== undefined && knownCode !== asset)) {
+          throw new Error("Recovered third-asset commission identity is contradictory for " + asset)
+        }
+        commissionAssetIdByCode.set(asset, assetId)
+        commissionAssetCodeById.set(assetId, asset)
+        if (compareDecimal({ left: amount, right: "0" }) === 0) continue
+
+        // A later snapshot cannot retroactively explain a fee debit that already occurred.
+        const baselineSequence = baselineSequenceByAsset.get(asset)
+        if (!baselineByAsset.has(asset) || !Number.isSafeInteger(baselineSequence)) {
+          throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
+        }
+        if (!Number.isSafeInteger(fill.sequence) || baselineSequence >= fill.sequence) {
+          throw new Error("Third-asset commission baseline must be durably recorded before its applied fill for " + asset)
+        }
+        const quoteValue = commission.quoteValue
+        if (!quoteValue ||
+            quoteValue.assetId !== market.quoteAsset.id ||
+            quoteValue.asset !== market.quoteAsset.code ||
+            typeof quoteValue.amount !== "string" ||
+            compareDecimal({ left: requireAmount({
+              value: quoteValue.amount,
+              field: fill.symbol + ".commission.quoteValue.amount",
+            }), right: "0" }) <= 0) {
+          throw new Error("Recovered third-asset commission has no valid historical quote valuation for " + fill.symbol)
+        }
+        thirdAssetCommissionCodes.add(asset)
+        addAmount({
+          amounts: expectedDeltas,
+          asset,
+          amount: subtractDecimal({ left: "0", right: amount }),
+        })
+      }
+    }
+
+    for (const asset of thirdAssetCommissionCodes) {
+      if (!baselineByAsset.has(asset)) {
+        throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
+      }
+    }
+    const marketAssetCodes = new Set(markets.flatMap((market) => [
+      market.baseAsset.code,
+      market.quoteAsset.code,
+    ]))
     const assetCodes = new Set([
-      ...baselineByAsset.keys(),
-      ...currentByAsset.keys(),
+      ...marketAssetCodes,
       ...expectedDeltas.keys(),
     ])
     for (const asset of assetCodes) {
-      const initial = baselineByAsset.get(asset) ?? "0"
+      const initial = baselineByAsset.get(asset)?.total ?? "0"
       const delta = expectedDeltas.get(asset) ?? "0"
       const expected = addDecimal({ left: initial, right: delta })
       if (compareDecimal({ left: expected, right: "0" }) < 0) {
@@ -264,7 +413,9 @@ export function auditRecoveredAccountState({
       }
     }
     for (const [asset, actual] of currentByAsset) {
-      const expected = expectedLocked.get(asset) ?? "0"
+      const initialLocked = baselineByAsset.get(asset)?.locked ?? "0"
+      const expected = expectedLocked.get(asset) ??
+        (thirdAssetCommissionCodes.has(asset) && !marketAssetCodes.has(asset) ? initialLocked : "0")
       if (compareDecimal({ left: actual.locked, right: expected }) !== 0) {
         throw new Error(
           "Exchange has unexplained locked funds for " + asset +

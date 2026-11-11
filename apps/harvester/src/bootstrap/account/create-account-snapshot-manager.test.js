@@ -52,7 +52,7 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
   }
 }
 
-const createAccountSnapshot = ({ market, sourceTime }) => ({
+const createAccountSnapshot = ({ market, sourceTime, extraBalances = [] }) => ({
   ok: true,
   data: {
     sourceTime,
@@ -65,6 +65,7 @@ const createAccountSnapshot = ({ market, sourceTime }) => ({
         free: new Quantity({ amount: "500", asset: market.quoteAsset }),
         locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
       }),
+      ...extraBalances,
     ],
   },
 })
@@ -83,6 +84,96 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
   assert.equal(fixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
+})
+
+test("publishes only the actual third-asset commission baseline and excludes unrelated wallet assets", async () => {
+  const market = createFixture().market
+  const bnb = new Asset({ id: "asset:BNB", code: "BNB" })
+  const xrp = new Asset({ id: "asset:XRP", code: "XRP" })
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 100,
+        extraBalances: [
+          new Balance({
+            free: new Quantity({ amount: "1", asset: bnb }),
+            locked: new Quantity({ amount: "0", asset: bnb }),
+          }),
+          new Balance({
+            free: new Quantity({ amount: "25", asset: xrp }),
+            locked: new Quantity({ amount: "0", asset: xrp }),
+          }),
+        ],
+      }),
+      createAccountSnapshot({
+        market,
+        sourceTime: 200,
+        extraBalances: [
+          new Balance({
+            free: new Quantity({ amount: "0.9999", asset: bnb }),
+            locked: new Quantity({ amount: "0", asset: bnb }),
+          }),
+          new Balance({
+            free: new Quantity({ amount: "25", asset: xrp }),
+            locked: new Quantity({ amount: "0", asset: xrp }),
+          }),
+        ],
+      }),
+    ],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(snapshot.getFreeBalance({ assetId: bnb.id }), undefined)
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "BNB"), false)
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "XRP"), false)
+
+  const baseline = await fixture.manager.publishCommissionAssetBaseline({
+    assetId: bnb.id,
+    assetCode: bnb.code,
+  })
+
+  assert.equal(baseline.ok, true)
+  assert.equal(fixture.publishedEvents.length, 2)
+  assert.equal(fixture.publishedEvents[1].data.phase, "COMMISSION_BASELINE")
+  assert.equal(fixture.publishedEvents[1].data.sourceTime, 100)
+  assert.deepEqual(fixture.publishedEvents[1].data.balances, [{
+    asset: "BNB",
+    free: "1",
+    locked: "0",
+    total: "1",
+  }])
+  assert.equal(fixture.publishedEvents.some(({ data }) => data.balances.some(({ asset }) => asset === "XRP")), false)
+
+  const duplicate = await fixture.manager.publishCommissionAssetBaseline({
+    assetId: bnb.id,
+    assetCode: bnb.code,
+  })
+  assert.equal(duplicate.data.reason, "BASELINE_ALREADY_CAPTURED")
+  assert.equal(fixture.publishedEvents.length, 2)
+  assert.equal(fixture.getFlushCount(), 2)
+
+  const refreshed = await fixture.manager.refreshAccountSnapshot()
+  assert.equal(refreshed.getFreeBalance({ assetId: bnb.id }).amount, "0.9999")
+  assert.equal(refreshed.getFreeBalance({ assetId: xrp.id }), undefined)
+})
+
+test("fails closed when an actual commission asset has no PREFLIGHT balance", async () => {
+  const market = createFixture().market
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+  })
+  await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  await assert.rejects(
+    fixture.manager.publishCommissionAssetBaseline({
+      assetId: "asset:BNB",
+      assetCode: "BNB",
+    }),
+    /PREFLIGHT account snapshot is missing commission asset BNB/,
+  )
+  assert.equal(fixture.publishedEvents.length, 1)
 })
 
 test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
