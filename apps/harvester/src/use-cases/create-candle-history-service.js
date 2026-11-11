@@ -10,6 +10,8 @@ import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 
 const CANDLE_INTERVAL = "1m"
 const CANDLE_INTERVAL_MS = 60_000
+const CANDLE_STREAM_FRESHNESS_GRACE_MS = 5_000
+const CANDLE_STREAM_MAX_AGE_MS = CANDLE_INTERVAL_MS + CANDLE_STREAM_FRESHNESS_GRACE_MS
 const HISTORY_SIZE = 100
 const HISTORY_REQUEST_LIMIT = HISTORY_SIZE + 1
 const ATR_PERIOD = 14
@@ -145,6 +147,7 @@ function createCandleHistoryService({
     const isFresh = state.lastEventAt !== null && isMarketDataFresh({
       timestamp: state.lastEventAt,
       now: observedAt,
+      maxAgeMs: CANDLE_STREAM_MAX_AGE_MS,
     })
     const blockers = []
     if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
