@@ -44,9 +44,9 @@ describe("calculateAtrSeries", () => {
       createCandle({ openTime: intervalMs, high: "15", low: "14", close: "14.5" }),
     ]
 
-    const result = calculateAtrSeries({ candles, intervalMs, period: 2, outputScale: 8 })
+    const result = calculateAtrSeries({ candles, intervalMs, period: 1, outputScale: 8 })
 
-    assert.equal(result[0].value, "3", "true range must include the previous close-to-current high gap instead of using only the candle range")
+    assert.equal(result[1].value, "5.5", "true range must include the previous close-to-current high gap instead of using only the candle range")
   })
 
   it("rejects insufficient history instead of returning a misleading partial indicator", () => {
