@@ -1,8 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Market } from "@coinzilla/entities"
+import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery.js"
 import { restoreHarvesterJournalState } from "../../use-cases/restore-harvester-journal-state.js"
+import { mapFillAppliedData } from "../../application/events/lifecycle-event-dtos.js"
+import { Portfolio } from "../../domain/portfolio/portfolio.js"
+import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
+import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
 
 const record = (name, data, id = name) => ({
   id,
@@ -699,6 +703,107 @@ test("rejects a third-asset commission valued in an asset other than the market 
 
   assert.equal(restored.ok, false)
   assert.match(restored.errors[0].message, /does not match the market quote asset/)
+})
+
+test("matches live BUY/SELL accounting through DTO, projection, and restore for base, quote, and third-asset fees", () => {
+  const bnbAsset = new Asset({ id: "binance:BNB", code: "BNB" })
+  const fills = [
+    new Fill({
+      tradeId: "parity-buy",
+      brokerOrderId: "9101",
+      clientOrderId: "h-BTCUSDT-parity-buy",
+      market: canonicalMarket,
+      side: "BUY",
+      price: new Money({ amount: "0.1", asset: canonicalMarket.quoteAsset }),
+      quantity: new Quantity({ amount: "100", asset: canonicalMarket.baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: canonicalMarket.quoteAsset }),
+      liquidityRole: "MAKER",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "1", asset: canonicalMarket.baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: canonicalMarket.quoteAsset }) }),
+        new Commission({
+          amount: new Money({ amount: "0.001", asset: bnbAsset }),
+          quoteValue: new Money({ amount: "0.02", asset: canonicalMarket.quoteAsset }),
+        }),
+      ],
+      commissionStatus: "COMPLETE",
+    }),
+    new Fill({
+      tradeId: "parity-sell",
+      brokerOrderId: "9102",
+      clientOrderId: "h-BTCUSDT-parity-sell",
+      market: canonicalMarket,
+      side: "SELL",
+      price: new Money({ amount: "0.12", asset: canonicalMarket.quoteAsset }),
+      quantity: new Quantity({ amount: "50", asset: canonicalMarket.baseAsset }),
+      quoteQuantity: new Money({ amount: "6", asset: canonicalMarket.quoteAsset }),
+      liquidityRole: "MAKER",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.5", asset: canonicalMarket.baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02", asset: canonicalMarket.quoteAsset }) }),
+        new Commission({
+          amount: new Money({ amount: "0.001", asset: bnbAsset }),
+          quoteValue: new Money({ amount: "0.03", asset: canonicalMarket.quoteAsset }),
+        }),
+      ],
+      commissionStatus: "COMPLETE",
+    }),
+  ]
+
+  let livePortfolio = new Portfolio()
+  let liveLedger = RecoveryLedger.empty({ market: canonicalMarket })
+  const records = []
+  for (const fillValue of fills) {
+    const live = updateTradingAccounting({
+      portfolio: livePortfolio,
+      recoveryLedger: liveLedger,
+      fill: fillValue,
+    })
+    assert.equal(live.ok, true, live.errors?.map(({ message }) => message).join("; "))
+    livePortfolio = live.data.portfolio
+    liveLedger = live.data.recoveryLedger
+
+    const dto = mapFillAppliedData({ fill: fillValue })
+    assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
+    const clientOrderId = fillValue.clientOrderId
+    const orderFacts = {
+      clientOrderId,
+      symbol: canonicalMarket.symbol,
+      side: fillValue.side,
+      type: "LIMIT",
+      price: fillValue.price.amount,
+      quantity: fillValue.quantity.amount,
+    }
+    records.push(record("order.submission_requested", {
+      ...orderFacts,
+      status: "PENDING",
+    }, "requested-" + fillValue.tradeId))
+    records.push(record("order.submitted", {
+      ...orderFacts,
+      brokerOrderId: fillValue.brokerOrderId,
+      status: "NEW",
+    }, "submitted-" + fillValue.tradeId))
+    records.push(record("execution.fill_applied", dto.data, "fill-" + fillValue.tradeId))
+  }
+
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([[canonicalMarket.symbol, canonicalMarket]]),
+  })
+  assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
+
+  const livePosition = livePortfolio.getPosition({ marketId: canonicalMarket.id })
+  const restoredPosition = restored.data.portfolio.getPosition({ marketId: canonicalMarket.id })
+  const restoredLedger = restored.data.recoveryLedgers.get(canonicalMarket.id)
+  assert.deepEqual(restoredPosition.value, livePosition.value)
+  assert.deepEqual(restoredLedger.value, liveLedger.value)
+  assert.equal(livePosition.baseQuantity.amount, "48.5")
+  assert.equal(livePosition.spent.amount, "10.03")
+  assert.equal(livePosition.quoteNetCashFlow.amount, "-4.08")
+  assert.equal(liveLedger.buyCost, "10.03")
+  assert.equal(liveLedger.netSellProceeds, "5.95")
 })
 
 test("restores third-asset commission facts and historical quote valuation into both accounting projections", () => {
