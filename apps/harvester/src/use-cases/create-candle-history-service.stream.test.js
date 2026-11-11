@@ -390,3 +390,48 @@ test("blocks a market while a closed-candle reconnect gap is being backfilled", 
     "A fully restored contiguous candle series may become ready after the backfill completes.",
   )
 })
+
+
+test("notifies the protection consumer after warm-up and each accepted live candle update", async () => {
+  const observed = []
+  const fixture = createFixture({
+    onSnapshot: async ({ symbol, snapshot }) => {
+      observed.push({ symbol, snapshot })
+    },
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+    },
+  })
+
+  await fixture.start()
+
+  assert.ok(observed.length >= 1, "The protection consumer must receive a snapshot after startup history and buffered events are processed.")
+  assert.equal(observed.at(-1).symbol, "BTCUSDT")
+  assert.equal(observed.at(-1).snapshot.data.status.isReady, true)
+  assert.equal(observed.at(-1).snapshot.data.metrics.openTime, 99 * INTERVAL_MS)
+
+  await fixture.candleHandlers.get("BTCUSDT")(
+    createCandle({ openTime: 100 * INTERVAL_MS, isClosed: true }),
+  )
+  assert.equal(observed.at(-1).snapshot.data.metrics.openTime, 100 * INTERVAL_MS)
+})
+
+
+test("notifies the protection consumer when the live Kline stream becomes stale without another candle event", async () => {
+  const observed = []
+  const fixture = createFixture({
+    onSnapshot: async ({ snapshot }) => observed.push(snapshot),
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+    },
+  })
+  await fixture.start()
+  assert.equal(observed.at(-1).data.status.isFresh, true)
+
+  fixture.clock.now += 5_001
+  await new Promise((resolve) => setTimeout(resolve, 1_100))
+  await fixture.subscriptions[0].unsubscribe()
+
+  assert.equal(observed.at(-1).data.status.isFresh, false)
+  assert.equal(observed.at(-1).data.status.reason, "STALE_STREAM")
+})
