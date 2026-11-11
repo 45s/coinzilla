@@ -31,7 +31,15 @@ const createDeferred = () => {
   return { promise, resolve, reject }
 }
 
-const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCancellation = false } = {}) => {
+const createFixture = ({
+  initiallyReady = true,
+  deferFirstSell = false,
+  deferCancellation = false,
+  marketPriceFresh = true,
+  isMarketBookFresh = () => true,
+  pausedMarkets = [],
+  hasUnownedOpenOrders = false,
+} = {}) => {
   const baseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
   const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
   const market = new Market({
@@ -163,8 +171,10 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     },
     completeRecoveryCycle: ({} = {}) => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: ({} = {}) => ready,
-    isMarketPriceFresh: () => true,
-    isMarketBookFresh: () => true,
+    isMarketPriceFresh: () => marketPriceFresh,
+    isMarketBookFresh,
+    hasUnownedOpenOrdersForSymbol: () => hasUnownedOpenOrders,
+    initialState: { pausedMarkets },
     onPause: async ({} = {}) => {},
     isStopping: ({} = {}) => false,
   })
@@ -265,6 +275,105 @@ test("readiness closing after PENDING registration removes the local order witho
   assert.equal(registry.getActiveOrders({ marketId: fixture.market.id }).length, 0)
 })
 
+test("defers an executable LIMIT_MAKER intent with a specific reason when its market book is unavailable", async () => {
+  const fixture = createFixture()
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "MARKET_BOOK_UNAVAILABLE")
+  assert.equal(fixture.submittedIntents.length, 0, "A missing book must never reach broker.placeOrder.")
+})
+
+test("defers an executable LIMIT_MAKER intent when market-price data is stale", async () => {
+  const fixture = createFixture({ marketPriceFresh: false })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "MARKET_PRICE_STALE")
+  assert.equal(fixture.submittedIntents.length, 0)
+})
+
+test("defers an executable LIMIT_MAKER intent when the market book becomes stale before dispatch", async () => {
+  let freshnessChecks = 0
+  const fixture = createFixture({
+    isMarketBookFresh: () => ++freshnessChecks === 1,
+  })
+  await fixture.engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.5",
+      bestBidQuantity: "1",
+      bestAskPrice: "1.5",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    },
+  })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "MARKET_BOOK_STALE")
+  assert.equal(fixture.submittedIntents.length, 0)
+})
+
+test("defers an executable intent for a paused market", async () => {
+  const fixture = createFixture({ pausedMarkets: ["ZROUSDT"] })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "MARKET_PAUSED")
+  assert.equal(fixture.submittedIntents.length, 0)
+})
+
+test("defers an executable intent while unowned open orders exist for its market", async () => {
+  const fixture = createFixture({ hasUnownedOpenOrders: true })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT")
+  assert.equal(fixture.submittedIntents.length, 0)
+})
+
+test("preserves post-only safety and reports a crossing LIMIT_MAKER intent as deferred", async () => {
+  const fixture = createFixture()
+  await fixture.engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.98",
+      bestBidQuantity: "1",
+      bestAskPrice: "0.99",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    },
+  })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "POST_ONLY_WOULD_CROSS")
+  assert.equal(result.data.deferralDetails.bestAskPrice, "0.99")
+  assert.equal(fixture.submittedIntents.length, 0, "A crossing post-only order must never be submitted.")
+})
+
 test("PENDING orders remain explicitly uncancellable", () => {
   const result = validateCancellationEligibility({
     order: { status: "PENDING", brokerOrderId: undefined },
@@ -282,7 +391,7 @@ test("deferred strategy evaluation resumes without another market-price tick", a
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
-  assert.equal(deferred.data.reason, "TRADING_NOT_READY")
+  assert.equal(deferred.data.reason, "TRADING_DISABLED")
   assert.equal(submittedIntents.length, 0)
 
   setReady({ value: true })
