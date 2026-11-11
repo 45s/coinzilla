@@ -331,6 +331,7 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     latestMetrics,
     assumptions: Object.freeze({
       startupHistoryCandles: STARTUP_HISTORY_CANDLES,
+      protectionRunsIncludeStartupWarmup: true,
       activeBuyOrderCount: 0,
       exchangeOrderExecutionSimulated: false,
       streamFreshnessSimulated: false,

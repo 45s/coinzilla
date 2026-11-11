@@ -190,7 +190,7 @@ test("analyzes historical volatility with the runtime ATR/NATR ratio and protect
   const candles = createCandleSeries()
   const report = analyzeVolatilityHistory({ symbol: "BTCUSDT", candles })
   const runtimeMetrics = calculateVolatilityMetrics({
-    candles: candles.slice(-74),
+    candles: candles.slice(-100),
     intervalMs: INTERVAL_MS,
     period: 14,
     referenceObservations: 60,
@@ -205,6 +205,7 @@ test("analyzes historical volatility with the runtime ATR/NATR ratio and protect
   assert.ok(report.protectionEntries > 0, "The state-machine replay must record a protection entry after the injected spike.")
   assert.ok(report.recoveryTransitions >= 2, "The replay must show startup recovery and recovery after the volatility spike.")
   assert.equal(report.assumptions.activeBuyOrderCount, 0, "The report must disclose that historical order-cancellation state is not simulated.")
+  assert.equal(report.assumptions.protectionRunsIncludeStartupWarmup, true, "Protection-run counts must disclose that the initial startup-protected period is included.")
 })
 
 test("requires enough candles to reproduce the runtime startup history window", () => {
