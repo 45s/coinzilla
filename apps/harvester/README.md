@@ -139,7 +139,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 
 ## Volatility protection
 
-Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection implementation is under review in [PR #1041](https://github.com/45s/coinzilla/pull/1041); do not treat it as active until that PR is merged and threshold validation is complete. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), the Harvester BrokerPort/adapter in [PR #1019](https://github.com/45s/coinzilla/pull/1019), and the per-market candle-history/indicator service in merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). PR #1041 implements the trading protection state machine, central order gate, owned-BUY cancellation and recovery-SELL exception; exact-head CI and review remain before merge. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+Harvester's high-volatility protection is implemented and wired into the runtime in merged [PR #1041](https://github.com/45s/coinzilla/pull/1041), building on the Brokers candle API ([PR #1017](https://github.com/45s/coinzilla/pull/1017)), Harvester BrokerPort/adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)) and candle-history service ([PR #1037](https://github.com/45s/coinzilla/pull/1037)). Each market starts protected until its candle history is ready. The central gate blocks new BUY and non-recovery strategy actions, cancels only owned active BUYs and preserves the recovery SELL lifecycle. The initial thresholds remain provisional pending offline historical calibration; the merge does not authorize unattended production trading, TESTNET/LIVE operations or process-restart recovery.
 
 ## Runtime and safety
 
@@ -154,7 +154,7 @@ Harvester's accepted high-volatility protection design is tracked in [Volatility
 - [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
 - [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
 - [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
-- [Volatility Protection](./docs/volatility-protection.md) — accepted design and staged implementation plan; not yet implemented.
+- [Volatility Protection](./docs/volatility-protection.md) — implemented runtime protection; provisional thresholds still require offline historical calibration.
 - [Domain documentation](./docs/domain/README.md) — Conservative specification, accounting invariants, glossary and Portfolio.
 - [Infrastructure](./docs/infrastructure/README.md) — broker port and adapter.
 - [Audits and historical evidence](./docs/audits/README.md).
