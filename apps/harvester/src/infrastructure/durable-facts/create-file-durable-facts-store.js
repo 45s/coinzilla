@@ -436,9 +436,9 @@ export function createFileDurableFactsStore({
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
         throw new Error("Durable-fact initialization requires a real directory")
       }
-      await fileSystem.chmod(absoluteDirectory, 0o700)
       const entries = await fileSystem.readdir(absoluteDirectory)
       if (entries.length > 0) throw new Error("Durable-fact initialization refuses to overwrite an existing directory")
+      await fileSystem.chmod(absoluteDirectory, 0o700)
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
