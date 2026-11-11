@@ -4,7 +4,7 @@
 
 ## High-volatility protection — issue #1016
 
-**Status: CANDLE DATA COLLECTION COMPLETE — PROTECTION IMPLEMENTATION IN REVIEW ([PR #1041](https://github.com/45s/coinzilla/pull/1041)).** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED — REGRESSION MATRIX AND EXACT-HEAD CI COMPLETE; HISTORICAL THRESHOLD CALIBRATION OPEN.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -22,8 +22,10 @@
 2. [x] Indicators: parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
 3. [x] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — merged [PR #1019](https://github.com/45s/coinzilla/pull/1019).
 4. [x] Harvester: startup warm-up, live candle maintenance, freshness/gap detection, bounded reconnect backfill and ATR/NATR measurement snapshots — merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). This delivers data collection only.
-5. [~] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — implementation in [PR #1041](https://github.com/45s/coinzilla/pull/1041), pending exact-head CI and review.
-6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
+6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
+7. [~] Synchronize living documentation and roadmaps — this closeout PR.
+8. [ ] Validate provisional thresholds against representative offline historical market data before treating them as production-calibrated.
 
 ---
 
