@@ -15,9 +15,10 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Volatility Protection](volatility-protection.md) — accepted per-market high-volatility safety design; candle history and ATR/NATR measurement collection are implemented in merged PR #1037; the protection state machine and order gate are under review in PR #1041 and are not active until merged
+- [Operator control](operator-control/README.md) — accepted transport-independent `/pause <SYMBOL>` contract; implementation in PR #1045, inbound runtime still disabled pending recovery/readiness gates
+- [Volatility Protection](volatility-protection.md) — candle history, ATR/NATR measurement collection and per-market protection state machine/order gate are implemented in merged PRs #1037 and #1041; historical threshold validation remains pending
 - [Exchange trading constraints](exchange-trading-constraints.md) — canonical exchange-neutral constraint contract, Binance's non-blocking diagnostic policy, and local-versus-venue enforcement boundary
-- [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
+- [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted contract and durable-fact store are implemented; one-market reconciliation, startup projection and restart readiness remain disabled.
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
 - [Domain glossary](domain/DOMAIN_GLOSSARY.md)
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)

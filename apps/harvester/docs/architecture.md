@@ -48,7 +48,7 @@ These are responsibility boundaries, not a requirement that every concept must b
 
 The runtime composes `createCandleHistoryService` after the existing price intake. It subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles, retains up to 100 completed candles, buffers live events during warm-up, and backfills detected gaps through the application broker port. It computes ATR(14), NATR and the current/reference ratio using the previous 60 NATR observations. The per-market snapshot is available through runtime `getVolatilityData({ symbol })`.
 
-This service reports measurement and data readiness only. The high-volatility protection state machine, BUY submission gate, owned-BUY cancellation and recovery-SELL exception remain unimplemented; do not treat the snapshot as permission to trade.
+This service reports measurement and data readiness to the implemented per-market high-volatility protection state machine, BUY submission gate, owned-BUY cancellation and recovery-SELL exception (merged PR #1041). Initial thresholds remain subject to offline historical validation; do not treat this as process-restart recovery.
 
 ## Operational notifications
 
@@ -57,6 +57,10 @@ Telegram is an optional outbound observer composed at the process boundary. The 
 Profiles are `minimal`, `trader`, `verbose`, and `custom`. Per-event overrides merge with the chosen profile; `markets: []` means all markets. Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, and account-safety alerts cannot be disabled and bypass market filters. Telegram bot token and chat ID remain environment-only secrets.
 
 Notification setup and delivery are best-effort. An explicit `enabled: false` or missing credentials disables notifications; malformed application configuration fails normal configuration validation rather than silently falling back. Transport/setup failures remain isolated from the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority.
+
+## Operator control
+
+Harvester operator control is an application capability, not a domain entity, strategy policy, broker adapter or generic command bus. The Conservative engine owns the serialized market-scoped operator-pause state; application use cases authorize a trusted `trading-operator` actor and append `OPERATOR_MARKET_PAUSED` / `OPERATOR_MARKET_RESUMED` through the ADR-0001 durable-facts port before applying in-memory state. The first inbound transport is a private-chat Telegram Long Polling adapter with an explicit user-ID allowlist and only `/pause <SYMBOL>` exposed. It never cancels existing exchange orders; resting BUYs may still fill, and recovery SELLs/accounting continue. See [ADR-0002](./architecture/decisions/0002-transport-independent-operator-control.md) and the [operator-control contract](./operator-control/README.md). The adapter is implemented but not started by the runtime: operator facts must first be projected and restored behind the closed ADR-0001 readiness gate, with recovery Steps 7–9 complete.
 
 ## Entity versus policy
 
@@ -161,7 +165,7 @@ Portfolio
 Updated state available to the next strategy evaluation
 ~~~
 
-The diagram is a responsibility flow, not a mandated synchronous call sequence. The accepted target contract for process-restart durable facts and readiness is defined in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md); runtime restoration and replay remain disabled until the roadmap's later implementation and verification steps are complete.
+The diagram is a responsibility flow, not a mandated synchronous call sequence. The accepted contract and file durable-facts store for process-restart recovery are defined in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md). One-market reconciliation, operator-fact projection, runtime restoration and replay remain disabled until the roadmap's remaining implementation and verification steps are complete.
 
 ### Historical implementation snapshot — superseded
 

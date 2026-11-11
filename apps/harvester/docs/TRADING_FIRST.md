@@ -10,9 +10,13 @@ The former blanket TESTNET acceptance gate is removed. Explicitly selected user 
 
 This does not authorize exchange writes during documentation or engineering preparation, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. The operator explicitly selects the exchange environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice. Keep all order-safety protections, exact-order ownership safeguards, and Journal durability barriers intact.
 
-## Selected safety work — high-volatility protection (#1016)
+## Completed safety work — high-volatility protection (#1016)
 
-The selected next safety feature is [Harvester Volatility Protection](./volatility-protection.md). It is separate from the Conservative strategy specification: it blocks all new BUY and non-recovery strategy actions per affected market, cancels only Harvester-owned active BUY orders, and preserves recovery SELL execution/accounting. Recovery SELL is the only strategy order lifecycle allowed while protection is active. The implementation must use the existing durable order/cancellation barriers and must not change recovery economics. This selected work does not authorize exchange operations and does not close process-restart recovery issue #654.
+[Harvester Volatility Protection](./volatility-protection.md) is implemented and merged in [PR #1041](https://github.com/45s/coinzilla/pull/1041), following the candle/indicator work in PRs #1017, #1018, #1019 and #1037. It blocks new BUY and non-recovery strategy actions per affected market, cancels only Harvester-owned active BUY orders, and preserves recovery SELL execution/accounting. Initial thresholds remain subject to offline historical validation. This work does not authorize exchange operations and does not close process-restart recovery issue #654.
+
+## Explicitly selected operator-control work — non-blocking
+
+The user explicitly selected Harvester operator control as a separate engineering task. Implement its engine, application and transport slices without delaying or changing the Conservative trading workflow. The initial Telegram vocabulary is only `/pause <SYMBOL>`; no existing exchange order is canceled or modified, and a resting BUY may still fill. The adapter remains offline-testable but **must not be started by the runtime** until operator pause facts are projected from the ADR-0001 store and restored before the first strategy evaluation behind the closed readiness gate. Complete recovery Steps 7–9 before enabling inbound control. No exchange operation is authorized by this work.
 
 ## Journal contract boundary
 
@@ -27,7 +31,7 @@ Journal is not wholly optional during trading. These existing durability barrier
 
 These are existing requirements, not permission to add more blocking Journal I/O. Additional investigation evidence in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md) remains best-effort and must not make strategy evaluation, market processing, broker-event handling, or fill accounting wait for Journal persistence. Any optional evidence loss must be observable as an evidence gap.
 
-The accepted target design for restart-critical facts is defined in [ADR-0001 — Application-owned durable facts](./architecture/decisions/0001-application-owned-recovery-facts.md). It deliberately separates that future application-owned store from the Journal observer. This is a design decision only: the current runtime and every mandatory Journal barrier remain unchanged, and process-restart recovery stays disabled.
+The accepted restart-critical fact contract is defined in [ADR-0001 — Application-owned durable facts](./architecture/decisions/0001-application-owned-recovery-facts.md). Its append-only file store, integrity checks and history-coverage primitives are implemented; one-market reconciliation, complete candidate projection and startup restoration remain pending. Journal remains a separate operational observer. The current runtime and mandatory Journal barriers remain unchanged, and process-restart recovery stays disabled.
 
 Journal records are not trading-state authority. Replay and process-restart recovery remain disabled until the separate implementation, reconciliation, and crash-test gates are complete.
 
@@ -103,7 +107,7 @@ Unless one narrowly scoped part is essential to prevent an immediate unsafe TEST
 - Full process-restart recovery and exactly-once delivery guarantees.
 - Comprehensive reconciliation of all historical exchange executions and long-term account history.
 - Generic recovery frameworks, storage abstractions, or app-local persistence frameworks.
-- Advanced health dashboards, alerting, operator controls, analytics, and performance optimization.
+- Advanced health dashboards, additional operator commands/controls beyond the explicitly selected initial pause, analytics, and performance optimization.
 - Aggressive strategy, multiple strategy modes, or additional trading features.
 - Refactoring or expanding architecture solely for theoretical future extensibility.
 

@@ -139,7 +139,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 
 ## Volatility protection
 
-Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection implementation is under review in [PR #1041](https://github.com/45s/coinzilla/pull/1041); do not treat it as active until that PR is merged and threshold validation is complete. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), the Harvester BrokerPort/adapter in [PR #1019](https://github.com/45s/coinzilla/pull/1019), and the per-market candle-history/indicator service in merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). PR #1041 implements the trading protection state machine, central order gate, owned-BUY cancellation and recovery-SELL exception; exact-head CI and review remain before merge. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Candle retrieval and measurement collection were delivered in [PRs #1017](https://github.com/45s/coinzilla/pull/1017), [#1018](https://github.com/45s/coinzilla/pull/1018), [#1019](https://github.com/45s/coinzilla/pull/1019) and [#1037](https://github.com/45s/coinzilla/pull/1037). The per-market protection state machine, central order gate, owned-BUY cancellation and recovery-SELL exception were merged in [PR #1041](https://github.com/45s/coinzilla/pull/1041). Initial thresholds remain subject to offline historical validation. This does not authorize TESTNET/LIVE operations or make process restarts safe.
 
 ## Runtime and safety
 
@@ -154,7 +154,8 @@ Harvester's accepted high-volatility protection design is tracked in [Volatility
 - [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
 - [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
 - [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
-- [Volatility Protection](./docs/volatility-protection.md) — accepted design and staged implementation plan; not yet implemented.
+- [Volatility Protection](./docs/volatility-protection.md) — implemented per-market protection; initial threshold validation remains pending.
+- [Operator control](./docs/operator-control/README.md) — initial private Telegram `/pause <SYMBOL>` capability; adapter is implemented but inbound runtime remains disabled pending recovery/readiness gates.
 - [Domain documentation](./docs/domain/README.md) — Conservative specification, accounting invariants, glossary and Portfolio.
 - [Infrastructure](./docs/infrastructure/README.md) — broker port and adapter.
 - [Audits and historical evidence](./docs/audits/README.md).
@@ -183,6 +184,10 @@ Telegram policy lives in `config.json` under `notifications.telegram`; bot crede
 - Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, and account-safety alerts cannot be disabled and bypass market filters.
 
 See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md) for the event vocabulary and delivery contract.
+
+### Operator control
+
+The transport-independent operator application, market-scoped engine pause and offline-testable Telegram adapter are being delivered in [PR #1045](https://github.com/45s/coinzilla/pull/1045). The first Telegram command is `/pause <SYMBOL>` only. It blocks new strategy BUYs and trailing-BUY replacements for one configured market; existing exchange orders remain open and may still fill, while fill accounting and recovery SELLs continue. The adapter is not started by Harvester yet: operator-fact projection, closed-gate startup restoration and process-restart recovery Steps 7–9 must be completed first. See the [operator-control contract](./docs/operator-control/README.md).
 
 ### Operational event journal
 

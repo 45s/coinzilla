@@ -1,8 +1,8 @@
 # Harvester Volatility Protection
 
-- Status: **Data collection merged in PR #1037; protection implementation under review in PR #1041**
+- Status: **Data collection and per-market protection implementation merged in PRs #1037 and #1041; historical threshold validation remains pending**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
-- Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) (data collection only)
+- Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) and [per-market protection PR #1041](https://github.com/45s/coinzilla/pull/1041)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
 - Owner: Harvester, with Brokers and Indicators package work
 

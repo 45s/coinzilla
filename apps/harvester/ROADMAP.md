@@ -2,9 +2,27 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Operator control — initial Telegram pause
+
+**Status: IN PROGRESS — engine, application and offline Telegram adapter implementation is in [PR #1045](https://github.com/45s/coinzilla/pull/1045); inbound runtime remains disabled.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+
+- Initial command vocabulary: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
+- Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
+- The engine commits the operator fact to the ADR-0001 durable-facts stream before applying in-memory state. Journal is not the control-state store.
+- Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
+- [~] Engine pause/resume boundary, application actor authorization and durable append ordering — implementation/tests in PR #1045.
+- [~] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — implementation/tests in PR #1045.
+- [ ] Project operator pause/resume facts and restore them before the first strategy evaluation.
+- [ ] Complete recovery Steps 7–9, disabled-by-default configuration validation and fail-closed runtime lifecycle integration before enabling inbound control.
+- [ ] Exact-head workspace CI, documentation/link checks and final review. No Binance/TESTNET/LIVE operations are part of this work.
+
+**Hard dependency:** the Telegram adapter must not start until ADR-0001 recovery reconciliation and the closed startup-readiness gate are complete. The one-market audit and crash/restart work remains tracked in the [process-restart recovery plan](./ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654).
+
+---
+
 ## High-volatility protection — issue #1016
 
-**Status: CANDLE DATA COLLECTION COMPLETE — PROTECTION IMPLEMENTATION IN REVIEW ([PR #1041](https://github.com/45s/coinzilla/pull/1041)).** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: CANDLE DATA COLLECTION AND PER-MARKET PROTECTION IMPLEMENTATION MERGED ([PR #1041](https://github.com/45s/coinzilla/pull/1041)); HISTORICAL THRESHOLD VALIDATION REMAINS.** The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -22,8 +40,8 @@
 2. [x] Indicators: parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
 3. [x] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — merged [PR #1019](https://github.com/45s/coinzilla/pull/1019).
 4. [x] Harvester: startup warm-up, live candle maintenance, freshness/gap detection, bounded reconnect backfill and ATR/NATR measurement snapshots — merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). This delivers data collection only.
-5. [~] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — implementation in [PR #1041](https://github.com/45s/coinzilla/pull/1041), pending exact-head CI and review.
-6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041).
+6. [ ] Validate provisional thresholds against representative offline historical data before any unattended production enablement.
 
 ---
 
@@ -178,7 +196,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
    - [x] Persist and project the `MARKET_HISTORY_COVERAGE_CONFIRMED` fact through ADR-0001; enforce a monotonic per-symbol coverage interval and bind it to the reviewed evidence digest/verifier.
-   - [ ] Provide an explicit offline operator workflow to create the coverage fact from reviewed exchange-history evidence and account reconciliation; no Telegram command is added.
+   - [ ] Provide an explicit offline operator workflow to create the coverage fact from reviewed exchange-history evidence and account reconciliation; no Telegram command is added as part of Step 7. Inbound Telegram control remains a separate capability and stays disabled until Steps 7–9 are complete.
    - [ ] Compose canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders into one read-only reconciliation use case.
    - [ ] Prove complete one-market outcomes and external-order isolation with deterministic end-to-end tests before connecting the audit to startup readiness.
 
@@ -806,7 +824,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). Optional operational evidence must not add blocking I/O to strategy evaluation, market processing, broker-event handling or fill accounting. Preserve the existing required broker-connected PREFLIGHT and pre-order/cancel durability barriers. Process-restart recovery is separate under [#654](https://github.com/45s/coinzilla/issues/654); do not silently extend the Journal observer into trading-state authority or add a new fill-persistence barrier without an explicit architecture decision.
 - [ ] Add actionable health/status reporting for process and each pair without exposing credentials or raw exchange payloads.
 - [ ] Add bounded reconnect/backoff, timeouts, stream liveness/staleness detection, and resource cleanup tests.
-- [ ] Add operator controls for pause/resume/stop and safe behavior when a pair is disabled while orders or inventory exist.
+- [x] Initial operator pause capability is tracked in the dedicated Operator control section at the top of this roadmap; additional Telegram commands (resume/stop) and disabled-pair behavior remain deferred.
 - [ ] Add alerts for unsafe states, rejected orders, reconciliation discrepancies, unsupported commissions, and repeated broker failures.
 - [ ] Add performance optimization only after profiling a correct end-to-end implementation.
 - [ ] Review dependency/security findings and shared package contracts as part of regular maintenance.
