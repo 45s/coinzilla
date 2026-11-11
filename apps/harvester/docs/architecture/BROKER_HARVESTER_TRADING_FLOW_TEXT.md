@@ -67,6 +67,8 @@ The historical/live candle methods are required by the Harvester port and forwar
 4. The adapter returns a normalized acknowledged order to the engine.
 5. The engine updates its order lifecycle / registry state.
 
+Before step 1 reaches the broker, the engine applies the submission-readiness gate. An executable strategy intent can be deliberately deferred when trading is paused/not ready, price data is unavailable/stale, unowned open orders exist, or a `LIMIT_MAKER` book is unavailable/stale or the proposed price would cross the opposite best quote. A deferral is not a broker rejection: no broker call is made. The result and DEBUG record distinguish `deferred` from `ok` and expose the stable reason; see [Submission deferrals and missing-order diagnostics](../operations/submission-deferrals.md) for the reason catalogue, lifecycle checks, and safe investigation procedure.
+
 **Important:** an acknowledgement is not a fill. It confirms the submission response; it does not prove that any quantity traded and does not update Portfolio or RecoveryLedger holdings.
 
 ### 4. Actual execution and accounting
