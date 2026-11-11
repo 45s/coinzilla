@@ -12,7 +12,7 @@
 
 **Canonical destination:** merge the generated pair into `apps/harvester/config.json` at `strategies.CG_coinGrabber.pairs.<SYMBOL>`. Harvester has one application-wide configuration file; do not create a parallel `config/strategies/CG/pair/` format.
 
-**Operator inputs:** symbol, quote investment budget, `keepQuantity`, maker percentage, taker percentage, minimum profit (default `0.01` quote units), and price-step percentage (default `0.05`%). Derive `orderQuantity` from the quote budget and a current public ticker-price snapshot, rounded down to the exchange step and capped at the exchange maximum. Derive price/quantity precision from Binance filters.
+**Operator inputs:** symbol, quote investment budget, `keepQuantity`, maker percentage, taker percentage, minimum profit (default `0.01` quote units), and price-step percentage (default `0.05`%). Derive `orderQuantity` from the quote budget and a current public ticker-price snapshot, rounded down to the exchange step and capped by active maximum quantity/notional bounds. Derive price/quantity precision from Binance filters and check the reference price against active minimum/maximum price bounds.
 
 **Safety and validation:**
 

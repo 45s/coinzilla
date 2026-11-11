@@ -17,7 +17,7 @@ const createExchangeInfo = ({
     isSpotTradingAllowed,
     orderTypes,
     filters: filters ?? [
-      { filterType: "PRICE_FILTER", tickSize: "0.00010000" },
+      { filterType: "PRICE_FILTER", minPrice: "0.00000000", maxPrice: "100000.00000000", tickSize: "0.00010000" },
       { filterType: "LOT_SIZE", minQty: "0.10000000", maxQty: "100000.00000000", stepSize: "0.10000000" },
       { filterType: "MIN_NOTIONAL", minNotional: "5.00000000" },
     ],
@@ -54,6 +54,7 @@ test("fetches public Spot exchange filters and current ticker price without cred
     quoteAsset: "FDUSD",
     price: "0.50000000",
     tickSize: "0.00010000",
+    maxPrice: "100000.00000000",
     stepSize: "0.10000000",
     minQuantity: "0.10000000",
     maxQuantity: "100000.00000000",
@@ -125,7 +126,7 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
 test("uses the stricter minimum when Binance returns both MIN_NOTIONAL and NOTIONAL filters", async () => {
   const filters = [
     ...createExchangeInfo().symbols[0].filters,
-    { filterType: "NOTIONAL", minNotional: "10.00000000", maxNotional: "0", applyMinToMarket: true, applyMaxToMarket: false },
+    { filterType: "NOTIONAL", minNotional: "10.00000000", maxNotional: "50.00000000", applyMinToMarket: true, applyMaxToMarket: true },
   ]
   const [exchangeResponse] = [createResponse(createExchangeInfo({ filters }))]
   const responses = [exchangeResponse, createResponse({ symbol: "ADAFDUSD", price: "0.5" })]
@@ -190,6 +191,29 @@ test("rejects unvalidated active symbol and exchange filters but ignores filters
     fetchImpl: async () => responses.shift(),
   })
   assert.equal(metadata.symbol, "ADAFDUSD", "Filters exclusive to unsupported MARKET orders must not block the current LIMIT/LIMIT_MAKER configuration.")
+})
+
+test("validates current reference price against active PRICE_FILTER bounds", async () => {
+  for (const priceFilter of [
+    { filterType: "PRICE_FILTER", minPrice: "1", maxPrice: "100", tickSize: "0.0001" },
+    { filterType: "PRICE_FILTER", minPrice: "0", maxPrice: "0.1", tickSize: "0.0001" },
+  ]) {
+    const responses = [
+      createResponse(createExchangeInfo({
+        filters: [
+          priceFilter,
+          { filterType: "LOT_SIZE", minQty: "0.1", maxQty: "100000", stepSize: "0.1" },
+          { filterType: "MIN_NOTIONAL", minNotional: "5" },
+        ],
+      })),
+      createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+    ]
+    await assert.rejects(
+      fetchBinanceSpotMetadata({ symbol: "ADAFDUSD", fetchImpl: async () => responses.shift() }),
+      /ticker price is (below|above) PRICE_FILTER/i,
+      "A reference price outside active Binance price bounds must not be used for order sizing.",
+    )
+  }
 })
 
 test("rejects a ticker response for a different symbol or invalid price", async () => {
