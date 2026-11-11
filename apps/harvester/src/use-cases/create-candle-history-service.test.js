@@ -801,3 +801,55 @@ test("backfills a gap and blocks readiness when the first post-reconnect update 
     "The market may become ready again only after the missing completed candles have been restored.",
   )
 })
+
+test("blocks a market while a closed-candle reconnect gap is being backfilled", async () => {
+  let resolveBackfill
+  let signalBackfillStarted
+  const backfillStarted = new Promise((resolve) => { signalBackfillStarted = resolve })
+  const backfillGate = new Promise((resolve) => { resolveBackfill = resolve })
+  const fixture = createFixture({
+    onSubscribe: async ({ onCandle }) => {
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+    },
+    getCandles: async (input) => {
+      if (input.startTime === undefined) {
+        return { ok: true, data: createHistory(input.symbol, 100, true) }
+      }
+      signalBackfillStarted()
+      await backfillGate
+      return {
+        ok: true,
+        data: [
+          createCandle({ openTime: 100 * INTERVAL_MS }),
+          createCandle({ openTime: 101 * INTERVAL_MS }),
+        ],
+      }
+    },
+  })
+  await fixture.start()
+
+  const acceptedCandleTask = fixture.candleHandlers.get("BTCUSDT")(
+    createCandle({ openTime: 102 * INTERVAL_MS }),
+  )
+  await backfillStarted
+
+  const snapshotWhileBackfillIsPending = getSnapshot(fixture)
+  assert.equal(
+    snapshotWhileBackfillIsPending.status.isReady,
+    false,
+    "A known reconnect gap must immediately remove market readiness while its historical repair is pending.",
+  )
+  assert.equal(
+    snapshotWhileBackfillIsPending.status.reason,
+    "GAP_DETECTED",
+    "The runtime snapshot must identify the pending gap instead of exposing the previous volatility measurement as current.",
+  )
+
+  resolveBackfill()
+  await acceptedCandleTask
+  assert.equal(
+    getSnapshot(fixture).status.isReady,
+    true,
+    "A fully restored contiguous candle series may become ready after the backfill completes.",
+  )
+})
