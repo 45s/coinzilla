@@ -332,6 +332,22 @@ The repository retains tested offline helpers: `projectHarvesterJournalRecovery(
 
 `auditRecoveredAccountState()` requires every asset present in the durable baseline and current account snapshot to be present on both sides. Missing assets are not interpreted as zero. Account-wide open orders outside the restored OrderRegistry remain unowned and untouched; when canonical Market metadata is available, their exact remaining BUY/SELL commitments are included in locked-balance reconciliation and their symbols are returned as narrow blockers. An unowned order on an unrelated symbol does not by itself block the target market, but missing metadata or an unexplained reservation fails closed.
 
+### Durable market-history coverage facts
+
+
+
+`recordMarketHistoryCoverage()` appends a `MARKET_HISTORY_COVERAGE_CONFIRMED` fact only to an already initialized, integrity-verified ADR-0001 store. Its strict payload contains the canonical symbol, `coveredFromTime`, `verifiedAt`, the SHA-256 digest of the reviewed evidence artifact, and a non-secret `verifiedBy` identity. The store rejects malformed payloads, unsupported fields, coverage-window narrowing, and verification-time regression.
+
+
+
+`readMarketHistoryCoverage()` calls the store's integrity-verifying `readAll()` path, validates the per-symbol monotonic sequence, and projects the latest fact into the exact evidence shape consumed by the one-market audit. A valid interval must cover the query start: `coveredFromTime <= historyStartTime <= verifiedAt`; the current account snapshot must not predate `verifiedAt`.
+
+
+
+The fact writer is an application use case, not a Telegram command. This slice does not add a CLI or startup integration; creating a coverage fact still requires an explicit offline operator review and a reviewed evidence artifact. A missing fact leaves the market audit blocked.
+
+
+
 These are offline audit primitives only. They are not wired into startup, do not publish runtime READY, and do not enable process-restart restoration or OPERATOR control.
 
 Current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not call this pipeline. Historical PR #606 did wire it, but passed `marketUniverseComplete: false` while `auditRecoveredTradeHistory()` requires true; that trading-enabled path therefore failed closed after prior trading activity. The current runtime bypasses that fail-closed gate rather than solving historical market-universe completeness. See F-031 and #654.
