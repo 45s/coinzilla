@@ -65,7 +65,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 test('loads configuration before returning the startup context', async () => {
   const appConfig = {
-    strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
   const configSource = '/etc/harvester/config.json';
   const calls = [];
@@ -144,6 +144,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,
+        minProfit: 0.01,
         makerPercent: 0,
         takerPercent: 0,
         investment: 1000,
@@ -357,19 +358,19 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: {
-          minProfit: 0.01,
-          conservative: { enabled: true },
+        settings: { conservative: { enabled: true },
           aggressive: { enabled: false },
         },
         pairs: {
           DOGEUSDT: {
             enabled: true, investment: 100, orderQuantity: 100, keepQuantity: 1,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
           },
           ZROUSDT: {
             enabled: true, investment: 100, orderQuantity: 10, keepQuantity: 0.01,
+            minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
           },
