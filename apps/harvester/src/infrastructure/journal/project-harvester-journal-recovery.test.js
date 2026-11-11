@@ -1953,3 +1953,23 @@ test("allows another fully filled SELL only after the prior SELL has an explicit
   assert.equal(result.data.recoveryCycles.length, 1)
   assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "h-BTCUSDT-sell-2")
 })
+
+test("restores a BLOCKED cycle evaluation as a market pause", () => {
+  const records = completedCycleRecords().slice(0, 6)
+  records.push(harvesterRecord("recovery.cycle_not_completed", {
+    symbol: "BTCUSDT", marketId: "binance:BTCUSDT",
+    sellOrderClientId: "h-BTCUSDT-sell-1", sellOrderBrokerOrderId: "9002",
+    outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
+    realizedNetProfit: "-1", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01",
+  }))
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true)
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+  assert.equal(restored.ok, true)
+  assert.equal(restored.data.pausedMarkets.has("BTCUSDT"), true)
+  assert.equal(restored.data.durablePausedMarkets.has("BTCUSDT"), true)
+  assert.equal(restored.data.recoveryCycleEvaluations.length, 1)
+})
