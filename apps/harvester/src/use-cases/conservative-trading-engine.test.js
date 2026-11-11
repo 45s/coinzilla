@@ -6719,3 +6719,50 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
   assert.equal(result.ok, true)
   assert.deepEqual(harness.orders, [], "A SELL side alone must not bypass volatility protection.")
 })
+
+
+test("volatility cancellation is isolated to the affected trading pair", async () => {
+  const zroBaseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
+  const zroMarket = new Market({ venue: "binance", symbol: "ZROUSDT", baseAsset: zroBaseAsset, quoteAsset })
+  const dogeBuy = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "doge-volatility-buy",
+    brokerOrderId: "broker-doge-volatility-buy",
+  })
+  const zroBuy = new CanonicalOrder({
+    clientOrderId: "zro-unaffected-buy",
+    brokerOrderId: "broker-zro-unaffected-buy",
+    market: zroMarket,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: zroBaseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: zroBaseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const highVolatility = {
+    ok: true,
+    data: {
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [dogeBuy, zroBuy] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    getVolatilityData: () => highVolatility,
+  })
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot: highVolatility,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.cancellationIds, ["broker-doge-volatility-buy"])
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "doge-volatility-buy").status, "CANCELED")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "zro-unaffected-buy").status, "OPEN")
+})
