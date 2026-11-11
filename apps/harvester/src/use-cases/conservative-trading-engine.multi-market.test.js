@@ -48,7 +48,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map() } = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -120,10 +120,10 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
   }
   const engine = makeConservativeTradingEngine({
     broker,
-    strategyPolicy: conservativeStrategyPolicy,
+    strategyPolicy,
     appConfig,
     getPortfolio: () => portfolio,
-    getRecoveryLedger: ({ marketId }) => RecoveryLedger.empty({ market: marketsById.get(marketId) }),
+    getRecoveryLedger: ({ marketId }) => recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
@@ -453,7 +453,10 @@ test("operator pause leaves already acknowledged exchange orders untouched", asy
     symbol: market.symbol,
   }))
 
-  const pauseResult = await engine.pauseMarket({ symbol: "DOGEUSDT" })
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
 
   assert.equal(
     pauseResult.ok,
@@ -522,4 +525,88 @@ test("operator pause state supplied by durable recovery is restored before marke
     [{ symbol: "SOLUSDT", side: "BUY" }],
     "A restored operator pause must block the selected market before its first strategy evaluation.",
   )
+})
+
+
+test("operator pause permits recovery SELLs while suppressing the next standing BUY", async () => {
+  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+  const portfolio = {
+    positions: [{
+      market: dogeMarket,
+      totalBaseQuantity: { amount: "1" },
+      quoteNetCashFlow: { amount: "-100" },
+    }],
+    getPosition: ({ marketId }) => marketId === dogeMarket.id
+      ? { baseQuantity: { amount: "1" }, spent: { amount: "100" } }
+      : undefined,
+  }
+  const recoveryLedgersByMarket = new Map([[
+    dogeMarket.id,
+    { market: dogeMarket, buyCost: "100", netSellProceeds: "0" },
+  ]])
+  const strategyPolicy = {
+    name: "CONSERVATIVE",
+    evaluate: ({ marketPrice }) => ({
+      strategy: "CONSERVATIVE",
+      symbol: marketPrice.symbol,
+      action: "PLACE_ORDERS",
+      actions: marketPrice.symbol === "DOGEUSDT"
+        ? [
+            { side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "1", reason: "RECOVERY" },
+            { side: "BUY", type: "LIMIT_MAKER", price: "99", quantity: "1", reason: "NEXT_STANDING_BUY" },
+          ]
+        : [
+            { side: "BUY", type: "LIMIT_MAKER", price: "99", quantity: "1", reason: "INITIAL_BUY" },
+          ],
+    }),
+    evaluateTrailingBuyRepricing: conservativeStrategyPolicy.evaluateTrailingBuyRepricing,
+  }
+  const { engine, orders } = await createHarness({
+    portfolio,
+    recoveryLedgersByMarket,
+    strategyPolicy,
+  })
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+  assert.equal(pauseResult.ok, true, "The operator pause must be committed before strategy evaluation.")
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [
+      { symbol: "DOGEUSDT", side: "SELL" },
+      { symbol: "SOLUSDT", side: "BUY" },
+    ],
+    "Operator pause must preserve the Conservative recovery SELL while suppressing only the paused market's new BUY.",
+  )
+})
+
+test("operator pause does not cancel or reprice an already acknowledged BUY", async () => {
+  const { engine, orders } = await createHarness()
+  await startBothMarkets(engine)
+  const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
+  const before = engine.getOrders().map(({ clientOrderId, status }) => ({ clientOrderId, status }))
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+  assert.equal(pauseResult.ok, true, "The operator pause must be accepted for a configured market.")
+
+  const priceResult = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.1", timestamp: 2 },
+  })
+  assert.equal(priceResult.ok, true, "A market update must continue to be processed while operator-paused.")
+  assert.deepEqual(
+    engine.getOrders().map(({ clientOrderId, status }) => ({ clientOrderId, status })),
+    before,
+    "The pause must leave the existing BUY order untouched and prevent trailing repricing/cancellation.",
+  )
+  assert.equal(orders.length, 2, "No replacement BUY may be submitted after the operator pause.")
+  assert.ok(dogeOrder, "The pre-existing DOGEUSDT order must remain registered.")
 })
