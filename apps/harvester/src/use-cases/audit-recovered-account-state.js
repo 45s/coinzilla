@@ -80,9 +80,11 @@ function getInitialTradingSnapshot({ projection }) {
 
 /**
  * Compare replayed strategy-owned inventory and commitments with a fresh,
- * read-only exchange account snapshot and the complete account open-order set.
- * Any unexplained asset movement, unowned order, or reservation mismatch fails
- * closed. This function performs no broker calls and no exchange mutations.
+ * read-only exchange account snapshot and the account open-order set. External
+ * orders remain unowned and untouched; their exact reservations are included,
+ * while their symbols are returned as narrow strategy blockers. Missing asset
+ * coverage or unexplained commitments fail closed. This function performs no
+ * broker calls and no exchange mutations.
  */
 export function auditRecoveredAccountState({
   projection,
@@ -92,6 +94,7 @@ export function auditRecoveredAccountState({
   markets,
   exchangeTradeHistory,
   requireCompleteTradeHistory = false,
+  tradeHistoryScope = "ACCOUNT",
   targetMarket,
 } = {}) {
   try {
@@ -135,6 +138,9 @@ export function auditRecoveredAccountState({
         ownedOrders: recoveredState.orderRegistry.orders,
         complete: exchangeTradeHistory?.historyPagesComplete === true,
         marketUniverseComplete: exchangeTradeHistory?.marketUniverseComplete === true,
+        scope: tradeHistoryScope,
+        market: targetMarket,
+        historyEvidence: exchangeTradeHistory,
       })
       if (!tradeHistoryAudit.ok) {
         throw tradeHistoryAudit.errors?.[0] ?? new Error("Complete account-wide trade history could not be verified")
