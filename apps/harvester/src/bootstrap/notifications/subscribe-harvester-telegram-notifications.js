@@ -3,16 +3,53 @@ import {
   TELEGRAM_NOTIFICATION_EVENTS,
 } from "@coinzilla/notifiers"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "../../application/events/event-names.js"
+import { resolveTelegramNotificationPolicy } from "./resolve-telegram-notification-policy.js"
 
 const EVENT_MAPPINGS = Object.freeze({
-  [HARVESTER_EVENT_NAMES.STARTED]: ({ data }) => ({ name: "bot.started", data: {} }),
+  [HARVESTER_EVENT_NAMES.STARTED]: () => ({ name: "bot.started", data: {} }),
   [HARVESTER_EVENT_NAMES.STOPPED]: ({ data }) => ({
     name: "bot.stopped",
     data: { reason: data.reason, outcome: data.outcome },
   }),
+  [HARVESTER_EVENT_NAMES.STARTUP_FAILED]: ({ data }) => ({
+    name: "bot.startup_failed",
+    data: { stage: data.stage, error: data.error },
+  }),
+  [HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED]: ({ data }) => ({
+    name: "broker.disconnected",
+    data: { broker: data.broker, error: data.error },
+  }),
+  [HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED]: ({ data }) => ({
+    name: "account.safety_alert",
+    data: {
+      symbol: data.market,
+      category: "broker-subscription-failed",
+      message: data.broker + " " + data.stream + " subscription failed: " + (data.error?.message ?? "unknown error"),
+    },
+  }),
   [HARVESTER_EVENT_NAMES.STRATEGY_PAUSED]: ({ data }) => ({
     name: "bot.pair_paused",
     data: { symbol: data.symbol, reason: data.reason },
+  }),
+  [HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED]: ({ data }) => ({
+    name: "order.failed",
+    data: {
+      symbol: data.symbol,
+      side: data.side,
+      operation: "submission",
+      outcome: data.outcome,
+      error: data.error,
+    },
+  }),
+  [HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED]: ({ data }) => ({
+    name: "order.failed",
+    data: {
+      symbol: data.symbol,
+      side: data.side,
+      operation: "cancellation",
+      outcome: data.outcome,
+      error: data.error,
+    },
   }),
   [HARVESTER_EVENT_NAMES.FILL_APPLIED]: ({ data }) => ({
     name: "fill.received",
@@ -32,21 +69,62 @@ const EVENT_MAPPINGS = Object.freeze({
     name: "bot.recovery_failed",
     data: { message: data.symbol + " execution accounting failed: " + data.error?.message },
   }),
+  [HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER]: ({ data }) => ({
+    name: "account.safety_alert",
+    data: {
+      symbol: data.symbol,
+      category: "unowned-order",
+      message: "An unowned or external order event was detected for " + data.symbol,
+    },
+  }),
+  [HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL]: ({ data }) => ({
+    name: "account.safety_alert",
+    data: {
+      symbol: data.symbol,
+      category: "invalid-fill",
+      message: data.symbol + " execution could not be safely reconciled: " + (data.error?.message ?? data.reason),
+    },
+  }),
+  [HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED]: ({ data }) => {
+    if (data.readiness !== "BLOCKED") return null
+    const symbols = [...new Set((data.orders ?? []).map(({ symbol }) => symbol).filter(Boolean))]
+    return {
+      name: "account.safety_alert",
+      data: {
+        symbol: symbols.length === 1 ? symbols[0] : undefined,
+        category: "account-open-orders-blocked",
+        message: `Account-wide open-orders audit is BLOCKED (${data.orderCount} open order(s))${symbols.length > 0 ? ": " + symbols.join(", ") : ""}. ${(data.blockReasons ?? []).join("; ")}`,
+      },
+    }
+  },
 })
 
 /**
  * Bridge Harvester-owned application events to the notifier package's stable
- * notification vocabulary. The package owns formatting, queuing and delivery.
+ * notification vocabulary. Harvester owns policy; Notifiers owns formatting,
+ * bounded queueing, transport and delivery.
  */
 export async function subscribeHarvesterTelegramNotifications({
   eventBus,
   notifier,
   logger,
+  telegramConfig,
 } = {}) {
+  const policy = resolveTelegramNotificationPolicy({ telegramConfig })
+  const notificationEventBus = Object.freeze({
+    subscribe: ({ name, handler }) => eventBus.subscribe({
+      name,
+      handler: (event) => {
+        if (!policy.shouldNotify({ name: event.name, data: event.data })) return
+        return handler(event)
+      },
+    }),
+  })
   const notificationSubscriber = subscribeTelegramNotifications({
-    eventBus,
+    eventBus: notificationEventBus,
     notifier,
     logger,
+    eventNames: policy.eventNames,
   })
   const subscriptions = []
 
@@ -56,6 +134,7 @@ export async function subscribeHarvesterTelegramNotifications({
         name: eventName,
         handler: (event) => {
           const mapped = mapEvent(event)
+          if (!mapped || !policy.shouldNotify(mapped)) return
           const publishResult = eventBus.publish({
             name: mapped.name,
             source: HARVESTER_EVENT_SOURCE,
