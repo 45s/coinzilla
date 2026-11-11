@@ -14,7 +14,7 @@ import {
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 import { resolveHarvesterOptions } from '../../src/bootstrap/config/resolve-harvester-options.js';
-import { loadHarvesterConfig } from '../../src/infrastructure/config/load-harvester-config.js';
+import { loadAppConfig } from '../../src/infrastructure/config/load-app-config.js';
 
 const createOpenOrderSnapshot = ({ order }) => {
   const openOrder = new Order({
@@ -98,7 +98,7 @@ test('fails startup when configuration loading or validation fails', async () =>
 });
 
 test('loads the default validated strategy and pair configuration', async () => {
-  const config = await loadHarvesterConfig();
+  const config = await loadAppConfig();
   assert.ok(config.strategies.CG_coinGrabber.pairs.ZROFDUSD);
   assert.equal(Object.hasOwn(config, 'runtime'), false);
 });

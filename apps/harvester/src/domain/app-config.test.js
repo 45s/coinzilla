@@ -5,7 +5,7 @@ import {
   validateAppConfig,
 } from "./app-config.js"
 
-const createHarvesterConfig = () => ({
+const createAppConfig = () => ({
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -32,21 +32,21 @@ const createHarvesterConfig = () => ({
 })
 
 test("validates strategy-owned pairs without requiring exchange-mode configuration in JSON", () => {
-  const config = createHarvesterConfig()
+  const config = createAppConfig()
   assert.equal(validateAppConfig(config), config, "Strategy and pair settings must remain valid without a runtime profile block.")
   assert.equal(Object.hasOwn(config, "runtime"), false, "Exchange selection must not be stored in config.json.")
   assert.equal(config.strategies.CG_coinGrabber.pairs.ZROFDUSD.investment, 100, "The pair investment setting must remain part of strategy configuration.")
 })
 
 test("selects Binance TESTNET from TRADING_MODE even when NODE_ENV says production", () => {
-  const runtime = resolveRuntimeConfig({ config: createHarvesterConfig(), tradingMode: "testnet", environment: "production" })
+  const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: "testnet", environment: "production" })
   assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for TESTNET.")
   assert.equal(runtime.tradingMode, "testnet", "TRADING_MODE must select TESTNET independently of NODE_ENV.")
   assert.equal(runtime.tradingEnabled, true, "Trading must be enabled when TESTNET is explicitly selected.")
 })
 
 test("selects Binance LIVE from TRADING_MODE even when NODE_ENV says development", () => {
-  const runtime = resolveRuntimeConfig({ config: createHarvesterConfig(), tradingMode: "live", environment: "development" })
+  const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: "live", environment: "development" })
   assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for LIVE.")
   assert.equal(runtime.tradingMode, "live", "TRADING_MODE must select LIVE independently of NODE_ENV.")
   assert.equal(runtime.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
@@ -54,7 +54,7 @@ test("selects Binance LIVE from TRADING_MODE even when NODE_ENV says development
 
 test("fails startup when TRADING_MODE is missing", () => {
   assert.throws(
-    () => resolveRuntimeConfig({ config: createHarvesterConfig() }),
+    () => resolveRuntimeConfig({ config: createAppConfig() }),
     /TRADING_MODE must be set to "testnet" or "live"/,
     "Startup must fail rather than silently choose an exchange mode when TRADING_MODE is absent.",
   )
@@ -63,7 +63,7 @@ test("fails startup when TRADING_MODE is missing", () => {
 test("rejects every TRADING_MODE value except exact testnet and live", () => {
   for (const tradingMode of ["", "TESTNET", "production", " live", "live "]) {
     assert.throws(
-      () => resolveRuntimeConfig({ config: createHarvesterConfig(), tradingMode }),
+      () => resolveRuntimeConfig({ config: createAppConfig(), tradingMode }),
       /TRADING_MODE must be set to "testnet" or "live"/,
       "An invalid exchange mode must fail startup instead of falling back to another environment: " + JSON.stringify(tradingMode),
     )
@@ -71,7 +71,7 @@ test("rejects every TRADING_MODE value except exact testnet and live", () => {
 })
 
 test("rejects legacy runtime profiles in strategy configuration", () => {
-  const config = { ...createHarvesterConfig(), runtime: { profiles: {} } }
+  const config = { ...createAppConfig(), runtime: { profiles: {} } }
   assert.throws(
     () => validateAppConfig(config),
     /runtime.*must not be present/,
@@ -81,7 +81,7 @@ test("rejects legacy runtime profiles in strategy configuration", () => {
 
 
 test("validates Telegram notification profiles, market filters, and event overrides", () => {
-  const config = createHarvesterConfig()
+  const config = createAppConfig()
   config.notifications = {
     telegram: {
       enabled: true,
@@ -99,7 +99,7 @@ test("validates Telegram notification profiles, market filters, and event overri
 })
 
 test("rejects unknown Telegram notification profiles", () => {
-  const config = createHarvesterConfig()
+  const config = createAppConfig()
   config.notifications = { telegram: { enabled: true, profile: "everything" } }
 
   assert.throws(
@@ -110,7 +110,7 @@ test("rejects unknown Telegram notification profiles", () => {
 })
 
 test("rejects unknown Telegram event override keys and non-boolean values", () => {
-  const unknownEvent = createHarvesterConfig()
+  const unknownEvent = createAppConfig()
   unknownEvent.notifications = { telegram: { profile: "custom", events: { orderSubmittedNow: true } } }
   assert.throws(
     () => validateAppConfig(unknownEvent),
@@ -118,7 +118,7 @@ test("rejects unknown Telegram event override keys and non-boolean values", () =
     "An unknown Telegram event key must be rejected instead of being silently ignored.",
   )
 
-  const invalidEventValue = createHarvesterConfig()
+  const invalidEventValue = createAppConfig()
   invalidEventValue.notifications = { telegram: { profile: "custom", events: { fillReceived: "yes" } } }
   assert.throws(
     () => validateAppConfig(invalidEventValue),
@@ -128,7 +128,7 @@ test("rejects unknown Telegram event override keys and non-boolean values", () =
 })
 
 test("rejects duplicate or malformed Telegram market filters", () => {
-  const duplicateMarkets = createHarvesterConfig()
+  const duplicateMarkets = createAppConfig()
   duplicateMarkets.notifications = { telegram: { profile: "trader", markets: ["LINKUSDT", "LINKUSDT"] } }
   assert.throws(
     () => validateAppConfig(duplicateMarkets),
@@ -136,7 +136,7 @@ test("rejects duplicate or malformed Telegram market filters", () => {
     "Duplicate Telegram market filters must be rejected so policy resolution is deterministic.",
   )
 
-  const malformedMarket = createHarvesterConfig()
+  const malformedMarket = createAppConfig()
   malformedMarket.notifications = { telegram: { profile: "trader", markets: [""] } }
   assert.throws(
     () => validateAppConfig(malformedMarket),
