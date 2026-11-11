@@ -56,6 +56,7 @@ test("rejects malformed pause syntax and does not expose unimplemented commands"
   assert.deepEqual(parseTelegramOperatorCommand("/pause"), { type: "INVALID" })
   assert.deepEqual(parseTelegramOperatorCommand("/pause LINKUSDT extra"), { type: "INVALID" })
   assert.deepEqual(parseTelegramOperatorCommand("/pause LINK-USDT"), { type: "INVALID" })
+  assert.deepEqual(parseTelegramOperatorCommand("/pause@coinzilla_bot@another_bot LINKUSDT", { botUsername: "coinzilla_bot" }), { type: "INVALID" })
   assert.deepEqual(parseTelegramOperatorCommand("/resume LINKUSDT"), { type: "UNSUPPORTED" })
 })
 
@@ -322,3 +323,57 @@ test("concurrent start calls share one Telegram identity check and one poller", 
   assert.equal(pollCalls, 1, "Only one long-poll loop may be active for one adapter instance.")
 })
 
+
+
+test("ignores a private-chat update whose chat identity does not match its allowlisted sender", async () => {
+  const update = makeUpdate({ userId: 12345, chatId: 54321 })
+  const calls = []
+  const sentMessages = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      finishSecondPoll()
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      })
+    }
+    if (method === "sendMessage") {
+      sentMessages.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: { message_id: 304 } })
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async (request) => {
+        calls.push(request)
+        return { ok: true, data: { symbol: request.symbol, paused: true, durable: true } }
+      },
+    },
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+
+  assert.deepEqual(
+    calls,
+    [],
+    "A private-chat update must not reach the operator use case when its chat ID differs from the authenticated sender ID.",
+  )
+  assert.deepEqual(
+    sentMessages,
+    [],
+    "A mismatched private-chat identity must be ignored without replying to an unrelated chat.",
+  )
+})

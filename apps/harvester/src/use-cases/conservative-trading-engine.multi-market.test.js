@@ -566,3 +566,155 @@ test("operator pause restored from durable facts is active before the first mark
     "The first DOGEUSDT strategy evaluation must observe the restored pause and submit no BUY.",
   )
 })
+
+
+test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
+  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+  const recoveryFill = new Fill({
+    tradeId: "operator-pause-recovery-buy",
+    brokerOrderId: "operator-pause-recovery-order",
+    clientOrderId: "operator-pause-recovery-client",
+    market: dogeMarket,
+    side: "BUY",
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    executedAt: 1,
+  })
+  const portfolio = new Portfolio().applyFill({ fill: recoveryFill }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill }).ledger
+  const strategyPolicy = {
+    evaluate: ({ marketPrice }) => {
+      const buy = {
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: "99.95",
+        quantity: "1",
+        reason: "TEST_STANDING_BUY",
+      }
+      const recoverySell = {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        type: "LIMIT_MAKER",
+        price: "100.01",
+        quantity: "0.9",
+        reason: "TEST_RECOVERY_SELL",
+      }
+      return {
+        strategy: "CONSERVATIVE",
+        symbol: marketPrice.symbol,
+        action: "PLACE_ORDERS",
+        reason: "TEST_OPERATOR_PAUSE",
+        actions: marketPrice.symbol === "DOGEUSDT" ? [recoverySell, buy] : [buy],
+      }
+    },
+    evaluateTrailingBuyRepricing: conservativeStrategyPolicy.evaluateTrailingBuyRepricing,
+  }
+  const { engine, orders } = await createHarness({
+    portfolio,
+    strategyPolicy,
+    recoveryLedgersByMarket: new Map([[dogeMarket.id, recoveryLedger]]),
+  })
+
+  assert.equal(
+    typeof engine.pauseMarket,
+    "function",
+    "The engine must expose operator pause before recovery-Sell coexistence can be verified.",
+  )
+  const paused = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+  assert.equal(
+    paused.ok,
+    true,
+    "The operator pause must be established before evaluating the market's recovery and entry intents.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [
+      { symbol: "DOGEUSDT", side: "SELL" },
+      { symbol: "SOLUSDT", side: "BUY" },
+    ],
+    "The paused market must retain its risk-reducing recovery SELL while suppressing only its new BUY; another market remains active.",
+  )
+})
+
+test("resume refuses to clear operator pause while a safety pause is active", async () => {
+  const { engine } = await createHarness({
+    initialState: {
+      operatorPausedMarkets: ["DOGEUSDT"],
+      pausedMarkets: ["DOGEUSDT"],
+    },
+  })
+  let durableCommits = 0
+
+  assert.equal(
+    typeof engine.resumeMarket,
+    "function",
+    "The engine must expose an explicit resume boundary rather than reusing the safety-pause API.",
+  )
+  const result = await engine.resumeMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => {
+      durableCommits += 1
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "An operator resume must be rejected while the independent safety pause remains active.",
+  )
+  assert.equal(
+    result.errors[0].code,
+    "SAFETY_BLOCKER_ACTIVE",
+    "The rejection must identify the unresolved safety blocker.",
+  )
+  assert.equal(
+    durableCommits,
+    0,
+    "A rejected resume must not append a durable resume fact.",
+  )
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "A rejected resume must preserve the operator-owned pause.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    ["DOGEUSDT"],
+    "A rejected resume must preserve the independent safety pause.",
+  )
+})
+
+test("repeated operator pause is idempotent and does not append another durable fact", async () => {
+  const { engine } = await createHarness()
+  let durableCommits = 0
+  const beforeApply = async () => {
+    durableCommits += 1
+    return { ok: true, data: { durable: true } }
+  }
+
+  const first = await engine.pauseMarket({ symbol: "DOGEUSDT", beforeApply })
+  const second = await engine.pauseMarket({ symbol: "DOGEUSDT", beforeApply })
+
+  assert.equal(first.ok, true, "The first durable operator pause must succeed.")
+  assert.equal(second.ok, true, "Repeating an already-active operator pause must be harmless.")
+  assert.equal(
+    second.data.alreadyPaused,
+    true,
+    "The repeated pause result must identify that the market was already paused.",
+  )
+  assert.equal(
+    durableCommits,
+    1,
+    "An already-active pause must not append another durable fact.",
+  )
+})
