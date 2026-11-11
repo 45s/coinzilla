@@ -177,14 +177,15 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation in [PR #1047](https://github.com/45s/coinzilla/pull/1047)).**
+7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
    - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
    - [x] Persist and project the `MARKET_HISTORY_COVERAGE_CONFIRMED` fact through ADR-0001; enforce a monotonic per-symbol coverage interval and bind it to the reviewed evidence digest/verifier.
-   - [~] The operator confirmation use case now gates the coverage append on a READY audit in [PR #1047](https://github.com/45s/coinzilla/pull/1047); a concrete offline CLI/context adapter remains pending. No Telegram command is added as part of Step 7.
-   - [~] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
-   - [~] Deterministic orchestration/confirmation tests are in PR #1047; full end-to-end proof using the production audit dependencies and external-order isolation remains pending before startup readiness can consume the result.
+   - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
+   - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
+   - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
+   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior; exact-head CI is pending.
 
 8. **[ ] Step 8 — Restore behind a closed readiness gate.**
    - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
