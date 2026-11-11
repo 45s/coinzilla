@@ -206,7 +206,6 @@ export function createUserDataRecoveryHandler({
           category: "ACCOUNTING_INTEGRITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_VALIDATION", retryable: false,
           task: () => publishOpenOrdersSnapshot({
             phase: "RECOVERY",
-            blockOnExistingOrders: tradingEnabled,
             ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
             orders: openOrdersResult.data,
           }),
