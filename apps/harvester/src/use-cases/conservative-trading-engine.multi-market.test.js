@@ -718,3 +718,63 @@ test("repeated operator pause is idempotent and does not append another durable 
     "An already-active pause must not append another durable fact.",
   )
 })
+
+
+test("resume removes only the operator pause after its durable fact commits", async () => {
+  const { engine, orders } = await createHarness({
+    initialState: { operatorPausedMarkets: ["DOGEUSDT"] },
+  })
+  let durableCommits = 0
+
+  const result = await engine.resumeMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => {
+      durableCommits += 1
+      assert.deepEqual(
+        engine.getOperatorPausedMarkets(),
+        ["DOGEUSDT"],
+        "The operator pause must remain active while the durable resume fact is being committed.",
+      )
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  assert.equal(result.ok, true, "A resume without safety or recovery blockers must succeed.")
+  assert.equal(durableCommits, 1, "A successful resume must commit exactly one durable fact.")
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    [],
+    "The in-memory operator pause may be removed only after durable resume acknowledgement.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [
+      { symbol: "DOGEUSDT", side: "BUY" },
+      { symbol: "SOLUSDT", side: "BUY" },
+    ],
+    "A durably resumed market must return to normal strategy evaluation without changing other markets.",
+  )
+})
+
+test("failed durable resume leaves the operator pause active", async () => {
+  const { engine } = await createHarness({
+    initialState: { operatorPausedMarkets: ["DOGEUSDT"] },
+  })
+  const result = await engine.resumeMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({
+      ok: false,
+      errors: [new Error("durable resume commit failed")],
+    }),
+  })
+
+  assert.equal(result.ok, false, "A failed durable resume commit must reject the state transition.")
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "A failed durable resume commit must leave the operator pause unchanged.",
+  )
+})
