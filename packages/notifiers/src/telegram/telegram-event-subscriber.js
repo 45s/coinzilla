@@ -1,11 +1,11 @@
-import {
-  formatTelegramNotification,
-  TELEGRAM_NOTIFICATION_EVENT_NAMES,
-} from "./format-telegram-notification.js"
-
 const DEFAULT_MAX_PENDING = 1000
 
-export const TELEGRAM_NOTIFICATION_EVENTS = TELEGRAM_NOTIFICATION_EVENT_NAMES
+export const TELEGRAM_NOTIFICATION_EVENTS = Object.freeze([
+  "order.filled", "fill.received", "bot.pair_paused", "bot.recovery_failed",
+  "bot.recovery_completed", "bot.startup_failed", "broker.connected",
+  "broker.disconnected", "order.submitted", "order.cancelled", "order.failed",
+  "account.safety_alert", "bot.started", "bot.stopped",
+])
 
 function validateEventNames(eventNames) {
   if (!Array.isArray(eventNames)) {
@@ -32,9 +32,12 @@ function validateEventNames(eventNames) {
   return Object.freeze([...eventNames])
 }
 
-function validateDependencies({ eventBus, notifier, logger, maxPending, eventNames }) {
+function validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames }) {
   if (!eventBus || typeof eventBus.subscribe !== "function") {
     throw new TypeError("eventBus must expose subscribe()")
+  }
+  if (typeof formatMessage !== "function") {
+    throw new TypeError("formatMessage must be a function supplied by the consuming application")
   }
   if (!notifier || typeof notifier.sendMessage !== "function") {
     throw new TypeError("notifier must expose sendMessage()")
@@ -107,8 +110,9 @@ export function subscribeTelegramNotifications({
   logger,
   maxPending = DEFAULT_MAX_PENDING,
   eventNames = TELEGRAM_NOTIFICATION_EVENTS,
+  formatMessage,
 } = {}) {
-  const selectedEventNames = validateDependencies({ eventBus, notifier, logger, maxPending, eventNames })
+  const selectedEventNames = validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames })
 
   let deliveryTail = Promise.resolve()
   let pendingCount = 0
@@ -144,7 +148,7 @@ export function subscribeTelegramNotifications({
           acceptedCount += 1
 
           const delivery = deliveryTail.then(async () => {
-            const message = formatTelegramNotification(event)
+            const message = formatMessage(event)
             if (message) {
               await notifier.sendMessage(message)
               deliveredCount += 1
