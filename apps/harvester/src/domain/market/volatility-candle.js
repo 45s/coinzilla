@@ -152,15 +152,8 @@ export function calculateVolatilityMetrics({
   }
   const atrSeries = calculateAtrSeries(indicatorInput)
   const natrSeries = calculateNatrSeries(indicatorInput)
-  if (natrSeries.length < referenceObservations + 1) {
-    return { metrics: null, reason: "INSUFFICIENT_HISTORY" }
-  }
-
   const currentNatr = natrSeries.at(-1)
   const reference = natrSeries.slice(-referenceObservations - 1, -1)
-  if (!currentNatr || reference.length !== referenceObservations) {
-    return { metrics: null, reason: "INSUFFICIENT_HISTORY" }
-  }
 
   const referenceTotal = reference.reduce(
     (total, observation) => addDecimal({ left: total, right: observation.value }),
