@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { defaultLogger } from "@coinzilla/utils"
 import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
 import { runOfflineMarketRecovery } from "./recovery-market-context.js"
 
@@ -67,8 +68,8 @@ export async function runRecoveryMarketCommand({
   env = process.env,
   cwd = process.cwd(),
   readContext = readFile,
-  writeOutput = (value) => console.log(value),
-  writeError = (value) => console.error(value),
+  writeOutput = (value) => process.stdout.write(value + "\n"),
+  writeError = (value) => defaultLogger.error({ message: "Offline market recovery CLI failed", error: value }),
 } = {}) {
   let parsed
   try {
