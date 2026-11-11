@@ -54,7 +54,7 @@ const formatters = Object.freeze({
   "broker.connected": ({ data }) => [
     "🔌 BROKER CONNECTED",
     `Broker: ${text(data.broker, "n/a", 64)}`,
-    `Mode: ${text(data.tradingMode, "n/a", 24).toUpperCase()}`,
+    ...(data.tradingMode === undefined ? [] : [`Mode: ${text(data.tradingMode, "n/a", 24).toUpperCase()}`]),
   ].join("\n"),
   "broker.disconnected": ({ data }) => [
     "🔌 BROKER DISCONNECTED",
@@ -90,6 +90,7 @@ const formatters = Object.freeze({
   "bot.started": () => "🟢 BOT STARTED",
   "bot.stopped": ({ data }) => [
     "⚪ BOT STOPPED",
+    `Outcome: ${text(data.outcome, "completed", 48)}`,
     `Reason: ${text(data.reason ?? data.message, "Shutdown requested")}`,
   ].join("\n"),
 })

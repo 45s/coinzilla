@@ -167,3 +167,19 @@ test("formats additional operational notification events with bounded allowliste
     "Every newly formatted operational event must appear in the exported supported-event allowlist.",
   )
 })
+
+
+test("omits unavailable broker mode and exposes failed shutdown outcome", () => {
+  const connected = formatTelegramNotification({
+    name: "broker.connected",
+    data: { broker: "binance" },
+  })
+  assert.match(connected, /BROKER CONNECTED.*binance/s, "Broker connection messages must include the known broker name.")
+  assert.doesNotMatch(connected, /Mode: n\/a/, "Broker connection messages must not invent an unavailable exchange mode.")
+
+  const stopped = formatTelegramNotification({
+    name: "bot.stopped",
+    data: { outcome: "failed", reason: "cleanup incomplete" },
+  })
+  assert.match(stopped, /BOT STOPPED.*Outcome: failed.*cleanup incomplete/s, "Shutdown notifications must distinguish a failed cleanup outcome.")
+})
