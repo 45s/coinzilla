@@ -43,9 +43,10 @@ const metadata = {
   supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
 }
 
-const createAsk = (answers) => {
+const createAsk = (answers, prompts = []) => {
   const remaining = [...answers]
-  return async () => {
+  return async (question) => {
+    prompts.push(question)
     assert.ok(remaining.length > 0, "The CLI must not ask for more values than the documented interactive flow.")
     return remaining.shift()
   }
@@ -55,8 +56,9 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   const output = []
   const metadataCalls = []
   const writes = []
+  const prompts = []
   const result = await runConfigSymbol({
-    ask: createAsk([" adafdusd ", "testnet", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
+    ask: createAsk([" adafdusd ", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""], prompts),
     writeLine: (line) => output.push(line),
     loadConfig: async () => createAppConfig(),
     metadataFetcher: async (args) => {
@@ -91,7 +93,7 @@ test("rejects invalid operator input before making any Binance request", async (
   let writes = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "100", "0.1", "0.01", "0.05", ""]),
+      ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "100", "0.1", "0.01", "0.05", ""]),
       loadConfig: async () => createAppConfig(),
       metadataFetcher: async () => {
         metadataCalls += 1
@@ -114,7 +116,7 @@ test("refuses an existing symbol before making an exchange request", async () =>
   config.strategies.CG_coinGrabber.pairs.ADAFDUSD = config.strategies.CG_coinGrabber.pairs.LINKFDUSD
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
+      ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
       loadConfig: async () => config,
       metadataFetcher: async () => {
         metadataCalls += 1
@@ -133,7 +135,7 @@ test("detects a case-insensitive existing pair before calling Binance", async ()
   let metadataCalls = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
+      ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
       loadConfig: async () => config,
       metadataFetcher: async () => {
         metadataCalls += 1
@@ -146,32 +148,25 @@ test("detects a case-insensitive existing pair before calling Binance", async ()
   assert.equal(metadataCalls, 0, "Case-insensitive duplicates must be rejected before contacting Binance.")
 })
 
-test("rejects an unsupported environment before loading config or calling Binance", async () => {
-  let configReads = 0
-  let metadataCalls = 0
-  await assert.rejects(
-    runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "paper", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
-      loadConfig: async () => {
-        configReads += 1
-        return createAppConfig()
-      },
-      metadataFetcher: async () => {
-        metadataCalls += 1
-        return metadata
-      },
-    }),
-    /environment.*testnet or live/i,
-    "The generator must not fetch exchange data for an unknown environment.",
-  )
-  assert.equal(configReads, 0, "Invalid environment selection must fail before reading or writing configuration.")
-  assert.equal(metadataCalls, 0, "Invalid environment selection must fail before contacting Binance.")
+test("uses the existing TRADING_MODE value without prompting for an environment", async () => {
+  const metadataCalls = []
+  await runConfigSymbol({
+    defaultEnvironment: "live",
+    ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"]),
+    loadConfig: async () => createAppConfig(),
+    metadataFetcher: async (args) => {
+      metadataCalls.push(args)
+      return { ...metadata, environment: "live" }
+    },
+  })
+  assert.equal(metadataCalls.length, 1)
+  assert.equal(metadataCalls[0].environment, "live")
 })
 
 test("cancels safely when the operator declines the configuration preview", async () => {
   let writes = 0
   const result = await runConfigSymbol({
-    ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"]),
+    ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"]),
     loadConfig: async () => createAppConfig(),
     metadataFetcher: async () => metadata,
     writeConfig: async () => {
@@ -190,7 +185,7 @@ test("refuses metadata for a different symbol or exchange environment", async ()
     let writes = 0
     await assert.rejects(
       runConfigSymbol({
-        ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
+        ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
         loadConfig: async () => createAppConfig(),
         metadataFetcher: async () => invalidMetadata,
         writeConfig: async () => {
@@ -208,7 +203,7 @@ test("does not write configuration when Binance metadata lookup fails", async ()
   let writes = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["ADAFDUSD", "testnet", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
+      ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
       loadConfig: async () => createAppConfig(),
       metadataFetcher: async () => {
         throw new Error("Binance unavailable")
