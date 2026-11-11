@@ -161,7 +161,16 @@ async function requestJson({ fetchImpl, url, label }) {
   }
 }
 
-/** Fetch public, read-only Binance Spot exchange filters and a current reference ticker price. */
+/**
+ * Fetch public, read-only Binance Spot exchange filters and a current reference ticker price.
+ *
+ * @param {object} options
+ * @param {string} options.symbol - Binance Spot symbol.
+ * @param {typeof fetch} [options.fetchImpl=fetch] - Injectable Fetch-compatible transport.
+ * @param {string} [options.baseUrl] - HTTPS Binance API base URL, primarily for isolated tests.
+ * @returns {Promise<object>} Exact exchange-filter strings, supported order types, and ticker price.
+ * @throws {TypeError|RangeError|Error} If the symbol, filters, order types, HTTP response, or ticker are invalid.
+ */
 export async function fetchBinanceSpotMetadata({
   symbol,
   fetchImpl = globalThis.fetch,

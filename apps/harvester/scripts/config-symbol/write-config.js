@@ -12,7 +12,13 @@ async function removeIfPresent(filePath) {
   }
 }
 
-/** Merge a new pair into config.json and atomically replace the file under an exclusive generator lock. */
+/**
+ * Merge a new pair into config.json and atomically replace the file under an exclusive generator lock.
+ *
+ * @param {{configPath: string, symbol: string, pairConfig: object}} options - Target config and generated pair.
+ * @returns {Promise<string>} Absolute path of the updated config file.
+ * @throws {Error|TypeError} If the file is invalid, the pair exists, or the lock/write fails.
+ */
 export async function writePairConfigAtomically({ configPath, symbol, pairConfig } = {}) {
   if (typeof configPath !== "string" || !configPath.trim()) {
     throw new TypeError("configPath must be a non-empty file path")

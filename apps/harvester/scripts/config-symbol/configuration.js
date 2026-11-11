@@ -11,7 +11,13 @@ const ZERO = "0"
 const HUNDRED = "100"
 const ORDER_QUANTITY_SCALE = 18
 
-/** Normalize and validate a Binance Spot symbol entered by an operator. */
+/**
+ * Normalize and validate an operator-entered Binance Spot symbol.
+ *
+ * @param {unknown} value - Raw terminal input.
+ * @returns {string} Uppercase symbol containing 5–20 ASCII letters or digits.
+ * @throws {TypeError} If the input is not a supported symbol.
+ */
 export function normalizeSymbolInput(value) {
   if (typeof value !== "string") {
     throw new TypeError("symbol must be a string")
@@ -23,7 +29,15 @@ export function normalizeSymbolInput(value) {
   return symbol
 }
 
-/** Parse a non-negative plain decimal CLI value without converting through Number. */
+/**
+ * Parse a non-negative plain decimal CLI value without converting through Number.
+ *
+ * @param {unknown} value - Raw terminal input.
+ * @param {string} field - Field name included in validation errors.
+ * @param {{exclusiveMin?: boolean}} [options] - Whether zero is invalid.
+ * @returns {string} Canonical exact decimal text.
+ * @throws {TypeError|RangeError} If the value is malformed or violates its minimum.
+ */
 export function parseDecimalInput(value, field, { exclusiveMin = false } = {}) {
   if (typeof value !== "string") {
     throw new TypeError(field + " must be entered as a decimal number")
@@ -64,7 +78,19 @@ function toConfigNumber(value, field) {
   return number
 }
 
-/** Calculate the largest order quantity within the quote budget and exchange limits. */
+/**
+ * Calculate the largest order quantity within the quote budget and exchange limits.
+ *
+ * @param {object} options
+ * @param {string} options.investment - Quote-asset budget as decimal text.
+ * @param {string} options.price - Current public reference price as decimal text.
+ * @param {string} options.stepSize - Binance LOT_SIZE increment.
+ * @param {string} options.minQuantity - Binance LOT_SIZE minimum.
+ * @param {string} options.maxQuantity - Binance LOT_SIZE maximum.
+ * @param {string} options.minNotional - Strictest applicable quote notional minimum.
+ * @returns {string} Quantity rounded down to the exchange increment.
+ * @throws {TypeError|RangeError} If exchange values are invalid or no valid quantity fits the budget.
+ */
 export function calculateOrderQuantity({
   investment,
   price,
@@ -117,7 +143,13 @@ export function calculateOrderQuantity({
   return quantity
 }
 
-/** Normalize and validate all operator-owned pair settings before any exchange request. */
+/**
+ * Normalize and validate all operator-owned pair settings before any exchange request.
+ *
+ * @param {object} inputs - Operator-provided pair settings.
+ * @returns {Readonly<object>} Validated decimal-string settings.
+ * @throws {TypeError|RangeError} If any required setting or boundary is invalid.
+ */
 export function normalizePairInputs(inputs) {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
     throw new TypeError("inputs must be an object")
@@ -144,7 +176,13 @@ export function normalizePairInputs(inputs) {
   return Object.freeze(normalized)
 }
 
-/** Create the complete pair object accepted by Harvester's current app-config schema. */
+/**
+ * Create the complete pair object accepted by Harvester's current app-config schema.
+ *
+ * @param {{inputs: object, metadata: object}} options - Operator inputs and Binance metadata.
+ * @returns {Readonly<object>} Runtime-valid, disabled-by-default pair configuration.
+ * @throws {TypeError|RangeError|Error} If sizing, exchange constraints, or order-type support is invalid.
+ */
 export function createPairConfig({ inputs, metadata } = {}) {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
     throw new TypeError("inputs must be an object")
@@ -201,7 +239,13 @@ export function createPairConfig({ inputs, metadata } = {}) {
   })
 }
 
-/** Add a pair immutably to the one canonical Harvester application configuration. */
+/**
+ * Add a pair immutably to the one canonical Harvester application configuration.
+ *
+ * @param {{appConfig: object, symbol: string, pairConfig: object}} options - Existing config and generated pair.
+ * @returns {object} A cloned, runtime-validated application configuration.
+ * @throws {TypeError|Error} If the config shape is invalid or the symbol already exists.
+ */
 export function addPairToAppConfig({ appConfig, symbol, pairConfig } = {}) {
   if (!appConfig || typeof appConfig !== "object" || Array.isArray(appConfig)) {
     throw new TypeError("appConfig must be an object")

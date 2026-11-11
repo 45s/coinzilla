@@ -12,7 +12,20 @@ function askWithDefault(value, fallback) {
   return value.trim() === "" ? fallback : value
 }
 
-/** Run the interactive operator flow; all external effects are injected or isolated at this boundary. */
+/**
+ * Run the interactive operator flow; all external effects are injected or isolated at this boundary.
+ *
+ * @param {object} options
+ * @param {(question: string) => Promise<string>} options.ask - Terminal prompt function.
+ * @param {(line: string) => void} [options.writeLine] - Operator-facing output function.
+ * @param {typeof fetch} [options.fetchImpl] - Public metadata transport.
+ * @param {Function} [options.metadataFetcher] - Binance metadata adapter.
+ * @param {string} [options.configPath] - Canonical Harvester config path.
+ * @param {Function} [options.loadConfig] - Existing app-config loader.
+ * @param {Function} [options.writeConfig] - Atomic pair-config writer.
+ * @returns {Promise<object>} Generated pair and whether the operator confirmed persistence.
+ * @throws {Error|TypeError|RangeError} If input, existing config, metadata, or persistence is invalid.
+ */
 export async function runConfigSymbol({
   ask,
   writeLine = () => {},
