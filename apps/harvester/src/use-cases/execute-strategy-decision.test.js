@@ -155,3 +155,39 @@ test("uses different client order ID namespaces for separate executor instances"
   assert.ok(firstId.length <= 36)
   assert.ok(secondId.length <= 36)
 })
+
+test("preserves explicit strategy purpose through both submission-gate checks without sending it to the broker", async () => {
+  const gatePurposes = []
+  const pendingPurposes = []
+  let brokerOrder
+  const sellDecision = {
+    actions: [{
+      side: "SELL",
+      purpose: "RECOVERY_SELL",
+      type: "LIMIT_MAKER",
+      price: "0.101",
+      quantity: "100",
+    }],
+  }
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        brokerOrder = order
+        return { ok: true, data: makeAcknowledgement({ ...order, side: "SELL", price: "0.101" }) }
+      },
+    },
+    canSubmit: ({ purpose }) => {
+      gatePurposes.push(purpose)
+      return true
+    },
+    onPendingOrder: async ({ purpose }) => pendingPurposes.push(purpose),
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+  })
+
+  const result = await execute({ decision: sellDecision, marketMetadata })
+  assert.equal(result.ok, true)
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL"])
+  assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"])
+  assert.equal(Object.hasOwn(brokerOrder, "purpose"), false, "Application-only recovery purpose must not leak into the broker order request.")
+})
