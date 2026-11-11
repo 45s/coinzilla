@@ -59,8 +59,8 @@ Architecture regression tests protect the dependency direction and keep composit
     } from "@coinzilla/notifiers"
 
 - TelegramNotifier: validates options and sends plain-text messages through Telegram's sendMessage Bot API method.
-- subscribeTelegramNotifications: subscribes to a curated event allowlist, serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
-- TELEGRAM_NOTIFICATION_EVENTS: immutable list of subscribed event names.
+- subscribeTelegramNotifications: subscribes to the full supported event allowlist by default, or to a validated `eventNames` subset selected by the consuming application; it serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
+- TELEGRAM_NOTIFICATION_EVENTS: immutable list of supported event names.
 - formatTelegramNotification: pure formatter for supported Telegram events.
 - formatNotification: backwards-compatible alias for formatTelegramNotification.
 
@@ -99,6 +99,8 @@ Both values are required by the consuming application. Leave both unset to disab
       notifier: telegram,
       logger,
       maxPending: 1000,
+      // Optional: select a validated subset of supported notification events.
+      eventNames: ["bot.started", "fill.received", "bot.pair_paused"],
     })
 
     eventBus.publish({
@@ -121,7 +123,7 @@ Both values are required by the consuming application. Leave both unset to disab
 
 ## Supported events
 
-| Event | Default behavior |
+| Event | Supported message |
 | --- | --- |
 | order.filled | Completed order alert |
 | fill.received | Individual execution/fill alert |
@@ -130,8 +132,15 @@ Both values are required by the consuming application. Leave both unset to disab
 | bot.recovery_completed | Recovery completion alert |
 | bot.started | Bot started alert |
 | bot.stopped | Bot stopped alert |
+| bot.startup_failed | Startup failure alert |
+| broker.connected | Broker connection established |
+| broker.disconnected | Broker connection lost |
+| order.submitted | Broker-acknowledged order submission |
+| order.cancelled | Broker-confirmed order cancellation |
+| order.failed | Submission or cancellation failure |
+| account.safety_alert | Account, execution, or ownership safety alert |
 
-High-volume events such as order.execution_report are intentionally excluded. The allowlist prevents accidental message noise and limits outbound data to explicitly selected fields.
+High-volume events such as order.execution_report are intentionally excluded. The exported allowlist contains every supported formatter event. Consumers may pass an `eventNames` array to subscribe to a unique subset; unknown names, duplicates, malformed values, and an empty selection are rejected before any subscription is registered. Omitting `eventNames` preserves the original full-allowlist behavior. The formatter still limits outbound data to explicitly selected fields.
 
 ## Reliability and security contract
 
