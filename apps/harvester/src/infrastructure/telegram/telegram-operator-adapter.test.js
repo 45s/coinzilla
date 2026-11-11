@@ -138,9 +138,9 @@ test("does not invoke the application for a user outside the private-chat allowl
     if (method === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => {
-          finishSecondPoll()
           reject(new Error("poll aborted"))
         }, { once: true })
       })
@@ -180,9 +180,9 @@ test("ignores group messages even when their sender ID is allowlisted", async ()
     if (method === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => {
-          finishSecondPoll()
           reject(new Error("poll aborted"))
         }, { once: true })
       })
