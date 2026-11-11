@@ -62,16 +62,14 @@ export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
 
 
 /**
- * Build a readable Portfolio Stats snapshot using exact domain decimal strings.
- * Exchange account balances are deliberately excluded; they are a separate
- * broker snapshot and are not part of Harvester's in-memory Portfolio.
+ * Build a readable Portfolio Stats snapshot using only exact Portfolio values.
+ * Exchange balances and RecoveryLedger accounting are intentionally excluded.
  *
  * @param {object} input
  * @param {object} input.position
- * @param {object} [input.recoveryLedger]
  * @returns {object|null}
  */
-export function createPortfolioStatsLogSummary({ position, recoveryLedger } = {}) {
+export function createPortfolioStatsLogSummary({ position } = {}) {
   if (!position) return null
 
   const baseAsset = position.market.baseAsset.code
@@ -81,15 +79,13 @@ export function createPortfolioStatsLogSummary({ position, recoveryLedger } = {}
     message: "Portfolio Stats",
     symbol: position.market.symbol,
     inventory: {
-      active: position.baseQuantity.amount + " " + baseAsset,
-      retained: position.freeBaseQuantity.amount + " " + baseAsset,
-      total: position.totalBaseQuantity.amount + " " + baseAsset,
+      activeBaseQuantity: position.baseQuantity.amount + " " + baseAsset,
+      freeBaseQuantity: position.freeBaseQuantity.amount + " " + baseAsset,
+      totalBaseQuantity: position.totalBaseQuantity.amount + " " + baseAsset,
     },
     accounting: {
-      cycleBuyCost: position.spent.amount + " " + quoteAsset,
-      netQuoteCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
-      outstandingRecovery: (recoveryLedger?.outstandingRecoveryAmount ?? "0") + " " + quoteAsset,
-      realizedNetProfit: (recoveryLedger?.realizedNetProfit ?? "0") + " " + quoteAsset,
+      spent: position.spent.amount + " " + quoteAsset,
+      quoteNetCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
     },
   }
 }
