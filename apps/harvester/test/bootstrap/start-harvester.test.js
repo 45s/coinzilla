@@ -14,7 +14,7 @@ import {
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 import { resolveHarvesterOptions } from '../../src/bootstrap/config/resolve-harvester-options.js';
-import { loadTradingConfig } from '../../src/infrastructure/config/load-trading-config.js';
+import { loadAppConfig } from '../../src/infrastructure/config/load-app-config.js';
 
 const createOpenOrderSnapshot = ({ order }) => {
   const openOrder = new Order({
@@ -64,10 +64,10 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 
 test('loads configuration before returning the startup context', async () => {
-  const tradingConfig = {
+  const appConfig = {
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
-  const configSource = '/etc/harvester/trading-config.json';
+  const configSource = '/etc/harvester/config.json';
   const calls = [];
 
   const context = await resolveHarvesterOptions({
@@ -75,17 +75,17 @@ test('loads configuration before returning the startup context', async () => {
     env: { TRADING_MODE: 'testnet' },
     loadConfig: async (source) => {
       calls.push(source);
-      return tradingConfig;
+      return appConfig;
     },
   });
 
   assert.deepEqual(calls, [configSource]);
-  assert.equal(context.tradingConfig, tradingConfig);
+  assert.equal(context.appConfig, appConfig);
   assert.equal(Object.isFrozen(context), true);
 });
 
 test('fails startup when configuration loading or validation fails', async () => {
-  const startupError = new TypeError('Invalid trading config');
+  const startupError = new TypeError('Invalid app config');
 
   await assert.rejects(
     startHarvesterForTest({
@@ -98,7 +98,7 @@ test('fails startup when configuration loading or validation fails', async () =>
 });
 
 test('loads the default validated strategy and pair configuration', async () => {
-  const config = await loadTradingConfig();
+  const config = await loadAppConfig();
   assert.ok(config.strategies.CG_coinGrabber.pairs.ZROFDUSD);
   assert.equal(Object.hasOwn(config, 'runtime'), false);
 });
@@ -137,7 +137,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       locked: new Quantity({ amount: '0', asset: quoteAsset }),
     }),
   ];
-  const tradingConfig = {
+  const appConfig = {
     strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
@@ -233,7 +233,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     },
   };
   const context = await startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => appConfig,
     brokerAdapterFactory: () => broker,
     env: {
       NODE_ENV: 'development',
@@ -353,7 +353,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
       locked: new Quantity({ amount: "0", asset: quoteAsset }),
     }),
   ]
-  const tradingConfig = {
+  const appConfig = {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -466,7 +466,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   }
 
   const context = await startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => appConfig,
     brokerAdapterFactory: () => broker,
     env: {
       NODE_ENV: "development",

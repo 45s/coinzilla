@@ -55,3 +55,12 @@ Follow the [Shared Utilities Policy](../../docs/engineering/SHARED_UTILITIES_POL
 Harvester agents MUST write the implementation, regression tests, and same-commit documentation updates. GitHub Actions runs the tests and checks for task PRs.
 
 A missing local checkout, terminal, Node installation, pnpm installation, or local test runner is not a reason to stop, defer implementation, or ask the user to run commands. Use GitHub repository operations to create the task branch, commit the actual changes, and open/update the PR. Inspect the exact PR head and GitHub Actions results, fix failures in source/tests, and let GitHub rerun them. Never weaken tests or claim success without green checks on the exact head SHA. Merge into `develop` only after all required checks pass and branch freshness is verified.
+
+## Application configuration
+
+- The app has one application-wide configuration file: `apps/harvester/config.json`. Do not create feature-specific configuration files.
+- Keep strategy-owned settings and pairs under `strategies.CG_coinGrabber`; keep application-wide concerns such as Telegram notification policy in sibling root sections.
+- Use `loadAppConfig` and `validateAppConfig` for the application configuration boundary. Update their tests and all docs/examples when the contract changes.
+- Telegram bot tokens and chat IDs are environment-only secrets. `notifications.telegram` contains only the enabled switch, profile, market filter, and event overrides.
+- Notification profiles are `minimal`, `trader`, `verbose`, and `custom`. Critical safety alerts are non-disableable and bypass event overrides and market filters.
+- Notification formatting, bounded queueing, transport, and delivery remain owned by `@coinzilla/notifiers`; Harvester owns profile resolution and mapping of Harvester events.

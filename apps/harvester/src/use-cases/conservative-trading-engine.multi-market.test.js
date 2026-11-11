@@ -57,7 +57,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     market.symbol,
     makeMarketMetadata(market),
   ]))
-  const tradingConfig = {
+  const appConfig = {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -119,7 +119,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: conservativeStrategyPolicy,
-    tradingConfig,
+    appConfig,
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId }) => RecoveryLedger.empty({ market: marketsById.get(marketId) }),
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),

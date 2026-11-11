@@ -284,7 +284,7 @@ test("publishes process started and stopped events for Binance trading startup",
       tradingEnabled: true,
       strategyMode: "conservative",
       subscriptions: [],
-      tradingConfig: { pairs: { BTCUSDT: { enabled: true } } },
+      appConfig: { strategies: { CG_coinGrabber: { pairs: { BTCUSDT: { enabled: true } } } } },
       stop: async () => {},
     }),
     registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
@@ -1516,12 +1516,12 @@ test("fails before acquiring a lock when TRADING_MODE is missing", async () => {
 
 
 test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer lock", async () => {
-  const tradingConfig = { strategies: { CG_coinGrabber: { enabled: true } } }
+  const appConfig = { strategies: { CG_coinGrabber: { enabled: true } } }
   let lockCalls = 0
   let startInput
   await main({
     env: { NODE_ENV: "development", TRADING_MODE: "live" },
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => appConfig,
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
       flush: async () => ({ ok: true, durable: true }),
@@ -1545,7 +1545,7 @@ test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer loc
   })
 
   assert.equal(lockCalls, 1, "LIVE trading must acquire the same single-writer process lock as TESTNET.")
-  assert.strictEqual(startInput.tradingConfig, tradingConfig, "Strategy and pair configuration must be passed unchanged to Harvester startup.")
+  assert.strictEqual(startInput.appConfig, appConfig, "Application configuration must be passed unchanged to Harvester startup.")
   assert.equal(startInput.env.NODE_ENV, "development", "NODE_ENV must not select the exchange.")
   assert.equal(startInput.env.TRADING_MODE, "live", "TRADING_MODE must select Binance LIVE independently of NODE_ENV.")
 })

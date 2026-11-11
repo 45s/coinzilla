@@ -495,7 +495,7 @@ Direct tests cover read-only startup, successful trading startup, malformed subs
 
 ## Startup configuration/read-only policy extraction — 2026-11-08
 
-Harvester config loading, strategy/pair validation, broker/mode resolution, TESTNET/non-production safety gates, and CONFIG_VALIDATED lifecycle publication now live in `src/bootstrap/config/resolve-harvester-options.js`. The read-only Conservative no-action decision is a separate deterministic use-case helper in `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+application config loading, strategy/pair validation, broker/mode resolution, TESTNET/non-production safety gates, and CONFIG_VALIDATED lifecycle publication now live in `src/bootstrap/config/resolve-harvester-options.js`. The read-only Conservative no-action decision is a separate deterministic use-case helper in `src/use-cases/evaluate-read-only-conservative-strategy.js`.
 
 Direct tests cover read-only mode, all explicit TESTNET gates, invalid configuration flags, and immutable no-action evaluation. No default or production trading permission is broadened.
 

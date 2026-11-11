@@ -1,4 +1,12 @@
 {
+  "notifications": {
+    "telegram": {
+      "enabled": true,
+      "profile": "trader",
+      "markets": [],
+      "events": {}
+    }
+  },
   "strategies": {
     "CG_coinGrabber": {
       "enabled": true,
