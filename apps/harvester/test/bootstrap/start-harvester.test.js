@@ -206,6 +206,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
     getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
+    getCandles: async () => toResult({ data: [] }),
+    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
       return toResult({ data: { unsubscribe: async () => {} } });
@@ -447,6 +449,8 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     getPrices: async ({ symbol } = {}) => toResult({
       data: { symbol, price: symbol === "DOGEUSDT" ? "0.1" : "1" },
     }),
+    getCandles: async () => toResult({ data: [] }),
+    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ symbol, onPrice } = {}) => {
       priceSubscriptions.set(symbol, onPrice)
       return toResult({ data: { unsubscribe: async () => {} } })
