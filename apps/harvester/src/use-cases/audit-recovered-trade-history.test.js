@@ -47,7 +47,23 @@ const journalFill = (fill = makeFill()) => ({
   ...(fill.executedAt === undefined ? {} : { executedAt: fill.executedAt }),
 })
 
-test("accepts exact complete account trade history matching every durable Journal fill", () => {
+const marketHistoryEvidence = Object.freeze({
+  historyPagesComplete: true,
+  marketHistoryComplete: true,
+  historyScope: "MARKET",
+  marketsQueried: Object.freeze(["BTCUSDT"]),
+})
+
+const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
+  ...input,
+  complete: false,
+  marketUniverseComplete: false,
+  scope: "MARKET",
+  market,
+  historyEvidence: marketHistoryEvidence,
+})
+
+test("rejects a caller-supplied market-universe boolean as account-wide completeness evidence", () => {
   const fill = makeFill()
   const result = auditRecoveredTradeHistory({
     journalFills: [journalFill(fill)],
@@ -56,15 +72,8 @@ test("accepts exact complete account trade history matching every durable Journa
     marketUniverseComplete: true,
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(result.data, {
-    complete: true,
-    scope: "ACCOUNT",
-    marketUniverseComplete: true,
-    fillsChecked: 1,
-    journalFillsChecked: 1,
-    reconciledOwnedOrderFills: 0,
-  })
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /Caller-supplied marketUniverseComplete is not authoritative evidence/)
 })
 
 test("rejects incomplete account-wide trade history even when every returned fill matches", () => {
@@ -86,11 +95,9 @@ test("rejects an exchange execution absent from the Harvester Journal", () => {
     brokerOrderId: "9002",
     clientOrderId: "manual-order",
   })
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [journalFill(ownedFill)],
     exchangeFills: [ownedFill, externalFill],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -99,11 +106,9 @@ test("rejects an exchange execution absent from the Harvester Journal", () => {
 
 test("rejects a Journal execution missing from complete exchange trade history", () => {
   const fill = makeFill()
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [journalFill(fill)],
     exchangeFills: [],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -116,11 +121,9 @@ test("rejects contradictory exact execution facts and commission data", () => {
     price: new Money({ amount: "101", asset: quoteAsset }),
     quoteQuantity: new Money({ amount: "40.4", asset: quoteAsset }),
   })
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [journalFill(fill)],
     exchangeFills: [contradictory],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -129,11 +132,9 @@ test("rejects contradictory exact execution facts and commission data", () => {
 
 test("rejects duplicate exchange execution and trade identities", () => {
   const fill = makeFill()
-  const duplicate = auditRecoveredTradeHistory({
+  const duplicate = auditMarketHistory({
     journalFills: [journalFill(fill)],
     exchangeFills: [fill, fill],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(duplicate.ok, false)
@@ -142,11 +143,9 @@ test("rejects duplicate exchange execution and trade identities", () => {
 
 test("rejects non-canonical exchange fill records", () => {
   const fill = makeFill()
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [journalFill(fill)],
     exchangeFills: [{ ...fill }],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -157,11 +156,9 @@ test("rejects non-canonical exchange fill records", () => {
 test("accepts canonical account trade fills that omit clientOrderId when broker and trade identities match", () => {
   const journalExecution = makeFill()
   const exchangeFill = makeFill({ clientOrderId: undefined })
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [journalFill(journalExecution)],
     exchangeFills: [exchangeFill],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, true)
@@ -196,12 +193,10 @@ test("accepts exchange fills missing from the prior Journal only when their brok
     executedQuantity: new Quantity({ amount: "0.4", asset: baseAsset }),
     status: "FILLED",
   })
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [],
     exchangeFills: [fill],
     ownedOrders: [ownedOrder],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, true)
@@ -210,12 +205,10 @@ test("accepts exchange fills missing from the prior Journal only when their brok
 
 test("rejects an unjournaled account execution whose broker order identity is not owned", () => {
   const fill = makeFill({ brokerOrderId: "external-order-77" })
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [],
     exchangeFills: [fill],
     ownedOrders: [],
-    complete: true,
-    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -225,19 +218,9 @@ test("rejects an unjournaled account execution whose broker order identity is no
 
 test("audits complete execution history for one market without claiming account-wide universe completeness", () => {
   const fill = makeFill()
-  const result = auditRecoveredTradeHistory({
+  const result = auditMarketHistory({
     journalFills: [journalFill(fill)],
     exchangeFills: [fill],
-    complete: false,
-    marketUniverseComplete: false,
-    scope: "MARKET",
-    market,
-    historyEvidence: {
-      historyPagesComplete: true,
-      marketHistoryComplete: true,
-      historyScope: "MARKET",
-      marketsQueried: ["BTCUSDT"],
-    },
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
