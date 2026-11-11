@@ -40,9 +40,7 @@ const FACT_TYPES = new Set([
 ])
 
 const FACTS_FILE_NAME = "facts.jsonl"
-const MANIFEST_FILE_NAME = "manifest.json"
-const MANIFEST_TEMP_FILE_NAME = "manifest.json.tmp"
-
+const MANIFEST_FILE_NAME = "manifest.jsonl"
 const operationQueues = new Map()
 
 function createError(message, code) {
@@ -149,7 +147,8 @@ function validateFactData({ factType, data }) {
     requireNonEmptyString({ value: canonicalData.actorId, field: "data.actorId", maxLength: MAX_FACT_ID_LENGTH })
     requireNonEmptyString({ value: canonicalData.symbol, field: "data.symbol" })
   }
-  if (factType === "LEDGER_INITIALIZED" && (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
+  if (factType === "LEDGER_INITIALIZED" &&
+      (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
   }
   return canonicalData
@@ -176,7 +175,7 @@ function validateFactInput({ fact, runtimeSessionId }) {
   }
 }
 
-function validateRecordEnvelope({ record, schemaVersion, expectedSequence, previousDigest, index }) {
+function validateFactRecord({ record, schemaVersion, expectedSequence, previousDigest, index }) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     throw new TypeError("Durable fact record must be an object")
   }
@@ -230,32 +229,77 @@ function validateRecordEnvelope({ record, schemaVersion, expectedSequence, previ
   if (digestRecord(record) !== record.digest) throw new Error("Durable fact digest mismatch at sequence " + record.sequence)
 }
 
-function parseCanonicalJson({ source, label }) {
+function createManifestCheckpoint({ schemaVersion, record, previousManifestDigest }) {
+  const body = {
+    formatVersion: FORMAT_VERSION,
+    schemaVersion,
+    sequence: record.sequence,
+    lastCommittedDigest: record.digest,
+    recordCount: (BigInt(record.sequence) + 1n).toString(),
+    previousManifestDigest,
+  }
+  return { ...body, digest: digestRecord(body) }
+}
+
+function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, expectedSequence, previousManifestDigest, index }) {
+  const expectedKeys = [
+    "digest", "formatVersion", "lastCommittedDigest", "previousManifestDigest",
+    "recordCount", "schemaVersion", "sequence",
+  ]
+  if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint)) {
+    throw new TypeError("Committed-head manifest checkpoint must be an object")
+  }
+  if (canonicalStringify(Object.keys(checkpoint).sort()) !== canonicalStringify(expectedKeys)) {
+    throw new Error("Committed-head manifest contains missing or unknown fields")
+  }
+  if (checkpoint.formatVersion !== FORMAT_VERSION || checkpoint.schemaVersion !== schemaVersion) {
+    throw new Error("Committed-head manifest format/schema version is unsupported")
+  }
+  if (typeof checkpoint.sequence !== "string" || !SEQUENCE_PATTERN.test(checkpoint.sequence) ||
+      checkpoint.sequence !== expectedSequence) {
+    throw new Error("Committed-head manifest sequence gap or reordering at record " + index)
+  }
+  if (checkpoint.recordCount !== String(index + 1)) {
+    throw new Error("Committed-head manifest record count does not match its sequence")
+  }
+  if (checkpoint.lastCommittedDigest !== factRecord.digest) {
+    throw new Error("Committed-head manifest does not reference the matching fact record")
+  }
+  if (checkpoint.previousManifestDigest !== previousManifestDigest) {
+    throw new Error("Committed-head manifest previous-digest chain is broken")
+  }
+  if (checkpoint.previousManifestDigest !== null && !SHA256_PATTERN.test(checkpoint.previousManifestDigest)) {
+    throw new TypeError("Committed-head manifest previous digest is malformed")
+  }
+  if (!SHA256_PATTERN.test(checkpoint.digest ?? "") || digestRecord(checkpoint) !== checkpoint.digest) {
+    throw new Error("Committed-head manifest digest mismatch at sequence " + checkpoint.sequence)
+  }
+}
+
+function parseJsonLines({ source, label }) {
   if (typeof source !== "string" || !source.endsWith("\n")) {
     throw new Error(label + " must end with a complete newline-terminated record")
   }
-  const line = source.slice(0, -1)
-  if (line === "" || line.includes("\n")) throw new Error(label + " contains an empty or partial record")
-  const parsed = JSON.parse(line)
-  if (canonicalStringify(parsed) !== line) throw new Error(label + " is not canonical JSON")
-  return parsed
-}
-
-function createManifest({ schemaVersion, record }) {
-  return {
-    formatVersion: FORMAT_VERSION,
-    schemaVersion,
-    lastCommittedSequence: record.sequence,
-    lastCommittedDigest: record.digest,
-    recordCount: (BigInt(record.sequence) + 1n).toString(),
+  const lines = source.slice(0, -1).split("\n")
+  if (lines.length === 0 || lines.some((line) => line === "")) {
+    throw new Error(label + " contains an empty or partial record")
   }
+  return lines.map((line, index) => {
+    const parsed = JSON.parse(line)
+    if (canonicalStringify(parsed) !== line) {
+      throw new Error(label + " is not canonical JSON at line " + (index + 1))
+    }
+    return parsed
+  })
 }
 
 /**
  * Create the narrow filesystem adapter for ADR-0001's append-only fact stream.
  *
- * initialize() is an explicit one-time operation. Normal startup must call
- * verify()/readAll() and must never create a missing ledger implicitly.
+ * The fact log is fsynced before an append-only committed-head checkpoint is
+ * fsynced. A partial checkpoint or a fact record without its matching checkpoint
+ * is unresolved and fails closed. Genesis creation is explicit; normal startup
+ * must verify/read an existing ledger and must never create one implicitly.
  *
  * @param {object} options
  * @param {string} options.directory - Stable per-installation durable-fact directory.
@@ -271,7 +315,6 @@ export function createFileDurableFactsStore({
   schemaVersion = DEFAULT_SCHEMA_VERSION,
   now = () => new Date(),
   fileSystem = nodeFileSystem,
-  platform = process.platform,
 } = {}) {
   const resolvedDirectory = requireNonEmptyString({ value: directory, field: "directory" })
   const resolvedRuntimeSessionId = requireNonEmptyString({
@@ -283,27 +326,15 @@ export function createFileDurableFactsStore({
     throw new TypeError("Durable-fact schemaVersion must be a positive safe integer")
   }
   if (typeof now !== "function") throw new TypeError("Durable-fact now must be a function")
-  for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "rename", "chmod"]) {
+  for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "chmod"]) {
     if (typeof fileSystem?.[method] !== "function") throw new TypeError("Durable-fact fileSystem requires " + method)
-  }
-
-  if (typeof platform !== "string" || platform.trim() === "") {
-    throw new TypeError("Durable-fact platform must be a non-empty string")
-  }
-  const assertDirectorySyncSupported = () => {
-    if (platform === "win32") {
-      throw createError(
-        "Durable-fact writes require directory fsync; Node's Windows filesystem API cannot confirm that durability",
-        "DURABLE_FACTS_DIRECTORY_SYNC_UNSUPPORTED",
-      )
-    }
   }
 
   const absoluteDirectory = path.resolve(resolvedDirectory)
   const logPath = path.join(absoluteDirectory, FACTS_FILE_NAME)
   const manifestPath = path.join(absoluteDirectory, MANIFEST_FILE_NAME)
-  const manifestTempPath = path.join(absoluteDirectory, MANIFEST_TEMP_FILE_NAME)
   let writeUncertain = false
+
   const assertNoUncertainWrite = () => {
     if (writeUncertain) {
       throw createError(
@@ -312,6 +343,7 @@ export function createFileDurableFactsStore({
       )
     }
   }
+
   const serialize = (task) => {
     const previous = operationQueues.get(absoluteDirectory) ?? Promise.resolve()
     const next = previous.then(task, task)
@@ -319,8 +351,8 @@ export function createFileDurableFactsStore({
     return next
   }
 
-  const syncDirectory = async () => {
-    const handle = await fileSystem.open(absoluteDirectory, "r")
+  const syncFile = async (filePath) => {
+    const handle = await fileSystem.open(filePath, "r+")
     try {
       await handle.sync()
     } finally {
@@ -328,16 +360,9 @@ export function createFileDurableFactsStore({
     }
   }
 
-  const writeManifest = async (manifest) => {
-    const handle = await fileSystem.open(manifestTempPath, "wx", 0o600)
-    try {
-      await handle.writeFile(canonicalStringify(manifest) + "\n", "utf8")
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    await fileSystem.rename(manifestTempPath, manifestPath)
-    await syncDirectory()
+  const syncStreams = async () => {
+    await syncFile(logPath)
+    await syncFile(manifestPath)
   }
 
   const verifyState = async () => {
@@ -345,12 +370,11 @@ export function createFileDurableFactsStore({
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
       throw new Error("Durable-fact directory must be a real directory, not a symlink")
     }
-    if (platform !== "win32" && ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)) {
+    if ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700) {
       throw new Error("Durable-fact directory permissions must be private (0700)")
     }
     const entries = await fileSystem.readdir(absoluteDirectory)
-    const unexpectedEntries = entries.filter((entry) =>
-      ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry))
+    const unexpectedEntries = entries.filter((entry) => ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry))
     if (unexpectedEntries.length > 0) {
       throw new Error("Durable-fact directory contains an unresolved temporary or unexpected file")
     }
@@ -358,79 +382,66 @@ export function createFileDurableFactsStore({
       fileSystem.lstat(logPath),
       fileSystem.lstat(manifestPath),
     ])
-    if (logStat.isSymbolicLink() || !logStat.isFile() || manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
-      throw new Error("Durable-fact log and manifest must be regular files, not symlinks")
+    if (logStat.isSymbolicLink() || !logStat.isFile() ||
+        manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
+      throw new Error("Durable-fact streams must be regular files, not symlinks")
     }
-    if (platform !== "win32" &&
-        [logStat, manifestStat].some((stat) => (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
-      throw new Error("Durable-fact log and manifest permissions must be private (0600)")
+    if ([logStat, manifestStat].some((stat) =>
+      (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
+      throw new Error("Durable-fact streams must use private file permissions (0600)")
     }
     const [rawLog, rawManifest] = await Promise.all([
       fileSystem.readFile(logPath, "utf8"),
       fileSystem.readFile(manifestPath, "utf8"),
     ])
-    if (!rawLog.endsWith("\n")) throw new Error("Durable-fact log has a partial or torn final record")
-    if (!rawManifest.endsWith("\n")) throw new Error("Durable-fact manifest is incomplete")
-    const lines = rawLog.slice(0, -1).split("\n")
-    if (lines.length === 0 || lines.some((line) => line === "")) {
-      throw new Error("Durable-fact log contains an empty or partial record")
+    const records = parseJsonLines({ source: rawLog, label: "Durable-fact log" })
+    const checkpoints = parseJsonLines({ source: rawManifest, label: "Committed-head manifest journal" })
+    if (checkpoints.length < records.length) {
+      throw new Error("Durable fact record exists beyond the committed-head manifest journal")
     }
-    const records = []
+    if (checkpoints.length > records.length) {
+      throw new Error("Committed-head manifest journal is ahead of the durable-fact log")
+    }
     const factIds = new Set()
-    let previousDigest = null
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index]
-      const record = JSON.parse(line)
-      if (canonicalStringify(record) !== line) throw new Error("Durable-fact record is not canonical JSON at line " + (index + 1))
-      validateRecordEnvelope({
+    let previousFactDigest = null
+    let previousManifestDigest = null
+    for (let index = 0; index < records.length; index += 1) {
+      const expectedSequence = BigInt(index).toString()
+      const record = records[index]
+      validateFactRecord({
         record,
         schemaVersion,
-        expectedSequence: BigInt(index).toString(),
-        previousDigest,
+        expectedSequence,
+        previousDigest: previousFactDigest,
         index,
       })
       if (factIds.has(record.factId)) throw new Error("Durable fact identity is duplicated in the append-only stream")
       factIds.add(record.factId)
-      records.push(record)
-      previousDigest = record.digest
+      const checkpoint = checkpoints[index]
+      validateManifestCheckpoint({
+        checkpoint,
+        schemaVersion,
+        factRecord: record,
+        expectedSequence,
+        previousManifestDigest,
+        index,
+      })
+      previousFactDigest = record.digest
+      previousManifestDigest = checkpoint.digest
     }
-    const manifest = parseCanonicalJson({ source: rawManifest, label: "Durable-fact manifest" })
-    const expectedManifestKeys = [
-      "formatVersion", "lastCommittedDigest", "lastCommittedSequence", "recordCount", "schemaVersion",
-    ]
-    if (canonicalStringify(Object.keys(manifest).sort()) !== canonicalStringify(expectedManifestKeys)) {
-      throw new Error("Durable-fact manifest contains missing or unknown fields")
+    return {
+      records,
+      checkpoints,
+      manifest: checkpoints.at(-1),
+      lastRecord: records.at(-1),
     }
-    if (manifest.formatVersion !== FORMAT_VERSION || manifest.schemaVersion !== schemaVersion) {
-      throw new Error("Durable-fact manifest format/schema version is unsupported")
-    }
-    if (typeof manifest.lastCommittedSequence !== "string" || !SEQUENCE_PATTERN.test(manifest.lastCommittedSequence)) {
-      throw new TypeError("Durable-fact manifest sequence is malformed")
-    }
-    if (!SHA256_PATTERN.test(manifest.lastCommittedDigest ?? "")) {
-      throw new TypeError("Durable-fact manifest digest is malformed")
-    }
-    if (typeof manifest.recordCount !== "string" || !SEQUENCE_PATTERN.test(manifest.recordCount) || manifest.recordCount === "0") {
-      throw new TypeError("Durable-fact manifest recordCount is malformed")
-    }
-    const lastRecord = records.at(-1)
-    if (BigInt(manifest.lastCommittedSequence) < BigInt(lastRecord.sequence)) {
-      throw new Error("Durable fact record exists beyond the committed manifest head")
-    }
-    if (BigInt(manifest.lastCommittedSequence) > BigInt(lastRecord.sequence)) {
-      throw new Error("Durable-fact log is truncated below the committed manifest head")
-    }
-    if (manifest.lastCommittedDigest !== lastRecord.digest || manifest.recordCount !== String(records.length)) {
-      throw new Error("Durable-fact manifest and verified log head do not agree")
-    }
-    return { records, manifest, lastRecord }
   }
 
   const initialize = () => serialize(async () => {
-    let genesisWriteStarted = false
+    let factWriteStarted = false
+    let manifestWriteStarted = false
     try {
       assertNoUncertainWrite()
-      assertDirectorySyncSupported()
       await fileSystem.mkdir(absoluteDirectory, { recursive: true, mode: 0o700 })
       const directoryStat = await fileSystem.lstat(absoluteDirectory)
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
@@ -450,28 +461,40 @@ export function createFileDurableFactsStore({
         previousDigest: null,
         data: { schemaVersion },
       }
-      const record = { ...genesisBody, digest: digestRecord(genesisBody) }
-      const handle = await fileSystem.open(logPath, "wx", 0o600)
+      const genesisRecord = { ...genesisBody, digest: digestRecord(genesisBody) }
+      const logHandle = await fileSystem.open(logPath, "wx", 0o600)
       try {
-        genesisWriteStarted = true
-        await handle.writeFile(canonicalStringify(record) + "\n", "utf8")
-        await handle.sync()
+        factWriteStarted = true
+        await logHandle.writeFile(canonicalStringify(genesisRecord) + "\n", "utf8")
+        await logHandle.sync()
       } finally {
-        await handle.close()
+        await logHandle.close()
       }
-      await syncDirectory()
-      await writeManifest(createManifest({ schemaVersion, record }))
+      const genesisCheckpointBody = createManifestCheckpoint({
+        schemaVersion,
+        record: genesisRecord,
+        previousManifestDigest: null,
+      })
+      const manifestHandle = await fileSystem.open(manifestPath, "wx", 0o600)
+      try {
+        manifestWriteStarted = true
+        await manifestHandle.writeFile(canonicalStringify(genesisCheckpointBody) + "\n", "utf8")
+        await manifestHandle.sync()
+      } finally {
+        await manifestHandle.close()
+      }
+      await syncStreams()
       const verified = await verifyState()
       return toResult({
         data: {
           durable: true,
           record: verified.lastRecord,
-          lastCommittedSequence: verified.manifest.lastCommittedSequence,
+          lastCommittedSequence: verified.manifest.sequence,
           lastCommittedDigest: verified.manifest.lastCommittedDigest,
         },
       })
     } catch (error) {
-      if (genesisWriteStarted) {
+      if (factWriteStarted || manifestWriteStarted) {
         writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
@@ -482,10 +505,13 @@ export function createFileDurableFactsStore({
   })
 
   const append = (fact) => serialize(async () => {
-    let logWriteStarted = false
+    let factWriteStarted = false
+    let manifestWriteStarted = false
+    let syncAttempted = false
     try {
       assertNoUncertainWrite()
-      assertDirectorySyncSupported()
+      syncAttempted = true
+      await syncStreams()
       const state = await verifyState()
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
       const existing = state.records.find((record) => record.factId === input.factId)
@@ -493,16 +519,9 @@ export function createFileDurableFactsStore({
         if (existing.factType !== input.factType || canonicalStringify(existing.data) !== canonicalStringify(input.data)) {
           throw createError("Durable factId was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
         }
-        try {
-          await syncDirectory()
-        } catch (error) {
-          writeUncertain = true
-          error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
-          throw error
-        }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
-      const sequence = (BigInt(state.manifest.lastCommittedSequence) + 1n).toString()
+      const sequence = (BigInt(state.manifest.sequence) + 1n).toString()
       const body = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
@@ -511,7 +530,7 @@ export function createFileDurableFactsStore({
         factType: input.factType,
         runtimeSessionId: input.runtimeSessionId,
         recordedAt: normalizeRecordedAt(now),
-        previousDigest: state.manifest.lastCommittedDigest,
+        previousDigest: state.lastRecord.digest,
         data: input.data,
       }
       const record = { ...body, digest: digestRecord(body) }
@@ -519,28 +538,43 @@ export function createFileDurableFactsStore({
       if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
         throw new RangeError("Durable fact record exceeds the " + MAX_RECORD_BYTES + " byte limit")
       }
-      const handle = await fileSystem.open(logPath, "a", 0o600)
+      const logHandle = await fileSystem.open(logPath, "a", 0o600)
       try {
-        logWriteStarted = true
-        await handle.writeFile(line + "\n", "utf8")
-        await handle.sync()
+        factWriteStarted = true
+        await logHandle.writeFile(line + "\n", "utf8")
+        await logHandle.sync()
       } finally {
-        await handle.close()
+        await logHandle.close()
       }
-      const manifest = createManifest({ schemaVersion, record })
-      await writeManifest(manifest)
+      const checkpoint = createManifestCheckpoint({
+        schemaVersion,
+        record,
+        previousManifestDigest: state.manifest.digest,
+      })
+      const manifestLine = canonicalStringify(checkpoint)
+      if (Buffer.byteLength(manifestLine, "utf8") > MAX_RECORD_BYTES) {
+        throw new RangeError("Committed-head manifest checkpoint exceeds the " + MAX_RECORD_BYTES + " byte limit")
+      }
+      const manifestHandle = await fileSystem.open(manifestPath, "a", 0o600)
+      try {
+        manifestWriteStarted = true
+        await manifestHandle.writeFile(manifestLine + "\n", "utf8")
+        await manifestHandle.sync()
+      } finally {
+        await manifestHandle.close()
+      }
       const verified = await verifyState()
       return toResult({
         data: {
           durable: true,
           duplicate: false,
           record: verified.lastRecord,
-          lastCommittedSequence: verified.manifest.lastCommittedSequence,
+          lastCommittedSequence: verified.manifest.sequence,
           lastCommittedDigest: verified.manifest.lastCommittedDigest,
         },
       })
     } catch (error) {
-      if (logWriteStarted) {
+      if (factWriteStarted || manifestWriteStarted || (syncAttempted && error.code !== "ENOENT")) {
         writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
@@ -553,26 +587,22 @@ export function createFileDurableFactsStore({
   const verify = () => serialize(async () => {
     try {
       assertNoUncertainWrite()
+      await syncStreams()
       const state = await verifyState()
-      if (platform !== "win32") {
-        try {
-          await syncDirectory()
-        } catch (error) {
-          writeUncertain = true
-          error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
-          throw error
-        }
-      }
       return toResult({
         data: {
           valid: true,
-          durableWriteSupported: platform !== "win32",
+          durableWriteSupported: true,
           recordCount: state.records.length,
-          lastCommittedSequence: state.manifest.lastCommittedSequence,
+          lastCommittedSequence: state.manifest.sequence,
           lastCommittedDigest: state.manifest.lastCommittedDigest,
         },
       })
     } catch (error) {
+      if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
+        writeUncertain = true
+        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+      }
       return toResult({ error })
     }
   })
@@ -580,16 +610,21 @@ export function createFileDurableFactsStore({
   const readAll = () => serialize(async () => {
     try {
       assertNoUncertainWrite()
+      await syncStreams()
       const state = await verifyState()
       return toResult({
         data: {
           records: Object.freeze([...state.records]),
-          durableWriteSupported: platform !== "win32",
-          lastCommittedSequence: state.manifest.lastCommittedSequence,
+          durableWriteSupported: true,
+          lastCommittedSequence: state.manifest.sequence,
           lastCommittedDigest: state.manifest.lastCommittedDigest,
         },
       })
     } catch (error) {
+      if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
+        writeUncertain = true
+        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+      }
       return toResult({ error })
     }
   })
