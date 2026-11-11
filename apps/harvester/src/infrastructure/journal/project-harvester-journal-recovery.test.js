@@ -1892,6 +1892,17 @@ test("preserves an explicitly evaluated residual sell-through without resetting 
   assert.equal(result.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
   assert.equal(result.data.recoveryCycleEvaluations[0].sellOrderClientId, "h-BTCUSDT-sell-1")
   assert.deepEqual(result.data.recoveryCycles, [])
+  const restored = restoreHarvesterJournalState({
+    projection: result,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+  assert.equal(restored.ok, true)
+  const position = restored.data.portfolio.getPosition({ symbol: "BTCUSDT" })
+  assert.equal(position.baseQuantity.amount, "0.0996")
+  assert.equal(position.freeBaseQuantity.amount, "0")
+  assert.equal(position.spent.amount, "50")
+  const ledger = restored.data.recoveryLedgers.get(canonicalMarket.id)
+  assert.equal(ledger.netSellProceeds, "41.1")
 })
 
 test("allows another fully filled SELL only after the prior SELL has an explicit continue-sell-through outcome", () => {
