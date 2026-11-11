@@ -6469,7 +6469,7 @@ test("keeps the standing BUY open when refreshed metadata contains an unvalidate
 
 test("definite Binance filter rejection removes PENDING without marking the order UNKNOWN", async () => {
   const events = []
-  const rejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: "BINANCE_FILTER_REJECTED" })
+  const rejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: "DEFINITE_EXCHANGE_FILTER_REJECTED" })
   const { engine, orders, pauses } = await createHarness({
     placeOrderFailureCount: 1,
     placeOrderFailureError: rejection,
