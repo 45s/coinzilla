@@ -460,3 +460,38 @@ test("enforces the total session-file limit during recursive discovery", async (
   }
 })
 
+
+test("keeps equal JSONL basenames distinguishable across nested legacy directories", async () => {
+  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-relative-paths-"))
+  const fileName = "2026-11-08_12-00-00.jsonl"
+
+  try {
+    await writeLegacyFlatSession({
+      directory: path.join(rootDirectory, "sessions", "legacy-a"),
+      fileName,
+      id: "legacy-a-record",
+      timestamp: "2026-11-08T12:00:00.000Z",
+      eventName: "harvester.legacy_a",
+    })
+    await writeLegacyFlatSession({
+      directory: path.join(rootDirectory, "sessions", "legacy-b"),
+      fileName,
+      id: "legacy-b-record",
+      timestamp: "2026-11-09T12:00:00.000Z",
+      eventName: "harvester.legacy_b",
+    })
+
+    const result = await readHarvesterJournalHistory({ directory: rootDirectory })
+    assert.equal(result.ok, true)
+    assert.deepEqual(
+      result.records.map((record) => record.position.fileName),
+      [
+        "sessions/legacy-a/" + fileName,
+        "sessions/legacy-b/" + fileName,
+      ],
+      "Returned positions must identify the full relative path, not a collision-prone basename",
+    )
+  } finally {
+    await rm(rootDirectory, { recursive: true, force: true })
+  }
+})

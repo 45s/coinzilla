@@ -55,14 +55,18 @@ function parseProcessStarted({ records, directory }) {
   }
   if (startedRecords.length === 0) return undefined
 
-  const data = startedRecords[0].payload?.data
+  const processStartedEvent = startedRecords[0].payload
+  const data = processStartedEvent?.data
   const startedAt = data?.startedAt
   const runtimeSessionId = data?.runtimeSessionId
   const processId = data?.processId
   const timestamp = parseTimestamp(startedAt)
+  const processStartedEventTimestamp = parseTimestamp(processStartedEvent?.timestamp)
   if (
-    data?.application !== "harvester" ||
+    processStartedEvent?.source !== "harvester" ||
+    processStartedEventTimestamp === undefined ||
     timestamp === undefined ||
+    processStartedEventTimestamp < timestamp ||
     new Date(timestamp).toISOString() !== startedAt ||
     typeof runtimeSessionId !== "string" ||
     runtimeSessionId.trim() === "" ||
