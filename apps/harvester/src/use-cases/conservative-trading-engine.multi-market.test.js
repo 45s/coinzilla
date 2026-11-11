@@ -61,12 +61,13 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
       enabled: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
+      minProfit: 0.01,
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
