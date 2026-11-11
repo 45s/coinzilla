@@ -132,6 +132,7 @@ function createCandleHistoryService({
 
   const markets = new Map()
   let startPromise
+  let freshnessMonitor
 
   function snapshot({ symbol } = {}) {
     const state = markets.get(symbol)
@@ -351,6 +352,26 @@ function createCandleHistoryService({
     return state.queue
   }
 
+  function stopFreshnessMonitorIfIdle() {
+    if (freshnessMonitor && [...markets.values()].every((state) => state.stopped)) {
+      clearInterval(freshnessMonitor)
+      freshnessMonitor = undefined
+    }
+  }
+
+  function registerFailedSubscriptionCleanup({ state, subscriptions } = {}) {
+    subscriptions.push({
+      symbol: state.symbol,
+      kind: "candle",
+      unsubscribe: async () => {
+        state.stopped = true
+        stopFreshnessMonitorIfIdle()
+        await state.queue
+        await state.observerQueue
+      },
+    })
+  }
+
   async function subscribeMarket({ state, subscriptions } = {}) {
     let result
     try {
@@ -361,6 +382,7 @@ function createCandleHistoryService({
       })
     } catch (error) {
       failMarket({ state, reason: "SUBSCRIPTION_FAILED", error })
+      registerFailedSubscriptionCleanup({ state, subscriptions })
       return
     }
     if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
@@ -369,6 +391,7 @@ function createCandleHistoryService({
         reason: "SUBSCRIPTION_FAILED",
         error: result?.errors?.[0] ?? new Error("candle subscription did not return an unsubscribe handle"),
       })
+      registerFailedSubscriptionCleanup({ state, subscriptions })
       return
     }
 
@@ -378,6 +401,7 @@ function createCandleHistoryService({
       kind: "candle",
       unsubscribe: async () => {
         state.stopped = true
+        stopFreshnessMonitorIfIdle()
         const errors = []
 
         try {
@@ -487,6 +511,14 @@ function createCandleHistoryService({
       await Promise.all(enabledSymbols.map((symbol) =>
         loadInitialHistory({ state: markets.get(symbol) })
       ))
+      if (enabledSymbols.length > 0 && !freshnessMonitor) {
+        freshnessMonitor = setInterval(() => {
+          for (const state of markets.values()) {
+            if (!state.stopped) notifySnapshot({ state })
+          }
+        }, 1_000)
+        freshnessMonitor.unref?.()
+      }
       return toResult({ data: Object.freeze({ symbols: Object.freeze(enabledSymbols) }) })
     })()
     return startPromise
