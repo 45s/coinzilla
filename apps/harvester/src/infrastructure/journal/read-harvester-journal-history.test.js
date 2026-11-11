@@ -308,3 +308,95 @@ test("accepts the sessions directory itself as a scan root and does not return a
     await rm(rootDirectory, { recursive: true, force: true })
   }
 })
+
+test("orders legacy flat sessions by unique event timestamps rather than filenames", async () => {
+  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-legacy-order-"))
+
+  try {
+    await writeLegacyFlatSession({
+      directory: rootDirectory,
+      fileName: "2026-11-08_12-00-00.jsonl",
+      id: "later-event",
+      timestamp: "2026-11-09T12:00:00.000Z",
+      eventName: "harvester.later_event",
+    })
+    await writeLegacyFlatSession({
+      directory: rootDirectory,
+      fileName: "2026-11-09_12-00-00.jsonl",
+      id: "earlier-event",
+      timestamp: "2026-11-08T12:00:00.000Z",
+      eventName: "harvester.earlier_event",
+    })
+
+    const result = await readHarvesterJournalHistory({ directory: rootDirectory })
+    assert.equal(result.ok, true)
+    assert.deepEqual(
+      result.records.map((record) => record.id),
+      ["earlier-event", "later-event"],
+      "Legacy filenames are not chronology evidence; unique persisted event timestamps establish the forensic order",
+    )
+    assert.deepEqual(
+      result.sessions.map((session) => session.chronologySource),
+      ["FIRST_RECORD_TIMESTAMP", "FIRST_RECORD_TIMESTAMP"],
+    )
+  } finally {
+    await rm(rootDirectory, { recursive: true, force: true })
+  }
+})
+
+test("rejects process-start metadata that does not match its process-session directory", async () => {
+  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-identity-mismatch-"))
+
+  try {
+    await writeJournalSession({
+      directory: path.join(rootDirectory, "sessions", "2026-11-09_12-00-00-folder-id"),
+      startedAt: "2026-11-09T12:00:00.500Z",
+      runtimeSessionId: "payload-id",
+      processId: 1006,
+      eventName: "harvester.identity_mismatch",
+    })
+
+    const result = await readHarvesterJournalHistory({ directory: rootDirectory })
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_PROCESS_IDENTITY_MISMATCH")
+  } finally {
+    await rm(rootDirectory, { recursive: true, force: true })
+  }
+})
+
+test("bounds recursive session-directory discovery", async () => {
+  const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-directory-limit-"))
+
+  try {
+    await writeJournalSession({
+      directory: path.join(rootDirectory, "sessions", "archive", "2026-11-09_12-00-00-limited-run"),
+      startedAt: "2026-11-09T12:00:00.500Z",
+      runtimeSessionId: "limited-run",
+      processId: 1007,
+      eventName: "harvester.limited_session",
+    })
+
+    const result = await readHarvesterJournalHistory({
+      directory: rootDirectory,
+      maxDirectories: 1,
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_DISCOVERY_LIMIT_EXCEEDED")
+  } finally {
+    await rm(rootDirectory, { recursive: true, force: true })
+  }
+})
+
+test("reports a missing history root instead of returning an empty snapshot", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-history-missing-root-"))
+  const missingDirectory = path.join(temporaryRoot, "not-created")
+
+  try {
+    const result = await readHarvesterJournalHistory({ directory: missingDirectory })
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "JOURNAL_DIRECTORY_NOT_FOUND")
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
