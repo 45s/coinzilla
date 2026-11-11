@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { projectHarvesterJournalRecovery } from "../../src/infrastructure/journal/project-harvester-journal-recovery.js"
 import { restoreHarvesterJournalState } from "../../src/use-cases/restore-harvester-journal-state.js"
-import { createRecoveryCrashFixture } from "./fixtures/recovery-crash-fixtures.js"
+import { createRecoveryCrashFixture } from "../../test-support/recovery/recovery-crash-fixtures.js"
 
 function restoreSnapshot({ fixture, recordCount }) {
   const records = fixture.records.slice(0, recordCount)
