@@ -58,6 +58,12 @@ test("explicit initialization writes a genesis fact and matching committed-head 
   assert.equal(records.data.records[0].sequence, "0")
   assert.equal(records.data.records[0].factType, "LEDGER_INITIALIZED")
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
+  const directoryMode = (await fsPromises.lstat(directory)).mode & 0o777
+  const logMode = (await fsPromises.lstat(path.join(directory, "facts.jsonl"))).mode & 0o777
+  const manifestMode = (await fsPromises.lstat(path.join(directory, "manifest.json"))).mode & 0o777
+  assert.equal(directoryMode & 0o077, 0)
+  assert.equal(logMode & 0o077, 0)
+  assert.equal(manifestMode & 0o077, 0)
   assert.equal(manifest.lastCommittedSequence, "0")
   assert.equal(manifest.lastCommittedDigest, records.data.records[0].digest)
   const verification = await store.verify()
