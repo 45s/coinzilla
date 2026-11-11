@@ -167,8 +167,8 @@ test("reports active dynamic and account-level filters as exchange-neutral unval
     { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
     { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
     { type: "OPEN_ORDER_COUNT_PER_MARKET", scope: "ACCOUNT", sourceFilterType: "MAX_NUM_ORDERS" },
-    { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE", scope: "EXCHANGE", sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
     { type: "UNMODELED_EXCHANGE_CONSTRAINT", scope: "SYMBOL", sourceFilterType: "FUTURE_UNRECOGNIZED_FILTER" },
+    { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE", scope: "EXCHANGE", sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
   ], "Applicable dynamic, account and newly introduced filters must not disappear at the exchange adapter boundary; filters only applicable to unsupported MARKET/algo orders must not block LIMIT strategies.")
 })
 
