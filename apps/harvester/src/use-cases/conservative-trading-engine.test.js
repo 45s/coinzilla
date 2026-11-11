@@ -307,6 +307,34 @@ test("defers strategy activity only for the symbol with an unowned open order", 
   )
 })
 
+test("rechecks external-order ownership after the durable order intent and before broker submission", async () => {
+  let hasExternalOrder = false
+  const harness = await createHarness({
+    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => {
+        hasExternalOrder = true
+        return { ok: true, durable: true }
+      },
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, "A newly observed external order must defer this strategy transition rather than turn it into an accounting failure.")
+  assert.deepEqual(harness.orders, [], "The final submission guard must prevent broker I/O when an external order appears during the durable intent barrier.")
+  assert.equal(harness.engine.getOrders().length, 0, "A deferred, never-submitted intent must be removed from the owned order registry.")
+  assert.deepEqual(
+    harness.engine.getRecoveryIntents().deferredEvaluations,
+    ["DOGEUSDT"],
+    "The affected symbol must remain queued for reevaluation after a later authoritative snapshot clears the guard.",
+  )
+})
+
 test("subtracts only shared BUY commitments created after the account snapshot", async () => {
   const ethAsset = new Asset({ id: "eth", code: "ETH" })
   const ethMarket = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset: ethAsset, quoteAsset })
