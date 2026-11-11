@@ -138,7 +138,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     }),
   ];
   const appConfig = {
-    strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
         priceStepPercent: 0.5,
