@@ -550,10 +550,20 @@ export function createFileDurableFactsStore({
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
       if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
-        const previousCoverage = state.records.filter((record) =>
+        const previousCoverageRecords = state.records.filter((record) =>
           record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
           record.data.symbol === input.data.symbol
-        ).at(-1)
+        )
+        let previousCoverage
+        for (const record of previousCoverageRecords) {
+          if (previousCoverage && record.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
+            throw new Error("Existing durable market-history coverage narrows the verified history window for " + input.data.symbol)
+          }
+          if (previousCoverage && record.data.verifiedAt < previousCoverage.data.verifiedAt) {
+            throw new Error("Existing durable market-history coverage verification timestamp regresses for " + input.data.symbol)
+          }
+          previousCoverage = record
+        }
         if (previousCoverage && input.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
           throw new Error("Market-history coverage must not narrow the verified history window for " + input.data.symbol)
         }
