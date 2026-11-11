@@ -656,3 +656,67 @@ test("reports unknown symbols without inventing a candle-history snapshot", asyn
 
   assert.equal(result.ok, false, "A symbol that was not enabled must not receive an empty successful history snapshot.")
 })
+
+
+test("drains accepted candle work before propagating a failed stream unsubscribe", async () => {
+  let resolveBackfill
+  let signalBackfillStarted
+  const backfillStarted = new Promise((resolve) => { signalBackfillStarted = resolve })
+  const backfillGate = new Promise((resolve) => { resolveBackfill = resolve })
+  const fixture = createFixture({
+    getCandles: async (input) => {
+      if (input.startTime === undefined) {
+        return { ok: true, data: createHistory(input.symbol, 100, true) }
+      }
+      signalBackfillStarted()
+      await backfillGate
+      return {
+        ok: true,
+        data: [
+          createCandle({ openTime: 100 * INTERVAL_MS }),
+          createCandle({ openTime: 101 * INTERVAL_MS }),
+        ],
+      }
+    },
+    subscribeForCandles: async () => ({
+      ok: true,
+      data: {
+        unsubscribe: async () => {
+          throw new Error("stream unsubscribe failed")
+        },
+      },
+    }),
+  })
+  await fixture.start()
+
+  const acceptedCandleTask = fixture.candleHandlers.get("BTCUSDT")(
+    createCandle({ openTime: 102 * INTERVAL_MS }),
+  )
+  await backfillStarted
+
+  let unsubscribeSettled = false
+  const unsubscribePromise = fixture.subscriptions[0].unsubscribe()
+  void unsubscribePromise.catch(() => { unsubscribeSettled = true })
+
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(
+    unsubscribeSettled,
+    false,
+    "A failed stream unsubscribe must not let shutdown overtake candle backfill already accepted by the service.",
+  )
+
+  resolveBackfill()
+  await assert.rejects(
+    unsubscribePromise,
+    /stream unsubscribe failed/,
+    "The service must still report the original broker unsubscribe failure after draining accepted work.",
+  )
+  await acceptedCandleTask
+
+  assert.equal(
+    getSnapshot(fixture).candles.at(-1).openTime,
+    102 * INTERVAL_MS,
+    "The accepted candle callback must finish its exact gap backfill before the failed unsubscribe settles.",
+  )
+})
