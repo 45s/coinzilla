@@ -278,7 +278,13 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           position: createPositionLogSummary({ position }),
           recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
         })
-        const completion = evaluateRecoveryCompletion(completionInput)
+        const evaluatedCompletion = evaluateRecoveryCompletion(completionInput)
+        const completion = Object.freeze({
+          ...evaluatedCompletion,
+          activeQuantity: completionInput.activeQuantity,
+          keepQuantity: completionInput.keepQuantity,
+          minProfit: completionInput.minProfit,
+        })
         if (completion.eligible) {
           const previousPortfolio = portfolio
           const previousLedger = recoveryLedger
