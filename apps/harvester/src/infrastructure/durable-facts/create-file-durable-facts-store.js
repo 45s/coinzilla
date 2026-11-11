@@ -493,6 +493,13 @@ export function createFileDurableFactsStore({
         if (existing.factType !== input.factType || canonicalStringify(existing.data) !== canonicalStringify(input.data)) {
           throw createError("Durable factId was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
         }
+        try {
+          await syncDirectory()
+        } catch (error) {
+          writeUncertain = true
+          error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+          throw error
+        }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
       const sequence = (BigInt(state.manifest.lastCommittedSequence) + 1n).toString()
@@ -547,9 +554,19 @@ export function createFileDurableFactsStore({
     try {
       assertNoUncertainWrite()
       const state = await verifyState()
+      if (platform !== "win32") {
+        try {
+          await syncDirectory()
+        } catch (error) {
+          writeUncertain = true
+          error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+          throw error
+        }
+      }
       return toResult({
         data: {
           valid: true,
+          durableWriteSupported: platform !== "win32",
           recordCount: state.records.length,
           lastCommittedSequence: state.manifest.lastCommittedSequence,
           lastCommittedDigest: state.manifest.lastCommittedDigest,
@@ -567,6 +584,7 @@ export function createFileDurableFactsStore({
       return toResult({
         data: {
           records: Object.freeze([...state.records]),
+          durableWriteSupported: platform !== "win32",
           lastCommittedSequence: state.manifest.lastCommittedSequence,
           lastCommittedDigest: state.manifest.lastCommittedDigest,
         },
