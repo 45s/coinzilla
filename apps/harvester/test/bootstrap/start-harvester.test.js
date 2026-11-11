@@ -276,13 +276,15 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   });
 
   assert.equal(context.userDataReady, true);
-  assert.ok(broker.lastOrder, 'the initial ticker snapshot should submit the first Conservative BUY');
+  // The startup REST ticker seed precedes candle-history warm-up and must stay
+  // blocked. A fresh price after warm-up is the first eligible BUY evaluation.
+  await onPrice({ symbol: 'ZROUSDT', price: '1', timestamp: 10 });
+  assert.ok(broker.lastOrder, 'the first post-warm-up ticker should submit the first Conservative BUY');
   assert.equal(accountSnapshotCalls, 1);
   assert.equal(openOrderSnapshotCalls, 1);
   assert.equal(typeof onPrice, 'function');
   assert.equal(typeof onUserDataEvent, 'function');
 
-  await onPrice({ symbol: 'ZROUSDT', price: '1', timestamp: 10 });
   const buyIntent = broker.lastOrder;
   assert.ok(buyIntent);
   const submittedOrder = new CanonicalOrder({
