@@ -187,6 +187,6 @@ POSIX installations create the directory with mode `0700` and both streams with 
 The one-time genesis operation is exposed only through the explicit script `apps/harvester/scripts/initialize-durable-facts.js`. It requires an absolute `DURABLE_FACTS_DIRECTORY` and the `--confirm` flag; it refuses unknown arguments and non-empty directories. It is never called by application startup. Do not initialize a production directory until the runtime-integration step explicitly instructs the operator to do so.
 
 ```powershell
-$env:DURABLE_FACTS_DIRECTORY = "C:\\coinzilla-data\\durable-facts"
+$env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
 node apps/harvester/scripts/initialize-durable-facts.js --confirm
 ```
