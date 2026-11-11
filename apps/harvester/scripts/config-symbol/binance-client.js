@@ -162,11 +162,13 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
   })
   const minNotional = strictestMinimum.value
   const notionalFilter = filters.find((filter) => filter?.filterType === "NOTIONAL")
-  const maxNotional = normalizeOptionalNonNegativeExchangeDecimal(
-    notionalFilter?.maxNotional,
-    "NOTIONAL.maxNotional",
-    { required: true },
-  )
+  const maxNotional = notionalFilter
+    ? normalizeOptionalNonNegativeExchangeDecimal(
+      notionalFilter.maxNotional,
+      "NOTIONAL.maxNotional",
+      { required: true },
+    )
+    : undefined
 
   return {
     symbol: requestedSymbol,
