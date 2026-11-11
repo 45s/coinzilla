@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
+import * as nodeFileSystem from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
@@ -288,4 +289,44 @@ test("production confirmation fails closed when the durable-fact ledger is missi
 
   assert.equal(result.ok, false, "A missing durable-fact ledger must not be initialized implicitly by the confirmation workflow.")
   assert.equal(reconciliationCalled, false, "Reconciliation must not run until the existing durable-fact ledger has been verified.")
+})
+
+test("production confirmation fails closed when the durable-fact commit checkpoint cannot be written", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-commit-failure-"))
+  try {
+    const fileSystem = {
+      ...nodeFileSystem,
+      open: async (filePath, flags, mode) => {
+        if (path.basename(filePath) === "manifest.jsonl" && flags === "a") {
+          throw new Error("injected committed-head checkpoint failure")
+        }
+        return nodeFileSystem.open(filePath, flags, mode)
+      },
+    }
+    const store = createFileDurableFactsStore({
+      directory,
+      runtimeSessionId: "step7-commit-failure",
+      fileSystem,
+    })
+    const initialized = await store.initialize()
+    assert.equal(initialized.ok, true, "The failure fixture must start from a valid initialized ledger.")
+    const { options } = createReconciliationOptions()
+    const result = await confirmMarketHistoryCoverage({
+      durableFactsStore: store,
+      symbol: evidence.symbol,
+      coveredFromTime: evidence.coveredFromTime,
+      verifiedAt: evidence.verifiedAt,
+      evidenceDigest: evidence.evidenceDigest,
+      verifiedBy: evidence.verifiedBy,
+      reconcileMarketState: () => reconcileRecoveredMarketState(options),
+    })
+
+    assert.equal(result.ok, false, "A failed committed-head checkpoint must not report successful coverage confirmation.")
+    assert.equal(result.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN", "A partially written durable fact must preserve the uncertain-commit classification.")
+    const readback = await store.readAll()
+    assert.equal(readback.ok, false, "The same store instance must remain fenced after an uncertain append.")
+    assert.equal(readback.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN", "The ledger must remain fail-closed until a fresh verification path resolves the uncertain commit.")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
