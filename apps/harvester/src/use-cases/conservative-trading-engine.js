@@ -2901,10 +2901,38 @@ export function makeConservativeTradingEngine({
     })
   }
 
-  const processMarketPrice = ({ symbol, priceEvent } = {}) =>
-    runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
-  const processBookTicker = ({ symbol, bookTicker } = {}) =>
-    runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
+  const refreshVolatilityProtectionIfNeeded = async ({ symbol } = {}) => {
+    if (!volatilityProtectionEnabled) return toResult({ data: { skipped: true } })
+    let snapshot
+    try {
+      snapshot = getVolatilityData({ symbol })
+    } catch (error) {
+      snapshot = toResult({ error })
+    }
+    const data = snapshot?.ok ? snapshot.data : null
+    const unavailableReason = !data?.status?.isReady
+      ? data?.status?.reason ?? "VOLATILITY_DATA_UNAVAILABLE"
+      : null
+    const candleOpenTime = data?.metrics?.openTime ?? null
+    const current = state.volatilityProtection.get(symbol) ??
+      createVolatilityProtectionState({ symbol })
+    const needsRefresh = unavailableReason
+      ? current.reason !== unavailableReason
+      : current.lastEvaluatedCandleOpenTime !== candleOpenTime
+    if (!needsRefresh) return toResult({ data: { skipped: true, state: current } })
+    return processVolatilitySnapshot({ symbol, snapshot })
+  }
+
+  const processMarketPrice = async ({ symbol, priceEvent } = {}) => {
+    const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
+    if (!protection?.ok) return protection
+    return runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
+  }
+  const processBookTicker = async ({ symbol, bookTicker } = {}) => {
+    const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
+    if (!protection?.ok) return protection
+    return runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
+  }
   const processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
     runTransition({ task: () => processUserDataEventTransition({ event, recoveryMode }) })
   const evaluateLatest = ({ symbol } = {}) =>
