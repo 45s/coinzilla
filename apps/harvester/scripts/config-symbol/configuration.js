@@ -98,6 +98,7 @@ export function calculateOrderQuantity({
   minQuantity,
   maxQuantity,
   minNotional,
+  maxNotional,
 } = {}) {
   const inputs = { investment, price, stepSize, minQuantity, maxQuantity, minNotional }
   for (const [field, value] of Object.entries(inputs)) {
@@ -111,6 +112,9 @@ export function calculateOrderQuantity({
   const normalizedMinimum = parseDecimalInput(minQuantity, "minQuantity", { exclusiveMin: true })
   const normalizedMaximum = parseDecimalInput(maxQuantity, "maxQuantity", { exclusiveMin: true })
   const normalizedNotional = parseDecimalInput(minNotional, "minNotional", { exclusiveMin: true })
+  const normalizedMaximumNotional = maxNotional === undefined || maxNotional === null
+    ? undefined
+    : parseDecimalInput(maxNotional, "maxNotional", { exclusiveMin: true })
 
   if (compareDecimal({ left: normalizedInvestment, right: normalizedNotional }) < 0) {
     throw new RangeError("investment is below exchange MIN_NOTIONAL")
@@ -122,9 +126,20 @@ export function calculateOrderQuantity({
     scale: ORDER_QUANTITY_SCALE,
     rounding: "toward-zero",
   })
-  const boundedQuantity = compareDecimal({ left: budgetQuantity, right: normalizedMaximum }) > 0
+  let boundedQuantity = compareDecimal({ left: budgetQuantity, right: normalizedMaximum }) > 0
     ? normalizedMaximum
     : budgetQuantity
+  if (normalizedMaximumNotional) {
+    const notionalQuantity = divideDecimal({
+      left: normalizedMaximumNotional,
+      right: normalizedPrice,
+      scale: ORDER_QUANTITY_SCALE,
+      rounding: "toward-zero",
+    })
+    if (compareDecimal({ left: notionalQuantity, right: boundedQuantity }) < 0) {
+      boundedQuantity = notionalQuantity
+    }
+  }
   const quantity = roundDecimalToIncrement({
     value: boundedQuantity,
     increment: normalizedStep,
@@ -138,6 +153,9 @@ export function calculateOrderQuantity({
   const orderNotional = multiplyDecimal({ left: quantity, right: normalizedPrice })
   if (compareDecimal({ left: orderNotional, right: normalizedNotional }) < 0) {
     throw new RangeError("calculated order quantity is below exchange MIN_NOTIONAL at the current reference price")
+  }
+  if (normalizedMaximumNotional && compareDecimal({ left: orderNotional, right: normalizedMaximumNotional }) > 0) {
+    throw new RangeError("calculated order quantity exceeds exchange MAX_NOTIONAL at the current reference price")
   }
 
   return quantity
@@ -211,6 +229,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
     minQuantity: metadata.minQuantity,
     maxQuantity: metadata.maxQuantity,
     minNotional: metadata.minNotional,
+    maxNotional: metadata.maxNotional,
   })
   const pricePrecision = decimalPlaces(metadata.tickSize)
   const quantityPrecision = decimalPlaces(normalizedStepSize)

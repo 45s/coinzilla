@@ -140,6 +140,35 @@ test("calculates the largest order quantity within investment using exact step r
   )
 })
 
+test("caps calculated order quantity at the active maximum notional", () => {
+  assert.equal(
+    calculateOrderQuantity({
+      investment: "100",
+      price: "0.5",
+      stepSize: "0.1",
+      minQuantity: "0.1",
+      maxQuantity: "1000",
+      minNotional: "5",
+      maxNotional: "50",
+    }),
+    "100",
+    "The calculated order quantity must respect the maximum quote notional even when the operator budget is larger.",
+  )
+  assert.throws(
+    () => calculateOrderQuantity({
+      investment: "100",
+      price: "0.5",
+      stepSize: "0.1",
+      minQuantity: "0.1",
+      maxQuantity: "1000",
+      minNotional: "50",
+      maxNotional: "10",
+    }),
+    /MIN_NOTIONAL/i,
+    "A maximum notional below the minimum notional must not produce an invalid order quantity.",
+  )
+})
+
 test("rejects order sizing that violates minimum quantity, maximum quantity, or minimum notional", () => {
   assert.throws(
     () => calculateOrderQuantity({ investment: "4", price: "1", stepSize: "0.1", minQuantity: "0.1", maxQuantity: "100", minNotional: "5" }),

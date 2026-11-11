@@ -81,10 +81,13 @@ export async function runConfigSymbol({
     referencePrice: metadata.price,
     exchangeFilters: {
       tickSize: metadata.tickSize,
+      minPrice: metadata.minPrice,
+      maxPrice: metadata.maxPrice,
       stepSize: metadata.stepSize,
       minQuantity: metadata.minQuantity,
       maxQuantity: metadata.maxQuantity,
       minNotional: metadata.minNotional,
+      maxNotional: metadata.maxNotional,
     },
     pairConfig,
   }, null, 2))
