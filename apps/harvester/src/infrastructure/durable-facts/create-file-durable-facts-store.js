@@ -427,7 +427,7 @@ export function createFileDurableFactsStore({
   }
 
   const initialize = () => serialize(async () => {
-    let genesisSynced = false
+    let genesisWriteStarted = false
     try {
       assertNoUncertainWrite()
       assertDirectorySyncSupported()
@@ -453,9 +453,9 @@ export function createFileDurableFactsStore({
       const record = { ...genesisBody, digest: digestRecord(genesisBody) }
       const handle = await fileSystem.open(logPath, "wx", 0o600)
       try {
+        genesisWriteStarted = true
         await handle.writeFile(canonicalStringify(record) + "\n", "utf8")
         await handle.sync()
-        genesisSynced = true
       } finally {
         await handle.close()
       }
@@ -471,7 +471,7 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (genesisSynced) {
+      if (genesisWriteStarted) {
         writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
@@ -482,7 +482,7 @@ export function createFileDurableFactsStore({
   })
 
   const append = (fact) => serialize(async () => {
-    let logSynced = false
+    let logWriteStarted = false
     try {
       assertNoUncertainWrite()
       assertDirectorySyncSupported()
@@ -514,9 +514,9 @@ export function createFileDurableFactsStore({
       }
       const handle = await fileSystem.open(logPath, "a", 0o600)
       try {
+        logWriteStarted = true
         await handle.writeFile(line + "\n", "utf8")
         await handle.sync()
-        logSynced = true
       } finally {
         await handle.close()
       }
@@ -533,7 +533,7 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (logSynced) {
+      if (logWriteStarted) {
         writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
