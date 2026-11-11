@@ -34,6 +34,20 @@ export function makeExecuteStrategyDecision({
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
 
+  const getSubmissionDeferral = ({ order } = {}) => {
+    const gate = canSubmit({ order })
+    if (gate === true) return null
+    if (gate === false) return { reason: "SUBMISSION_NOT_ALLOWED" }
+    if (!gate || typeof gate !== "object" || Array.isArray(gate) || typeof gate.allowed !== "boolean") {
+      throw new TypeError("canSubmit must return a boolean or a structured { allowed, reason, details } result")
+    }
+    if (gate.allowed) return null
+    if (typeof gate.reason !== "string" || !gate.reason.trim()) {
+      throw new TypeError("A deferred submission gate must provide a non-empty reason")
+    }
+    return { reason: gate.reason, details: gate.details }
+  }
+
   const validateDecision = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) => {
     try {
       if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
@@ -62,8 +76,9 @@ export function makeExecuteStrategyDecision({
           if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
           throw error
         }
-        if (!canSubmit({ order: pendingOrder })) {
-          return toResult({ data: { deferred: true, validatedOrders: [] } })
+        const deferral = getSubmissionDeferral({ order: pendingOrder })
+        if (deferral) {
+          return toResult({ data: { deferred: true, reason: deferral.reason, details: deferral.details, validatedOrders: [] } })
         }
         validatedOrders.push(pendingOrder)
       }
@@ -109,15 +124,17 @@ export function makeExecuteStrategyDecision({
 
       const submittedOrders = []
       for (const { orderIntent, pendingOrder } of pendingOrders) {
-        if (!canSubmit({ order: pendingOrder })) {
-          await onSubmissionDeferred({ order: pendingOrder, registered: false })
-          return toResult({ data: { deferred: true, submittedOrders } })
+        const initialDeferral = getSubmissionDeferral({ order: pendingOrder })
+        if (initialDeferral) {
+          await onSubmissionDeferred({ order: pendingOrder, registered: false, ...initialDeferral })
+          return toResult({ data: { deferred: true, ...initialDeferral, submittedOrders } })
         }
         const pendingResult = onPendingOrder({ order: pendingOrder })
         if (pendingResult && typeof pendingResult.then === "function") await pendingResult
-        if (!canSubmit({ order: pendingOrder })) {
-          await onSubmissionDeferred({ order: pendingOrder, registered: true })
-          return toResult({ data: { deferred: true, submittedOrders } })
+        const dispatchDeferral = getSubmissionDeferral({ order: pendingOrder })
+        if (dispatchDeferral) {
+          await onSubmissionDeferred({ order: pendingOrder, registered: true, ...dispatchDeferral })
+          return toResult({ data: { deferred: true, ...dispatchDeferral, submittedOrders } })
         }
         let brokerResult
         try {
