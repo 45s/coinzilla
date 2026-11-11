@@ -269,6 +269,7 @@ export function createFileDurableFactsStore({
   schemaVersion = DEFAULT_SCHEMA_VERSION,
   now = () => new Date(),
   fileSystem = nodeFileSystem,
+  platform = process.platform,
 } = {}) {
   const resolvedDirectory = requireNonEmptyString({ value: directory, field: "directory" })
   const resolvedRuntimeSessionId = requireNonEmptyString({
@@ -282,6 +283,18 @@ export function createFileDurableFactsStore({
   if (typeof now !== "function") throw new TypeError("Durable-fact now must be a function")
   for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "rename"]) {
     if (typeof fileSystem?.[method] !== "function") throw new TypeError("Durable-fact fileSystem requires " + method)
+  }
+
+  if (typeof platform !== "string" || platform.trim() === "") {
+    throw new TypeError("Durable-fact platform must be a non-empty string")
+  }
+  const assertDirectorySyncSupported = () => {
+    if (platform === "win32") {
+      throw createError(
+        "Durable-fact writes require directory fsync; Node's Windows filesystem API cannot confirm that durability",
+        "DURABLE_FACTS_DIRECTORY_SYNC_UNSUPPORTED",
+      )
+    }
   }
 
   const absoluteDirectory = path.resolve(resolvedDirectory)
@@ -397,6 +410,7 @@ export function createFileDurableFactsStore({
 
   const initialize = () => serialize(async () => {
     try {
+      assertDirectorySyncSupported()
       await fileSystem.mkdir(absoluteDirectory, { recursive: true, mode: 0o700 })
       const directoryStat = await fileSystem.lstat(absoluteDirectory)
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
@@ -443,6 +457,7 @@ export function createFileDurableFactsStore({
   const append = (fact) => serialize(async () => {
     let logSynced = false
     try {
+      assertDirectorySyncSupported()
       const state = await verifyState()
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
       const existing = state.records.find((record) => record.factId === input.factId)
