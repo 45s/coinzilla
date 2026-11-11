@@ -1,8 +1,8 @@
 # Indicators — Agent Instructions
 
-- Status: Active package; first implementation in progress in [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+- Status: Initial calculation capability merged in [PR #1018](https://github.com/45s/coinzilla/pull/1018); active package.
 - Owner: Indicators domain under `packages/indicators/`.
-- First consumer: Harvester volatility protection, issue #1016. Adaptive price-step planning, PR #1013, is a separate later consumer.
+- First consumer: Harvester's per-market ATR/NATR measurement service in [PR #1021](https://github.com/45s/coinzilla/pull/1021), under issue #1016. That PR collects measurements only; the protection policy remains Harvester-owned and is not active yet. Adaptive price-step planning, PR #1013, is a separate later consumer.
 
 ## Scope
 

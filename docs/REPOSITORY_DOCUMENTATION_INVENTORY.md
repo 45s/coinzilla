@@ -82,13 +82,13 @@ At the current source-verified develop checkpoint `b5fc236987833da4374258da876b4
 
 | Added path | Purpose |
 | --- | --- |
-| `packages/indicators/README.md` | Defines the exchange-neutral indicator package boundary and intended consumers. |
+| `packages/indicators/README.md` | Defines the exchange-neutral indicator package boundary and public API; records Harvester as its first runtime consumer of ATR/NATR measurements in PR #1021 (data collection only). |
 | `packages/indicators/AGENTS.md` | Defines Indicators domain ownership and implementation constraints. |
-| `packages/indicators/ROADMAP.md` | Tracks the Indicators delivery stages and acceptance gates. |
+| `packages/indicators/ROADMAP.md` | Tracks the delivered ATR/NATR/ratio capability, Harvester candle-data consumer and remaining protection/adaptive-price-step work. |
 | `apps/harvester/docs/volatility-protection.md` | Defines per-market protection, candle data, the recovery-SELL exception and Harvester implementation/test plan. |
 | `apps/harvester/docs/exchange-trading-constraints.md` | Records exchange trading constraints and their application-level handling. |
 
-The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths; the 124-file count remains unchanged.
+The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths. PR #1021 updates existing Harvester/Indicators documentation and test support without adding Markdown/MDX paths; the 124-file count remains unchanged.
 
 ## Source-verified content reviews (post-baseline)
 
@@ -100,6 +100,7 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 | `packages/notifiers/AGENTS.md`; `packages/notifiers/README.md` | Verified the formatter's caller-owned free-form `message`/`reason` boundary, EventBus error-reporter fallback, delivery-queue recovery and smoke-test confirmation output against source and tests. | [PR #873](https://github.com/45s/coinzilla/pull/873) |
 | `packages/utils/README.md` | Verified the exported per-key serialized queue and non-null/non-array object assertion against implementation, tests, public exports and consumers; the Validator configuration limitation remains tracked in #892. | [PR #876](https://github.com/45s/coinzilla/pull/876) |
 | `apps/harvester/docs/TRADING_FIRST.md` | Verified current WebSocket API/Streams and CLOSING-audit transport terminology against the broker adapter, source-verified Architecture and Journal Operations; dated November 4 incident terminology remains historical and unchanged. | [PR #883](https://github.com/45s/coinzilla/pull/883) |
+| `apps/harvester/docs/volatility-protection.md`; Harvester architecture/flow and BrokerPort guidance; `packages/indicators/README.md` and `ROADMAP.md` | Verified the implemented per-market candle-history service, ATR/NATR measurement contract, freshness and reconnect-gap behavior, unsubscribe drain guarantees, and explicit boundary that trading protection/order gating is still not active. | [PR #1021](https://github.com/45s/coinzilla/pull/1021) |
 | `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` | Added the source-driven behavior-to-test inventory and maintained its evidence through the Portfolio/RecoveryLedger commission-conflict and Conservative investment-cap regression additions. | [PR #917](https://github.com/45s/coinzilla/pull/917), [PR #921](https://github.com/45s/coinzilla/pull/921), [PR #922](https://github.com/45s/coinzilla/pull/922) |
 | `apps/harvester/docs/JOURNAL_EVIDENCE_CONTRACT.md`; Harvester Journal architecture/domain/operations indexes | Reconciled the Harvester consumer contract with Journal JSONL serialization: persisted payloads must be JSON-safe, while the broader EventBus payload type is not a promise of durable representability. Updated navigation and roadmap evidence without changing runtime behavior. | [PR #895](https://github.com/45s/coinzilla/pull/895) |
 | `packages/brokers/ARCHITECTURE.md`; `packages/brokers/README.md`; `packages/brokers/ROADMAP.md` | Reconciled architecture completion claims with current implementation and tests; retained the target-architecture versus current-source boundary and corrected the active roadmap status. | [PR #896](https://github.com/45s/coinzilla/pull/896) |

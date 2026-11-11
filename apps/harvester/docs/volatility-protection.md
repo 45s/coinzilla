@@ -1,7 +1,8 @@
 # Harvester Volatility Protection
 
-- Status: **Accepted design; not implemented**
+- Status: **Data collection implemented in PR #1021; protection policy not implemented**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
+- Related implementation: [Harvester candle history and ATR/NATR measurements PR #1021](https://github.com/45s/coinzilla/pull/1021) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
 - Owner: Harvester, with Brokers and Indicators package work
 
