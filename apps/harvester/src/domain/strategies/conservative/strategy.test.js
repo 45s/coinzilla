@@ -26,6 +26,7 @@ const pairConfig = {
   priceStepPercent: 0.05,
   orderQuantity: 100,
   keepQuantity: 1,
+  minProfit: 0.01,
   makerPercent: 0,
   takerPercent: 0.075,
 }
