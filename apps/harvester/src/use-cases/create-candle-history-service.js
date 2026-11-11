@@ -1,16 +1,11 @@
-import {
-  addDecimal,
-  assertDecimalString,
-  compareDecimal,
-  divideDecimal,
-  toResult,
-} from "@coinzilla/utils"
-import {
-  calculateAtrSeries,
-  calculateNatrSeries,
-  calculateVolatilityRatio,
-} from "@coinzilla/indicators"
+import { toResult } from "@coinzilla/utils"
 
+import {
+  areCandlesEqual,
+  calculateVolatilityMetrics,
+  validateCandle as validateMarketCandle,
+  validateCandleSeries as validateMarketCandleSeries,
+} from "../domain/market/volatility-candle.js"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 
 const CANDLE_INTERVAL = "1m"
@@ -46,141 +41,6 @@ function logUnavailable(logger, state, reason, error) {
   })
 }
 
-function validateCandle({ candle, symbol } = {}) {
-  if (!candle || typeof candle !== "object" || Array.isArray(candle)) {
-    throw new TypeError("candle must be an object")
-  }
-  if (candle.symbol !== symbol || candle.interval !== CANDLE_INTERVAL) {
-    throw new RangeError("candle market or interval does not match its subscription")
-  }
-  if (
-    !Number.isSafeInteger(candle.openTime) ||
-    candle.openTime < 0 ||
-    candle.openTime % CANDLE_INTERVAL_MS !== 0
-  ) {
-    throw new RangeError("candle openTime must be a UTC one-minute boundary")
-  }
-  if (
-    !Number.isSafeInteger(candle.closeTime) ||
-    candle.closeTime !== candle.openTime + CANDLE_INTERVAL_MS - 1
-  ) {
-    throw new RangeError("candle closeTime does not match its one-minute interval")
-  }
-  if (typeof candle.isClosed !== "boolean") {
-    throw new TypeError("candle isClosed must be a boolean")
-  }
-
-  const decimalFields = ["open", "high", "low", "close", "volume"]
-  for (const field of decimalFields) {
-    assertDecimalString({ value: candle[field], field: "candle " + field })
-  }
-  for (const field of ["open", "high", "low", "close"]) {
-    if (compareDecimal({ left: candle[field], right: "0" }) <= 0) {
-      throw new RangeError("candle " + field + " must be positive")
-    }
-  }
-  if (compareDecimal({ left: candle.volume, right: "0" }) < 0) {
-    throw new RangeError("candle volume must be non-negative")
-  }
-  if (compareDecimal({ left: candle.high, right: candle.low }) < 0) {
-    throw new RangeError("candle high must not be below candle low")
-  }
-  for (const field of ["open", "close"]) {
-    if (
-      compareDecimal({ left: candle[field], right: candle.low }) < 0 ||
-      compareDecimal({ left: candle[field], right: candle.high }) > 0
-    ) {
-      throw new RangeError("candle " + field + " must be within its high-low range")
-    }
-  }
-
-  return Object.freeze({ ...candle })
-}
-
-function validateCandleSeries({ candles, symbol } = {}) {
-  if (!Array.isArray(candles)) {
-    throw new TypeError("candle history must be an array")
-  }
-
-  const validated = []
-  let previousOpenTime = null
-  for (let index = 0; index < candles.length; index += 1) {
-    const candle = validateCandle({ candle: candles[index], symbol })
-    if (!candle.isClosed && index !== candles.length - 1) {
-      throw new RangeError("only the final historical candle may still be forming")
-    }
-    if (previousOpenTime !== null && candle.openTime !== previousOpenTime + CANDLE_INTERVAL_MS) {
-      throw new RangeError("candle history must be strictly ordered and contiguous")
-    }
-    validated.push(candle)
-    previousOpenTime = candle.openTime
-  }
-  return validated
-}
-
-function areCandlesEqual(left, right) {
-  return [
-    "symbol",
-    "interval",
-    "openTime",
-    "closeTime",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-    "isClosed",
-  ].every((field) => left[field] === right[field])
-}
-
-function calculateMetrics({ candles } = {}) {
-  if (candles.length < REQUIRED_CANDLE_COUNT) {
-    return { metrics: null, reason: "INSUFFICIENT_HISTORY" }
-  }
-
-  const indicatorInput = {
-    candles,
-    intervalMs: CANDLE_INTERVAL_MS,
-    period: ATR_PERIOD,
-    outputScale: INDICATOR_SCALE,
-    rounding: "half-up",
-  }
-  const atrSeries = calculateAtrSeries(indicatorInput)
-  const natrSeries = calculateNatrSeries(indicatorInput)
-  const currentNatr = natrSeries.at(-1)
-  const reference = natrSeries.slice(-REFERENCE_OBSERVATIONS - 1, -1)
-
-  const referenceTotal = reference.reduce(
-    (total, observation) => addDecimal({ left: total, right: observation.value }),
-    "0",
-  )
-  const referenceNatr = divideDecimal({
-    left: referenceTotal,
-    right: String(REFERENCE_OBSERVATIONS),
-    scale: INDICATOR_SCALE,
-    rounding: "half-up",
-  })
-  if (compareDecimal({ left: referenceNatr, right: "0" }) <= 0) {
-    return { metrics: null, reason: "ZERO_REFERENCE_VOLATILITY" }
-  }
-
-  const volatilityRatio = calculateVolatilityRatio({
-    current: currentNatr.value,
-    reference: referenceNatr,
-    outputScale: RATIO_SCALE,
-    rounding: "half-up",
-  })
-  const metrics = Object.freeze({
-    openTime: currentNatr.openTime,
-    atr: atrSeries.at(-1).value,
-    natr: currentNatr.value,
-    referenceNatr,
-    referenceObservations: REFERENCE_OBSERVATIONS,
-    volatilityRatio,
-  })
-  return { metrics, reason: null }
-}
-
 function createMarketState(symbol) {
   return {
     symbol,
@@ -206,7 +66,14 @@ function updateMetrics({ state, logger } = {}) {
       logUnavailable(logger, state, state.fatalReason)
       return
     }
-    const result = calculateMetrics({ candles: state.candles })
+    const result = calculateVolatilityMetrics({
+      candles: state.candles,
+      intervalMs: CANDLE_INTERVAL_MS,
+      period: ATR_PERIOD,
+      referenceObservations: REFERENCE_OBSERVATIONS,
+      indicatorScale: INDICATOR_SCALE,
+      ratioScale: RATIO_SCALE,
+    })
     state.metrics = result.metrics
     if (result.reason) {
       logUnavailable(logger, state, result.reason)
@@ -346,7 +213,12 @@ function createCandleHistoryService({
     }
 
     try {
-      const backfill = validateCandleSeries({ candles: result.data, symbol: state.symbol })
+      const backfill = validateMarketCandleSeries({
+        candles: result.data,
+        symbol: state.symbol,
+        interval: CANDLE_INTERVAL,
+        intervalMs: CANDLE_INTERVAL_MS,
+      })
         .filter((candle) => candle.isClosed)
       if (
         backfill.length !== missingCount ||
@@ -367,7 +239,12 @@ function createCandleHistoryService({
   }
 
   async function processLiveCandle({ state, candle, receivedAt } = {}) {
-    const validated = validateCandle({ candle, symbol: state.symbol })
+    const validated = validateMarketCandle({
+      candle,
+      symbol: state.symbol,
+      interval: CANDLE_INTERVAL,
+      intervalMs: CANDLE_INTERVAL_MS,
+    })
     const latest = state.candles.at(-1)
     const oldest = state.candles[0]
     const existing = state.candles.find((item) => item.openTime === validated.openTime)
@@ -530,7 +407,12 @@ function createCandleHistoryService({
     }
 
     try {
-      const historical = validateCandleSeries({ candles: result.data, symbol: state.symbol })
+      const historical = validateMarketCandleSeries({
+        candles: result.data,
+        symbol: state.symbol,
+        interval: CANDLE_INTERVAL,
+        intervalMs: CANDLE_INTERVAL_MS,
+      })
       const completed = historical.filter((candle) => candle.isClosed).slice(-HISTORY_SIZE)
       state.candles = Object.freeze(completed)
       state.initialized = true
