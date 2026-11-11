@@ -191,6 +191,7 @@ function createMarketState(symbol) {
     subscriptionReady: false,
     stopped: false,
     lastEventAt: null,
+    pendingGap: false,
     bufferOverflow: false,
     bufferedEvents: [],
     fatalReason: null,
@@ -269,6 +270,7 @@ function createCandleHistoryService({
     const blockers = []
     if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
     if (state.reason) blockers.push(state.reason)
+    else if (state.pendingGap) blockers.push("GAP_DETECTED")
     if (state.stopped) blockers.push("STOPPED")
     if (!isFresh) blockers.push(state.lastEventAt === null ? "AWAITING_LIVE_DATA" : "STALE_STREAM")
     const reason = blockers[0] ?? null
@@ -298,15 +300,19 @@ function createCandleHistoryService({
 
   function failMarket({ state, reason, error, fatal = false } = {}) {
     if (fatal && !state.fatalReason) state.fatalReason = reason
+    if (fatal) state.pendingGap = false
     state.metrics = null
     logUnavailable(logger, state, state.fatalReason ?? reason, error)
   }
 
-  async function backfillGap({ state, incomingCandle } = {}) {
+  async function backfillGap({ state, incomingCandle, nextCandleOpenTime } = {}) {
+    state.pendingGap = true
     const latest = state.candles.at(-1)
     const expectedOpenTime = latest.openTime + CANDLE_INTERVAL_MS
-    const missingCount = (incomingCandle.openTime - expectedOpenTime) / CANDLE_INTERVAL_MS
+    const nextOpenTime = incomingCandle?.openTime ?? nextCandleOpenTime
+    const missingCount = (nextOpenTime - expectedOpenTime) / CANDLE_INTERVAL_MS
     if (missingCount > MAX_BACKFILL_CANDLES) {
+      state.pendingGap = false
       failMarket({ state, reason: "GAP_TOO_LARGE" })
       return false
     }
@@ -318,13 +324,15 @@ function createCandleHistoryService({
         interval: CANDLE_INTERVAL,
         limit: missingCount,
         startTime: expectedOpenTime,
-        endTime: incomingCandle.openTime - 1,
+        endTime: nextOpenTime - 1,
       })
     } catch (error) {
+      state.pendingGap = false
       failMarket({ state, reason: "GAP_DETECTED", error })
       return false
     }
     if (!result?.ok || !Array.isArray(result.data)) {
+      state.pendingGap = false
       failMarket({
         state,
         reason: "GAP_DETECTED",
@@ -339,51 +347,70 @@ function createCandleHistoryService({
       if (
         backfill.length !== missingCount ||
         backfill[0]?.openTime !== expectedOpenTime ||
-        backfill.at(-1)?.openTime !== incomingCandle.openTime - CANDLE_INTERVAL_MS
+        backfill.at(-1)?.openTime !== nextOpenTime - CANDLE_INTERVAL_MS
       ) {
         throw new RangeError("candle gap backfill did not restore every missing interval")
       }
-      appendCompletedCandles({ state, candles: [...backfill, incomingCandle], logger })
+      state.pendingGap = false
+      const restoredCandles = incomingCandle
+        ? [...backfill, incomingCandle]
+        : backfill
+      appendCompletedCandles({ state, candles: restoredCandles, logger })
       return true
     } catch (error) {
+      state.pendingGap = false
       failMarket({ state, reason: "GAP_DETECTED", error })
       return false
     }
   }
 
-  async function processLiveCandle({ state, candle } = {}) {
+  async function processLiveCandle({ state, candle, receivedAt } = {}) {
     const validated = validateCandle({ candle, symbol: state.symbol })
+    const latest = state.candles.at(-1)
+    const oldest = state.candles[0]
+    const existing = state.candles.find((item) => item.openTime === validated.openTime)
+
     if (!validated.isClosed) {
-      const existing = state.candles.find((item) => item.openTime === validated.openTime)
       if (existing?.isClosed) {
         failMarket({ state, reason: "CANDLE_CONFLICT", fatal: true })
+        return
+      }
+      if (latest && validated.openTime < latest.openTime) {
+        if (validated.openTime < oldest.openTime) return
+        failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
+        return
+      }
+
+      state.lastEventAt = receivedAt
+      if (latest && validated.openTime > latest.openTime + CANDLE_INTERVAL_MS) {
+        await backfillGap({ state, nextCandleOpenTime: validated.openTime })
       }
       return
     }
 
     if (state.candles.length === 0) {
+      state.lastEventAt = receivedAt
       appendCompletedCandles({ state, candles: [validated], logger })
       return
     }
 
-    const existing = state.candles.find((item) => item.openTime === validated.openTime)
     if (existing) {
       if (!areCandlesEqual(existing, validated)) {
         failMarket({ state, reason: "CANDLE_CONFLICT", fatal: true })
+      } else if (existing.openTime === latest.openTime) {
+        state.lastEventAt = receivedAt
       }
       return
     }
 
-    const oldest = state.candles[0]
-    const latest = state.candles.at(-1)
     if (validated.openTime < latest.openTime) {
       if (validated.openTime < oldest.openTime) return
       failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
       return
     }
 
-    const difference = validated.openTime - latest.openTime
-    const missingCount = difference / CANDLE_INTERVAL_MS - 1
+    state.lastEventAt = receivedAt
+    const missingCount = (validated.openTime - latest.openTime) / CANDLE_INTERVAL_MS - 1
     if (missingCount > 0) {
       await backfillGap({ state, incomingCandle: validated })
       return
@@ -395,7 +422,6 @@ function createCandleHistoryService({
   function receiveCandle({ state, candle } = {}) {
     if (state.stopped) return Promise.resolve()
     const receivedAt = now()
-    state.lastEventAt = receivedAt
 
     if (!state.initialized) {
       if (state.bufferedEvents.length >= MAX_BUFFERED_LIVE_EVENTS) {
@@ -403,12 +429,23 @@ function createCandleHistoryService({
         failMarket({ state, reason: "LIVE_BUFFER_OVERFLOW" })
         return Promise.resolve()
       }
-      state.bufferedEvents.push(candle)
+      state.bufferedEvents.push({ candle, receivedAt })
       return Promise.resolve()
     }
 
+    const latest = state.candles.at(-1)
+    if (
+      latest &&
+      candle?.symbol === state.symbol &&
+      candle?.interval === CANDLE_INTERVAL &&
+      Number.isSafeInteger(candle.openTime) &&
+      candle.openTime > latest.openTime + CANDLE_INTERVAL_MS
+    ) {
+      state.pendingGap = true
+    }
+
     state.queue = state.queue
-      .then(() => processLiveCandle({ state, candle }))
+      .then(() => processLiveCandle({ state, candle, receivedAt }))
       .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
     return state.queue
   }
@@ -507,7 +544,11 @@ function createCandleHistoryService({
     state.bufferedEvents = []
     for (const event of bufferedEvents) {
       state.queue = state.queue
-        .then(() => processLiveCandle({ state, candle: event }))
+        .then(() => processLiveCandle({
+          state,
+          candle: event.candle,
+          receivedAt: event.receivedAt,
+        }))
         .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
     }
     await state.queue
