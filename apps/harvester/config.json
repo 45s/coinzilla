@@ -11,7 +11,6 @@
     "CG_coinGrabber": {
       "enabled": true,
       "settings": {
-        "minProfit": 0.01,
         "conservative": {
           "enabled": true
         },
@@ -29,7 +28,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0.075,
-          "takerPercent": 0.075
+          "takerPercent": 0.075,
+          "minProfit": 0.1
         },
         "LINKFDUSD": {
           "enabled": true,
@@ -40,7 +40,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0,
-          "takerPercent": 0.075
+          "takerPercent": 0.075,
+          "minProfit": 0.01
         },
         "DOGEUSDT": {
           "enabled": false,
@@ -51,7 +52,8 @@
           "pricePrecision": 5,
           "quantityPrecision": 0,
           "makerPercent": 0.1,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "minProfit": 0.01
         },
         "SOLFDUSD": {
           "enabled": false,
@@ -62,7 +64,8 @@
           "pricePrecision": 2,
           "quantityPrecision": 3,
           "makerPercent": 0,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "minProfit": 0.01
         },
         "ZROUSDT": {
           "enabled": false,
@@ -73,7 +76,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0.1,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "minProfit": 0.01
         },
         "ZROFDUSD": {
           "enabled": false,
@@ -84,7 +88,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "minProfit": 0.01
         }
       }
     }
