@@ -3,7 +3,7 @@
 Reusable, deterministic, exchange-neutral technical indicator calculations over caller-supplied completed market candles.
 
 - Owner: Indicators domain
-- First consumer: Harvester high-volatility protection ([issue #1016](https://github.com/45s/coinzilla/issues/1016)); per-market ATR/NATR measurements are consumed by Harvester in [PR #1021](https://github.com/45s/coinzilla/pull/1021). That PR delivers data collection only; the protection policy remains a separate Harvester phase.
+- First consumer: Harvester high-volatility protection ([issue #1016](https://github.com/45s/coinzilla/issues/1016)); per-market ATR/NATR measurements are consumed by Harvester in merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). Harvester's protection policy is implemented separately in [PR #1038](https://github.com/45s/coinzilla/pull/1038); thresholds still require offline historical validation.
 - Later consumer: Harvester adaptive price-step planning ([PR #1013](https://github.com/45s/coinzilla/pull/1013))
 - Runtime dependencies: `@coinzilla/utils` for exact decimal-string arithmetic; no exchange SDK or network dependency
 
