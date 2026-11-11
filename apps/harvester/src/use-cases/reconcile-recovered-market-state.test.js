@@ -39,8 +39,8 @@ function createDependencies(overrides = {}) {
       calls.push(["refreshAccountSnapshot"])
       return { ok: true, data: { sourceTime: 300 } }
     },
-    getOpenOrders: async () => {
-      calls.push(["getOpenOrders"])
+    refreshOpenOrders: async () => {
+      calls.push(["refreshOpenOrders"])
       return { ok: true, data: [] }
     },
     fetchMarketTradeHistory: async (options) => {

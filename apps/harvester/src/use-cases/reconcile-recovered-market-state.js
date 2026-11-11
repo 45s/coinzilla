@@ -24,7 +24,7 @@ function unwrapResult({ result, field }) {
  * @param {Function} options.reconcileOwnedOrders - Serialized read-only engine reconciliation boundary.
  * @param {Function} options.getRecoveredState - Returns the candidate state after owned-order reconciliation.
  * @param {Function} options.refreshAccountSnapshot - Returns a canonical AccountSnapshot or result.
- * @param {Function} options.getOpenOrders - Returns the account-wide canonical open-order set or result.
+ * @param {Function} options.refreshOpenOrders - Returns the account-wide canonical open-order set or result.
  * @param {Function} options.fetchMarketTradeHistory - Fetches complete history for the target market from startTime.
  * @param {Array<Market>} options.markets - Canonical metadata for every known market in the account.
  * @param {Market} options.targetMarket - The single market being certified.
@@ -37,7 +37,7 @@ export async function reconcileRecoveredMarketState({
   reconcileOwnedOrders,
   getRecoveredState,
   refreshAccountSnapshot,
-  getOpenOrders,
+  refreshOpenOrders,
   fetchMarketTradeHistory,
   markets,
   targetMarket,
@@ -51,7 +51,7 @@ export async function reconcileRecoveredMarketState({
     if (typeof reconcileOwnedOrders !== "function" ||
         typeof getRecoveredState !== "function" ||
         typeof refreshAccountSnapshot !== "function" ||
-        typeof getOpenOrders !== "function" ||
+        typeof refreshOpenOrders !== "function" ||
         typeof fetchMarketTradeHistory !== "function") {
       throw new TypeError("reconcileRecoveredMarketState requires all read-only reconciliation dependencies")
     }
@@ -86,7 +86,7 @@ export async function reconcileRecoveredMarketState({
     })
     const [currentAccountSnapshotResult, openOrdersResult, historyResult] = await Promise.all([
       refreshAccountSnapshot(),
-      getOpenOrders(),
+      refreshOpenOrders(),
       fetchMarketTradeHistory({
         market: targetMarket,
         startTime: historyRetentionEvidence.coveredFromTime,
@@ -96,7 +96,7 @@ export async function reconcileRecoveredMarketState({
       result: currentAccountSnapshotResult,
       field: "Fresh account snapshot",
     })
-    const openOrders = unwrapResult({ result: openOrdersResult, field: "Account-wide open orders" })
+    const openOrders = unwrapResult({ result: openOrdersResult, field: "Fresh account-wide open orders" })
     const history = unwrapResult({ result: historyResult, field: "Target-market trade history" })
     if (!Array.isArray(openOrders)) {
       throw new TypeError("Account-wide open-order read must return an array")
