@@ -12,16 +12,17 @@ This section is authoritative for next work and orders the broker package by ris
 
 ### Historical candle and live Kline capability — Harvester issue #1016
 
-**Status: PLANNED — public API not implemented.** Harvester volatility protection needs completed 1-minute candles at startup and a live Kline stream thereafter.
+**Status: IMPLEMENTED in PR #1017.** The Binance WebSocket broker now exposes a normalized candle contract:
 
-- Add an exchange-neutral normalized candle result contract with symbol, interval, millisecond open/close timestamps, exact OHLCV decimal strings and an isClosed flag.
-- Expose historical retrieval through the broker API using Binance WebSocket API klines; expose live updates through the existing public Streams client using the Kline stream.
-- Add the corresponding narrow Harvester-owned broker-port methods and Binance infrastructure-adapter mapping. Do not expose Binance DTOs to Harvester domain/application policy.
-- Validate request symbol/interval/limit/time bounds, response shape, ascending order, duplicate identities and exact decimal fields. Preserve deterministic error/result behavior.
-- Test history limits, malformed rows, empty history, out-of-order/duplicate rows, partial/current candles, live closed-candle events, reconnect/resubscription and unsubscribe cleanup.
-- Keep the current no-REST/no-third-party-SDK broker architecture. No exchange order operations are part of this work.
+- [x] Add the immutable, exchange-neutral candle shape and strict Binance history/stream adapters.
+- [x] Expose getCandles using the unsigned WebSocket API time and klines methods. Validate symbol, interval, limit (1–1000), optional time bounds, response shape, exact OHLCV strings, timestamps, OHLC invariants and strict ascending order.
+- [x] Expose subscribeForCandles through the existing public Streams client using the Kline stream; preserve the exchange isClosed flag and return an unsubscribe handle.
+- [x] Add offline adapter, broker contract, malformed-response, history-order, subscription and unsubscribe tests.
+- [x] Preserve the native WebSocket architecture; no REST transport, third-party SDK or order mutation is added.
 
-The first consumer requests approximately 100 completed 1-minute candles per enabled market and backfills gaps after reconnect. The exact public contract must be reviewed against the current Binance WebSocket API and the package's request/response lifecycle before implementation.
+Historical completion uses Binance server time sampled immediately before the klines query, avoiding local-clock assumptions. The broker deliberately does not sort, interpolate or backfill gaps; those are consumer-owned market-data responsibilities.
+
+**Next consumer phase:** add the narrow methods to Harvester's application-owned BrokerPort and adapter, then implement history warm-up, gap/freshness handling and protection state.
 
 ### Canonical order acknowledgement completeness — issue #960
 

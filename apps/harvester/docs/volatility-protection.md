@@ -94,14 +94,14 @@ NATR is retained in diagnostics as well as the ratio. Raw ATR values must never 
 
 ### Broker capability proposed for implementation
 
-The current public Brokers and Harvester broker-port APIs do not expose candles. The planned normalized capability is:
+The public @coinzilla/brokers API now exposes historical and live candles through PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter still do **not** expose them; that is the next consumer integration step. The normalized methods are:
 
 - **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical data.
 - **subscribeForCandles({ symbol, interval, onCandle })** for live updates.
 
-The Binance adapter should use the existing native WebSocket API klines request for history and the public Kline Streams subscription for live data. Do not add a REST fallback or third-party SDK. The existing Streams protocol already recognizes Kline stream names internally, but that is not yet a public broker capability.
+The Brokers implementation uses the existing native WebSocket API klines request for history and the public Kline Streams subscription for live data. It uses Binance server time to determine whether a historical candle was closed at query time. No REST fallback or third-party SDK is used.
 
-The normalized candle contract should preserve symbol, interval, open/close timestamps in milliseconds, OHLCV decimal strings, and an isClosed flag. Historical results must be validated and returned in ascending time order. The live stream may update a forming candle; Harvester commits it to indicator history only when Binance marks it closed.
+The normalized candle contract preserves symbol, interval, open/close timestamps in milliseconds, exact OHLCV decimal strings, and an isClosed flag. Historical completion is determined using Binance server time fetched immediately before the history request, not the local machine clock. Historical results must be validated and returned in ascending time order. The live stream may update a forming candle; Harvester commits it to indicator history only when Binance marks it closed.
 
 ### Data integrity rules
 

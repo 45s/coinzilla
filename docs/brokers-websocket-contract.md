@@ -39,6 +39,8 @@ packages/brokers/src/
 │       │   ├── constants/
 │       │   ├── helpers/
 │       │   │   └── adapters/
+│       │   │       ├── adapt-kline.js
+│       │   │       └── adapt-kline.test.js
 │       │   ├── tests/
 │       │   │   ├── user-data-session.setup.test.js
 │       │   │   ├── user-data-session.recovery.test.js
@@ -70,6 +72,7 @@ The lifecycle implementation and its direct unit tests live together in `src/app
 - `infrastructure/binance/broker-websocket/config/` owns validated runtime configuration; `BinanceWebSocketConfig` is Coinzilla-owned and does not depend on the removed Binance SDK.
 - `infrastructure/binance/broker-websocket/constants/` owns fixed Binance endpoint values.
 - `infrastructure/binance/broker-websocket/helpers/` owns Binance request construction and protocol-specific event/response adaptation.
+- `helpers/adapters/adapt-kline.js` maps Binance historical klines and live Kline stream events into one immutable, exchange-neutral candle shape; its direct tests cover payload validation and OHLC invariants.
 - `infrastructure/binance/broker-websocket/utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
 - `src/infrastructure/binance/adapters/` maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs. These are exchange-specific infrastructure mappings even though some outputs are canonical Entities.
 - `broker-websocket/tests/` groups broker-operation contract tests; focused module tests remain colocated with their implementation.
@@ -83,6 +86,17 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 - `packages/market-simulator`, whose `HistoricalMarketBroker` extends `CoreBroker` and whose `SimulatedExecutionBroker` extends the historical broker.
 
 `CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve all four root exports and their consumer contracts unless a separately reviewed compatibility change proves a migration safe. Do not reintroduce the removed third-party SDK.
+
+## Candle market-data public contract
+
+PR #1017 adds two optional market-data capabilities to BinanceWebSocketBroker. They are additive methods on the concrete Binance broker; CoreBroker and the Market Simulator are not changed.
+
+- getCandles({ symbol, interval, limit = 500, startTime?, endTime? }) issues an unsigned time request followed by an unsigned klines request. The limit must be an integer from 1 to 1000; time bounds are non-negative safe integer Unix milliseconds, and startTime cannot exceed endTime.
+- subscribeForCandles({ symbol, interval, onCandle }) subscribes through the existing Streams client to symbol@kline_interval and returns the stream name plus an unsubscribe function.
+- Both paths map to the same immutable candle fields: symbol, interval, openTime, closeTime, open, high, low, close, volume and isClosed. Timestamp fields are Unix milliseconds; OHLCV fields remain exact decimal strings.
+- Historical isClosed is derived from Binance server time fetched immediately before the klines query. Live isClosed is copied from the Kline payload's x flag.
+- History must already be strictly ascending and unique by openTime. Malformed or out-of-order results fail; the broker does not fill gaps, sort rows or apply trading policy.
+- The implementation uses Binance's native WebSocket API and Streams only. No REST transport or third-party SDK is introduced.
 
 ## DDD responsibility map (current implementation and Phase 9 target boundaries)
 
