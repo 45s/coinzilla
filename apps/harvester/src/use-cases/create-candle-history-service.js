@@ -499,7 +499,7 @@ function createCandleHistoryService({
       await Promise.all(enabledSymbols.map((symbol) =>
         loadInitialHistory({ state: markets.get(symbol) })
       ))
-      if (enabledSymbols.length > 0 && onSnapshot && !freshnessMonitor) {
+      if (enabledSymbols.some((symbol) => markets.get(symbol)?.subscriptionReady) && onSnapshot && !freshnessMonitor) {
         freshnessMonitor = setInterval(() => {
           for (const state of markets.values()) {
             if (state.subscriptionReady && !state.stopped) notifySnapshot({ state })
