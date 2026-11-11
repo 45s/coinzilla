@@ -177,7 +177,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
-   - [ ] Project and validate operator-verified market-history retention coverage from ADR-0001 durable facts; this PR's synthetic test evidence is not a production proof source.
+   - [ ] Persist, project and validate the `MARKET_HISTORY_COVERAGE_CONFIRMED` fact from ADR-0001 durable facts; this PR validates only the reference shape and timing, and its synthetic test evidence is not a production proof source.
    - [ ] Compose canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders into one read-only reconciliation use case.
    - [ ] Prove complete one-market outcomes and external-order isolation with deterministic end-to-end tests before connecting the audit to startup readiness.
 
