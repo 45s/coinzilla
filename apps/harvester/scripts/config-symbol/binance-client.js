@@ -42,8 +42,10 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
     throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
   }
   const supportedOrderTypes = [...new Set(symbolInfo.orderTypes)]
-  if (!supportedOrderTypes.includes("LIMIT")) {
-    throw new Error("Binance Spot symbol " + requestedSymbol + " does not support LIMIT orders")
+  for (const requiredOrderType of ["LIMIT", "LIMIT_MAKER"]) {
+    if (!supportedOrderTypes.includes(requiredOrderType)) {
+      throw new Error("Binance Spot symbol " + requestedSymbol + " does not support " + requiredOrderType + " orders")
+    }
   }
 
   if (!Array.isArray(symbolInfo.filters)) {
