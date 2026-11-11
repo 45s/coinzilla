@@ -246,6 +246,7 @@ export function makeConservativeTradingEngine({
       .filter(([, pairConfig]) => pairConfig?.enabled === true)
       .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
     volatilityCancellationAttemptCandleBySymbol: new Map(),
+    volatilitySnapshotSignatureBySymbol: new Map(),
   }
   const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
     [...state.recoveryManagedCancellationClientOrderIds].some((clientOrderId) => {
@@ -2628,16 +2629,27 @@ export function makeConservativeTradingEngine({
           createVolatilityProtectionState({ symbol })
         const activeBuyOrders = state.registry.getActiveOrders()
           .filter((order) => order.market.symbol === symbol && order.side === "BUY")
+        const data = currentSnapshot?.ok ? currentSnapshot.data : currentSnapshot?.data
+        const candleKey = data?.metrics?.openTime ??
+          data?.status?.lastClosedCandleOpenTime ?? null
+        const signature = JSON.stringify({
+          ready: data?.status?.isReady === true,
+          fresh: data?.status?.isFresh === true,
+          reason: data?.status?.reason ?? null,
+          candleKey,
+          volatilityRatio: data?.metrics?.volatilityRatio ?? null,
+          activeBuyOrderCount: activeBuyOrders.length,
+        })
+        if (state.volatilitySnapshotSignatureBySymbol.get(symbol) === signature) {
+          return { skipped: true, mode: current.mode, reason: current.reason }
+        }
+        state.volatilitySnapshotSignatureBySymbol.set(symbol, signature)
         const transition = transitionVolatilityProtection({
           state: current,
           snapshot: currentSnapshot,
           activeBuyOrderCount: activeBuyOrders.length,
         })
         state.volatilityProtection.set(symbol, transition.state)
-
-        const data = currentSnapshot?.ok ? currentSnapshot.data : currentSnapshot?.data
-        const candleKey = data?.metrics?.openTime ??
-          data?.status?.lastClosedCandleOpenTime ?? null
         const hasCancellableBuy = activeBuyOrders.some((order) =>
           ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
         const lastCancellationCandle = state.volatilityCancellationAttemptCandleBySymbol.get(symbol)
@@ -2683,6 +2695,7 @@ export function makeConservativeTradingEngine({
     })
 
     if (!update?.ok) return update
+    if (update.data.skipped) return toResult({ data: update.data })
     if (update.data.shouldCancel) {
       const cancellation = await cancelOwnedBuyOrders({
         reason: "HIGH_VOLATILITY_PROTECTION",
