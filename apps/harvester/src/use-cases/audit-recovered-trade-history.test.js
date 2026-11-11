@@ -68,6 +68,8 @@ const auditMarketHistory = (input = {}) => auditRecoveredTradeHistory({
     symbol: "BTCUSDT",
     coveredFromTime: 50,
     verifiedAt: 60,
+    evidenceDigest: "a".repeat(64),
+    verifiedBy: "operator:trader",
   },
 })
 
@@ -315,6 +317,10 @@ test("rejects a durable market-history baseline that starts after the queried hi
       symbol: "BTCUSDT",
       coveredFromTime: 51,
       verifiedAt: 60,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
+    evidenceDigest: "a".repeat(64),
+    verifiedBy: "operator:trader",
     },
   })
 
