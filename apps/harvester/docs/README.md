@@ -6,8 +6,6 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the single `config.json`, profile behavior, event overrides, and environment-only credentials.
 
-- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the single `config.json`, profile behavior, event overrides, and environment-only credentials.
-
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Interactive pair configuration generator](../README.md#generate-a-new-trading-pair) — create a validated, disabled-by-default Binance Spot pair through `pnpm run config:symbol`
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
@@ -17,7 +15,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Volatility Protection](volatility-protection.md) — accepted per-market high-volatility safety design; not yet implemented
+- [Volatility Protection](volatility-protection.md) — per-market protection and order gate are implemented in merged PR #1041; provisional thresholds still require offline historical calibration
 - [Exchange trading constraints](exchange-trading-constraints.md) — canonical exchange-neutral constraint contract, Binance's non-blocking diagnostic policy, and local-versus-venue enforcement boundary
 - [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior

@@ -4,7 +4,7 @@
 
 ## High-volatility protection — issue #1016
 
-**Status: ACCEPTED DESIGN — NOT IMPLEMENTED.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix and exact-head CI complete; candle-stream freshness correction merged in PR #1049; historical threshold calibration open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -20,10 +20,14 @@
 
 1. [x] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
 2. [x] Indicators: parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
-3. [~] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — [PR #1019](https://github.com/45s/coinzilla/pull/1019). This adds no runtime subscriptions or trading behavior.
-4. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
-5. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
-6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+3. [x] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — merged [PR #1019](https://github.com/45s/coinzilla/pull/1019).
+4. [x] Harvester: startup warm-up, live candle maintenance, freshness/gap detection, bounded reconnect backfill and ATR/NATR measurement snapshots — merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). This delivers data collection only.
+5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
+6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
+7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
+8. [~] Synchronize living documentation and roadmaps — this closeout PR.
+9. [~] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — implementation in [PR #1046](https://github.com/45s/coinzilla/pull/1046); exact-head CI and merge remain pending.
+10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
 
@@ -128,7 +132,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–5 complete; restart restoration remains disabled pending Steps 6–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -166,17 +170,21 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
    - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
-6. **[ ] Step 6 — Add verifiable durable-fact integrity (F-037, F-042; [PR #1027](https://github.com/45s/coinzilla/pull/1027) in progress).**
+6. **[x] Step 6 — Add verifiable durable-fact integrity (F-037, F-042; [PR #1027](https://github.com/45s/coinzilla/pull/1027) merged).**
    - Implement the smallest durable store/port needed by the agreed contract, with explicit durability acknowledgement before dependent state transitions proceed.
    - Detect missing/reordered/duplicated records using a monotonic decimal-string sequence, canonical JSON, SHA-256 previous-record digest, and an append-only committed-head manifest journal.
    - Require explicit one-time genesis initialization; normal startup/verify/append never creates a missing ledger. Exact duplicate fact identity/payload is idempotent; uncertain commits fail closed.
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps).**
-   - Reconcile owned order identity/status, complete execution history, all relevant asset balances (including fee assets), locked funds, and current open orders.
-   - Keep external orders unowned and untouched; detect and block only actual unsafe conflicts or unowned executions according to the agreed policy.
-   - Treat incomplete exchange history, missing assets, mismatched quantities, unknown outcomes, and unexplained commitments as unresolved—not as zero.
+7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; [PR #1034](https://github.com/45s/coinzilla/pull/1034) audit primitives in progress).**
+   - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
+   - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
+   - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
+   - [x] Persist and project the `MARKET_HISTORY_COVERAGE_CONFIRMED` fact through ADR-0001; enforce a monotonic per-symbol coverage interval and bind it to the reviewed evidence digest/verifier.
+   - [ ] Provide an explicit offline operator workflow to create the coverage fact from reviewed exchange-history evidence and account reconciliation; no Telegram command is added.
+   - [ ] Compose canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders into one read-only reconciliation use case.
+   - [ ] Prove complete one-market outcomes and external-order isolation with deterministic end-to-end tests before connecting the audit to startup readiness.
 
 8. **[ ] Step 8 — Restore behind a closed readiness gate.**
    - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
@@ -500,7 +508,7 @@ This section is the current operational status and supersedes older statements b
 
 ### Optional operational notifications
 
-- [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected lifecycle, pause, applied-fill, recovery-completion, and accounting-failure events; the notifier package owns formatting, bounded serialized delivery, and transport.
+- [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected application events and owns Telegram message formatting; the notifier package provides generic bounded serialized delivery and Telegram transport.
 - Telegram transport is constructed only when `notifications.telegram.enabled` is not false and both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
 - [~] Add Harvester-owned `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filtering, and non-disableable safety alerts through the single `config.json`; depend on the Notifiers event-selection contract tracked by [#996](https://github.com/45s/coinzilla/issues/996).
 - Delivery is best-effort, in-memory, and not a durable outbox. No trading behavior, exchange integration, or financial accounting rules are changed.

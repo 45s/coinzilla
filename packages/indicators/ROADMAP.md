@@ -8,7 +8,7 @@
 
 ## Current delivery
 
-The first package capability is implemented in the open [PR #1018](https://github.com/45s/coinzilla/pull/1018). The package provides:
+The first package capability was implemented and merged in [PR #1018](https://github.com/45s/coinzilla/pull/1018). The package provides:
 
 - Parameterized ATR series with standard initial simple-average seed and Wilder smoothing.
 - NATR series, normalized against each matching candle close.
@@ -20,9 +20,9 @@ The implementation uses `@coinzilla/utils` exact decimal-string arithmetic. It d
 
 ## Remaining work
 
-1. [~] **Finish first capability and merge PR #1018.** Keep exact reference examples, error-path tests, package metadata, README/AGENTS and workspace CI synchronized.
-2. [ ] **Harvester candle lifecycle.** Add the normalized candle methods to Harvester's application-owned BrokerPort and adapter; load startup history, subscribe to live Kline events, retain completed candles, detect stale/gapped data and backfill after reconnect.
-3. [ ] **Harvester protection policy.** Consume ATR/NATR/ratio per market; keep period/timeframe/reference-window choices, thresholds, hysteresis, fallback, Journal diagnostics, central BUY gate, owned-BUY cancellation and recovery-SELL exception in Harvester.
+1. [x] **Deliver the first package capability.** ATR, NATR and volatility-ratio calculations, exact decimal behavior, input validation, immutable outputs, offline tests and package coverage were merged in [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+2. [x] **Harvester candle lifecycle.** The BrokerPort and adapter are merged in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Per-market startup history, live Kline maintenance, freshness/gap handling, bounded backfill and ATR/NATR measurement snapshots were merged in [PR #1037](https://github.com/45s/coinzilla/pull/1037). This remains the data-collection foundation.
+3. [x] **Harvester protection policy.** Per-market states, thresholds/hysteresis, fail-closed freshness, central order gate, owned-BUY cancellation and explicit recovery-SELL exception were merged in [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on its exact PR head. Historical threshold validation remains Harvester-owned and required.
 4. [ ] **Adaptive price step.** Treat PR #1013 as a separate strategy consumer. Keep baseline config unchanged; define coefficient bounds, floor behavior, affected strategies and order-replacement policy before implementation.
 5. [ ] **Expand indicators only for concrete consumers.** EMA, SMA, RSI, MACD, Fibonacci and other candidates remain deferred until a consumer and calculation contract justify them.
 

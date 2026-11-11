@@ -78,7 +78,7 @@ Each provider owns its transport client, provider-specific formatter, event inte
 
 - [x] Implement Telegram Bot API sendMessage using native fetch().
 - [x] Validate token, chat ID, injected fetch, timeout, message length, HTTP response, and Telegram API response.
-- [x] Format an explicit allowlist of lifecycle, recovery, pair-pause, order-fill, and execution-fill events.
+- [x] Deliver application-formatted plain-text messages through the injected formatter boundary; application-specific event vocabulary and presentation remain with the consumer.
 - [x] Exclude raw exchange payloads and high-volume execution reports.
 - [x] Serialize sends and expose explicit subscriber cleanup.
 - [x] Integrate optional Telegram notifications into Harvester through the composition boundary (PR #734); delivery remains isolated from trading execution.
@@ -104,7 +104,7 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [x] Add a configurable maxPending limit to bound the subscriber's local queue.
 - [x] Recover the internal send queue after transport or logger failures.
 - [x] Avoid duplicate delivery-error logging when a subscriber logger is configured; preserve event-bus reporting when it is not.
-- [x] Normalize and bound untrusted event fields before formatting.
+- [x] Keep transport validation and bounded delivery inside the package; consuming applications sanitize and bound message content before delivery.
 - [x] Redact Telegram credentials from transport and API error messages.
 - [x] Reject malformed successful Telegram API responses instead of reporting false success.
 - [x] Add deterministic regression tests for shutdown races, partial cleanup, queue overflow, malformed responses, secret redaction, and error recovery.

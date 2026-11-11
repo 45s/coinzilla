@@ -18,7 +18,8 @@
     "testnet:audit": "node --env-file=.env.development scripts/audit-testnet-account.js",
     "testnet": "node --env-file=.env.development scripts/testnet-menu.js",
     "test:targeted": "node scripts/run-targeted-tests.js",
-    "config:symbol": "node scripts/config-symbol.js"
+    "config:symbol": "node scripts/config-symbol.js",
+    "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js"
   },
   "engines": {
     "node": ">=24"
@@ -28,13 +29,14 @@
     "@coinzilla/brokers": "workspace:*",
     "@coinzilla/entities": "workspace:*",
     "@coinzilla/event-bus": "workspace:*",
+    "@coinzilla/indicators": "workspace:*",
     "@coinzilla/journal": "workspace:*",
     "@coinzilla/notifiers": "workspace:*",
     "@coinzilla/utils": "workspace:*"
   },
   "config": {
     "targetedTestFiles": [
-      "src/bootstrap/doge-zro-conservative-replay.test.js",
+      "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
       "test/bootstrap/start-harvester.test.js"
     ]

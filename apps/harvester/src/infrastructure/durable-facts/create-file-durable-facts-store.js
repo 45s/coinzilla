@@ -37,6 +37,7 @@ const FACT_TYPES = new Set([
   "SAFETY_BLOCKER_RESOLVED",
   "ACCOUNT_SNAPSHOT_CAPTURED",
   "ACCOUNT_OPEN_ORDERS_CAPTURED",
+  "MARKET_HISTORY_COVERAGE_CONFIRMED",
 ])
 
 const FACTS_FILE_NAME = "facts.jsonl"
@@ -151,6 +152,30 @@ function validateFactData({ factType, data }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
+  }
+  if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+    const allowedFields = new Set([
+      "symbol",
+      "coveredFromTime",
+      "verifiedAt",
+      "evidenceDigest",
+      "verifiedBy",
+    ])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Market-history coverage fact contains unsupported fields")
+    }
+    requireNonEmptyString({ value: canonicalData.symbol, field: "data.symbol" })
+    if (!/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
+    }
+    requireNonEmptyString({ value: canonicalData.verifiedBy, field: "data.verifiedBy", maxLength: MAX_FACT_ID_LENGTH })
+    if (!Number.isSafeInteger(canonicalData.coveredFromTime) || canonicalData.coveredFromTime < 0 ||
+        !Number.isSafeInteger(canonicalData.verifiedAt) || canonicalData.verifiedAt < canonicalData.coveredFromTime) {
+      throw new TypeError("Market-history coverage timestamps must be non-negative safe integers with verifiedAt >= coveredFromTime")
+    }
+    if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
+      throw new TypeError("Market-history coverage evidenceDigest must be a SHA-256 digest")
+    }
   }
   return canonicalData
 }
@@ -533,6 +558,32 @@ export function createFileDurableFactsStore({
           throw createError("Durable factId was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
         }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
+      }
+      if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+        const nowTime = now().getTime()
+        if (!Number.isSafeInteger(nowTime) || input.data.verifiedAt > nowTime) {
+          throw new Error("Market-history coverage verification timestamp cannot be in the future")
+        }
+        const previousCoverageRecords = state.records.filter((record) =>
+          record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
+          record.data.symbol === input.data.symbol
+        )
+        let previousCoverage
+        for (const record of previousCoverageRecords) {
+          if (previousCoverage && record.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
+            throw new Error("Existing durable market-history coverage narrows the verified history window for " + input.data.symbol)
+          }
+          if (previousCoverage && record.data.verifiedAt < previousCoverage.data.verifiedAt) {
+            throw new Error("Existing durable market-history coverage verification timestamp regresses for " + input.data.symbol)
+          }
+          previousCoverage = record
+        }
+        if (previousCoverage && input.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
+          throw new Error("Market-history coverage must not narrow the verified history window for " + input.data.symbol)
+        }
+        if (previousCoverage && input.data.verifiedAt < previousCoverage.data.verifiedAt) {
+          throw new Error("Market-history coverage verification timestamp must be monotonic for " + input.data.symbol)
+        }
       }
       const sequence = (BigInt(state.manifest.sequence) + 1n).toString()
       const body = {

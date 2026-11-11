@@ -1,7 +1,8 @@
 # Harvester Volatility Protection
 
-- Status: **Accepted design; not implemented**
+- Status: **Protection implementation merged in PR #1041; regression matrix and exact-head CI complete; historical threshold calibration outstanding**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
+- Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
 - Owner: Harvester, with Brokers and Indicators package work
 
@@ -94,7 +95,7 @@ NATR is retained in diagnostics as well as the ratio. Raw ATR values must never 
 
 ### Broker capability delivered
 
-The public @coinzilla/brokers API exposes historical and live candles through merged PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter expose the same methods through PR #1019. Bootstrap does **not** yet fetch candle history or subscribe to Kline streams; that is the next consumer integration step. The normalized methods are:
+The public @coinzilla/brokers API exposes historical and live candles through merged PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter expose them through merged PR #1019. The runtime composes per-market history and indicator collection in merged PR #1037. The per-market protection state machine, central order gate, explicit recovery-SELL purpose and owned-BUY cancellation are implemented and merged in PR #1041. The normalized methods are:
 
 - **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical data.
 - **subscribeForCandles({ symbol, interval, onCandle })** for live updates.
@@ -111,10 +112,18 @@ The Indicators package provides `calculateAtrSeries`, `calculateNatrSeries` and 
 
 - Deduplicate by market, interval and candle open time. Identical repeats are idempotent; conflicting facts for one candle identity fail closed.
 - Require consecutive 1-minute open times. A gap or out-of-order sequence blocks new strategy activity until authoritative history backfills the gap.
-- On stream disconnect, silence beyond the configured freshness limit, malformed candle, or failed backfill, enter PROTECTED.
+- On stream disconnect, candle silence longer than one 1-minute interval plus a 5-second grace, malformed candle, or failed backfill, enter PROTECTED. This candle-feed window is separate from the 5-second market-price and order-book freshness gates; an order still requires fresh price and book data.
 - After reconnect, backfill from the last accepted completed candle before treating the series as current.
 - Never replace missing candles with zeros, interpolate OHLC values, or treat unavailable history as low volatility.
 - Re-evaluate protection only on completed candles. A forming candle cannot count toward the three-candle recovery requirement.
+
+### Runtime candle-history behavior
+
+The current Harvester data service (merged PR #1037) subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles. It accepts only completed bars into the bounded 100-candle history and buffers live events during warm-up. A market needs 74 contiguous completed candles to produce 61 NATR observations: the current observation plus the 60-observation reference. The reference is the arithmetic mean of the previous 60 NATR values; the ratio is current NATR divided by that reference.
+
+A valid current partial Kline update refreshes stream freshness but never enters indicator history. It can still reveal a missing completed interval: the service immediately marks that market unavailable, requests the exact bounded backfill, and restores readiness only after every missing completed candle is present. The forming candle itself is never appended. Closed candles are appended idempotently. Delayed events older than the retained history are ignored without refreshing freshness. Invalid history, a conflicting duplicate, unresolved gap, insufficient history, zero reference NATR, missing subscription or a candle stream older than one 1-minute interval plus a 5-second grace produces an unavailable per-market snapshot. The candle timeout is intentionally distinct from the 5-second price/book freshness checks used by the trading engine. Runtime consumers read it through `getVolatilityData({ symbol })`. During shutdown, the service stops accepting new callbacks and drains already-accepted candle/backfill work before broker disconnect; an unsubscribe error is still propagated, but cannot skip that drain.
+
+Merged PR #1041 adds and wires the per-market protection state machine, central submission gate, recovery-SELL purpose marker, owned-BUY cancellation/reconciliation and one-second freshness monitor. The candle-history service allows one 1-minute interval plus a 5-second grace before declaring the Kline feed stale; the independent 5-second market-price and order-book gates remain unchanged. The protection gate is active in the runtime; each market starts protected until its candle history is ready. The initial thresholds remain provisional and require representative offline historical validation before unattended trading.
 
 ## 5. Order and accounting behavior while protected
 
@@ -128,6 +137,8 @@ Use the existing Harvester-owned order registry and durable cancellation workflo
 4. Durably record the cancellation intent before broker I/O.
 5. Require canonical terminal order facts and reconcile all fills, including fills racing with cancellation.
 6. If cancellation outcome, terminal status, fill history or accounting is uncertain, remain protected. Never assume the BUY was canceled and never blindly retry an uncertain request.
+
+Volatility-specific cancellation behavior: a definite NOT_SENT result leaves the owned order OPEN and may be retried no more than once per five seconds (or on a new completed candle). An unconfirmed outcome is recorded as UNKNOWN and is not blindly retried; the market stays protected until authoritative reconciliation resolves it. If the registry cannot record UNKNOWN, or fill/accounting reconciliation fails, the existing full account-integrity pause remains in force. Otherwise, volatility protection does not activate the global pause, so known recovery SELL management can continue.
 
 ### Recovery SELL exception
 
@@ -175,7 +186,7 @@ Volatility state is process-local in the first implementation. It is not a subst
 - Stream disconnect/reconnect, historical backfill and repeated candles.
 - Central gate blocks BUY and non-recovery SELL intents before and immediately before broker I/O.
 - Explicit recovery SELL remains permitted while protected; arbitrary SELL is rejected.
-- Only owned active BUYs are canceled; external orders and recovery SELLs are untouched.
+- Only owned active BUYs are canceled; external orders and recovery SELLs are untouched. A direct engine regression proves an existing recovery SELL remains OPEN while the owned BUY reaches CANCELED.
 - Partial BUY fills and cancel/fill races are reconciled and accounted exactly once.
 - Unknown cancellation/submission outcomes keep protection active.
 - Recovery SELL fills, commissions, replacement after terminal state and cycle completion continue correctly.
@@ -183,11 +194,35 @@ Volatility state is process-local in the first implementation. It is not a subst
 
 ## 9. Delivery order
 
-1. **Brokers:** add the normalized historical-candle and live-candle public contract, Binance adapters, and offline protocol/normalization tests.
-2. **Indicators:** implement the reusable ATR, NATR and volatility-ratio API — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
-3. **Harvester market data:** fetch startup history, subscribe to live candles, maintain a bounded completed-candle series, detect stale/gapped data and backfill after reconnect.
-4. **Harvester protection:** implement per-market states, thresholds/hysteresis, the central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation.
-5. **Verification/docs:** complete the regression matrix, update operational guidance and roadmaps, and pass exact-head CI.
+1. [x] **Brokers:** normalized historical-candle and live-candle public contract, Binance adapters, and offline protocol/normalization tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
+2. [x] **Indicators:** reusable ATR, NATR and volatility-ratio API — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
+3. [x] **Harvester broker port:** application-owned historical/live candle methods — [PR #1019](https://github.com/45s/coinzilla/pull/1019).
+4. [x] **Harvester market data:** startup history, bounded completed-candle series, freshness/gap detection and reconnect backfill — [PR #1037](https://github.com/45s/coinzilla/pull/1037).
+5. [x] **Harvester protection:** per-market states, thresholds/hysteresis, freshness monitor, central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041).
+6. [x] **Regression matrix and exact-head CI:** offline coverage is in the domain state, candle-history, order-gate, engine and startup tests; all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
+7. [x] **Candle-stream freshness correction:** one 1-minute interval plus a 5-second grace, with quiet-stream regressions — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049).
+8. [~] **Documentation and offline calibration CLI:** synchronize the runtime contract and add the local-only analyzer, CSV validation and candidate-threshold options — PR #1046.
+9. [ ] **Historical calibration:** validate the provisional warning/protection/recovery thresholds against representative offline Spot market history before treating them as production-calibrated.
+
+## 10. Offline historical threshold calibration
+
+The initial thresholds are provisional. Calibration uses completed Binance Spot 1-minute Kline CSV files from the official [Binance Public Data archive](https://github.com/binance/binance-public-data) ([archive browser](https://data.binance.vision/)). Download the matching `.zip` and `.CHECKSUM` files, verify the archive checksum, and extract the CSV outside the repository; no market-history dataset or credentials are bundled with Harvester.
+
+Run the offline analyzer with one or more monthly/daily CSV files. The filenames must follow Binance's `SYMBOL-1m-YYYY-MM.csv` or `SYMBOL-1m-YYYY-MM-DD.csv` convention:
+
+```sh
+pnpm --filter @coinzilla/harvester run volatility:calibrate -- \
+  --input ./data/volatility/BTCUSDT-1m-2024-03.csv \
+  --input ./data/volatility/BTCUSDT-1m-2024-04.csv \
+  --input ./data/volatility/DOGEUSDT-1m-2024-03.csv \
+  --output ./data/volatility/calibration-report.json
+```
+
+Use the same symbol's files together; the tool reports each symbol independently. Optional candidate values are `--warning-ratio`, `--protect-ratio`, `--recover-ratio` and `--stable-candles`. Candidate thresholds must satisfy `0 < recover < warning < protect`; the defaults mirror the current runtime. The implementation is [`scripts/calibrate-volatility-thresholds.js`](../scripts/calibrate-volatility-thresholds.js). The command is local-only: it performs no network request, broker connection, credential access or exchange operation.
+
+The archive's Spot timestamps use milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. The parser normalizes both units to the runtime's millisecond candle contract. It rejects malformed rows, conflicting duplicates, gaps, out-of-order data and incomplete source history; it never interpolates or fabricates candles. The report includes SHA-256 hashes of the extracted CSV inputs for reproducibility and can be written to a JSON file with `--output`.
+
+The analysis reuses the runtime's ATR(14) Wilder smoothing, NATR, previous-60 completed-NATR reference and protection-state transition function, and replays a rolling 100-candle startup window. It reports ratio percentiles, warning/protection/recovery threshold frequencies, NORMAL/PROTECTED/RECOVERING occupancy, protection episodes, the `recoveryTransitions` count, and the longest protected run. `protectionRuns` includes the initial startup-protected run; `protectionEntries` counts later transitions into protection. It assumes no active owned BUY orders and does not model exchange cancellation latency, fills, slippage, PnL or strategy profitability. These reports inform threshold review; they do not automatically change runtime constants or authorize unattended trading.
 
 No TESTNET/LIVE order, cancellation, restart or other exchange operation is authorized by these implementation steps. A separate controlled validation requires explicit operator approval.
 

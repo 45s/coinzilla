@@ -2,9 +2,16 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { EventBus } from "../../../event-bus/src/event-bus.js"
 import {
-  subscribeTelegramNotifications,
-  TELEGRAM_NOTIFICATION_EVENTS,
+  subscribeTelegramNotifications as subscribeTelegramNotificationsRaw,
 } from "./telegram-event-subscriber.js"
+
+const TELEGRAM_NOTIFICATION_EVENTS = Object.freeze(["order.filled", "fill.received", "bot.pair_paused", "bot.recovery_failed", "bot.recovery_completed", "bot.startup_failed", "broker.connected", "broker.disconnected", "order.submitted", "order.cancelled", "order.failed", "account.safety_alert", "bot.started", "bot.stopped"])
+
+const subscribeTelegramNotifications = (options = {}) => subscribeTelegramNotificationsRaw({
+  eventNames: TELEGRAM_NOTIFICATION_EVENTS,
+  formatMessage: (event) => event.name.replaceAll(".", " ").toUpperCase(),
+  ...options,
+})
 
 function createEventBus({ failAt, throwOnUnsubscribe = [] } = {}) {
   const handlers = new Map()
@@ -487,13 +494,12 @@ test("subscribes only to the explicitly selected supported notification events",
   )
 })
 
-test("rejects malformed, duplicate, empty, and unsupported Telegram event selections", () => {
+test("rejects malformed, duplicate, and empty application event selections", () => {
   const invalidSelections = [
     { eventNames: "bot.started", message: /eventNames/ },
     { eventNames: [], message: /at least one/ },
     { eventNames: ["bot.started", "bot.started"], message: /Duplicate/ },
-    { eventNames: ["unknown.event"], message: /Unsupported/ },
-    { eventNames: [null], message: /event name/ },
+      { eventNames: [null], message: /event name/ },
   ]
 
   for (const { eventNames, message } of invalidSelections) {

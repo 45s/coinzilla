@@ -49,6 +49,8 @@ pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
 
+The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harness live in [`test/replays/`](./test/replays/). They exercise the real Harvester composition without connecting to Binance or placing exchange orders.
+
 ## Configuration
 
 Harvester uses one application-wide `config.json`. The root contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. The active strategy key is `CG_coinGrabber`.
@@ -137,7 +139,7 @@ The strategy configuration remains in `config.json` under `strategies`; exchange
 
 ## Volatility protection
 
-Harvester's accepted high-volatility protection design is tracked in [Volatility Protection](./docs/volatility-protection.md) and [issue #1016](https://github.com/45s/coinzilla/issues/1016). Protection is **not active in the runtime**. The shared Brokers candle API is delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017), and the Harvester BrokerPort/adapter exposes it in [PR #1019](https://github.com/45s/coinzilla/pull/1019). Startup history loading, live Kline intake, gap/freshness handling and the trading protection gate remain pending. The design pauses new BUY and non-recovery strategy actions per market, cancels only Harvester-owned active BUYs, and preserves the recovery SELL lifecycle. It does not authorize TESTNET/LIVE operations or make process restarts safe.
+Harvester's high-volatility protection is implemented and wired into the runtime in merged [PR #1041](https://github.com/45s/coinzilla/pull/1041), building on the Brokers candle API ([PR #1017](https://github.com/45s/coinzilla/pull/1017)), Harvester BrokerPort/adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)) and candle-history service ([PR #1037](https://github.com/45s/coinzilla/pull/1037)). Each market starts protected until its candle history is ready. The central gate blocks new BUY and non-recovery strategy actions, cancels only owned active BUYs and preserves the recovery SELL lifecycle. The initial thresholds remain provisional pending offline historical calibration; the merge does not authorize unattended production trading, TESTNET/LIVE operations or process-restart recovery.
 
 ## Runtime and safety
 
@@ -152,7 +154,7 @@ Harvester's accepted high-volatility protection design is tracked in [Volatility
 - [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
 - [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
 - [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
-- [Volatility Protection](./docs/volatility-protection.md) — accepted design and staged implementation plan; not yet implemented.
+- [Volatility Protection](./docs/volatility-protection.md) — implemented runtime protection; provisional thresholds still require offline historical calibration.
 - [Domain documentation](./docs/domain/README.md) — Conservative specification, accounting invariants, glossary and Portfolio.
 - [Infrastructure](./docs/infrastructure/README.md) — broker port and adapter.
 - [Audits and historical evidence](./docs/audits/README.md).
@@ -301,7 +303,7 @@ ADR-0001 defines the application-owned durable-fact store. Genesis creation is a
 
 The explicit command is documented in [ADR-0001 — Application-owned recovery facts](./docs/architecture/decisions/0001-application-owned-recovery-facts.md). Do not run it against a production directory until the runtime-integration step explicitly instructs you to initialize the store.
 
-The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor.
+The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor. The allowlisted `MARKET_HISTORY_COVERAGE_CONFIRMED` fact records only a reviewed per-market history interval and never certifies account-wide market-universe completeness.
 
 ## Process identity and build provenance
 

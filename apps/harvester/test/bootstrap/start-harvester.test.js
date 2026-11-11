@@ -37,6 +37,19 @@ const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
 })
+
+const createTestCandle = ({ symbol, openTime, isClosed = true } = {}) => ({
+  symbol,
+  interval: "1m",
+  openTime,
+  closeTime: openTime + 59_999,
+  open: "1",
+  high: "1.1",
+  low: "0.9",
+  close: "1",
+  volume: "1",
+  isClosed,
+})
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher
     ? input.env?.NODE_ENV === "development" && typeof input.eventPublisher.flush !== "function"
@@ -161,6 +174,9 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   const fillsByOrderId = new Map();
   let onPrice;
   let onUserDataEvent;
+  const candleHistoryRequests = [];
+  const candleSubscriptions = new Map();
+  const candleUnsubscriptions = [];
   let observedTrade;
   const tradeObserved = new Promise((resolve) => { observedTrade = resolve; });
   const broker = {
@@ -206,8 +222,16 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
     getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
-    getCandles: async () => toResult({ data: [] }),
-    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
+    getCandles: async ({ symbol } = {}) => toResult({
+      data: Array.from({ length: 100 }, (_, index) =>
+        createTestCandle({ symbol, openTime: index * 60_000 })),
+    }),
+    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+      await onCandle(createTestCandle({ symbol, openTime: 100 * 60_000 }))
+      await onCandle(createTestCandle({ symbol, openTime: 101 * 60_000 }))
+      await onCandle(createTestCandle({ symbol, openTime: 102 * 60_000 }))
+      return toResult({ data: { unsubscribe: async () => {} } })
+    },
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
       return toResult({ data: { unsubscribe: async () => {} } });
@@ -246,20 +270,30 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       BINANCE_API_SECRET_KEY: 'test-secret',
     },
     now: () => 10,
-    logger: { debug() {}, info() {}, error(...args) { userDataErrors.push(args) } },
+    logger: {
+      debug() {}, info() {},
+      warn(...args) { userDataErrors.push(args) },
+      error(...args) { userDataErrors.push(args) },
+    },
     onUserDataEvent: async ({ event } = {}) => {
       if (event?.executionType === 'TRADE') observedTrade();
     },
   });
 
   assert.equal(context.userDataReady, true);
-  assert.ok(broker.lastOrder, 'the initial ticker snapshot should submit the first Conservative BUY');
+  const volatility = context.getVolatilityData({ symbol: 'ZROUSDT' });
+  assert.equal(volatility.ok, true);
+  assert.equal(volatility.data.status.isReady, true, JSON.stringify({
+    status: volatility.data.status,
+    logs: userDataErrors.map(([entry]) => ({ ...entry, error: entry.error?.message, stack: entry.error?.stack })),
+  }));
+  // The startup REST ticker seed is deferred until candle warm-up reaches NORMAL.
+  assert.ok(broker.lastOrder, 'the startup ticker seed should be evaluated after volatility history becomes ready');
   assert.equal(accountSnapshotCalls, 1);
   assert.equal(openOrderSnapshotCalls, 1);
   assert.equal(typeof onPrice, 'function');
   assert.equal(typeof onUserDataEvent, 'function');
 
-  await onPrice({ symbol: 'ZROUSDT', price: '1', timestamp: 10 });
   const buyIntent = broker.lastOrder;
   assert.ok(buyIntent);
   const submittedOrder = new CanonicalOrder({
@@ -325,7 +359,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
 });
 
 
-test("subscribes and submits initial BUYs independently for every enabled Conservative market", async () => {
+test("subscribes every enabled market and fail-closes BUYs until its volatility history is ready", async () => {
   const createMetadata = ({ symbol, baseCode } = {}) => {
     const baseAsset = new Asset({ id: "asset-" + baseCode.toLowerCase(), code: baseCode })
     const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
@@ -382,6 +416,9 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     },
   }
   const priceSubscriptions = new Map()
+  const candleSubscriptions = new Map()
+  const candleHistoryRequests = []
+  const candleUnsubscriptions = []
   const bookSubscriptions = []
   const submittedSymbols = []
   const diagnosticLogs = []
@@ -449,8 +486,14 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     getPrices: async ({ symbol } = {}) => toResult({
       data: { symbol, price: symbol === "DOGEUSDT" ? "0.1" : "1" },
     }),
-    getCandles: async () => toResult({ data: [] }),
-    subscribeForCandles: async () => toResult({ data: { unsubscribe: async () => {} } }),
+    getCandles: async ({ symbol, interval, limit } = {}) => {
+      candleHistoryRequests.push({ symbol, interval, limit })
+      return toResult({ data: [] })
+    },
+    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+      candleSubscriptions.set(symbol, { interval, onCandle })
+      return toResult({ data: { unsubscribe: async () => candleUnsubscriptions.push(symbol) } })
+    },
     subscribeForPrices: async ({ symbol, onPrice } = {}) => {
       priceSubscriptions.set(symbol, onPrice)
       return toResult({ data: { unsubscribe: async () => {} } })
@@ -490,8 +533,21 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
 
   assert.equal(context.userDataReady, true)
   assert.deepEqual([...priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual([...candleSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"], "The candle service must subscribe every enabled pair independently.")
+  assert.deepEqual(candleHistoryRequests, [
+    { symbol: "DOGEUSDT", interval: "1m", limit: 101 },
+    { symbol: "ZROUSDT", interval: "1m", limit: 101 },
+  ], "Startup must request one-minute history for each enabled market after candle subscriptions are established.")
+  assert.deepEqual(
+    context.subscriptions,
+    ["DOGEUSDT", "ZROUSDT"],
+    "Adding candle streams must not duplicate market symbols in the existing runtime subscription summary.",
+  )
+  const dogeVolatilityData = context.getVolatilityData({ symbol: "DOGEUSDT" })
+  assert.equal(dogeVolatilityData.ok, true)
+  assert.equal(dogeVolatilityData.data.status.reason, "INSUFFICIENT_HISTORY", "Missing candle history must remain explicitly unavailable for the later fail-closed gate.")
   assert.deepEqual(bookSubscriptions, ["DOGEUSDT", "ZROUSDT"])
-  assert.deepEqual(submittedSymbols, ["DOGEUSDT", "ZROUSDT"], JSON.stringify(diagnosticLogs))
+  assert.deepEqual(submittedSymbols, [], "Neither market may submit a BUY while its own candle history is insufficient.")
   assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
   assert.equal(typeof priceSubscriptions.get("ZROUSDT"), "function")
 
@@ -508,5 +564,10 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
       JSON.stringify(diagnosticLogs.filter(({ message }) =>
         message === "Shutdown order reconciliation failed" ||
         message === "paused a trading pair")),
+  )
+  assert.deepEqual(
+    candleUnsubscriptions.sort(),
+    ["DOGEUSDT", "ZROUSDT"],
+    "Harvester shutdown must unsubscribe each live candle stream as part of market-data cleanup.",
   )
 })
