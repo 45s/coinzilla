@@ -54,7 +54,7 @@ Keep cumulative confirmed netSellProceeds with the current position's full spent
 
 ## 4. Recovery SELL economics
 
-The minimum realized net profit is at least 0.01 units of the pair's quote asset. For a USDT-quoted pair this is 0.01 USDT; for the currently enabled ZROFDUSD pair it is 0.01 FDUSD. The strategy compares quote-asset amounts directly and performs no USD conversion. A value below 0.01 is invalid. Never intentionally close a recovery position at a loss or break-even.
+The minimum realized net profit is configured independently for each pair as `pairs.<SYMBOL>.minProfit`, and must be at least 0.01 units of that pair's quote asset. For a USDT-quoted pair, `minProfit: 0.1` means 0.1 USDT; for an FDUSD-quoted pair, `minProfit: 0.01` means 0.01 FDUSD. The strategy compares quote-asset amounts directly and performs no USD conversion. A value below 0.01 is invalid. There is no global `settings.minProfit`; every configured pair must declare its own threshold. Never intentionally close a recovery position at a loss or break-even.
 
 Sell all exchange-sellable strategy inventory except the exact configured pair-level keepQuantity. This is the only retained-inventory setting name. Do not introduce coinToKeep or keepCoinQuantity.
 
@@ -97,7 +97,7 @@ Let:
 - t = exchange price tick;
 - C = the entire accumulated position spent;
 - P = cumulative confirmed net SELL proceeds;
-- m = configured minimum profit, with m >= 0.01.
+- m = this pair's configured `minProfit`, with m >= 0.01 in its quote asset.
 
 Maximum planned SELL quantity, accounting for a possible base-asset fee and quantity-step rounding:
 
@@ -189,7 +189,7 @@ Recovery is complete only when all of the following are true:
 
 Only after these conditions pass may keepQuantity plus any classified exchange-constrained dust be allocated as retained/free inventory, preserving the dust quantity and its accounting provenance, and the completed recovery basis be reset. If profit is below 0.01, fill history is incomplete, inventory accounting is inconsistent, or the full retained total cannot be preserved, fail closed and do not reset.
 
-The durable `recovery.cycle_completed` record must preserve the configured `keepQuantity`, configured `minProfit`, actual `realizedNetProfit`, final `freeQuantity`, and exact dust/filter evidence when dust exists. Replay must verify that realized profit meets the recorded threshold and that `freeQuantity = keepQuantity + dust` (or exactly `keepQuantity` when there is no dust). After replaying the fills, the recorded free allocation must consume all remaining active inventory. A journal record that leaves sellable active inventory behind or weakens the configured profit threshold is invalid and must fail closed. Older completion records that lack the configured threshold or retained-inventory proof are not silently upgraded; replay must fail closed and require reconciliation.
+The durable `recovery.cycle_completed` record must preserve the pair's configured `keepQuantity` and `minProfit`, actual `realizedNetProfit`, final `freeQuantity`, and exact dust/filter evidence when dust exists. The recorded threshold is the value used for that market and cycle; replay validates the record against its own threshold rather than another market's current configuration. Replay must verify that realized profit meets the recorded threshold and that `freeQuantity = keepQuantity + dust` (or exactly `keepQuantity` when there is no dust). After replaying the fills, the recorded free allocation must consume all remaining active inventory. A journal record that leaves sellable active inventory behind or weakens the configured profit threshold is invalid and must fail closed. Older completion records that lack the configured threshold or retained-inventory proof are not silently upgraded; replay must fail closed and require reconciliation.
 
 keepQuantity = 0 is permitted only after the complete workflow—including BUY, partial SELL, cancellation/reconciliation, terminal SELL, dust, profit verification, and exact-once completion—has passed end-to-end regression. Until then, fail closed at the precise unsupported boundary.
 
