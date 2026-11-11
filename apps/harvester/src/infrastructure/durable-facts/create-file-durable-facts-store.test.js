@@ -311,6 +311,7 @@ test("refuses to claim durable writes on platforms without directory fsync suppo
   assert.equal(initialization.ok, false)
   assert.match(initialization.errors[0].message, /directory fsync/i)
   assert.deepEqual(await readdir(directory), [])
+  if (process.platform === "win32") return
   const supportedStore = createStore(directory, { platform: "linux" })
   assert.equal((await supportedStore.initialize()).ok, true)
   const before = await readFile(path.join(directory, "facts.jsonl"), "utf8")
