@@ -1593,6 +1593,9 @@ test("projects unowned-order evidence as a sticky safety blocker without a separ
     eventName: "execution.unowned_order",
     symbol: "BTCUSDT",
     reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    clientOrderId: "external-client",
+    brokerOrderId: "external-broker",
+    sequence: 0,
   }])
   assert.deepEqual(result.data.pausedMarkets, [])
 })
