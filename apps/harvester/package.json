@@ -28,6 +28,7 @@
     "@coinzilla/brokers": "workspace:*",
     "@coinzilla/entities": "workspace:*",
     "@coinzilla/event-bus": "workspace:*",
+    "@coinzilla/indicators": "workspace:*",
     "@coinzilla/journal": "workspace:*",
     "@coinzilla/notifiers": "workspace:*",
     "@coinzilla/utils": "workspace:*"

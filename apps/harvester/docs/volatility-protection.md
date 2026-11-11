@@ -1,7 +1,8 @@
 # Harvester Volatility Protection
 
-- Status: **Accepted design; not implemented**
+- Status: **Data collection implemented in PR #1021; protection policy not implemented**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
+- Related implementation: [Harvester candle history and ATR/NATR measurements PR #1021](https://github.com/45s/coinzilla/pull/1021) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
 - Owner: Harvester, with Brokers and Indicators package work
 
@@ -94,7 +95,7 @@ NATR is retained in diagnostics as well as the ratio. Raw ATR values must never 
 
 ### Broker capability delivered
 
-The public @coinzilla/brokers API exposes historical and live candles through merged PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter expose the same methods through PR #1019. Bootstrap does **not** yet fetch candle history or subscribe to Kline streams; that is the next consumer integration step. The normalized methods are:
+The public @coinzilla/brokers API exposes historical and live candles through merged PR #1017. Harvester's application-owned BrokerPort and infrastructure adapter expose them through merged PR #1019. The runtime now composes per-market history and indicator collection in PR #1021; the trading protection state machine and central order gate are still pending. The normalized methods are:
 
 - **getCandles({ symbol, interval, limit, startTime?, endTime? })** for historical data.
 - **subscribeForCandles({ symbol, interval, onCandle })** for live updates.
@@ -115,6 +116,14 @@ The Indicators package provides `calculateAtrSeries`, `calculateNatrSeries` and 
 - After reconnect, backfill from the last accepted completed candle before treating the series as current.
 - Never replace missing candles with zeros, interpolate OHLC values, or treat unavailable history as low volatility.
 - Re-evaluate protection only on completed candles. A forming candle cannot count toward the three-candle recovery requirement.
+
+### Runtime candle-history behavior
+
+The current Harvester data service (PR #1021) subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles. It accepts only completed bars into the bounded 100-candle history and buffers live events during warm-up. A market needs 74 contiguous completed candles to produce 61 NATR observations: the current observation plus the 60-observation reference. The reference is the arithmetic mean of the previous 60 NATR values; the ratio is current NATR divided by that reference.
+
+A valid current partial Kline update refreshes stream freshness but never enters indicator history. It can still reveal a missing completed interval: the service immediately marks that market unavailable, requests the exact bounded backfill, and restores readiness only after every missing completed candle is present. The forming candle itself is never appended. Closed candles are appended idempotently. Delayed events older than the retained history are ignored without refreshing freshness. Invalid history, a conflicting duplicate, unresolved gap, insufficient history, zero reference NATR, missing subscription or a stream older than five seconds produces an unavailable per-market snapshot. Runtime consumers read it through `getVolatilityData({ symbol })`. During shutdown, the service stops accepting new callbacks and drains already-accepted candle/backfill work before broker disconnect; an unsubscribe error is still propagated, but cannot skip that drain.
+
+This phase does not pause BUYs or cancel orders. Until the next protection-policy phase is merged, these measurements are diagnostic/runtime data only and must not be described as an active safety gate.
 
 ## 5. Order and accounting behavior while protected
 

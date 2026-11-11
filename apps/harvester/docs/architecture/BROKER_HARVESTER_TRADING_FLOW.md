@@ -12,8 +12,8 @@ The Binance broker and Harvester adapter perform exchange I/O and translate exch
 | --- | --- | --- |
 | Live market prices | `subscribeForPrices({ symbol, onPrice })` | Subscribes to the aggregate-trade price stream and invokes `onPrice` with a normalized price event. |
 | Initial ticker price | `getPrices({ symbol })` | Requests a ticker snapshot when startup has not received a fresh stream price. |
-| Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` | Exposes normalized historical candles through the application port; not yet called by bootstrap. |
-| Live candle updates | `subscribeForCandles({ symbol, interval, onCandle })` | Exposes normalized Kline callbacks and unsubscribe lifecycle; not yet subscribed by bootstrap. |
+| Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` | Loads the initial completed history and backfills missing one-minute candles. |
+| Live candle updates | `subscribeForCandles({ symbol, interval, onCandle })` | Feeds the per-market history service; the subscription is drained during shutdown. |
 | Trading constraints | `getSymbolFilters({ symbol })` | Loads symbol filters and converts them into Harvester market metadata. |
 | Best bid/ask | `subscribeForBookTicker({ symbol, onBookTicker })` | Delivers normalized best-bid/best-ask updates used by the trading engine's LIMIT_MAKER safety checks. |
 | Submit an order | Harvester port: `placeOrder({ order })`; Binance client: `createCanonicalOrder(order)` or `createOrder(order)` | The adapter prefers canonical submission when the client supports it; otherwise it uses the regular order method. |
@@ -21,7 +21,7 @@ The Binance broker and Harvester adapter perform exchange I/O and translate exch
 
 The adapter is `src/infrastructure/brokers/binance-broker-adapter.js`; the application-owned contract is `src/application/ports/broker.port.js`. Binance-specific API operations, stream names, and payload mappings stay behind this boundary.
 
-The candle methods are now part of the required Harvester port and are forwarded unchanged by the adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)). They are available capabilities, not current bootstrap behavior: the startup flow below does not yet fetch history or subscribe to Kline streams.
+The candle methods are part of the required Harvester port and are forwarded unchanged by the adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)). The startup candle-history service now uses them ([PR #1021](https://github.com/45s/coinzilla/pull/1021)); it runs after the existing price intake and does not change the BUY/SELL decision path.
 
 **Naming clarification:** `createCanonicalOrder()` and `createOrder()` are methods on the shared Binance broker client, not Harvester's application port. Harvester submits through `broker.placeOrder({ order })`. Likewise, `subscribeForBookTicker()` is an available broker-port capability; it supplies order-book safety data and is not the Conservative price-decision input.
 
@@ -35,6 +35,29 @@ The candle methods are now part of the required Harvester port and are forwarded
 | `updateTradingAccounting({ fill })` | Applies one canonical actual fill to Portfolio and RecoveryLedger as one accounting transition. |
 
 Bootstrap composes the broker adapter, engine, strategy policy, and accounting workflow. The engine uses the injected broker port; the strategy policy remains exchange-independent.
+
+## Candle history warm-up and live maintenance
+
+The candle service is composed after the existing market-price intake. It establishes all enabled-market Kline subscriptions before requesting historical data, buffers callbacks received during warm-up, and exposes data readiness separately from trading policy.
+
+```mermaid
+flowchart TD
+    A[Enabled market] --> B[Subscribe to 1m Kline stream]
+    B --> C[Buffer live candle updates]
+    C --> D[Request 101 historical candles]
+    D --> E[Validate and retain up to 100 completed candles]
+    E --> F[Merge buffered live updates]
+    F --> G[Calculate ATR14 and NATR]
+    G --> H[Average previous 60 NATR values]
+    H --> I[Publish per-market volatility snapshot]
+    F --> J{Gap detected?}
+    J -- yes --> K[Block readiness; backfill exact missing range]
+    K --> F
+    J -- no --> L[Wait for next Kline update]
+    L --> F
+```
+
+A market is not data-ready until it has at least 74 contiguous completed candles (61 NATR observations), a successful live subscription, and a fresh valid Kline update. A detected gap immediately removes readiness while its exact historical backfill is pending; readiness returns only after continuity is restored. Delayed events outside the retained window do not refresh freshness. The current five-second stream freshness rule is reused. A zero reference NATR, invalid candle, unresolved gap, failed subscription or stale stream remains explicitly unavailable. Shutdown drains accepted candle/backfill callbacks before broker disconnect, even when the unsubscribe operation itself fails. This service reports data readiness only; it does not yet pause trading or authorize an order.
 
 ## Interaction diagram
 
