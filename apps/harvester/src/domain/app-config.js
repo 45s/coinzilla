@@ -65,7 +65,9 @@ export function validateAppConfig(config) {
   if (!strategy.enabled) fail("strategies.CG_coinGrabber.enabled", "CG_coinGrabber must remain enabled")
   requireRecord(strategy.settings, "strategies.CG_coinGrabber.settings")
   const settingsPath = "strategies.CG_coinGrabber.settings"
-  requireNumber(strategy.settings.minProfit, `${settingsPath}.minProfit`, { min: 0.01 })
+  if (Object.hasOwn(strategy.settings, "minProfit")) {
+    fail(`${settingsPath}.minProfit`, "must be configured on each market pair")
+  }
   requireRecord(strategy.settings.conservative, `${settingsPath}.conservative`)
   requireBoolean(strategy.settings.conservative.enabled, `${settingsPath}.conservative.enabled`)
   if (!strategy.settings.conservative.enabled) fail(`${settingsPath}.conservative.enabled`, "Conservative must remain enabled")
@@ -83,6 +85,7 @@ export function validateAppConfig(config) {
     requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true })
     requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true })
     requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 })
+    requireNumber(pair.minProfit, `${pairPath}.minProfit`, { min: 0.01 })
     requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true, max: 100, exclusiveMax: true })
     requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`)
     requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`)
