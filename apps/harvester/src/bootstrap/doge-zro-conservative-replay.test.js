@@ -17,7 +17,7 @@ const FIRST_BUY_TRADE_ID = 645
 const FINAL_RECOVERY_SELL_TRADE_ID = "649"
 const SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID = "650"
 
-const tradingConfig = {
+const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -88,7 +88,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
   beforeEach(async () => {
     dogeTradingReplay = await createDogeTradingReplay({
       marketSymbol: MARKET_SYMBOL,
-      tradingConfig,
+      appConfig,
     })
   })
 

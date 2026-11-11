@@ -25,9 +25,9 @@ function createOpenOrderSnapshot({ order }) {
   return openOrder
 }
 
-function createExchangeMarketMetadata(marketSymbol, tradingConfig) {
+function createExchangeMarketMetadata(marketSymbol, appConfig) {
   const baseAsset = marketSymbol.slice(0, -4)
-  const marketConfiguration = tradingConfig.strategies.CG_coinGrabber.pairs[marketSymbol]
+  const marketConfiguration = appConfig.strategies.CG_coinGrabber.pairs[marketSymbol]
   return {
     symbol: marketSymbol,
     baseAsset,
@@ -84,9 +84,9 @@ function waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, 
   })
 }
 
-export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
-  const marketConfiguration = tradingConfig.strategies.CG_coinGrabber.pairs[marketSymbol]
-  const dogeExchangeInfo = createExchangeMarketMetadata(marketSymbol, tradingConfig)
+export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
+  const marketConfiguration = appConfig.strategies.CG_coinGrabber.pairs[marketSymbol]
+  const dogeExchangeInfo = createExchangeMarketMetadata(marketSymbol, appConfig)
   const scenarioExpectations = {
     initialPrice: "0.07161000",
     buyPrice: "0.07157",
@@ -345,7 +345,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
   }
 
   const runtime = await startHarvester({
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => appConfig,
     env: {
       BINANCE_API_KEY: "key",
       BINANCE_API_SECRET_KEY: "secret",

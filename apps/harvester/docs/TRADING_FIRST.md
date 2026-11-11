@@ -51,7 +51,7 @@ The historical incident facts remain: twelve distinct 400-DOGE BUY orders at 0.0
 
 When implementing or changing the trading runtime, follow this order:
 
-1. **Start the application.** Read and validate the trading configuration. Resolve enabled pairs and their strategy settings. Fail with actionable errors for invalid configuration.
+1. **Start the application.** Read and validate the single application-wide `config.json`. Resolve enabled strategy pairs and their settings; resolve optional notification policy independently. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
 3. **Receive usable market prices.** Validate incoming prices and make the latest usable price available to the trading workflow. Handle missing/stale prices safely.
 4. **Evaluate the first strategy.** Conservative is the first executable policy. Its complete BUY/SELL, accounting, commission, retained-inventory, partial-fill, cancellation/replacement, dust, and completion behavior is defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not duplicate those rules here. Do not start Aggressive first or place runtime/broker concerns inside the domain.
@@ -79,7 +79,7 @@ The expected product workflow is the Conservative lifecycle defined in [Trading 
 
 Trading first does not mean careless execution. Implement the smallest safety boundary that makes the TESTNET cycle controlled and testable:
 
-- Resolve the Binance environment from the single `TRADING_MODE` environment variable. Accept only `testnet` or `live`; reject missing or invalid values at startup. Binance is the only broker, so no broker selector is needed. Trading is enabled in either mode, with no separate trading-enable flag or runtime-profile selector. `NODE_ENV` may describe the Node.js runtime but must not choose the exchange environment. Implemented: the bootstrap reads `TRADING_MODE` directly; `NODE_ENV` does not select the exchange, and no runtime profile is loaded from `trading-config.json`.
+- Resolve the Binance environment from the single `TRADING_MODE` environment variable. Accept only `testnet` or `live`; reject missing or invalid values at startup. Binance is the only broker, so no broker selector is needed. Trading is enabled in either mode, with no separate trading-enable flag or runtime-profile selector. `NODE_ENV` may describe the Node.js runtime but must not choose the exchange environment. Implemented: the bootstrap reads `TRADING_MODE` directly; `NODE_ENV` does not select the exchange, and no exchange-mode profile is loaded from `config.json`; Telegram notification profiles are separate and do not select the exchange environment.
 - Validate the enabled pair, current price, exchange tick/step rules, supported order type, minimum quantity/notional, and available balance needed for the specific order.
 - Use stable client order identifiers where the broker supports them and retain enough in-process order state to associate updates/fills with submitted orders.
 - Never submit duplicate orders because of repeated market events or duplicate execution events.
