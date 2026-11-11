@@ -463,10 +463,12 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (genesisSynced) writeUncertain = true
-      if (!error.code) error.code = genesisSynced
-        ? "DURABLE_FACTS_COMMIT_UNCERTAIN"
-        : "DURABLE_FACTS_INITIALIZATION_FAILED"
+      if (genesisSynced) {
+        writeUncertain = true
+        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+      } else if (!error.code) {
+        error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
+      }
       return toResult({ error })
     }
   })
@@ -523,9 +525,11 @@ export function createFileDurableFactsStore({
         },
       })
     } catch (error) {
-      if (logSynced) writeUncertain = true
-      if (!error.code) {
-        error.code = logSynced ? "DURABLE_FACTS_COMMIT_UNCERTAIN" : "DURABLE_FACTS_APPEND_FAILED"
+      if (logSynced) {
+        writeUncertain = true
+        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+      } else if (!error.code) {
+        error.code = "DURABLE_FACTS_APPEND_FAILED"
       }
       return toResult({ error })
     }
