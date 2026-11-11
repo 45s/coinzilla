@@ -6432,7 +6432,7 @@ test("does not trust NOT_SENT metadata on a successful noncanonical cancellation
 })
 
 
-test("keeps the standing BUY open when refreshed metadata contains an unvalidated exchange constraint", async () => {
+test("allows trailing BUY replacement when refreshed metadata contains unsupported exchange filters", async () => {
   const refreshedMetadata = {
     ...marketMetadata,
     unvalidatedConstraints: [
@@ -6457,13 +6457,12 @@ test("keeps the standing BUY open when refreshed metadata contains an unvalidate
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false, "A dynamic price filter discovered during refresh must block the replacement before any order mutation.")
-  assert.match(result.errors[0].message, /DYNAMIC_PRICE_BAND/, "The exact unvalidated constraint must remain visible to the caller.")
-  assert.equal(refreshedRuleReads, 1, "The engine must inspect current exchange constraints before replacing the standing BUY.")
-  assert.deepEqual(harness.cancellationIds, [], "The existing BUY must not be canceled when refreshed metadata contains an unsupported constraint.")
-  assert.equal(harness.orders.length, 1, "No replacement order may be submitted while the dynamic filter is unvalidated.")
-  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The original standing BUY must remain open.")
-  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE"), "The market must pause when a newly discovered constraint cannot be evaluated.")
+  assert.equal(result.ok, true, "A refreshed unsupported filter must not block a replacement that passes all supported static checks.")
+  assert.equal(result.data.trailingBuyReplaced, true, "The engine must continue the normal trailing replacement after supported rules pass.")
+  assert.equal(refreshedRuleReads, 1, "The engine must still refresh exchange metadata before replacing the standing BUY.")
+  assert.equal(harness.cancellationIds.length, 1, "The engine must cancel the prior owned BUY before submitting its replacement.")
+  assert.equal(harness.orders.length, 2, "The engine must submit exactly one replacement order after the old BUY is canceled.")
+  assert.equal(harness.engine.getOrders().at(-1).status, "OPEN", "The replacement order must remain tracked as OPEN after acknowledgement.")
 });
 
 

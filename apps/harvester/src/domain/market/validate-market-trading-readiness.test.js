@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { validateMarketTradingReadiness } from "./validate-market-trading-readiness.js"
+import { UnvalidatedMarketExchangeConstraintsError } from "./errors/unvalidated-market-exchange-constraints-error.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
@@ -220,24 +221,22 @@ test("enforces MIN_NOTIONAL at exact equality and immediately below the configur
 })
 
 
-test("blocks an enabled market when any applicable exchange constraint remains unvalidated", () => {
-  const metadata = {
-    ...makeMetadata(),
-    unvalidatedConstraints: [
-      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
-      { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
-    ],
-  }
+test("allows enabled markets with unsupported exchange constraints while retaining their diagnostics", () => {
+  const unvalidatedConstraints = [
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+  ]
+  const metadata = { ...makeMetadata(), unvalidatedConstraints }
 
-  assert.throws(
-    () => validateMarketTradingReadiness({
-      symbol: "DOGEUSDT",
-      pairConfig,
-      marketMetadata: metadata,
-    }),
-    /DYNAMIC_PRICE_BAND\/SYMBOL\/PERCENT_PRICE_BY_SIDE.*BASE_ASSET_POSITION_LIMIT\/ACCOUNT\/MAX_POSITION/,
-    "An enabled market must not become tradable while dynamic price or account position constraints are not validated.",
-  )
+  const result = validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
+    pairConfig,
+    marketMetadata: metadata,
+  })
+
+  assert.equal(result.market, market, "Unsupported exchange constraints must not prevent a correctly configured market from becoming ready.")
+  assert.deepEqual(result.unvalidatedConstraints, unvalidatedConstraints, "Readiness must preserve unsupported filter descriptors for diagnostics and later investigation.")
+  assert.equal(result.tradingRules.constraints.length, metadata.tradingRules.constraints.length, "Unsupported constraints must not be misrepresented as validated static TradingRules.")
 })
 
 test("rejects malformed unvalidated constraint metadata instead of treating it as an empty list", () => {
@@ -249,5 +248,32 @@ test("rejects malformed unvalidated constraint metadata instead of treating it a
     }),
     /unvalidatedConstraints must be an array/,
     "Malformed exchange-constraint metadata must close the readiness gate rather than be interpreted as no restrictions.",
+  )
+})
+
+
+test("rejects incomplete context when constructing an unvalidated-market error", () => {
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: " ", constraints: [] }),
+    /requires a market symbol/,
+    "A market-readiness error must not be constructed without the affected market identity.",
+  )
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT", constraints: [] }),
+    /requires at least one unvalidated exchange constraint/,
+    "A market-readiness error must identify at least one concrete exchange constraint.",
+  )
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT", constraints: [null] }),
+    /descriptors must be objects/,
+    "Malformed constraint entries must be rejected rather than hidden inside a diagnostic.",
+  )
+  assert.throws(
+    () => new UnvalidatedMarketExchangeConstraintsError({
+      symbol: "DOGEUSDT",
+      constraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" }],
+    }),
+    /require type, scope, and sourceFilterType/,
+    "A constraint diagnostic must retain its source filter type as well as its canonical category and scope.",
   )
 })
