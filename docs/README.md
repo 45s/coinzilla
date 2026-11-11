@@ -48,6 +48,10 @@ Each active application/package owns its local README, agent instructions, roadm
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
 - [Workspace ownership map](engineering/DOMAIN_OWNERSHIP.md)
 
+## Proposed future package
+
+- [Indicators proposal](../packages/indicators/README.md) — proposed exchange-neutral technical indicators; not yet an installed workspace package.
+
 ## Shared package entry points
 
 - [Brokers](../packages/brokers/README.md) — exchange integration and broker operations
