@@ -35,8 +35,8 @@ function createDependencies(overrides = {}) {
       calls.push(["getRecoveredState"])
       return { portfolio: {}, orderRegistry: {}, journalFills: [] }
     },
-    getCurrentAccountSnapshot: async () => {
-      calls.push(["getCurrentAccountSnapshot"])
+    refreshAccountSnapshot: async () => {
+      calls.push(["refreshAccountSnapshot"])
       return { ok: true, data: { sourceTime: 300 } }
     },
     getOpenOrders: async () => {
