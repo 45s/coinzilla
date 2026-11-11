@@ -7,8 +7,8 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { createPendingCanonicalOrder } from "../../../src/domain/orders/create-pending-canonical-order.js"
-import { HARVESTER_EVENT_NAMES } from "../../../src/application/events/event-names.js"
+import { createPendingCanonicalOrder } from "../../src/domain/orders/create-pending-canonical-order.js"
+import { HARVESTER_EVENT_NAMES } from "../../src/application/events/event-names.js"
 import {
   mapExecutionUnownedOrderData,
   mapFillAppliedData,
@@ -17,7 +17,7 @@ import {
   mapOrderSubmittedData,
   mapRecoveryCycleCompletedData,
   mapStrategyPausedData,
-} from "../../../src/application/events/lifecycle-event-dtos.js"
+} from "../../src/application/events/lifecycle-event-dtos.js"
 
 export const recoveryTestMarket = new Market({
   venue: "binance",
