@@ -20,7 +20,8 @@ function symbol(value) {
   if (normalized.includes("/")) return normalized
 
   const quote = QUOTE_ASSETS.find((asset) => normalized.length > asset.length && normalized.endsWith(asset))
-  return quote ? `${normalized.slice(0, -quote.length)}/${quote}` : normalized
+  const base = quote ? normalized.slice(0, -quote.length) : ""
+  return quote && base && !/\\s/.test(base) ? `${base}/${quote}` : normalized
 }
 
 function side(value) {
@@ -65,7 +66,7 @@ const formatters = Object.freeze({
   "broker.disconnected": ({ data }) => `🟥 ${text(data.broker, "BROKER", 64).toUpperCase()} DISCONNECTED · ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
   "order.submitted": ({ data }) => compactOrder(data, null, "ORDER SUBMITTED"),
   "order.cancelled": ({ data }) => [
-    `✖️ ${side(data.side).label} ${symbol(data.symbol)} CANCELLED · Filled ${text(data.executedQuantity, "0", 96)}`,
+    `✖️ ${side(data.side).label} ${symbol(data.symbol)} ORDER CANCELLED · Filled ${text(data.executedQuantity, "0", 96)}`,
     orderId(data),
   ].filter(Boolean).join("\n"),
   "order.failed": ({ data }) => `❌ ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
