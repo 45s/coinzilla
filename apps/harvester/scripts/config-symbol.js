@@ -1,0 +1,104 @@
+import { createInterface } from "node:readline/promises"
+import { stdin, stdout, stderr } from "node:process"
+import { pathToFileURL, fileURLToPath } from "node:url"
+import { normalizeSymbolInput, parseDecimalInput, createPairConfig } from "./config-symbol/configuration.js"
+import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
+import { writePairConfigAtomically } from "./config-symbol/write-config.js"
+
+const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config.json", import.meta.url))
+
+function askWithDefault(value, fallback) {
+  return value.trim() === "" ? fallback : value
+}
+
+/** Run the interactive operator flow; all external effects are injected or isolated at this boundary. */
+export async function runConfigSymbol({
+  ask,
+  writeLine = () => {},
+  fetchImpl = globalThis.fetch,
+  metadataFetcher = fetchBinanceSpotMetadata,
+  configPath = DEFAULT_CONFIG_PATH,
+  writeConfig = writePairConfigAtomically,
+} = {}) {
+  if (typeof ask !== "function") {
+    throw new TypeError("runConfigSymbol requires an interactive ask function")
+  }
+
+  writeLine("Harvester — add a Binance Spot trading pair")
+  writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
+  const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
+  const inputs = {
+    investment: parseDecimalInput(await ask("Investment / quote budget: "), "investment", { exclusiveMin: true }),
+    keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
+    makerPercent: parseDecimalInput(await ask("Maker commission percent (for example 0): "), "makerPercent"),
+    takerPercent: parseDecimalInput(await ask("Taker commission percent (for example 0.1): "), "takerPercent"),
+    minProfit: parseDecimalInput(
+      askWithDefault(await ask("Minimum profit per recovery cycle in quote asset [0.01]: "), "0.01"),
+      "minProfit",
+      { exclusiveMin: true },
+    ),
+    priceStepPercent: parseDecimalInput(
+      askWithDefault(await ask("Price step percent [0.05]: "), "0.05"),
+      "priceStepPercent",
+      { exclusiveMin: true },
+    ),
+  }
+
+  writeLine("Fetching current public Binance Spot exchange information...")
+  const metadata = await metadataFetcher({ symbol, fetchImpl })
+  const pairConfig = createPairConfig({ inputs, metadata })
+  writeLine("")
+  writeLine("Configuration preview (new pair will be disabled):")
+  writeLine(JSON.stringify({
+    symbol,
+    baseAsset: metadata.baseAsset,
+    quoteAsset: metadata.quoteAsset,
+    referencePrice: metadata.price,
+    exchangeFilters: {
+      tickSize: metadata.tickSize,
+      stepSize: metadata.stepSize,
+      minQuantity: metadata.minQuantity,
+      maxQuantity: metadata.maxQuantity,
+      minNotional: metadata.minNotional,
+    },
+    pairConfig,
+  }, null, 2))
+
+  const confirmation = (await ask("Add this pair to apps/harvester/config.json? [Y/n]: ")).trim().toLowerCase()
+  if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
+    writeLine("Cancelled. No configuration file was changed.")
+    return Object.freeze({ written: false, symbol, pairConfig })
+  }
+
+  const writtenPath = await writeConfig({ configPath, symbol, pairConfig })
+  writeLine("Pair configuration added successfully: " + writtenPath)
+  writeLine("The new pair is disabled. Review it and enable it manually when ready.")
+  return Object.freeze({ written: true, symbol, pairConfig, path: writtenPath })
+}
+
+async function main() {
+  if (!stdin.isTTY || !stdout.isTTY) {
+    throw new Error("config:symbol requires an interactive terminal; run it from Git Bash or a terminal window")
+  }
+  const terminal = createInterface({ input: stdin, output: stdout })
+  try {
+    await runConfigSymbol({
+      ask: (question) => terminal.question(question),
+      writeLine: (line) => stdout.write(line + "\n"),
+    })
+  } finally {
+    terminal.close()
+  }
+}
+
+const isDirectExecution = process.argv[1]
+  && pathToFileURL(process.argv[1]).href === import.meta.url
+
+if (isDirectExecution) {
+  try {
+    await main()
+  } catch (error) {
+    stderr.write("config:symbol failed: " + (error?.message ?? String(error)) + "\n")
+    process.exitCode = 1
+  }
+}
