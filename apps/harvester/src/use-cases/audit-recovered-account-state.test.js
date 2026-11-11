@@ -782,3 +782,54 @@ test("integrates structured one-market history evidence with account balance and
   assert.equal(result.data.tradeHistory.marketSymbol, "BTCUSDT")
   assert.equal(result.data.tradeHistory.marketUniverseComplete, false)
 })
+
+
+test("fails closed when an exchange open order reuses a terminal recovered brokerOrderId", () => {
+  const { projection, restored } = restoreState()
+  const conflictingOrder = new CanonicalOrder({
+    clientOrderId: "manual-replacement",
+    brokerOrderId: "9001",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1", asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [conflictingOrder],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /terminal recovered order as open/)
+})
+
+test("fails closed when an unowned open order reuses a recovered clientOrderId", () => {
+  const { projection, restored } = restoreState()
+  const conflictingOrder = new CanonicalOrder({
+    clientOrderId: "h-BTCUSDT-buy-1",
+    brokerOrderId: "9902",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1", asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [conflictingOrder],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /clientOrderId conflicts with recovered order ownership/)
+})
