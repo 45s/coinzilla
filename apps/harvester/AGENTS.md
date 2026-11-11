@@ -65,7 +65,6 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 - Notification profiles are `minimal`, `trader`, `verbose`, and `custom`. Critical safety alerts are non-disableable and bypass event overrides and market filters.
 - Notification formatting, bounded queueing, transport, and delivery remain owned by `@coinzilla/notifiers`; Harvester owns profile resolution and mapping of Harvester events.
 
-
 ## Actionable errors and diagnostics
 
 - AI agents MUST NOT introduce a generic `Error` for a known Harvester/domain failure when a specific failure type can be named. Use a domain-specific class extending `Error`, with a precise `name` and stable machine-readable `code`.
