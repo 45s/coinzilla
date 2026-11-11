@@ -1569,3 +1569,118 @@ test("rejects a PREFLIGHT open-order baseline written after trading activity", (
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /PREFLIGHT open-order snapshot must precede trading activity/)
 })
+
+
+test("projects unowned-order evidence as a sticky safety blocker without a separate pause event", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [record("execution.unowned_order", {
+      clientOrderId: "external-client",
+      brokerOrderId: "external-broker",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      status: "FILLED",
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    })],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.stickySafetyBlockers.length, 1)
+  assert.deepEqual(result.data.stickySafetyBlockers[0], {
+    eventName: "execution.unowned_order",
+    symbol: "BTCUSDT",
+    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+  })
+  const restored = restoreHarvesterJournalState({
+    projection: result,
+    marketMetadata: new Map(),
+  })
+  assert.equal(restored.ok, false, "A blocker must not be silently restored without canonical market metadata.")
+})
+
+test("projects invalid-fill and accounting-failure evidence as sticky blockers without pause events", () => {
+  for (const [eventName, reason] of [
+    ["execution.invalid_fill", "IDENTITY_MISMATCH"],
+    ["execution.accounting_failed", "FILL_ACCOUNTING"],
+  ]) {
+    const result = projectHarvesterJournalRecovery({
+      records: [record(eventName, { symbol: "BTCUSDT", reason })],
+    })
+
+    assert.equal(result.ok, true, eventName + " must be retained as safety evidence.")
+    assert.equal(result.data.stickySafetyBlockers.length, 1)
+    assert.equal(result.data.stickySafetyBlockers[0].eventName, eventName)
+    assert.equal(result.data.stickySafetyBlockers[0].symbol, "BTCUSDT")
+    assert.equal(result.data.stickySafetyBlockers[0].reason, reason)
+  }
+})
+
+test("rejects an unknown Harvester event instead of silently skipping potentially stateful evidence", () => {
+  const unknown = record("execution.future_safety_event", { symbol: "BTCUSDT" })
+  unknown.payload.source = "harvester"
+  const result = projectHarvesterJournalRecovery({ records: [unknown] })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /unknown Harvester recovery event/)
+})
+
+test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
+  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("account.snapshot_captured", {
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 100,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+      record("harvester.started", {
+        broker: "binance",
+        strategyMode: "conservative",
+        enabledMarkets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }),
+      record("account.snapshot_captured", {
+        phase: "RECOVERY",
+        sourceTime: 200,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("account.open_orders_captured", {
+        phase: "RECOVERY",
+        observedAt: 200,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+      record("account.snapshot_captured", {
+        phase: "CLOSING",
+        sourceTime: 300,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.accountSnapshots.map(({ phase }) => phase), [
+    "PREFLIGHT",
+    "RECOVERY",
+    "CLOSING",
+  ])
+  assert.deepEqual(result.data.openOrderSnapshots.map(({ phase }) => phase), [
+    "PREFLIGHT",
+    "RECOVERY",
+  ])
+})
