@@ -368,7 +368,7 @@ test("poisons the current store after an uncertain manifest fsync, then verifies
   assert.equal(appended.ok, false)
   assert.equal(appended.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN")
   assert.equal((await store.verify()).ok, false)
-  assert.equal((await store.append(operatorPause()).ok, false)
+  assert.equal((await store.append(operatorPause())).ok, false)
   const freshInstance = createStore(directory)
   const verified = await freshInstance.verify()
   assert.equal(verified.ok, true)
