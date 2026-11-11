@@ -245,6 +245,7 @@ export function evaluateConservativeStrategy({
         if (quantityMeetsMinimum && notionalMeetsMinimum) {
           actions.push(Object.freeze({
             side: "SELL",
+            purpose: "RECOVERY_SELL",
             type: marketMetadata.orderType,
             price: residualPrice,
             quantity: sellQuantity,
