@@ -136,6 +136,7 @@ export function auditRecoveredTradeHistory({
           historyRetentionEvidence.coveredFromTime < 0 ||
           historyRetentionEvidence.coveredFromTime > historyEvidence.historyStartTime ||
           !Number.isSafeInteger(historyRetentionEvidence.verifiedAt) ||
+          historyRetentionEvidence.verifiedAt < historyEvidence.historyStartTime ||
           historyRetentionEvidence.verifiedAt < historyRetentionEvidence.coveredFromTime ||
           typeof historyRetentionEvidence.evidenceDigest !== "string" ||
           !SHA256_PATTERN.test(historyRetentionEvidence.evidenceDigest) ||
