@@ -104,6 +104,43 @@ test("formats console entries as one compact line while retaining structured fie
 })
 
 
+test("prints complete Portfolio Stats inventory and accounting in console output", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output })
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    data: {
+      message: "Portfolio Stats",
+      symbol: "ZROFDUSD",
+      inventory: {
+        activeBaseQuantity: "25 ZRO",
+        freeBaseQuantity: "0.15 ZRO",
+        totalBaseQuantity: "25.15 ZRO",
+      },
+      accounting: {
+        spent: "0 FDUSD",
+        quoteNetCashFlow: "0 FDUSD",
+      },
+    },
+  })
+
+  const line = written.trim()
+  assert.match(line, /Portfolio Stats/)
+  assert.match(line, /"symbol":"ZROFDUSD"/)
+  assert.match(line, /"activeBaseQuantity":"25 ZRO"/)
+  assert.match(line, /"freeBaseQuantity":"0.15 ZRO"/)
+  assert.match(line, /"totalBaseQuantity":"25.15 ZRO"/)
+  assert.match(line, /"spent":"0 FDUSD"/)
+  assert.match(line, /"quoteNetCashFlow":"0 FDUSD"/)
+  assert.ok(line.length <= 360, "Portfolio Stats should remain a bounded single console line")
+  output.destroy()
+})
+
+
 test("suppresses consecutive duplicate console entries and reports their count", () => {
   const output = new PassThrough()
   let written = ""
