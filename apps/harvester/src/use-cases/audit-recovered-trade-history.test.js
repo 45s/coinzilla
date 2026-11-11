@@ -59,6 +59,7 @@ test("accepts exact complete account trade history matching every durable Journa
   assert.equal(result.ok, true)
   assert.deepEqual(result.data, {
     complete: true,
+    scope: "ACCOUNT",
     marketUniverseComplete: true,
     fillsChecked: 1,
     journalFillsChecked: 1,
