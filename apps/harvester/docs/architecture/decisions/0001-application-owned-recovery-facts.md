@@ -192,7 +192,6 @@ $env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
 node apps/harvester/scripts/initialize-durable-facts.js --confirm
 ```
 
-
 ## Implementation tracking (non-normative)
 
 The accepted contract remains the authority for recovery boundaries; delivery status is maintained in the [Harvester roadmap](../../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654).
