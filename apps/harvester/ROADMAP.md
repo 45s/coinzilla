@@ -4,7 +4,7 @@
 
 ## Operator tooling — interactive trading-pair configuration generator
 
-**Status: IN PROGRESS — implementation and tests are included in [PR #1012](https://github.com/45s/coinzilla/pull/1012); exact-head CI and final review remain pending.**
+**Status: IMPLEMENTATION COMPLETE — delivered in [PR #1012](https://github.com/45s/coinzilla/pull/1012).**
 
 **Problem:** manually adding a pair requires looking up exchange-specific precision and trading filters. Guessing tick size, quantity step, minimum quantity or minimum notional can produce invalid configuration and rejected orders.
 
@@ -27,13 +27,15 @@
 
 **Implementation and verification checklist:**
 
-1. [ ] Inspect/reuse the canonical config loader/schema and public decimal utilities; keep the CLI and Binance adapter at the application tooling boundary.
-2. [ ] RED/GREEN — symbol/input validation, percentage boundaries, exact decimal sizing, exchange precision and min/max/notional boundaries.
-3. [ ] RED/GREEN — mocked Binance exchange-info/ticker responses, unsupported symbols/status/order types, malformed/duplicate filters, HTTP/JSON/network failures.
-4. [ ] RED/GREEN — complete config generation, runtime-schema validation, disabled-by-default behavior and existing-pair preservation.
-5. [ ] RED/GREEN — interactive confirmation/cancellation, atomic persistence, lock contention, malformed existing config and cleanup on failure.
-6. [ ] Register the package command; document prompts, defaults, generated fields, safety behavior and operator invocation.
-7. [ ] Run Harvester tests/coverage and all required repository CI on the exact PR head. No TESTNET/LIVE order activity is needed or authorized for this feature.
+1. [x] Inspect/reuse the canonical config loader/schema and public decimal utilities; keep the CLI and Binance adapter at the application tooling boundary.
+2. [x] RED/GREEN — symbol/input validation, percentage boundaries, exact decimal sizing, exchange precision and min/max/notional boundaries.
+3. [x] RED/GREEN — mocked Binance exchange-info/ticker responses, unsupported symbols/status/order types, malformed/duplicate filters, HTTP/JSON/network failures.
+4. [x] RED/GREEN — complete config generation, runtime-schema validation, disabled-by-default behavior and existing-pair preservation.
+5. [x] RED/GREEN — interactive confirmation/cancellation, atomic persistence, lock contention, malformed existing config and cleanup on failure.
+6. [x] Register the package command; document prompts, defaults, generated fields, safety behavior and operator invocation.
+7. [x] Run Harvester tests/coverage and all required repository CI on the exact PR head. No TESTNET/LIVE order activity is needed or authorized for this feature.
+
+**Verification:** exact PR head `a680ad6e612d088c3565beae9b039618f1496a20` passed the full Harvester suite (1,025/1,025), workspace package tests, Harvester/workspace coverage, JavaScript syntax, actionlint, production dependency audit, Utils tests and external documentation links. The optional read-only Binance TESTNET integration workflow was skipped; no live/testnet trading or order placement was performed.
 
 **Acceptance:** the operator supplies strategy-owned inputs without guessing exchange filters; the generator obtains and validates Binance Spot metadata, creates a complete runtime-valid disabled pair in the canonical config, and cannot silently overwrite existing pair settings or leave a partial config after failure.
 
