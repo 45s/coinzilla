@@ -288,9 +288,6 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (data.phase === "RECOVERY" && !session.started) {
           throw new Error("RECOVERY account snapshot requires a started Journal session " + fileName)
         }
-        if (data.phase === "RECOVERY" && !session.started) {
-          throw new Error("RECOVERY open-order snapshot requires a started Journal session " + fileName)
-        }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
         }
@@ -347,6 +344,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
         if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (data.phase === "RECOVERY" && !session.started) {
+          throw new Error("RECOVERY open-order snapshot requires a started Journal session " + fileName)
+        }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT open-order snapshot must precede trading activity in Journal session " + fileName)
         }
