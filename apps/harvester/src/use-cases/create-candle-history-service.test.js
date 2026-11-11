@@ -550,10 +550,11 @@ test("ignores valid live candle events older than the retained 100-candle window
   const fixture = createFixture({
     historyBySymbol: { BTCUSDT: createHistoryFrom("BTCUSDT", 100, 100) },
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 0, isClosed: false }))
+      await onCandle(createCandle({ openTime: 200 * INTERVAL_MS, isClosed: false }))
     },
   })
   await fixture.start()
+  await fixture.candleHandlers.get("BTCUSDT")(createCandle({ openTime: 0 }))
   const snapshot = getSnapshot(fixture)
 
   assert.equal(snapshot.status.isReady, true, "An old event outside the retained history must not invalidate a current contiguous series.")
