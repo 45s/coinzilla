@@ -48,7 +48,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map() } = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -120,10 +120,10 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
   }
   const engine = makeConservativeTradingEngine({
     broker,
-    strategyPolicy: conservativeStrategyPolicy,
+    strategyPolicy,
     appConfig,
     getPortfolio: () => portfolio,
-    getRecoveryLedger: ({ marketId }) => RecoveryLedger.empty({ market: marketsById.get(marketId) }),
+    getRecoveryLedger: ({ marketId }) => recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
@@ -151,6 +151,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     isMarketBookFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
+    initialState,
   })
 
   for (const market of markets) {
@@ -408,4 +409,160 @@ test("duplicate fills and stale order updates do not double-account across marke
   assert.equal(engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT").status, "PARTIALLY_FILLED")
   assert.equal(engine.getOrders().find((order) => order.market.symbol === "SOLUSDT").status, "PARTIALLY_FILLED")
   assert.deepEqual(pauses, [])
+})
+
+
+test("operator pause blocks new BUY exposure only for the selected market", async () => {
+  const { engine, orders } = await createHarness()
+
+  assert.equal(
+    typeof engine.pauseMarket,
+    "function",
+    "The trading engine must expose a serialized operator-pause boundary before the operator capability can be used.",
+  )
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+
+  assert.equal(
+    pauseResult.ok,
+    true,
+    "A configured market must accept an operator pause after its durable fact has been committed.",
+  )
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "The operator pause must be tracked independently for the selected market.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "An operator pause must not be represented as or overwrite a safety pause.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [{ symbol: "SOLUSDT", side: "BUY" }],
+    "Pausing DOGEUSDT must suppress its new BUY while leaving SOLUSDT eligible for normal strategy evaluation.",
+  )
+})
+
+test("operator pause does not change in-memory state when the durable fact commit fails", async () => {
+  const { engine, orders } = await createHarness()
+
+  assert.equal(
+    typeof engine.pauseMarket,
+    "function",
+    "The trading engine must expose the operator-pause boundary for durable-before-apply verification.",
+  )
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({
+      ok: false,
+      errors: [new Error("durable fact commit failed")],
+    }),
+  })
+
+  assert.equal(
+    pauseResult.ok,
+    false,
+    "A failed durable-fact append must reject the pause instead of acknowledging an unpersisted control change.",
+  )
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    [],
+    "A failed durable-fact append must leave the operator-pause projection unchanged.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [
+      { symbol: "DOGEUSDT", side: "BUY" },
+      { symbol: "SOLUSDT", side: "BUY" },
+    ],
+    "A rejected pause must not partially block either market's ordinary BUY evaluation.",
+  )
+})
+
+test("operator pause leaves existing exchange orders untouched and suppresses trailing-BUY replacement", async () => {
+  const { engine, orders } = await createHarness()
+  await startBothMarkets(engine)
+  const beforePause = engine.getOrders().map(({ clientOrderId, status, market }) => ({
+    clientOrderId,
+    status,
+    symbol: market.symbol,
+  }))
+
+  assert.equal(
+    typeof engine.pauseMarket,
+    "function",
+    "The trading engine must expose operator pause without routing it through exchange cancellation.",
+  )
+
+  const pauseResult = await engine.pauseMarket({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+  })
+  assert.equal(
+    pauseResult.ok,
+    true,
+    "An operator pause must succeed without requiring cancellation of an already acknowledged order.",
+  )
+
+  const priceResult = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.1", timestamp: 2 },
+  })
+
+  assert.equal(
+    priceResult.ok,
+    true,
+    "Market-price intake must continue while an operator pause is active.",
+  )
+  assert.deepEqual(
+    engine.getOrders().map(({ clientOrderId, status, market }) => ({
+      clientOrderId,
+      status,
+      symbol: market.symbol,
+    })),
+    beforePause,
+    "Operator pause must preserve existing order identities and statuses without cancellation or replacement.",
+  )
+  assert.equal(
+    orders.length,
+    2,
+    "Operator pause must not submit a trailing-BUY replacement or any other new order for the paused market.",
+  )
+})
+
+test("operator pause restored from durable facts is active before the first market evaluation", async () => {
+  const { engine, orders } = await createHarness({
+    initialState: { operatorPausedMarkets: ["DOGEUSDT"] },
+  })
+
+  assert.equal(
+    typeof engine.getOperatorPausedMarkets,
+    "function",
+    "The engine must expose its restored operator-pause projection for startup verification.",
+  )
+  assert.deepEqual(
+    engine.getOperatorPausedMarkets(),
+    ["DOGEUSDT"],
+    "A restored operator pause must be available before any market event is evaluated.",
+  )
+
+  await startBothMarkets(engine)
+
+  assert.deepEqual(
+    orders.map(({ symbol, side }) => ({ symbol, side })),
+    [{ symbol: "SOLUSDT", side: "BUY" }],
+    "The first DOGEUSDT strategy evaluation must observe the restored pause and submit no BUY.",
+  )
 })
