@@ -76,6 +76,7 @@ test("maps object-shaped application inputs to the broker package methods", asyn
         minQuantity: "0.0001",
         minNotional: "5",
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+        unvalidatedConstraints: [],
       },
     }
   }
@@ -232,6 +233,7 @@ test("fetches current exchange filters for every metadata request instead of reu
         minQuantity: "0.0001",
         minNotional,
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+        unvalidatedConstraints: [],
       },
     }
   }
