@@ -1,4 +1,4 @@
-import { TELEGRAM_NOTIFICATION_EVENT_KEYS } from "../../domain/harvester-config.js"
+import { TELEGRAM_NOTIFICATION_EVENT_KEYS } from "../../domain/app-config.js"
 import { TELEGRAM_NOTIFICATION_EVENTS } from "@coinzilla/notifiers"
 
 const EVENT_NAME_BY_KEY = Object.freeze({

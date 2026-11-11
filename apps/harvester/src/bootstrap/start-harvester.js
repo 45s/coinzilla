@@ -4,7 +4,7 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { loadHarvesterConfig } from "../infrastructure/config/load-harvester-config.js"
+import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
@@ -31,7 +31,7 @@ function logSystem(logger, data) {
 export async function startHarvester({
   configSource,
   appConfig: suppliedHarvesterConfig,
-  loadConfig = loadHarvesterConfig,
+  loadConfig = loadAppConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
   evaluateStrategy = conservativeStrategyPolicy.evaluate,

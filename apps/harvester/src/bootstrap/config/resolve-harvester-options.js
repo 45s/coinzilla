@@ -1,7 +1,7 @@
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapConfigValidatedData } from "../../application/events/lifecycle-event-dtos.js"
-import { resolveRuntimeConfig } from "../../domain/harvester-config.js"
+import { resolveRuntimeConfig } from "../../domain/app-config.js"
 
 export async function resolveHarvesterOptions({ configSource, appConfig: suppliedHarvesterConfig, loadConfig, env = process.env, eventPublisher, logger } = {}) {
   const appConfig = suppliedHarvesterConfig ?? await loadConfig(configSource)
