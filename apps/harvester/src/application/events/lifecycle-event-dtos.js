@@ -680,6 +680,52 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 
 
+/** Map an explicit non-completion evaluation for a fully filled recovery SELL. */
+export const mapRecoveryCycleNotCompletedData = (input = {}) =>
+  mapData(input, "Recovery-cycle-not-completed event mapping", ({
+    symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome, reason,
+    realizedNetProfit, activeQuantity, keepQuantity, minProfit,
+  }) => {
+    if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
+      throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
+    }
+    const mappedReason = requireString({ value: reason, field: "reason" })
+    const continueReasons = ["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"]
+    if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(mappedReason)) {
+      throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
+    }
+    if (outcome === "BLOCKED" && continueReasons.includes(mappedReason)) {
+      throw new TypeError("BLOCKED cannot use a residual sell-through reason")
+    }
+    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" })
+    const mappedActiveQuantity = requireDecimalString({ value: activeQuantity, field: "activeQuantity" })
+    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity, field: "keepQuantity" })
+    const mappedMinProfit = requireDecimalString({ value: minProfit, field: "minProfit" })
+    if (compareDecimal({ left: mappedActiveQuantity, right: "0" }) < 0 || compareDecimal({ left: mappedKeepQuantity, right: "0" }) < 0) {
+      throw new RangeError("activeQuantity and keepQuantity must be non-negative")
+    }
+    if (compareDecimal({ left: mappedMinProfit, right: "0.01" }) < 0) throw new RangeError("minProfit must be at least 0.01")
+    if (outcome === "CONTINUE_SELL_THROUGH" && compareDecimal({ left: mappedActiveQuantity, right: mappedKeepQuantity }) <= 0) {
+      throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
+    }
+    if (mappedReason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) >= 0) {
+      throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
+    }
+    return {
+      symbol: requireString({ value: symbol, field: "symbol" }),
+      marketId: requireString({ value: marketId, field: "marketId" }),
+      sellOrderClientId: requireString({ value: sellOrderClientId, field: "sellOrderClientId" }),
+      sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" }),
+      outcome,
+      reason: mappedReason,
+      realizedNetProfit: mappedRealizedNetProfit,
+      activeQuantity: mappedActiveQuantity,
+      keepQuantity: mappedKeepQuantity,
+      minProfit: mappedMinProfit,
+    }
+  })
+
+
 /** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
 export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData(input, "Account-open-orders-captured event mapping", ({
