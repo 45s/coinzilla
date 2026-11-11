@@ -711,6 +711,13 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
     if (mappedReason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) >= 0) {
       throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
     }
+    if (mappedReason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) < 0) {
+      throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
+    }
+    if (outcome === "BLOCKED" && mappedReason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
+        compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) >= 0) {
+      throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
+    }
     return {
       symbol: requireString({ value: symbol, field: "symbol" }),
       marketId: requireString({ value: marketId, field: "marketId" }),
