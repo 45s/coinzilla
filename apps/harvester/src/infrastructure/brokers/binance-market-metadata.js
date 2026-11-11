@@ -126,9 +126,28 @@ export function createBinanceMarketMetadata({ symbolFilters } = {}) {
   ]
 
   const tradingRules = new TradingRules({ market, constraints })
+  const unvalidatedConstraints = symbolFilters.unvalidatedConstraints
+  if (!Array.isArray(unvalidatedConstraints)) {
+    throw new TypeError("Binance market metadata unvalidatedConstraints must be an array")
+  }
+  const normalizedUnvalidatedConstraints = unvalidatedConstraints.map((constraint) => {
+    if (!constraint || typeof constraint !== "object" ||
+        typeof constraint.type !== "string" || !constraint.type.trim() ||
+        typeof constraint.scope !== "string" || !constraint.scope.trim() ||
+        typeof constraint.sourceFilterType !== "string" || !constraint.sourceFilterType.trim()) {
+      throw new TypeError("Binance market metadata contains an invalid unvalidated exchange constraint")
+    }
+    return Object.freeze({
+      type: constraint.type,
+      scope: constraint.scope,
+      sourceFilterType: constraint.sourceFilterType,
+    })
+  })
+
   return Object.freeze({
     market,
     tradingRules,
     supportedOrderTypes: Object.freeze([...symbolFilters.supportedOrderTypes]),
+    unvalidatedConstraints: Object.freeze(normalizedUnvalidatedConstraints),
   })
 }

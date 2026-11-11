@@ -19,7 +19,7 @@ const createMetadata = (symbol = "BTCUSDT") => {
       { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"] }
+  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
 }
 
 test("loads every configured market and validates/emits trading rules only for enabled pairs", async () => {
@@ -81,4 +81,36 @@ test("rejects mismatched market symbols before storing metadata", async () => {
     "Exchange metadata for a different symbol must not be stored under the configured symbol.",
   )
   assert.equal(marketMetadata.size, 0, "Rejected metadata must not be added to the market map.")
+})
+
+
+test("does not activate an enabled market with unvalidated exchange constraints", async () => {
+  const metadata = {
+    ...createMetadata("BTCUSDT"),
+    unvalidatedConstraints: [
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" },
+    ],
+  }
+  const marketMetadata = new Map()
+
+  await assert.rejects(
+    loadMarketMetadata({
+      broker: { getSymbolFilters: async () => ({ ok: true, data: metadata }) },
+      pairs: {
+        BTCUSDT: {
+          enabled: true,
+          orderQuantity: 0.01,
+          investment: 100,
+          makerPercent: 0,
+          takerPercent: 0.1,
+        },
+      },
+      marketMetadata,
+      eventPublisher: { publish: () => ({ ok: true }) },
+      logger: {},
+    }),
+    /cannot validate: DYNAMIC_PRICE_BAND\/SYMBOL\/PERCENT_PRICE/,
+    "The bootstrap market loader must fail before strategy activation when an applicable exchange constraint has no domain evaluator.",
+  )
+  assert.equal(marketMetadata.size, 0, "A market rejected by exchange-constraint readiness must not be inserted into the active metadata map.")
 })

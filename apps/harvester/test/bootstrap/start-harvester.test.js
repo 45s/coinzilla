@@ -126,6 +126,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     market,
     tradingRules,
     supportedOrderTypes: ['LIMIT_MAKER'],
+    unvalidatedConstraints: [],
   };
   const balances = [
     new Balance({
@@ -336,7 +337,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
         { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
       ],
     })
-    return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"] }
+    return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"], unvalidatedConstraints: [] }
   }
   const metadataBySymbol = new Map([
     ["DOGEUSDT", createMetadata({ symbol: "DOGEUSDT", baseCode: "DOGE" })],

@@ -50,6 +50,7 @@ test("maps required and optional Binance market filters without decimal normaliz
     minNotional: "5.00",
     maxNotional: "1000000.00",
     supportedOrderTypes: ["LIMIT", "MARKET"],
+    unvalidatedConstraints: [],
   })
 })
 
@@ -83,6 +84,7 @@ test("omits optional filter fields when Binance does not provide them", () => {
     tickSize: "0.01",
     stepSize: "0.001",
     supportedOrderTypes: ["LIMIT", "MARKET"],
+    unvalidatedConstraints: [],
   })
 })
 
@@ -136,3 +138,123 @@ test("rejects exchange-info responses that do not contain the requested symbol",
     exchangeInfo: { symbols: [{ ...completeSymbolInfo, symbol: "ETHUSDT" }] },
   }), /PRICE_FILTER\.tickSize missing for BTCUSDT/)
 })
+
+
+test("reports active dynamic and account-level filters as exchange-neutral unvalidated constraints", () => {
+  const symbolInfo = {
+    ...completeSymbolInfo,
+    filters: [
+      ...completeSymbolInfo.filters,
+      { filterType: "PERCENT_PRICE_BY_SIDE", bidMultiplierUp: "1.2", bidMultiplierDown: "0.8", askMultiplierUp: "1.2", askMultiplierDown: "0.8", avgPriceMins: 5 },
+      { filterType: "MAX_POSITION", maxPosition: "1000" },
+      { filterType: "MAX_NUM_ORDERS", maxNumOrders: 25 },
+      { filterType: "MARKET_LOT_SIZE", minQty: "0.001", maxQty: "1000", stepSize: "0.001" },
+      { filterType: "MAX_NUM_ALGO_ORDERS", maxNumAlgoOrders: 5 },
+      { filterType: "FUTURE_UNRECOGNIZED_FILTER" },
+    ],
+  }
+  const result = adaptSymbolFiltersResponse({
+    symbol: "BTCUSDT",
+    exchangeInfo: {
+      symbols: [symbolInfo],
+      exchangeFilters: [
+        { filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 1000 },
+      ],
+    },
+  })
+
+  assert.deepEqual(result.unvalidatedConstraints, [
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+    { type: "OPEN_ORDER_COUNT_PER_MARKET", scope: "ACCOUNT", sourceFilterType: "MAX_NUM_ORDERS" },
+    { type: "UNMODELED_EXCHANGE_CONSTRAINT", scope: "SYMBOL", sourceFilterType: "FUTURE_UNRECOGNIZED_FILTER" },
+    { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE", scope: "EXCHANGE", sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
+  ], "Applicable dynamic, account and newly introduced filters must not disappear at the exchange adapter boundary; filters only applicable to unsupported MARKET/algo orders must not block LIMIT strategies.")
+})
+
+
+test("maps private MAX_ASSET filters into account-scoped unvalidated constraints", () => {
+  const result = adaptSymbolFiltersResponse({
+    symbol: "BTCUSDT",
+    exchangeInfo: { symbols: [completeSymbolInfo] },
+    accountFilters: {
+      symbolFilters: [],
+      exchangeFilters: [],
+      assetFilters: [
+        { filterType: "MAX_ASSET", asset: "USDT", limit: "1000" },
+      ],
+    },
+  })
+
+  assert.deepEqual(result.unvalidatedConstraints, [
+    { type: "ASSET_ORDER_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_ASSET" },
+  ], "A private account asset limit must be retained even when it applies to the quote asset rather than the market's base asset.")
+})
+
+
+test("does not block a market for account asset filters belonging to unrelated assets", () => {
+  const result = adaptSymbolFiltersResponse({
+    symbol: "BTCUSDT",
+    exchangeInfo: { symbols: [completeSymbolInfo] },
+    accountFilters: {
+      symbolFilters: [],
+      exchangeFilters: [],
+      assetFilters: [
+        { filterType: "MAX_ASSET", asset: "ETH", limit: "10" },
+      ],
+    },
+  })
+
+  assert.deepEqual(result.unvalidatedConstraints, [], "An account-level asset filter must block only markets whose base or quote asset it actually constrains.")
+})
+
+
+test("preserves both dynamic price filter variants and excludes only unsupported order-feature filters", () => {
+  const symbolInfo = {
+    ...completeSymbolInfo,
+    filters: [
+      ...completeSymbolInfo.filters,
+      { filterType: "PERCENT_PRICE", multiplierUp: "1.2", multiplierDown: "0.8", avgPriceMins: 5 },
+      { filterType: "PERCENT_PRICE_BY_SIDE", bidMultiplierUp: "1.2", bidMultiplierDown: "0.8", askMultiplierUp: "1.2", askMultiplierDown: "0.8", avgPriceMins: 5 },
+      { filterType: "MARKET_LOT_SIZE" },
+      { filterType: "MAX_NUM_ALGO_ORDERS" },
+      { filterType: "MAX_NUM_ICEBERG_ORDERS" },
+      { filterType: "ICEBERG_PARTS" },
+      { filterType: "TRAILING_DELTA" },
+      { filterType: "MAX_NUM_ORDER_LISTS" },
+      { filterType: "MAX_NUM_ORDER_AMENDS" },
+    ],
+  }
+
+  const result = adaptSymbolFiltersResponse({
+    symbol: "BTCUSDT",
+    exchangeInfo: { symbols: [symbolInfo] },
+  })
+
+  assert.deepEqual(result.unvalidatedConstraints, [
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" },
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+  ], "Both dynamic price filters must block until evaluated, while filters exclusive to unsupported order features must not block ordinary LIMIT/LIMIT_MAKER orders.")
+})
+
+
+test("does not reclassify static rules repeated by the private relevant-filters response", () => {
+  const result = adaptSymbolFiltersResponse({
+    symbol: "BTCUSDT",
+    exchangeInfo: { symbols: [completeSymbolInfo] },
+    accountFilters: {
+      symbolFilters: [
+        { filterType: "PRICE_FILTER", tickSize: "0.01" },
+        { filterType: "LOT_SIZE", stepSize: "0.001" },
+        { filterType: "MIN_NOTIONAL", minNotional: "5" },
+        { filterType: "PERCENT_PRICE", multiplierUp: "1.2", multiplierDown: "0.8", avgPriceMins: 5 },
+      ],
+      exchangeFilters: [],
+      assetFilters: [],
+    },
+  });
+
+  assert.deepEqual(result.unvalidatedConstraints, [
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" },
+  ], "The private relevant-filters response may repeat static filters; only additional applicable rules should be classified as unvalidated.");
+});

@@ -581,17 +581,20 @@ export function makeConservativeTradingEngine({
       const submissionError = error ?? errors?.[0]
       const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
         submissionError?.code === "POST_ONLY_WOULD_TAKE"
-      const failureOutcome = definitePostOnlyRejection ? "REJECTED" : outcome
+      const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
+        submissionError?.outcomeUnknown !== true
+      const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
+      const failureOutcome = definiteRejection ? "REJECTED" : outcome
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
         dataResult: mapOrderSubmissionFailedData({ order, outcome: failureOutcome, error: submissionError }),
       })
-      if (definitePostOnlyRejection) {
+      if (definiteRejection) {
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) throw new Error("Cannot remove a definitively rejected POST-ONLY pending order")
+        if (!removal.removed) throw new Error("Cannot remove a definitively rejected pending order")
         state.registry = removal.registry
-        state.books.delete(order.market.symbol)
+        if (definitePostOnlyRejection) state.books.delete(order.market.symbol)
         state.deferredEvaluations.add(order.market.symbol)
         return
       }
