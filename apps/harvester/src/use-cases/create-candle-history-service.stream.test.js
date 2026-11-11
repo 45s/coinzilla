@@ -176,10 +176,13 @@ test("ignores valid live candle events older than the retained 100-candle window
     },
   })
   await fixture.start()
+  fixture.clock.now += 5_001
   await fixture.candleHandlers.get("BTCUSDT")(createCandle({ openTime: 0 }))
   const snapshot = getSnapshot(fixture)
 
-  assert.equal(snapshot.status.isReady, true, "An old event outside the retained history must not invalidate a current contiguous series.")
+  assert.equal(snapshot.status.isFresh, false, "An old event outside the retained history must not refresh the live-stream freshness timestamp.")
+  assert.equal(snapshot.status.isReady, false, "An out-of-window event cannot make a stale stream ready.")
+  assert.equal(snapshot.status.reason, "STALE_STREAM", "The old event must leave the existing stale-stream blocker visible.")
   assert.equal(snapshot.candles.at(-1).openTime, 199 * INTERVAL_MS, "An out-of-window event must not move the current history cursor backward.")
 })
 
