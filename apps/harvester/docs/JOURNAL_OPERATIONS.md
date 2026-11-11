@@ -400,7 +400,6 @@ broker generation.
 This is same-process recovery only. It does not enable Journal replay or
 process-restart recovery. TESTNET acceptance remains PAUSED / UNVERIFIED.
 
-
 ## External open orders and strategy eligibility
 
 Account-wide open-order audits classify unmatched orders as external/unowned. Their symbols are retained as a strategy-only exclusion set after the audit event is durably flushed. The Conservative engine defers both policy evaluation and the final broker-submission attempt for those symbols; unrelated markets remain eligible. A later authoritative reconnect audit replaces the set and clears a symbol only after the no-longer-present state is durably recorded. Do not adopt, cancel, or modify external orders. An external order alone does not create a global readiness failure. This guard is same-process only and does not restore trading state after a process restart.
