@@ -2721,10 +2721,11 @@ export function makeConservativeTradingEngine({
         return { recovered: transition.recovered, state: transition.state }
       },
     })
-    if (settled?.ok && settled.data.recovered) {
+    if (!settled?.ok) return settled
+    if (settled.data.recovered) {
       await evaluateLatest({ symbol })
     }
-    return toResult({ data: settled?.data ?? { mode: update.data.mode, reason: update.data.reason } })
+    return toResult({ data: settled.data })
   }
 
   const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
