@@ -186,7 +186,7 @@ Volatility state is process-local in the first implementation. It is not a subst
 - Stream disconnect/reconnect, historical backfill and repeated candles.
 - Central gate blocks BUY and non-recovery SELL intents before and immediately before broker I/O.
 - Explicit recovery SELL remains permitted while protected; arbitrary SELL is rejected.
-- Only owned active BUYs are canceled; external orders and recovery SELLs are untouched.
+- Only owned active BUYs are canceled; external orders and recovery SELLs are untouched. A direct engine regression proves an existing recovery SELL remains OPEN while the owned BUY reaches CANCELED.
 - Partial BUY fills and cancel/fill races are reconciled and accounted exactly once.
 - Unknown cancellation/submission outcomes keep protection active.
 - Recovery SELL fills, commissions, replacement after terminal state and cycle completion continue correctly.
