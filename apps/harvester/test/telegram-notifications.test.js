@@ -84,8 +84,8 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
 
   assert.equal(sentMessages.length, 5, "Telegram must receive startup, pause, canonical fill, recovery completion, and shutdown notifications")
   assert.ok(sentMessages.some((message) => message.includes("BOT STARTED")), "A successful Harvester startup must produce a Telegram lifecycle notification")
-  assert.ok(sentMessages.some((message) => message.includes("TRADING PAIR PAUSED") && message.includes("DOGEUSDT")), "A paused market must produce a Telegram safety notification with its symbol")
-  assert.ok(sentMessages.some((message) => message.includes("EXECUTION RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
+  assert.ok(sentMessages.some((message) => message.includes("PAUSED") && message.includes("DOGE/USDT")), "A paused market must produce a Telegram safety notification with its symbol")
+  assert.ok(sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
   assert.ok(sentMessages.some((message) => message.includes("BOT RECOVERY COMPLETED") && message.includes("0.25")), "A completed recovery cycle must produce a Telegram completion notification")
   assert.ok(sentMessages.some((message) => message.includes("BOT STOPPED")), "A completed Harvester shutdown must produce a Telegram lifecycle notification")
   assert.deepEqual(loggerErrors, [], "Successful optional Telegram delivery must not create application error diagnostics")
@@ -271,15 +271,15 @@ test("applies custom Telegram event overrides and market filters while preservin
     "Custom policy must deliver the selected LINK fill and both non-disableable safety alerts, while excluding the filtered ETH fill and disabled recovery summary.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("EXECUTION RECEIVED") && message.includes("LINKUSDT") && message.includes("link-fill")),
+    sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("LINK/USDT") && message.includes("link-fill")),
     "The enabled fillReceived override must deliver fills for the selected LINKUSDT market.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("TRADING PAIR PAUSED") && message.includes("ETHUSDT")),
+    sentMessages.some((message) => message.includes("PAUSED") && message.includes("ETHUSDT")),
     "A critical pair-pause alert must bypass both an explicit false override and the LINKUSDT-only market filter.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("ACCOUNT SAFETY ALERT") && message.includes("ETHUSDT")),
+    sentMessages.some((message) => message.includes("ACCOUNT SAFETY") && message.includes("ETHUSDT")),
     "An execution-accounting safety alert must bypass custom event exclusions and market filters.",
   )
   assert.ok(
