@@ -228,6 +228,7 @@ test("respects exact investment-cap equality and blocks the next BUY immediately
   const { portfolio, recoveryLedger } = makeBoughtState()
   const expectedRecoverySell = {
     side: "SELL",
+    purpose: "RECOVERY_SELL",
     type: "LIMIT_MAKER",
     price: "0.102",
     quantity: "99",
