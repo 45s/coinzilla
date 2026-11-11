@@ -338,21 +338,19 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
   assert.equal(infoLogs[0].message, "Portfolio Stats", "The first inventory snapshot must use the concise Portfolio Stats heading.")
   assert.equal(infoLogs[0].symbol, "BTCUSDT", "The Portfolio Stats snapshot must identify the market whose fill changed inventory.")
   assert.deepEqual(infoLogs[0].inventory, {
-    active: "0.004 BTC",
-    retained: "0 BTC",
-    total: "0.004 BTC",
-  }, "The first partial BUY snapshot must distinguish active, retained, and total BTC inventory.")
+    activeBaseQuantity: "0.004 BTC",
+    freeBaseQuantity: "0 BTC",
+    totalBaseQuantity: "0.004 BTC",
+  }, "The first partial BUY snapshot must distinguish active, free, and total BTC inventory.")
   assert.deepEqual(infoLogs[1].inventory, {
-    active: "0.01 BTC",
-    retained: "0 BTC",
-    total: "0.01 BTC",
+    activeBaseQuantity: "0.01 BTC",
+    freeBaseQuantity: "0 BTC",
+    totalBaseQuantity: "0.01 BTC",
   }, "The second partial BUY snapshot must show the cumulative active and total BTC inventory.")
   assert.deepEqual(infoLogs[1].accounting, {
-    cycleBuyCost: "650 USDT",
-    netQuoteCashFlow: "-650 USDT",
-    outstandingRecovery: "650 USDT",
-    realizedNetProfit: "-650 USDT",
-  }, "The BUY snapshot must report exact quote-currency accounting without mixing exchange wallet balances into Portfolio stats.")
+    spent: "650 USDT",
+    quoteNetCashFlow: "-650 USDT",
+  }, "The BUY snapshot must report only quote-currency values exposed by Portfolio.")
 
   const duplicateBuyResult = await workflow.updateTradingAccounting({ fill: secondPartialBuyFill })
   assert.equal(duplicateBuyResult.data.duplicate, true, "An identical replay of the latest BUY fill must be recognized as a duplicate.")
@@ -369,14 +367,55 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
   assert.equal(sellResult.ok, true, "A confirmed partial SELL fill must update the portfolio before its stats are logged.")
   assert.equal(infoLogs.length, 3, "A distinct applied partial SELL fill that changes inventory must produce one Portfolio Stats snapshot.")
   assert.deepEqual(infoLogs[2].inventory, {
-    active: "0.006 BTC",
-    retained: "0 BTC",
-    total: "0.006 BTC",
+    activeBaseQuantity: "0.006 BTC",
+    freeBaseQuantity: "0 BTC",
+    totalBaseQuantity: "0.006 BTC",
   }, "The SELL snapshot must show the reduced active and total BTC inventory.")
   assert.deepEqual(infoLogs[2].accounting, {
-    cycleBuyCost: "650 USDT",
-    netQuoteCashFlow: "-350 USDT",
-    outstandingRecovery: "350 USDT",
-    realizedNetProfit: "-350 USDT",
-  }, "The SELL snapshot must preserve the full BUY cost basis and show exact cumulative quote cash flow and recovery values.")
+    spent: "650 USDT",
+    quoteNetCashFlow: "-350 USDT",
+  }, "The SELL snapshot must show only the updated Portfolio accounting values.")
+})
+
+
+test("logs Portfolio Stats when recovery completion changes Portfolio accounting without changing inventory", () => {
+  const infoLogs = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: { info: (entry) => { infoLogs.push(entry) } },
+  })
+
+  const buyFill = createFill({ tradeId: "stats-cycle-buy", quantity: "2", quoteQuantity: "130000" })
+  const sellFill = createFill({
+    tradeId: "stats-cycle-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+
+  return (async () => {
+    await workflow.updateTradingAccounting({ fill: buyFill })
+    await workflow.updateTradingAccounting({ fill: sellFill })
+    assert.equal(infoLogs.length, 2)
+
+    const completion = workflow.completeRecoveryCycle({
+      marketId: market.id,
+      keepQuantity: "1",
+      minProfit: "5",
+    })
+
+    assert.equal(completion.ok, true)
+    assert.equal(completion.data.eligible, true)
+    assert.equal(infoLogs.length, 3, "Resetting Portfolio spent must emit a stats snapshot even when inventory is unchanged.")
+    assert.deepEqual(infoLogs[2].inventory, {
+      activeBaseQuantity: "1 BTC",
+      freeBaseQuantity: "0 BTC",
+      totalBaseQuantity: "1 BTC",
+    })
+    assert.deepEqual(infoLogs[2].accounting, {
+      spent: "0 USDT",
+      quoteNetCashFlow: "5 USDT",
+    })
+  })()
 })
