@@ -56,7 +56,6 @@ Harvester agents MUST write the implementation, regression tests, and same-commi
 
 A missing local checkout, terminal, Node installation, pnpm installation, or local test runner is not a reason to stop, defer implementation, or ask the user to run commands. Use GitHub repository operations to create the task branch, commit the actual changes, and open/update the PR. Inspect the exact PR head and GitHub Actions results, fix failures in source/tests, and let GitHub rerun them. Never weaken tests or claim success without green checks on the exact head SHA. Merge into `develop` only after all required checks pass and branch freshness is verified.
 
-
 ## Application configuration
 
 - Harvester has one application-wide configuration file: `apps/harvester/config.json`. Do not create feature-specific config files or reintroduce `trading-config.json`.
