@@ -37,6 +37,7 @@ const FACT_TYPES = new Set([
   "SAFETY_BLOCKER_RESOLVED",
   "ACCOUNT_SNAPSHOT_CAPTURED",
   "ACCOUNT_OPEN_ORDERS_CAPTURED",
+  "MARKET_HISTORY_COVERAGE_CONFIRMED",
 ])
 
 const FACTS_FILE_NAME = "facts.jsonl"
@@ -151,6 +152,20 @@ function validateFactData({ factType, data }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
+  }
+  if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+    requireNonEmptyString({ value: canonicalData.symbol, field: "data.symbol" })
+    if (!/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
+    }
+    requireNonEmptyString({ value: canonicalData.verifiedBy, field: "data.verifiedBy", maxLength: MAX_FACT_ID_LENGTH })
+    if (!Number.isSafeInteger(canonicalData.coveredFromTime) || canonicalData.coveredFromTime < 0 ||
+        !Number.isSafeInteger(canonicalData.verifiedAt) || canonicalData.verifiedAt < canonicalData.coveredFromTime) {
+      throw new TypeError("Market-history coverage timestamps must be non-negative safe integers with verifiedAt >= coveredFromTime")
+    }
+    if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
+      throw new TypeError("Market-history coverage evidenceDigest must be a SHA-256 digest")
+    }
   }
   return canonicalData
 }
