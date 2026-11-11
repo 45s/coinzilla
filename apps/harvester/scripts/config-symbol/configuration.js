@@ -1,7 +1,6 @@
 import {
   compareDecimal,
   divideDecimal,
-  maxDecimal,
   multiplyDecimal,
   normalizeDecimalString,
   roundDecimalToIncrement,
@@ -97,12 +96,9 @@ export function calculateOrderQuantity({
     scale: ORDER_QUANTITY_SCALE,
     rounding: "toward-zero",
   })
-  const boundedQuantity = maxDecimal({
-    left: ZERO,
-    right: compareDecimal({ left: budgetQuantity, right: normalizedMaximum }) > 0
-      ? normalizedMaximum
-      : budgetQuantity,
-  })
+  const boundedQuantity = compareDecimal({ left: budgetQuantity, right: normalizedMaximum }) > 0
+    ? normalizedMaximum
+    : budgetQuantity
   const quantity = roundDecimalToIncrement({
     value: boundedQuantity,
     increment: normalizedStep,
@@ -121,6 +117,33 @@ export function calculateOrderQuantity({
   return quantity
 }
 
+/** Normalize and validate all operator-owned pair settings before any exchange request. */
+export function normalizePairInputs(inputs) {
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    throw new TypeError("inputs must be an object")
+  }
+  const normalized = {
+    investment: parseDecimalInput(inputs.investment, "investment", { exclusiveMin: true }),
+    keepQuantity: parseDecimalInput(inputs.keepQuantity, "keepQuantity"),
+    makerPercent: parseDecimalInput(inputs.makerPercent, "makerPercent"),
+    takerPercent: parseDecimalInput(inputs.takerPercent, "takerPercent"),
+    minProfit: parseDecimalInput(inputs.minProfit, "minProfit", { exclusiveMin: true }),
+    priceStepPercent: parseDecimalInput(inputs.priceStepPercent, "priceStepPercent", { exclusiveMin: true }),
+  }
+  for (const [field, value] of [["makerPercent", normalized.makerPercent], ["takerPercent", normalized.takerPercent]]) {
+    if (compareDecimal({ left: value, right: HUNDRED }) >= 0) {
+      throw new RangeError(field + " must be less than 100 percent")
+    }
+  }
+  if (compareDecimal({ left: normalized.priceStepPercent, right: HUNDRED }) >= 0) {
+    throw new RangeError("priceStepPercent must be less than 100 percent")
+  }
+  if (compareDecimal({ left: normalized.minProfit, right: "0.01" }) < 0) {
+    throw new RangeError("minProfit must be at least 0.01 in the pair quote asset")
+  }
+  return Object.freeze(normalized)
+}
+
 /** Create the complete pair object accepted by Harvester's current app-config schema. */
 export function createPairConfig({ inputs, metadata } = {}) {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
@@ -130,24 +153,8 @@ export function createPairConfig({ inputs, metadata } = {}) {
     throw new TypeError("metadata must be an object")
   }
 
-  const investment = parseDecimalInput(inputs.investment, "investment", { exclusiveMin: true })
-  const keepQuantity = parseDecimalInput(inputs.keepQuantity, "keepQuantity")
-  const makerPercent = parseDecimalInput(inputs.makerPercent, "makerPercent")
-  const takerPercent = parseDecimalInput(inputs.takerPercent, "takerPercent")
-  const minProfit = parseDecimalInput(inputs.minProfit, "minProfit", { exclusiveMin: true })
-  const priceStepPercent = parseDecimalInput(inputs.priceStepPercent, "priceStepPercent", { exclusiveMin: true })
-
-  for (const [field, value] of [["makerPercent", makerPercent], ["takerPercent", takerPercent]]) {
-    if (compareDecimal({ left: value, right: HUNDRED }) >= 0) {
-      throw new RangeError(field + " must be less than 100 percent")
-    }
-  }
-  if (compareDecimal({ left: priceStepPercent, right: HUNDRED }) >= 0) {
-    throw new RangeError("priceStepPercent must be less than 100 percent")
-  }
-  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
-    throw new RangeError("minProfit must be at least 0.01 in the pair quote asset")
-  }
+  const normalizedInputs = normalizePairInputs(inputs)
+  const { investment, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
 
   const normalizedStepSize = parseDecimalInput(metadata.stepSize, "stepSize", { exclusiveMin: true })
   const alignedKeepQuantity = roundDecimalToIncrement({
