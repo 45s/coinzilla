@@ -12,6 +12,8 @@ owner: notifiers
 
 ### IMPORTANT — preserve safe best-effort notification behavior
 
+- [~] **Consumer-selectable Telegram event subscriptions — [#996](https://github.com/45s/coinzilla/issues/996).** Keep profile resolution in consuming applications. The Notifiers package exposes a validated per-subscriber event-name subset and bounded formatters for additional operational messages; omitting the selection preserves the existing full-allowlist behavior.
+
 1. **Keep Harvester's Telegram integration aligned with the notifier contract.**
    - **Why:** operational alerts are useful only if they remain high-signal and cannot affect order processing, accounting, recovery or shutdown.
    - **Do:** mark the Harvester integration complete (PR #734); maintain the fixed event allowlist, bounded queue, optional two-value configuration and isolated setup/delivery failures. Keep formatting and transport code inside this package.

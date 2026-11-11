@@ -46,6 +46,47 @@ const formatters = Object.freeze({
     "✅ BOT RECOVERY COMPLETED",
     `Summary: ${text(data.message ?? data.summary, "Recovery completed")}`,
   ].join("\n"),
+  "bot.startup_failed": ({ data }) => [
+    "🚨 BOT STARTUP FAILED",
+    `Stage: ${text(data.stage, "n/a", 64)}`,
+    `Reason: ${text(data.error?.message ?? data.message)}`,
+  ].join("\\n"),
+  "broker.connected": ({ data }) => [
+    "🔌 BROKER CONNECTED",
+    `Broker: ${text(data.broker, "n/a", 64)}`,
+    `Mode: ${text(data.tradingMode, "n/a", 24).toUpperCase()}`,
+  ].join("\\n"),
+  "broker.disconnected": ({ data }) => [
+    "🔌 BROKER DISCONNECTED",
+    `Broker: ${text(data.broker, "n/a", 64)}`,
+    `Reason: ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
+  ].join("\\n"),
+  "order.submitted": ({ data }) => [
+    "📨 ORDER SUBMITTED",
+    `${text(data.side, "UNKNOWN", 24).toUpperCase()} ${text(data.symbol, "n/a", 64)}`,
+    `Price: ${text(data.price, "n/a", 96)}`,
+    `Quantity: ${text(data.quantity, "n/a", 96)}`,
+    `Order: ${text(data.brokerOrderId ?? data.orderId ?? data.clientOrderId, "n/a", 96)}`,
+  ].join("\\n"),
+  "order.cancelled": ({ data }) => [
+    "⚪ ORDER CANCELLED",
+    `${text(data.side, "UNKNOWN", 24).toUpperCase()} ${text(data.symbol, "n/a", 64)}`,
+    `Order: ${text(data.brokerOrderId ?? data.orderId ?? data.clientOrderId, "n/a", 96)}`,
+    `Executed: ${text(data.executedQuantity, "n/a", 96)}`,
+  ].join("\\n"),
+  "order.failed": ({ data }) => [
+    "🚨 ORDER FAILED",
+    `${text(data.side, "UNKNOWN", 24).toUpperCase()} ${text(data.symbol, "n/a", 64)}`,
+    `Operation: ${text(data.operation, "n/a", 48)}`,
+    `Outcome: ${text(data.outcome, "n/a", 48)}`,
+    `Reason: ${text(data.error?.message ?? data.message ?? data.reason)}`,
+  ].join("\\n"),
+  "account.safety_alert": ({ data }) => [
+    "🚨 ACCOUNT SAFETY ALERT",
+    `Symbol: ${text(data.symbol, "account-wide", 64)}`,
+    `Category: ${text(data.category, "safety", 64)}`,
+    `Details: ${text(data.message ?? data.reason)}`,
+  ].join("\\n"),
   "bot.started": () => "🟢 BOT STARTED",
   "bot.stopped": ({ data }) => [
     "⚪ BOT STOPPED",
