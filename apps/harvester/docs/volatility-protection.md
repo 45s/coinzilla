@@ -206,9 +206,21 @@ Volatility state is process-local in the first implementation. It is not a subst
 
 The initial thresholds are provisional. Calibration uses completed Binance Spot 1-minute Kline CSV files from the official [Binance Public Data archive](https://github.com/binance/binance-public-data) ([archive browser](https://data.binance.vision/)). Download the matching `.zip` and `.CHECKSUM` files, verify the archive checksum, and extract the CSV outside the repository; no market-history dataset or credentials are bundled with Harvester.
 
-The archive's Spot timestamps use milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. The calibration tool normalizes both units to the runtime's millisecond candle contract. It must reject malformed rows, conflicting duplicates, gaps, out-of-order data and incomplete source history; it never interpolates or fabricates candles.
+Run the offline analyzer with one or more monthly/daily CSV files. The filenames must follow Binance's `SYMBOL-1m-YYYY-MM.csv` or `SYMBOL-1m-YYYY-MM-DD.csv` convention:
 
-The analysis uses the same ATR(14) Wilder smoothing, NATR, previous-60 completed-NATR reference, 100-candle startup window and protection-state transition function as the runtime. It reports ratio percentiles, warning/protection/recovery threshold frequencies, NORMAL/PROTECTED/RECOVERING occupancy, protection episodes and recovery transitions. It assumes no active owned BUY orders and does not model exchange cancellation latency, fills, slippage, PnL or strategy profitability. These reports inform threshold review; they do not automatically change runtime constants or authorize unattended trading.
+```sh
+pnpm --filter @coinzilla/harvester run volatility:calibrate -- \
+  --input ./data/volatility/BTCUSDT-1m-2024-03.csv \
+  --input ./data/volatility/BTCUSDT-1m-2024-04.csv \
+  --input ./data/volatility/DOGEUSDT-1m-2024-03.csv \
+  --output ./data/volatility/calibration-report.json
+```
+
+Use the same symbol's files together; the tool reports each symbol independently. Optional candidate values are `--warning-ratio`, `--protect-ratio`, `--recover-ratio` and `--stable-candles`. Candidate thresholds must satisfy `0 < recover < warning < protect`; the defaults mirror the current runtime. The implementation is [`scripts/calibrate-volatility-thresholds.js`](../scripts/calibrate-volatility-thresholds.js). The command is local-only: it performs no network request, broker connection, credential access or exchange operation.
+
+The archive's Spot timestamps use milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. The parser normalizes both units to the runtime's millisecond candle contract. It rejects malformed rows, conflicting duplicates, gaps, out-of-order data and incomplete source history; it never interpolates or fabricates candles. The report includes SHA-256 hashes of the extracted CSV inputs for reproducibility.
+
+The analysis reuses the runtime's ATR(14) Wilder smoothing, NATR, previous-60 completed-NATR reference and protection-state transition function, and replays a rolling 100-candle startup window. It reports ratio percentiles, warning/protection/recovery threshold frequencies, NORMAL/PROTECTED/RECOVERING occupancy, protection episodes and recovery transitions. It assumes no active owned BUY orders and does not model exchange cancellation latency, fills, slippage, PnL or strategy profitability. These reports inform threshold review; they do not automatically change runtime constants or authorize unattended trading.
 
 No TESTNET/LIVE order, cancellation, restart or other exchange operation is authorized by these implementation steps. A separate controlled validation requires explicit operator approval.
 

@@ -6,6 +6,7 @@ import {
   analyzeVolatilityHistory,
   mergeAndValidateCandles,
   parseBinanceSpotKlineCsv,
+  parseCalibrationArguments,
   validateCalibrationThresholds,
 } from "./calibrate-volatility-thresholds.js"
 
@@ -211,5 +212,48 @@ test("requires enough candles to reproduce the runtime startup history window", 
     () => analyzeVolatilityHistory({ symbol: "BTCUSDT", candles: createCandleSeries({ count: 99 }) }),
     /at least 100/i,
     "Calibration must reject a dataset shorter than the runtime's 100-candle startup history.",
+  )
+})
+
+test("parses repeated CSV inputs and candidate thresholds without enabling network access", () => {
+  const options = parseCalibrationArguments([
+    "--input", "BTCUSDT-1m-2024-03.csv",
+    "--input", "DOGEUSDT-1m-2024-03.csv",
+    "--warning-ratio", "1.6",
+    "--protect-ratio", "2.2",
+    "--recover-ratio", "1.2",
+    "--stable-candles", "4",
+    "--output", "calibration-report.json",
+  ])
+
+  assert.deepEqual(options.inputPaths, ["BTCUSDT-1m-2024-03.csv", "DOGEUSDT-1m-2024-03.csv"])
+  assert.deepEqual(options.thresholds, {
+    warningRatio: "1.6",
+    protectRatio: "2.2",
+    recoverRatio: "1.2",
+    requiredStableCandles: 4,
+  })
+  assert.equal(options.outputPath, "calibration-report.json")
+  assert.equal(options.help, false)
+})
+
+test("requires an input file unless help was requested", () => {
+  assert.throws(
+    () => parseCalibrationArguments([]),
+    /at least one --input/i,
+    "The CLI must not silently analyze an empty dataset.",
+  )
+  assert.equal(parseCalibrationArguments(["--help"]).help, true)
+})
+
+test("rejects malformed Binance CSV rows with source context", () => {
+  assert.throws(
+    () => parseBinanceSpotKlineCsv({
+      symbol: "BTCUSDT",
+      sourceFile: "broken.csv",
+      content: "1700000040000,100,100.1",
+    }),
+    /broken.csv line 1.*12/i,
+    "Malformed archive rows must fail with the source filename and row number.",
   )
 })
