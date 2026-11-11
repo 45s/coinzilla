@@ -97,12 +97,10 @@
 
 **Steps:**
 
-1. [~] **RED — Reproduce conflict (test-only stage, PR [#987](https://github.com/45s/coinzilla/pull/987)):** deterministic manager and Conservative-engine regressions now express the same-symbol block and unrelated-symbol control. On PR head `0fcc159e8bf0d75cc7aa6d329507da3ffe9d2c29`, CI fails at the intended missing behavior: the snapshot manager has no symbol-query API and the engine submits one competing order. This is RED evidence only; it is not a passing test or production fix.
+1. [ ] **RED — Reproduce conflict:** unowned open BUY/SELL on symbol A, no owned order in OrderRegistry, otherwise-valid strategy decision. Assert no competing strategy order. Control: symbol B remains eligible.
 2. [ ] **GREEN — Add narrow symbol gate:** use a current authoritative account-wide open-order view; defer only the affected symbol while a conflicting unowned order is open. Never adopt, cancel, modify or claim ownership of it.
 3. [ ] **RED/GREEN — Snapshot lifecycle:** startup snapshot, order update/terminal event, reconnect refresh, stale/missing snapshot and snapshot-read failure. Unknown/stale state must not mean “no open orders”.
 4. [ ] **Regression — Isolation/diagnostics:** no duplicate intent; external order unchanged; unrelated symbols unaffected; actionable blocked-symbol reason.
-
-**Current status (2026-11-11):** [#985](https://github.com/45s/coinzilla/issues/985) remains open. [PR #987](https://github.com/45s/coinzilla/pull/987) is open and currently contains only the two unit-test changes above; it does not yet contain the production guard, startup/reconnect integration coverage, or removal of the unused `blockOnExistingOrders` argument. Harvester unit tests and coverage are red on the expected new regressions; no required-green or merge claim is made. Continue with the smallest source fix, then add authoritative startup/reconnect lifecycle coverage before marking this item complete.
 
 **Acceptance:** no conflicting same-symbol order can be submitted while an unowned order is open; external orders stay untouched/unowned; unrelated symbols remain independent; inability to establish current open-order state fails closed for that decision.
 

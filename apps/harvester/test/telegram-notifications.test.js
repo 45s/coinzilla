@@ -186,3 +186,133 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
     process.exitCode = previousExitCode
   }
 })
+
+
+test("applies custom Telegram event overrides and market filters while preserving safety alerts", async () => {
+  const sentMessages = []
+  const signalHandlers = new Map()
+  const config = {
+    notifications: {
+      telegram: {
+        enabled: true,
+        profile: "custom",
+        markets: ["LINKUSDT"],
+        events: {
+          fillReceived: true,
+          pairPaused: false,
+          recoveryCompleted: false,
+        },
+      },
+    },
+  }
+
+  await runMain({
+    env: {
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      TELEGRAM_CHAT_ID: "test-chat-id",
+    },
+    loadConfig: async () => config,
+    createTelegramNotifier: () => ({
+      async sendMessage(message) { sentMessages.push(message) },
+    }),
+    createJournalService: disabledJournalService,
+    start: async ({ eventPublisher }) => {
+      eventPublisher.publish({
+        name: "strategy.paused",
+        source: "harvester",
+        data: { symbol: "ETHUSDT", reason: "account safety halt" },
+      })
+      eventPublisher.publish({
+        name: "execution.fill_applied",
+        source: "harvester",
+        data: { symbol: "LINKUSDT", price: "14.25", quantity: "2", tradeId: "link-fill" },
+      })
+      eventPublisher.publish({
+        name: "execution.fill_applied",
+        source: "harvester",
+        data: { symbol: "ETHUSDT", price: "2500", quantity: "0.1", tradeId: "eth-fill" },
+      })
+      eventPublisher.publish({
+        name: "recovery.cycle_completed",
+        source: "harvester",
+        data: { symbol: "LINKUSDT", realizedNetProfit: "0.42", freeQuantity: "0.01" },
+      })
+      eventPublisher.publish({
+        name: "execution.accounting_failed",
+        source: "harvester",
+        data: {
+          symbol: "ETHUSDT",
+          error: { message: "fill accounting could not be reconciled" },
+        },
+      })
+
+      return {
+        connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
+        subscriptions: ["LINKUSDT", "ETHUSDT"],
+        stop: async () => ({ ok: true }),
+      }
+    },
+    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    logger: { info() {}, error() {} },
+  })
+
+  await signalHandlers.get("SIGTERM")()
+
+  assert.equal(
+    sentMessages.length,
+    3,
+    "Custom policy must deliver the selected LINK fill and both non-disableable safety alerts, while excluding the filtered ETH fill and disabled recovery summary.",
+  )
+  assert.ok(
+    sentMessages.some((message) => message.includes("EXECUTION RECEIVED") && message.includes("LINKUSDT") && message.includes("link-fill")),
+    "The enabled fillReceived override must deliver fills for the selected LINKUSDT market.",
+  )
+  assert.ok(
+    sentMessages.some((message) => message.includes("TRADING PAIR PAUSED") && message.includes("ETHUSDT")),
+    "A critical pair-pause alert must bypass both an explicit false override and the LINKUSDT-only market filter.",
+  )
+  assert.ok(
+    sentMessages.some((message) => message.includes("ACCOUNT SAFETY ALERT") && message.includes("ETHUSDT")),
+    "An execution-accounting safety alert must bypass custom event exclusions and market filters.",
+  )
+  assert.ok(
+    sentMessages.every((message) => !message.includes("eth-fill") && !message.includes("0.42")),
+    "Ordinary filtered fills and explicitly disabled recovery-completion messages must not reach Telegram.",
+  )
+})
+
+test("does not construct Telegram transport when the unified config disables notifications", async () => {
+  let notifierCreations = 0
+
+  await runMain({
+    env: {
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      TELEGRAM_CHAT_ID: "test-chat-id",
+    },
+    loadConfig: async () => ({
+      notifications: { telegram: { enabled: false, profile: "trader" } },
+    }),
+    createTelegramNotifier: () => {
+      notifierCreations += 1
+      throw new Error("Disabled Telegram notifications must not construct a transport")
+    },
+    createJournalService: disabledJournalService,
+    start: async () => ({
+      connected: true,
+      brokerName: "binance",
+      tradingEnabled: true,
+      strategyMode: "conservative",
+      subscriptions: [],
+    }),
+    logger: { info() {}, error() {} },
+  })
+
+  assert.equal(
+    notifierCreations,
+    0,
+    "The config-level enabled=false switch must disable Telegram even when both credentials are present.",
+  )
+})

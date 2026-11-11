@@ -94,3 +94,27 @@ test('rejects invalid pair enabled flags, amounts, fees, and precision', () => {
   const invalidPrecision = structuredClone(validConfig); strategy(invalidPrecision).pairs.DOGEUSDT.pricePrecision = 1.5;
   assert.throws(() => validateTradingConfig(invalidPrecision), /pricePrecision/);
 });
+
+
+test("the default Harvester config includes the trader Telegram profile without credentials", () => {
+  assert.equal(
+    validConfig.notifications.telegram.enabled,
+    true,
+    "Telegram policy must be enabled in the single config while transport credentials remain external.",
+  )
+  assert.equal(
+    validConfig.notifications.telegram.profile,
+    "trader",
+    "The default Telegram profile must provide useful trading alerts without verbose event noise.",
+  )
+  assert.deepEqual(
+    validConfig.notifications.telegram.markets,
+    [],
+    "An empty Telegram market list must mean all configured markets rather than silently suppressing alerts.",
+  )
+  assert.deepEqual(
+    validConfig.notifications.telegram.events,
+    {},
+    "The default profile must not require custom overrides.",
+  )
+})

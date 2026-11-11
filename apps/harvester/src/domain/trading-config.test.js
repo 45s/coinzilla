@@ -78,3 +78,69 @@ test("rejects legacy runtime profiles in strategy configuration", () => {
     "The trading JSON must not retain a second exchange-mode selector.",
   )
 })
+
+
+test("validates Telegram notification profiles, market filters, and event overrides", () => {
+  const config = createTradingConfig()
+  config.notifications = {
+    telegram: {
+      enabled: true,
+      profile: "custom",
+      markets: ["LINKUSDT", "LINKFDUSD"],
+      events: { fillReceived: true, pairPaused: false },
+    },
+  }
+
+  assert.equal(
+    validateTradingConfig(config),
+    config,
+    "A valid custom Telegram policy must be accepted as part of the single Harvester configuration.",
+  )
+})
+
+test("rejects unknown Telegram notification profiles", () => {
+  const config = createTradingConfig()
+  config.notifications = { telegram: { enabled: true, profile: "everything" } }
+
+  assert.throws(
+    () => validateTradingConfig(config),
+    /profile/,
+    "An unsupported Telegram profile must fail configuration validation instead of silently selecting another policy.",
+  )
+})
+
+test("rejects unknown Telegram event override keys and non-boolean values", () => {
+  const unknownEvent = createTradingConfig()
+  unknownEvent.notifications = { telegram: { profile: "custom", events: { orderSubmittedNow: true } } }
+  assert.throws(
+    () => validateTradingConfig(unknownEvent),
+    /events/,
+    "An unknown Telegram event key must be rejected instead of being silently ignored.",
+  )
+
+  const invalidEventValue = createTradingConfig()
+  invalidEventValue.notifications = { telegram: { profile: "custom", events: { fillReceived: "yes" } } }
+  assert.throws(
+    () => validateTradingConfig(invalidEventValue),
+    /boolean/,
+    "Every Telegram event override must be an explicit boolean.",
+  )
+})
+
+test("rejects duplicate or malformed Telegram market filters", () => {
+  const duplicateMarkets = createTradingConfig()
+  duplicateMarkets.notifications = { telegram: { profile: "trader", markets: ["LINKUSDT", "LINKUSDT"] } }
+  assert.throws(
+    () => validateTradingConfig(duplicateMarkets),
+    /markets/,
+    "Duplicate Telegram market filters must be rejected so policy resolution is deterministic.",
+  )
+
+  const malformedMarket = createTradingConfig()
+  malformedMarket.notifications = { telegram: { profile: "trader", markets: [""] } }
+  assert.throws(
+    () => validateTradingConfig(malformedMarket),
+    /markets/,
+    "An empty Telegram market symbol must be rejected rather than matching no market accidentally.",
+  )
+})
