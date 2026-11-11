@@ -43,6 +43,8 @@ const FACTS_FILE_NAME = "facts.jsonl"
 const MANIFEST_FILE_NAME = "manifest.json"
 const MANIFEST_TEMP_FILE_NAME = "manifest.json.tmp"
 
+const operationQueues = new Map()
+
 function createError(message, code) {
   const error = new Error(message)
   error.code = code
@@ -265,11 +267,10 @@ export function createFileDurableFactsStore({
   const logPath = path.join(absoluteDirectory, FACTS_FILE_NAME)
   const manifestPath = path.join(absoluteDirectory, MANIFEST_FILE_NAME)
   const manifestTempPath = path.join(absoluteDirectory, MANIFEST_TEMP_FILE_NAME)
-  let operationQueue = Promise.resolve()
-
   const serialize = (task) => {
-    const next = operationQueue.then(task, task)
-    operationQueue = next.then(() => undefined, () => undefined)
+    const previous = operationQueues.get(absoluteDirectory) ?? Promise.resolve()
+    const next = previous.then(task, task)
+    operationQueues.set(absoluteDirectory, next.then(() => undefined, () => undefined))
     return next
   }
 
