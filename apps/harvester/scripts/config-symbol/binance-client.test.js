@@ -8,6 +8,7 @@ const createExchangeInfo = ({
   orderTypes = ["LIMIT", "LIMIT_MAKER"],
   filters,
 } = {}) => ({
+  exchangeFilters: [],
   symbols: [{
     symbol: "ADAFDUSD",
     status,
@@ -150,6 +151,44 @@ test("reports Binance HTTP, malformed JSON, and network failures clearly", async
     /network down/i,
     "Network failures must retain their original diagnostic.",
   )
+})
+
+test("rejects unvalidated active symbol and exchange filters but ignores filters exclusive to unsupported order types", async () => {
+  const base = createExchangeInfo()
+  await assert.rejects(
+    fetchBinanceSpotMetadata({
+      symbol: "ADAFDUSD",
+      fetchImpl: async () => createResponse({
+        ...base,
+        symbols: [{ ...base.symbols[0], filters: [...base.symbols[0].filters, { filterType: "PERCENT_PRICE", multiplierUp: "1.2" }] }],
+      }),
+    }),
+    /PERCENT_PRICE.*not validated/i,
+    "A dynamic price-band filter must not be silently ignored by a generator that cannot validate it.",
+  )
+  await assert.rejects(
+    fetchBinanceSpotMetadata({
+      symbol: "ADAFDUSD",
+      fetchImpl: async () => createResponse({
+        ...base,
+        exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 }],
+      }),
+    }),
+    /EXCHANGE_MAX_NUM_ORDERS.*not validated/i,
+    "An exchange-wide order constraint must be reported as unsupported.",
+  )
+  const responses = [
+    createResponse({
+      ...base,
+      symbols: [{ ...base.symbols[0], filters: [...base.symbols[0].filters, { filterType: "MARKET_LOT_SIZE", minQty: "0", maxQty: "0", stepSize: "0" }] }],
+    }),
+    createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+  ]
+  const metadata = await fetchBinanceSpotMetadata({
+    symbol: "ADAFDUSD",
+    fetchImpl: async () => responses.shift(),
+  })
+  assert.equal(metadata.symbol, "ADAFDUSD", "Filters exclusive to unsupported MARKET orders must not block the current LIMIT/LIMIT_MAKER configuration.")
 })
 
 test("rejects a ticker response for a different symbol or invalid price", async () => {
