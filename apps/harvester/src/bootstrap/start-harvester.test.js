@@ -93,6 +93,7 @@ const createMarketMetadata = (symbol) => {
     market,
     tradingRules,
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    unvalidatedConstraints: [],
   }
 }
 const createOpenOrderSnapshot = ({ order }) => {

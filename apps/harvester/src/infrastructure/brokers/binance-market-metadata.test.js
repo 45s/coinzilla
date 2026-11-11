@@ -16,6 +16,7 @@ const baseFilters = {
   minNotional: "5",
   maxNotional: "1000000",
   supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+  unvalidatedConstraints: [],
 }
 
 test("converts exact Binance filter strings into canonical Market and TradingRules", () => {
@@ -96,3 +97,43 @@ test("rejects negative optional filters and inverted bounds", () => {
     symbolFilters: { ...baseFilters, minQuantity: "200", maxQuantity: "100" },
   }), /MIN_QUANTITY cannot exceed MAX_QUANTITY/)
 })
+
+
+test("preserves exchange-neutral unvalidated constraints without leaking them into TradingRules", () => {
+  const result = createBinanceMarketMetadata({
+    symbolFilters: {
+      ...baseFilters,
+      unvalidatedConstraints: [
+        { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+        { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+      ],
+    },
+  })
+
+  assert.deepEqual(result.unvalidatedConstraints, [
+    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+  ], "The canonical market metadata must retain constraints that require additional dynamic or account state.")
+  assert.equal(result.tradingRules.constraints.length, 8, "Unvalidated constraints must remain separate from the static typed TradingRules until their evaluation contract is implemented.")
+  assert.ok(Object.isFrozen(result.unvalidatedConstraints), "Unvalidated constraints must be immutable after metadata normalization.")
+})
+
+test("rejects malformed unvalidated exchange constraints", () => {
+  assert.throws(() => createBinanceMarketMetadata({
+    symbolFilters: {
+      ...baseFilters,
+      unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" }],
+    },
+  }), /invalid unvalidated exchange constraint/, "Incomplete exchange-constraint evidence must fail metadata normalization rather than be silently accepted.")
+})
+
+
+test("requires the adapter to provide an explicit unvalidated-constraint inventory", () => {
+  const { unvalidatedConstraints, ...incompleteSymbolFilters } = baseFilters;
+
+  assert.throws(
+    () => createBinanceMarketMetadata({ symbolFilters: incompleteSymbolFilters }),
+    /unvalidatedConstraints must be an array/,
+    "Missing constraint inventory must not be treated as proof that the exchange has no additional applicable restrictions.",
+  );
+});

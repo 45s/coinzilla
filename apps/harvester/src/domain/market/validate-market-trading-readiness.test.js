@@ -32,6 +32,7 @@ const makeMetadata = ({
     ],
   }),
   supportedOrderTypes,
+  unvalidatedConstraints: [],
 })
 
 const pairConfig = { makerPercent: 0, takerPercent: 0.1, investment: 100, orderQuantity: 100 }
@@ -215,5 +216,38 @@ test("enforces MIN_NOTIONAL at exact equality and immediately below the configur
     }),
     /investment.*MIN_NOTIONAL/,
     "An investment immediately below the exchange MIN_NOTIONAL must fail closed.",
+  )
+})
+
+
+test("blocks an enabled market when any applicable exchange constraint remains unvalidated", () => {
+  const metadata = {
+    ...makeMetadata(),
+    unvalidatedConstraints: [
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+      { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+    ],
+  }
+
+  assert.throws(
+    () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig,
+      marketMetadata: metadata,
+    }),
+    /DYNAMIC_PRICE_BAND\/SYMBOL\/PERCENT_PRICE_BY_SIDE.*BASE_ASSET_POSITION_LIMIT\/ACCOUNT\/MAX_POSITION/,
+    "An enabled market must not become tradable while dynamic price or account position constraints are not validated.",
+  )
+})
+
+test("rejects malformed unvalidated constraint metadata instead of treating it as an empty list", () => {
+  assert.throws(
+    () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig,
+      marketMetadata: { ...makeMetadata(), unvalidatedConstraints: "unknown" },
+    }),
+    /unvalidatedConstraints must be an array/,
+    "Malformed exchange-constraint metadata must close the readiness gate rather than be interpreted as no restrictions.",
   )
 })

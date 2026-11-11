@@ -35,6 +35,7 @@ function makeMarketMetadata(market) {
     market,
     orderType: "LIMIT_MAKER",
     supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+    unvalidatedConstraints: [],
     tradingRules: new TradingRules({
       market,
       constraints: [
