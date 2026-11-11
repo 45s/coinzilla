@@ -35,7 +35,7 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
   if (symbolInfo.isSpotTradingAllowed !== true) {
     throw new Error("Binance symbol " + requestedSymbol + " is not enabled for Spot trading")
   }
-  if (!symbolInfo.baseAsset || !symbolInfo.quoteAsset) {
+  if (typeof symbolInfo.baseAsset !== "string" || !symbolInfo.baseAsset || typeof symbolInfo.quoteAsset !== "string" || !symbolInfo.quoteAsset) {
     throw new Error("Binance symbol " + requestedSymbol + " is missing base/quote asset metadata")
   }
   if (!Array.isArray(symbolInfo.orderTypes)) {
@@ -127,8 +127,11 @@ export async function fetchBinanceSpotMetadata({
   if (!Array.isArray(exchangeInfo?.symbols)) {
     throw new TypeError("Binance exchangeInfo response is missing its symbols array")
   }
+  if (exchangeInfo.symbols.length === 0) {
+    throw new Error("Binance Spot symbol " + requestedSymbol + " was not found")
+  }
   if (exchangeInfo.symbols.length !== 1) {
-    throw new Error("Binance exchangeInfo did not return exactly one result for " + requestedSymbol)
+    throw new Error("Binance exchangeInfo returned an ambiguous result for " + requestedSymbol)
   }
   const normalized = parseSymbolMetadata({
     symbolInfo: exchangeInfo.symbols[0],
