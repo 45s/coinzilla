@@ -14,7 +14,7 @@ See [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.m
 
 ## Offline CLI
 
-The command accepts an operator-prepared JSON evidence bundle. It does not discover or read Journal files itself; the bundle must contain the validated Journal projection input and the independently collected exchange evidence. It is deterministic for a fixed bundle and has no network dependency.
+The command accepts an operator-prepared JSON evidence bundle. It does not discover or read Journal files itself; the bundle must contain the validated Journal projection input and the independently collected exchange evidence. The audit result is deterministic for a fixed bundle and has no network dependency; a successful confirmation still records the durable store's actual commit timestamp.
 
 From `apps/harvester`:
 
@@ -22,7 +22,7 @@ From `apps/harvester`:
 pnpm run recovery:market -- --context ./recovery-evidence/linkusdt.json
 ```
 
-The default mode is audit-only and never writes the durable-fact ledger. It reports `READY`, `BLOCKED` or `SKIPPED`; exit code `0` means READY, `2` means the audit did not establish readiness, and `1` means invalid input or an execution/evidence failure.
+The default mode is audit-only and never writes the durable-fact ledger. It reports `READY`, `BLOCKED` or `SKIPPED`; exit code `0` means READY in audit-only mode or confirmed in explicit confirmation mode, `2` means the audit did not establish readiness, and `1` means invalid input or an execution/evidence failure.
 
 Only an explicit confirmation flag can append a coverage fact:
 
@@ -42,7 +42,7 @@ Confirmation requires an already initialized and verifiable ADR-0001 ledger. The
 
 ### Evidence bundle contract
 
-The JSON root has these fields:
+All timestamps in this bundle are Unix milliseconds. The JSON root has these fields:
 
 - `symbol`: the one uppercase target market.
 - `runtimeSessionId`: required for `--confirm`; a non-empty identifier for this offline confirmation process.
