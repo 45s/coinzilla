@@ -64,7 +64,7 @@ function normalizePositiveExchangeDecimal(value, field) {
   return value
 }
 
-function parseSymbolMetadata({ symbolInfo, requestedSymbol }) {
+function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
   if (!symbolInfo || symbolInfo.symbol !== requestedSymbol) {
     throw new Error("Binance did not return the requested symbol " + requestedSymbol)
   }
@@ -211,6 +211,7 @@ export async function fetchBinanceSpotMetadata({
   const normalized = parseSymbolMetadata({
     symbolInfo: exchangeInfo.symbols[0],
     requestedSymbol,
+    exchangeInfo,
   })
 
   const ticker = await requestJson({
