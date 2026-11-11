@@ -16,7 +16,7 @@
 
 **Safety and validation:**
 
-- Use public, read-only Binance Spot `exchangeInfo` and `ticker/price`; no API credentials or order endpoints. Reject active symbol/exchange filters outside the currently validated LIMIT/LIMIT_MAKER subset; ignore only filters exclusive to unsupported order types. Account-specific `myFilters` remain a runtime startup check because this generator intentionally requires no credentials. The preview records the public metadata source and fetch timestamp.
+- Use public, read-only Binance Spot `exchangeInfo` and `ticker/price`; select TESTNET (`https://testnet.binance.vision`) or LIVE (`https://api.binance.com`) explicitly. Default to TESTNET unless the shell's `TRADING_MODE` is `live`; no API credentials or order endpoints. Generate against the same environment Harvester will use because symbols/filters can differ. Reject active symbol/exchange filters outside the currently validated LIMIT/LIMIT_MAKER subset; ignore only filters exclusive to unsupported order types. Account-specific `myFilters` remain a runtime startup check because this generator intentionally requires no credentials. The preview records the public metadata source and fetch timestamp.
 - Require an existing, actively trading Spot symbol and the LIMIT/LIMIT_MAKER order types used by Harvester.
 - Preserve exact decimal strings while parsing inputs and calculating order quantity. Reject malformed/negative/non-finite values, invalid percentages, a budget below minimum notional, quantities below minimum quantity, and `keepQuantity` not aligned to `LOT_SIZE.stepSize`.
 - Keep maker/taker assumptions as separate operator inputs; do not treat public exchange metadata as account commission data.

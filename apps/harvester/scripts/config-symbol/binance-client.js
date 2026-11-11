@@ -1,7 +1,10 @@
 import { compareDecimal, normalizeDecimalString, roundDecimalToIncrement } from "@coinzilla/utils"
-import { normalizeSymbolInput } from "./configuration.js"
+import { normalizeSymbolInput, normalizeTradingEnvironment } from "./configuration.js"
 
-const DEFAULT_BINANCE_SPOT_BASE_URL = "https://api.binance.com"
+const BINANCE_SPOT_API_BASE_URLS = Object.freeze({
+  testnet: "https://testnet.binance.vision",
+  live: "https://api.binance.com",
+})
 const REQUEST_TIMEOUT_MS = 10_000
 const FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS = new Set([
   "MARKET_LOT_SIZE",
@@ -202,6 +205,7 @@ async function requestJson({ fetchImpl, url, label }) {
  *
  * @param {object} options
  * @param {string} options.symbol - Binance Spot symbol.
+ * @param {"testnet"|"live"} [options.environment="testnet"] - Binance Spot environment whose filters must match Harvester's runtime mode.
  * @param {typeof fetch} [options.fetchImpl=fetch] - Injectable Fetch-compatible transport.
  * @param {string} [options.baseUrl] - HTTPS Binance API base URL, primarily for isolated tests.
  * @returns {Promise<object>} Exact exchange-filter strings, supported order types, and ticker price.
@@ -209,17 +213,20 @@ async function requestJson({ fetchImpl, url, label }) {
  */
 export async function fetchBinanceSpotMetadata({
   symbol,
+  environment = "testnet",
   fetchImpl = globalThis.fetch,
-  baseUrl = DEFAULT_BINANCE_SPOT_BASE_URL,
+  baseUrl,
 } = {}) {
   const requestedSymbol = normalizeSymbolInput(symbol)
+  const normalizedEnvironment = normalizeTradingEnvironment(environment)
   if (typeof fetchImpl !== "function") {
     throw new TypeError("fetchImpl must be a function")
   }
-  if (typeof baseUrl !== "string" || !/^https:\/\//.test(baseUrl)) {
+  const selectedBaseUrl = baseUrl ?? BINANCE_SPOT_API_BASE_URLS[normalizedEnvironment]
+  if (typeof selectedBaseUrl !== "string" || !/^https:\/\//.test(selectedBaseUrl)) {
     throw new TypeError("baseUrl must be an HTTPS URL")
   }
-  const endpoint = baseUrl.replace(/\/+$/, "")
+  const endpoint = selectedBaseUrl.replace(/\/+$/, "")
   const encodedSymbol = encodeURIComponent(requestedSymbol)
   const exchangeInfo = await requestJson({
     fetchImpl,
@@ -256,5 +263,5 @@ export async function fetchBinanceSpotMetadata({
   if (normalized.maxPrice && compareDecimal({ left: price, right: normalized.maxPrice }) > 0) {
     throw new Error("Binance ticker price is above PRICE_FILTER.maxPrice for " + requestedSymbol)
   }
-  return Object.freeze({ ...normalized, price })
+  return Object.freeze({ ...normalized, price, environment: normalizedEnvironment })
 }

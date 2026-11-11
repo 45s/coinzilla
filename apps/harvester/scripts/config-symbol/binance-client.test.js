@@ -45,8 +45,8 @@ test("fetches public Spot exchange filters and current ticker price without cred
   })
 
   assert.equal(requests.length, 2, "The client must fetch exchange filters and a current reference price.")
-  assert.match(requests[0].url, /api\/v3\/exchangeInfo\?symbol=ADAFDUSD/, "The exchange-info request must be symbol-scoped.")
-  assert.match(requests[1].url, /api\/v3\/ticker\/price\?symbol=ADAFDUSD/, "The ticker request must be symbol-scoped.")
+  assert.match(requests[0].url, /testnet\.binance\.vision\/api\/v3\/exchangeInfo\?symbol=ADAFDUSD/, "The default exchange-info request must use the Binance Spot TESTNET host and be symbol-scoped.")
+  assert.match(requests[1].url, /testnet\.binance\.vision\/api\/v3\/ticker\/price\?symbol=ADAFDUSD/, "The default ticker request must use the Binance Spot TESTNET host and be symbol-scoped.")
   assert.deepEqual(requests.map(({ options }) => options.headers), [{ Accept: "application/json" }, { Accept: "application/json" }], "Public metadata requests must not include API keys or credentials.")
   assert.deepEqual(metadata, {
     symbol: "ADAFDUSD",
@@ -61,6 +61,41 @@ test("fetches public Spot exchange filters and current ticker price without cred
     minNotional: "5.00000000",
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
   }, "The normalized metadata must preserve exact exchange decimal strings.")
+})
+
+test("uses the LIVE public API only when the operator selects live", async () => {
+  const urls = []
+  const responses = [
+    createResponse(createExchangeInfo()),
+    createResponse({ symbol: "ADAFDUSD", price: "0.50000000" }),
+  ]
+  const metadata = await fetchBinanceSpotMetadata({
+    symbol: "ADAFDUSD",
+    environment: "live",
+    fetchImpl: async (url) => {
+      urls.push(String(url))
+      return responses.shift()
+    },
+  })
+  assert.ok(urls.every((url) => url.startsWith("https://api.binance.com/")), "Live metadata must come from the Binance production public API host.")
+  assert.equal(metadata.environment, "live", "The selected environment must remain attached to the metadata result.")
+})
+
+test("rejects an unsupported environment before making a network request", async () => {
+  let requests = 0
+  await assert.rejects(
+    fetchBinanceSpotMetadata({
+      symbol: "ADAFDUSD",
+      environment: "paper",
+      fetchImpl: async () => {
+        requests += 1
+        return createResponse(createExchangeInfo())
+      },
+    }),
+    /environment.*testnet or live/i,
+    "Unknown environment values must not silently fall back to production or TESTNET.",
+  )
+  assert.equal(requests, 0, "Invalid environment selection must fail before any Binance request.")
 })
 
 test("rejects an unknown symbol returned by Binance", async () => {
