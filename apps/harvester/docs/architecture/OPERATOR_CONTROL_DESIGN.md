@@ -44,6 +44,66 @@ The engine remains under `src/use-cases/conservative-trading-engine.js` because 
 
 Do not create `packages/operator`, `packages/operators` or `packages/commands` now. Extract a shared package only after a second real application proves that actor, authorization, request/result and idempotency semantics are genuinely shared without Harvester trading dependencies.
 
+## Architecture flow
+
+The application capability is shared by inbound adapters. Only the adapter changes when another transport is introduced.
+
+```mermaid
+flowchart TB
+  subgraph IN["Inbound adapters"]
+    TG["Telegram Long Polling"]
+    HTTP["Future HTTP adapter"]
+    CLI["Possible CLI adapter"]
+  end
+  subgraph APP["Harvester application"]
+    AUTH["Resolve trusted actor"]
+    OP["HarvesterOperator facade"]
+    PAUSE["pauseMarket use case"]
+    RESUME["resumeMarket use case"]
+    FACTS["ADR-0001 durable-facts port"]
+  end
+  subgraph ENGINE["Harvester trading application"]
+    SERIAL["Serialized engine transition"]
+    STATE["Operator pause state"]
+    POLICY["Conservative strategy policy"]
+    EXEC["Existing order execution workflow"]
+  end
+  TG --> AUTH
+  HTTP --> AUTH
+  CLI --> AUTH
+  AUTH --> OP
+  OP --> PAUSE
+  OP --> RESUME
+  PAUSE --> SERIAL
+  RESUME --> SERIAL
+  SERIAL --> FACTS
+  FACTS --> STATE
+  STATE --> POLICY
+  POLICY --> EXEC
+```
+
+A pause transition commits its fact from inside the engine's serialized transition before applying the operator state:
+
+```mermaid
+sequenceDiagram
+  participant T as Inbound adapter
+  participant O as HarvesterOperator
+  participant U as pauseMarket use case
+  participant E as Conservative engine
+  participant F as ADR-0001 durable-facts port
+  T->>O: pauseMarket(actor, requestId, symbol)
+  O->>U: authorize trusted actor
+  U->>E: pauseMarket(symbol, beforeApply)
+  E->>F: append OPERATOR_MARKET_PAUSED
+  F-->>E: committed durable fact
+  E->>E: add operatorPausedMarkets
+  E-->>U: structured result
+  U-->>O: application result
+  O-->>T: transport response
+```
+
+If the durable append fails or is uncertain, the engine does not mutate operator state. If the process crashes after the fact is committed but before the in-memory update, the ADR-0001 startup projection restores the pause before market evaluation.
+
 ## Application contracts
 
 ### Actor and request
@@ -85,6 +145,25 @@ The durable-facts adapter must return `durable: true` only after the record and 
 
 The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. The current production runtime does not yet provide this adapter; therefore the application facade is not wired to an inbound transport.
 
+## Application result shape
+
+The application returns the repository's structured result envelope. A successful pause includes the configured market and whether it was already paused:
+
+```js
+{
+  ok: true,
+  data: {
+    symbol: "LINKUSDT",
+    paused: true,
+    alreadyPaused: false,
+    durable: true
+  },
+  errors: []
+}
+```
+
+A rejected request uses a stable error code, for example `OPERATOR_UNAUTHORIZED`, `INVALID_OPERATOR_REQUEST_ID`, `INVALID_OPERATOR_MARKET` or `SAFETY_BLOCKER_ACTIVE`. Transport adapters map these codes to concise messages; they must not expose stack traces or internal storage details.
+
 ## Pause semantics
 
 An operator pause is market-scoped and separate from safety/recovery pause ownership.
@@ -118,6 +197,21 @@ The first adapter will use Telegram Bot API Long Polling and be optional.
 - Start and stop the poller with the Harvester runtime. If the feature is enabled without a valid durable-fact store and restored operator state, fail closed before strategy evaluation.
 - Reuse the existing `TELEGRAM_BOT_TOKEN` environment secret. Never commit credentials.
 - Keep outbound notification delivery independent and best-effort.
+
+The target configuration is intentionally separate from outbound notification policy and remains disabled by default:
+
+```json
+{
+  "operatorControl": {
+    "telegram": {
+      "enabled": false,
+      "allowedUserIds": []
+    }
+  }
+}
+```
+
+When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. This configuration is a target contract; runtime configuration validation and wiring are still pending.
 
 The first and only Telegram command in this milestone is:
 
