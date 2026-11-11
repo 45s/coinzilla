@@ -762,8 +762,13 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
             throw new Error("Profit-target continuation requires realized profit below minProfit")
           }
+          if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+            throw new Error("Residual sell-through requires realized profit to meet minProfit")
+          }
         } else if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
           throw new Error("BLOCKED cannot use a residual sell-through reason")
+        } else if (reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+          throw new Error("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
         }
         const pendingSell = lastFullyFilledSellBySymbol.get(symbol)
         if (!pendingSell || pendingSell.clientOrderId !== sellOrderClientId || pendingSell.brokerOrderId !== sellOrderBrokerOrderId) {
