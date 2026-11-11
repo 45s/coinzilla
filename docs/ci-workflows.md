@@ -7,7 +7,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
 | `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
-| `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix. Pull requests also run a credential-free Brokers endpoint diagnostic; manual `develop` dispatch can opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
+| `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
 | `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage` in both active rulesets. |
 | `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests` in both active rulesets. |
 | `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies` in both active rulesets. |
@@ -49,7 +49,7 @@ The networked **External Documentation Links** workflow is an advisory check for
 
 The `unit-tests.yml` workflow exposes an opt-in `run_broker_testnet_read_only` dispatch input on `develop`. The TESTNET job uses repository secrets only in its final integration step; checkout, tool setup, and dependency installation do not receive exchange credentials. It rejects missing or case-insensitive placeholder credentials before running the read-only broker integration suite. Order mutations and externally triggered user-data event waiting are fixed to `0`; the job does not upload integration artifacts.
 
-The Brokers pull-request endpoint probe is a separate credential-free diagnostic and is configured not to fail the package-test job. It is not the read-only TESTNET integration. Ordinary package tests remain offline and credential-free.
+Pull-request package tests do not contact Binance or any exchange endpoint. The only Binance TESTNET connection in this workflow is the explicitly dispatched `broker-testnet-read-only` job on `develop`; it requires the opt-in input and valid TESTNET credentials, and its order-mutation/user-data-waiting settings remain fixed to `0`. Do not dispatch it unless the task has explicit TESTNET authorization.
 
 ## Active repository rulesets
 
@@ -108,7 +108,7 @@ pnpm --filter @coinzilla/harvester test:targeted
 pnpm --filter @coinzilla/harvester exec node --test src/infrastructure/process-lock/acquire-harvester-process-lock.test.js
 ```
 
-The package test commands should remain deterministic and must not require credentials, local environment files, or live exchange access. The PR-only Brokers endpoint probe is a separate network diagnostic; the read-only TESTNET integration is opt-in and TESTNET-only.
+The package test commands and pull-request workflow remain deterministic, credential-free, and offline. The read-only TESTNET integration is opt-in through manual `workflow_dispatch` and must only be used when separately authorized.
 
 ## Failure triage
 
