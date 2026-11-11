@@ -4,7 +4,7 @@
 
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED ([PR #1041](https://github.com/45s/coinzilla/pull/1041) merged); candle-stream freshness follow-up in [PR #1048](https://github.com/45s/coinzilla/pull/1048).** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED ([PR #1041](https://github.com/45s/coinzilla/pull/1041) merged); candle-stream freshness follow-up in [PR #1049](https://github.com/45s/coinzilla/pull/1049).** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -23,7 +23,7 @@
 3. [x] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — merged [PR #1019](https://github.com/45s/coinzilla/pull/1019).
 4. [x] Harvester: startup warm-up, live candle maintenance, freshness/gap detection, bounded reconnect backfill and ATR/NATR measurement snapshots — merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). This delivers data collection only.
 5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041).
-6. [~] Correct the candle-stream freshness window, add quiet-stream regressions, and synchronize the current contract/docs — [PR #1048](https://github.com/45s/coinzilla/pull/1048). Initial ratio-threshold validation against representative offline history remains open.
+6. [~] Correct the candle-stream freshness window, add quiet-stream regressions, and synchronize the current contract/docs — [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
 
 ---
 
