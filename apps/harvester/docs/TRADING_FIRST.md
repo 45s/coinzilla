@@ -8,7 +8,7 @@
 
 The former blanket TESTNET acceptance gate is removed. Explicitly selected user tasks may proceed independently of TESTNET acceptance. TESTNET validation remains a separate operational milestone, not a prerequisite for Journal evidence, documentation, or other selected engineering work.
 
-This does not authorize exchange writes during documentation or engineering preparation, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. The operator explicitly selects the exchange environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice. Keep all order-safety protections, exact-order ownership safeguards, and Journal durability barriers intact.
+This explicitly selected operator-control work may proceed as a parallel, offline engineering task; it must not delay the trading workflow or alter its strategy behavior. It does not authorize exchange writes during documentation or engineering preparation, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. The operator explicitly selects the exchange environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice. Keep all order-safety protections, exact-order ownership safeguards, and Journal durability barriers intact.
 
 ## Journal contract boundary
 

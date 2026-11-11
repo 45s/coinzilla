@@ -155,9 +155,9 @@ Telegram policy lives in `config.json` under `notifications.telegram`; bot crede
 
 See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md) for the event vocabulary and delivery contract.
 
-### Operator control — design proposal only
+### Operator control
 
-Telegram currently sends outbound notifications only; it does not receive commands. The proposed transport-independent operator-control architecture (Telegram first, future web adapter later) is documented in [Operator control interface — design proposal](./docs/architecture/OPERATOR_CONTROL_DESIGN.md). This is discussion material only: no command receiver, web server, or pause/resume API is implemented.
+Harvester has a transport-independent operator application capability and a separate engine-level operator-pause state. The accepted [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md) and [operator-control documentation](./docs/operator-control/README.md) define the contract. The initial inbound command is planned as Telegram `/pause <SYMBOL>`; it is not available until the ADR-0001 durable-fact store and startup projection are implemented. Outbound `notifications.telegram` remains independent.
 
 ### Operational event journal
 

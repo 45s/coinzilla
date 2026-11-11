@@ -2,22 +2,14 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
-## Operator control interface — design before implementation
-
-**Status: DISCUSSION / PLANNED — no runtime implementation.** Tracking: [PR #1011](https://github.com/45s/coinzilla/pull/1011). The [operator-control design proposal](./docs/architecture/OPERATOR_CONTROL_DESIGN.md) describes a transport-independent application boundary, with Telegram as the first optional adapter and a future web/HTTP adapter reusing the same use cases.
-
-- **Current baseline:** Telegram is outbound-notification-only. No inbound command receiver, public control API, or web server exists.
-- **Next:** resolve the proposal's pause/order semantics, layered safety-state ownership, durable control-fact dependency, authorization model, configuration naming, idempotency and lifecycle questions before implementation.
-- **Implementation gate:** once decisions are accepted, deliver TDD-first in separate steps: transport-neutral application contracts and safety tests; durable control state; read-only commands; then authorized pause/resume. Do not implement a Telegram-specific trading workflow or treat Journal notifications as durable control state.
-- **Scope boundary:** this is Harvester-owned work. The root roadmap remains a cross-workspace priority index and does not duplicate this domain proposal.
-
 ## Operator control — first command: pause
 
 **Status: IN PROGRESS — test-first implementation in [PR #1011](https://github.com/45s/coinzilla/pull/1011).** The first inbound command is a single-market pause. The operator capability is Harvester-owned application functionality; Telegram is an inbound adapter, while outbound notifications remain separate.
 
 - **First behavior slice:** an operator pause is distinct from safety/recovery pauses, blocks new BUY exposure only for the selected market, leaves acknowledged exchange orders untouched, and preserves fill/accounting/reconciliation processing. Risk-reducing recovery SELLs remain eligible under the existing Conservative workflow.
 - **Engine slice implemented:** the serialized engine now has separate operator-pause state, durable-before-apply callbacks, BUY suppression, trailing-BUY suppression, recovery-SELL continuity, and a resume guard that refuses active safety/recovery blockers. Existing exchange orders remain untouched and may still fill.
-- **Next slices:** transport-independent application facade and actor authorization, then the ADR-0001 durable-fact adapter/projection and Telegram adapter lifecycle. The command must remain disabled until durable restore is available.
+- **Application slice implemented:** the `HarvesterOperator` facade and pause/resume use cases enforce the `trading-operator` actor role and append typed facts through the ADR-0001 port inside the serialized engine transition.
+- **Next slices:** implement the ADR-0001 durable-fact store/projection, wire restored state before market evaluation, then add the Telegram parser/allowlist/poller and lifecycle. The command remains unavailable until durable restore is available.
 - **Hard dependency:** operator pause facts must use the ADR-0001 application-owned durable-fact stream and be restored before strategy evaluation. Journal events are not authoritative pause state. Do not enable inbound control until durable commit, restart restoration, authorization, idempotency and startup-gate tests pass.
 - **Transport scope:** Telegram Long Polling only; inbound control defaults disabled and is independent from `notifications.telegram`. No HTTP server or generic command framework.
 - **TDD sequence:** prove serialized engine pause semantics, then the durable application use case/actor authorization, then Telegram parsing/allowlisting/update deduplication/lifecycle. Keep the initial Telegram vocabulary to `/pause <SYMBOL>`; do not add other commands in this milestone.
