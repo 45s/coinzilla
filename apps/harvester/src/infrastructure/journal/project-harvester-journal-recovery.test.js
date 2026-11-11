@@ -1853,3 +1853,92 @@ test("preserves execution safety DTOs through projection and restoration", () =>
   assert.equal(restored.data.durablePausedMarkets.has("DOGEUSDT"), true)
   assert.equal(restored.data.stickySafetyBlockers.length, 3)
 })
+
+test("fails closed when a fully filled SELL has no explicit recovery-cycle outcome", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: completedCycleRecords().slice(0, 6),
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /fully filled SELL has no explicit recovery-cycle outcome/)
+})
+
+test("preserves an explicitly evaluated residual sell-through without resetting the recovery basis", () => {
+  const records = completedCycleRecords().slice(0, 6)
+  records[3] = record("order.submission_requested", {
+    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL", type: "LIMIT",
+    price: "102.75", quantity: "0.4", status: "PENDING",
+  })
+  records[4] = record("order.submitted", {
+    clientOrderId: "h-BTCUSDT-sell-1", brokerOrderId: "9002", symbol: "BTCUSDT", side: "SELL",
+    type: "LIMIT", price: "102.75", quantity: "0.4", status: "FILLED",
+  })
+  records[5] = record("execution.fill_applied", {
+    fillId: "binance:BTCUSDT:trade-2", tradeId: "trade-2", brokerOrderId: "9002",
+    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL",
+    price: "102.75", quantity: "0.4", quoteQuantity: "41.1", liquidityRole: "MAKER",
+    commissions: [], commissionStatus: "COMPLETE",
+  })
+  records.push(harvesterRecord("recovery.cycle_not_completed", {
+    symbol: "BTCUSDT", marketId: "binance:BTCUSDT",
+    sellOrderClientId: "h-BTCUSDT-sell-1", sellOrderBrokerOrderId: "9002",
+    outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    realizedNetProfit: "-8.9", activeQuantity: "0.0996", keepQuantity: "0.01", minProfit: "0.01",
+  }))
+
+  const result = projectHarvesterJournalRecovery({ records })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.recoveryCycleEvaluations.length, 1)
+  assert.equal(result.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(result.data.recoveryCycleEvaluations[0].sellOrderClientId, "h-BTCUSDT-sell-1")
+  assert.deepEqual(result.data.recoveryCycles, [])
+})
+
+test("allows another fully filled SELL only after the prior SELL has an explicit continue-sell-through outcome", () => {
+  const records = completedCycleRecords().slice(0, 6)
+  records[3] = record("order.submission_requested", {
+    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL", type: "LIMIT",
+    price: "102.75", quantity: "0.4", status: "PENDING",
+  })
+  records[4] = record("order.submitted", {
+    clientOrderId: "h-BTCUSDT-sell-1", brokerOrderId: "9002", symbol: "BTCUSDT", side: "SELL",
+    type: "LIMIT", price: "102.75", quantity: "0.4", status: "FILLED",
+  })
+  records[5] = record("execution.fill_applied", {
+    fillId: "binance:BTCUSDT:trade-2", tradeId: "trade-2", brokerOrderId: "9002",
+    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL",
+    price: "102.75", quantity: "0.4", quoteQuantity: "41.1", liquidityRole: "MAKER",
+    commissions: [], commissionStatus: "COMPLETE",
+  })
+  records.push(harvesterRecord("recovery.cycle_not_completed", {
+    symbol: "BTCUSDT", marketId: "binance:BTCUSDT",
+    sellOrderClientId: "h-BTCUSDT-sell-1", sellOrderBrokerOrderId: "9002",
+    outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    realizedNetProfit: "-8.9", activeQuantity: "0.0996", keepQuantity: "0.01", minProfit: "0.01",
+  }))
+  records.push(record("order.submission_requested", {
+    clientOrderId: "h-BTCUSDT-sell-2", symbol: "BTCUSDT", side: "SELL", type: "LIMIT",
+    price: "102.75", quantity: "0.0896", status: "PENDING",
+  }))
+  records.push(record("order.submitted", {
+    clientOrderId: "h-BTCUSDT-sell-2", brokerOrderId: "9003", symbol: "BTCUSDT", side: "SELL",
+    type: "LIMIT", price: "102.75", quantity: "0.0896", status: "FILLED",
+  }))
+  records.push(record("execution.fill_applied", {
+    fillId: "binance:BTCUSDT:trade-3", tradeId: "trade-3", brokerOrderId: "9003",
+    clientOrderId: "h-BTCUSDT-sell-2", symbol: "BTCUSDT", side: "SELL",
+    price: "102.75", quantity: "0.0896", quoteQuantity: "9.2088", liquidityRole: "MAKER",
+    commissions: [], commissionStatus: "COMPLETE",
+  }))
+  records.push(record("recovery.cycle_completed", {
+    symbol: "BTCUSDT", marketId: "binance:BTCUSDT", freeQuantity: "0.01",
+    keepQuantity: "0.01", minProfit: "0.01", realizedNetProfit: "0.3088",
+  }))
+
+  const result = projectHarvesterJournalRecovery({ records })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.recoveryCycleEvaluations.length, 1)
+  assert.equal(result.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(result.data.recoveryCycles.length, 1)
+  assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "h-BTCUSDT-sell-2")
+})
