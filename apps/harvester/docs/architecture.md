@@ -308,8 +308,9 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Responsibility | Harvester location / owner |
 | --- | --- |
 | Trading invariants, value construction, calculations, deterministic policy | `src/domain/` |
-
-Market-data timestamp freshness is a deterministic domain policy in `src/domain/market/is-market-data-fresh.js`; the caller supplies the current time and policy bounds.
+| Market-data timestamp freshness | `src/domain/market/is-market-data-fresh.js`; caller supplies current time and policy bounds |
+| Candle shape validation, UTC interval alignment, contiguous-series validation and ATR/NATR metric composition | `src/domain/market/volatility-candle.js`; indicator formulas are delegated to `@coinzilla/indicators` |
+| Historical/live Kline warm-up, buffering, freshness snapshots and bounded gap backfill | `src/use-cases/create-candle-history-service.js`; uses the application-owned BrokerPort and owns no exchange protocol details |
 | One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
