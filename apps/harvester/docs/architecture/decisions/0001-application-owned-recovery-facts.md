@@ -191,3 +191,12 @@ The one-time genesis operation is exposed only through the explicit script `apps
 $env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
 node apps/harvester/scripts/initialize-durable-facts.js --confirm
 ```
+
+## Implementation tracking (non-normative)
+
+The accepted contract remains the authority for recovery boundaries; delivery status is maintained in the [Harvester roadmap](../../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654).
+
+- The durable-fact store, committed-head integrity, typed coverage facts and market-history coverage read/write primitives are implemented in merged recovery PRs through #1036.
+- The read-only one-market reconciliation orchestrator and guarded operator confirmation workflow are in [PR #1047](https://github.com/45s/coinzilla/pull/1047). They compose canonical owned-order reconciliation, current account balances, account-wide open orders and complete target-market fill history. The coverage fact is appended only after the target-market audit is READY and is read back after commit.
+- A concrete offline command/context composition and complete end-to-end evidence matrix remain pending. This PR does not wire the workflow into startup.
+- Step 8 candidate projection/readiness integration and Step 9 crash/restart proof remain pending. Runtime restoration and unattended restart readiness stay disabled.
