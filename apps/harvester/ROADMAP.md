@@ -2,6 +2,15 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Operator control interface — design before implementation
+
+**Status: DISCUSSION / PLANNED — no runtime implementation.** The [operator-control design proposal](./docs/architecture/OPERATOR_CONTROL_DESIGN.md) describes a transport-independent application boundary, with Telegram as the first optional adapter and a future web/HTTP adapter reusing the same use cases.
+
+- **Current baseline:** Telegram is outbound-notification-only. No inbound command receiver, public control API, or web server exists.
+- **Next:** resolve the proposal's pause/order semantics, layered safety-state ownership, durable control-fact dependency, authorization model, configuration naming, idempotency and lifecycle questions before implementation.
+- **Implementation gate:** once decisions are accepted, deliver TDD-first in separate steps: transport-neutral application contracts and safety tests; durable control state; read-only commands; then authorized pause/resume. Do not implement a Telegram-specific trading workflow or treat Journal notifications as durable control state.
+- **Scope boundary:** this is Harvester-owned work. The root roadmap remains a cross-workspace priority index and does not duplicate this domain proposal.
+
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: PLANNED — NOT IMPLEMENTED.** Restart restoration remains disabled. This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
