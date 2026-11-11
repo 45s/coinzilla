@@ -8,10 +8,6 @@ import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config.json", import.meta.url))
 
-function askWithDefault(value, fallback) {
-  return value.trim() === "" ? fallback : value
-}
-
 /**
  * Run the interactive operator flow; all external effects are injected or isolated at this boundary.
  *
@@ -43,9 +39,7 @@ export async function runConfigSymbol({
   writeLine("Harvester — add a Binance Spot trading pair")
   writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
   const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
-  const environment = normalizeTradingEnvironment(
-    askWithDefault(await ask("Binance environment [testnet/live] (default " + defaultEnvironment + "): "), defaultEnvironment),
-  )
+  const environment = normalizeTradingEnvironment(defaultEnvironment)
   const inputs = normalizePairInputs({
     investment: parseDecimalInput(await ask("Total investment / quote budget for this pair: "), "investment", { exclusiveMin: true }),
     orderQuantity: parseDecimalInput(await ask("Quantity per individual order (base asset): "), "orderQuantity", { exclusiveMin: true }),
