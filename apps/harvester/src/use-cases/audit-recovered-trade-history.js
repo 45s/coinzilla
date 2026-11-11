@@ -80,10 +80,12 @@ function assertFillParity({ journalFill, exchangeFill }) {
 /**
  * Prove that exchange trade history is represented by Journal-applied fills.
  *
- * ACCOUNT scope requires exhaustive history pages and an independently
- * established complete market universe. MARKET scope proves only the requested
- * canonical Market and requires the structured evidence returned by
- * fetchAccountTradeHistory; it never claims account-wide completeness.
+ * ACCOUNT scope remains fail-closed because the current exchange catalog cannot
+ * prove the historical market universe. MARKET scope proves only the requested
+ * canonical Market and requires exhausted-page evidence plus a reference to a
+ * durable MARKET_HISTORY_COVERAGE_CONFIRMED fact covering the query start.
+ * The caller must resolve that fact from the durable-fact projection; this
+ * function validates its shape and scope, not its storage provenance.
  */
 export function auditRecoveredTradeHistory({
   journalFills,
