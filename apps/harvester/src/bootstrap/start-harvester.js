@@ -115,6 +115,7 @@ export async function startHarvester({
         logger.error?.({
           message: "Harvester volatility protection update failed",
           symbol,
+          error: result.error,
           errors: result.errors,
         })
       }
