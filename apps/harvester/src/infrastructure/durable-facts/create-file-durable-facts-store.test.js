@@ -388,10 +388,12 @@ test("verification flushes both committed streams before declaring the ledger va
     open: async (target, ...args) => {
       const handle = await fsPromises.open(target, ...args)
       const sync = handle.sync.bind(handle)
-      handle.sync = async () => {
-        syncPaths.push(target)
-        return sync()
-      }
+      Object.defineProperty(handle, "sync", {
+        value: async () => {
+          syncPaths.push(target)
+          return sync()
+        },
+      })
       return handle
     },
   }
