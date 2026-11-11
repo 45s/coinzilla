@@ -92,6 +92,7 @@ export function auditRecoveredAccountState({
   markets,
   exchangeTradeHistory,
   requireCompleteTradeHistory = false,
+  targetMarket,
 } = {}) {
   try {
     if (projection?.ok !== true || !projection.data) {
@@ -108,6 +109,9 @@ export function auditRecoveredAccountState({
     }
     if (!Array.isArray(openOrders)) throw new TypeError("openOrders must be an array")
     if (!Array.isArray(markets)) throw new TypeError("markets must be an array")
+    if (targetMarket !== undefined && !(targetMarket instanceof Market)) {
+      throw new TypeError("targetMarket must be a canonical Market")
+    }
 
     if (!projection.data.requiresExchangeReconciliation) {
       return toResult({ data: Object.freeze({ skipped: true, reason: "NO_PRIOR_TRADING_STATE" }) })
@@ -203,6 +207,9 @@ export function auditRecoveredAccountState({
         amount: requireAmount({ value: position.quoteNetCashFlow.amount, field: market.symbol + ".quoteNetCashFlow" }),
       })
     }
+    if (targetMarket && marketsBySymbol.get(targetMarket.symbol)?.id !== targetMarket.id) {
+      throw new Error("Canonical Market metadata is missing for target market " + targetMarket.symbol)
+    }
 
     const commissionAssetIdByCode = new Map()
     const commissionAssetCodeById = new Map()
@@ -297,22 +304,40 @@ export function auditRecoveredAccountState({
         throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
       }
     }
-    const marketAssetCodes = new Set(markets.flatMap((market) => [
+    const relevantMarketIds = new Set([
+      ...recoveredState.portfolio.value.positions.map((position) => position.market.id),
+      ...recoveredState.orderRegistry.orders.map((order) => order.market.id),
+      ...(targetMarket ? [targetMarket.id] : []),
+      ...openOrders.map((order) => {
+        const symbol = order.market?.symbol ?? order.symbol
+        return marketsBySymbol.get(symbol)?.id
+      }).filter(Boolean),
+    ])
+    const relevantMarkets = [...marketsById.values()].filter((market) => relevantMarketIds.has(market.id))
+    const marketAssetCodes = new Set(relevantMarkets.flatMap((market) => [
       market.baseAsset.code,
       market.quoteAsset.code,
     ]))
     const assetCodes = new Set([
+      ...baselineByAsset.keys(),
+      ...currentByAsset.keys(),
       ...marketAssetCodes,
       ...expectedDeltas.keys(),
     ])
     for (const asset of assetCodes) {
-      const initial = baselineByAsset.get(asset)?.total ?? "0"
+      if (!baselineByAsset.has(asset)) {
+        throw new Error("Initial account snapshot is missing required asset " + asset)
+      }
+      if (!currentByAsset.has(asset)) {
+        throw new Error("Current account snapshot is missing required asset " + asset)
+      }
+      const initial = baselineByAsset.get(asset).total
       const delta = expectedDeltas.get(asset) ?? "0"
       const expected = addDecimal({ left: initial, right: delta })
       if (compareDecimal({ left: expected, right: "0" }) < 0) {
         throw new Error("Replayed strategy accounting predicts a negative account balance for " + asset)
       }
-      const actual = currentByAsset.get(asset)?.total ?? "0"
+      const actual = currentByAsset.get(asset).total
       if (compareDecimal({ left: actual, right: expected }) !== 0) {
         throw new Error(
           "Exchange balance does not match replayed Harvester ownership for " + asset +
@@ -366,23 +391,85 @@ export function auditRecoveredAccountState({
     }
 
     const actualOpenByBrokerId = new Map()
+    const seenOpenOrderIds = new Set()
+    const unownedOpenOrders = []
+    const blockedMarkets = new Set()
     for (const order of openOrders) {
       const identity = getOpenOrderIdentity({ order })
       const { brokerOrderId, symbol } = identity
       if (typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-          typeof symbol !== "string" || !symbol.trim()) {
+          typeof symbol !== "string" || !symbol.trim() ||
+          typeof identity.clientOrderId !== "string" || !identity.clientOrderId.trim()) {
         throw new Error("Exchange open-order snapshot contains an order without canonical identity")
       }
-      if (actualOpenByBrokerId.has(brokerOrderId)) {
+      if (seenOpenOrderIds.has(brokerOrderId)) {
         throw new Error("Exchange open-order snapshot contains duplicate brokerOrderId " + brokerOrderId)
       }
+      seenOpenOrderIds.add(brokerOrderId)
       const expected = expectedByBrokerId.get(brokerOrderId)
       if (!expected) {
-        throw new Error("Exchange contains an open order not owned by the recovered Harvester registry: " + brokerOrderId)
+        const externalMarket = marketsBySymbol.get(symbol)
+        if (!externalMarket) {
+          throw new Error("Canonical Market metadata is missing for unowned open order " + symbol)
+        }
+        const actualStatus = normalizeOrderStatus({ status: order.status })
+        if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
+          throw new Error("Unowned exchange order has an unsupported open status: " + brokerOrderId)
+        }
+        if (!["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
+          throw new Error("Unowned exchange order has an unsupported commitment type: " + brokerOrderId)
+        }
+        const originalQuantity = requireAmount({
+          value: identity.originalQuantity,
+          field: "Unowned order " + brokerOrderId + ".originalQuantity",
+        })
+        const executedQuantity = requireAmount({
+          value: identity.executedQuantity,
+          field: "Unowned order " + brokerOrderId + ".executedQuantity",
+        })
+        const remainingQuantity = subtractDecimal({
+          left: originalQuantity,
+          right: executedQuantity,
+        })
+        if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+          throw new Error("Unowned exchange order has no positive remaining quantity: " + brokerOrderId)
+        }
+        const actualPrice = requireAmount({
+          value: getOrderPrice({ order }),
+          field: "Unowned order " + brokerOrderId + ".price",
+        })
+        if (compareDecimal({ left: actualPrice, right: "0" }) <= 0) {
+          throw new Error("Unowned exchange order price must be positive: " + brokerOrderId)
+        }
+        if (order.side === "BUY") {
+          addAmount({
+            amounts: expectedLocked,
+            asset: externalMarket.quoteAsset.code,
+            amount: multiplyDecimal({ left: remainingQuantity, right: actualPrice }),
+          })
+        } else if (order.side === "SELL") {
+          addAmount({
+            amounts: expectedLocked,
+            asset: externalMarket.baseAsset.code,
+            amount: remainingQuantity,
+          })
+        } else {
+          throw new Error("Unowned exchange order has an unsupported side: " + brokerOrderId)
+        }
+        blockedMarkets.add(symbol)
+        unownedOpenOrders.push(Object.freeze({
+          brokerOrderId,
+          clientOrderId: identity.clientOrderId,
+          symbol,
+          side: order.side,
+          type: order.type,
+          status: actualStatus,
+        }))
+        continue
       }
       const actualPrice = getOrderPrice({ order })
       const expectedPrice = expected.limitPrice?.amount
-      const actualStatus = order.status === "NEW" ? "OPEN" : order.status
+      const actualStatus = normalizeOrderStatus({ status: order.status })
       const expectedStatus = normalizeOrderStatus({ status: expected.status })
       if (
         expected.clientOrderId !== identity.clientOrderId ||
@@ -430,6 +517,11 @@ export function auditRecoveredAccountState({
         balancesChecked: assetCodes.size,
         openOrdersChecked: openOrders.length,
         reservationsChecked: expectedLocked.size,
+        unownedOpenOrders: Object.freeze(unownedOpenOrders.sort((left, right) =>
+          left.symbol.localeCompare(right.symbol) || left.brokerOrderId.localeCompare(right.brokerOrderId)
+        )),
+        blockedMarkets: Object.freeze([...blockedMarkets].sort()),
+        targetMarketBlocked: targetMarket ? blockedMarkets.has(targetMarket.symbol) : undefined,
         sourceTime: currentAccountSnapshot.sourceTime,
       }),
     })
