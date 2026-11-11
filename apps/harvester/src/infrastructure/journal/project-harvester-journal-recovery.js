@@ -14,6 +14,9 @@ const EVENT = Object.freeze({
   FILL_APPLIED: "execution.fill_applied",
   RECOVERY_COMPLETED: "recovery.cycle_completed",
   STRATEGY_PAUSED: "strategy.paused",
+  EXECUTION_UNOWNED_ORDER: "execution.unowned_order",
+  EXECUTION_INVALID_FILL: "execution.invalid_fill",
+  EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
 })
 
 const ORDER_SIDES = new Set(["BUY", "SELL"])
@@ -177,6 +180,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     const tradeIdBySymbol = new Map()
     const cycles = []
     const pausedMarkets = new Map()
+    const stickySafetyBlockers = []
     const sessionsByFile = new Map()
     const accountSnapshots = []
     const openOrderSnapshots = []
@@ -195,7 +199,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       const payload = requireObject({ value: record?.payload, field: "Journal record payload" })
       const name = payload.name
       if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
-      if (!Object.values(EVENT).includes(name)) continue
+      if (!Object.values(EVENT).includes(name)) {
+        if (payload.source === "harvester") {
+          throw new Error("unknown Harvester recovery event: " + name)
+        }
+        continue
+      }
       const data = requireObject({ value: payload.data, field: name + " data" })
       const fileName = requireString({
         value: record.position?.fileName,
@@ -248,13 +257,22 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.FILL_APPLIED,
         EVENT.RECOVERY_COMPLETED,
         EVENT.STRATEGY_PAUSED,
+        EVENT.EXECUTION_UNOWNED_ORDER,
+        EVENT.EXECUTION_INVALID_FILL,
+        EVENT.EXECUTION_ACCOUNTING_FAILED,
       ].includes(name)) {
         session.hasTradingActivity = true
       }
 
       if (name === EVENT.ACCOUNT_SNAPSHOT) {
-        if (!["PREFLIGHT", "OPENING", "CLOSING", "COMMISSION_BASELINE"].includes(data.phase)) {
+        if (!["PREFLIGHT", "OPENING", "RECOVERY", "CLOSING", "COMMISSION_BASELINE"].includes(data.phase)) {
           throw new TypeError("Account snapshot phase is invalid")
+        }
+        if (data.phase === "RECOVERY" && !session.started) {
+          throw new Error("RECOVERY account snapshot requires a started Journal session " + fileName)
+        }
+        if (data.phase === "RECOVERY" && !session.started) {
+          throw new Error("RECOVERY open-order snapshot requires a started Journal session " + fileName)
         }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
@@ -311,7 +329,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
-        if (!["OPENING", "PREFLIGHT"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
           throw new Error("PREFLIGHT open-order snapshot must precede trading activity in Journal session " + fileName)
         }
@@ -691,6 +709,31 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const symbol = requireString({ value: data.symbol, field: "symbol" })
         const reason = requireString({ value: data.reason, field: "reason" })
         pausedMarkets.set(symbol, reason)
+        continue
+      }
+
+      if ([
+        EVENT.EXECUTION_UNOWNED_ORDER,
+        EVENT.EXECUTION_INVALID_FILL,
+        EVENT.EXECUTION_ACCOUNTING_FAILED,
+      ].includes(name)) {
+        const symbol = requireString({ value: data.symbol, field: name + " symbol" })
+        const reason = requireString({ value: data.reason ?? data.error ?? name, field: name + " reason" })
+        stickySafetyBlockers.push(Object.freeze({
+          eventName: name,
+          symbol,
+          reason,
+          ...(data.clientOrderId === undefined ? {} : {
+            clientOrderId: requireString({ value: data.clientOrderId, field: name + " clientOrderId" }),
+          }),
+          ...(data.brokerOrderId === undefined ? {} : {
+            brokerOrderId: requireString({ value: data.brokerOrderId, field: name + " brokerOrderId" }),
+          }),
+          ...(data.fillId === undefined ? {} : {
+            fillId: requireString({ value: data.fillId, field: name + " fillId" }),
+          }),
+          sequence: currentSequence,
+        }))
       }
     }
 
@@ -722,6 +765,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
         pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
+        stickySafetyBlockers: Object.freeze(stickySafetyBlockers),
         sessions: Object.freeze(sessions),
         accountSnapshots: Object.freeze(accountSnapshots),
         openOrderSnapshots: Object.freeze(openOrderSnapshots),
