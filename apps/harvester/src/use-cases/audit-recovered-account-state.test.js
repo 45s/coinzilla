@@ -539,3 +539,177 @@ test("accepts a recovered LIMIT_MAKER commitment with exact quote reservation", 
   assert.equal(result.ok, true)
   assert.equal(result.data.reservationsChecked, 1)
 })
+
+
+test("reports an unowned same-market open order as a narrow market blocker without adopting it", () => {
+  const { projection, restored } = restoreState()
+  const externalOrder = openBuyOrder()
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    openOrders: [externalOrder],
+    markets: [market],
+    targetMarket: market,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(result.data.blockedMarkets, ["BTCUSDT"])
+  assert.equal(result.data.unownedOpenOrders.length, 1)
+  assert.equal(result.data.unownedOpenOrders[0].brokerOrderId, externalOrder.brokerOrderId)
+  assert.equal(result.data.unownedOpenOrders[0].symbol, "BTCUSDT")
+  assert.equal(result.data.openOrdersChecked, 1)
+  assert.equal(restored.orderRegistry.getByBrokerOrderId(externalOrder.brokerOrderId), undefined)
+})
+
+test("keeps an unrelated external order unowned and does not block the reconciled market", () => {
+  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethMarket = new Market({
+    venue: "binance",
+    symbol: "ETHUSDT",
+    baseAsset: ethAsset,
+    quoteAsset: market.quoteAsset,
+  })
+  const { projection, restored } = restoreState()
+  const expandedProjection = {
+    ...projection,
+    data: {
+      ...projection.data,
+      accountSnapshots: projection.data.accountSnapshots.map((entry) =>
+        entry.phase === "PREFLIGHT"
+          ? {
+              ...entry,
+              balances: [...entry.balances, {
+                asset: "ETH",
+                free: "0.5",
+                locked: "0",
+                total: "0.5",
+              }],
+            }
+          : entry
+      ),
+    },
+  }
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-eth-sell",
+    brokerOrderId: "9900",
+    market: ethMarket,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "10", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1", asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: ethAsset }),
+    status: "OPEN",
+  })
+  const currentAccountSnapshot = new AccountSnapshot({
+    sourceTime: 3000,
+    balances: [
+      new Balance({
+        free: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+        locked: new Quantity({ amount: "0", asset: market.baseAsset }),
+      }),
+      new Balance({
+        free: new Quantity({ amount: "1000.25", asset: market.quoteAsset }),
+        locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+      }),
+      new Balance({
+        free: new Quantity({ amount: "0.4", asset: ethAsset }),
+        locked: new Quantity({ amount: "0.1", asset: ethAsset }),
+      }),
+    ],
+  })
+  const result = auditRecoveredAccountState({
+    projection: expandedProjection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot,
+    openOrders: [externalOrder],
+    markets: [market, ethMarket],
+    targetMarket: market,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(result.data.blockedMarkets, [])
+  assert.equal(result.data.unownedOpenOrders.length, 1)
+  assert.equal(result.data.unownedOpenOrders[0].symbol, "ETHUSDT")
+})
+
+test("fails closed when a relevant market asset is absent from the current account snapshot", () => {
+  const { projection, restored } = restoreState()
+  const currentAccountSnapshot = new AccountSnapshot({
+    sourceTime: 3000,
+    balances: [
+      new Balance({
+        free: new Quantity({ amount: "1000.25", asset: market.quoteAsset }),
+        locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+      }),
+    ],
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot,
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /current account snapshot is missing required asset BTC/)
+})
+
+test("fails closed when the durable baseline omits a relevant market asset", () => {
+  const { projection, restored } = restoreState()
+  const incompleteProjection = {
+    ...projection,
+    data: {
+      ...projection.data,
+      accountSnapshots: projection.data.accountSnapshots.map((entry) =>
+        entry.phase === "PREFLIGHT"
+          ? { ...entry, balances: entry.balances.filter(({ asset }) => asset !== "BTC") }
+          : entry
+      ),
+    },
+  }
+  const result = auditRecoveredAccountState({
+    projection: incompleteProjection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /initial account snapshot is missing required asset BTC/)
+})
+
+test("fails closed when an unowned open order has no canonical market metadata", () => {
+  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethMarket = new Market({
+    venue: "binance",
+    symbol: "ETHUSDT",
+    baseAsset: ethAsset,
+    quoteAsset: market.quoteAsset,
+  })
+  const { projection, restored } = restoreState()
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-eth-sell",
+    brokerOrderId: "9901",
+    market: ethMarket,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "10", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1", asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: ethAsset }),
+    status: "OPEN",
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [externalOrder],
+    markets: [market],
+    targetMarket: market,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /canonical Market metadata is missing for unowned open order ETHUSDT/)
+})
