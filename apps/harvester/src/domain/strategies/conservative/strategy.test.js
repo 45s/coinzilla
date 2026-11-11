@@ -30,7 +30,7 @@ const pairConfig = {
   makerPercent: 0,
   takerPercent: 0.075,
 }
-const settings = { minProfit: 0.01 }
+const settings = {}
 const marketPrice = { symbol: "DOGEUSDT", price: "0.100", timestamp: 100 }
 
 function makeBoughtState({ quoteCommission = "0" } = {}) {
