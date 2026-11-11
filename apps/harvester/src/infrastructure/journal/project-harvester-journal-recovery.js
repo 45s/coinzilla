@@ -67,6 +67,12 @@ function requireDecimal({ value, field, positive = false }) {
   return value
 }
 
+function requireSignedDecimal({ value, field }) {
+  if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
+  assertDecimalString({ value, field })
+  return value
+}
+
 function requireRecoveryDust({ value }) {
   if (value === undefined) return undefined
   const dust = requireObject({ value, field: "dust" })
@@ -697,7 +703,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity" })
         const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
         const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
-        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
         if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
           throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
         }
