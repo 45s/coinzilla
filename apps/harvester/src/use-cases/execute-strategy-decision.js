@@ -62,7 +62,7 @@ export function makeExecuteStrategyDecision({
           if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
           throw error
         }
-        if (!canSubmit({ order: pendingOrder })) {
+        if (!canSubmit({ order: pendingOrder, purpose: action.purpose ?? null })) {
           return toResult({ data: { deferred: true, validatedOrders: [] } })
         }
         validatedOrders.push(pendingOrder)
@@ -104,19 +104,19 @@ export function makeExecuteStrategyDecision({
           await onOrderValidationFailure({ order: pendingOrder, error })
           throw error
         }
-        return Object.freeze({ orderIntent, pendingOrder })
+        return Object.freeze({ orderIntent, pendingOrder, purpose: action.purpose ?? null })
       }))
 
       const submittedOrders = []
-      for (const { orderIntent, pendingOrder } of pendingOrders) {
-        if (!canSubmit({ order: pendingOrder })) {
-          await onSubmissionDeferred({ order: pendingOrder, registered: false })
+      for (const { orderIntent, pendingOrder, purpose } of pendingOrders) {
+        if (!canSubmit({ order: pendingOrder, purpose })) {
+          await onSubmissionDeferred({ order: pendingOrder, purpose, registered: false })
           return toResult({ data: { deferred: true, submittedOrders } })
         }
-        const pendingResult = onPendingOrder({ order: pendingOrder })
+        const pendingResult = onPendingOrder({ order: pendingOrder, purpose })
         if (pendingResult && typeof pendingResult.then === "function") await pendingResult
-        if (!canSubmit({ order: pendingOrder })) {
-          await onSubmissionDeferred({ order: pendingOrder, registered: true })
+        if (!canSubmit({ order: pendingOrder, purpose })) {
+          await onSubmissionDeferred({ order: pendingOrder, purpose, registered: true })
           return toResult({ data: { deferred: true, submittedOrders } })
         }
         let brokerResult
