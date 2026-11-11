@@ -34,6 +34,12 @@ function requireString({ value, field }) {
  * All exchange observations are supplied by the operator in the context file.
  * It can append only the market-history coverage fact, and only when the
  * caller explicitly sets confirm=true and supplies the existing durable store.
+ *
+ * @param {object} options
+ * @param {object} options.context - Operator-prepared Journal and exchange evidence bundle.
+ * @param {boolean} [options.confirm=false] - Whether to append the coverage fact after a READY audit.
+ * @param {object} [options.durableFactsStore] - Existing ADR-0001 durable-facts read/append port; required only for confirmation.
+ * @returns {Promise<object>} Result containing an audit-only reconciliation or explicit confirmation outcome.
  */
 export async function runOfflineMarketRecovery({
   context,
