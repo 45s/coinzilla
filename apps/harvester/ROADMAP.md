@@ -62,6 +62,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 6. [ ] Validate against historical/offline market data; consider TESTNET only under a separately approved bounded plan.
 
 **Safety constraints:** this roadmap item changes no runtime behavior. No coefficient, timeframe, period, bound or fallback is finalized. The feature remains unimplemented and disabled until the design, tests and acceptance criteria are agreed. No TESTNET/LIVE operation is authorized by this planning work.
+
 ---
 
 ## Process-restart recovery — small-step delivery plan (#654)
