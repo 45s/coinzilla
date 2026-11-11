@@ -183,3 +183,10 @@ The committed-head manifest is therefore an append-only checkpoint journal, not 
 Genesis is created only by the explicit one-time initialization operation. Normal startup, verification, reads, and append never create or repair a missing store. The two stream files are created only during genesis; if either file or the containing directory is missing later, startup fails closed rather than recreating an empty ledger. Store the directory on a local filesystem; network shares and cloud-synchronized folders are not a supported durability target.
 
 POSIX installations create the directory with mode `0700` and both streams with mode `0600`. The SHA-256 chains detect accidental corruption, truncation, duplication and reordering; they are not a cryptographic defense against a privileged local actor who can rewrite both streams and recompute their digests. One Harvester writer process per installation remains a runtime invariant; the bootstrap process-singleton gate is delivered in the later readiness step.
+
+The one-time genesis operation is exposed only through the explicit script `apps/harvester/scripts/initialize-durable-facts.js`. It requires an absolute `DURABLE_FACTS_DIRECTORY` and the `--confirm` flag; it refuses unknown arguments and non-empty directories. It is never called by application startup. Do not initialize a production directory until the runtime-integration step explicitly instructs the operator to do so.
+
+```powershell
+$env:DURABLE_FACTS_DIRECTORY = "C:\\coinzilla-data\\durable-facts"
+node apps/harvester/scripts/initialize-durable-facts.js --confirm
+```
