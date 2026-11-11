@@ -75,6 +75,7 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   assert.equal(metadataCalls.length, 1, "Valid operator input must trigger one public exchange metadata lookup.")
   assert.equal(metadataCalls[0].symbol, "ADAFDUSD", "The normalized symbol must be sent to Binance.")
   assert.equal(metadataCalls[0].environment, "testnet", "Exchange metadata must be fetched from the selected trading environment.")
+  assert.ok(!prompts.some((question) => /environment/i.test(question)), "The CLI must not ask the operator to select a Binance environment.")
   assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
   assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
   assert.equal(writes[0].pairConfig.enabled, true, "The generated pair must match the enabled config entry expected by the operator.")
