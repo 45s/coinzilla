@@ -6766,3 +6766,37 @@ test("volatility cancellation is isolated to the affected trading pair", async (
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "doge-volatility-buy").status, "CANCELED")
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "zro-unaffected-buy").status, "OPEN")
 })
+
+
+test("retries a volatility BUY cancellation only after a known NOT_SENT outcome and retry interval", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "volatility-not-sent-buy",
+    brokerOrderId: "broker-volatility-not-sent-buy",
+  })
+  const makeSnapshot = (observedAt) => ({
+    ok: true,
+    data: {
+      status: { isReady: true, isFresh: true, reason: null, observedAt, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  })
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    cancelNotSent: true,
+    getVolatilityData: () => makeSnapshot(0),
+  })
+
+  await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: makeSnapshot(0) })
+  assert.deepEqual(harness.cancellationIds, ["broker-volatility-not-sent-buy"])
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-not-sent-buy").status, "OPEN")
+
+  await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: makeSnapshot(5_000) })
+  assert.deepEqual(
+    harness.cancellationIds,
+    ["broker-volatility-not-sent-buy", "broker-volatility-not-sent-buy"],
+    "A known NOT_SENT cancellation may be retried after the bounded five-second retry interval.",
+  )
+  assert.deepEqual(harness.pauses, [])
+})
