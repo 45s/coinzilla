@@ -140,6 +140,21 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         throw new TypeError("Recovery projection contains an invalid sticky safety blocker")
       }
     }
+    const recoveryCycleEvaluations = data.recoveryCycleEvaluations ?? []
+    if (!Array.isArray(recoveryCycleEvaluations)) {
+      throw new TypeError("Recovery projection recoveryCycleEvaluations must be an array")
+    }
+    for (const evaluation of recoveryCycleEvaluations) {
+      if (!evaluation || typeof evaluation.symbol !== "string" || !evaluation.symbol.trim() ||
+          typeof evaluation.marketId !== "string" || !evaluation.marketId.trim() ||
+          !["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(evaluation.outcome)) {
+        throw new TypeError("Recovery projection contains an invalid recovery-cycle evaluation")
+      }
+      const market = requireMarket({ marketMetadata, symbol: evaluation.symbol })
+      if (market.id !== evaluation.marketId) {
+        throw new Error("Recovery-cycle evaluation market identity conflicts with canonical exchange metadata for " + evaluation.symbol)
+      }
+    }
 
     const portfolioEvents = [
       ...data.fills.map((fill) => ({ type: "fill", sequence: fill.sequence, value: fill })),
@@ -230,6 +245,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     const durablePausedMarkets = new Set([
       ...data.pausedMarkets.map(({ symbol }) => symbol),
       ...stickySafetyBlockers.map(({ symbol }) => symbol),
+      ...recoveryCycleEvaluations.filter(({ outcome }) => outcome === "BLOCKED").map(({ symbol }) => symbol),
     ])
     const pausedMarkets = new Set(durablePausedMarkets)
     for (const order of data.orders) {
@@ -305,6 +321,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         orderRegistry,
         journalFills: Object.freeze([...data.fills]),
         stickySafetyBlockers: Object.freeze([...stickySafetyBlockers]),
+        recoveryCycleEvaluations: Object.freeze([...recoveryCycleEvaluations]),
         pausedMarkets,
         durablePausedMarkets,
         recoveryManagedPausedMarkets,
