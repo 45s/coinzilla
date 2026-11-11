@@ -581,7 +581,8 @@ export function makeConservativeTradingEngine({
       const submissionError = error ?? errors?.[0]
       const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
         submissionError?.code === "POST_ONLY_WOULD_TAKE"
-      const definiteFilterRejection = submissionError?.code === "BINANCE_FILTER_REJECTED"
+      const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
+        submissionError?.outcomeUnknown !== true
       const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
       const failureOutcome = definiteRejection ? "REJECTED" : outcome
       publishLifecycleEvent({
