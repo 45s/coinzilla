@@ -202,6 +202,14 @@ Volatility state is process-local in the first implementation. It is not a subst
 6. [x] **Regression matrix and exact-head CI:** offline coverage is in the domain state, candle-history, order-gate, engine and startup tests; all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 7. [ ] **Historical calibration:** validate the provisional warning/protection/recovery thresholds against representative offline Spot market history before treating them as production-calibrated.
 
+## 10. Offline historical threshold calibration
+
+The initial thresholds are provisional. Calibration uses completed Binance Spot 1-minute Kline CSV files from the official [Binance Public Data archive](https://github.com/binance/binance-public-data) ([archive browser](https://data.binance.vision/)). Download the matching `.zip` and `.CHECKSUM` files, verify the archive checksum, and extract the CSV outside the repository; no market-history dataset or credentials are bundled with Harvester.
+
+The archive's Spot timestamps use milliseconds before 2025-01-01 and microseconds from 2025-01-01 onward. The calibration tool normalizes both units to the runtime's millisecond candle contract. It must reject malformed rows, conflicting duplicates, gaps, out-of-order data and incomplete source history; it never interpolates or fabricates candles.
+
+The analysis uses the same ATR(14) Wilder smoothing, NATR, previous-60 completed-NATR reference, 100-candle startup window and protection-state transition function as the runtime. It reports ratio percentiles, warning/protection/recovery threshold frequencies, NORMAL/PROTECTED/RECOVERING occupancy, protection episodes and recovery transitions. It assumes no active owned BUY orders and does not model exchange cancellation latency, fills, slippage, PnL or strategy profitability. These reports inform threshold review; they do not automatically change runtime constants or authorize unattended trading.
+
 No TESTNET/LIVE order, cancellation, restart or other exchange operation is authorized by these implementation steps. A separate controlled validation requires explicit operator approval.
 
 ## Related specifications
