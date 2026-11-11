@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   addPairToAppConfig,
-  calculateOrderQuantity,
+  validateOrderQuantity,
   createPairConfig,
   decimalPlaces,
   normalizeSymbolInput,
@@ -84,6 +84,7 @@ test("parses financial input as exact decimal text and rejects invalid values", 
 test("validates every strategy-owned setting before making an exchange request", () => {
   const validInputs = {
     investment: "100",
+    orderQuantity: "20",
     keepQuantity: "0.1",
     makerPercent: "0",
     takerPercent: "0.1",
@@ -126,84 +127,40 @@ test("derives effective decimal precision from exchange increments, ignoring tra
   assert.throws(() => decimalPlaces("not-a-number"), /decimal/i, "Malformed exchange increments must be rejected.")
 })
 
-test("calculates the largest order quantity within investment using exact step rounding", () => {
-  assert.equal(
-    calculateOrderQuantity({
-      investment: "100",
-      price: "0.5",
-      stepSize: "0.1",
-      minQuantity: "0.1",
-      maxQuantity: "1000",
-      minNotional: "5",
-    }),
-    "200",
-    "The order quantity must use the full budget when it divides exactly into exchange steps.",
-  )
-  assert.equal(
-    calculateOrderQuantity({
-      investment: "100",
-      price: "0.3",
-      stepSize: "0.1",
-      minQuantity: "0.1",
-      maxQuantity: "1000",
-      minNotional: "5",
-    }),
-    "333.3",
-    "The calculated quantity must round down to the exchange step and never exceed the budget.",
-  )
+test("validates an operator-selected per-order quantity and allows the pair budget to split across orders", () => {
+  assert.equal(validateOrderQuantity({
+    orderQuantity: "5",
+    investment: "120",
+    price: "4",
+    stepSize: "0.1",
+    minQuantity: "0.1",
+    maxQuantity: "1000",
+    minNotional: "5",
+    maxNotional: "50",
+  }), "5", "The selected 5-unit order must be retained, leaving the 120 quote budget available for multiple orders.")
 })
 
-test("caps calculated order quantity at the active maximum notional", () => {
-  assert.equal(
-    calculateOrderQuantity({
-      investment: "100",
-      price: "0.5",
-      stepSize: "0.1",
-      minQuantity: "0.1",
-      maxQuantity: "1000",
-      minNotional: "5",
-      maxNotional: "50",
-    }),
-    "100",
-    "The calculated order quantity must respect the maximum quote notional even when the operator budget is larger.",
-  )
-  assert.throws(
-    () => calculateOrderQuantity({
-      investment: "100",
-      price: "0.5",
-      stepSize: "0.1",
-      minQuantity: "0.1",
-      maxQuantity: "1000",
-      minNotional: "50",
-      maxNotional: "10",
-    }),
-    /MIN_NOTIONAL/i,
-    "A maximum notional below the minimum notional must not produce an invalid order quantity.",
-  )
+test("rejects per-order quantities that violate Binance limits or cannot split the pair budget", () => {
+  const base = {
+    orderQuantity: "5",
+    investment: "120",
+    price: "4",
+    stepSize: "0.1",
+    minQuantity: "0.1",
+    maxQuantity: "1000",
+    minNotional: "5",
+  }
+  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "5.05" }), /stepSize/i)
+  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "0.1" }), /MIN_NOTIONAL/i)
+  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "13", maxNotional: "50" }), /MAX_NOTIONAL/i)
+  assert.throws(() => validateOrderQuantity({ ...base, orderQuantity: "30" }), /smaller than the total investment/i)
 })
 
-test("rejects order sizing that violates minimum quantity, maximum quantity, or minimum notional", () => {
-  assert.throws(
-    () => calculateOrderQuantity({ investment: "4", price: "1", stepSize: "0.1", minQuantity: "0.1", maxQuantity: "100", minNotional: "5" }),
-    /MIN_NOTIONAL/i,
-    "An investment below the exchange minimum notional must not generate a pair.",
-  )
-  assert.throws(
-    () => calculateOrderQuantity({ investment: "5", price: "100", stepSize: "0.1", minQuantity: "0.1", maxQuantity: "100", minNotional: "5" }),
-    /MIN_QUANTITY/i,
-    "A budget that cannot buy the exchange minimum quantity must be rejected.",
-  )
-  assert.equal(
-    calculateOrderQuantity({ investment: "1000", price: "1", stepSize: "0.1", minQuantity: "0.1", maxQuantity: "100", minNotional: "5" }),
-    "100",
-    "The exchange maximum quantity must cap the calculated order size without exceeding the operator's budget.",
-  )
-})
-
-test("creates a runtime-valid disabled pair using exchange-derived precision and operator fee assumptions", () => {
+test("creates a runtime-valid enabled pair using exchange-derived precision and operator fee assumptions", () => {
   const pair = createPairConfig({
     inputs: {
       investment: "100",
+      orderQuantity: "20",
       keepQuantity: "0.1",
       makerPercent: "0",
       takerPercent: "0.1",
@@ -213,9 +170,9 @@ test("creates a runtime-valid disabled pair using exchange-derived precision and
     metadata,
   })
   assert.deepEqual(pair, {
-    enabled: false,
+    enabled: true,
     investment: 100,
-    orderQuantity: 200,
+    orderQuantity: 20,
     keepQuantity: 0.1,
     minProfit: 0.01,
     priceStepPercent: 0.05,
@@ -223,13 +180,13 @@ test("creates a runtime-valid disabled pair using exchange-derived precision and
     quantityPrecision: 1,
     makerPercent: 0,
     takerPercent: 0.1,
-  }, "The generated pair must contain the complete runtime contract and remain disabled by default.")
+  }, "The generated pair must contain the complete runtime contract and be enabled as requested by the config:symbol workflow.")
 })
 
 test("rejects keepQuantity that is not aligned to the exchange quantity step", () => {
   assert.throws(
     () => createPairConfig({
-      inputs: { investment: "100", keepQuantity: "0.15", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+      inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.15", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
       metadata,
     }),
     /keepQuantity.*stepSize/i,
@@ -240,7 +197,7 @@ test("rejects keepQuantity that is not aligned to the exchange quantity step", (
 test("rejects exchange metadata whose required order type is unsupported", () => {
   assert.throws(
     () => createPairConfig({
-      inputs: { investment: "100", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+      inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
       metadata: { ...metadata, supportedOrderTypes: ["LIMIT"] },
     }),
     /LIMIT_MAKER/i,
@@ -251,7 +208,7 @@ test("rejects exchange metadata whose required order type is unsupported", () =>
 test("adds a new pair without mutating or replacing existing application configuration", () => {
   const original = createAppConfig()
   const pair = createPairConfig({
-    inputs: { investment: "100", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+    inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
     metadata,
   })
   const updated = addPairToAppConfig({ appConfig: original, symbol: "ADAFDUSD", pairConfig: pair })

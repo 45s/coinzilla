@@ -97,19 +97,21 @@ function toConfigNumber(value, field) {
 }
 
 /**
- * Calculate the largest order quantity within the quote budget and exchange limits.
+ * Validate an operator-selected per-order quantity against Binance filters and pair budget.
  *
  * @param {object} options
- * @param {string} options.investment - Quote-asset budget as decimal text.
- * @param {string} options.price - Current public reference price as decimal text.
+ * @param {string} options.orderQuantity - Base-asset quantity for each individual order.
+ * @param {string} options.investment - Total quote-asset allocation for this pair.
+ * @param {string} options.price - Current public reference price.
  * @param {string} options.stepSize - Binance LOT_SIZE increment.
  * @param {string} options.minQuantity - Binance LOT_SIZE minimum.
  * @param {string} options.maxQuantity - Binance LOT_SIZE maximum.
  * @param {string} options.minNotional - Strictest applicable quote notional minimum.
- * @returns {string} Quantity rounded down to the exchange increment.
- * @throws {TypeError|RangeError} If exchange values are invalid or no valid quantity fits the budget.
+ * @param {string} [options.maxNotional] - Active maximum quote notional.
+ * @returns {string} The validated per-order quantity.
  */
-export function calculateOrderQuantity({
+export function validateOrderQuantity({
+  orderQuantity,
   investment,
   price,
   stepSize,
@@ -118,64 +120,33 @@ export function calculateOrderQuantity({
   minNotional,
   maxNotional,
 } = {}) {
-  const inputs = { investment, price, stepSize, minQuantity, maxQuantity, minNotional }
-  for (const [field, value] of Object.entries(inputs)) {
-    if (typeof value !== "string") {
-      throw new TypeError(field + " must be an exact decimal string")
-    }
+  const values = { orderQuantity, investment, price, stepSize, minQuantity, maxQuantity, minNotional }
+  for (const [field, value] of Object.entries(values)) {
+    if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
   }
-  const normalizedInvestment = parseDecimalInput(investment, "investment", { exclusiveMin: true })
-  const normalizedPrice = parseDecimalInput(price, "reference price", { exclusiveMin: true })
-  const normalizedStep = parseDecimalInput(stepSize, "stepSize", { exclusiveMin: true })
-  const normalizedMinimum = parseDecimalInput(minQuantity, "minQuantity", { exclusiveMin: true })
-  const normalizedMaximum = parseDecimalInput(maxQuantity, "maxQuantity", { exclusiveMin: true })
-  const normalizedNotional = parseDecimalInput(minNotional, "minNotional", { exclusiveMin: true })
-  const normalizedMaximumNotional = maxNotional === undefined || maxNotional === null
+  const quantity = parseDecimalInput(orderQuantity, "orderQuantity", { exclusiveMin: true })
+  const budget = parseDecimalInput(investment, "investment", { exclusiveMin: true })
+  const referencePrice = parseDecimalInput(price, "reference price", { exclusiveMin: true })
+  const step = parseDecimalInput(stepSize, "stepSize", { exclusiveMin: true })
+  const minimum = parseDecimalInput(minQuantity, "minQuantity", { exclusiveMin: true })
+  const maximum = parseDecimalInput(maxQuantity, "maxQuantity", { exclusiveMin: true })
+  const minQuote = parseDecimalInput(minNotional, "minNotional", { exclusiveMin: true })
+  const maxQuote = maxNotional === undefined || maxNotional === null
     ? undefined
     : parseDecimalInput(maxNotional, "maxNotional", { exclusiveMin: true })
 
-  if (compareDecimal({ left: normalizedInvestment, right: normalizedNotional }) < 0) {
-    throw new RangeError("investment is below exchange MIN_NOTIONAL")
+  if (compareDecimal({ left: roundDecimalToIncrement({ value: quantity, increment: step, direction: "down" }), right: quantity }) !== 0) {
+    throw new RangeError("orderQuantity must align exactly with the exchange LOT_SIZE stepSize")
   }
+  if (compareDecimal({ left: quantity, right: minimum }) < 0) throw new RangeError("orderQuantity is below exchange MIN_QUANTITY")
+  if (compareDecimal({ left: quantity, right: maximum }) > 0) throw new RangeError("orderQuantity exceeds exchange MAX_QUANTITY")
 
-  const budgetQuantity = divideDecimal({
-    left: normalizedInvestment,
-    right: normalizedPrice,
-    scale: ORDER_QUANTITY_SCALE,
-    rounding: "toward-zero",
-  })
-  let boundedQuantity = compareDecimal({ left: budgetQuantity, right: normalizedMaximum }) > 0
-    ? normalizedMaximum
-    : budgetQuantity
-  if (normalizedMaximumNotional) {
-    const notionalQuantity = divideDecimal({
-      left: normalizedMaximumNotional,
-      right: normalizedPrice,
-      scale: ORDER_QUANTITY_SCALE,
-      rounding: "toward-zero",
-    })
-    if (compareDecimal({ left: notionalQuantity, right: boundedQuantity }) < 0) {
-      boundedQuantity = notionalQuantity
-    }
+  const notional = multiplyDecimal({ left: quantity, right: referencePrice })
+  if (compareDecimal({ left: notional, right: minQuote }) < 0) throw new RangeError("orderQuantity is below exchange MIN_NOTIONAL at the current reference price")
+  if (maxQuote && compareDecimal({ left: notional, right: maxQuote }) > 0) throw new RangeError("orderQuantity exceeds exchange MAX_NOTIONAL at the current reference price")
+  if (compareDecimal({ left: notional, right: budget }) >= 0) {
+    throw new RangeError("orderQuantity must be smaller than the total investment so the pair allocation can be split across multiple orders")
   }
-  const quantity = roundDecimalToIncrement({
-    value: boundedQuantity,
-    increment: normalizedStep,
-    direction: "down",
-  })
-
-  if (compareDecimal({ left: quantity, right: normalizedMinimum }) < 0) {
-    throw new RangeError("investment cannot satisfy exchange MIN_QUANTITY at the current reference price")
-  }
-
-  const orderNotional = multiplyDecimal({ left: quantity, right: normalizedPrice })
-  if (compareDecimal({ left: orderNotional, right: normalizedNotional }) < 0) {
-    throw new RangeError("calculated order quantity is below exchange MIN_NOTIONAL at the current reference price")
-  }
-  if (normalizedMaximumNotional && compareDecimal({ left: orderNotional, right: normalizedMaximumNotional }) > 0) {
-    throw new RangeError("calculated order quantity exceeds exchange MAX_NOTIONAL at the current reference price")
-  }
-
   return quantity
 }
 
@@ -192,6 +163,7 @@ export function normalizePairInputs(inputs) {
   }
   const normalized = {
     investment: parseDecimalInput(inputs.investment, "investment", { exclusiveMin: true }),
+    orderQuantity: parseDecimalInput(inputs.orderQuantity, "orderQuantity", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(inputs.keepQuantity, "keepQuantity"),
     makerPercent: parseDecimalInput(inputs.makerPercent, "makerPercent"),
     takerPercent: parseDecimalInput(inputs.takerPercent, "takerPercent"),
@@ -216,7 +188,7 @@ export function normalizePairInputs(inputs) {
  * Create the complete pair object accepted by Harvester's current app-config schema.
  *
  * @param {{inputs: object, metadata: object}} options - Operator inputs and Binance metadata.
- * @returns {Readonly<object>} Runtime-valid, disabled-by-default pair configuration.
+ * @returns {Readonly<object>} Runtime-valid pair configuration ready to add to the strategy.
  * @throws {TypeError|RangeError|Error} If sizing, exchange constraints, or order-type support is invalid.
  */
 export function createPairConfig({ inputs, metadata } = {}) {
@@ -228,7 +200,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   }
 
   const normalizedInputs = normalizePairInputs(inputs)
-  const { investment, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
+  const { investment, orderQuantity: requestedOrderQuantity, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
 
   const normalizedStepSize = parseDecimalInput(metadata.stepSize, "stepSize", { exclusiveMin: true })
   const alignedKeepQuantity = roundDecimalToIncrement({
@@ -240,7 +212,8 @@ export function createPairConfig({ inputs, metadata } = {}) {
     throw new RangeError("keepQuantity must align exactly with the exchange LOT_SIZE stepSize")
   }
 
-  const orderQuantity = calculateOrderQuantity({
+  const orderQuantity = validateOrderQuantity({
+    orderQuantity: requestedOrderQuantity,
     investment,
     price: metadata.price,
     stepSize: normalizedStepSize,
@@ -263,7 +236,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   }
 
   return Object.freeze({
-    enabled: false,
+    enabled: true,
     investment: toConfigNumber(investment, "investment"),
     orderQuantity: toConfigNumber(orderQuantity, "orderQuantity"),
     keepQuantity: toConfigNumber(keepQuantity, "keepQuantity"),
