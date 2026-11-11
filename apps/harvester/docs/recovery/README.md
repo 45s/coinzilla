@@ -32,7 +32,7 @@ See [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.m
 
 ## Current implementation status
 
-<badge>PR #1047 — implementation in progress</badge>
+**Status: IN PROGRESS — implementation in [PR #1047](https://github.com/45s/coinzilla/pull/1047).**
 
 The orchestration and confirmation use cases and their deterministic tests are implemented in [PR #1047](https://github.com/45s/coinzilla/pull/1047). The PR does not connect the workflow to runtime startup, start Telegram polling, or expose a command.
 
