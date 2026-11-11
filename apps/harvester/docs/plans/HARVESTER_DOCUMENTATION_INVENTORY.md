@@ -72,11 +72,12 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 
 ## Post-baseline additions — current 57-file checkpoint
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) finds **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 subsequently updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. This PR adds the accepted process-restart recovery ADR as the sixteenth post-baseline addition; the resulting Harvester tree will contain 58 tracked Markdown/MDX files. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 subsequently updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
 | `apps/harvester/docs/architecture/README.md` | Local index for Harvester architecture documentation. | **KEEP** |
+| `apps/harvester/docs/architecture/decisions/0001-application-owned-recovery-facts.md` | Accepted application-owned durable-fact contract for process-restart recovery; design only, runtime replay remains disabled. | **KEEP** |
 | `apps/harvester/docs/audits/README_HISTORY.md` | Preserved historical README material and navigation. | **KEEP** |
 | `apps/harvester/docs/audits/ROADMAP_HISTORY.md` | Preserved historical roadmap material, provenance and compatibility anchors. | **KEEP** |
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. | **KEEP** |
