@@ -183,7 +183,7 @@ function validateFactData({ factType, data, factId }) {
     requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
     requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
     requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
-    if (factIdForOrderIntent(clientOrderId) !== currentFactId) {
+    if (factIdForOrderIntent(clientOrderId) !== factId) {
       throw new TypeError("Order-submission intent factId must match its stable clientOrderId identity")
     }
     if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
@@ -250,7 +250,7 @@ function validateFactInput({ fact, runtimeSessionId }) {
       field: "runtimeSessionId",
       maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
     }),
-    data: validateFactData({ factType, data: fact.data }),
+    data: validateFactData({ factType, data: fact.data, factId }),
   }
 }
 
