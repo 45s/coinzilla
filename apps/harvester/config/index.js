@@ -1,4 +1,6 @@
 import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";
+import { OPERATOR_CONTROL_CONFIG } from "./operator-control.js";
+import { EXTERNAL_ORDERS_POLICIES } from "../src/domain/external-orders-policy.js";
 
 export const appConfig = {
   notifications: {
@@ -9,12 +11,7 @@ export const appConfig = {
       events: {},
     },
   },
-  operatorControl: {
-    telegram: {
-      enabled: false,
-      allowedUserIds: [],
-    },
-  },
+  operatorControl: OPERATOR_CONTROL_CONFIG,
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -31,7 +28,7 @@ export const appConfig = {
         LINKUSDT: {
           enabled: false,
           enableVolatilityProtection: true,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 200,
           orderQuantity: 2,
           keepQuantity: 0.01,
@@ -45,7 +42,7 @@ export const appConfig = {
         LINKFDUSD: {
           enabled: true,
           enableVolatilityProtection: false,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 200,
           orderQuantity: 2,
           keepQuantity: 0.01,
@@ -59,7 +56,7 @@ export const appConfig = {
         DOGEUSDT: {
           enabled: false,
           enableVolatilityProtection: true,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 100,
           orderQuantity: 400,
           keepQuantity: 1,
@@ -73,7 +70,7 @@ export const appConfig = {
         SOLFDUSD: {
           enabled: false,
           enableVolatilityProtection: true,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 100,
           orderQuantity: 1,
           keepQuantity: 0.01,
@@ -87,7 +84,7 @@ export const appConfig = {
         ZROUSDT: {
           enabled: false,
           enableVolatilityProtection: true,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 100,
           orderQuantity: 5,
           keepQuantity: 0.01,
@@ -99,9 +96,9 @@ export const appConfig = {
           takerPercent: 0.1,
         },
         ZROFDUSD: {
-          enabled: false,
+          enabled: true,
           enableVolatilityProtection: true,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 120,
           orderQuantity: 5,
           keepQuantity: 0.01,
@@ -115,7 +112,7 @@ export const appConfig = {
         ADAFDUSD: {
           enabled: false,
           enableVolatilityProtection: false,
-          externalOrdersPolicy: "ignore",
+          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
           investment: 120,
           orderQuantity: 30,
           keepQuantity: 0.1,

@@ -55,14 +55,14 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 ## Configuration
 
-Harvester exposes one application-wide named `appConfig` export from `config/index.js`. The module contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. Notification profile constants are named exports from `config/notifications-tg-profiles.js`. The active strategy key is `CG_coinGrabber`.
+Harvester exposes one application-wide named `appConfig` export from `config/index.js`. That module composes focused named-export modules into one validated object: `OPERATOR_CONTROL_CONFIG` lives in `config/operator-control.js`, and Telegram profile identifiers live in `config/notifications-tg-profiles.js`. Domain policy identifiers such as `EXTERNAL_ORDERS_POLICIES` are named exports from `src/domain/external-orders-policy.js`. Harvester uses named exports only; there are no default exports. The active strategy key is `CG_coinGrabber`.
 
 - `strategies.CG_coinGrabber.enabled`: enables the strategy.
 - `strategies.CG_coinGrabber.pairs.<SYMBOL>.minProfit`: minimum required net profit per completed recovery cycle, in that pair's quote currency (minimum `0.01`).
 - `strategies.CG_coinGrabber.settings.conservative.enabled`: must remain `true`; Conservative is the first executable mode.
 - `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
 - `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, minimum profit, precision, and fee settings.
-- `strategies.CG_coinGrabber.pairs.<SYMBOL>.externalOrdersPolicy`: optional per-pair policy for manual/external Binance and CScalp orders. It defaults to `"ignore"`; set it to `"block"` to defer that pair while a manual/external order is open or reports an execution. External orders are never adopted or booked to Harvester accounting. Harvester-generated `h-` client IDs remain protected regardless of this setting.
+- `strategies.CG_coinGrabber.pairs.<SYMBOL>.externalOrdersPolicy`: optional per-pair policy selected from the named `EXTERNAL_ORDERS_POLICIES` constants in `src/domain/external-orders-policy.js`. It defaults to `EXTERNAL_ORDERS_POLICIES.IGNORE`; select `EXTERNAL_ORDERS_POLICIES.BLOCK` to defer that pair while a manual/external order is open or reports an execution. The serialized values remain `"ignore"` and `"block"`. External orders are never adopted or booked to Harvester accounting. Harvester-generated `h-` client IDs remain protected regardless of this setting.
 
 `minProfit` is required on every pair and must be at least `0.01` in that pair's quote asset. The former global `settings.minProfit` is rejected; migrate it explicitly to each pair rather than relying on an implicit default.
 
