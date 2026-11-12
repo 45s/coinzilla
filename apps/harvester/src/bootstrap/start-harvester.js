@@ -31,6 +31,7 @@ import { recordConfigurationBaseline } from "../use-cases/record-configuration-b
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
+import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
 
 export async function startHarvester({
   configSource,
@@ -78,6 +79,21 @@ export async function startHarvester({
       const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 durable-fact ledger: " + (cause.message ?? String(cause)), { cause })
       error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
       throw error
+    }
+    const existingFacts = await durableFactsStore.readAll()
+    if (existingFacts?.ok !== true || existingFacts.data?.durableWriteSupported !== true || !Array.isArray(existingFacts.data.records)) {
+      const cause = existingFacts?.errors?.[0] ?? new Error("Durable-fact history could not be read and verified")
+      throw new Error("Harvester cannot connect to the broker without verified durable-fact history: " + (cause.message ?? String(cause)), { cause })
+    }
+    const existingProjection = projectHarvesterDurableFacts({ records: existingFacts.data.records })
+    if (existingProjection?.ok !== true) {
+      const cause = existingProjection?.errors?.[0] ?? new Error("Durable-fact history projection failed")
+      throw new Error("Harvester cannot restart from an unprojectable durable-fact history: " + (cause.message ?? String(cause)), { cause })
+    }
+    if (existingProjection.data.sessions.length > 0) {
+      throw new Error(
+        "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
+      )
     }
   }
   let processConfigurationFingerprint
