@@ -37,7 +37,7 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     asset: commission.amount.asset.code,
   })).sort((left, right) =>
     (left.assetId + ":" + left.asset + ":" + left.amount)
-      .localeCompare(right.assetId + ":" + right.assetId + ":" + right.amount)
+      .localeCompare(right.assetId + ":" + right.asset + ":" + right.amount)
   )
   const expectedCommissions = [...journalFill.commissions].sort((left, right) =>
     (left.assetId + ":" + left.asset + ":" + left.amount)
