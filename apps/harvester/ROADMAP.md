@@ -192,10 +192,11 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] Persist canonical execution-fill facts, including every commission identity and historical quote valuation, before committing Portfolio/RecoveryLedger references; failed durability leaves both projections unchanged. `startHarvester` accepts the initialized store through dependency injection; `main()` wiring remains pending.
    - [x] Define strict canonical `ORDER_CANCELLATION_INTENT` and `ORDER_CANCELLATION_OUTCOME` payloads and application recorders that preserve the expected owned order state and distinguish NOT_SENT/unknown/confirmed results. All three engine-owned cancellation paths now commit intent before the broker RPC and classified outcome before registry mutation; failure remains fail-closed.
    - [x] Persist eligible recovery-cycle completion facts with a deterministic cycle identity, exact fill/accounting boundary, and validated exchange-constrained dust evidence before resetting Portfolio or RecoveryLedger; failed durability leaves both projections unchanged.
-   - [ ] Persist process/configuration boundaries and safety/control facts at their required durability barriers.
+   - [x] Persist a secret-free configuration fingerprint and process-start boundary before broker connection; append a clean process-stop boundary only after runtime shutdown completes. Production `main()` initialization/injection remains pending.
+   - [ ] Persist safety/control facts and blocker-resolution evidence at their required durability barriers.
    - [ ] Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
-   - Compare candidate state with authoritative exchange state. Publish READY only after every required reconciliation and safety check succeeds.
-   - On any ambiguity, keep trading paused and provide actionable operator diagnostics. Never auto-adopt or auto-cancel external orders.
+   - [ ] Compare candidate state with authoritative exchange state. Publish READY only after every required reconciliation and safety check succeeds.
+   - [ ] On any ambiguity, keep trading paused and provide actionable operator diagnostics. Never auto-adopt or auto-cancel external orders.
 
 9. **[ ] Step 9 — Prove crash/restart behavior, then consider controlled TESTNET validation.**
    - Run the full crash-point matrix, duplicate/reordered event tests, missing-record/session tests, legacy-session tests, and restart-twice idempotency tests.
