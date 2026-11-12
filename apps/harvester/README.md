@@ -55,7 +55,7 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 ## Configuration
 
-Harvester uses one application-wide `config.json`. The root contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. The active strategy key is `CG_coinGrabber`.
+Harvester exposes one application-wide named `appConfig` export from `config/index.js`. The module contains `strategies` and `notifications` sections: strategies own their enabled flags, settings, and market pairs; application-wide concerns such as Telegram notification policy live beside them. Notification profile constants are named exports from `config/notifications-tg-profiles.js`. The active strategy key is `CG_coinGrabber`.
 
 - `strategies.CG_coinGrabber.enabled`: enables the strategy.
 - `strategies.CG_coinGrabber.pairs.<SYMBOL>.minProfit`: minimum required net profit per completed recovery cycle, in that pair's quote currency (minimum `0.01`).
@@ -70,7 +70,7 @@ Trading settings and pairs belong to their strategy. Future strategies can be si
 
 **Runtime environment contract:** `TRADING_MODE` is the only operator-facing exchange-mode setting and accepts exactly `testnet` or `live`. Binance is the only broker, so there is no broker selector or exchange-mode profile selector. Trading is enabled in either selected mode; there is no trading-enable flag. Telegram notification profiles are independent and never select the exchange environment. Missing or invalid `TRADING_MODE` must fail startup rather than silently choose an exchange environment. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
 
-The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. Strategy and pair settings remain in `config.json` under `strategies`.
+The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. The named `appConfig` export in `config/index.js` contains strategy and pair settings under `strategies`.
 
 ### Generate a new trading pair
 
@@ -90,7 +90,7 @@ The generator then uses public, read-only Binance Spot endpoints to retrieve `ex
 
 Maker and taker percentages are supplied by the operator and stored independently; Binance's public exchange-info endpoint does not provide the account's commission schedule. A zero maker percentage requires the symbol to support `LIMIT_MAKER`; a non-zero maker percentage uses `LIMIT`.
 
-The generator validates the complete result with the same `validateAppConfig` contract used by Harvester, then merges the pair into `strategies.CG_coinGrabber.pairs` in this existing `config.json`. It does not create a second pair-config format. It validates supported static public filters and records applicable filters it does not evaluate as `unvalidatedConstraints` diagnostics; their presence alone does not abort pair generation. This is deliberate: dynamic price bands require Binance reference-price semantics, while order-count, position and asset limits require current account/exchange state that this credential-free generator cannot authoritatively establish. Silently pretending those constraints were checked would be unsafe, but blocking every pair because they exist would also be incorrect: Binance remains authoritative when an order is submitted, and a definite filter rejection is handled as `DEFINITE_EXCHANGE_FILTER_REJECTED` (not an ambiguous/UNKNOWN outcome). Unknown active filters are preserved as diagnostics rather than discarded. Filters exclusive to unsupported order types/features may be excluded; the rationale is documented in [Exchange trading constraints](./docs/exchange-trading-constraints.md). Because the command deliberately uses no credentials, it does not query account-specific Binance `myFilters`; Harvester performs authenticated account-filter checks at startup before an enabled pair can trade. New pairs are written with `enabled: true` and `enableVolatilityProtection: true`, matching the required pair-entry shape in `config.json`. Operators can explicitly set the latter to `false` when they intend to disable volatility protection for that pair. The preview prints only the symbol-keyed pair object so it can be reviewed and copied directly; exchange-filter diagnostics remain internal metadata and are not mixed into the pair config. Existing symbols are rejected case-insensitively rather than overwritten. The generator uses the retrieved exchange limits internally to validate the pair entry; the CLI preview stays focused on the copyable `config.json` shape. Missing required fields or malformed metadata abort generation instead of producing a partial pair; optional price bounds and `NOTIONAL.maxNotional` are validated and applied when Binance supplies them; omitted optional bounds are not invented. File replacement is atomic and protected by an exclusive generator lock. The lock file records the owning process ID and creation timestamp. If the process is interrupted and leaves a `config.json.config-symbol.lock` file, inspect it and first confirm that no generator is running before removing a stale lock; the next successful locked run cleans abandoned generator temporary files.
+The generator validates the complete result with the same `validateAppConfig` contract used by Harvester, then merges the pair into `strategies.CG_coinGrabber.pairs` in this existing `config/index.js`. It does not create a second pair-config format. It validates supported static public filters and records applicable filters it does not evaluate as `unvalidatedConstraints` diagnostics; their presence alone does not abort pair generation. This is deliberate: dynamic price bands require Binance reference-price semantics, while order-count, position and asset limits require current account/exchange state that this credential-free generator cannot authoritatively establish. Silently pretending those constraints were checked would be unsafe, but blocking every pair because they exist would also be incorrect: Binance remains authoritative when an order is submitted, and a definite filter rejection is handled as `DEFINITE_EXCHANGE_FILTER_REJECTED` (not an ambiguous/UNKNOWN outcome). Unknown active filters are preserved as diagnostics rather than discarded. Filters exclusive to unsupported order types/features may be excluded; the rationale is documented in [Exchange trading constraints](./docs/exchange-trading-constraints.md). Because the command deliberately uses no credentials, it does not query account-specific Binance `myFilters`; Harvester performs authenticated account-filter checks at startup before an enabled pair can trade. New pairs are written with `enabled: true` and `enableVolatilityProtection: true`, matching the required pair-entry shape in `config/index.js`. Operators can explicitly set the latter to `false` when they intend to disable volatility protection for that pair. The preview prints only the symbol-keyed pair object so it can be reviewed and copied directly; exchange-filter diagnostics remain internal metadata and are not mixed into the pair config. Existing symbols are rejected case-insensitively rather than overwritten. The generator uses the retrieved exchange limits internally to validate the pair entry; the CLI preview stays focused on the copyable `config/index.js` shape. Missing required fields or malformed metadata abort generation instead of producing a partial pair; optional price bounds and `NOTIONAL.maxNotional` are validated and applied when Binance supplies them; omitted optional bounds are not invented. The generator updates only the marked pair region in `config/index.js`; imports, profile references, comments, and source outside that region remain untouched. File replacement is atomic and protected by an exclusive generator lock. The startup loader imports the named `appConfig` export and supports an explicit file URL or filesystem path when an alternate source is needed. The lock file records the owning process ID and creation timestamp. If the process is interrupted and leaves a `config/index.js.config-symbol.lock` file, inspect it and first confirm that no generator is running before removing a stale lock; the next successful locked run cleans abandoned generator temporary files.
 
 This is configuration tooling only: it requires no Binance API credentials and never places, cancels or modifies orders. The reference ticker price is a sizing snapshot, not a guaranteed execution price; Harvester's normal startup exchange-rule validation remains in force.
 
@@ -100,45 +100,48 @@ This is configuration tooling only: it requires no Binance API credentials and n
 
 Example (illustrative only; it does not identify the currently enabled default pair):
 
-```json
-{
-  "notifications": {
-    "telegram": {
-      "enabled": true,
-      "profile": "trader",
-      "markets": [],
-      "events": {}
-    }
+```js
+import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";
+
+export const appConfig = {
+  notifications: {
+    telegram: {
+      enabled: true,
+      profile: NOTIFICATIONS_TG_PROFILES.TRADER,
+      markets: [],
+      events: {},
+    },
   },
-  "strategies": {
-    "CG_coinGrabber": {
-      "enabled": true,
-      "settings": {
-        "conservative": { "enabled": true },
-        "aggressive": { "enabled": false }
+  strategies: {
+    CG_coinGrabber: {
+      enabled: true,
+      settings: {
+        conservative: { enabled: true },
+        aggressive: { enabled: false },
       },
-      "pairs": {
-        "ZROUSDT": {
-          "enabled": true,
-          "investment": 100,
-          "orderQuantity": 5,
-          "keepQuantity": 0.01,
-          "minProfit": 0.01,
-          "priceStepPercent": 0.05,
-          "pricePrecision": 3,
-          "quantityPrecision": 1,
-          "makerPercent": 0.1,
-          "takerPercent": 0.1
-        }
-      }
-    }
-  }
-}
+      pairs: {
+        ZROUSDT: {
+          enabled: true,
+          enableVolatilityProtection: true,
+          investment: 100,
+          orderQuantity: 5,
+          keepQuantity: 0.01,
+          minProfit: 0.01,
+          priceStepPercent: 0.05,
+          pricePrecision: 3,
+          quantityPrecision: 1,
+          makerPercent: 0.1,
+          takerPercent: 0.1,
+        },
+      },
+    },
+  },
+};
 ```
 
-`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed `config.json` currently enables only `LINKFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. The disabled `LINKUSDT` pair currently has configured maker/taker assumptions of 0.075% / 0.075%; enabled `LINKFDUSD` has maker 0% and taker 0.075%. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed `config/index.js` currently enables `LINKFDUSD` and `ZROFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. Disabled `LINKUSDT` has configured maker/taker assumptions of 0.075% / 0.075%; enabled `LINKFDUSD` has maker 0% and taker 0.075%; enabled `ZROFDUSD` has maker 0% and taker 0.1%. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
-The strategy configuration remains in `config.json` under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
+The named `appConfig` export in `config/index.js` contains strategy configuration under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 
 ## Volatility protection
 
@@ -177,7 +180,7 @@ The broker-wide and Harvester process locks live under `~/.coinzilla/harvester/p
 
 ### Optional Telegram notifications
 
-Telegram policy lives in `config.json` under `notifications.telegram`; bot credentials remain in `.env.development` / deployment environment variables and must never be committed.
+Telegram policy lives in `config/index.js` under `notifications.telegram`; bot credentials remain in `.env.development` / deployment environment variables and must never be committed.
 
 - `enabled`: set to `false` to disable Telegram even when credentials exist. The default is `true`; transport is still created only when both credential variables are present.
 - `profile`: `minimal` (safety alerts only), `trader` (useful order/fill/recovery and lifecycle milestones), `verbose` (all supported low-volume operational events), or `custom` (only explicitly enabled ordinary events).

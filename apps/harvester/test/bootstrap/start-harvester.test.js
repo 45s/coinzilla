@@ -80,7 +80,7 @@ test('loads configuration before returning the startup context', async () => {
   const appConfig = {
     strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true, enableVolatilityProtection: true } } } },
   };
-  const configSource = '/etc/harvester/config.json';
+  const configSource = '/etc/harvester/config/index.js';
   const calls = [];
 
   const context = await resolveHarvesterOptions({
@@ -174,9 +174,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   const fillsByOrderId = new Map();
   let onPrice;
   let onUserDataEvent;
-  const candleHistoryRequests = [];
-  const candleSubscriptions = new Map();
-  const candleUnsubscriptions = [];
   let observedTrade;
   const tradeObserved = new Promise((resolve) => { observedTrade = resolve; });
   const broker = {
@@ -226,7 +223,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       data: Array.from({ length: 100 }, (_, index) =>
         createTestCandle({ symbol, openTime: index * 60_000 })),
     }),
-    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+    subscribeForCandles: async ({ symbol, onCandle } = {}) => {
       await onCandle(createTestCandle({ symbol, openTime: 100 * 60_000 }))
       await onCandle(createTestCandle({ symbol, openTime: 101 * 60_000 }))
       await onCandle(createTestCandle({ symbol, openTime: 102 * 60_000 }))
@@ -276,7 +273,9 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       error(...args) { userDataErrors.push(args) },
     },
     onUserDataEvent: async ({ event } = {}) => {
-      if (event?.executionType === 'TRADE') observedTrade();
+      if (event?.executionType === 'TRADE') {
+        observedTrade();
+      }
     },
   });
 

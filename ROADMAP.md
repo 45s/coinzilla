@@ -50,7 +50,7 @@
 5. **Broker protocol and multi-market TESTNET acceptance.**
    - **Why:** offline fakes cannot prove endpoint compatibility, account reads, recovery acknowledgement, shared-asset reservations or real exchange filter behavior.
    - **Remaining:** complete the read-only protocol/recovery matrix in an eligible authorized environment; separately authorize any bounded order-mutation test. Keep all mutation flags disabled by default.
-   - **Blockers:** current hosted Spot TESTNET regional eligibility restriction; acceptance is not established. The Harvester runbook's last documented DOGEUSDT/ZROUSDT scope also no longer matches the PR #836 ZROFDUSD-only config; no replacement session scope is recorded. Keep execution paused until an eligible environment and an explicitly reconciled pair scope exist (see [Harvester roadmap](apps/harvester/ROADMAP.md) and [TESTNET runbook](apps/harvester/docs/TESTNET_VALIDATION_RUNBOOK.md)).
+   - **Blockers:** current hosted Spot TESTNET regional eligibility restriction; acceptance is not established. The Harvester runbook's last documented DOGEUSDT/ZROUSDT scope also no longer matches the current LINKFDUSD and ZROFDUSD config; no replacement session scope is recorded. Keep execution paused until an eligible environment and an explicitly reconciled pair scope exist (see [Harvester roadmap](apps/harvester/ROADMAP.md) and [TESTNET runbook](apps/harvester/docs/TESTNET_VALIDATION_RUNBOOK.md)).
    - **Owners:** [Brokers roadmap](packages/brokers/ROADMAP.md) and [Harvester roadmap](apps/harvester/ROADMAP.md).
 
 6. **Repository documentation consolidation (#795) — governance foundation and recursive inventory complete; content migration in progress.**
@@ -81,7 +81,7 @@
    - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
 
 11. **Workspace JavaScript linting — DONE ([PR #1058](https://github.com/45s/coinzilla/pull/1058)).**
-   - ESLint 10 flat configuration, full-workspace inventory reporting, and strict changed-JavaScript CI enforcement.
+   - ESLint 10 flat configuration, full-workspace inventory reporting, strict changed-JavaScript CI enforcement, and named-export-only enforcement for ESM modules (with the required ESLint config-loader exception).
    - **Owner:** shared infrastructure.
 
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified

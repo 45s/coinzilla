@@ -68,9 +68,9 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
     },
     writeConfig: async (args) => {
       writes.push(args)
-      return "/repo/apps/harvester/config.json"
+      return "/repo/apps/harvester/config/index.js"
     },
-    configPath: "/repo/apps/harvester/config.json",
+    configPath: "/repo/apps/harvester/config/index.js",
   })
 
   assert.equal(metadataCalls.length, 1, "Valid operator input must trigger one public exchange metadata lookup.")
@@ -85,6 +85,8 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The operator-supplied price step must be preserved.")
   assert.equal(result.written, true, "The CLI result must report a successful write only after the writer resolves.")
   assert.ok(output.some((line) => line.includes("Configuration preview")), "The operator must see the generated configuration before confirming.")
+  assert.ok(output.some((line) => line.includes("config/index.js")), "The operator preview must identify the canonical ESM config module.")
+  assert.ok(output.some((line) => line.includes("config/index.js")), "The operator preview must identify the canonical ESM config module.")
   assert.ok(output.some((line) => line.includes('"ADAFDUSD"')), "The preview must be a copyable symbol-keyed config entry.")
   assert.ok(output.some((line) => line.includes('"enabled": true')), "The preview must show the generated pair as enabled.")
   assert.ok(!output.some((line) => line.includes("unvalidatedConstraints") || line.includes("myFilters")), "Internal exchange diagnostics must not clutter the pair-config preview.")
@@ -197,7 +199,7 @@ test("refuses metadata for a different symbol or exchange environment", async ()
       /metadata symbol\/environment does not match/i,
       "The generator must not combine operator input with exchange metadata for a different symbol or environment.",
     )
-    assert.equal(writes, 0, "Mismatched metadata must never be written into config.json.")
+    assert.equal(writes, 0, "Mismatched metadata must never be written into config/index.js.")
   }
 })
 
