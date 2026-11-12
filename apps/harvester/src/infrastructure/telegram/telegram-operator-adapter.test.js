@@ -751,7 +751,7 @@ test("accepts an authorized one-time inline confirmation and executes the existi
   assert.equal(operatorCalls[0].symbol, "LINKUSDT")
   assert.equal(operatorCalls[0].requestId, "telegram:callback:callback-503", "The callback identity must remain stable for application-level durable idempotency.")
   assert.equal(callbackAnswers.length, 2, "Both the request and confirmation callbacks must receive acknowledgements.")
-  assert.match(editedMessages[0].text, /Paused LINKUSDT/)
+  assert.match(editedMessages[1].text, /Paused LINKUSDT/)
 })
 
 test("rejects inline callbacks from users outside the allowlist without invoking the application", async () => {
@@ -816,4 +816,67 @@ test("renders an inline status navigation callback using the read-only applicati
   assert.equal(queries[0].actor.id, "telegram-user:12345")
   assert.match(edits[0].text, /Harvester status/)
   assert.equal(edits[0].reply_markup.inline_keyboard.length > 0, true, "Rendered pages must retain safe navigation and refresh controls.")
+})
+
+
+test("consumes an inline confirmation only once even when Telegram redelivers the callback", async () => {
+  const updates = [
+    makeCallbackUpdate({ updateId: 601, callbackId: "ask-601", messageId: 801, data: "cc:ask:PAUSE:LINKUSDT" }),
+    makeCallbackUpdate({ updateId: 602, callbackId: "confirm-602", messageId: 801, data: "cc:confirm:PAUSE:LINKUSDT:601" }),
+    makeCallbackUpdate({ updateId: 603, callbackId: "replay-603", messageId: 801, data: "cc:confirm:PAUSE:LINKUSDT:601" }),
+  ]
+  const operatorCalls = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: updates }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery" || method === "editMessageText" || method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: { pauseMarket: async request => { operatorCalls.push(request); return { ok: true, data: { symbol: request.symbol } } } },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(operatorCalls.length, 1, "A stale or replayed confirmation must never execute a second operator action.")
+})
+
+test("treats Telegram's unchanged-message refresh response as successful and continues polling", async () => {
+  const update = makeCallbackUpdate({ updateId: 604, data: "cc:refresh:status", messageId: 804 })
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [update] }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery" || method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    if (method === "editMessageText") { return makeResponse({ ok: false, description: "Bad Request: message is not modified" }, 400) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: { pauseMarket: async () => assert.fail("Refreshing status must never invoke a control use case."), getStatus: async () => ({ ok: true, data: { runtimeState: "RUNNING", tradingEnabled: false, userData: { ready: false }, readiness: { state: "TRADING_DISABLED", blockers: [] }, markets: { enabled: 1, configured: 1, blocked: 0 }, observedAt: 1700000000000 } }) },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(pollCount, 2, "An unchanged Telegram message is a successful refresh outcome, not a permanently retried update.")
 })

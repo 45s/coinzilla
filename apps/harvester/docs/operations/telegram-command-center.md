@@ -18,7 +18,7 @@ Text commands remain available:
 
 ## Confirming a control
 
-A pause or resume request first displays the exact action and market. No operator use case or durable-fact append occurs at this stage. Confirm executes the existing application pause/resume use case; cancel dismisses the pending request. Confirmation callbacks are bound to the originating allowlisted private-chat user and message, are one-time and short-lived, and are rejected when stale, replayed, malformed or issued by another user.
+An inline pause or resume request first displays the exact action and market. No operator use case or durable-fact append occurs at this stage. Confirm executes the existing application pause/resume use case; cancel dismisses the pending request. Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit commands and execute the existing application use case directly. Confirmation callbacks are bound to the originating allowlisted private-chat user and message, are one-time and short-lived, and are rejected when stale, replayed, malformed or issued by another user.
 
 A confirmed pause is acknowledged only after the application reports a successful durable-before-memory transition. A confirmed resume can remove only the operator-owned pause; any safety, recovery or volatility blocker remains authoritative. A failed or uncertain durable append is never presented as success.
 

@@ -165,106 +165,222 @@ export function createTelegramOperatorAdapter({
     return body.result
   }
 
-  const sendMessage = ({ chatId, text, signal }) =>
-    callApi({
-      method: "sendMessage",
-      payload: { chat_id: chatId, text },
-      signal,
-    })
+  const pendingConfirmations = new Map()
+  const CONFIRMATION_TTL_MS = 5 * 60 * 1000
+  const PAGE_METHODS = Object.freeze({ status: "getStatus", markets: "getMarkets", positions: "getPositions", orders: "getOrders", balances: "getBalances" })
+  const PAGE_TITLES = Object.freeze({ status: "runtime status", markets: "market snapshot", positions: "position snapshot", orders: "order snapshot", balances: "balance snapshot" })
+
+  const sendMessage = ({ chatId, text, replyMarkup, signal }) =>
+    callApi({ method: "sendMessage", payload: { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }, signal })
+
+  const editMessage = async ({ chatId, messageId, text, replyMarkup, signal }) => {
+    try {
+      return await callApi({ method: "editMessageText", payload: { chat_id: chatId, message_id: messageId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }, signal })
+    } catch (error) {
+      if (/message is not modified/i.test(error?.message ?? "")) { return undefined }
+      throw error
+    }
+  }
+
+  const answerCallback = async ({ callbackId, text, signal }) => {
+    try {
+      return await callApi({ method: "answerCallbackQuery", payload: { callback_query_id: callbackId, ...(text ? { text } : {}) }, signal })
+    } catch (error) {
+      if (/query is too old|query id is invalid|query has expired/i.test(error?.message ?? "")) { return undefined }
+      throw error
+    }
+  }
+
+  const navigationKeyboard = ({ page = "home", markets = [] } = {}) => {
+    const rows = [
+      [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
+      [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
+      [{ text: "Balances", callback_data: "cc:nav:balances" }],
+    ]
+    if (page === "markets") {
+      for (const market of markets.slice(0, 20)) {
+        if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
+        const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
+        rows.push([{ text: (action === "PAUSE" ? "Pause " : "Resume ") + market.symbol, callback_data: "cc:ask:" + action + ":" + market.symbol }])
+      }
+    }
+    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + (page === "home" ? "home" : page) }, { text: "Main menu", callback_data: "cc:nav:home" }])
+    return { inline_keyboard: rows }
+  }
+
+  const helpText = () => [
+    "Harvester Command Center",
+    "/start — show the command center",
+    "/status — runtime readiness and blockers",
+    "/markets — configured market prices, freshness and blockers",
+    "/positions — canonical active and retained inventory with recovery accounting",
+    "/orders — Harvester-owned and external open orders",
+    "/balances — latest exchange free and locked balances with snapshot age",
+    "/pause SYMBOL — request a market-scoped operator pause",
+    "/resume SYMBOL — request removal of the operator-owned pause",
+    "/help — show this help",
+    "",
+    "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
+    "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
+    "Operator pause lasts only for this process and is not restored after restart.",
+  ].join("\n")
+
+  const readPage = async ({ page, userId }) => {
+    if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
+    const method = PAGE_METHODS[page]
+    if (!method || typeof operator[method] !== "function") {
+      return { text: "This read-only query is not available in the current operator configuration.", keyboard: navigationKeyboard({ page }) }
+    }
+    let result
+    try {
+      result = await operator[method]({ actor: { id: "telegram-user:" + userId, roles: ["trading-operator"] } })
+    } catch (error) {
+      logger?.error?.({ message: "Telegram operator read query failed", component: "harvester.operator", operation: method, error })
+      result = { ok: false }
+    }
+    if (result?.ok !== true) {
+      logger?.error?.({ message: "Telegram operator read query returned a failure", component: "harvester.operator", operation: method, error: result?.errors ?? result?.error ?? "Unclassified query failure" })
+      return { text: "Unable to read the Harvester " + PAGE_TITLES[page] + ". No trading state was changed; check Harvester diagnostics.", keyboard: navigationKeyboard({ page }) }
+    }
+    const text = ({
+      status: () => formatTelegramOperatorStatus({ status: result.data }),
+      markets: () => formatTelegramOperatorMarkets({ snapshot: result.data }),
+      positions: () => formatTelegramOperatorPositions({ snapshot: result.data }),
+      orders: () => formatTelegramOperatorOrders({ snapshot: result.data }),
+      balances: () => formatTelegramOperatorBalances({ snapshot: result.data }),
+    })[page]()
+    return { text, keyboard: navigationKeyboard({ page, markets: page === "markets" ? result.data.markets : [] }) }
+  }
+
+  const editPage = async ({ page, chatId, messageId, userId, signal }) => {
+    const rendered = await readPage({ page, userId })
+    await editMessage({ chatId, messageId, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+  }
+
+  const executeControl = async ({ action, symbol, userId, requestId, chatId, messageId, signal }) => {
+    const method = action === "RESUME" ? "resumeMarket" : "pauseMarket"
+    if (typeof operator[method] !== "function") {
+      const text = action === "RESUME" ? "Resume is not available in this operator adapter configuration." : "Pause is not available in this operator adapter configuration."
+      if (messageId !== undefined) { await editMessage({ chatId, messageId, text, replyMarkup: navigationKeyboard(), signal }) }
+      else { await sendMessage({ chatId, text, replyMarkup: navigationKeyboard(), signal }) }
+      return
+    }
+    let result
+    try {
+      result = await operator[method]({ actor: { id: "telegram-user:" + userId, roles: ["trading-operator"] }, requestId, symbol })
+    } catch (error) {
+      logger?.error?.({ message: "Telegram operator control use case threw unexpectedly", component: "harvester.operator", operation: method, symbol, error })
+      result = { ok: false, errors: [] }
+    }
+    let reply
+    if (!result?.ok) {
+      const code = result?.errors?.[0]?.code
+      if (code === "INVALID_OPERATOR_MARKET") { reply = "Unknown configured market: " + symbol + "." }
+      else if (code === "SAFETY_BLOCKER_ACTIVE") { reply = "Cannot resume " + symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed." }
+      else {
+        const actionLabel = action === "RESUME" ? "Resume" : "Pause"
+        reply = actionLabel + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+      }
+    } else if (action === "RESUME") {
+      reply = "Resumed " + symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
+    } else if (result.data?.alreadyPaused === true) {
+      reply = "Already paused " + symbol + ". New strategy BUYs remain blocked."
+    } else {
+      reply = "Paused " + symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+    }
+    if (messageId !== undefined) { await editMessage({ chatId, messageId, text: reply, replyMarkup: navigationKeyboard(), signal }) }
+    else { await sendMessage({ chatId, text: reply, replyMarkup: navigationKeyboard(), signal }) }
+  }
+
+  const respondToCallback = async ({ update, signal }) => {
+    const callback = update.callback_query
+    const userId = normalizeTelegramUserId(callback?.from?.id)
+    const chat = callback?.message?.chat
+    const chatId = normalizeTelegramUserId(chat?.id)
+    if (!callback || chat?.type !== "private" || !userId || chatId !== userId || !allowedUsers.has(userId) || callback.from?.is_bot === true || typeof callback.id !== "string") { return }
+    const messageId = callback.message.message_id
+    if (!Number.isSafeInteger(messageId) || messageId <= 0 || typeof callback.data !== "string") {
+      await answerCallback({ callbackId: callback.id, text: "Invalid or expired control.", signal })
+      return
+    }
+
+    const navigation = /^cc:(nav|refresh):(home|status|markets|positions|orders|balances)$/.exec(callback.data)
+    if (navigation) {
+      await answerCallback({ callbackId: callback.id, signal })
+      await editPage({ page: navigation[2], chatId: chat.id, messageId, userId, signal })
+      return
+    }
+
+    const ask = /^cc:ask:(PAUSE|RESUME):([A-Z0-9]{2,30})$/.exec(callback.data)
+    if (ask) {
+      const token = String(update.update_id)
+      const now = Date.now()
+      for (const [pendingToken, pending] of pendingConfirmations) {
+        if (pending.expiresAt < now) { pendingConfirmations.delete(pendingToken) }
+      }
+      while (pendingConfirmations.size >= 1000) { pendingConfirmations.delete(pendingConfirmations.keys().next().value) }
+      pendingConfirmations.set(token, { action: ask[1], symbol: ask[2], userId, chatId: String(chat.id), messageId, expiresAt: now + CONFIRMATION_TTL_MS })
+      await answerCallback({ callbackId: callback.id, text: "Review the confirmation prompt.", signal })
+      await editMessage({
+        chatId: chat.id, messageId,
+        text: "Confirm " + ask[1].toLowerCase() + " of " + ask[2] + "? No action has been taken yet.",
+        replyMarkup: { inline_keyboard: [[
+          { text: "Confirm " + ask[1].toLowerCase(), callback_data: "cc:confirm:" + ask[1] + ":" + ask[2] + ":" + token },
+          { text: "Cancel", callback_data: "cc:cancel:" + token },
+        ], [{ text: "Main menu", callback_data: "cc:nav:home" }]] },
+        signal,
+      })
+      return
+    }
+
+    const confirm = /^cc:confirm:(PAUSE|RESUME):([A-Z0-9]{2,30}):(\d+)$/.exec(callback.data)
+    if (confirm) {
+      const pending = pendingConfirmations.get(confirm[3])
+      const valid = pending && pending.action === confirm[1] && pending.symbol === confirm[2] &&
+        pending.userId === userId && pending.chatId === String(chat.id) && pending.messageId === messageId &&
+        pending.expiresAt >= Date.now()
+      pendingConfirmations.delete(confirm[3])
+      if (!valid) {
+        await answerCallback({ callbackId: callback.id, text: "Confirmation expired or already used. Start again.", signal })
+        await editMessage({ chatId: chat.id, messageId, text: "Confirmation expired or already used. No action was taken.", replyMarkup: navigationKeyboard(), signal })
+        return
+      }
+      await answerCallback({ callbackId: callback.id, text: "Processing confirmed action.", signal })
+      await executeControl({ action: pending.action, symbol: pending.symbol, userId, requestId: "telegram:callback:" + callback.id, chatId: chat.id, messageId, signal })
+      return
+    }
+
+    const cancel = /^cc:cancel:(\d+)$/.exec(callback.data)
+    if (cancel) {
+      const pending = pendingConfirmations.get(cancel[1])
+      if (pending && pending.userId === userId && pending.chatId === String(chat.id) && pending.messageId === messageId) { pendingConfirmations.delete(cancel[1]) }
+      await answerCallback({ callbackId: callback.id, text: "Cancelled.", signal })
+      await editMessage({ chatId: chat.id, messageId, text: "Control action cancelled. No action was taken.", replyMarkup: navigationKeyboard(), signal })
+      return
+    }
+    await answerCallback({ callbackId: callback.id, text: "Unknown or expired action.", signal })
+  }
 
   const respondToUpdate = async ({ update, signal }) => {
+    if (update.callback_query) { await respondToCallback({ update, signal }); return }
     const message = update.message
-    if (!message || message.chat?.type !== "private" || message.from?.is_bot === true) {return}
+    if (!message || message.chat?.type !== "private" || message.from?.is_bot === true) { return }
     const userId = normalizeTelegramUserId(message.from?.id)
     const privateChatUserId = normalizeTelegramUserId(message.chat.id)
-    if (!userId || privateChatUserId !== userId) {return}
+    if (!userId || privateChatUserId !== userId) { return }
 
     const parsed = parseTelegramOperatorCommand(message.text, { botUsername })
-    if (parsed.type === "IGNORE") {return}
-    if (!allowedUsers.has(userId)) {
-      await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal })
+    if (parsed.type === "IGNORE") { return }
+    if (!allowedUsers.has(userId)) { await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal }); return }
+    if (parsed.type === "HELP") { await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal }); return }
+    if (PAGE_METHODS[parsed.type.toLowerCase()]) {
+      const page = parsed.type.toLowerCase()
+      const rendered = await readPage({ page, userId })
+      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
       return
     }
-    if (parsed.type === "HELP") {
-      await sendMessage({
-        chatId: message.chat.id,
-        text: [
-          "Harvester Command Center",
-          "/start — show this help",
-          "/status — runtime readiness and blockers",
-          "/markets — configured market prices, freshness and blockers",
-          "/positions — canonical active and retained inventory with recovery accounting",
-          "/orders — Harvester-owned and external open orders",
-          "/balances — latest exchange free and locked balances with snapshot age",
-          "/pause SYMBOL — block new strategy BUYs for one market",
-          "/resume SYMBOL — remove only the operator pause when safety permits",
-          "/help — show this help",
-          "",
-          "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
-        ].join("\n"),
-        signal,
-      })
-      return
-    }
-    if (["STATUS", "MARKETS", "POSITIONS", "ORDERS", "BALANCES"].includes(parsed.type)) {
-      const method = ({ STATUS: "getStatus", MARKETS: "getMarkets", POSITIONS: "getPositions", ORDERS: "getOrders", BALANCES: "getBalances" })[parsed.type]
-      if (typeof operator[method] !== "function") {
-        await sendMessage({
-          chatId: message.chat.id,
-          text: "This read-only query is not available in the current operator configuration.",
-          signal,
-        })
-        return
-      }
-      let result
-      try {
-        result = await operator[method]({
-          actor: {
-            id: "telegram-user:" + userId,
-            roles: ["trading-operator"],
-          },
-        })
-      } catch (error) {
-        logger?.error?.({
-          message: "Telegram operator read query failed",
-          component: "harvester.operator",
-          operation: method,
-          error,
-        })
-        result = { ok: false }
-      }
-      if (result?.ok !== true) {
-        logger?.error?.({
-          message: "Telegram operator read query returned a failure",
-          component: "harvester.operator",
-          operation: method,
-          error: result?.errors ?? result?.error ?? "Unclassified query failure",
-        })
-        await sendMessage({
-          chatId: message.chat.id,
-          text: "Unable to read the Harvester " + ({ STATUS: "runtime status", MARKETS: "market snapshot", POSITIONS: "position snapshot", ORDERS: "order snapshot", BALANCES: "balance snapshot" })[parsed.type] +
-            ". No trading state was changed; check Harvester diagnostics.",
-          signal,
-        })
-        return
-      }
-      const reply = ({
-        STATUS: () => formatTelegramOperatorStatus({ status: result.data }),
-        MARKETS: () => formatTelegramOperatorMarkets({ snapshot: result.data }),
-        POSITIONS: () => formatTelegramOperatorPositions({ snapshot: result.data }),
-        ORDERS: () => formatTelegramOperatorOrders({ snapshot: result.data }),
-        BALANCES: () => formatTelegramOperatorBalances({ snapshot: result.data }),
-      })[parsed.type]()
-      await sendMessage({ chatId: message.chat.id, text: reply, signal })
-      return
-    }
-
     if (parsed.type === "UNSUPPORTED") {
-      await sendMessage({
-        chatId: message.chat.id,
-        text: "Unknown command. Use /help to see available commands.",
-        signal,
-      })
+      await sendMessage({ chatId: message.chat.id, text: "Unknown command. Use /help to see available commands.", replyMarkup: navigationKeyboard(), signal })
       return
     }
     if (parsed.type === "INVALID") {
@@ -277,56 +393,12 @@ export function createTelegramOperatorAdapter({
       })
       return
     }
-
-    const requestId = "telegram:" + update.update_id + ":" + (message.date ?? "0") + ":" + userId
-    if (parsed.type === "RESUME" && typeof operator.resumeMarket !== "function") {
-      await sendMessage({ chatId: message.chat.id, text: "Resume is not available in this operator adapter configuration.", signal })
-      return
-    }
-
-    let result
-    try {
-      result = await operator[parsed.type === "RESUME" ? "resumeMarket" : "pauseMarket"]({
-        actor: {
-          id: "telegram-user:" + userId,
-          roles: ["trading-operator"],
-        },
-        requestId,
-        symbol: parsed.symbol,
-      })
-    } catch (error) {
-      logger?.error?.({
-        message: "Telegram operator pause use case threw unexpectedly",
-        symbol: parsed.symbol,
-        error: error?.message ?? String(error),
-      })
-      result = { ok: false, errors: [] }
-    }
-
-    if (!result?.ok) {
-      const code = result?.errors?.[0]?.code
-      let reply
-      if (code === "INVALID_OPERATOR_MARKET") {
-        reply = "Unknown configured market: " + parsed.symbol + "."
-      } else if (code === "SAFETY_BLOCKER_ACTIVE") {
-        reply = "Cannot resume " + parsed.symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
-      } else {
-        const action = parsed.type === "RESUME" ? "Resume" : "Pause"
-        reply = action + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
-      }
-      await sendMessage({ chatId: message.chat.id, text: reply, signal })
-      return
-    }
-
-    let reply
-    if (parsed.type === "RESUME") {
-      reply = "Resumed " + parsed.symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
-    } else if (result.data?.alreadyPaused === true) {
-      reply = "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
-    } else {
-      reply = "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
-    }
-    await sendMessage({ chatId: message.chat.id, text: reply, signal })
+    const action = parsed.type === "RESUME" ? "RESUME" : "PAUSE"
+    await executeControl({
+      action, symbol: parsed.symbol, userId,
+      requestId: "telegram:" + update.update_id + ":" + (message.date ?? "0") + ":" + userId,
+      chatId: message.chat.id, signal,
+    })
   }
 
   const poll = async ({ signal }) => {
@@ -335,7 +407,7 @@ export function createTelegramOperatorAdapter({
       try {
         const payload = {
           timeout: pollTimeoutSeconds,
-          allowed_updates: ["message"],
+          allowed_updates: ["message", "callback_query"],
         }
         if (offset !== undefined) {payload.offset = offset}
         const updates = await callApi({
@@ -392,6 +464,30 @@ export function createTelegramOperatorAdapter({
             throw new TypeError("Telegram getMe response is missing the bot username")
           }
           botUsername = identity.username
+          try {
+            await callApi({
+              method: "setMyCommands",
+              payload: { commands: [
+                { command: "start", description: "Open the Harvester Command Center" },
+                { command: "help", description: "Show commands and safety notes" },
+                { command: "status", description: "Read runtime readiness and blockers" },
+                { command: "markets", description: "Read configured market state" },
+                { command: "positions", description: "Read positions and recovery accounting" },
+                { command: "orders", description: "Read Harvester and external open orders" },
+                { command: "balances", description: "Read latest exchange balances" },
+                { command: "pause", description: "Request a market-scoped operator pause" },
+                { command: "resume", description: "Request removal of an operator pause" },
+              ] },
+              signal: nextController.signal,
+            })
+          } catch (error) {
+            logger?.warn?.({
+              message: "Telegram command menu registration failed; text commands remain available",
+              component: "harvester.operator",
+              operation: "setMyCommands",
+              error,
+            })
+          }
           pollPromise = poll({ signal: nextController.signal })
           return Object.freeze({ started: true, alreadyStarted: false })
         } catch (error) {
