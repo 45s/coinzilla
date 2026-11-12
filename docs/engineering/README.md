@@ -8,6 +8,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [Modularity standard](MODULARITY_STANDARD.md)
 - [Shared utilities policy](SHARED_UTILITIES_POLICY.md)
 - [JavaScript and JSDoc standard](JAVASCRIPT_JSDOC_STANDARD.md)
+- [Structured error handling standard](ERROR_HANDLING_STANDARD.md) — shared error contract and incremental adoption
 - [Branch and release policy](BRANCH_AND_RELEASE_POLICY.md)
 - [Definition of Done](DEFINITION_OF_DONE.md)
 
