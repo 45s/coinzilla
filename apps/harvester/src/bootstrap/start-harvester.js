@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -29,7 +30,7 @@ import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
-import { recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
+import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
 
 export async function startHarvester({
   configSource,
@@ -129,6 +130,15 @@ export async function startHarvester({
         symbol,
         reason,
       })
+    : undefined
+  const onSafetyBlockerRaised = durableFactsStore
+    ? ({ scope, symbol, reason, evidence }) => {
+        const canonicalEvidence = Object.fromEntries(
+          Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right)),
+        )
+        const evidenceDigest = createHash("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
+        return recordSafetyBlockerRaised({ durableFactsStore, scope, symbol, reason, evidenceDigest })
+      }
     : undefined
   const onDurableCancellationOutcome = durableFactsStore
     ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
@@ -264,6 +274,7 @@ export async function startHarvester({
     updateTradingAccounting,
     cancelOwnedBuysAfterAccountingFailure,
     resumeDeferredStrategyEvaluations,
+    onSafetyBlockerRaised,
   })
 
   const drainUserDataEvents = async () => {
