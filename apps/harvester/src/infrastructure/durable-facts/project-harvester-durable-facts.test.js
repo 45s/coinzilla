@@ -175,3 +175,137 @@ test("fails closed for missing configuration baseline, orphan facts, or resoluti
   assert.equal(orphan.ok, false, "Trading facts outside a process-start boundary must be rejected.")
   assert.equal(unresolved.ok, false, "A resolution without an active raised blocker must be rejected.")
 })
+
+
+test("projects cancellation outcomes in a later process session against the original durable order intent", () => {
+  const nextSession = "process-session-2"
+  const result = projectHarvesterDurableFacts({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      ...orderFacts(),
+      record(7, "PROCESS_STARTED", {
+        configurationFingerprint: fingerprint,
+        strategyName: "conservative",
+        markets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }, "process-started:" + nextSession, nextSession),
+      record(8, "ORDER_CANCELLATION_INTENT", {
+        clientOrderId: "harvester-client-1",
+        brokerOrderId: "broker-order-1",
+        marketId: "binance:BTCUSDT",
+        venue: "binance",
+        symbol: "BTCUSDT",
+        baseAssetId: "asset:BTC",
+        quoteAssetId: "asset:USDT",
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: "100",
+        quantity: "0.1",
+        executedQuantity: "0",
+        reason: "TRAILING_BUY_REPRICE",
+        status: "OPEN",
+      }, "order-cancellation-intent:harvester-client-1:TRAILING_BUY_REPRICE:OPEN:0", nextSession),
+      record(9, "ORDER_CANCELLATION_OUTCOME", {
+        clientOrderId: "harvester-client-1",
+        brokerOrderId: "broker-order-1",
+        marketId: "binance:BTCUSDT",
+        venue: "binance",
+        symbol: "BTCUSDT",
+        baseAssetId: "asset:BTC",
+        quoteAssetId: "asset:USDT",
+        side: "BUY",
+        outcome: "CANCELED",
+        status: "CANCELED",
+        executedQuantity: "0",
+      }, "order-cancellation-outcome:harvester-client-1:CANCELED", nextSession),
+    ],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.orders.length, 1, "A cross-session cancellation must update the original owned order, not create a second order.")
+  assert.equal(result.data.orders[0].clientOrderId, "harvester-client-1")
+  assert.equal(result.data.orders[0].cancellationState, "CANCELED", "The later cancellation outcome must resolve the original order's cancellation state.")
+  assert.equal(result.data.orders[0].brokerOrderId, "broker-order-1")
+})
+
+test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
+  const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
+    clientOrderId: "harvester-recovery-sell-1",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.4",
+    purpose: "RECOVERY_SELL",
+  }, "order-submission-intent:harvester-recovery-sell-1")
+  const sellOutcome = record(6, "ORDER_SUBMISSION_OUTCOME", {
+    clientOrderId: "harvester-recovery-sell-1",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.4",
+    executedQuantity: "0.4",
+    purpose: "RECOVERY_SELL",
+    outcome: "ACKNOWLEDGED",
+    brokerOrderId: "broker-recovery-sell-1",
+    status: "FILLED",
+  }, "order-submission-outcome:harvester-recovery-sell-1:ACKNOWLEDGED")
+  const sellFill = record(7, "EXECUTION_FILL_APPLIED", {
+    fillId: "binance:BTCUSDT:recovery-trade-1",
+    tradeId: "recovery-trade-1",
+    brokerOrderId: "broker-recovery-sell-1",
+    clientOrderId: "harvester-recovery-sell-1",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    price: "100",
+    quantity: "0.4",
+    quoteQuantity: "40",
+    liquidityRole: "MAKER",
+    executedAt: 1_700_000_000_010,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  }, "execution-fill-applied:binance:BTCUSDT:recovery-trade-1")
+  const cycle = record(8, "RECOVERY_CYCLE_COMPLETED", {
+    cycleId: "c".repeat(64),
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    appliedFillIds: ["binance:BTCUSDT:recovery-trade-1"],
+    buyCost: "39.75",
+    spent: "39.75",
+    netSellProceeds: "40",
+    realizedNetProfit: "0.25",
+    minProfit: "0.01",
+    activeQuantity: "0.01",
+    keepQuantity: "0.01",
+    freeQuantity: "0.01",
+    inventoryDisposition: null,
+  }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
+  const result = projectHarvesterDurableFacts({
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.recoveryCycles.length, 1, "The durable completion fact must be projected only after the fully filled SELL.")
+  assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "harvester-recovery-sell-1")
+  assert.equal(result.data.recoveryCycles[0].completedOrderBrokerOrderId, "broker-recovery-sell-1")
+  assert.equal(result.data.requiresExchangeReconciliation, true, "A completed cycle projection still requires exchange reconciliation.")
+})
