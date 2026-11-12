@@ -30,7 +30,7 @@
 ## Harvester source quality and domain-logic audit — issue #1090
 
 **Status: [~] IN PROGRESS — [issue #1090](https://github.com/45s/coinzilla/issues/1090).** The current `develop` inventory contains 307 JavaScript files under `apps/harvester/`. Audit the complete application surface against the repository JavaScript/JSDoc, modularity, structured-error and test standards; prioritize concrete domain defects and missing failure-path coverage over cosmetic churn.
-A temporary diagnostic test runs ESLint across the entire Harvester package with the repository's root configuration so existing findings can be reviewed by file and rule; the probe will be removed after the audit and is not a permanent lint gate.
+A temporary diagnostic test runs ESLint across the entire Harvester package with the repository's root configuration, emits safe autofix candidates and remaining findings by file/rule without writing to the checkout, and will be removed after the audit; it is not a permanent lint gate.
 
 - Preserve the Conservative Domain Specification as the sole authority for trading policy. Do not change strategy economics, exchange configuration, shared packages, or other application domains.
 - Use RED → GREEN → REFACTOR for every behavior correction. Add the failing regression and update this roadmap in the same test-first commit before changing runtime implementation.
