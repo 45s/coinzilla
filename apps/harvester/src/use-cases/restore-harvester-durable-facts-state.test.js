@@ -23,7 +23,7 @@ const record = (sequence, factType, data, factId = factType + ":" + sequence) =>
   data,
 })
 
-const records = ({ accountBlocker = false } = {}) => [
+const records = ({ accountBlocker = false, externalOpenOrder = false } = {}) => [
   record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
   record(1, "CONFIGURATION_BASELINE", {
     schemaVersion: 1,
@@ -43,7 +43,20 @@ const records = ({ accountBlocker = false } = {}) => [
   }),
   record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
     phase: "PREFLIGHT", observedAt: 1_700_000_000_001,
-    readiness: "READY", orderCount: 0, orders: [], blockReasons: [],
+    readiness: externalOpenOrder ? "BLOCKED" : "READY",
+    orderCount: externalOpenOrder ? 1 : 0,
+    orders: externalOpenOrder ? [{
+      symbol: "BTCUSDT",
+      clientOrderId: "manual-client-1",
+      brokerOrderId: "broker-manual-1",
+      side: "BUY",
+      type: "LIMIT",
+      price: "90",
+      quantity: "0.1",
+      executedQuantity: "0",
+      status: "NEW",
+    }] : [],
+    blockReasons: externalOpenOrder ? ["UNOWNED_OPEN_ORDERS"] : [],
   }),
   record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-client-1", marketId: market.id, venue: market.venue,
@@ -140,4 +153,18 @@ test("refuses an unreadable or non-durable fact stream", async () => {
   })
 
   assert.equal(result.ok, false, "A non-durable source must never be accepted as restart recovery authority.")
+})
+
+
+test("preserves external account-wide open orders as evidence without adopting them into OrderRegistry", async () => {
+  const result = await restoreHarvesterDurableFactsState({
+    durableFactsStore: makeStore(records({ externalOpenOrder: true })),
+    marketMetadata: new Map([[market.symbol, { market }]]),
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.orderRegistry.getOrder({ clientOrderId: "manual-client-1" }), undefined, "A matching clientOrderId in an account snapshot is not proof of Harvester ownership.")
+  assert.equal(result.data.orderRegistry.getActiveOrders().length, 1, "Only the durable Harvester-owned order intent may enter the candidate registry.")
+  assert.equal(result.data.openOrderSnapshots.length, 1, "The external order must remain available as reconciliation evidence.")
+  assert.equal(result.data.requiresExchangeReconciliation, true)
 })

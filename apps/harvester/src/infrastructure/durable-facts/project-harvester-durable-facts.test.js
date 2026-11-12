@@ -309,3 +309,24 @@ test("projects a durable completed recovery cycle only after its full SELL execu
   assert.equal(result.data.recoveryCycles[0].completedOrderBrokerOrderId, "broker-recovery-sell-1")
   assert.equal(result.data.requiresExchangeReconciliation, true, "A completed cycle projection still requires exchange reconciliation.")
 })
+
+
+test("rejects market-history coverage facts that narrow a previously verified window", () => {
+  const result = projectHarvesterDurableFacts({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      record(3, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
+        symbol: "BTCUSDT", coveredFromTime: 100, verifiedAt: 200,
+        evidenceDigest: "a".repeat(64), verifiedBy: "operator:trader",
+      }, "market-history-coverage:BTCUSDT:1"),
+      record(4, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
+        symbol: "BTCUSDT", coveredFromTime: 101, verifiedAt: 201,
+        evidenceDigest: "b".repeat(64), verifiedBy: "operator:trader",
+      }, "market-history-coverage:BTCUSDT:2"),
+    ],
+  })
+
+  assert.equal(result.ok, false, "Later evidence may extend coverage but must never silently narrow a previously verified history window.")
+})
