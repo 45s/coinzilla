@@ -12,11 +12,11 @@ export async function recordRecoveryCycleCompleted({
   minProfit,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") throw new TypeError("recordRecoveryCycleCompleted requires a durable-fact append port")
+    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordRecoveryCycleCompleted requires a durable-fact append port") }
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
       throw new TypeError("recordRecoveryCycleCompleted requires canonical RecoveryLedger and Position values")
     }
-    if (completion?.eligible !== true) throw new TypeError("Only an eligible recovery cycle can be durably completed")
+    if (completion?.eligible !== true) { throw new TypeError("Only an eligible recovery cycle can be durably completed") }
     const market = recoveryLedger.market
     if (position.market.id !== market.id) throw new TypeError("Recovery-cycle Position and ledger markets must match")
     if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0) {
@@ -32,7 +32,7 @@ export async function recordRecoveryCycleCompleted({
     }
     const inventoryDisposition = completion.dust ?? null
     const appliedFillIds = [...recoveryLedger.appliedFillIds]
-    if (appliedFillIds.length === 0) throw new TypeError("Recovery-cycle completion requires at least one applied execution fill")
+    if (appliedFillIds.length === 0) { throw new TypeError("Recovery-cycle completion requires at least one applied execution fill") }
     const cycleIdentity = JSON.stringify([
       market.id,
       appliedFillIds,

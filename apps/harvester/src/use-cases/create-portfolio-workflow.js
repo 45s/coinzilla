@@ -189,7 +189,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         }) !== 0)
         if (result.data.applied === true && portfolioStatsChanged) {
           const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-          if (portfolioStats) logger.info?.(portfolioStats)
+          if (portfolioStats) { logger.info?.(portfolioStats) }
         }
         logger.debug?.({
           message: "Execution accounted",
@@ -260,7 +260,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             message: error?.message ?? String(error),
             stack: error?.stack,
           })),
-          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId }),
+          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId: fill.market.id }),
           unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
         })
       }
@@ -364,7 +364,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
           if (portfolioStatsChanged) {
             const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-            if (portfolioStats) logger.info?.(portfolioStats)
+            if (portfolioStats) { logger.info?.(portfolioStats) }
           }
         } else {
           logger.debug?.({

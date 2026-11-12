@@ -12,8 +12,8 @@ import { toResult } from "@coinzilla/utils"
  */
 export async function recordExecutionFill({ durableFactsStore, fill } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") throw new TypeError("recordExecutionFill requires a durable-fact append port")
-    if (!(fill instanceof Fill)) throw new TypeError("recordExecutionFill requires a canonical Fill")
+    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a durable-fact append port") }
+    if (!(fill instanceof Fill)) { throw new TypeError("recordExecutionFill requires a canonical Fill") }
     const market = fill.market
     const commissions = fill.commissions.map((commission) => ({
       amount: commission.amount.amount,
