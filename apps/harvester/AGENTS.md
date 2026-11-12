@@ -68,6 +68,8 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 
 ## Actionable errors and diagnostics
 
+Follow the repository-wide [Structured Error Handling Standard](../../docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, stable codes, cause preservation and safe context. This section adds stricter Harvester-specific diagnostic requirements.
+
 - AI agents MUST NOT introduce a generic `Error` for a known Harvester/domain failure when a specific failure type can be named. Use a domain-specific class extending `Error`, with a precise `name` and stable machine-readable `code`.
 - Every operational error MUST identify the failing component/operation and affected entity (for example, market symbol), preserve the original cause, and expose safe structured details needed to act. The message must state what failed and why; include concrete remediation when known.
 - At external-data boundaries, emit structured DEBUG/TRACE evidence before validation can reject the data. Include source/filter identifiers and normalized descriptors; never log credentials, signatures, or secret payloads.
