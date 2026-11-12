@@ -409,7 +409,20 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createDurableFactsStore: () => ({
+      runtimeSessionId: "test-runtime-session",
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      readAll: async () => ({
+        ok: true,
+        data: {
+          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          durableWriteSupported: true,
+          lastCommittedSequence: "0",
+          lastCommittedDigest: "a".repeat(64),
+        },
+      }),
+      append: async () => ({ ok: true, data: { durable: true } }),
+    }),
     createTelegramOperatorAdapter: () => ({
       start: async () => { throw new Error("Telegram getMe unauthorized") },
       stop: async () => {
@@ -478,8 +491,18 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
   broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
   const durableFacts = {
+    runtimeSessionId: "test-runtime-session",
     verify: async () => { calls.push("verify-durable-facts"); return { ok: true, data: { valid: true, durableWriteSupported: true } } },
-    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } } },
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+        durableWriteSupported: true,
+        lastCommittedSequence: "0",
+        lastCommittedDigest: "a".repeat(64),
+      },
+    }),
+    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
@@ -506,9 +529,9 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
     const pauseResult = await operator.pauseMarket({ actor: { id: "telegram-user:12345", roles: ["trading-operator"] }, requestId: "telegram:9001", symbol: "BTCUSDT" })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
-    assert.equal(appendedFacts.length, 1, "A successful operator pause must append exactly one durable fact.")
-    assert.equal(appendedFacts[0].factType, "OPERATOR_MARKET_PAUSED", "The operator facade must persist the existing ADR-0001 pause fact type.")
-    assert.equal(appendedFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
+    const operatorPauseFacts = appendedFacts.filter(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
+    assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one durable fact.")
+    assert.equal(operatorPauseFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
     assert.ok(calls.indexOf("append-operator-fact") > calls.indexOf("start-telegram-poller"), "A pause fact is appended only after the adapter is running and a request is received.")
     assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
     assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
@@ -524,7 +547,20 @@ test("stops Telegram and broker when Telegram identity verification fails during
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createDurableFactsStore: () => ({
+      runtimeSessionId: "test-runtime-session",
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      readAll: async () => ({
+        ok: true,
+        data: {
+          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          durableWriteSupported: true,
+          lastCommittedSequence: "0",
+          lastCommittedDigest: "a".repeat(64),
+        },
+      }),
+      append: async () => ({ ok: true, data: { durable: true } }),
+    }),
     createTelegramOperatorAdapter: () => ({ start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") }, stop: async () => calls.push("stop-telegram-poller") }),
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -3852,6 +3888,7 @@ test("reuses the process-owned durable-facts store for Telegram operator pause f
   const runtime = await startHarvesterForTest({
     appConfig: config,
     durableFactsStore,
+    runtimeSessionId,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: directory },
     createDurableFactsStore: () => {
       secondaryStoreFactoryCalls += 1

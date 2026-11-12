@@ -69,6 +69,7 @@ export async function prepareTelegramOperatorControl({
   let adapter
   return Object.freeze({
     enabled: true,
+    durableFactsStore: durableFacts,
     async start({ engine } = {}) {
       if (adapter) {
         return Object.freeze({ started: true, alreadyStarted: true })

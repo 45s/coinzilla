@@ -71,6 +71,18 @@ export async function startHarvester({
     tradingMode,
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
+
+  const operatorControlLifecycle = await prepareTelegramOperatorControl({
+    telegramConfig: appConfig.operatorControl?.telegram,
+    env,
+    runtimeSessionId,
+    durableFactsStore,
+    createDurableFactsStore,
+    createAdapter: createTelegramOperatorAdapterFactory,
+    fetchImpl: telegramOperatorFetchImpl,
+    logger,
+  })
+  durableFactsStore ??= operatorControlLifecycle.durableFactsStore
   if (durableFactsStore !== undefined) {
     if (typeof durableFactsStore?.append !== "function" ||
         typeof durableFactsStore?.verify !== "function" ||
@@ -122,19 +134,6 @@ export async function startHarvester({
         (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
     }
   }
-  if (appConfig.operatorControl?.telegram?.enabled === true && !durableFactsStore) {
-    throw new Error("Telegram operator control requires the initialized ADR-0001 durable-facts store used by this process session")
-  }
-  const operatorControlLifecycle = await prepareTelegramOperatorControl({
-    telegramConfig: appConfig.operatorControl?.telegram,
-    env,
-    runtimeSessionId,
-    durableFactsStore,
-    createDurableFactsStore,
-    createAdapter: createTelegramOperatorAdapterFactory,
-    fetchImpl: telegramOperatorFetchImpl,
-    logger,
-  })
   const onDurableExecutionFill = durableFactsStore
     ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
     : undefined
