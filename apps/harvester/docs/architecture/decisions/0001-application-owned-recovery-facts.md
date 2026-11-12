@@ -61,10 +61,10 @@ Each record has a versioned envelope containing:
 The committed-head manifest records its format version, the last committed sequence, and the last committed digest. The genesis record is created only by an explicit one-time initialization operation; normal startup never creates a new empty ledger when files are missing. A write is acknowledged as durable only after:
 
 1. The complete canonical record has been appended and the log file has been synced.
-2. The committed-head manifest has been written to a temporary file, synced, atomically replaced, and its containing directory synced.
-3. The resulting log head and manifest agree.
+2. The matching committed-head checkpoint has been appended to the manifest journal and the manifest file synced.
+3. Startup/append verification confirms the fact-log head and final manifest checkpoint agree, including both digest chains.
 
-A record beyond the committed manifest, a missing or malformed log/manifest, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation relative to the committed head is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
+A fact record beyond the committed-head manifest journal, a checkpoint ahead of the fact log, a missing or malformed stream, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
 
 The global sequence and committed head avoid relying on directory enumeration, filename timestamps, or UUID lexical order for new authoritative history. The old Journal directory tree still needs explicit discovery when it is examined for legacy evidence or a one-time baseline assessment.
 
@@ -82,6 +82,7 @@ Persist the minimum immutable facts needed to reconstruct and reconcile state:
 | Recovery-cycle outcome | Explicit `COMPLETED` or `NOT_COMPLETED` outcome tied to the exact cycle and terminal SELL identity. A completed outcome includes realized net profit and the exact retained/free allocation, including validated exchange-constrained dust. It must be durable before resetting basis or scheduling the next BUY. A full SELL without a proven outcome remains unresolved. |
 | Strategy control and safety | Pair/account pauses, recovery-managed state, pending replacement/trailing intents that cannot be derived from canonical orders, sticky safety blockers, and explicit blocker-resolution facts with their reconciliation evidence. A blocker is never cleared merely because a process restarted. |
 | Account reconciliation | Complete PREFLIGHT/RECOVERY balance snapshots and account-wide open-order snapshots, including all returned assets' exact free/locked/total quantities, fee assets required by applied commissions, source timestamps, and completeness/status metadata. |
+| Operator-verified market-history coverage | A per-symbol `MARKET_HISTORY_COVERAGE_CONFIRMED` fact containing canonical symbol, earliest covered timestamp, verification timestamp, SHA-256 digest of the reviewed evidence artifact, and a non-secret verifier identity. Coverage is append-only and monotonic: later facts may widen coverage backward but may not narrow it or move verification time backward. This fact proves only the named market and never proves the historical account-wide market universe. |
 
 Do not persist mutable `Portfolio`, `Position`, `RecoveryLedger`, or reservation totals as competing authorities. Rebuild them deterministically from execution facts and explicit cycle outcomes through the existing canonical accounting workflow. Reconstruct active/free inventory from those same facts and outcomes. Derive order commitments/reservations from durable order intents plus canonical exchange order state; do not independently persist a second mutable counter that can diverge.
 
@@ -102,11 +103,11 @@ Every process starts with strategy evaluation and order submission disabled. Rec
 
 The gate may open only after all of the following succeed:
 
-1. Validate the complete durable-fact stream, committed manifest, schema versions, process boundaries, global ordering, stable identities, and configuration compatibility.
+1. Validate the complete durable-fact stream, committed-head manifest journal, schema versions, process boundaries, global ordering, stable identities, and configuration compatibility.
 2. Build a candidate projection deterministically and idempotently. Validate Position cost basis, RecoveryLedger, active/free inventory, completed-cycle outcomes, order ownership, reservations, strategy-control state, and sticky blockers before publishing any candidate state.
 3. Reconcile every restored owned order by durable `clientOrderId` and canonical exchange identity/status. Reconcile complete available execution history and exact fill/commission parity; never infer ownership from symbol/side/price/quantity shape alone.
 4. Reconcile current account-wide open orders and exact free/locked balances for all relevant assets, including third-asset commission assets. Compare outstanding commitments and reservations without double-counting snapshot-relative balances.
-5. Prove the historical market universe and exchange-history coverage required by the chosen baseline. The current exchange catalog and symbol-scoped `getFills()` helper do not prove coverage of delisted/unknown historical symbols or an undocumented retention horizon. A caller-supplied `marketUniverseComplete: true` is not proof.
+5. Prove the historical market universe and exchange-history coverage required by the chosen baseline. The current exchange catalog and symbol-scoped `getFills()` helper do not prove coverage of delisted/unknown historical symbols or an undocumented retention horizon. A caller-supplied `marketUniverseComplete: true` is not proof. A `MARKET_HISTORY_COVERAGE_CONFIRMED` fact can attest only to a reviewed per-market interval; it cannot be used to infer coverage for any other symbol.
 6. Confirm every sticky blocker has an explicit durable resolution and no unresolved order, fill, cycle, account, or ownership discrepancy remains.
 
 If any step is incomplete, ambiguous, unsupported, inconsistent, or unavailable, readiness remains closed with an actionable reason. No partial candidate state is published to the trading engine.
@@ -170,3 +171,33 @@ The diagram describes the accepted target contract, not current runtime behavior
 - [Harvester Journal Evidence Contract](../../JOURNAL_EVIDENCE_CONTRACT.md)
 - [Harvester Trading First](../../TRADING_FIRST.md)
 - [Findings register F-035–F-044](../../audits/reports/AUDIT_FINDINGS.md)
+
+## Filesystem durability support
+
+The filesystem adapter uses two append-only newline-delimited streams:
+
+1. `facts.jsonl`: append the canonical fact record and sync the file.
+2. `manifest.jsonl`: append a committed-head checkpoint that references the exact fact sequence/digest and chains to the previous checkpoint; sync this file before returning `durable: true`.
+
+The committed-head manifest is therefore an append-only checkpoint journal, not a replace-in-place JSON document. This refinement avoids relying on directory fsync or atomic rename for every append and uses regular-file sync operations on both POSIX and Windows. Startup verification syncs both existing streams before publishing the verified head. A fact without its matching checkpoint, a checkpoint ahead of the fact log, a partial tail, or either broken digest chain is unresolved and fails closed.
+
+Genesis is created only by the explicit one-time initialization operation. Normal startup, verification, reads, and append never create or repair a missing store. The two stream files are created only during genesis; if either file or the containing directory is missing later, startup fails closed rather than recreating an empty ledger. Store the directory on a local filesystem; network shares and cloud-synchronized folders are not a supported durability target.
+
+POSIX installations create the directory with mode `0700` and both streams with mode `0600`. The SHA-256 chains detect accidental corruption, truncation, duplication and reordering; they are not a cryptographic defense against a privileged local actor who can rewrite both streams and recompute their digests. One Harvester writer process per installation remains a runtime invariant; the bootstrap process-singleton gate is delivered in the later readiness step.
+
+The one-time genesis operation is exposed only through the explicit script `apps/harvester/scripts/initialize-durable-facts.js`. It requires an absolute `DURABLE_FACTS_DIRECTORY` and the `--confirm` flag; it refuses unknown arguments and non-empty directories. It is never called by application startup. Do not initialize a production directory until the runtime-integration step explicitly instructs the operator to do so.
+
+```powershell
+$env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
+node apps/harvester/scripts/initialize-durable-facts.js --confirm
+```
+
+## Implementation tracking (non-normative)
+
+The accepted contract remains the authority for recovery boundaries; delivery status is maintained in the [Harvester roadmap](../../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654).
+
+- The durable-fact store, committed-head integrity, typed coverage facts and market-history coverage read/write primitives are implemented in merged recovery PRs through #1036.
+- The read-only one-market reconciliation orchestrator and guarded operator confirmation workflow merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047). They compose canonical owned-order reconciliation, current account balances, account-wide open orders and complete target-market fill history. The coverage fact is appended only after the target-market audit is READY and is read back after commit.
+- The offline JSON context adapter, explicit audit-only/confirmation CLI and production-audit end-to-end evidence matrix are in draft [PR #1053](https://github.com/45s/coinzilla/pull/1053); all required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`. The command consumes operator-supplied Journal/exchange evidence only; it does not connect to a broker, start Harvester or place/cancel orders. Step 7 remains unmerged pending user review.
+- A concrete offline command/context composition and complete end-to-end evidence matrix remain pending. This PR does not wire the workflow into startup.
+- Step 8 candidate projection/readiness integration and Step 9 crash/restart proof remain pending. Runtime restoration and unattended restart readiness stay disabled.

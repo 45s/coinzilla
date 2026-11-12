@@ -271,96 +271,14 @@ test("reconstructs final BUY fill facts across two process sessions without losi
   })
 })
 
-test("does not reset recovery basis before the cycle-completion fact is published", () => {
+test("fails closed when a full SELL is present but its cycle outcome has not yet been published", () => {
   const fixture = createRecoveryCrashFixture()
-  const { state } = restoreSnapshot({
-    fixture,
-    recordCount: fixture.checkpoints.afterRecoverySellFillApplied,
+  const projection = projectHarvesterJournalRecovery({
+    records: fixture.records.slice(0, fixture.checkpoints.afterRecoverySellFillApplied),
   })
 
-  assert.deepEqual(state, {
-    orders: [
-      {
-        clientOrderId: "harvester-BTCUSDT-buy-001",
-        brokerOrderId: "9001",
-        side: "BUY",
-        status: "UNKNOWN",
-        originalQuantity: "1",
-        executedQuantity: "1",
-      },
-      {
-        clientOrderId: "harvester-BTCUSDT-sell-001",
-        brokerOrderId: "9002",
-        side: "SELL",
-        status: "UNKNOWN",
-        originalQuantity: "0.9892",
-        executedQuantity: "0.9892",
-      },
-    ],
-    positions: [{
-      symbol: "BTCUSDT",
-      activeQuantity: "0.01",
-      freeQuantity: "0",
-      totalQuantity: "0.01",
-      spent: "100",
-      quoteNetCashFlow: "2",
-    }],
-    ledgers: [{
-      marketId: fixture.market.id,
-      buyCost: "100",
-      netSellProceeds: "102",
-      outstandingRecoveryAmount: "0",
-      appliedFillIds: [
-        "binance:BTCUSDT:buy-trade-001",
-        "binance:BTCUSDT:buy-trade-002",
-        "binance:BTCUSDT:sell-trade-001",
-      ],
-    }],
-    appliedFillIds: [
-      "binance:BTCUSDT:buy-trade-001",
-      "binance:BTCUSDT:buy-trade-002",
-      "binance:BTCUSDT:sell-trade-001",
-    ],
-    journalFills: [
-      {
-        fillId: "binance:BTCUSDT:buy-trade-001",
-        side: "BUY",
-        quantity: "0.4",
-        quoteQuantity: "40",
-      },
-      {
-        fillId: "binance:BTCUSDT:buy-trade-002",
-        side: "BUY",
-        quantity: "0.6",
-        quoteQuantity: "60",
-      },
-      {
-        fillId: "binance:BTCUSDT:sell-trade-001",
-        side: "SELL",
-        quantity: "0.9892",
-        quoteQuantity: "102",
-      },
-    ],
-    pausedMarkets: noPause,
-    durablePausedMarkets: noPause,
-    recoveryManagedPausedMarkets: noPause,
-    completedOrderClientIds: noCompletedOrders,
-    requiresExchangeReconciliation: true,
-    sessions: [
-      {
-        fileName: "process-001.jsonl",
-        tradingEnabled: true,
-        hasTradingActivity: true,
-        uncleanTradingShutdown: true,
-      },
-      {
-        fileName: "process-002.jsonl",
-        tradingEnabled: true,
-        hasTradingActivity: true,
-        uncleanTradingShutdown: true,
-      },
-    ],
-  })
+  assert.equal(projection.ok, false)
+  assert.match(projection.errors[0].message, /fully filled SELL has no explicit recovery-cycle outcome/)
 })
 
 test("restores retained inventory, reset basis, and sticky pause after cycle and blocker publication", () => {

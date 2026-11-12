@@ -40,7 +40,7 @@ For a multi-action decision, earlier actions may already have been acknowledged 
 
 ## Submission gate and stable reasons
 
-The Conservative engine's `canSubmit({ order })` callback returns a structured decision:
+The Conservative engine's `canSubmit({ order, purpose })` callback returns a structured decision. The purpose is application-only metadata; only an explicitly marked `RECOVERY_SELL` receives the volatility-specific exception.
 
 - Allowed: `{ allowed: true }`.
 - Deferred: `{ allowed: false, reason, details }`.
@@ -49,16 +49,19 @@ The reason is a stable diagnostic identifier. Details are safe context, not a pr
 
 | Reason | Exact guard condition | Safe interpretation |
 | --- | --- | --- |
-| `MARKET_PAUSED` | The symbol is in the engine's paused set. | The pair is paused; do not retry by bypassing the pause. Investigate the pause cause and its recovery path. |
+| `MARKET_PAUSED` | The symbol is in the engine's safety-paused set. | The pair is paused; do not retry by bypassing the pause. Investigate the pause cause and its recovery path. |
+| `OPERATOR_MARKET_PAUSED` | The symbol is operator-paused and the candidate is a BUY. | New BUYs are suppressed by operator control; existing orders and recovery SELL lifecycle remain governed by the operator-control contract. |
 | `UNOWNED_OPEN_ORDERS_PRESENT` | Account-wide reconciliation reports open orders for the symbol that Harvester does not own. | Strategy submission is blocked to avoid interacting with external orders. Resolve ownership through the established reconciliation process; never adopt or cancel an external order by guess. |
 | `TRADING_DISABLED` | `canTrade({ symbol })` is false at the submission gate. | Trading is not currently permitted/ready for this symbol. Inspect the engine readiness and stream/subscription state. |
 | `MARKET_PRICE_UNAVAILABLE` | No cached market-price event exists for the symbol at the gate. | Wait for a valid price event; do not fabricate a price. |
 | `MARKET_PRICE_STALE` | The cached market-price event fails the configured freshness check. | Wait for a fresh market-price event. |
+| `VOLATILITY_DATA_UNAVAILABLE` | Volatility protection is enabled for the symbol but its candle history/snapshot is not ready or could not be read. | Keep ordinary strategy actions blocked until valid, fresh volatility data is available. |
+| `VOLATILITY_PROTECTION_ACTIVE` | The per-market protection state is not NORMAL or the latest ratio is at/above the protection threshold. | Keep ordinary strategy actions blocked; only an explicitly marked `RECOVERY_SELL` may pass this volatility-specific gate. |
 | `MARKET_BOOK_UNAVAILABLE` | The order is `LIMIT_MAKER` and no same-symbol book ticker is cached. | No safe post-only crossing decision can be made; broker I/O is withheld. |
 | `MARKET_BOOK_STALE` | The order is `LIMIT_MAKER` and its cached same-symbol book fails the freshness check. | Wait for a fresh book ticker; stale quotes must not authorize a maker order. |
 | `POST_ONLY_WOULD_CROSS` | The `LIMIT_MAKER` price would execute immediately against the opposite best quote. | The intent is not safe as post-only at this book. Preserve the guard; wait for a new market evaluation or a newly calculated safe price. |
 
-For `POST_ONLY_WOULD_CROSS`, details include the symbol, side, limit price, best bid, best ask and book timestamp. Price and quantity values remain exact decimal strings where provided by the source.
+For `POST_ONLY_WOULD_CROSS`, details include the symbol, side, limit price, best bid, best ask and book timestamp. Volatility deferrals include the current protection mode and latest ratio when available. Price and quantity values remain exact decimal strings where provided by the source.
 
 The generic execution use case also supports legacy boolean gate callbacks. A legacy `false` is reported as `SUBMISSION_NOT_ALLOWED`; it does not identify the underlying cause. The Conservative engine uses structured results. A malformed structured result, or a deferred result without a non-empty reason, is an error rather than a silent deferral.
 
@@ -78,20 +81,21 @@ These are evaluation-level skips, not the structured submission-gate reasons abo
 
 The execution use case checks readiness at more than one point because market state can change while the order is being prepared:
 
-1. Validation/preflight checks that the candidate is admissible under current market state.
-2. Immediately before registration, the execution path checks the gate again. If it is deferred here, no PENDING order is registered and no broker call occurs.
+1. The execution use case constructs and validates every canonical order candidate against the current exchange trading rules before submitting any action.
+2. Immediately before local PENDING registration, it checks the submission gate. If the gate defers the intent, no PENDING order is registered and no broker call occurs.
 3. Harvester registers a local PENDING canonical order and durably publishes `order.submission_requested`. The durable-intent barrier must succeed before broker I/O.
-4. After that asynchronous registration/persistence step, the execution path checks readiness again. If the market became unsafe, the deferred callback removes the local PENDING order. Failure to remove it is treated as an error. The broker is not called.
-5. Only if all checks pass does the use case call `broker.placeOrder({ order })`.
+4. After that asynchronous registration/persistence step, the execution use case checks the gate again. If readiness changed, the deferred callback removes the local PENDING order and preserves the reason/details. Failure to remove it is an error. The broker is not called.
+5. Only if both gate checks pass does the use case call `broker.placeOrder({ order })`.
+
+The trailing-BUY replacement workflow also uses the executor's separate `.validate()` preflight before canceling the existing BUY. That preflight does not register PENDING or call the broker; after confirmed cancellation, the rebuilt replacement order goes through the normal two-gate submission sequence above.
 
 The post-registration check is important: the book or price may become stale, a pair may be paused, or another safety condition may change while the durable intent is being written. The gate is intentionally repeated at the final broker boundary.
 
 ```mermaid
 flowchart TD
-    A[Executable strategy intent] --> B[Validate exchange rules and readiness]
-    B -->|Deferred| D[Return deferred reason; no broker call]
-    B -->|Allowed| C[Recheck immediately before PENDING registration]
-    C -->|Deferred| D
+    A[Executable strategy intent] --> B[Validate all canonical candidates against exchange rules]
+    B --> C[Check submission readiness before PENDING]
+    C -->|Deferred| D[Return deferred reason; no broker call]
     C -->|Allowed| E[Register PENDING and durably publish submission intent]
     E -->|Durability failure| F[Remove PENDING; pause/report error]
     E -->|Durable| G[Recheck readiness at dispatch boundary]
@@ -144,16 +148,18 @@ Deferred evaluations are retained by symbol. A fresh book update can trigger ree
 
 The regression tests in `apps/harvester/test/use-cases/conservative-trading-engine.test.js` cover:
 
-- Structured deferral reason/details propagation and zero broker calls for every gate category.
+- Structured deferral reason/details propagation and zero broker calls across every stable gate-reason category.
 - A gate changing after PENDING registration, including local PENDING cleanup and zero broker calls.
-- Missing and stale book data, stale price data, paused markets and unowned open orders.
+- Missing and stale book data, stale price data, unavailable volatility history, and active volatility protection.
 - A crossing `LIMIT_MAKER` intent remaining deferred with no broker call.
+- Preservation of earlier acknowledged orders when a later action in a multi-action decision is deferred.
 - Existing readiness skip/resume behavior.
 
 Implementation references:
 
 - [Conservative Trading Engine](../../src/use-cases/conservative-trading-engine.js)
 - [Strategy decision execution](../../src/use-cases/execute-strategy-decision.js)
+- [Strategy decision execution tests](../../src/use-cases/execute-strategy-decision.test.js)
 - [Market-data subscriptions](../../src/bootstrap/subscriptions/subscribe-to-market-data.js)
 - [Conservative Domain Specification](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md)
 - [Broker–Harvester trading flow](../architecture/BROKER_HARVESTER_TRADING_FLOW_TEXT.md)

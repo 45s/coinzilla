@@ -80,6 +80,29 @@ Use the authoritative [cross-domain request process](docs/engineering/CROSS_DOMA
 
 ## 5. Task PR requirements and automated integration
 
+## 5.1 Pull-request title convention — mandatory
+
+Every task PR title MUST communicate the actual change in a short, specific phrase. Use this format:
+
+`<type>(<app-or-package>): <specific change and outcome>`
+
+- **Type:** use `feat` for new behavior/capability, `fix` for correcting broken or unsafe behavior, and `docs` for documentation-only changes.
+- **Scope:** name the owning application or package, using its repository directory name (for example, `harvester`, `brokers`, or `utils`). For a genuinely repository-wide change with no single app/package owner, use `repo`.
+- **Description:** start with a clear action verb and name the behavior being added, corrected, or documented. Include a short outcome when it makes the functionality clearer.
+- Keep the title concise (normally 50–90 characters). A reader should understand the PR's purpose without opening it.
+- Describe the delivered functionality, not the implementation phase, internal milestone, architecture jargon, or issue number alone.
+- Avoid vague titles such as `build operator control`, `begin Step 8`, `update Harvester`, or `fix issue #123`. Do not claim a capability is runtime-enabled when the PR only adds its foundation.
+- Do not put a list of changed files, test status, or the full PR summary in the title; keep those in the PR body.
+
+Examples:
+
+- `feat(harvester): add transport-independent operator pause controls`
+- `feat(harvester): record durable order facts for future recovery`
+- `fix(harvester): preserve reasons when order submission is deferred`
+- `docs(harvester): explain volatility protection thresholds with examples`
+
+The PR template reminds contributors of this format. Apply it to new PRs and improve existing titles when updating those PRs, after completing the required branch-freshness check.
+
 A task PR targeting `develop` must:
 
 - Be focused on one task and one primary owning domain.
@@ -154,6 +177,18 @@ When the user-approved milestone is ready:
 5. The user performs the final review and approval. Agents must not merge this PR unless the user explicitly authorizes that merge.
 
 Do not turn every small commit into a separate human decision. Keep the final PR understandable with a summary and links to task PRs/issues.
+
+### Post-release ancestry reconciliation — mandatory
+
+A successful `develop` → `main` release PR creates a merge commit on `main` that is not automatically reachable from `develop`. After **every** user-approved release merge, the responsible agent MUST reconcile that release-merge ancestry back into `develop` before treating the branches as synchronized or preparing another release.
+
+1. Re-fetch and record the exact `main` and `develop` HEAD SHAs. Verify the merged PR was exactly `develop` → `main`, inspect its merge commit and both parents, confirm the user's approving review is recorded, and confirm every required check passed on the exact release PR head. If the approval is absent, the live `main` ruleset does not require at least one approval, or the ruleset cannot be verified, stop: do not merge another release PR.
+2. Compare the branches and inspect every commit exclusive to `main`. Do not infer that commits are harmless from their count or message. For each release merge commit, verify its second parent is the exact release PR head, its tree SHA equals that second parent's tree SHA, and that source/head commit is an ancestor of the current `develop`. Inspect file-level differences as well. If any main-only commit contains content not already present in `develop`, any source head is not an ancestor, or any tree/diff is unexpected, stop and prepare a separately reviewed reconciliation; never use a blanket `ours`/ `theirs` resolution.
+3. When the evidence proves that only release-merge ancestry is missing and the `main` tree introduces no content absent from `develop`, create a short-lived task branch from the exact latest `develop` SHA. Merge the exact latest `main` into that task branch, preserving both histories with `develop` as the first parent. Inspect the complete resulting tree and diff; the resulting tree must retain the full `develop` tree unchanged. Do not force-push or update either integration branch directly.
+4. Open a PR from that task branch into `develop`. Include the before/after SHAs, release PR links, parent/tree verification, and an explicit statement that this is ancestry-only reconciliation with no runtime/content changes. Run all required checks on the exact PR head, verify branch freshness, and merge only under the ordinary `develop` PR gates. Delete the task branch after successful merge.
+5. Re-fetch both integration refs and verify `main` is now an ancestor of `develop` (`main` → `develop` comparison has `behind_by = 0`). Record the resulting SHAs. If either branch advanced during the procedure, repeat the audit against the new tips.
+
+This is repository-history maintenance, not permission to merge task work into `main`. The only permitted PR target for this reconciliation is `develop`; the only permitted PR target for a release remains `main` with source `develop` and explicit user approval. Never reset, rebase, force-push, delete, or recreate either integration branch.
 
 ## 10. One-time GitHub repository configuration
 

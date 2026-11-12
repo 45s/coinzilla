@@ -64,6 +64,23 @@ The Harvester reader:
 
 A successful scan means the discovered forensic files were readable and could be ordered under these legacy rules. It does **not** make Journal authoritative restart state, prove that missing exchange fills did not occur, establish a complete historical baseline, or open the ADR-0001 startup readiness gate. Multiple-session ambiguity and any missing/unreadable session remain hard failures. Any one-time baseline still requires the explicit operator-assisted reconciliation rules in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md).
 
+## Step 7 — one-market recovery confirmation
+
+The one-market recovery workflow is separate from Journal persistence. Journal history is projected and restored only as a candidate; the ADR-0001 durable-facts stream remains the sole authority for confirmed market-history coverage.
+
+The read-only reconciliation sequence is:
+
+1. Restore the candidate state from the discovered Journal history.
+2. Reconcile every Harvester-owned order by canonical client/broker identity and exchange status before auditing balances. This updates the candidate recovery state through the existing serialized engine reconciliation boundary.
+3. Read a fresh canonical account snapshot and the complete account-wide open-order set.
+4. Exhaust exchange fill history for exactly the target market from the operator-reviewed coverage start time.
+5. Run `auditRecoveredAccountState()` with `tradeHistoryScope: "MARKET"`, complete-history enforcement and the candidate `MARKET_HISTORY_COVERAGE_CONFIRMED` evidence.
+6. Append the coverage fact only when the target market is READY, then read the fact back and verify its symbol, time boundary, evidence digest and verifier identity.
+
+An unowned order on the target market blocks confirmation; external orders remain unowned and untouched. Unowned orders in another market remain a symbol-scoped blocker and do not automatically invalidate an otherwise-ready target market. Incomplete history, ambiguous owned-order identity/status, missing asset/market metadata, account-balance mismatch, invalid evidence or an unreadable durable-fact ledger all fail closed.
+
+The orchestration and guarded confirmation use cases were merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047). The offline JSON context adapter, audit-only/explicit-confirmation CLI and production-audit evidence matrix are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053); all required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`. PR #1053 remains draft and unmerged pending user review. See the [Step 7 recovery operator guide](recovery/README.md) for the evidence-bundle contract and command. This workflow is not invoked by runtime startup and does not add a Telegram command. It has no order-placement or cancellation dependency; no exchange writes are performed by the workflow.
+
 ## Event inventory
 
 All events use source `harvester`. Payloads are created by Harvester-owned allowlist mappers; fields not listed below are not copied into the event DTO.
@@ -97,6 +114,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
 | `execution.duplicate_fill` | Fill facts plus `duplicate: true` |
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
+| `recovery.cycle_not_completed` | exact SELL client/broker identity, `CONTINUE_SELL_THROUGH` or `BLOCKED` outcome, reason, realized profit, active/keep quantities, configured minimum profit |
 | `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING or targeted COMMISSION_BASELINE phase, audit status, exchange source timestamp, allowlisted exact free/locked/total balances, audit reasons |
 | `account.open_orders_captured` | PREFLIGHT/OPENING phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
@@ -325,6 +343,22 @@ Therefore the Journal must not be described as a crash-consistent fill ledger or
 
 The repository retains tested offline helpers: `projectHarvesterJournalRecovery()`, `restoreHarvesterJournalState()`, `fetchAccountTradeHistory()`, `auditRecoveredTradeHistory()`, and `auditRecoveredAccountState()`. They can project Journal records, rehydrate Portfolio/RecoveryLedger/OrderRegistry and pause/intent state, scan trade history for supplied markets, and compare exact executions, balances, open orders and reservations.
 
+### One-market exchange audit semantics (offline only)
+
+`fetchAccountTradeHistory()` reports the exact canonical market symbols queried, query start time and whether every page for those markets was exhausted. Page exhaustion does not prove exchange-retention coverage. `auditRecoveredTradeHistory({ scope: "MARKET" })` therefore also requires a durable operator-verified history-retention baseline whose covered-from time is no later than the query start. The audit validates only the requested Market and does not claim account-wide completeness. The evidence reference must identify a `MARKET_HISTORY_COVERAGE_CONFIRMED` fact with a stable fact ID, matching symbol, covered-from time, query-start coverage through the verification time, evidence digest and verifier identity. This slice validates the reference shape and timing only; it does not yet resolve the fact ID against the durable-fact store. Tests use synthetic evidence. Durable-fact projection and provenance verification remain pending. Account-wide history remains fail-closed: a caller-supplied `marketUniverseComplete: true` boolean is not proof that delisted or otherwise unenumerated symbols are covered.
+
+`auditRecoveredAccountState()` requires every asset present in the durable baseline and current account snapshot to be present on both sides. Missing assets are not interpreted as zero. Account-wide open orders outside the restored OrderRegistry remain unowned and untouched; when canonical Market metadata is available, their exact remaining BUY/SELL commitments are included in locked-balance reconciliation and their symbols are returned as narrow blockers. An unowned order on an unrelated symbol does not by itself block the target market, but missing metadata or an unexplained reservation fails closed.
+
+### Durable market-history coverage facts
+
+`recordMarketHistoryCoverage()` appends a `MARKET_HISTORY_COVERAGE_CONFIRMED` fact only to an already initialized, integrity-verified ADR-0001 store. Its strict payload contains the canonical symbol, `coveredFromTime`, `verifiedAt`, the SHA-256 digest of the reviewed evidence artifact, and a non-secret `verifiedBy` identity. The store rejects malformed payloads, unsupported fields, coverage-window narrowing, and verification-time regression.
+
+`readMarketHistoryCoverage()` calls the store's integrity-verifying `readAll()` path, validates the per-symbol monotonic sequence, and projects the latest fact into the exact evidence shape consumed by the one-market audit. A valid interval must cover the query start: `coveredFromTime <= historyStartTime <= verifiedAt`; the current account snapshot must not predate `verifiedAt`.
+
+The fact writer is an application use case, not a Telegram command. This slice does not add a CLI or startup integration; creating a coverage fact still requires an explicit offline operator review and a reviewed evidence artifact. A missing fact leaves the market audit blocked.
+
+These are offline audit primitives only. They are not wired into startup, do not publish runtime READY, and do not enable process-restart restoration or OPERATOR control.
+
 Current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not call this pipeline. Historical PR #606 did wire it, but passed `marketUniverseComplete: false` while `auditRecoveredTradeHistory()` requires true; that trading-enabled path therefore failed closed after prior trading activity. The current runtime bypasses that fail-closed gate rather than solving historical market-universe completeness. See F-031 and #654.
 
 ## Process-restart recovery status — 2026-11-09
@@ -369,7 +403,7 @@ Both Harvester process locks are local to one OS user's home directory; they do 
 
 - **Third-asset commission valuation (F-039):** PR #990 preserves exact commission amount/asset identity and historical quoteValue through the applied-fill DTO, journal projection and offline restoration. Legacy records without quoteValue fail closed; no current-price reconstruction is permitted. Wallet reconciliation for unconfigured commission assets remains outstanding. See [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 - **Same-second session chronology:** process start times have millisecond precision, but session paths and Journal filenames retain only seconds. The reader breaks same-second ties by random session ID, not chronological start time. See F-040 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
-- **Recovery-cycle outcome durability:** the engine resets in-memory recovery basis before best-effort publication of `recovery.cycle_completed`. The projection does not reject an unmatched fully filled SELL at end-of-input, so a missing completion event can restore stale cost basis without a wallet-balance mismatch. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
+- **Recovery-cycle outcome evidence:** the engine records `recovery.cycle_completed` for a reset or `recovery.cycle_not_completed` for an explicit residual sell-through/blocked result. The projection requires a completed or explicit non-completed outcome for every fully filled SELL, ties the outcome to the exact SELL order identity, permits another SELL only after `CONTINUE_SELL_THROUGH`, and restores `BLOCKED` outcomes as market pauses. A missing Journal event fails closed at projection time. Journal remains observer-only and this is not the ADR-0001 durable-fact store; restart restoration stays disabled until the durable store and reconciliation steps are complete. See F-041 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md) and #654.
 
 **Record completeness:** current Journal events carry random IDs and timestamps but no monotonic sequence or integrity chain. The reader can detect malformed/truncated lines and duplicate IDs, but a whole valid middle line can disappear without a structural error. Do not treat successful JSONL parsing as proof of a complete event history. See F-042 in [AUDIT_FINDINGS.md](audits/reports/AUDIT_FINDINGS.md).
 

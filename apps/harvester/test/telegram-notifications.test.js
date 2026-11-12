@@ -45,9 +45,21 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
         source: "harvester",
         data: {
           symbol: "DOGEUSDT",
+          side: "BUY",
           price: "0.075",
           quantity: "400",
           tradeId: "trade-123",
+        },
+      })
+      eventPublisher.publish({
+        name: "execution.fill_applied",
+        source: "harvester",
+        data: {
+          symbol: "DOGEUSDT",
+          side: "SELL",
+          price: "0.076",
+          quantity: "399",
+          tradeId: "trade-124",
         },
       })
       eventPublisher.publish({
@@ -82,12 +94,14 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
 
   await signalHandlers.get("SIGTERM")()
 
-  assert.equal(sentMessages.length, 5, "Telegram must receive startup, pause, canonical fill, recovery completion, and shutdown notifications")
-  assert.ok(sentMessages.some((message) => message.includes("BOT STARTED")), "A successful Harvester startup must produce a Telegram lifecycle notification")
-  assert.ok(sentMessages.some((message) => message.includes("TRADING PAIR PAUSED") && message.includes("DOGEUSDT")), "A paused market must produce a Telegram safety notification with its symbol")
-  assert.ok(sentMessages.some((message) => message.includes("EXECUTION RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
+  assert.equal(sentMessages.length, 6, "Telegram must receive startup, pause, canonical fill, recovery completion, and shutdown notifications")
+  assert.ok(sentMessages.includes("▶️ BOT STARTED"), "A successful Harvester startup must use the selected start icon")
+  assert.ok(sentMessages.some((message) => message.includes("PAUSED") && message.includes("DOGE/USDT")), "A paused market must produce a Telegram safety notification with its symbol")
+  assert.ok(sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
+  assert.ok(sentMessages.includes("✅ FILL RECEIVED · DOGE/USDT @ 0.075 × 400\n#trade-123"), "A canonical BUY fill must retain its side through the event bridge and use the selected BUY icon")
+  assert.ok(sentMessages.includes("💰 FILL RECEIVED · DOGE/USDT @ 0.076 × 399\n#trade-124"), "A canonical SELL fill must retain its side through the event bridge and use the selected SELL icon")
   assert.ok(sentMessages.some((message) => message.includes("BOT RECOVERY COMPLETED") && message.includes("0.25")), "A completed recovery cycle must produce a Telegram completion notification")
-  assert.ok(sentMessages.some((message) => message.includes("BOT STOPPED")), "A completed Harvester shutdown must produce a Telegram lifecycle notification")
+  assert.ok(sentMessages.some((message) => message.startsWith("⏹️ BOT STOPPED")), "A completed Harvester shutdown must use the selected stop icon")
   assert.deepEqual(loggerErrors, [], "Successful optional Telegram delivery must not create application error diagnostics")
 })
 
@@ -225,12 +239,12 @@ test("applies custom Telegram event overrides and market filters while preservin
       eventPublisher.publish({
         name: "execution.fill_applied",
         source: "harvester",
-        data: { symbol: "LINKUSDT", price: "14.25", quantity: "2", tradeId: "link-fill" },
+        data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", tradeId: "link-fill" },
       })
       eventPublisher.publish({
         name: "execution.fill_applied",
         source: "harvester",
-        data: { symbol: "ETHUSDT", price: "2500", quantity: "0.1", tradeId: "eth-fill" },
+        data: { symbol: "ETHUSDT", side: "SELL", price: "2500", quantity: "0.1", tradeId: "eth-fill" },
       })
       eventPublisher.publish({
         name: "recovery.cycle_completed",
@@ -271,15 +285,15 @@ test("applies custom Telegram event overrides and market filters while preservin
     "Custom policy must deliver the selected LINK fill and both non-disableable safety alerts, while excluding the filtered ETH fill and disabled recovery summary.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("EXECUTION RECEIVED") && message.includes("LINKUSDT") && message.includes("link-fill")),
+    sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("LINK/USDT") && message.includes("link-fill")),
     "The enabled fillReceived override must deliver fills for the selected LINKUSDT market.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("TRADING PAIR PAUSED") && message.includes("ETHUSDT")),
+    sentMessages.some((message) => message.includes("PAUSED") && message.includes("ETH/USDT")),
     "A critical pair-pause alert must bypass both an explicit false override and the LINKUSDT-only market filter.",
   )
   assert.ok(
-    sentMessages.some((message) => message.includes("ACCOUNT SAFETY ALERT") && message.includes("ETHUSDT")),
+    sentMessages.some((message) => message.includes("🚨 ACCOUNT SAFETY") && message.includes("ETH/USDT")),
     "An execution-accounting safety alert must bypass custom event exclusions and market filters.",
   )
   assert.ok(
@@ -326,17 +340,17 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
   const scenarios = [
     {
       profile: "minimal",
-      expected: ["TRADING PAIR PAUSED"],
-      excluded: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "EXECUTION RECEIVED", "BOT RECOVERY COMPLETED", "BOT STOPPED", "BROKER CONNECTED"],
+      expected: ["PAUSED"],
+      excluded: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "FILL RECEIVED", "BOT RECOVERY COMPLETED", "BOT STOPPED", "BROKER CONNECTED"],
     },
     {
       profile: "trader",
-      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "EXECUTION RECEIVED", "BOT RECOVERY COMPLETED", "TRADING PAIR PAUSED", "BOT STOPPED"],
+      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "FILL RECEIVED", "BOT RECOVERY COMPLETED", "PAUSED", "BOT STOPPED"],
       excluded: ["BROKER CONNECTED"],
     },
     {
       profile: "verbose",
-      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "EXECUTION RECEIVED", "BOT RECOVERY COMPLETED", "TRADING PAIR PAUSED", "BOT STOPPED", "BROKER CONNECTED"],
+      expected: ["BOT STARTED", "ORDER SUBMITTED", "ORDER CANCELLED", "FILL RECEIVED", "BOT RECOVERY COMPLETED", "PAUSED", "BOT STOPPED", "BROKER CONNECTED"],
       excluded: [],
     },
   ]
@@ -364,7 +378,7 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
         eventPublisher.publish({
           name: "execution.fill_applied",
           source: "harvester",
-          data: { symbol: "LINKUSDT", price: "14.25", quantity: "2", tradeId: "profile-fill" },
+          data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", tradeId: "profile-fill" },
         })
         eventPublisher.publish({
           name: "recovery.cycle_completed",
@@ -465,9 +479,9 @@ test("delivers startup, broker, order, and execution safety failures in custom m
   )
   for (const [fragment, description] of [
     ["BOT STARTUP FAILED", "startup failure"],
-    ["BROKER DISCONNECTED", "broker connection failure"],
+    ["DISCONNECTED", "broker connection failure"],
     ["broker-subscription-failed", "broker subscription failure"],
-    ["ORDER FAILED", "order submission/cancellation failure"],
+    ["FAILED", "order submission/cancellation failure"],
     ["unowned-order", "unowned external order"],
     ["invalid-fill", "invalid execution fill"],
   ]) {

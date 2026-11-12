@@ -1,5 +1,5 @@
 import { TELEGRAM_NOTIFICATION_EVENT_KEYS } from "../../domain/app-config.js"
-import { TELEGRAM_NOTIFICATION_EVENTS } from "@coinzilla/notifiers"
+import { HARVESTER_TELEGRAM_NOTIFICATION_EVENTS } from "./format-telegram-notification.js"
 
 const EVENT_NAME_BY_KEY = Object.freeze({
   orderSubmitted: "order.submitted",
@@ -38,7 +38,7 @@ const PROFILE_EVENT_NAMES = Object.freeze({
     "bot.recovery_completed",
     ...SAFETY_EVENT_NAMES,
   ]),
-  verbose: TELEGRAM_NOTIFICATION_EVENTS,
+  verbose: HARVESTER_TELEGRAM_NOTIFICATION_EVENTS,
   custom: Object.freeze([]),
 })
 
@@ -61,7 +61,7 @@ export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) 
 
   const markets = Object.freeze([...(telegramConfig.markets ?? [])])
   const eventNames = Object.freeze(
-    TELEGRAM_NOTIFICATION_EVENTS.filter((eventName) =>
+    HARVESTER_TELEGRAM_NOTIFICATION_EVENTS.filter((eventName) =>
       selectedEvents.has(eventName) || eventName === "bot.stopped"
     ),
   )

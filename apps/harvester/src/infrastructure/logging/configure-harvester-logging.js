@@ -13,6 +13,8 @@ const TRACE_TRANSPORT_NAME = "harvester-trace-file"
 const CONSOLE_DETAIL_KEYS = Object.freeze([
   "errorCode",
   "symbol",
+  "inventory",
+  "accounting",
   "sourceFilterTypes",
   "errorName",
   "errorMessage",
@@ -34,6 +36,7 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "reason",
 ])
 const MAX_CONSOLE_LINE_LENGTH = 200
+const MAX_PORTFOLIO_STATS_LINE_LENGTH = 360
 const LEVEL_COLORS = Object.freeze({
   trace: "\u001b[95m",
   debug: "\u001b[35m",
@@ -286,15 +289,18 @@ export function createHarvesterConsoleTransport({
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
         ? " " + JSON.stringify(summary.details)
         : ""
-      const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length - 1)
+      const maxLineLength = summary.message === "Portfolio Stats"
+        ? MAX_PORTFOLIO_STATS_LINE_LENGTH
+        : MAX_CONSOLE_LINE_LENGTH
+      const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
       const suffix = serializedDetails.length > availableDetailsLength
         ? (availableDetailsLength > 3
           ? serializedDetails.slice(0, availableDetailsLength - 3) + "..."
           : "")
         : serializedDetails
       const plainLine = plainPrefix + suffix
-      const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
-        ? plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
+      const boundedLine = plainLine.length > maxLineLength
+        ? plainLine.slice(0, maxLineLength - 3) + "..."
         : plainLine
       output.write(formatConsoleLine({
         line: boundedLine,

@@ -63,7 +63,7 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 - Use `loadAppConfig` and `validateAppConfig` for the application configuration boundary. Update their tests and all docs/examples when the contract changes.
 - Telegram bot tokens and chat IDs are environment-only secrets. `notifications.telegram` contains only the enabled switch, profile, market filter, and event overrides.
 - Notification profiles are `minimal`, `trader`, `verbose`, and `custom`. Critical safety alerts are non-disableable and bypass event overrides and market filters.
-- Notification formatting, bounded queueing, transport, and delivery remain owned by `@coinzilla/notifiers`; Harvester owns profile resolution and mapping of Harvester events.
+- Harvester owns trading-specific Telegram event mapping, message formatting, and notification policy. `@coinzilla/notifiers` owns generic bounded delivery, Telegram transport, and delivery diagnostics; it must not contain Harvester event semantics or message templates.
 
 ## Actionable errors and diagnostics
 

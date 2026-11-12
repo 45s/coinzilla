@@ -5,8 +5,8 @@ import {
   multiplyDecimal,
   percentageToRate,
 } from "@coinzilla/utils"
-import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
-import { startHarvester } from "./start-harvester.js"
+import { createBinanceBrokerAdapter } from "../../src/infrastructure/brokers/binance-broker-adapter.js"
+import { startHarvester } from "../../src/bootstrap/start-harvester.js"
 
 function createOpenOrderSnapshot({ order }) {
   const openOrder = new Order({
@@ -298,6 +298,52 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
         return onEvent(message)
       }
       return { data: { disconnect: async () => {} } }
+    }
+    // The replay harness must remain fully offline. Provide deterministic
+    // completed candle history and a no-op live Kline subscription instead of
+    // allowing the newly composed candle service to reach Binance.
+    broker.getCandles = async ({ symbol: requestedSymbol, interval, limit = 101 } = {}) => {
+      if (requestedSymbol !== marketSymbol || interval !== "1m") {
+        throw new Error("Unexpected simulated candle request: " + requestedSymbol + " " + interval)
+      }
+      return {
+        ok: true,
+        data: Array.from({ length: Math.min(limit, 101) }, (_, index) => ({
+          symbol: requestedSymbol,
+          interval,
+          openTime: index * 60_000,
+          closeTime: index * 60_000 + 59_999,
+          open: "1",
+          high: "1.1",
+          low: "0.9",
+          close: "1",
+          volume: "1",
+          isClosed: index < Math.min(limit, 101) - 1,
+        })),
+      }
+    }
+    broker.subscribeForCandles = async ({ symbol: requestedSymbol, interval, onCandle } = {}) => {
+      for (const index of [100, 101, 102]) {
+        await onCandle({
+          symbol: requestedSymbol,
+          interval,
+          openTime: index * 60_000,
+          closeTime: index * 60_000 + 59_999,
+          open: "1",
+          high: "1.1",
+          low: "0.9",
+          close: "1",
+          volume: "1",
+          isClosed: true,
+        })
+      }
+      return {
+        ok: true,
+        data: {
+          stream: requestedSymbol.toLowerCase() + "@kline_" + interval,
+          unsubscribe: async () => {},
+        },
+      }
     }
     broker.subscribeForPrices = async ({
       subscribedSymbol,

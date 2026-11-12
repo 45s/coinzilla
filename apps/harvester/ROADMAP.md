@@ -2,9 +2,27 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Operator control — initial Telegram pause
+
+**Status: IMPLEMENTED IN [PR #1045](https://github.com/45s/coinzilla/pull/1045); inbound runtime remains disabled.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+
+- Initial Telegram command: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
+- Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
+- The engine commits the operator fact to the ADR-0001 durable-facts stream before applying in-memory state. Journal is not the control-state store.
+- Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
+- [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
+- [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
+- [ ] Project operator pause/resume facts and restore them before the first strategy evaluation.
+- [ ] Complete recovery Steps 7–9, disabled-by-default configuration validation and fail-closed runtime lifecycle integration before enabling inbound control.
+- [ ] Exact-head workspace CI and final review. No Binance/TESTNET/LIVE operations are part of this work.
+
+**Hard dependency:** the Telegram adapter must not start until ADR-0001 recovery reconciliation and the closed startup-readiness gate are complete.
+
+---
+
 ## High-volatility protection — issue #1016
 
-**Status: ACCEPTED DESIGN — NOT IMPLEMENTED.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix and exact-head CI complete; candle-stream freshness correction merged in PR #1049; historical threshold calibration open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -20,19 +38,25 @@
 
 1. [x] Brokers: historical candle retrieval and live Kline subscription, normalized public contract and offline tests — [PR #1017](https://github.com/45s/coinzilla/pull/1017).
 2. [x] Indicators: parameterized ATR, NATR and volatility-ratio calculations in @coinzilla/indicators — [PR #1018](https://github.com/45s/coinzilla/pull/1018).
-3. [~] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — [PR #1019](https://github.com/45s/coinzilla/pull/1019). This adds no runtime subscriptions or trading behavior.
-4. [ ] Harvester: startup warm-up, live candle maintenance, freshness/gap detection and reconnect backfill.
-5. [ ] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and event diagnostics.
-6. [ ] Regression matrix, docs/roadmap synchronization and exact-head CI.
+3. [x] Harvester: expose historical/live candle methods through the application BrokerPort and Binance adapter — merged [PR #1019](https://github.com/45s/coinzilla/pull/1019).
+4. [x] Harvester: startup warm-up, live candle maintenance, freshness/gap detection, bounded reconnect backfill and ATR/NATR measurement snapshots — merged [PR #1037](https://github.com/45s/coinzilla/pull/1037). This delivers data collection only.
+5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
+6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
+7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
+8. [~] Synchronize living documentation and roadmaps — this closeout PR.
+9. [~] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — implementation in [PR #1046](https://github.com/45s/coinzilla/pull/1046); exact-head CI and merge remain pending.
+10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
+
+---
 
 ## Submission deferral diagnostics — issue #1025
 
-**Status: IMPLEMENTED ON PR #1026 — NOT YET MERGED.** The Conservative submission gate now preserves structured reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).
+**Status: IMPLEMENTED ON PR #1026 — NOT YET MERGED.** The Conservative submission gate now preserves stable reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).
 
 - Preserve `ok` as execution-use-case success, not proof of broker submission; callers and logs distinguish `deferred`, `deferralReason`, and acknowledged `submittedOrders`.
-- Recheck readiness after durable PENDING registration; if readiness changes, remove the local PENDING record and do not call the broker.
-- Keep `LIMIT_MAKER` fail-closed for missing/stale book data and crossing prices. No bypass or fallback taker submission.
-- Regression tests cover the structured gate reasons, the post-registration race, no-broker-call guarantees, and post-only crossing.
+- Recheck all submission gates after durable PENDING registration; if readiness changes, remove the local PENDING record and do not call the broker.
+- Keep `LIMIT_MAKER` fail-closed for missing/stale book data and crossing prices. Volatility data/protection reasons are explicit; the recovery-SELL exception remains purpose-specific.
+- Regression tests cover structured reason propagation, post-registration PENDING cleanup, no-broker-call guarantees, and post-only crossing/freshness checks.
 - Merge status and exact-head CI evidence remain tracked in [PR #1026](https://github.com/45s/coinzilla/pull/1026) and [issue #1025](https://github.com/45s/coinzilla/issues/1025).
 
 ---
@@ -138,7 +162,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–2 complete; restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -149,7 +173,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
-   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2 was completed as a tests-only harness in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3 is next.
+   - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2's deterministic harness is merged in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3's recursive legacy-session discovery and chronology validation are merged in [PR #1015](https://github.com/45s/coinzilla/pull/1015).
 
 2. **[x] Step 2 — Build a deterministic recovery test harness (tests only; PR #1014).**
    - Added `apps/harvester/test-support/recovery/recovery-crash-fixtures.js`, building deterministic two-session fixtures with canonical entities and the same lifecycle DTO mappers used by production publication.
@@ -158,31 +182,40 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fixtures intentionally use the legacy Journal observer envelope to exercise the retained offline projector/restore path. They are **not** ADR-0001 durable facts and do not make Journal the recovery authority. No production source or runtime behavior changed.
    - Exact PR-head verification: Harvester unit and coverage jobs each report 991 passed, 0 failed; targeted Harvester tests, JavaScript syntax, dependency audit and the remaining required checks must pass on the final PR head.
 
-3. **[ ] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040).**
-   - Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment.
-   - Use explicit durable chronology where available; never use random session IDs or second-resolution filenames as ordering authority.
-   - Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history.
-   - Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
+3. **[x] Step 3 — Assess legacy Journal sessions and ordering deterministically (F-035, F-040; PR #1015 merged).**
+   - [x] Recursively discover nested process-session directories and preserve legacy flat-file compatibility for forensic review and any explicitly approved one-time baseline assessment ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
+   - [x] Use explicit durable chronology where available; never use random session IDs or second-resolution filenames as ordering authority ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
+   - [x] Reject missing, unreadable, duplicated, or ambiguously ordered sessions; never interpret an incomplete scan as an empty history ([PR #1015](https://github.com/45s/coinzilla/pull/1015)).
+   - [x] Do not promote legacy Journal records to authoritative restart state merely because discovery and parsing succeed; apply the baseline/reconciliation rules in ADR-0001.
 
-4. **[ ] Step 4 — Make replay understand every relevant fact (F-043, F-044).**
-   - Classify known events as state facts, sticky safety blockers, or explicitly ignorable diagnostics; unknown stateful/safety events fail closed.
-   - Accept and correctly order valid `RECOVERY` account/open-order snapshots emitted by normal reconnect handling.
-   - Add DTO → projection → restore parity tests for every recovery-relevant event.
+4. **[x] Step 4 — Make replay understand every relevant fact (F-043, F-044; [PR #1023](https://github.com/45s/coinzilla/pull/1023)).**
+   - [x] Classify all 30 declared Harvester event names as replay facts or explicitly ignorable diagnostics; preserve unowned-order, invalid-fill, and accounting-failure facts as sticky blockers. Unknown or source-unclassified events fail closed; blockers are restored as durable/effective market pauses.
+   - [x] Accept `RECOVERY` account/open-order snapshots only after `harvester.started`, preserving PREFLIGHT → RECOVERY → CLOSING order and existing timestamp monotonicity.
+   - [x] Add DTO → projection → restore parity tests for all three execution safety events, plus fail-closed, diagnostic allowlist, pre-start snapshot and reconnect phase regressions.
+   - Exact PR head `f06304f9`: **1,019 Harvester tests passed, 0 failed**; all seven required workflows passed, including package/workspace coverage and external documentation links. TESTNET integration was skipped.
 
-5. **[ ] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041).**
-   - Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation.
-   - Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconcile the related asset balance.
-   - Represent cycle completion explicitly. A full SELL without a proven completed/not-completed cycle outcome is unresolved and must not silently restore stale basis or re-sell retained inventory.
+5. **[x] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041; [PR #1024](https://github.com/45s/coinzilla/pull/1024)).**
+   - [x] Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation; completed cycles reset basis while explicit residual sell-through preserves active inventory and cost basis.
+   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance remains a Step 7 gate.
+   - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
+   - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
-6. **[ ] Step 6 — Add verifiable durable-fact integrity (F-037, F-042).**
+6. **[x] Step 6 — Add verifiable durable-fact integrity (F-037, F-042; [PR #1027](https://github.com/45s/coinzilla/pull/1027) merged).**
    - Implement the smallest durable store/port needed by the agreed contract, with explicit durability acknowledgement before dependent state transitions proceed.
-   - Detect missing/reordered/duplicated records using a monotonic sequence and a simple integrity mechanism (for example, a previous-record digest or committed manifest).
+   - Detect missing/reordered/duplicated records using a monotonic decimal-string sequence, canonical JSON, SHA-256 previous-record digest, and an append-only committed-head manifest journal.
+   - Require explicit one-time genesis initialization; normal startup/verify/append never creates a missing ledger. Exact duplicate fact identity/payload is idempotent; uncertain commits fail closed.
+   - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[ ] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps).**
-   - Reconcile owned order identity/status, complete execution history, all relevant asset balances (including fee assets), locked funds, and current open orders.
-   - Keep external orders unowned and untouched; detect and block only actual unsafe conflicts or unowned executions according to the agreed policy.
-   - Treat incomplete exchange history, missing assets, mismatched quantities, unknown outcomes, and unexplained commitments as unresolved—not as zero.
+7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
+   - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
+   - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
+   - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
+   - [x] Persist and project the `MARKET_HISTORY_COVERAGE_CONFIRMED` fact through ADR-0001; enforce a monotonic per-symbol coverage interval and bind it to the reviewed evidence digest/verifier.
+   - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
+   - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
+   - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
+   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the draft PR remains unmerged and awaits review, so Step 7 remains in progress on `develop`.
 
 8. **[ ] Step 8 — Restore behind a closed readiness gate.**
    - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
@@ -506,7 +539,7 @@ This section is the current operational status and supersedes older statements b
 
 ### Optional operational notifications
 
-- [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected lifecycle, pause, applied-fill, recovery-completion, and accounting-failure events; the notifier package owns formatting, bounded serialized delivery, and transport.
+- [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected application events and owns Telegram message formatting; the notifier package provides generic bounded serialized delivery and Telegram transport.
 - Telegram transport is constructed only when `notifications.telegram.enabled` is not false and both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
 - [~] Add Harvester-owned `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filtering, and non-disableable safety alerts through the single `config.json`; depend on the Notifiers event-selection contract tracked by [#996](https://github.com/45s/coinzilla/issues/996).
 - Delivery is best-effort, in-memory, and not a durable outbox. No trading behavior, exchange integration, or financial accounting rules are changed.
@@ -1540,13 +1573,11 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Remove the unused `blockOnExistingOrders` recovery argument and cover snapshot lifecycle, symbol isolation, and the final submission race with offline regressions.
 - [ ] Merge after final-head CI passes.
 
-## 2026-11-11 — Exchange constraint safety / issue #957
+## 2026-11-11 — Exchange constraint safety / issue #957 (historical decision)
 
-Implementation is in progress on a task branch targeting `develop`. The Binance adapter now has a path to preserve applicable dynamic, account-level, exchange-wide and unknown filters as exchange-neutral unvalidated constraints; the enabled-market readiness gate is intended to fail closed on those constraints. Authenticated `myFilters` retrieval is required so account-level `MAX_ASSET` data is not silently omitted.
+The initial #957 proposal treated every applicable but locally unvalidated dynamic/account/exchange filter as a readiness blocker. That policy was superseded by merged PR #1020. Keep this historical entry for decision provenance; do not use its fail-closed readiness proposal as the current contract. The current policy preserves those filters as diagnostics without blocking readiness solely because they are present. Supported static rules and complete, well-formed authoritative metadata still fail closed. Binance remains authoritative for constraints Harvester does not evaluate locally.
 
-The detailed contract, currently supported static rules, deliberately excluded order-type-specific filters, known limitations and readiness flow are documented in [Exchange trading constraints](docs/exchange-trading-constraints.md).
-
-Do not mark #957 complete until the exact PR head has green broker and Harvester tests, full required CI, and review confirms all active Binance filter sources are covered. Dynamic price-band and account-state constraints remain blockers rather than implemented evaluators in this slice; this is intentional fail-closed behavior, not a claim that those constraints are supported.
+The current rationale, filter mapping, deliberately excluded order-type-specific filters, limitations and readiness flow are documented in [Exchange trading constraints](docs/exchange-trading-constraints.md).
 
 ## 2026-11-11 — Unsupported exchange filters no longer block startup
 

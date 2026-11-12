@@ -21,6 +21,7 @@
       "pairs": {
         "LINKUSDT": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
@@ -33,6 +34,7 @@
         },
         "LINKFDUSD": {
           "enabled": true,
+          "enableVolatilityProtection": true,
           "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
@@ -45,6 +47,7 @@
         },
         "DOGEUSDT": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 100,
           "orderQuantity": 400,
           "keepQuantity": 1,
@@ -57,6 +60,7 @@
         },
         "SOLFDUSD": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 100,
           "orderQuantity": 1,
           "keepQuantity": 0.01,
@@ -69,6 +73,7 @@
         },
         "ZROUSDT": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
@@ -80,16 +85,30 @@
           "takerPercent": 0.1
         },
         "ZROFDUSD": {
-          "enabled": false,
-          "investment": 100,
+          "enabled": true,
+          "enableVolatilityProtection": true,
+          "investment": 120,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
           "minProfit": 0.01,
-          "priceStepPercent": 0.5,
+          "priceStepPercent": 0.3,
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0,
           "takerPercent": 0.1
+        },
+        "ADAFDUSD": {
+          "enabled": false,
+          "enableVolatilityProtection": true,
+          "investment": 120,
+          "orderQuantity": 30,
+          "keepQuantity": 0.1,
+          "minProfit": 0.01,
+          "priceStepPercent": 0.3,
+          "pricePrecision": 4,
+          "quantityPrecision": 1,
+          "makerPercent": 0,
+          "takerPercent": 0.075
         }
       }
     }

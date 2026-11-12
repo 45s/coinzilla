@@ -17,6 +17,7 @@ const createAppConfig = () => ({
       pairs: {
         LINKFDUSD: {
           enabled: true,
+          enableVolatilityProtection: true,
           investment: 200,
           orderQuantity: 2,
           keepQuantity: 0.01,
@@ -34,6 +35,7 @@ const createAppConfig = () => ({
 
 const generatedPair = {
   enabled: false,
+  enableVolatilityProtection: true,
   investment: 100,
   orderQuantity: 200,
   keepQuantity: 0.1,

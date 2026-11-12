@@ -44,11 +44,19 @@ Before changing an execution path, compare it with the approved Conservative Dom
 
 These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy policy is implemented as a plain pure function when its decision is deterministic. Calling it a domain policy describes its business responsibility; it does not imply a class or stateful strategy object.
 
+## Volatility market-data intake (current implementation)
+
+The runtime composes `createCandleHistoryService` after the existing price intake. It subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles, retains up to 100 completed candles, buffers live events during warm-up, and backfills detected gaps through the application broker port. It computes ATR(14), NATR and the current/reference ratio using the previous 60 NATR observations. The per-market snapshot is available through runtime `getVolatilityData({ symbol })`.
+
+The candle-history service allows one 1-minute interval plus a 5-second grace before marking its Kline feed stale. This timeout is separate from the trading engine's 5-second market-price and order-book freshness gates. The runtime sends snapshots to the per-market volatility protection state machine; PROTECTED and RECOVERING block ordinary strategy actions, the central submission gate permits only explicitly marked recovery SELLs, and only Harvester-owned active BUYs are eligible for protection cancellation. Existing recovery SELLs and their accounting remain active. Initial ratio thresholds are provisional pending offline historical validation.
+
 ## Operational notifications
 
 Telegram is an optional outbound observer composed at the process boundary. The single `apps/harvester/config.json` owns the `notifications.telegram` profile, per-event overrides, market filter, and enabled switch. Harvester resolves that policy and maps application events to the stable notification vocabulary; `@coinzilla/notifiers` owns bounded formatting, event subscription selection, serialized queueing, delivery, and transport validation. The domain and trading engine must not depend on Telegram or its credentials.
 
 Profiles are `minimal`, `trader`, `verbose`, and `custom`. Per-event overrides merge with the chosen profile; `markets: []` means all markets. Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, and account-safety alerts cannot be disabled and bypass market filters. Telegram bot token and chat ID remain environment-only secrets.
+
+Harvester's directional notification icons are: BUY order submitted 🟢, SELL order submitted 🔴, BUY fill received ✅, and SELL fill received 💰. Bot start/stop use ▶️/⏹️. A blocked account-wide open-orders audit uses 🚨; other account-safety alerts retain ⚠️. Fill direction is taken from the canonical applied-fill event and carried through the Telegram bridge; notification formatting does not affect trading or accounting.
 
 Notification setup and delivery are best-effort. An explicit `enabled: false` or missing credentials disables notifications; malformed application configuration fails normal configuration validation rather than silently falling back. Transport/setup failures remain isolated from the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority.
 
@@ -302,8 +310,9 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Responsibility | Harvester location / owner |
 | --- | --- |
 | Trading invariants, value construction, calculations, deterministic policy | `src/domain/` |
-
-Market-data timestamp freshness is a deterministic domain policy in `src/domain/market/is-market-data-fresh.js`; the caller supplies the current time and policy bounds.
+| Market-data timestamp freshness | `src/domain/market/is-market-data-fresh.js`; caller supplies current time and policy bounds |
+| Candle shape validation, UTC interval alignment, contiguous-series validation and ATR/NATR metric composition | `src/domain/market/volatility-candle.js`; indicator formulas are delegated to `@coinzilla/indicators` |
+| Historical/live Kline warm-up, buffering, freshness snapshots and bounded gap backfill | `src/use-cases/create-candle-history-service.js`; uses the application-owned BrokerPort and owns no exchange protocol details |
 | One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
@@ -673,3 +682,7 @@ single-flight reconciliation and durable audit barriers before readiness can
 ## External open-order strategy isolation
 
 Unmatched account-wide open orders remain external/unowned. Their symbols enter the Conservative strategy exclusion set only after the corresponding open-orders audit passes its durable Journal flush. The engine defers evaluation for an affected symbol and checks again at the final broker-submission boundary. Unrelated enabled markets remain eligible. Each authoritative startup or same-process recovery snapshot replaces the set; a symbol is released only after a durable snapshot confirms the external order is gone. External orders are never adopted, canceled, modified, or registered as owned. This is not a global startup gate and does not enable process-restart recovery.
+
+## Operator control
+
+Harvester operator control is an application capability, not a domain entity, strategy policy, broker adapter or generic command bus. The Conservative engine owns the serialized market-scoped operator-pause state; application use cases authorize a trusted `trading-operator` actor and append `OPERATOR_MARKET_PAUSED` / `OPERATOR_MARKET_RESUMED` through the ADR-0001 durable-facts port before applying in-memory state. The first inbound transport is a private-chat Telegram Long Polling adapter with an explicit user-ID allowlist and only `/pause <SYMBOL>` exposed. It never cancels existing exchange orders; resting BUYs may still fill, and recovery SELLs/accounting continue. See [ADR-0002](./architecture/decisions/0002-transport-independent-operator-control.md) and the [operator-control contract](./operator-control/README.md). The adapter is implemented but not started by the runtime: operator facts must first be projected and restored behind the closed ADR-0001 readiness gate, with recovery Steps 7–9 complete.

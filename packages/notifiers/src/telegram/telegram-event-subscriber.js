@@ -1,18 +1,11 @@
-import {
-  formatTelegramNotification,
-  TELEGRAM_NOTIFICATION_EVENT_NAMES,
-} from "./format-telegram-notification.js"
-
 const DEFAULT_MAX_PENDING = 1000
-
-export const TELEGRAM_NOTIFICATION_EVENTS = TELEGRAM_NOTIFICATION_EVENT_NAMES
 
 function validateEventNames(eventNames) {
   if (!Array.isArray(eventNames)) {
-    throw new TypeError("eventNames must be an array of supported Telegram event names")
+    throw new TypeError("eventNames must be an array of application event names")
   }
   if (eventNames.length === 0) {
-    throw new RangeError("eventNames must contain at least one supported Telegram event")
+    throw new RangeError("eventNames must contain at least one application event")
   }
 
   const seen = new Set()
@@ -20,11 +13,8 @@ function validateEventNames(eventNames) {
     if (typeof eventName !== "string" || !eventName.trim()) {
       throw new TypeError("Every event name must be a non-empty string")
     }
-    if (!TELEGRAM_NOTIFICATION_EVENTS.includes(eventName)) {
-      throw new TypeError(`Unsupported Telegram notification event: ${eventName}`)
-    }
     if (seen.has(eventName)) {
-      throw new TypeError(`Duplicate Telegram notification event: ${eventName}`)
+      throw new TypeError(`Duplicate notification event: ${eventName}`)
     }
     seen.add(eventName)
   }
@@ -32,9 +22,12 @@ function validateEventNames(eventNames) {
   return Object.freeze([...eventNames])
 }
 
-function validateDependencies({ eventBus, notifier, logger, maxPending, eventNames }) {
+function validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames }) {
   if (!eventBus || typeof eventBus.subscribe !== "function") {
     throw new TypeError("eventBus must expose subscribe()")
+  }
+  if (typeof formatMessage !== "function") {
+    throw new TypeError("formatMessage must be a function supplied by the consuming application")
   }
   if (!notifier || typeof notifier.sendMessage !== "function") {
     throw new TypeError("notifier must expose sendMessage()")
@@ -98,7 +91,7 @@ function unsubscribeAll(subscriptions) {
 }
 
 /**
- * Attach a Telegram notifier to a fixed allowlist of low-volume operational events.
+ * Deliver application-formatted messages for application-selected events through Telegram.
  * Sends are serialized and admission-controlled; flush the event bus before close().
  */
 export function subscribeTelegramNotifications({
@@ -106,9 +99,10 @@ export function subscribeTelegramNotifications({
   notifier,
   logger,
   maxPending = DEFAULT_MAX_PENDING,
-  eventNames = TELEGRAM_NOTIFICATION_EVENTS,
+  eventNames,
+  formatMessage,
 } = {}) {
-  const selectedEventNames = validateDependencies({ eventBus, notifier, logger, maxPending, eventNames })
+  const selectedEventNames = validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames })
 
   let deliveryTail = Promise.resolve()
   let pendingCount = 0
@@ -144,7 +138,7 @@ export function subscribeTelegramNotifications({
           acceptedCount += 1
 
           const delivery = deliveryTail.then(async () => {
-            const message = formatTelegramNotification(event)
+            const message = formatMessage(event)
             if (message) {
               await notifier.sendMessage(message)
               deliveredCount += 1

@@ -63,7 +63,7 @@ const appConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -133,6 +133,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
       if (cancelNotSentOnSuccess) return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       canceledOrders.set(order.brokerOrderId, order)
+      const executedQuantity = typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order })
+        : cancelExecutedQuantity
       return {
       ok: true,
       data: new CanonicalOrder({
@@ -144,10 +147,10 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         limitPrice: order.limitPrice,
         originalQuantity: order.originalQuantity,
         executedQuantity: new Quantity({
-          amount: cancelExecutedQuantity,
+          amount: executedQuantity,
           asset: baseAsset,
         }),
-        status: "CANCELED",
+        status: cancelOrderStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
         updatedAt: 2,
@@ -162,6 +165,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
+      const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
+        ? cancelExecutedQuantity({ order: canceledOrder })
+        : cancelExecutedQuantity)
       const cancelFill = cancelWithFill && canceledOrder
         ? [new Fill({
             tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase() + "-" + orderId,
@@ -170,9 +176,9 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
             market,
             side: canceledOrder.side,
             price: canceledOrder.limitPrice,
-            quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+            quantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
             quoteQuantity: new Money({
-              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: "0.1" }),
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: executedQuantity }),
               asset: quoteAsset,
             }),
             commissions: [],
@@ -236,6 +242,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     hasUnownedOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
+    getVolatilityData: getVolatilityDataOverride,
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
@@ -2418,6 +2425,10 @@ test("does not publish recovery completion when the cycle is ineligible", async 
   })
   assert.equal(result.ok, false)
   assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "BLOCKED")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
 })
 
 
@@ -4048,8 +4059,13 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
+  const continuedEvent = events.find((event) => event.name === "recovery.cycle_not_completed")
+  assert.ok(continuedEvent)
+  assert.equal(continuedEvent.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(continuedEvent.data.sellOrderClientId, recoverySell.clientOrderId)
   const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
   assert.ok(completedEvent)
+  assert.ok(events.indexOf(continuedEvent) < events.indexOf(completedEvent))
   assert.deepEqual(completedEvent.data.dust, {
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: dust.quantity,
@@ -6486,3 +6502,385 @@ test("definite Binance filter rejection removes PENDING without marking the orde
   assert.equal(engine.getOrders().length, 0, "The definitely rejected PENDING order must be removed instead of becoming a phantom active order.")
   assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED", "The Journal must record a definite rejection, not UNKNOWN.")
 });
+
+test("publishes a CONTINUE_SELL_THROUGH outcome for a fully filled SELL below the profit target", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "continue-sell-through" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
+})
+
+test("publishes an explicit cycle outcome when the recovery SELL fills during cancellation", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine, pauses } = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelWithFill: true,
+    cancelExecutedQuantity: ({ order }) => order.originalQuantity.amount,
+    cancelOrderStatus: "FILLED",
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "cancel-race-buy", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(pauses, [])
+  const outcome = events.find(({ name }) => name === "recovery.cycle_not_completed")
+  assert.ok(outcome)
+  assert.equal(outcome.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(outcome.data.sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(outcome.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
+})
+
+
+test("volatility data unavailable blocks new strategy orders without using the global strategy pause", async () => {
+  const unavailable = {
+    ok: true,
+    data: { status: { isReady: false, reason: "INSUFFICIENT_HISTORY" }, metrics: null },
+  }
+  const harness = await createHarness({ getVolatilityData: () => unavailable })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [], "Missing volatility history must fail closed before broker submission.")
+  assert.deepEqual(harness.pauses, [], "Volatility protection must remain separate from the full accounting safety pause.")
+})
+
+test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs", async () => {
+  const buyOrder = makeShutdownOrder({ side: "BUY", clientOrderId: "volatility-disabled-owned-buy", brokerOrderId: "broker-volatility-disabled-owned-buy" })
+  const highVolatility = { ok: true, data: { status: { isReady: true, isFresh: true, reason: null, lastClosedCandleOpenTime: 60_000 }, metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" } } }
+  const config = structuredClone(appConfig)
+  config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
+  const harness = await createHarness({ appConfig: config, initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) }, eventPublisher: { publish: () => ({ ok: true }) }, getVolatilityData: () => highVolatility })
+  const result = await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: highVolatility })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.skipped, true, "A disabled pair must not enter the volatility state machine.")
+  assert.equal(result.data.reason, "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR")
+  assert.equal(harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }), undefined, "A disabled pair must not allocate a startup-PROTECTED state.")
+  assert.deepEqual(harness.cancellationIds, [], "Volatility opt-out must not initiate volatility-specific BUY cancellation.")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-disabled-owned-buy").status, "OPEN")
+  assert.deepEqual(harness.pauses, [], "The opt-out must not touch independent account-integrity pause behavior.")
+})
+
+test("per-pair opt-out bypasses the volatility submission gate while retaining normal strategy execution", async () => {
+  const unavailable = { ok: true, data: { status: { isReady: false, reason: "INSUFFICIENT_HISTORY" }, metrics: null } }
+  const config = structuredClone(appConfig)
+  config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
+  const harness = await createHarness({ appConfig: config, getVolatilityData: () => unavailable })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+  assert.equal(result.ok, true)
+  assert.ok(harness.orders.length > 0, "The disabled pair must not be held behind volatility-history readiness; ordinary strategy gates still decide whether an order can be sent.")
+  assert.equal(harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }), undefined)
+})
+
+test("high volatility cancels only acknowledged owned BUYs and keeps the market protected", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "volatility-owned-buy",
+    brokerOrderId: "broker-volatility-owned-buy",
+  })
+  const highVolatility = {
+    ok: true,
+    data: {
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    getVolatilityData: () => highVolatility,
+  })
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot: highVolatility,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.cancellationIds, ["broker-volatility-owned-buy"])
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-owned-buy").status, "CANCELED")
+  assert.equal(harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }).mode, "PROTECTED")
+  assert.deepEqual(harness.pauses, [], "A confirmed volatility cancellation must not activate the global strategy pause.")
+})
+
+
+test("high-volatility BUY cancellation preserves an existing recovery SELL order", async () => {
+  const ownedBuyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "volatility-preserved-sell-owned-buy",
+    brokerOrderId: "broker-volatility-preserved-sell-owned-buy",
+  })
+  const recoverySellOrder = makeShutdownOrder({
+    side: "SELL",
+    clientOrderId: "volatility-preserved-recovery-sell",
+    brokerOrderId: "broker-volatility-preserved-recovery-sell",
+  })
+  const highVolatility = {
+    ok: true,
+    data: {
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [ownedBuyOrder, recoverySellOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    getVolatilityData: () => highVolatility,
+  })
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot: highVolatility,
+  })
+
+  assert.equal(result.ok, true, "A high-volatility snapshot must complete its owned-BUY cancellation workflow.")
+  assert.deepEqual(
+    harness.cancellationIds,
+    [ownedBuyOrder.brokerOrderId],
+    "Volatility protection must send cancellation only for the acknowledged owned BUY, never the resting recovery SELL.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === ownedBuyOrder.clientOrderId).status,
+    "CANCELED",
+    "The owned BUY must reach its broker-confirmed terminal state after volatility protection activates.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === recoverySellOrder.clientOrderId).status,
+    "OPEN",
+    "The existing recovery SELL must remain resting and unchanged when volatility protection activates.",
+  )
+  assert.equal(
+    harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }).mode,
+    "PROTECTED",
+    "The market must remain protected after its owned BUY is canceled.",
+  )
+})
+
+
+test("an unconfirmed volatility BUY cancellation stays protected without blocking recovery management globally", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "volatility-unknown-buy",
+    brokerOrderId: "broker-volatility-unknown-buy",
+  })
+  const highVolatility = {
+    ok: true,
+    data: {
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    cancelFailure: true,
+    getVolatilityData: () => highVolatility,
+  })
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot: highVolatility,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-unknown-buy").status, "UNKNOWN")
+  assert.equal(harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }).mode, "PROTECTED")
+  assert.deepEqual(harness.pauses, [], "An uncertain volatility cancellation must retain the dedicated protection state, not silently become a full strategy pause.")
+})
+
+test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
+  const position = new Position({
+    market,
+    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
+    spent: new Money({ amount: "10", asset: quoteAsset }),
+  })
+  const portfolio = new Portfolio({ positions: [position] })
+  const ledger = new RecoveryLedger({ market, buyCost: "10" })
+  const unavailable = {
+    ok: true,
+    data: { status: { isReady: false, reason: "STALE_STREAM" }, metrics: null },
+  }
+  const harness = await createHarness({
+    initialPortfolio: portfolio,
+    initialRecoveryLedger: ledger,
+    baseFreeBalance: "100",
+    getVolatilityData: () => unavailable,
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders.map((order) => order.side), ["SELL"])
+  assert.equal(harness.orders[0].side, "SELL", "Only the explicitly marked recovery SELL may pass the protected-market submission gate.")
+})
+
+
+test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
+  const position = new Position({
+    market,
+    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
+    spent: new Money({ amount: "10", asset: quoteAsset }),
+  })
+  const unavailable = {
+    ok: true,
+    data: { status: { isReady: false, reason: "STALE_STREAM" }, metrics: null },
+  }
+  const harness = await createHarness({
+    initialPortfolio: new Portfolio({ positions: [position] }),
+    initialRecoveryLedger: new RecoveryLedger({ market, buyCost: "10" }),
+    baseFreeBalance: "100",
+    getVolatilityData: () => unavailable,
+    strategyPolicy: {
+      name: "UNTRUSTED_SELL_TEST",
+      evaluate: () => ({
+        strategy: "UNTRUSTED_SELL_TEST",
+        action: "PLACE_ORDERS",
+        actions: [{ side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "1" }],
+        reason: "SELL_WITHOUT_RECOVERY_PURPOSE",
+      }),
+      evaluateTrailingBuyRepricing: () => ({ actions: [] }),
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [], "A SELL side alone must not bypass volatility protection.")
+})
+
+
+test("volatility cancellation is isolated to the affected trading pair", async () => {
+  const zroBaseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
+  const zroMarket = new Market({ venue: "binance", symbol: "ZROUSDT", baseAsset: zroBaseAsset, quoteAsset })
+  const dogeBuy = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "doge-volatility-buy",
+    brokerOrderId: "broker-doge-volatility-buy",
+  })
+  const zroBuy = new CanonicalOrder({
+    clientOrderId: "zro-unaffected-buy",
+    brokerOrderId: "broker-zro-unaffected-buy",
+    market: zroMarket,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: zroBaseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: zroBaseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const highVolatility = {
+    ok: true,
+    data: {
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [dogeBuy, zroBuy] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    getVolatilityData: () => highVolatility,
+  })
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot: highVolatility,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.cancellationIds, ["broker-doge-volatility-buy"])
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "doge-volatility-buy").status, "CANCELED")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "zro-unaffected-buy").status, "OPEN")
+})
+
+
+test("retries a volatility BUY cancellation only after a known NOT_SENT outcome and retry interval", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "volatility-not-sent-buy",
+    brokerOrderId: "broker-volatility-not-sent-buy",
+  })
+  const makeSnapshot = (observedAt) => ({
+    ok: true,
+    data: {
+      status: { isReady: true, isFresh: true, reason: null, observedAt, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
+    },
+  })
+  const harness = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    cancelNotSent: true,
+    getVolatilityData: () => makeSnapshot(0),
+  })
+
+  await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: makeSnapshot(0) })
+  assert.deepEqual(harness.cancellationIds, ["broker-volatility-not-sent-buy"])
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-not-sent-buy").status, "OPEN")
+
+  await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: makeSnapshot(5_000) })
+  assert.deepEqual(
+    harness.cancellationIds,
+    ["broker-volatility-not-sent-buy", "broker-volatility-not-sent-buy"],
+    "A known NOT_SENT cancellation may be retried after the bounded five-second retry interval.",
+  )
+  assert.deepEqual(harness.pauses, [])
+})

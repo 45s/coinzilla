@@ -156,17 +156,18 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
         const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
         const nextLedger = result.data.recoveryLedger
-        if (
-          result.data.applied === true &&
-          compareDecimal({
-            left: previousPosition?.totalBaseQuantity.amount ?? "0",
-            right: nextPosition?.totalBaseQuantity.amount ?? "0",
-          }) !== 0
-        ) {
-          const portfolioStats = createPortfolioStatsLogSummary({
-            position: nextPosition,
-            recoveryLedger: nextLedger,
-          })
+        const portfolioStatsChanged = [
+          [previousPosition?.baseQuantity.amount, nextPosition?.baseQuantity.amount],
+          [previousPosition?.freeBaseQuantity.amount, nextPosition?.freeBaseQuantity.amount],
+          [previousPosition?.totalBaseQuantity.amount, nextPosition?.totalBaseQuantity.amount],
+          [previousPosition?.spent.amount, nextPosition?.spent.amount],
+          [previousPosition?.quoteNetCashFlow.amount, nextPosition?.quoteNetCashFlow.amount],
+        ].some(([previous, next]) => compareDecimal({
+          left: previous ?? "0",
+          right: next ?? "0",
+        }) !== 0)
+        if (result.data.applied === true && portfolioStatsChanged) {
+          const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
           if (portfolioStats) logger.info?.(portfolioStats)
         }
         logger.debug?.({
@@ -278,7 +279,13 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           position: createPositionLogSummary({ position }),
           recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
         })
-        const completion = evaluateRecoveryCompletion(completionInput)
+        const evaluatedCompletion = evaluateRecoveryCompletion(completionInput)
+        const completion = Object.freeze({
+          ...evaluatedCompletion,
+          activeQuantity: completionInput.activeQuantity,
+          keepQuantity: completionInput.keepQuantity,
+          minProfit: completionInput.minProfit,
+        })
         if (completion.eligible) {
           const previousPortfolio = portfolio
           const previousLedger = recoveryLedger
@@ -307,6 +314,18 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
 
           portfolio = nextPortfolio
           recoveryLedgers = nextRecoveryLedgers
+
+          const portfolioStatsChanged = [
+            [position.baseQuantity.amount, nextPosition.baseQuantity.amount],
+            [position.freeBaseQuantity.amount, nextPosition.freeBaseQuantity.amount],
+            [position.totalBaseQuantity.amount, nextPosition.totalBaseQuantity.amount],
+            [position.spent.amount, nextPosition.spent.amount],
+            [position.quoteNetCashFlow.amount, nextPosition.quoteNetCashFlow.amount],
+          ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
+          if (portfolioStatsChanged) {
+            const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
+            if (portfolioStats) logger.info?.(portfolioStats)
+          }
         } else {
           logger.debug?.({
             message: "recovery cycle not completed",

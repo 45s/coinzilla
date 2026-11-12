@@ -8,10 +8,6 @@ import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config.json", import.meta.url))
 
-function askWithDefault(value, fallback) {
-  return value.trim() === "" ? fallback : value
-}
-
 /**
  * Run the interactive operator flow; all external effects are injected or isolated at this boundary.
  *
@@ -43,11 +39,10 @@ export async function runConfigSymbol({
   writeLine("Harvester — add a Binance Spot trading pair")
   writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
   const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
-  const environment = normalizeTradingEnvironment(
-    askWithDefault(await ask("Binance environment [testnet/live] (default " + defaultEnvironment + "): "), defaultEnvironment),
-  )
+  const environment = normalizeTradingEnvironment(defaultEnvironment)
   const inputs = normalizePairInputs({
-    investment: parseDecimalInput(await ask("Investment / quote budget: "), "investment", { exclusiveMin: true }),
+    investment: parseDecimalInput(await ask("Total investment / quote budget for this pair: "), "investment", { exclusiveMin: true }),
+    orderQuantity: parseDecimalInput(await ask("Quantity per individual order (base asset): "), "orderQuantity", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
     makerPercent: parseDecimalInput(await ask("Maker commission percent (for example 0): "), "makerPercent"),
     takerPercent: parseDecimalInput(await ask("Taker commission percent (for example 0.1): "), "takerPercent"),
@@ -75,31 +70,10 @@ export async function runConfigSymbol({
   if (metadata?.symbol !== symbol || metadata?.environment !== environment) {
     throw new Error("Binance metadata symbol/environment does not match the operator selection")
   }
-  const metadataFetchedAt = new Date().toISOString()
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
-  writeLine("Configuration preview (new pair will be disabled):")
-  writeLine(JSON.stringify({
-    symbol,
-    environment,
-    baseAsset: metadata.baseAsset,
-    quoteAsset: metadata.quoteAsset,
-    metadataSource: "Binance Spot " + environment + " public REST API",
-    metadataFetchedAt,
-    referencePrice: metadata.price,
-    exchangeFilters: {
-      tickSize: metadata.tickSize,
-      minPrice: metadata.minPrice,
-      maxPrice: metadata.maxPrice,
-      stepSize: metadata.stepSize,
-      minQuantity: metadata.minQuantity,
-      maxQuantity: metadata.maxQuantity,
-      minNotional: metadata.minNotional,
-      maxNotional: metadata.maxNotional,
-    },
-    pairConfig,
-  }, null, 2))
-  writeLine("Account-specific myFilters are not queried by this credential-free tool; Harvester performs its normal authenticated metadata checks at startup before trading.")
+  writeLine("Configuration preview — config.json pair entry:")
+  writeLine(JSON.stringify({ [symbol]: pairConfig }, null, 2))
 
   const confirmation = (await ask("Add this pair to apps/harvester/config.json? [Y/n]: ")).trim().toLowerCase()
   if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
@@ -109,7 +83,7 @@ export async function runConfigSymbol({
 
   const writtenPath = await writeConfig({ configPath, symbol, pairConfig })
   writeLine("Pair configuration added successfully: " + writtenPath)
-  writeLine("The new pair is disabled. Review it and enable it manually when ready.")
+  writeLine("The pair was added with enabled: true.")
   return Object.freeze({ written: true, symbol, pairConfig, path: writtenPath })
 }
 

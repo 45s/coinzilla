@@ -7,7 +7,9 @@ import { validateOrderAgainstTradingRules } from "../domain/orders/validate-orde
 /**
  * Validate a complete strategy decision before submitting any of its orders.
  * Register each PENDING canonical order before network I/O. Unknown outcomes
- * are reported to the caller and are never retried automatically.
+ * are reported to the caller and are never retried automatically. The readiness
+ * gate may return a boolean for legacy callers or a structured deferral reason
+ * and safe details for callers that need actionable diagnostics.
  */
 export function makeExecuteStrategyDecision({
   broker,
@@ -34,18 +36,18 @@ export function makeExecuteStrategyDecision({
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
 
-  const getSubmissionDeferral = ({ order } = {}) => {
-    const gate = canSubmit({ order })
-    if (gate === true) return null
-    if (gate === false) return { reason: "SUBMISSION_NOT_ALLOWED" }
+  const getSubmissionDeferral = ({ order, purpose } = {}) => {
+    const gate = canSubmit({ order, purpose })
+    if (gate === true) {return null}
+    if (gate === false) {return { reason: "SUBMISSION_NOT_ALLOWED" }}
     if (!gate || typeof gate !== "object" || Array.isArray(gate) || typeof gate.allowed !== "boolean") {
       throw new TypeError("canSubmit must return a boolean or a structured { allowed, reason, details } result")
     }
-    if (gate.allowed) return null
+    if (gate.allowed) {return null}
     if (typeof gate.reason !== "string" || !gate.reason.trim()) {
       throw new TypeError("A deferred submission gate must provide a non-empty reason")
     }
-    return { reason: gate.reason, details: gate.details }
+    return { reason: gate.reason.trim(), details: gate.details }
   }
 
   const validateDecision = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) => {
@@ -76,9 +78,9 @@ export function makeExecuteStrategyDecision({
           if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
           throw error
         }
-        const deferral = getSubmissionDeferral({ order: pendingOrder })
+        const deferral = getSubmissionDeferral({ order: pendingOrder, purpose: action.purpose ?? null })
         if (deferral) {
-          return toResult({ data: { deferred: true, reason: deferral.reason, details: deferral.details, validatedOrders: [] } })
+          return toResult({ data: { deferred: true, ...deferral, validatedOrders: [] } })
         }
         validatedOrders.push(pendingOrder)
       }
@@ -119,21 +121,33 @@ export function makeExecuteStrategyDecision({
           await onOrderValidationFailure({ order: pendingOrder, error })
           throw error
         }
-        return Object.freeze({ orderIntent, pendingOrder })
+        return Object.freeze({ orderIntent, pendingOrder, purpose: action.purpose ?? null })
       }))
 
       const submittedOrders = []
-      for (const { orderIntent, pendingOrder } of pendingOrders) {
-        const initialDeferral = getSubmissionDeferral({ order: pendingOrder })
+      for (const { orderIntent, pendingOrder, purpose } of pendingOrders) {
+        const initialDeferral = getSubmissionDeferral({ order: pendingOrder, purpose })
         if (initialDeferral) {
-          await onSubmissionDeferred({ order: pendingOrder, registered: false, ...initialDeferral })
+          await onSubmissionDeferred({ order: pendingOrder, purpose, registered: false, ...initialDeferral })
           return toResult({ data: { deferred: true, ...initialDeferral, submittedOrders } })
         }
-        const pendingResult = onPendingOrder({ order: pendingOrder })
+        const pendingResult = onPendingOrder({ order: pendingOrder, purpose })
         if (pendingResult && typeof pendingResult.then === "function") await pendingResult
-        const dispatchDeferral = getSubmissionDeferral({ order: pendingOrder })
+        let dispatchDeferral
+        try {
+          dispatchDeferral = getSubmissionDeferral({ order: pendingOrder, purpose })
+        } catch (error) {
+          await onSubmissionDeferred({
+            order: pendingOrder,
+            purpose,
+            registered: true,
+            reason: "SUBMISSION_GATE_ERROR",
+            details: { errorName: error.name },
+          })
+          throw error
+        }
         if (dispatchDeferral) {
-          await onSubmissionDeferred({ order: pendingOrder, registered: true, ...dispatchDeferral })
+          await onSubmissionDeferred({ order: pendingOrder, purpose, registered: true, ...dispatchDeferral })
           return toResult({ data: { deferred: true, ...dispatchDeferral, submittedOrders } })
         }
         let brokerResult

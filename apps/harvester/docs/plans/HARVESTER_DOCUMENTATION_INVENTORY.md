@@ -1,11 +1,11 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 15 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 19 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `86f9c1d4d7a012e628dcd1b7b68b2354e4073045` (`truncated: false`; 57 Harvester Markdown/MDX files; PR #950 added no paths after the PR #951 archive relocation)
-- Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-10
+- Latest recursive checkpoint: `develop` at `b5fc236987833da4374258da876b412be3c48759` (`truncated: false`; 61 Harvester Markdown/MDX files)
+- Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-11
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
 
@@ -70,9 +70,9 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 | `apps/harvester/docs/testnet-order-tools.md` | 16286 | Operational tool guide | **KEEP** | Current standalone TESTNET command procedures and destructive authorization boundaries are checked against package scripts; PR #808 corrected the history argument example. Current ownership diagnostics are aligned with `create-user-data-event-handler.js` and `OrderRegistry`; dated `666845`/client-ID investigation snapshots now point to `ROADMAP_HISTORY.md` rather than posing as current instructions. The ZROUSDT market-sell helper and ZROUSDT/DOGEUSDT history defaults are explicitly labeled legacy and not authorized by the paused runbook; the interactive menu is documented as a wrapper for order tools plus the exchange-read-only account audit and local Journal audit; the account-wide cancel is explicitly marked as proceeding without interactive confirmation. Inbound links from `apps/harvester/README.md` and `docs/README.md` are preserved. |
 | `apps/harvester/docs/trading-strategies.md` | 20794 | Strategy overview | **KEEP** | Conservative section delegates all behavior to the canonical domain specification; Aggressive is explicitly exploratory/disabled. Current implementation status now reflects merged PR #653, closed audit #645 and paused/unverified TESTNET acceptance. |
 
-## Post-baseline additions — current 59-file checkpoint after PR #1003
+## Post-baseline additions — current 61-file checkpoint after PR #1013
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. The source-verified `develop` tree at `515324a6b1cb872b99593bdf448d1914b005bfcb` contained **58**: the 2026-11-10 process-restart audit report was the sixteenth post-baseline addition. Merged PR #1003 adds the accepted recovery ADR as the seventeenth addition; the current `develop` tree at `bbd80b93cc0b8ab09172119c0d2d87617257a159` contains **59 tracked Harvester Markdown/MDX files**. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 subsequently updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. The source-verified `develop` tree at `515324a6b1cb872b99593bdf448d1914b005bfcb` contained **58**: the 2026-11-10 process-restart audit report was the sixteenth post-baseline addition. Merged PR #1003 added the accepted recovery ADR as the seventeenth addition; the `develop` tree at `bbd80b93cc0b8ab09172119c0d2d87617257a159` contained **59**. PR #1013 added `exchange-trading-constraints.md` and `volatility-protection.md`, bringing the current source-verified `develop` tree at `b5fc236987833da4374258da876b412be3c48759` to **61 tracked Harvester Markdown/MDX files** (19 additions relative to the frozen baseline). PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. PR #1021 updates existing documentation only and adds no Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -84,6 +84,8 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/domain/README.md` | Local index for Harvester domain documentation. | **KEEP** |
 | `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` | Source-driven behavior-to-test map, regression evidence and prioritized domain test-quality improvements (added in PR #917). | **KEEP** |
 | `apps/harvester/docs/error-vocabulary.md` | Maintained source-verified error vocabulary and recovery classifications. | **KEEP** |
+| `apps/harvester/docs/exchange-trading-constraints.md` | Canonical exchange-neutral trading-constraint contract and Binance fail-closed mapping (PR #1013). | **KEEP** |
+| `apps/harvester/docs/volatility-protection.md` | Per-market protection contract, candle data requirements, recovery-SELL exception and implementation roadmap; data collection is merged in PR #1037 and runtime protection in PR #1041. Historical threshold calibration remains open. | **KEEP** |
 | `apps/harvester/docs/incidents/README.md` | Local index for Harvester incident records. | **KEEP** |
 | `apps/harvester/docs/infrastructure/README.md` | Local index for Harvester infrastructure documentation. | **KEEP** |
 | `apps/harvester/docs/operations/README.md` | Local index for Harvester operating procedures and runbooks. | **KEEP** |
@@ -94,15 +96,9 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 | `apps/harvester/docs/audits/sessions/README.md` | Index for distinct historical session audits (PR #951). | **KEEP** |
 | `apps/harvester/docs/audits/evidence/README.md` | Index for read-only exchange exports and log-integrity evidence (PR #951). | **KEEP** |
 
-## Pending addition — PR #1013
+## Source-verified documentation updates — PR #1021
 
-The documentation-only update to [PR #1013](https://github.com/45s/coinzilla/pull/1013) adds one Harvester design document:
-
-| Proposed path | Purpose | Disposition |
-| --- | --- | --- |
-| apps/harvester/docs/volatility-protection.md | Accepted high-volatility protection behavior, candle-data contract, recovery-SELL exception and implementation/test plan for issue #1016. | **KEEP** |
-
-The current develop checkpoint remains 59 Harvester Markdown/MDX files. If PR #1013 merges with this addition, the Harvester count will become 60. Refresh the complete recursive-tree count and checkpoint SHA at PR closeout; do not claim the proposed count as current develop state.
+PR #1021 updates existing Harvester README, roadmap, Volatility Protection, architecture flow and BrokerPort/adapter guidance to match the implemented candle-history service, freshness handling, gap backfill and shutdown-drain guarantees. It adds no Markdown/MDX paths. Candle measurement collection is implemented; the high-volatility trading policy, central order gate and owned-BUY cancellation remain separate unimplemented work.
 
 ## Content-based findings
 
@@ -129,3 +125,7 @@ The current develop checkpoint remains 59 Harvester Markdown/MDX files. If PR #1
 - [ ] Create dated successor/addendum records where historical findings need correction; do not rewrite originals.
 - [ ] Record final disposition and rationale for each REVIEW row.
 - [ ] Update this inventory and all indexes after each approved migration.
+
+## Source-verified documentation updates — PR #1041
+
+Merged PR #1041 implements and wires the per-market protection state machine, central order-submission gate, explicit recovery-SELL purpose, owned-BUY cancellation/reconciliation and freshness monitoring. The regression matrix and all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`. The initial warning/protection/recovery thresholds remain provisional pending representative offline historical market-data validation. No TESTNET/LIVE exchange operation was performed or authorized.
