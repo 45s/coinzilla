@@ -13,7 +13,8 @@
 - Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
 - [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
 - [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
-- [ ] TDD RED: add configuration-boundary regressions for disabled-by-default operator control and strict Telegram user allowlist validation — issue #1066.
+- [x] TDD RED: add configuration-boundary regressions for disabled-by-default operator control and strict Telegram user allowlist validation — commit `f201c277` on PR #1067; Harvester unit/coverage jobs failed on the new assertions while JavaScript syntax and configured regression checks passed.
+- [ ] TDD RED: add startup fail-closed regressions for missing Telegram credentials, missing durable-store directory and invalid durable-store verification — issue #1066.
 - [ ] GREEN: verify the initialized ADR-0001 store, compose the operator facade and Telegram poller into runtime startup/shutdown, and fail closed on invalid enablement — issue #1066.
 - [ ] Exact-head workspace CI and final review. No Binance/TESTNET/LIVE operations are part of this work.
 
