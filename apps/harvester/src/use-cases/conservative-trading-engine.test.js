@@ -63,7 +63,7 @@ const appConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, initialState } = {}) {
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onDurableCancellationIntent, onDurableCancellationOutcome, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -243,6 +243,8 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: getVolatilityDataOverride,
+    onDurableCancellationIntent,
+    onDurableCancellationOutcome,
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
@@ -875,6 +877,42 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
   assert.match(cancelled.data.clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(cancelled.data.status, "CANCELED")
   assert.equal(cancelled.data.executedQuantity, "0")
+})
+
+test("durably brackets a trailing BUY cancellation before broker and registry transitions", async () => {
+  const sequence = []
+  let engine
+  const harness = await createHarness({
+    onDurableCancellationIntent: async ({ order, reason }) => {
+      sequence.push("intent")
+      assert.equal(reason, "TRAILING_BUY_REPRICE")
+      assert.equal(order.status, "OPEN")
+      assert.equal(engine.getOrders()[0].status, "OPEN", "The order registry must remain unchanged before broker cancellation.")
+      return { ok: true, data: { durable: true } }
+    },
+    onDurableCancellationOutcome: async ({ order, canceledOrder, reason, outcome }) => {
+      sequence.push("outcome")
+      assert.equal(reason, "TRAILING_BUY_REPRICE")
+      assert.equal(order.status, "OPEN")
+      assert.equal(canceledOrder.status, "CANCELED")
+      assert.equal(outcome, "CANCELED")
+      assert.equal(engine.getOrders()[0].status, "OPEN", "The order registry must not advance before the cancellation outcome is durable.")
+      return { ok: true, data: { durable: true } }
+    },
+  })
+  engine = harness.engine
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(sequence, ["intent", "outcome"])
+  assert.equal(engine.getOrders()[0].status, "CANCELED")
 })
 
 test("treats decimal-formatted zero as no execution in trailing BUY cancellation reconciliation", async () => {
