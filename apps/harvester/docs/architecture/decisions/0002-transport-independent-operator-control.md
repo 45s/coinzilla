@@ -95,8 +95,8 @@ Operator pause/resume facts are appended to the **same ADR-0001 durable-fact str
 - Fact data includes `requestId`, `actorId` and configured `symbol`.
 - The application calls the durable-fact port from the engine's serialized transition callback. The engine applies the in-memory operator state only after the callback reports `{ ok: true, data: { durable: true } }`.
 - Missing, failed or uncertain persistence means no state transition and no successful acknowledgement.
-- Startup must validate and project the committed fact stream, including operator pause facts, before the first strategy evaluation. The resulting `operatorPausedMarkets` projection is supplied to the engine as initial state.
-- Missing or corrupt durable history, an unclean process boundary, unresolved safety facts or incomplete reconciliation must keep the readiness gate closed under ADR-0001.
+- **Full-recovery target only; not required for the initial process-lifetime rollout:** startup may validate and project the committed fact stream, including operator pause facts, before the first strategy evaluation. The resulting `operatorPausedMarkets` projection is supplied to the engine as initial state when restart restoration is implemented under ADR-0001.
+- Missing or corrupt durable history, an unclean process boundary, unresolved safety facts or incomplete reconciliation must keep the readiness gate closed for the separate ADR-0001 trading-state recovery workflow. This does not gate the initial process-lifetime operator pause.
 
 The ADR-0001 file durable-facts store and integrity checks are implemented. The operator application accepts that existing append port, but production runtime composition does not yet connect the store to the operator use cases. Startup projection is deliberately excluded from the initial process-lifetime rollout by ADR-0003: a committed pause fact is not replayed after restart, so the in-memory operator pause is lost when the process exits. Runtime configuration and lifecycle wiring remain separate pending work; they do not depend on completing full recovery Steps 7–9. Do not create an operator-specific store or substitute Journal.
 

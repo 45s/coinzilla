@@ -37,4 +37,4 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Process-restart restoration of operator pause state | Explicitly out of scope; separate ADR-0001 / #654 workstream |
 | Disabled-by-default runtime configuration and lifecycle wiring | Pending; independent of full restart recovery |
 
-The code in this PR is not a production inbound-control release. The Telegram adapter is not instantiated or started by the Harvester runtime, and no environment variable or config flag enables it yet. Merge of this foundation does not authorize a TESTNET or LIVE session.
+The PR #1045 foundation is not a production inbound-control release. The Telegram adapter is not instantiated or started by the Harvester runtime, and no environment variable or config flag enables it yet. Merge of this foundation does not authorize a TESTNET or LIVE session.
