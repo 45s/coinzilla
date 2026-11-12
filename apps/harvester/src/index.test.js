@@ -48,6 +48,24 @@ const main = (options = {}) => {
 }
 const runMain = (options = {}) => main(options)
 
+test("does not create or inject durable recovery facts while recovery is disabled", async () => {
+  let storeCreated = false
+  let startupInput
+  await runMain({
+    createDurableFactsStore: () => {
+      storeCreated = true
+      throw new Error("disabled recovery must not construct a durable-facts store")
+    },
+    start: async (input) => {
+      startupInput = input
+      return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
+    },
+    logger: { info() {}, system() {}, error() {} },
+  })
+  assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a durable-facts ledger.")
+  assert.equal(startupInput.durableFactsStore, undefined, "Disabled restart recovery must not inject a durable-facts store into runtime startup.")
+})
+
 test("uses the injected logger after Binance TESTNET startup", async () => {
   const calls = []
   const logger = {
