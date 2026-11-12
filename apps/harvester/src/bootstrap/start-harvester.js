@@ -20,6 +20,15 @@ import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
+import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
+import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
+import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
+import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
+import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
+import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
+import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
+import { recordProcessStarted } from "../use-cases/record-process-started.js"
+import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -49,6 +58,7 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
+  durableFactsStore,
 } = {}) {
   const {
     appConfig,
@@ -60,6 +70,72 @@ export async function startHarvester({
     tradingMode,
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
+  if (durableFactsStore !== undefined) {
+    if (typeof durableFactsStore?.append !== "function" ||
+        typeof durableFactsStore?.verify !== "function" ||
+        typeof durableFactsStore?.readAll !== "function") {
+      throw new TypeError("durableFactsStore must provide append(), verify(), and readAll() when supplied")
+    }
+    const verification = await durableFactsStore.verify()
+    if (verification?.ok !== true ||
+        verification.data?.valid !== true ||
+        verification.data?.durableWriteSupported !== true) {
+      const cause = verification?.errors?.[0] ?? new Error("Durable-fact ledger verification was not confirmed")
+      const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 durable-fact ledger: " + (cause.message ?? String(cause)), { cause })
+      error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
+      throw error
+    }
+  }
+  let processConfigurationFingerprint
+  if (durableFactsStore) {
+    const baseline = await recordConfigurationBaseline({ durableFactsStore, appConfig })
+    if (baseline?.ok !== true || baseline.data?.durable !== true) {
+      throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
+        (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    }
+    processConfigurationFingerprint = baseline.data.fingerprint
+    const started = await recordProcessStarted({
+      durableFactsStore,
+      configurationFingerprint: processConfigurationFingerprint,
+      strategyName: baseline.data.strategyName,
+      markets: baseline.data.markets,
+    })
+    if (started?.ok !== true || started.data?.durable !== true) {
+      throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
+        (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    }
+  }
+  const onDurableExecutionFill = durableFactsStore
+    ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
+    : undefined
+  const onDurableRecoveryCycleCompleted = durableFactsStore
+    ? ({ recoveryLedger, position, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
+        durableFactsStore,
+        recoveryLedger,
+        position,
+        completion,
+        minProfit,
+        inventoryDisposition,
+      })
+    : undefined
+  const onDurableSubmissionIntent = durableFactsStore
+    ? ({ order, purpose }) => recordOrderSubmissionIntent({ durableFactsStore, order, purpose })
+    : undefined
+  const onDurableSubmissionOutcome = durableFactsStore
+    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ durableFactsStore, order, outcome, purpose })
+    : undefined
+  const onDurableCancellationIntent = durableFactsStore
+    ? ({ order, reason }) => recordOrderCancellationIntent({ durableFactsStore, order, reason })
+    : undefined
+  const onDurableCancellationOutcome = durableFactsStore
+    ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
+        durableFactsStore,
+        order,
+        canceledOrder,
+        reason,
+        outcome,
+      })
+    : undefined
 
   let accountSnapshotManager
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
@@ -68,7 +144,7 @@ export async function startHarvester({
     }
     return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
@@ -243,6 +319,10 @@ export async function startHarvester({
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
+      onDurableSubmissionIntent,
+      onDurableSubmissionOutcome,
+      onDurableCancellationIntent,
+      onDurableCancellationOutcome,
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
@@ -271,7 +351,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
 
     userDataSubscription = await subscribeToUserData({
       broker,
@@ -332,7 +412,7 @@ export async function startHarvester({
   userDataState.startupComplete = true
   if (userDataState.pendingRecovery) startUserDataRecovery()
 
-  const stop = createShutdownHandler({
+  const stopRuntime = createShutdownHandler({
     state: userDataState,
     logger,
     tradingEnabled,
@@ -346,6 +426,20 @@ export async function startHarvester({
     eventPublisher,
     publishAccountSnapshot,
   })
+  const stop = async () => {
+    await stopRuntime()
+    if (durableFactsStore) {
+      const stopped = await recordProcessStopped({
+        durableFactsStore,
+        reason: "SHUTDOWN_COMPLETED",
+        clean: true,
+      })
+      if (stopped?.ok !== true || stopped.data?.durable !== true) {
+        throw new Error("Harvester shutdown completed but its clean process-stop boundary was not durable: " +
+          (stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+      }
+    }
+  }
 
   return Object.freeze({
     appConfig,

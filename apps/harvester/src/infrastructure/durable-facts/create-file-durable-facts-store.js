@@ -135,7 +135,31 @@ function normalizeRecordedAt(now) {
   return recordedAt
 }
 
-function validateFactData({ factType, data }) {
+function factIdForOrderIntent(clientOrderId) {
+  return "order-submission-intent:" + clientOrderId
+}
+
+function factIdForRecoveryCycle(marketId, cycleId) {
+  return "recovery-cycle-completed:" + marketId + ":" + cycleId
+}
+
+function factIdForCancellationIntent(clientOrderId, reason, status, executedQuantity) {
+  return "order-cancellation-intent:" + clientOrderId + ":" + reason + ":" + status + ":" + executedQuantity
+}
+
+function factIdForCancellationOutcome(clientOrderId, reason, outcome) {
+  return "order-cancellation-outcome:" + clientOrderId + ":" + reason + ":" + outcome
+}
+
+function factIdForExecutionFill(fillId) {
+  return "execution-fill-applied:" + fillId
+}
+
+function factIdForOrderOutcome(clientOrderId, outcome) {
+  return "order-submission-outcome:" + clientOrderId + ":" + outcome
+}
+
+function validateFactData({ factType, data, factId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new TypeError("Durable fact data must be a plain object")
   }
@@ -152,6 +176,279 @@ function validateFactData({ factType, data }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
+  }
+  if (factType === "ORDER_SUBMISSION_INTENT") {
+    const allowedFields = new Set([
+      "clientOrderId",
+      "marketId",
+      "venue",
+      "symbol",
+      "baseAssetId",
+      "quoteAssetId",
+      "side",
+      "type",
+      "price",
+      "quantity",
+      "purpose",
+    ])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Order-submission intent fact contains unsupported fields")
+    }
+    const clientOrderId = requireNonEmptyString({
+      value: canonicalData.clientOrderId,
+      field: "data.clientOrderId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+    requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (factIdForOrderIntent(clientOrderId) !== factId) {
+      throw new TypeError("Order-submission intent factId must match its stable clientOrderId identity")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Order-submission intent symbol must be canonical uppercase alphanumeric")
+    }
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
+      throw new TypeError("Order-submission intent side must be BUY or SELL")
+    }
+    if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") {
+      throw new TypeError("Order-submission intent type must be LIMIT or LIMIT_MAKER")
+    }
+    const isPositiveDecimalString = (value) =>
+      typeof value === "string" &&
+      /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value) &&
+      /[1-9]/.test(value)
+    if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity)) {
+      throw new TypeError("Order-submission intent price and quantity must be positive exact decimal strings")
+    }
+    if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+      throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
+    }
+  }
+  if (factType === "ORDER_SUBMISSION_OUTCOME") {
+    const allowedFields = new Set([
+      "clientOrderId",
+      "marketId",
+      "venue",
+      "symbol",
+      "baseAssetId",
+      "quoteAssetId",
+      "side",
+      "type",
+      "price",
+      "quantity",
+      "executedQuantity",
+      "purpose",
+      "outcome",
+      "brokerOrderId",
+      "status",
+    ])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Order-submission outcome fact contains unsupported fields")
+    }
+    const clientOrderId = requireNonEmptyString({
+      value: canonicalData.clientOrderId,
+      field: "data.clientOrderId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+    requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (factIdForOrderOutcome(clientOrderId, canonicalData.outcome) !== factId) {
+      throw new TypeError("Order-submission outcome factId must match its stable clientOrderId and outcome identity")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Order-submission outcome symbol must be canonical uppercase alphanumeric")
+    }
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
+      throw new TypeError("Order-submission outcome side must be BUY or SELL")
+    }
+    if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") {
+      throw new TypeError("Order-submission outcome type must be LIMIT or LIMIT_MAKER")
+    }
+    const isDecimalString = (value) =>
+      typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
+    if (!isPositiveDecimalString(canonicalData.price) ||
+        !isPositiveDecimalString(canonicalData.quantity) ||
+        !isDecimalString(canonicalData.executedQuantity)) {
+      throw new TypeError("Order-submission outcome amounts must be canonical exact decimal strings")
+    }
+    if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+      throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
+    }
+    if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
+      throw new TypeError("Order-submission outcome classification is unsupported")
+    }
+    requireNonEmptyString({ value: canonicalData.status, field: "data.status", maxLength: 32 })
+    if (canonicalData.outcome === "ACKNOWLEDGED") {
+      requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+      if (canonicalData.status === "PENDING") {
+        throw new TypeError("Acknowledged order-submission outcome cannot have PENDING status")
+      }
+    } else if (canonicalData.brokerOrderId !== null || canonicalData.status !== "PENDING" ||
+        canonicalData.executedQuantity !== "0") {
+      throw new TypeError("Unacknowledged order-submission outcome must preserve a PENDING order without broker identity or execution")
+    }
+  }
+  if (factType === "ORDER_CANCELLATION_INTENT") {
+    const allowedFields = new Set(["clientOrderId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "executedQuantity", "reason", "status"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) throw new TypeError("Order-cancellation intent fact contains unsupported fields")
+    const clientOrderId = requireNonEmptyString({ value: canonicalData.clientOrderId, field: "data.clientOrderId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+    const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+    if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(reason) || venue !== venue.toLowerCase() ||
+        marketId !== venue + ":" + canonicalData.symbol ||
+        factId !== factIdForCancellationIntent(clientOrderId, reason, canonicalData.status, canonicalData.executedQuantity)) {
+      throw new TypeError("Order-cancellation intent identity or reason is not canonical")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Order-cancellation symbol must be canonical uppercase alphanumeric")
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") throw new TypeError("Order-cancellation side must be BUY or SELL")
+    if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") throw new TypeError("Order-cancellation type must be LIMIT or LIMIT_MAKER")
+    if (canonicalData.status !== "OPEN" && canonicalData.status !== "PARTIALLY_FILLED") throw new TypeError("Order-cancellation intent requires an active acknowledged order")
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
+    if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity) || !isDecimalString(canonicalData.executedQuantity)) {
+      throw new TypeError("Order-cancellation amounts must be exact canonical decimal strings")
+    }
+  }
+  if (factType === "ORDER_CANCELLATION_OUTCOME") {
+    const allowedFields = new Set(["clientOrderId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "reason", "outcome", "status", "executedQuantity"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) throw new TypeError("Order-cancellation outcome fact contains unsupported fields")
+    const clientOrderId = requireNonEmptyString({ value: canonicalData.clientOrderId, field: "data.clientOrderId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+    const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+    const outcomes = ["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED", "NOT_SENT", "OUTCOME_UNKNOWN", "UNCONFIRMED", "UNKNOWN"]
+    if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(reason) || !outcomes.includes(canonicalData.outcome) ||
+        venue !== venue.toLowerCase() || marketId !== venue + ":" + canonicalData.symbol ||
+        factId !== factIdForCancellationOutcome(clientOrderId, reason, canonicalData.outcome)) {
+      throw new TypeError("Order-cancellation outcome identity or classification is not canonical")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Order-cancellation outcome symbol must be canonical uppercase alphanumeric")
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") throw new TypeError("Order-cancellation outcome side must be BUY or SELL")
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const confirmedStatuses = ["CANCELED", "FILLED", "REJECTED", "EXPIRED"]
+    if (confirmedStatuses.includes(canonicalData.outcome)) {
+      if (canonicalData.status !== canonicalData.outcome || !isDecimalString(canonicalData.executedQuantity)) throw new TypeError("Confirmed cancellation outcome must preserve its canonical terminal state")
+    } else if (canonicalData.outcome === "NOT_CANCELED") {
+      if (!["OPEN", "PARTIALLY_FILLED"].includes(canonicalData.status) || !isDecimalString(canonicalData.executedQuantity)) throw new TypeError("NOT_CANCELED outcome must preserve the still-active canonical order state")
+    } else if (canonicalData.status !== null || canonicalData.executedQuantity !== null) {
+      throw new TypeError("Unconfirmed cancellation outcome cannot invent a canonical order state")
+    }
+  }
+  if (factType === "EXECUTION_FILL_APPLIED") {
+    const allowedFields = new Set(["fillId", "tradeId", "brokerOrderId", "clientOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "price", "quantity", "quoteQuantity", "liquidityRole", "executedAt", "commissionStatus", "commissions"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) throw new TypeError("Execution-fill fact contains unsupported fields")
+    const fillId = requireNonEmptyString({ value: canonicalData.fillId, field: "data.fillId", maxLength: MAX_FACT_ID_LENGTH })
+    const tradeId = requireNonEmptyString({ value: canonicalData.tradeId, field: "data.tradeId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+    if (canonicalData.clientOrderId !== null) requireNonEmptyString({ value: canonicalData.clientOrderId, field: "data.clientOrderId", maxLength: MAX_FACT_ID_LENGTH })
+    const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (canonicalData.baseAssetId === canonicalData.quoteAssetId || venue !== venue.toLowerCase() || marketId !== venue + ":" + canonicalData.symbol || fillId !== marketId + ":" + tradeId || factId !== factIdForExecutionFill(fillId)) {
+      throw new TypeError("Execution-fill fact identities must match its canonical market, trade and stable fact identity")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Execution-fill symbol must be canonical uppercase alphanumeric")
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") throw new TypeError("Execution-fill side must be BUY or SELL")
+    if (!["MAKER", "TAKER", "UNKNOWN"].includes(canonicalData.liquidityRole)) throw new TypeError("Execution-fill liquidity role is unsupported")
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
+    if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity) || !isPositiveDecimalString(canonicalData.quoteQuantity)) {
+      throw new TypeError("Execution-fill price and quantities must be positive exact decimal strings")
+    }
+    if (canonicalData.executedAt !== null && (!Number.isSafeInteger(canonicalData.executedAt) || canonicalData.executedAt < 0)) throw new TypeError("Execution-fill executedAt must be a non-negative safe integer or null")
+    if (!["COMPLETE", "PARTIAL", "UNKNOWN"].includes(canonicalData.commissionStatus) || !Array.isArray(canonicalData.commissions)) throw new TypeError("Execution-fill commission status or collection is invalid")
+    if ((canonicalData.commissionStatus === "UNKNOWN" && canonicalData.commissions.length !== 0) || (canonicalData.commissionStatus === "PARTIAL" && canonicalData.commissions.length === 0)) {
+      throw new TypeError("Execution-fill commission entries contradict commission completeness")
+    }
+    for (const commission of canonicalData.commissions) {
+      if (!commission || typeof commission !== "object" || Array.isArray(commission) || Object.keys(commission).some((key) => !["amount", "assetId", "assetCode", "quoteValue"].includes(key))) {
+        throw new TypeError("Execution-fill commission contains unsupported fields")
+      }
+      if (!isDecimalString(commission.amount)) throw new TypeError("Execution-fill commission amount must be a non-negative exact decimal string")
+      requireNonEmptyString({ value: commission.assetId, field: "commission.assetId", maxLength: MAX_FACT_ID_LENGTH })
+      requireNonEmptyString({ value: commission.assetCode, field: "commission.assetCode", maxLength: 32 })
+      if (commission.quoteValue !== null) {
+        const quoteValue = commission.quoteValue
+        if (!quoteValue || typeof quoteValue !== "object" || Array.isArray(quoteValue) || Object.keys(quoteValue).some((key) => !["amount", "assetId", "assetCode"].includes(key)) || !isDecimalString(quoteValue.amount) || quoteValue.assetId !== canonicalData.quoteAssetId) {
+          throw new TypeError("Execution-fill commission quote valuation must use the canonical quote asset")
+        }
+        requireNonEmptyString({ value: quoteValue.assetCode, field: "commission.quoteValue.assetCode", maxLength: 32 })
+      }
+    }
+  }
+  if (factType === "RECOVERY_CYCLE_COMPLETED") {
+    const allowedFields = new Set(["cycleId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "appliedFillIds", "buyCost", "spent", "netSellProceeds", "realizedNetProfit", "minProfit", "activeQuantity", "keepQuantity", "freeQuantity", "inventoryDisposition"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) throw new TypeError("Recovery-cycle completion fact contains unsupported fields")
+    const cycleId = requireNonEmptyString({ value: canonicalData.cycleId, field: "data.cycleId", maxLength: 64 })
+    const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (!/^[0-9a-f]{64}$/.test(cycleId) || venue !== venue.toLowerCase() ||
+        marketId !== venue + ":" + canonicalData.symbol ||
+        factId !== factIdForRecoveryCycle(marketId, cycleId)) {
+      throw new TypeError("Recovery-cycle completion identity is not canonical")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
+    if (canonicalData.baseAssetId === canonicalData.quoteAssetId) throw new TypeError("Recovery-cycle base and quote assets must differ")
+    if (!Array.isArray(canonicalData.appliedFillIds) || canonicalData.appliedFillIds.length === 0 ||
+        canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
+        new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length) {
+      throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
+    }
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
+    if (!isDecimalString(canonicalData.buyCost) || canonicalData.buyCost !== canonicalData.spent ||
+        !isDecimalString(canonicalData.netSellProceeds) ||
+        !isPositiveDecimalString(canonicalData.realizedNetProfit) ||
+        !isPositiveDecimalString(canonicalData.minProfit) ||
+        !isDecimalString(canonicalData.activeQuantity) ||
+        !isDecimalString(canonicalData.keepQuantity) ||
+        !isDecimalString(canonicalData.freeQuantity)) {
+      throw new TypeError("Recovery-cycle completion accounting values must be exact canonical decimals")
+    }
+    if (canonicalData.inventoryDisposition !== null) {
+      const dust = canonicalData.inventoryDisposition
+      const dustFields = new Set(["status", "quantity", "reason", "minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"])
+      if (!dust || typeof dust !== "object" || Array.isArray(dust) ||
+          Object.keys(dust).some((key) => !dustFields.has(key)) ||
+          dust.status !== "EXCHANGE_CONSTRAINED_DUST" ||
+          !["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason) ||
+          !isPositiveDecimalString(dust.quantity)) {
+        throw new TypeError("Recovery-cycle inventory disposition must be validated exchange-constrained dust")
+      }
+      for (const field of ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"]) {
+        if (dust[field] !== undefined && !isDecimalString(dust[field])) {
+          throw new TypeError("Recovery-cycle dust " + field + " must be an exact decimal string")
+        }
+      }
+      if (dust.reason === "MIN_QUANTITY" &&
+          (dust.minimumQuantity === undefined || dust.evaluatedQuantity === undefined)) {
+        throw new TypeError("MIN_QUANTITY dust requires its exchange minimum and evaluated quantity")
+      }
+      if (dust.reason === "MIN_NOTIONAL" &&
+          (dust.minimumQuantity === undefined || dust.minimumNotional === undefined ||
+           dust.evaluatedQuantity === undefined || dust.evaluatedNotional === undefined)) {
+        throw new TypeError("MIN_NOTIONAL dust requires exact quantity and notional evidence")
+      }
+      if (dust.reason === "QUANTITY_INCREMENT" &&
+          (dust.quantityStepSize === undefined || dust.evaluatedQuantity !== "0")) {
+        throw new TypeError("QUANTITY_INCREMENT dust requires exact step-size evidence and zero evaluated quantity")
+      }
+    }
   }
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
     const allowedFields = new Set([
@@ -197,7 +494,7 @@ function validateFactInput({ fact, runtimeSessionId }) {
       field: "runtimeSessionId",
       maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
     }),
-    data: validateFactData({ factType, data: fact.data }),
+    data: validateFactData({ factType, data: fact.data, factId }),
   }
 }
 
@@ -248,7 +545,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
     throw new TypeError("Durable fact previousDigest must be a SHA-256 digest or null for genesis")
   }
   if (!SHA256_PATTERN.test(record.digest ?? "")) throw new TypeError("Durable fact digest is malformed")
-  validateFactData({ factType: record.factType, data: record.data })
+  validateFactData({ factType: record.factType, data: record.data, factId: record.factId })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
     throw new Error("Durable fact genesis schema version does not match the stream schema")
   }
@@ -693,5 +990,5 @@ export function createFileDurableFactsStore({
     }
   })
 
-  return Object.freeze({ initialize, append, verify, readAll })
+  return Object.freeze({ runtimeSessionId, initialize, append, verify, readAll })
 }

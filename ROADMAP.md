@@ -26,8 +26,9 @@
    - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.
    - **Completed:** ADR-0001 was accepted in [PR #1003](https://github.com/45s/coinzilla/pull/1003); recovery Steps 1–6 and the durable-fact store/coverage primitives are merged through [PR #1036](https://github.com/45s/coinzilla/pull/1036).
    - **Completed:** [PR #1047](https://github.com/45s/coinzilla/pull/1047) merged the read-only one-market orchestration and READY-gated MARKET_HISTORY_COVERAGE_CONFIRMED append/readback.
-   - **In review:** [PR #1053](https://github.com/45s/coinzilla/pull/1053) implements the offline JSON context/CLI adapter and production-audit end-to-end evidence matrix. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the PR remains draft/unmerged pending user review.
-   - **Remaining:** complete Step 7 verification, then implement Step 8 closed-gate candidate restoration and Step 9 crash/restart proof.
+   - **Completed:** [PR #1053](https://github.com/45s/coinzilla/pull/1053) merged the offline JSON context/CLI adapter and production-audit end-to-end evidence matrix (merge commit `a6dd3412b21daa85b9767164e3619ad45a4de777`); Step 7 is complete.
+   - **In progress:** [PR #1055](https://github.com/45s/coinzilla/pull/1055) adds durable order-submission intent/outcome contracts plus an execution-fill producer that gates Portfolio/RecoveryLedger commits. Production composition, remaining durable fact producers, candidate projection, invariant validation and exchange reconciliation are still pending.
+   - **Remaining:** complete Step 8 closed-gate candidate restoration and Step 9 crash/restart proof.
    - **Safety:** unattended restart readiness remains blocked. The Journal is not the recovery authority; do not wire runtime replay or claim legacy Journal history is complete.
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 

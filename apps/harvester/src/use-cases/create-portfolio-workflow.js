@@ -26,12 +26,18 @@ import {
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset } = {}) => {
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted } = {}) => {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
   if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
     throw new TypeError("initialRecoveryLedgers must be a Map")
+  }
+  if (onDurableExecutionFill !== undefined && typeof onDurableExecutionFill !== "function") {
+    throw new TypeError("onDurableExecutionFill must be a function")
+  }
+  if (onDurableRecoveryCycleCompleted !== undefined && typeof onDurableRecoveryCycleCompleted !== "function") {
+    throw new TypeError("onDurableRecoveryCycleCompleted must be a function")
   }
   let portfolio = initialPortfolio ?? new Portfolio()
   let recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
@@ -128,6 +134,21 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedger: currentLedger,
         fill,
       })
+      if (result.ok && result.data.applied === true && onDurableExecutionFill) {
+        let durableResult
+        try {
+          durableResult = await onDurableExecutionFill({ fill })
+        } catch (error) {
+          return toResult({ error })
+        }
+        if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+          return toResult({
+            errors: durableResult?.errors?.length
+              ? durableResult.errors
+              : [new Error("Execution-fill fact append did not confirm durable commitment")],
+          })
+        }
+      }
       // Journal is optional: a failed baseline write must not block a validated fill.
       // The later account audit detects the missing baseline and fails closed.
       if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
@@ -168,7 +189,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         }) !== 0)
         if (result.data.applied === true && portfolioStatsChanged) {
           const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-          if (portfolioStats) logger.info?.(portfolioStats)
+          if (portfolioStats) { logger.info?.(portfolioStats) }
         }
         logger.debug?.({
           message: "Execution accounted",
@@ -239,7 +260,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             message: error?.message ?? String(error),
             stack: error?.stack,
           })),
-          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId }),
+          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId: fill.market.id }),
           unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
         })
       }
@@ -255,7 +276,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
+    completeRecoveryCycle: async ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
       const recoveryLedger = recoveryLedgers.get(marketId)
       const position = portfolio.getPosition({ marketId })
       if (!recoveryLedger || !position) {
@@ -301,6 +322,25 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           nextRecoveryLedgers.set(marketId, resetLedger)
           const nextPosition = nextPortfolio.getPosition({ marketId })
 
+
+          if (onDurableRecoveryCycleCompleted) {
+            const durableResult = await onDurableRecoveryCycleCompleted({
+              marketId,
+              recoveryLedger: previousLedger,
+              position,
+              completion,
+              minProfit,
+              inventoryDisposition: completion.dust ?? null,
+            })
+            if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+              return toResult({
+                errors: durableResult?.errors?.length
+                  ? durableResult.errors
+                  : [new Error("Recovery-cycle completion fact did not confirm durable commitment")],
+              })
+            }
+          }
+
           logger.debug?.({
             message: "Recovery cycle completed",
             marketId,
@@ -324,7 +364,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
           if (portfolioStatsChanged) {
             const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-            if (portfolioStats) logger.info?.(portfolioStats)
+            if (portfolioStats) { logger.info?.(portfolioStats) }
           }
         } else {
           logger.debug?.({

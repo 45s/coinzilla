@@ -1,9 +1,13 @@
 import nodeTest from "node:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
+import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
@@ -3480,4 +3484,57 @@ test("identifies user-data events received during application recovery as recove
     releaseRecoverySnapshot()
     await runtime.stop()
   }
+})
+
+
+test("verifies an injected durable-fact ledger before connecting to the broker", async () => {
+  const calls = []
+  await assert.rejects(
+    () => startHarvesterForTest({
+      appConfig,
+      durableFactsStore: {
+        append: async () => ({ ok: true, data: { durable: true } }),
+        verify: async () => ({ ok: false, errors: [new Error("durable ledger integrity failed")] }),
+        readAll: async () => ({ ok: true, data: { records: [] } }),
+      },
+      brokerAdapterFactory: () => {
+        calls.push("broker-factory")
+        return createBroker(calls)
+      },
+    }),
+    /durable ledger integrity failed/,
+  )
+  assert.deepEqual(calls, [], "An unverified durable-fact ledger must block broker connection and subscriptions.")
+})
+
+
+test("records configuration and process boundaries before broker startup and after shutdown", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-boundaries-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const durableFactsStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "start-harvester-process-boundary-test",
+    now: () => new Date("2026-11-12T00:00:00.000Z"),
+  })
+  await durableFactsStore.initialize()
+
+  const harvester = await startHarvesterForTest({ appConfig, durableFactsStore })
+  const started = await durableFactsStore.readAll()
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+  const configuration = started.data.records.find(({ factType }) => factType === "CONFIGURATION_BASELINE")
+  const processStart = started.data.records.find(({ factType }) => factType === "PROCESS_STARTED")
+  assert.ok(configuration, "The sanitized strategy configuration fingerprint must be durable before broker startup.")
+  assert.ok(processStart, "The current process boundary must be durable before broker startup.")
+  assert.equal(configuration.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.equal(processStart.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.equal(processStart.data.configurationFingerprint, configuration.data.fingerprint)
+
+  await harvester.stop()
+
+  const stopped = await durableFactsStore.readAll()
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  const processStop = stopped.data.records.find(({ factType }) => factType === "PROCESS_STOPPED")
+  assert.ok(processStop, "A clean shutdown must durably close the process boundary.")
+  assert.equal(processStop.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.equal(processStop.data.clean, true)
 })

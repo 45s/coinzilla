@@ -172,9 +172,27 @@ test("preserves exact decimal strings and canonical key ordering", async (t) => 
   const store = createStore(directory)
   await store.initialize()
   const appended = await store.append({
-    factId: "execution:binance:BTCUSDT:trade-1",
+    factId: "execution-fill-applied:binance:BTCUSDT:trade-1",
     factType: "EXECUTION_FILL_APPLIED",
-    data: { quantity: "0.0100", price: "67234.50", symbol: "BTCUSDT", side: "BUY" },
+    data: {
+      fillId: "binance:BTCUSDT:trade-1",
+      tradeId: "trade-1",
+      brokerOrderId: "broker-order-1",
+      clientOrderId: null,
+      marketId: "binance:BTCUSDT",
+      venue: "binance",
+      symbol: "BTCUSDT",
+      baseAssetId: "binance:BTC",
+      quoteAssetId: "binance:USDT",
+      side: "BUY",
+      quantity: "0.0100",
+      price: "67234.50",
+      quoteQuantity: "672.345000",
+      liquidityRole: "UNKNOWN",
+      executedAt: null,
+      commissionStatus: "UNKNOWN",
+      commissions: [],
+    },
   })
   assert.equal(appended.ok, true)
   const lines = await readLines(path.join(directory, "facts.jsonl"))
