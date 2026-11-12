@@ -15,7 +15,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Operator control](operator-control/README.md) — engine/application foundation in PR #1045 and disabled-by-default Telegram runtime wiring in PR #1067; `/pause <SYMBOL>` is process-lifetime only under ADR-0003 and is not restored after restart
+- [Operator control](operator-control/README.md) — Telegram Command Center `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`; read-only query contracts are in PR #1081. Operator pause remains process-lifetime only under ADR-0003 and is not restored after restart
 - [Volatility Protection](volatility-protection.md) — per-market protection, required explicit pair-level policy and order gate; provisional thresholds still require offline historical calibration
 - [Exchange trading constraints](exchange-trading-constraints.md) — canonical exchange-neutral constraint contract, Binance's non-blocking diagnostic policy, and local-versus-venue enforcement boundary
 - [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
