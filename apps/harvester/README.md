@@ -69,7 +69,8 @@ Harvester exposes one application-wide named `appConfig` export from `config/ind
 - `strategies.CG_coinGrabber.enabled`: enables the strategy.
 - `strategies.CG_coinGrabber.pairs.<SYMBOL>.minProfit`: minimum required net profit per completed recovery cycle, in that pair's quote currency (minimum `0.01`).
 - `strategies.CG_coinGrabber.settings.conservative.enabled`: must remain `true`; Conservative is the first executable mode.
-- `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.\n- `strategies.CG_coinGrabber.settings.recovery.enabled`: must remain `false`; process-restart recovery is deferred until exchange reconciliation and crash/restart acceptance are complete.
+- `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
+- `strategies.CG_coinGrabber.settings.recovery.enabled`: must remain `false`; process-restart recovery is deferred until exchange reconciliation and crash/restart acceptance are complete.
 - `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, minimum profit, precision, and fee settings.
 - `strategies.CG_coinGrabber.pairs.<SYMBOL>.externalOrdersPolicy`: optional per-pair policy selected from the named `EXTERNAL_ORDERS_POLICIES` constants in `src/domain/external-orders-policy.js`. It defaults to `EXTERNAL_ORDERS_POLICIES.IGNORE`; select `EXTERNAL_ORDERS_POLICIES.BLOCK` to defer that pair while a manual/external order is open or reports an execution. The serialized values remain `"ignore"` and `"block"`. External orders are never adopted or booked to Harvester accounting. Harvester-generated `h-` client IDs remain protected regardless of this setting.
 
