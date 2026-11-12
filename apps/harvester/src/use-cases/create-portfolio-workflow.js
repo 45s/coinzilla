@@ -328,6 +328,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
               marketId,
               recoveryLedger: previousLedger,
               position,
+              sellOrder,
               completion,
               minProfit,
               inventoryDisposition: completion.dust ?? null,
