@@ -132,7 +132,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Command:** `pnpm run config:symbol` (also available from the repository root through `pnpm --filter @coinzilla/harvester config:symbol`).
 
-**Canonical destination:** merge the generated pair into `apps/harvester/config/index.js` at `strategies.CG_coinGrabber.pairs.<SYMBOL>`. Harvester has one application-wide `appConfig` object; supporting constants modules may be imported by its entrypoint, but do not create parallel feature-specific configuration formats.
+**Canonical destination:** merge the generated pair into `apps/harvester/config/strategies/cg-coin-grabber.js` at `CG_COIN_GRABBER_CONFIG.pairs.<SYMBOL>`. `config/index.js` composes this named strategy export into the single application-wide `appConfig`; do not create parallel runtime configuration boundaries.
 
 **Operator inputs:** symbol, quote investment budget, `keepQuantity`, maker percentage, taker percentage, minimum profit (quote units), and price-step percentage; both are required strategy inputs because their values are market-specific and must not be guessed. Derive `orderQuantity` from the quote budget and a current public ticker-price snapshot, rounded down to the exchange step and capped by active maximum quantity/notional bounds. Derive price/quantity precision from Binance filters and check the reference price against active minimum/maximum price bounds.
 
