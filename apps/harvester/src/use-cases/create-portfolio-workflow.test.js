@@ -401,7 +401,7 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
   })
 
-  const result = workflow.completeRecoveryCycle({
+  const result = await workflow.completeRecoveryCycle({
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
