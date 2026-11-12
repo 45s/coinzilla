@@ -111,7 +111,7 @@ export async function recordSafetyBlockerRaised({
       throw new TypeError("Safety blocker requires a canonical reason code and SHA-256 evidence digest")
     }
     const blockerId = createHash("sha256")
-      .update([scope, symbol ?? "", reason, evidenceDigest].join("\\0"))
+      .update([scope, symbol ?? "", reason, evidenceDigest].join("\0"))
       .digest("hex")
     return await appendDurably({
       durableFactsStore,

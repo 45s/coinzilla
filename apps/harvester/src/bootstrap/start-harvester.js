@@ -29,6 +29,7 @@ import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
+import { recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
 
 export async function startHarvester({
   configSource,
@@ -118,6 +119,16 @@ export async function startHarvester({
     : undefined
   const onDurableCancellationIntent = durableFactsStore
     ? ({ order, reason }) => recordOrderCancellationIntent({ durableFactsStore, order, reason })
+    : undefined
+  let strategyPauseTransitionSequence = 0
+  const onDurableStrategyMarketPaused = durableFactsStore
+    ? ({ symbol, reason }) => recordStrategyMarketControl({
+        durableFactsStore,
+        action: "PAUSE",
+        transitionId: durableFactsStore.runtimeSessionId + ":" + (++strategyPauseTransitionSequence),
+        symbol,
+        reason,
+      })
     : undefined
   const onDurableCancellationOutcome = durableFactsStore
     ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
@@ -315,6 +326,7 @@ export async function startHarvester({
       onDurableSubmissionOutcome,
       onDurableCancellationIntent,
       onDurableCancellationOutcome,
+      onDurableStrategyMarketPaused,
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,

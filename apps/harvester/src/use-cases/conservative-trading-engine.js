@@ -168,6 +168,7 @@ export function makeConservativeTradingEngine({
   onDurableSubmissionOutcome,
   onDurableCancellationIntent,
   onDurableCancellationOutcome,
+  onDurableStrategyMarketPaused,
   logger,
   initialState = {},
 } = {}) {
@@ -198,6 +199,9 @@ export function makeConservativeTradingEngine({
   }
   if ((onDurableCancellationIntent === undefined) !== (onDurableCancellationOutcome === undefined)) {
     throw new TypeError("onDurableCancellationIntent and onDurableCancellationOutcome must be provided together")
+  }
+  if (onDurableStrategyMarketPaused !== undefined && typeof onDurableStrategyMarketPaused !== "function") {
+    throw new TypeError("onDurableStrategyMarketPaused must be a function")
   }
   if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
@@ -446,6 +450,17 @@ export function makeConservativeTradingEngine({
 
   const pause = async ({ symbol, reason, error }) => {
     const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
+    if (!wasDurablyPaused && onDurableStrategyMarketPaused) {
+      const durable = await onDurableStrategyMarketPaused({ symbol, reason })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        logger.error?.({
+          message: "strategy pause could not be committed to the durable-fact ledger",
+          symbol,
+          reason,
+          errors: durable?.errors,
+        })
+      }
+    }
     state.paused.add(symbol)
     state.durablePausedMarkets.add(symbol)
     if (!wasDurablyPaused) {

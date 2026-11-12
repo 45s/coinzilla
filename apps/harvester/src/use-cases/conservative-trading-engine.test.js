@@ -63,7 +63,7 @@ const appConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onDurableCancellationIntent, onDurableCancellationOutcome, initialState } = {}) {
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onDurableCancellationIntent, onDurableCancellationOutcome, onDurableStrategyMarketPaused, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -245,6 +245,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     getVolatilityData: getVolatilityDataOverride,
     onDurableCancellationIntent,
     onDurableCancellationOutcome,
+    onDurableStrategyMarketPaused,
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
@@ -6908,4 +6909,43 @@ test("retries a volatility BUY cancellation only after a known NOT_SENT outcome 
     "A known NOT_SENT cancellation may be retried after the bounded five-second retry interval.",
   )
   assert.deepEqual(harness.pauses, [])
+})
+
+
+test("commits a strategy pause fact before publishing the Journal pause event", async () => {
+  const sequence = []
+  const harness = await createHarness({
+    onDurableStrategyMarketPaused: async ({ symbol, reason }) => {
+      sequence.push("durable-fact")
+      assert.equal(symbol, "DOGEUSDT", "The durable pause must retain the exact affected market.")
+      assert.equal(reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "The durable pause must retain its canonical cause.")
+      return { ok: true, data: { durable: true } }
+    },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "strategy.paused") sequence.push("journal-event")
+        return { ok: true }
+      },
+    },
+  })
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "external-client-order-durable-pause",
+    brokerOrderId: "external-broker-order-durable-pause",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+
+  const result = await harness.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+
+  assert.equal(result.ok, false, "An unowned order update must continue to fail the ownership check.")
+  assert.deepEqual(sequence, ["durable-fact", "journal-event"], "The recovery-authoritative pause fact must commit before its Journal observer event.")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "The affected market must remain paused after the unowned order event.")
 })
