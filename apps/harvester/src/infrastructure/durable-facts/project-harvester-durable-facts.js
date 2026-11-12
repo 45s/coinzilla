@@ -14,6 +14,7 @@ const EVENT = Object.freeze({
   CANCEL_FAILED: "order.cancel_failed",
   FILL_APPLIED: "execution.fill_applied",
   RECOVERY_COMPLETED: "recovery.cycle_completed",
+  RECOVERY_NOT_COMPLETED: "recovery.cycle_not_completed",
   STRATEGY_PAUSED: "strategy.paused",
   EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
 })
@@ -78,7 +79,15 @@ function mapFill({ data }) {
   }
 }
 
-function mapFact({ record, orderIntents }) {
+function assertIntentMatches({ intent, data, fields, context }) {
+  for (const field of fields) {
+    if (intent[field] !== data[field]) {
+      throw new Error(context + " conflicts with its original durable order intent: " + field)
+    }
+  }
+}
+
+function mapFact({ record, orderIntents, cancellationIntents }) {
   const { factType, data } = record
   if (factType === "ACCOUNT_SNAPSHOT_CAPTURED") {
     return [{ name: EVENT.ACCOUNT_SNAPSHOT, data }]
@@ -104,6 +113,12 @@ function mapFact({ record, orderIntents }) {
   if (factType === "ORDER_SUBMISSION_OUTCOME") {
     const intent = orderIntents.get(data.clientOrderId)
     if (!intent) { throw new Error("Durable submission outcome has no preceding intent: " + data.clientOrderId) }
+    assertIntentMatches({
+      intent,
+      data,
+      fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
+      context: "Durable submission outcome",
+    })
     const immutableIntent = {
       clientOrderId: data.clientOrderId,
       symbol: data.symbol,
@@ -124,6 +139,18 @@ function mapFact({ record, orderIntents }) {
     }]
   }
   if (factType === "ORDER_CANCELLATION_INTENT") {
+    const intent = orderIntents.get(data.clientOrderId)
+    if (!intent) { throw new Error("Durable cancellation intent has no preceding submission intent: " + data.clientOrderId) }
+    assertIntentMatches({
+      intent,
+      data,
+      fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity"],
+      context: "Durable cancellation intent",
+    })
+    if (cancellationIntents.has(data.clientOrderId)) {
+      throw new Error("Durable cancellation intent was repeated before its prior outcome: " + data.clientOrderId)
+    }
+    cancellationIntents.set(data.clientOrderId, data)
     return [{
       name: EVENT.CANCEL_REQUESTED,
       data: {
@@ -142,7 +169,18 @@ function mapFact({ record, orderIntents }) {
   }
   if (factType === "ORDER_CANCELLATION_OUTCOME") {
     const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) { throw new Error("Durable cancellation outcome has no preceding submission intent: " + data.clientOrderId) }
+    const cancellationIntent = cancellationIntents.get(data.clientOrderId)
+    if (!intent || !cancellationIntent) { throw new Error("Durable cancellation outcome has no preceding submission and cancellation intent: " + data.clientOrderId) }
+    assertIntentMatches({
+      intent,
+      data,
+      fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
+      context: "Durable cancellation outcome",
+    })
+    if (cancellationIntent.reason !== data.reason || cancellationIntent.brokerOrderId !== data.brokerOrderId) {
+      throw new Error("Durable cancellation outcome conflicts with its exact cancellation intent")
+    }
+    cancellationIntents.delete(data.clientOrderId)
     if (data.outcome === "CANCELED") {
       return [{
         name: EVENT.CANCELLED,
@@ -185,7 +223,26 @@ function mapFact({ record, orderIntents }) {
         keepQuantity: data.keepQuantity,
         minProfit: data.minProfit,
         realizedNetProfit: data.realizedNetProfit,
+        sellOrderClientId: data.sellOrderClientId,
+        sellOrderBrokerOrderId: data.sellOrderBrokerOrderId,
         ...(data.inventoryDisposition == null ? {} : { dust: data.inventoryDisposition }),
+      },
+    }]
+  }
+  if (factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
+    return [{
+      name: EVENT.RECOVERY_NOT_COMPLETED,
+      data: {
+        symbol: data.symbol,
+        marketId: data.marketId,
+        sellOrderClientId: data.sellOrderClientId,
+        sellOrderBrokerOrderId: data.sellOrderBrokerOrderId,
+        outcome: data.outcome,
+        reason: data.reason,
+        realizedNetProfit: data.realizedNetProfit,
+        activeQuantity: data.activeQuantity,
+        keepQuantity: data.keepQuantity,
+        minProfit: data.minProfit,
       },
     }]
   }
@@ -217,6 +274,12 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     const marketHistoryCoverage = []
     const marketHistoryCoverageBySymbol = new Map()
     const orderIntents = new Map()
+    const cancellationIntents = new Map()
+    const cycleFillIdsByMarket = new Map()
+    const orderSubmissionOutcomes = []
+    const orderCancellationOutcomes = []
+    const recoveryCycleCompletedFacts = []
+    const recoveryCycleNotCompletedFacts = []
     let previousSequence = -1n
 
     for (const [index, rawRecord] of records.entries()) {
@@ -339,8 +402,35 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       if (!session || session.stopped) {
         throw new Error("Durable trading fact is outside an active process session: " + record.factType)
       }
-      if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED"].includes(record.factType)) {
+      if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED", "RECOVERY_CYCLE_NOT_COMPLETED"].includes(record.factType)) {
         throw new Error("Unsupported durable-fact projection type: " + record.factType)
+      }
+      if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
+        orderSubmissionOutcomes.push(Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence }))
+      }
+      if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
+        orderCancellationOutcomes.push(Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence }))
+      }
+      if (record.factType === "EXECUTION_FILL_APPLIED") {
+        const appliedFillIds = cycleFillIdsByMarket.get(record.data.marketId) ?? []
+        if (appliedFillIds.includes(record.data.fillId)) {
+          throw new Error("Durable recovery cycle contains a duplicate applied fill identity: " + record.data.fillId)
+        }
+        appliedFillIds.push(record.data.fillId)
+        cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
+      }
+      if (record.factType === "RECOVERY_CYCLE_COMPLETED" || record.factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
+        const expectedFillIds = cycleFillIdsByMarket.get(record.data.marketId) ?? []
+        if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
+          throw new Error("Durable recovery-cycle outcome does not match the exact applied-fill boundary for " + record.data.marketId)
+        }
+        const fact = Object.freeze({ factId: record.factId, sequence: record.sequence, data: record.data })
+        if (record.factType === "RECOVERY_CYCLE_COMPLETED") {
+          recoveryCycleCompletedFacts.push(fact)
+          cycleFillIdsByMarket.set(record.data.marketId, [])
+        } else {
+          recoveryCycleNotCompletedFacts.push(fact)
+        }
       }
       session.facts.push(record)
     }
@@ -382,7 +472,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       }
 
       for (const record of remaining) {
-        const events = mapFact({ record, orderIntents })
+        const events = mapFact({ record, orderIntents, cancellationIntents })
         for (const event of events) { emit(event.name, event.data) }
       }
       if (session.stop) {
@@ -397,6 +487,70 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     if (projected?.ok !== true) {
       return projected
     }
+    const recoveryCycles = projected.data.recoveryCycles.map((cycle) => {
+      const fact = recoveryCycleCompletedFacts.find(({ data }) =>
+        data.sellOrderClientId === cycle.completedOrderClientId &&
+        data.sellOrderBrokerOrderId === cycle.completedOrderBrokerOrderId &&
+        data.marketId === cycle.marketId &&
+        data.symbol === cycle.symbol
+      )
+      if (!fact) {
+        throw new Error("Canonical recovery-cycle projection has no matching durable completion fact for " + cycle.symbol)
+      }
+      return Object.freeze({
+        ...cycle,
+        cycleId: fact.data.cycleId,
+        appliedFillIds: Object.freeze([...fact.data.appliedFillIds]),
+        buyCost: fact.data.buyCost,
+        spent: fact.data.spent,
+        netSellProceeds: fact.data.netSellProceeds,
+        realizedNetProfit: fact.data.realizedNetProfit,
+        minProfit: fact.data.minProfit,
+        activeQuantity: fact.data.activeQuantity,
+        keepQuantity: fact.data.keepQuantity,
+        freeQuantity: fact.data.freeQuantity,
+        inventoryDisposition: fact.data.inventoryDisposition,
+        sellOrderClientId: fact.data.sellOrderClientId,
+        sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
+        factId: fact.factId,
+        sequence: fact.sequence,
+      })
+    })
+    if (recoveryCycles.length !== recoveryCycleCompletedFacts.length) {
+      throw new Error("Durable recovery-cycle completion facts do not map one-to-one to canonical completed cycles")
+    }
+    const recoveryCycleEvaluations = projected.data.recoveryCycleEvaluations.map((evaluation) => {
+      const fact = recoveryCycleNotCompletedFacts.find(({ data }) =>
+        data.sellOrderClientId === evaluation.sellOrderClientId &&
+        data.sellOrderBrokerOrderId === evaluation.sellOrderBrokerOrderId &&
+        data.marketId === evaluation.marketId &&
+        data.symbol === evaluation.symbol &&
+        data.outcome === evaluation.outcome &&
+        data.reason === evaluation.reason
+      )
+      if (!fact) {
+        throw new Error("Canonical recovery-cycle evaluation has no matching durable NOT_COMPLETED fact for " + evaluation.symbol)
+      }
+      return Object.freeze({
+        ...evaluation,
+        evaluationId: fact.data.evaluationId,
+        appliedFillIds: Object.freeze([...fact.data.appliedFillIds]),
+        buyCost: fact.data.buyCost,
+        spent: fact.data.spent,
+        netSellProceeds: fact.data.netSellProceeds,
+        realizedNetProfit: fact.data.realizedNetProfit,
+        minProfit: fact.data.minProfit,
+        activeQuantity: fact.data.activeQuantity,
+        keepQuantity: fact.data.keepQuantity,
+        sellOrderClientId: fact.data.sellOrderClientId,
+        sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
+        factId: fact.factId,
+        sequence: fact.sequence,
+      })
+    })
+    if (recoveryCycleEvaluations.length !== recoveryCycleNotCompletedFacts.length) {
+      throw new Error("Durable recovery-cycle NOT_COMPLETED facts do not map one-to-one to canonical evaluations")
+    }
     const stickySafetyBlockers = Object.freeze([...activeBlockers.values()].map((blocker) =>
       Object.freeze({ ...blocker, scope: blocker.scope })))
     const pausedMarkets = Object.freeze([...activePauses].map(([symbol, pause]) =>
@@ -404,6 +558,10 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     return toResult({
       data: Object.freeze({
         ...projected.data,
+        recoveryCycles: Object.freeze(recoveryCycles),
+        recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),
+        orderSubmissionOutcomes: Object.freeze(orderSubmissionOutcomes),
+        orderCancellationOutcomes: Object.freeze(orderCancellationOutcomes),
         source: "DURABLE_FACTS",
         candidateOnly: true,
         restorationEnabled: false,
