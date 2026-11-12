@@ -244,7 +244,7 @@ test("replays a completed recovery cycle before later-session fills when non-pro
       const evidenceDigest = String(index + 1).padStart(64, "0")
       const resolutionDigest = String(index + 101).padStart(64, "0")
       const blockerId = createHash("sha256")
-        .update(["MARKET", market.symbol, reason, evidenceDigest].join("\\0"))
+        .update(["MARKET", market.symbol, reason, evidenceDigest].join("\0"))
         .digest("hex")
       return [
         record(11 + index * 2, "SAFETY_BLOCKER_RAISED", {
