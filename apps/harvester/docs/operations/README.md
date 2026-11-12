@@ -2,7 +2,7 @@
 
 Start with the procedure matching the task. Do not treat a runbook as standing authorization to interact with TESTNET or place/cancel orders.
 
-- [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/CLOSING durability, process locks, shutdown ordering and failure diagnosis.
+- [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/RECOVERY/CLOSING and targeted COMMISSION_BASELINE durability, process locks, shutdown ordering and failure diagnosis.
 - [One-market recovery reconciliation](../recovery/README.md) — offline ADR-0001 Step 7 evidence bundle, audit-only CLI and explicit coverage confirmation.
 - [Error vocabulary](../error-vocabulary.md) — stable diagnostic identifiers, meanings and safe recovery steps.
 - [Submission deferrals and missing-order diagnostics](submission-deferrals.md) — interpret successful-but-deferred results, stable gate reasons, structured logs, and LIMIT_MAKER safety.
@@ -10,14 +10,14 @@ Start with the procedure matching the task. Do not treat a runbook as standing a
 - [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; the earlier DOGEUSDT/ZROUSDT scope no longer matches the LINKFDUSD and ZROFDUSD default config. Reconcile before any future session.
 - [TESTNET order tools](../testnet-order-tools.md) — read-only diagnostics plus legacy ZROUSDT market-sell and account-wide cancel writes; neither write is authorized by the paused runbook. The account-wide cancel proceeds after a warning without interactive confirmation; the menu adds no confirmation layer. The menu's read-only exchange account audit and local Journal balance audit are documented in the runbook and Journal Operations.
 - [Trading First](../TRADING_FIRST.md) — priority and non-negotiable trading safety constraints.
-- [Operator control](../operator-control/README.md) — initial Telegram `/pause <SYMBOL>` behavior, authorization, durable acknowledgement and runtime-enable blockers.
+- [Operator control](../operator-control/README.md) — runtime-wired Telegram `/pause <SYMBOL>` behavior, authorization, durable acknowledgement, process-lifetime scope and restart limitation.
 - [Incident audit playbook](../INCIDENT_AUDIT_PLAYBOOK.md) — evidence capture and incident investigation workflow.
 
 ## Important safety boundaries
 
 - Set `TRADING_MODE=testnet` for Binance Spot TESTNET or `TRADING_MODE=live` for Binance Spot LIVE. Binance is the only broker; trading is enabled in either mode and there is no separate trading-enable switch or runtime-profile selector. Missing or invalid mode fails startup. LIVE uses real funds and requires dedicated LIVE API credentials with withdrawals disabled. `NODE_ENV` does not select the exchange. Startup currently does not restore prior trading state after process restart; see #654.
 - The committed default config currently enables LINKFDUSD and ZROFDUSD; the runbook's earlier DOGEUSDT/ZROUSDT plan is historical and not an approved session scope. The regional HTTP 451 pause remains in force.
-- Broker-connected startup requires the Journal PREFLIGHT audit and durable flush.
-- Current startup does not restore prior Portfolio/RecoveryLedger/OrderRegistry state from Journal history; process-restart reconciliation remains tracked by [#654](https://github.com/45s/coinzilla/issues/654).
+- Broker-connected startup requires the ADR-0001 durable account-snapshot fact and Journal PREFLIGHT audit/flush before market-data subscriptions.
+- Runtime startup does not restore prior Portfolio/RecoveryLedger/OrderRegistry state from Journal history or the offline ADR-0001 candidate projection. The production entry point rejects a second process session while a prior `PROCESS_STARTED` fact remains; process-restart parity and crash proof remain tracked by [#654](https://github.com/45s/coinzilla/issues/654).
 - External/unowned orders and balances are not adopted automatically.
 - Read-only tools do not authorize or imply permission to run destructive commands.

@@ -15,12 +15,12 @@ const record = (fileName, payload) => ({ payload, position: { fileName, lineNumb
 test("pairs snapshots by Journal session and computes exact asset deltas", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record("session-a.jsonl", event("OPENING", 100, [balance("DOGE", "10.0001"), balance("USDT", "20")])),
+      record("session-a.jsonl", event("PREFLIGHT", 100, [balance("DOGE", "10.0001"), balance("USDT", "20")])),
       record("session-a.jsonl", { name: "bot.started", data: {} }),
       record("session-a.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.07808" } }),
       record("session-a.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.03285" } }),
       record("session-a.jsonl", event("CLOSING", 200, [balance("DOGE", "10.1251"), balance("USDT", "19.5")])),
-      record("session-b.jsonl", event("OPENING", 300, [balance("ZRO", "2")])),
+      record("session-b.jsonl", event("PREFLIGHT", 300, [balance("ZRO", "2")])),
       record("session-b.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.36335" } }),
       record("session-b.jsonl", event("CLOSING", 400, [balance("ZRO", "2.1")])),
     ],
@@ -35,12 +35,40 @@ test("pairs snapshots by Journal session and computes exact asset deltas", () =>
   assert.equal(result.data.profitAssessment, "NOT_DETERMINABLE_FROM_BALANCE_DELTAS_ALONE")
 })
 
+
+test("pairs current PREFLIGHT/CLOSING snapshots by Journal session", () => {
+  const result = reconcileJournalAccountSnapshotRecords({
+    records: [
+      record("preflight-session.jsonl", event("PREFLIGHT", 100, [balance("DOGE", "10"), balance("USDT", "20")])),
+      record("preflight-session.jsonl", event("CLOSING", 200, [balance("DOGE", "10.25"), balance("USDT", "19.5")])),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reports[0].auditStatus, "COMPLETE")
+  assert.deepEqual(result.data.reports[0].assetDeltas[0].delta.total, "0.25")
+  assert.deepEqual(result.data.reports[0].assetDeltas[1].delta.total, "-0.5")
+})
+
+
+test("continues to read legacy OPENING snapshots from historical Journal sessions", () => {
+  const result = reconcileJournalAccountSnapshotRecords({
+    records: [
+      record("legacy-session.jsonl", event("OPENING", 100, [balance("DOGE", "2")])),
+      record("legacy-session.jsonl", event("CLOSING", 200, [balance("DOGE", "3")])),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.reports[0].assetDeltas[0].delta.total, "1")
+})
+
 test("reports missing or duplicate snapshot endpoints as incomplete instead of inventing deltas", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record("missing-close.jsonl", event("OPENING", 100, [])),
-      record("duplicate-open.jsonl", event("OPENING", 100, [])),
-      record("duplicate-open.jsonl", event("OPENING", 101, [])),
+      record("missing-close.jsonl", event("PREFLIGHT", 100, [])),
+      record("duplicate-open.jsonl", event("PREFLIGHT", 100, [])),
+      record("duplicate-open.jsonl", event("PREFLIGHT", 101, [])),
       record("duplicate-open.jsonl", event("CLOSING", 200, [])),
     ],
   })
@@ -48,13 +76,13 @@ test("reports missing or duplicate snapshot endpoints as incomplete instead of i
   const reports = new Map(result.data.reports.map((report) => [report.session, report]))
   assert.equal(reports.get("missing-close.jsonl").auditStatus, "INCOMPLETE")
   assert.deepEqual(reports.get("missing-close.jsonl").blockers, ["CLOSING_SNAPSHOT_COUNT:0"])
-  assert.deepEqual(reports.get("duplicate-open.jsonl").blockers, ["OPENING_SNAPSHOT_COUNT:2"])
+  assert.deepEqual(reports.get("duplicate-open.jsonl").blockers, ["PREFLIGHT_SNAPSHOT_COUNT:2"])
 })
 
 test("reports duplicate CLOSING endpoints as an incomplete session", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record("duplicate-close.jsonl", event("OPENING", 100, [])),
+      record("duplicate-close.jsonl", event("PREFLIGHT", 100, [])),
       record("duplicate-close.jsonl", event("CLOSING", 200, [])),
       record("duplicate-close.jsonl", event("CLOSING", 201, [])),
     ],
@@ -68,7 +96,7 @@ test("reports duplicate CLOSING endpoints as an incomplete session", () => {
 
 test("fails closed for malformed snapshot session, phase, and recovery profit records", () => {
   const missingSession = reconcileJournalAccountSnapshotRecords({
-    records: [{ payload: event("OPENING", 100, []), position: { lineNumber: 1 } }],
+    records: [{ payload: event("PREFLIGHT", 100, []), position: { lineNumber: 1 } }],
   })
   const invalidPhase = reconcileJournalAccountSnapshotRecords({
     records: [
@@ -92,7 +120,7 @@ test("fails closed for malformed snapshot session, phase, and recovery profit re
 test("preserves an INCOMPLETE closing audit and rejects missing snapshot events", () => {
   const incomplete = reconcileJournalAccountSnapshotRecords({
     records: [
-      record("incomplete.jsonl", event("OPENING", 100, [])),
+      record("incomplete.jsonl", event("PREFLIGHT", 100, [])),
       record("incomplete.jsonl", event("CLOSING", 200, [], "INCOMPLETE", ["UNRESOLVED_OWNED_ORDERS:1"])),
     ],
   })

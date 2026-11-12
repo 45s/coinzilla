@@ -32,7 +32,7 @@ const validateSnapshot = ({ snapshot, phase }) => {
     if (typeof asset !== "string" || !asset.trim()) {
       throw new TypeError(phase + " snapshot asset " + index + " must have a non-empty code")
     }
-    if (balances.has(asset)) throw new TypeError(phase + " snapshot contains duplicate asset " + asset)
+    if (balances.has(asset)) {throw new TypeError(phase + " snapshot contains duplicate asset " + asset)}
     for (const field of ["free", "locked", "total"]) {
       assertDecimalString({ value: balance[field], field: phase + "." + asset + "." + field })
       if (compareDecimal({ left: balance[field], right: "0" }) < 0) {
@@ -57,10 +57,14 @@ const validateSnapshot = ({ snapshot, phase }) => {
  */
 export function reconcileAccountSnapshotDeltas({ openingSnapshot, closingSnapshot } = {}) {
   try {
-    const opening = validateSnapshot({ snapshot: openingSnapshot, phase: "OPENING" })
+    const openingPhase = openingSnapshot?.phase
+    if (!["PREFLIGHT", "OPENING"].includes(openingPhase)) {
+      throw new TypeError("Expected a PREFLIGHT or legacy OPENING account snapshot event")
+    }
+    const opening = validateSnapshot({ snapshot: openingSnapshot, phase: openingPhase })
     const closing = validateSnapshot({ snapshot: closingSnapshot, phase: "CLOSING" })
     if (closingSnapshot.sourceTime < openingSnapshot.sourceTime) {
-      throw new RangeError("CLOSING account snapshot predates OPENING snapshot")
+      throw new RangeError("CLOSING account snapshot predates the PREFLIGHT/OPENING baseline")
     }
     const assets = [...new Set([...opening.keys(), ...closing.keys()])].sort()
     const assetDeltas = assets.map((asset) => {
@@ -78,7 +82,7 @@ export function reconcileAccountSnapshotDeltas({ openingSnapshot, closingSnapsho
       }
     })
     const auditReasons = [
-      ...(openingSnapshot.auditReasons ?? []).map((reason) => "OPENING:" + reason),
+      ...(openingSnapshot.auditReasons ?? []).map((reason) => openingPhase + ":" + reason),
       ...(closingSnapshot.auditReasons ?? []).map((reason) => "CLOSING:" + reason),
     ]
     const auditStatus = openingSnapshot.auditStatus === "COMPLETE" &&

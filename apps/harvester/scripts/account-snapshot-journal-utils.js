@@ -5,16 +5,17 @@ const SNAPSHOT_EVENT = "account.snapshot_captured"
 const RECOVERY_CYCLE_EVENT = "recovery.cycle_completed"
 
 /**
- * Reconcile OPENING/CLOSING snapshot event pairs independently per JSONL
- * session. Missing or duplicate endpoints are incomplete audits, never zeroes.
+ * Reconcile PREFLIGHT/CLOSING snapshot event pairs independently per JSONL
+ * session. Accept legacy OPENING records for historical sessions. Missing or
+ * duplicate endpoints are incomplete audits, never zeroes.
  */
 export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
   try {
-    if (!Array.isArray(records)) throw new TypeError("Journal records must be an array")
+    if (!Array.isArray(records)) {throw new TypeError("Journal records must be an array")}
     const sessions = new Map()
     for (const record of records) {
       const event = record?.payload
-      if (![SNAPSHOT_EVENT, RECOVERY_CYCLE_EVENT].includes(event?.name)) continue
+      if (![SNAPSHOT_EVENT, RECOVERY_CYCLE_EVENT].includes(event?.name)) {continue}
       const fileName = record?.position?.fileName
       if (typeof fileName !== "string" || !fileName.trim()) {
         throw new TypeError("Account audit Journal record requires a session file name")
@@ -29,17 +30,17 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
         continue
       }
       const phase = event.data?.phase
-      if (phase === "OPENING") sessions.get(fileName).opening.push(event.data)
-      else if (phase === "CLOSING") sessions.get(fileName).closing.push(event.data)
-      else throw new TypeError("Account snapshot Journal event has an invalid phase")
+      if (phase === "PREFLIGHT" || phase === "OPENING") {sessions.get(fileName).opening.push(event.data)}
+      else if (phase === "CLOSING") {sessions.get(fileName).closing.push(event.data)}
+      else {throw new TypeError("Account snapshot Journal event has an invalid phase")}
     }
-    if (sessions.size === 0) throw new Error("No account.snapshot_captured events were found in Journal sessions")
+    if (sessions.size === 0) {throw new Error("No account.snapshot_captured events were found in Journal sessions")}
     const reports = []
     const errors = []
     for (const [session, pair] of [...sessions.entries()].sort(([left], [right]) => left.localeCompare(right))) {
       const blockers = []
-      if (pair.opening.length !== 1) blockers.push("OPENING_SNAPSHOT_COUNT:" + pair.opening.length)
-      if (pair.closing.length !== 1) blockers.push("CLOSING_SNAPSHOT_COUNT:" + pair.closing.length)
+      if (pair.opening.length !== 1) {blockers.push("PREFLIGHT_SNAPSHOT_COUNT:" + pair.opening.length)}
+      if (pair.closing.length !== 1) {blockers.push("CLOSING_SNAPSHOT_COUNT:" + pair.closing.length)}
       const recoveryCycleProfits = pair.recoveryCycleProfits
       const recoverySummary = {
         recoveryCycleCount: recoveryCycleProfits.length,

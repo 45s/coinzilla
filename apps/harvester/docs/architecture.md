@@ -318,7 +318,11 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
 
-Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its WebSocket API/stream sequence plus durable Journal barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial Binance WebSocket API `ticker.price` request/response seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket Streams-before-WebSocket API request/response ordering.
+`src/index.js` is the process entry/composition root. It creates the immutable process identity and EventBus, loads and validates configuration, acquires the host/global process locks, verifies the existing ADR-0001 durable-facts ledger before broker startup, starts the Journal observer, and passes the same durable-facts store into `startHarvester`. A clean `PROCESS_STOPPED` fact is appended only after runtime shutdown is confirmed; Journal close and process-lock release retain their existing failure gates. The Journal is an operational observer, not the restart-recovery authority.
+
+`src/bootstrap/start-harvester.js` composes the application runtime: it resolves enabled markets and exchange settings, prepares optional Telegram operator control, verifies/projects existing durable facts (and refuses a second process session while restart restoration is disabled), records the configuration/process-start facts, connects the Binance adapter, and creates the Portfolio workflow, account-snapshot manager, Conservative engine, user-data event/status/recovery handlers, market-data subscriptions, candle-history service, and shutdown handler. The sequence is source-defined: load exchange market metadata; activate the engine; start the optional operator adapter; establish user-data subscription and pass the durable PREFLIGHT account/open-order audit; then subscribe to market data and start candle history. Same-process transport recovery repeats the RECOVERY account/open-order audits before broker recovery acknowledgement. Shutdown stops operator polling, delegates order/user-data cleanup to the shutdown handler, writes the trading-enabled CLOSING account audit, disconnects, and only then records the durable process-stop fact.
+
+Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`. Account balance/open-order capture and mandatory durable-fact plus Journal audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; it owns broker reads and lifecycle barriers, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its WebSocket API/stream sequence plus durable RECOVERY audit barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial Binance WebSocket API `ticker.price` request/response seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket Streams-before-WebSocket API request/response ordering.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
@@ -346,7 +350,16 @@ Immediately before submission, `validateOrderAgainstTradingRules` independently 
 
 ## Account balance snapshot
 
-After the user-data stream is established, bootstrap loads a complete canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The complete snapshot remains in memory and is used for validation after each accounted execution; a failed or stale refresh blocks further order placement. Only the Journal event is filtered: it stores the de-duplicated base/quote asset balances for currently enabled pairs (including zero balances), not unrelated account assets. This filtering does not mutate or narrow the in-memory AccountSnapshot used by runtime checks. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
+The broker account read returns the exchange's full raw balance response, but `create-account-snapshot-manager.js` constructs the runtime `AccountSnapshot` and durable audit from a deliberately bounded asset set:
+
+- Base and quote assets from every configured market in `marketMetadata`, including disabled-pair metadata retained for audit coverage (not only currently enabled pairs).
+- A third-asset commission asset only after a positive commission in that asset is observed on an applied fill and its original baseline is successfully published.
+
+During PREFLIGHT, the manager temporarily retains the raw balance list in an in-memory lookup map. That map exists only so a later third-asset fee can be compared with its original PREFLIGHT free/locked/total balance. Unrelated wallet balances are not copied into the runtime `AccountSnapshot`, durable account-snapshot fact, or Journal DTO; they are not strategy-owned inventory. The targeted `COMMISSION_BASELINE` event contains exactly one newly observed third-asset commission balance, and that asset is then included in subsequent tracked snapshots.
+
+The lifecycle phases are distinct: startup publishes durable `PREFLIGHT` account and account-wide open-order audits; same-process user-data reconnect publishes separate `RECOVERY` account and open-order audits before broker recovery acknowledgement; trading-enabled graceful shutdown publishes a `CLOSING` account-balance audit (the shutdown handler does not publish a CLOSING open-orders snapshot). `COMMISSION_BASELINE` is a targeted one-asset audit, not a lifecycle phase. There is no `OPENING` phase. Account-snapshot durable facts are committed before the corresponding Journal event is published and durably flushed.
+
+The filtered snapshot is the exchange-availability view used by balance/commitment checks; it is not the strategy ledger. Wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
 
 This does not yet solve account-wide budget allocation or order reservations. Multiple pairs can share a quote asset, and the order lifecycle must reserve and release free/locked balances before any strategy is allowed to submit orders.
 
@@ -372,20 +385,71 @@ raw exchange response.
 `makeConservativeTradingEngine` receives a broker-independent strategy policy
 from bootstrap and connects its decisions to the validated order-submission
 use case. The policy supplies pure decision evaluation and trailing-BUY
-repricing calculations; the engine does not import strategy calculators. The
-engine owns the in-process order registry, latest market prices, last completed
-BUY reference prices, and pair pause flags. Portfolio and RecoveryLedger
-remain owned by the bootstrap domain workflow and are supplied through
-explicit callbacks. Conservative-specific order lifecycle sequencing remains
-in this engine; full multi-strategy lifecycle separation is still outstanding.
+repricing calculations; the engine does not import strategy calculators.
+`createPortfolioWorkflow` remains the owner of Portfolio and RecoveryLedger
+accounting and supplies explicit callbacks.
 
-Only order updates matching a registered Harvester client order ID are
-accepted. TRADE events must contain a canonical Fill and are applied through
-the injected accounting use case. A partial order fill updates actual
-accounting but does not advance the strategy; the engine waits for the order's
-terminal state. Unknown/manual order events pause the pair and never alter
-strategy inventory. A fully filled order triggers immediate strategy
-reevaluation from the latest known price.
+The engine remains the serialized Conservative application boundary. Its
+transition queue coordinates the order registry, latest market prices/books,
+BUY reference prices, processed-fill identities and execution totals, durable
+pause/recovery markers, deferred evaluations, volatility state, operator
+pause/resume, broker order lifecycle and shutdown-facing order operations.
+The central final order-submission gate and serialized state application remain
+engine-owned; the engine is not a domain policy and does not parse raw Binance
+messages.
+
+P3 has introduced four cohesive use-case boundaries on the current branch:
+
+- `makeCollectOwnedOrderSnapshots` in
+  `src/use-cases/collect-owned-order-snapshots.js` performs read-only REST
+  evidence collection for registered orders: account-wide open-order reads per
+  affected symbol, canonical order-history identity checks, complete paginated
+  fill-history retrieval, and parity checks against Journal fill evidence supplied in the engine's initial state.
+  It returns validated snapshots and does not mutate the order registry or
+  accounting. `applyOwnedOrderSnapshotsTransition` remains in the engine and
+  applies those snapshots inside the serialized transition queue.
+- `makeVolatilityProtectionWorkflow` in
+  `src/use-cases/volatility-protection-workflow.js` owns per-market volatility
+  snapshot deduplication, protection-state transitions, cancellation retry
+  timing, and recovery-triggered reevaluation. It receives the engine's
+  serialized transition, owned-BUY cancellation, and latest-evaluation
+  callbacks. The central order gate still reads the protection state and
+  prevents disallowed submissions.
+- `makeOrderEventWorkflow` in
+  `src/use-cases/order-event-workflow.js` coordinates normalized user-data
+  order events, external-order ownership policy, execution-fill application,
+  terminal order handling and recovery-cycle transitions. It receives the
+  engine's serialization, accounting, cancellation and strategy callbacks;
+  Portfolio/RecoveryLedger mutation remains owned by
+  `createPortfolioWorkflow`.
+- `makeReconcileTerminalOrderFills` in
+  `src/use-cases/reconcile-terminal-order-fills.js` reads canonical REST fill
+  history, unions it with already-processed and current stream fills, validates
+  order identity and duplicate facts, proves cumulative executed-quantity and
+  terminal-status parity, then delegates each fill to the order-event
+  workflow's existing accounting transition. It owns no Portfolio/RecoveryLedger
+  state and does not bypass the engine's durable fill barriers.
+
+The engine has reduced from 3,335 lines at the verified `develop` baseline to
+2,266 lines on this branch. The extraction is incremental, not a completed
+lifecycle redesign. Strategy evaluation/commitment allocation, execution
+totals and recovery markers, owned-order cancellation/replacement, and the
+central submission gate remain coordinated by the engine. The engine still
+owns the serialized state transition queue; the extracted workflows do not
+create a second concurrency boundary. See the [Harvester roadmap](../ROADMAP.md)
+and [P3 issue #1073](https://github.com/45s/coinzilla/issues/1073).
+
+Only order updates matched to a registered Harvester client order ID may
+mutate the order registry or accounting. TRADE events must contain a canonical
+Fill and pass the durable execution-fact barrier before Portfolio/RecoveryLedger
+state is committed. A partial fill updates actual accounting but does not
+advance the strategy; the engine waits for the order's terminal state.
+Unmatched manual/external reports are diagnostic-only under the default
+per-pair `externalOrdersPolicy: "ignore"`; the explicit `"block"` policy
+retains the same-symbol restriction. Unmatched Harvester-reserved `h-`
+identities and malformed/conflicting identities remain fail-closed. A fully
+filled order triggers immediate strategy reevaluation from the latest known
+price.
 
 ## Conservative recovery SELL replacement
 
@@ -691,4 +755,4 @@ Manual trading can still change exchange free balances or inventory; Harvester u
 
 The single application-wide named `appConfig` export is composed from focused named-export modules. Inbound Telegram defaults are isolated as `OPERATOR_CONTROL_CONFIG` in `config/operator-control.js` and imported by `config/index.js`; validation remains at the single application configuration boundary. Harvester configuration and domain modules use named exports only.
 
-Harvester operator control is an application capability, not a domain entity, strategy policy, broker adapter or generic command bus. The Conservative engine owns the serialized market-scoped operator-pause state; application use cases authorize a trusted `trading-operator` actor and append `OPERATOR_MARKET_PAUSED` / `OPERATOR_MARKET_RESUMED` through the ADR-0001 durable-facts port before applying in-memory state. The first inbound transport is a private-chat Telegram Long Polling adapter with an explicit user-ID allowlist and only `/pause <SYMBOL>` exposed. It never cancels existing exchange orders; resting BUYs may still fill, and recovery SELLs/accounting continue. See [ADR-0002](./architecture/decisions/0002-transport-independent-operator-control.md) and the [operator-control contract](./operator-control/README.md). The adapter is implemented but not started by the runtime: operator facts must first be projected and restored behind the closed ADR-0001 readiness gate, with recovery Steps 7–9 complete.
+Harvester operator control is an application capability, not a domain entity, strategy policy, broker adapter or generic command bus. The Conservative engine owns the serialized market-scoped operator-pause state; application use cases authorize a trusted `trading-operator` actor and append `OPERATOR_MARKET_PAUSED` / `OPERATOR_MARKET_RESUMED` through the ADR-0001 durable-facts port before applying in-memory state. The first inbound transport is a private-chat Telegram Long Polling adapter with an explicit user-ID allowlist and only `/pause <SYMBOL>` exposed. It is runtime-wired but disabled by default; when enabled, bootstrap starts it after engine activation and before user-data subscription, and stops it before runtime shutdown. It never cancels existing exchange orders; resting BUYs may still fill, and recovery SELLs/accounting continue. Pause state is process-lifetime and is not restored after restart. See [ADR-0002](./architecture/decisions/0002-transport-independent-operator-control.md), [ADR-0003](./architecture/decisions/0003-process-lifetime-operator-pause.md), and the [operator-control contract](./operator-control/README.md).
