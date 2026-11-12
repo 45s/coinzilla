@@ -82,6 +82,42 @@ Illustrative initial thresholds, subject to offline historical validation before
 | Recovery | <= 1.3 | Count one stable completed candle while all data remains valid. |
 | Resume | <= 1.3 for 3 consecutive completed candles | Transition to NORMAL after cancellation/reconciliation is resolved. |
 
+### Worked example: reference NATR is 0.30%
+
+The ratio is a **multiplier**, not a percentage by itself:
+
+`volatility ratio = current candle NATR / average NATR of the previous 60 completed candles`
+
+Assume the average of the previous 60 NATR observations is **0.30%**. The current candle's NATR is compared with that reference:
+
+| Current NATR | Calculation | Ratio | Meaning |
+| ---: | ---: | ---: | --- |
+| 0.30% | 0.30% / 0.30% | 1.0 | Same volatility as the reference. |
+| 0.39% | 0.39% / 0.30% | 1.3 | Recovery boundary: this candle may count toward recovery if protection is already active. |
+| 0.45% | 0.45% / 0.30% | 1.5 | Warning threshold; this alone does not activate protection. |
+| 0.60% | 0.60% / 0.30% | 2.0 | Protection threshold: enter PROTECTED and block new non-recovery actions. |
+| 0.75% | 0.75% / 0.30% | 2.5 | 2.5 times the reference; protection is active. |
+
+In this example, **0.60% or higher** activates protection. It is not 0.39%: `0.30% × 1.3 = 0.39%` is the recovery boundary, not the activation boundary. Likewise, a ratio of `2.0` means “twice the reference volatility”; it does not mean “2% NATR”.
+
+The absolute NATR values move with the reference. If the previous-60 average later becomes 0.20%, the protection boundary becomes 0.40% (`0.20% × 2.0`) and the recovery boundary becomes 0.26% (`0.20% × 1.3`). The runtime recalculates the reference from each market's own candle history; 0.30% is only the example baseline here.
+
+### What happens after protection activates?
+
+Suppose the reference is still 0.30% and a candle reaches 0.60% NATR (ratio 2.0). The market enters PROTECTED. A later candle at 0.50% NATR has ratio 1.67: it is below the activation threshold, but it is **not** low enough to recover. The market remains PROTECTED and the stable-candle count resets to zero.
+
+Recovery requires three **different, consecutive completed** 1-minute candles, each with ratio at or below 1.3 (at or below 0.39% NATR in this example):
+
+| Completed candle | NATR | Ratio | Recovery count |
+| --- | ---: | ---: | ---: |
+| First | 0.38% | 1.27 | 1 of 3 |
+| Second | 0.36% | 1.20 | 2 of 3 |
+| Third | 0.39% | 1.30 | 3 of 3 — volatility condition satisfied |
+
+The market can return to NORMAL after the third candle only if the candle feed is still ready/current and all Harvester-owned BUY cancellation and fill reconciliation is resolved. If an owned BUY remains active or unresolved, the state stays RECOVERING with reason `OWNED_BUY_ORDERS_UNRESOLVED` until that order is resolved. Repeated updates for the same candle do not count as additional stable candles.
+
+**The important distinction:** a ratio from above 1.3 but below 2.0 does not newly trigger protection in a NORMAL market, but it cannot recover a market that is already protected. A ratio at or below 1.3 is required to build the three-candle recovery sequence.
+
 The thresholds are initial policy candidates, not calibrated production guarantees. They must be tested against representative historical data before the feature is enabled for unattended trading. A ratio between the recovery and protection thresholds does not resume a protected market; it resets the stable-candle count.
 
 NATR is retained in diagnostics as well as the ratio. Raw ATR values must never be compared across symbols with different price scales.
