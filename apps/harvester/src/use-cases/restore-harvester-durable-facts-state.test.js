@@ -55,7 +55,26 @@ const records = ({ accountBlocker = false } = {}) => [
     side: "BUY", type: "LIMIT_MAKER", price: "100", quantity: "0.1", executedQuantity: "0",
     purpose: null, outcome: "ACKNOWLEDGED", brokerOrderId: "broker-order-1", status: "OPEN",
   }, "order-submission-outcome:harvester-client-1:ACKNOWLEDGED"),
-  ...(accountBlocker ? [record(7, "SAFETY_BLOCKER_RAISED", {
+  record(7, "EXECUTION_FILL_APPLIED", {
+    fillId: "binance:BTCUSDT:trade-1",
+    tradeId: "trade-1",
+    brokerOrderId: "broker-order-1",
+    clientOrderId: "harvester-client-1",
+    marketId: market.id,
+    venue: market.venue,
+    symbol: market.symbol,
+    baseAssetId: market.baseAsset.id,
+    quoteAssetId: market.quoteAsset.id,
+    side: "BUY",
+    price: "100",
+    quantity: "0.02",
+    quoteQuantity: "2",
+    liquidityRole: "MAKER",
+    executedAt: 1_700_000_000_002,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  }, "execution-fill-applied:binance:BTCUSDT:trade-1"),
+  ...(accountBlocker ? [record(8, "SAFETY_BLOCKER_RAISED", {
     blockerId, scope: "ACCOUNT", symbol: null, reason: "ACCOUNTING_INTEGRITY_FAILURE", evidenceDigest: "a".repeat(64),
   }, "safety-blocker-raised:" + blockerId)] : []),
 ]
@@ -82,6 +101,10 @@ test("restores an offline candidate Portfolio, RecoveryLedger map, and UNKNOWN o
   assert.ok(result.data.portfolio instanceof Portfolio, "The candidate must use the canonical Portfolio aggregate.")
   assert.ok(result.data.orderRegistry instanceof OrderRegistry, "The candidate must use the canonical OrderRegistry aggregate.")
   assert.equal(result.data.orderRegistry.getOrder({ clientOrderId: "harvester-client-1" }).status, "UNKNOWN", "Every acknowledged order must remain UNKNOWN until exchange reconciliation.")
+  assert.equal(result.data.orderRegistry.getOrder({ clientOrderId: "harvester-client-1" }).executedQuantity.amount, "0.02", "The candidate order must retain exact durable fill quantity.")
+  assert.equal(result.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02", "Durable BUY fills must rebuild canonical Portfolio inventory.")
+  assert.equal(result.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2", "Durable BUY fills must rebuild exact quote cost.")
+  assert.equal(result.data.recoveryLedgers.get(market.id).buyCost, "2", "The candidate RecoveryLedger must remain aligned with Portfolio.spent.")
   assert.equal(result.data.requiresExchangeReconciliation, true, "Candidate restoration must not open the trading gate.")
   assert.equal(result.data.historyCoverageComplete, false, "The candidate must not infer global market-history completeness.")
   assert.equal(result.data.candidateOnly, true)
