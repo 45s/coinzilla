@@ -93,6 +93,7 @@ export async function startHarvester({
       configurationFingerprint: processConfigurationFingerprint,
       strategyName: baseline.data.strategyName,
       markets: baseline.data.markets,
+      tradingEnabled,
     })
     if (started?.ok !== true || started.data?.durable !== true) {
       throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +

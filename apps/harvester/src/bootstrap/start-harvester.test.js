@@ -3524,6 +3524,7 @@ test("records configuration and process boundaries before broker startup and aft
   assert.equal(configuration.runtimeSessionId, "start-harvester-process-boundary-test")
   assert.equal(processStart.runtimeSessionId, "start-harvester-process-boundary-test")
   assert.equal(processStart.data.configurationFingerprint, configuration.data.fingerprint)
+  assert.equal(processStart.data.tradingEnabled, true, "The durable process boundary must preserve whether this session could submit orders.")
 
   await harvester.stop()
 

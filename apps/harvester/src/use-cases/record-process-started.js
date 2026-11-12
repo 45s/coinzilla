@@ -5,6 +5,7 @@ export async function recordProcessStarted({
   configurationFingerprint,
   strategyName,
   markets,
+  tradingEnabled,
 } = {}) {
   try {
     const sessionId = durableFactsStore?.runtimeSessionId
@@ -15,7 +16,7 @@ export async function recordProcessStarted({
     if (typeof configurationFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(configurationFingerprint)) {
       throw new TypeError("recordProcessStarted requires a SHA-256 configuration fingerprint")
     }
-    if (typeof strategyName !== "string" || !strategyName.trim() ||
+    if (typeof strategyName !== "string" || !strategyName.trim() || typeof tradingEnabled !== "boolean" ||
         !Array.isArray(markets) || markets.length === 0 ||
         markets.some((market) => typeof market !== "string" || !/^[A-Z0-9]{3,30}$/.test(market))) {
       throw new TypeError("recordProcessStarted requires a strategy name and canonical configured markets")
@@ -23,7 +24,7 @@ export async function recordProcessStarted({
     const result = await durableFactsStore.append({
       factId: "process-started:" + sessionId,
       factType: "PROCESS_STARTED",
-      data: { configurationFingerprint, strategyName, markets: [...markets].sort() },
+      data: { configurationFingerprint, strategyName, markets: [...markets].sort(), tradingEnabled },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Process-start append did not confirm durable commitment")] })
