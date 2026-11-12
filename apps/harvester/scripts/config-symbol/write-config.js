@@ -89,7 +89,7 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
     try {
       currentConfigText = await readFile(absoluteConfigPath, "utf8")
     } catch (cause) {
-      throw new Error("Unable to read Harvester app config module at " + absoluteConfigPath + ": " + cause.message, { cause })
+      throw new Error("Unable to read CG coin-grabber strategy config module at " + absoluteConfigPath + ": " + cause.message, { cause })
     }
 
     const currentConfig = await importAppConfig(absoluteConfigPath)
