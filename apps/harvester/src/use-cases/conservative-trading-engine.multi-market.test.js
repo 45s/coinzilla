@@ -48,7 +48,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false, externalOrdersPolicyBySymbol = {} } = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -65,6 +65,9 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
         settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
       enabled: true,
+      ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
+        ? {}
+        : { externalOrdersPolicy: externalOrdersPolicyBySymbol[market.symbol] }),
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
@@ -268,7 +271,9 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
 })
 
 test("an unowned order in one market pauses only that market and cannot block another market fill", async () => {
-  const { engine, pauses, accountedFills } = await createHarness()
+  const { engine, pauses, accountedFills } = await createHarness({
+    externalOrdersPolicyBySymbol: { SOLUSDT: "block" },
+  })
   await startBothMarkets(engine)
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solMarket = marketsBySymbol.get("SOLUSDT")

@@ -1,7 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
-import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
 const testEventPublisher = Object.freeze({
@@ -70,7 +69,7 @@ const appConfig = {
 }
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
-  if (!quoteCode) throw new Error("Unsupported test market quote asset for " + symbol)
+  if (!quoteCode) {throw new Error("Unsupported test market quote asset for " + symbol)}
   const baseCode = symbol.slice(0, -quoteCode.length)
   const baseAsset = new Asset({ id: "asset:" + baseCode, code: baseCode })
   const quoteAsset = new Asset({ id: "asset:" + quoteCode, code: quoteCode })
@@ -254,7 +253,7 @@ const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
     volume: "1",
     isClosed: true,
   })
-  broker.getCandles = async ({ symbol, interval, limit } = {}) => ({
+  broker.getCandles = async ({ symbol, limit } = {}) => ({
     ok: true,
     data: symbols.includes(symbol)
       ? Array.from({ length: Math.min(limit ?? 100, 100) }, (_, index) =>
@@ -411,7 +410,7 @@ test("subscribes every enabled market before waiting for the first market's REST
   const firstTicker = new Promise((resolve) => { resolveFirstTicker = resolve })
   broker.getPrices = async ({ symbol }) => {
     calls.push("prices:" + symbol)
-    if (symbol === "BTCUSDT") return firstTicker
+    if (symbol === "BTCUSDT") {return firstTicker}
     return { ok: true, data: { symbol, price: "65000" } }
   }
   let accountSnapshotTime = 0
@@ -460,7 +459,7 @@ test("subscribes every enabled market before waiting for the first market's REST
   const subscribeForPrices = broker.subscribeForPrices
   broker.subscribeForPrices = async (input) => {
     const result = await subscribeForPrices(input)
-    if (input.symbol === "ETHUSDT") resolveSecondSubscription()
+    if (input.symbol === "ETHUSDT") {resolveSecondSubscription()}
     return result
   }
 
@@ -895,7 +894,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   let accountReads = 0
   broker.getAccountSnapshot = async () => {
     accountReads += 1
-    if (accountReads === 2) return { ok: false, errors: [new Error("account endpoint unavailable")] }
+    if (accountReads === 2) {return { ok: false, errors: [new Error("account endpoint unavailable")] }}
     return getAccountSnapshot()
   }
   let acknowledgementCount = 0
@@ -1184,7 +1183,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
   let calls = 0
   broker.getAccountSnapshot = async () => {
     calls += 1
-    if (calls === 1) return getAccountSnapshot()
+    if (calls === 1) {return getAccountSnapshot()}
     return { ok: false, errors: [new Error("account endpoint unavailable")] }
   }
   const result = await startHarvesterForTest({
@@ -1351,7 +1350,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     getCandles: async () => ({ ok: true, data: [] }),
     subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     cancelOrder: async ({ order }) => {
-      if (order.side === "BUY") buyCancellationCount.value += 1
+      if (order.side === "BUY") {buyCancellationCount.value += 1}
       const canceledOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: order.brokerOrderId,
@@ -1371,7 +1370,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       return { ok: true, data: canceledOrder }
     },
     getFills: async ({ orderId } = {}) => {
-      if (recoveryPending) recoveryFillHistoryReads += 1
+      if (recoveryPending) {recoveryFillHistoryReads += 1}
       return { ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }
     },
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => {
@@ -1391,7 +1390,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
-      if (recoveryPending) recoveryAccountSnapshotReads += 1
+      if (recoveryPending) {recoveryAccountSnapshotReads += 1}
       snapshotTime += 1
       const balances = [
         new Balance({
@@ -1469,8 +1468,8 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     placeOrder: async ({ order }) => {
       calls.push({ side: order.side, price: order.price, quantity: order.quantity })
       submittedOrders.push(order)
-      if (submittedOrders.length === 3) resolveThreeOrders()
-      if (submittedOrders.length === 5) resolveFiveOrders()
+      if (submittedOrders.length === 3) {resolveThreeOrders()}
+      if (submittedOrders.length === 5) {resolveFiveOrders()}
       const acknowledgedOrder = new CanonicalOrder({
           clientOrderId: order.clientOrderId,
           brokerOrderId: "broker-" + order.clientOrderId,
@@ -1523,7 +1522,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     eventPublisher: {
       publish: (event) => {
         publishedEvents.push(event)
-        if (event.name === "recovery.cycle_completed") signalRecoveryCompleted()
+        if (event.name === "recovery.cycle_completed") {signalRecoveryCompleted()}
         return { ok: true }
       },
       flush: async () => {
@@ -2082,8 +2081,6 @@ test("stops broker intake before draining queued user-data and disconnects after
     }
   }
   const originalSubscribeForUserData = broker.subscribeForUserData.bind(broker)
-  let resolveUserDataUnsubscribe
-  const userDataUnsubscribed = new Promise((resolve) => { resolveUserDataUnsubscribe = resolve })
   broker.subscribeForUserData = async (handlers) => {
     const result = await originalSubscribeForUserData(handlers)
     return {
@@ -2092,7 +2089,6 @@ test("stops broker intake before draining queued user-data and disconnects after
         ...result.data,
         disconnect: async () => {
           calls.push("unsubscribe:user-data")
-          resolveUserDataUnsubscribe()
           return result.data.disconnect()
         },
       },
@@ -2142,21 +2138,18 @@ test("stops broker intake before draining queued user-data and disconnects after
 })
 
 
-test("logs safe correlation details when an execution report is not owned", async () => {
+test("records unmatched manual order reports as diagnostics without closing user-data readiness", async () => {
   const broker = createBroker()
-  const errors = []
+  const events = []
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development",
-    },
+    env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
-    logger: {
-      info() {},
-      debug() {},
-      error: (entry) => errors.push(entry),
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => ({ ok: true, durable: true }),
     },
+    logger: { info() {}, debug() {}, error() {} },
   })
   const metadata = createMarketMetadata("BTCUSDT")
   const externalOrder = new CanonicalOrder({
@@ -2182,36 +2175,15 @@ test("logs safe correlation details when an execution report is not owned", asyn
   })
   await new Promise((resolve) => setImmediate(resolve))
 
-  const diagnostic = errors.find((entry) =>
-    entry.message === "rejected an unowned or invalid order event")
-  assert.ok(diagnostic)
-  assert.equal(diagnostic.symbol, "BTCUSDT")
-  assert.equal(diagnostic.brokerOrderId, "987654")
-  assert.equal(diagnostic.clientOrderId, "external-client-id")
-  assert.equal(diagnostic.side, "BUY")
-  assert.equal(diagnostic.executionType, "NEW")
-  assert.equal(diagnostic.orderStatus, "OPEN")
-  assert.equal(diagnostic.executionId, 123456)
-  assert.equal(diagnostic.registryMatchedByClientOrderId, false)
-  assert.equal(diagnostic.registryMatchedByBrokerOrderId, false)
-  assert.equal(diagnostic.clientIdMatchStatus, undefined)
-  assert.ok(Array.isArray(diagnostic.errors))
+  const diagnostic = events.find((event) => event.name === "execution.unowned_order")
+  assert.ok(diagnostic, "The external order must remain visible in the diagnostic event stream.")
+  assert.equal(diagnostic.data.clientOrderId, "external-client-id")
+  assert.equal(diagnostic.data.brokerOrderId, "987654")
+  assert.equal(result.userDataReady, true, "A manual order report must not close Harvester's user-data readiness gate.")
+  assert.equal(result.userDataStatus, "READY")
 
-  await assert.rejects(
-    result.stop(),
-    (error) => {
-      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
-      assert.ok(
-        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
-        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
-      )
-      return true
-    },
-    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
-  )
+  await result.stop()
 })
-
-
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
   const broker = createBroker()
   let acknowledgementCount = 0
@@ -2414,7 +2386,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
   const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
   broker.getOpenOrders = async ({ symbol } = {}) => {
-    if (symbol === undefined) return { ok: true, data: [] }
+    if (symbol === undefined) {return { ok: true, data: [] }}
     signalOpenOrdersStarted()
     await openOrdersGate
     return { ok: true }
@@ -2826,7 +2798,7 @@ test("blocks trading startup when either PREFLIGHT audit event cannot be durably
         publish: (event) => { events.push(event); return { ok: true } },
         flush: async () => {
           flushCount += 1
-          if (flushCount !== failedFlush) return { ok: true, durable: true }
+          if (flushCount !== failedFlush) {return { ok: true, durable: true }}
           return nonDurable
             ? { ok: true, durable: false }
             : { ok: false, errors: [new Error("journal fsync failed")] }
@@ -3063,30 +3035,21 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   } catch (error) {
     stopError = error
   }
-  if (testError) throw testError
-  if (stopError) throw stopError
+  if (testError) {throw testError}
+  if (stopError) {throw stopError}
 
   assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"), "the BUY cancellation request must complete before user-data intake is disconnected")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "user-data intake must be disconnected only after cancellation reconciliation and before broker disconnect")
 })
 
 
-test("cancels acknowledged Harvester BUY orders across markets after an unowned external execution closes the global accounting gate", async () => {
+test("does not cancel Harvester BUY orders or close the accounting gate after a manual external fill", async () => {
   const calls = []
   const broker = createBroker(calls)
   const cancelledBrokerOrderIds = []
   let resolveOwnedBuyAcknowledged
   const ownedBuyAcknowledged = new Promise((resolve) => {
     resolveOwnedBuyAcknowledged = resolve
-  })
-  let resolveOwnedBuyCancellation
-  const ownedBuyCancellation = new Promise((resolve) => {
-    resolveOwnedBuyCancellation = resolve
-  })
-
-  broker.getPrices = async ({ symbol } = {}) => ({
-    ok: true,
-    data: { symbol, price: "6500" },
   })
   broker.placeOrder = async ({ order } = {}) => {
     const metadata = createMarketMetadata(order.symbol)
@@ -3114,11 +3077,13 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
   const cancelOrder = broker.cancelOrder
   broker.cancelOrder = async ({ order } = {}) => {
     cancelledBrokerOrderIds.push(order.brokerOrderId)
-    const result = await cancelOrder({ order })
-    if (order.brokerOrderId === "owned-buy-1") resolveOwnedBuyCancellation(order.brokerOrderId)
-    return result
+    return cancelOrder({ order })
   }
 
+  broker.getPrices = async ({ symbol } = {}) => ({
+    ok: true,
+    data: { symbol, price: "6500" },
+  })
   makeVolatilityReadyBroker(broker, ["BTCUSDT", "ETHUSDT"])
   const appConfigWithRegularLimitBuys = {
     ...appConfig,
@@ -3137,19 +3102,13 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
       },
     },
   }
-  const journalEvents = []
+  const events = []
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfigWithRegularLimitBuys,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development",
-    },
+    env: { ...binanceEnv, NODE_ENV: "development" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
-      publish: (event) => {
-        journalEvents.push(event)
-        return { ok: true }
-      },
+      publish: (event) => { events.push(event); return { ok: true } },
       flush: async () => ({ ok: true, durable: true }),
     },
     onUserDataEvent: ({ event } = {}) => {
@@ -3160,25 +3119,16 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     logger: { info() {}, debug() {}, error() {} },
   })
 
-  // The initial REST ticker seed arrives before candle warm-up. Submit a fresh
-  // price after the market's volatility snapshot becomes ready to exercise the
-  // ownership-failure cancellation path rather than bypassing the safety gate.
   await broker.emitPrice("BTCUSDT", {
     symbol: "BTCUSDT",
     price: "65000",
     timestamp: Date.now(),
   })
-
   await waitForTestSignal(
     ownedBuyAcknowledged,
-    "acknowledged Harvester BUY before the ownership failure",
+    "acknowledged Harvester BUY before the manual external fill",
     () => ({ calls, userDataStatus: result.userDataStatus }),
     2_000,
-  )
-  assert.deepEqual(
-    (await broker.getOpenOrders({})).data.map((order) => order.id),
-    ["owned-buy-1"],
-    "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
   )
 
   const metadata = createMarketMetadata("ZROUSDT")
@@ -3217,58 +3167,20 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     executedOrder: externalOrder,
     fill: externalFill,
   })
+  await new Promise((resolve) => setImmediate(resolve))
 
-  await waitForTestSignal(
-    ownedBuyCancellation,
-    "safety cancellation of the acknowledged Harvester BUY",
-    () => ({
-      cancelledBrokerOrderIds,
-      userDataStatus: result.userDataStatus,
-      userDataReady: result.userDataReady,
-    }),
-    2_000,
-  )
-
+  assert.deepEqual(cancelledBrokerOrderIds, [], "A manual external fill must not cancel a Harvester-owned BUY.")
+  assert.equal(result.userDataReady, true, "Manual external fills must not close the global user-data/accounting gate.")
+  assert.equal(result.userDataStatus, "READY")
+  assert.ok(events.some((event) => event.name === "execution.unowned_order"))
   assert.deepEqual(
-    cancelledBrokerOrderIds,
+    (await broker.getOpenOrders({})).data.map((order) => order.id),
     ["owned-buy-1"],
-    "an account-integrity failure must cancel the Harvester-owned BUY without ever canceling the unowned external order",
-  )
-  assert.equal(
-    result.userDataReady,
-    false,
-    "canceling resting BUY exposure must not reopen trading while execution ownership/accounting remains unsafe",
-  )
-  assert.equal(
-    result.userDataStatus,
-    "EXECUTION_ACCOUNTING_FAILED",
-    "the original execution-accounting failure must remain visible after safety cancellation",
-  )
-  assert.equal(
-    (await broker.getOpenOrders({})).data.length,
-    0,
-    "the owned BUY must reach a broker-confirmed terminal state before the safety halt is considered complete",
-  )
-  assert.ok(
-    journalEvents.some((event) => event.name === "order.cancel_requested"),
-    "the emergency BUY cancellation must preserve the durable cancellation-intent journal barrier",
+    "The Harvester-owned BUY must remain untouched while the manual order is ignored.",
   )
 
-  await assert.rejects(
-    result.stop(),
-    (error) => {
-      assert.ok(error instanceof AggregateError, "shutdown must aggregate the unresolved account-integrity state instead of reporting success")
-      assert.ok(
-        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
-        "the closing audit must retain the original user-data/accounting reconciliation failure after BUY cancellation",
-      )
-      return true
-    },
-    "the runtime must remain fail-closed at shutdown even after all owned BUY exposure has been canceled",
-  )
+  await result.stop()
 })
-
-
 test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
   const calls = []
   const broker = createBroker(calls)

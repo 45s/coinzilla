@@ -21,14 +21,6 @@ import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 
-function logSystem(logger, data) {
-  if (typeof logger?.system === "function") {
-    logger.system(data)
-    return
-  }
-  logger?.info?.(data)
-}
-
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -61,15 +53,15 @@ export async function startHarvester({
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
 
-  let accountSnapshotManager
+  const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
-    if (!accountSnapshotManager) {
+    if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
   }
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
-  let recoveredState = Object.freeze({
+  const recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
@@ -104,8 +96,7 @@ export async function startHarvester({
   const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
-  let candleHistoryService
-  candleHistoryService = createCandleHistoryService({
+  const candleHistoryService = createCandleHistoryService({
     broker,
     logger,
     now,
@@ -142,7 +133,7 @@ export async function startHarvester({
     pendingRecovery: false,
     intakeStopped: false,
   }
-  accountSnapshotManager = createAccountSnapshotManager({
+  const accountSnapshotManager = createAccountSnapshotManager({
     broker,
     eventPublisher,
     marketMetadata,
@@ -153,15 +144,16 @@ export async function startHarvester({
     logger,
     now,
   })
+  accountSnapshotManagerRef.current = accountSnapshotManager
   const {
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
     publishAccountSnapshot,
   } = accountSnapshotManager
-  const resumeDeferredStrategyEvaluations = ({} = {}) => {
-    if (!tradingEngine || !userDataState.ready || userDataState.stopped) return
+  const resumeDeferredStrategyEvaluations = () => {
+    if (!tradingEngine || !userDataState.ready || userDataState.stopped) {return}
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
-      if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
+      if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })}
     }).catch((error) => {
       logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
@@ -191,7 +183,7 @@ export async function startHarvester({
     while (true) {
       const queuedEvents = userDataState.eventQueue
       await queuedEvents
-      if (queuedEvents === userDataState.eventQueue) return
+      if (queuedEvents === userDataState.eventQueue) {return}
     }
   }
 
@@ -240,6 +232,7 @@ export async function startHarvester({
       completeRecoveryCycle,
       canTrade: () => userDataState.ready,
       hasUnownedOpenOrdersForSymbol: accountSnapshotManager.hasUnownedOpenOrdersForSymbol,
+      hasUnresolvedHarvesterOpenOrdersForSymbol: accountSnapshotManager.hasUnresolvedHarvesterOpenOrdersForSymbol,
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
@@ -324,13 +317,14 @@ export async function startHarvester({
       throw new AggregateError(
         [error, ...cleanupErrors],
         "Harvester market-data startup failed and cleanup was incomplete",
+        { cause: error },
       )
     }
     throw error
   }
 
   userDataState.startupComplete = true
-  if (userDataState.pendingRecovery) startUserDataRecovery()
+  if (userDataState.pendingRecovery) {startUserDataRecovery()}
 
   const stop = createShutdownHandler({
     state: userDataState,
