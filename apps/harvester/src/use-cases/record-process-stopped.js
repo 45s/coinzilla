@@ -16,7 +16,7 @@ export async function recordProcessStopped({ durableFactsStore, reason, clean } 
     if (history?.ok !== true) { throw history?.errors?.[0] ?? new Error("Unable to verify the current process-start boundary") }
     const started = history.data.records.find((record) =>
       record.factType === "PROCESS_STARTED" && record.runtimeSessionId === sessionId)
-    if (!started) throw new Error("Process-stop boundary does not match a durable process-start session")
+    if (!started) { throw new Error("Process-stop boundary does not match a durable process-start session") }
     const result = await durableFactsStore.append({
       factId: "process-stopped:" + sessionId,
       factType: "PROCESS_STOPPED",

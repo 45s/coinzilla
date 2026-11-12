@@ -18,7 +18,7 @@ export async function recordRecoveryCycleCompleted({
     }
     if (completion?.eligible !== true) { throw new TypeError("Only an eligible recovery cycle can be durably completed") }
     const market = recoveryLedger.market
-    if (position.market.id !== market.id) throw new TypeError("Recovery-cycle Position and ledger markets must match")
+    if (position.market.id !== market.id) { throw new TypeError("Recovery-cycle Position and ledger markets must match") }
     if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0) {
       throw new TypeError("Recovery-cycle authoritative Position.spent must match RecoveryLedger buyCost")
     }
