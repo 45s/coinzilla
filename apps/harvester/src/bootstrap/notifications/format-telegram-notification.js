@@ -27,12 +27,21 @@ function symbol(value) {
 
 function side(value) {
   const normalized = text(value, "UNKNOWN", 24).toUpperCase()
-  return { label: normalized, icon: normalized === "BUY" ? "🟢" : normalized === "SELL" ? "🔴" : "⚪" }
+  let icon = "⚪"
+  if (normalized === "BUY") {
+    icon = "🟢"
+  } else if (normalized === "SELL") {
+    icon = "🔴"
+  }
+  return { label: normalized, icon }
 }
 
 function fillIcon(value) {
   const normalized = text(value, "", 24).toUpperCase()
-  return normalized === "BUY" ? "✅" : normalized === "SELL" ? "💰" : "💰"
+  if (normalized === "BUY") {
+    return "✅"
+  }
+  return "💰"
 }
 
 function orderId(data) {
@@ -61,10 +70,10 @@ const formatters = Object.freeze({
       trade === undefined || trade === null ? null : `#${text(trade, "n/a", 96)}`,
     ].filter(Boolean).join("\n")
   },
-  "bot.pair_paused": ({ data }) => `⚠️ ${symbol(data.symbol)} PAUSED · ${text(data.message ?? data.reason)}`,
-  "bot.recovery_failed": ({ data }) => `⚠️ BOT RECOVERY FAILED · ${text(data.message ?? data.reason)}`,
-  "bot.recovery_completed": ({ data }) => `✅ BOT RECOVERY COMPLETED · ${text(data.message ?? data.summary, "Recovery completed")}`,
-  "bot.startup_failed": ({ data }) => `⚠️ BOT STARTUP FAILED · ${text(data.stage, "n/a", 64)} · ${text(data.error?.message ?? data.message)}`,
+  "bot.pair_paused": ({ data }) => `⏹️ ${symbol(data.symbol)} PAUSED · ${text(data.message ?? data.reason)}`,
+  "bot.recovery_failed": ({ data }) => `🚨 BOT RECOVERY FAILED · ${text(data.message ?? data.reason)}`,
+  "bot.recovery_completed": ({ data }) => `📡 BOT RECOVERY COMPLETED · ${text(data.message ?? data.summary, "Recovery completed")}`,
+  "bot.startup_failed": ({ data }) => `🛑 BOT STARTUP FAILED · ${text(data.stage, "n/a", 64)} · ${text(data.error?.message ?? data.message)}`,
   "broker.connected": ({ data }) => [
     `🟩 BROKER CONNECTED · ${text(data.broker, "UNKNOWN", 64).toUpperCase()}`,
     ...(data.tradingMode === undefined ? [] : [text(data.tradingMode, "n/a", 24).toUpperCase()]),

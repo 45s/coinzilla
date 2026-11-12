@@ -73,7 +73,7 @@ test("uses the approved compact icon and layout for each notification type", () 
     [{ name: "bot.stopped", data: { reason: "SIGINT" } }, "⏹️ BOT STOPPED · SIGINT"],
     [{ name: "bot.stopped", data: {} }, "⏹️ BOT STOPPED"],
     [{ name: "order.failed", data: { side: "BUY", symbol: "LINKUSDT", message: "insufficient balance" } }, "❌ BUY LINK/USDT FAILED · insufficient balance"],
-    [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⚠️ LINK/USDT PAUSED · stale price"],
+    [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⏹️ LINK/USDT PAUSED · stale price"],
   ]
 
   for (const [event, expected] of examples) {
@@ -83,9 +83,9 @@ test("uses the approved compact icon and layout for each notification type", () 
 
 test("formats critical lifecycle and recovery events", () => {
   const examples = [
-    ["bot.recovery_failed", { message: "reconciliation failed" }, /⚠️ BOT RECOVERY FAILED · reconciliation failed/],
-    ["bot.recovery_completed", { summary: "synced" }, /✅ BOT RECOVERY COMPLETED · synced/],
-    ["bot.startup_failed", { stage: "broker-connect", message: "connection refused" }, /⚠️ BOT STARTUP FAILED · broker-connect · connection refused/],
+    ["bot.recovery_failed", { message: "reconciliation failed" }, /🚨 BOT RECOVERY FAILED · reconciliation failed/],
+    ["bot.recovery_completed", { summary: "synced" }, /📡 BOT RECOVERY COMPLETED · synced/],
+    ["bot.startup_failed", { stage: "broker-connect", message: "connection refused" }, /🛑 BOT STARTUP FAILED · broker-connect · connection refused/],
     ["account.safety_alert", { symbol: "ZROFDUSD", category: "unowned-order", message: "manual order detected" }, /⚠️ ACCOUNT SAFETY · ZRO\/FDUSD · unowned-order · manual order detected/],
     ["account.safety_alert", { symbol: "ZROFDUSD", category: "account-open-orders-blocked", message: "audit blocked" }, /🚨 ACCOUNT SAFETY · ZRO\/FDUSD · account-open-orders-blocked · audit blocked/],
   ]
