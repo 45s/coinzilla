@@ -1,3 +1,17 @@
+<!--
+PR title format (required):
+  <type>(<app-or-package>): <specific change and outcome>
+
+Use feat for new behavior, fix for bug/safety corrections, and docs for documentation-only changes.
+Scope is the owning app/package directory (for example, harvester, brokers, utils); use repo only
+for genuinely repository-wide work. Start with an action verb and describe the actual functionality.
+Avoid vague phase labels ("begin Step 8", "build foundation") and issue-number-only titles.
+Examples:
+  feat(harvester): add transport-independent operator pause controls
+  fix(harvester): preserve reasons when order submission is deferred
+  docs(harvester): explain volatility protection thresholds with examples
+-->
+
 ## Summary
 
 <!-- What changed and why? -->
