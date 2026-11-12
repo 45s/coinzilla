@@ -8,7 +8,7 @@ function normalizeTelegramUserId(value) {
   }
   if (typeof value === "string" && /^\d+$/.test(value)) {
     const numericValue = Number(value)
-    if (Number.isSafeInteger(numericValue) && numericValue > 0) return String(numericValue)
+    if (Number.isSafeInteger(numericValue) && numericValue > 0) {return String(numericValue)}
   }
   return undefined
 }
@@ -25,9 +25,9 @@ function waitForRetry({ milliseconds, signal }) {
       signal.removeEventListener("abort", finish)
       resolve()
     }
-    timer = setTimeout(finish, milliseconds)
+    const timer = setTimeout(finish, milliseconds)
     signal.addEventListener("abort", finish, { once: true })
-    if (signal.aborted) finish()
+    if (signal.aborted) {finish()}
   })
 }
 
@@ -46,13 +46,13 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
 
   const [commandToken, ...argumentsList] = text.trim().split(/\s+/)
   const commandParts = commandToken.split("@")
-  if (commandParts.length > 2) return Object.freeze({ type: "INVALID" })
+  if (commandParts.length > 2) {return Object.freeze({ type: "INVALID" })}
   const [command, targetUsername] = commandParts
   if (targetUsername !== undefined &&
       (typeof botUsername !== "string" || targetUsername.toLowerCase() !== botUsername.toLowerCase())) {
     return Object.freeze({ type: "IGNORE" })
   }
-  if (command !== "/pause") return Object.freeze({ type: "UNSUPPORTED" })
+  if (command !== "/pause") {return Object.freeze({ type: "UNSUPPORTED" })}
   if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
     return Object.freeze({ type: "INVALID" })
   }
@@ -90,7 +90,7 @@ export function createTelegramOperatorAdapter({
   }
   if (!Array.isArray(allowedUserIds) || allowedUserIds.length === 0 ||
       allowedUserIds.some((value) => {
-        if (typeof value !== "string" || !/^\d+$/.test(value)) return true
+        if (typeof value !== "string" || !/^\d+$/.test(value)) {return true}
         const numericValue = Number(value)
         return !Number.isSafeInteger(numericValue) || numericValue <= 0
       })) {
@@ -156,13 +156,13 @@ export function createTelegramOperatorAdapter({
 
   const respondToUpdate = async ({ update, signal }) => {
     const message = update.message
-    if (!message || message.chat?.type !== "private" || message.from?.is_bot === true) return
+    if (!message || message.chat?.type !== "private" || message.from?.is_bot === true) {return}
     const userId = normalizeTelegramUserId(message.from?.id)
     const privateChatUserId = normalizeTelegramUserId(message.chat.id)
-    if (!userId || privateChatUserId !== userId) return
+    if (!userId || privateChatUserId !== userId) {return}
 
     const parsed = parseTelegramOperatorCommand(message.text, { botUsername })
-    if (parsed.type === "IGNORE") return
+    if (parsed.type === "IGNORE") {return}
     if (!allowedUsers.has(userId)) {
       await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal })
       return
@@ -227,7 +227,7 @@ export function createTelegramOperatorAdapter({
           timeout: pollTimeoutSeconds,
           allowed_updates: ["message"],
         }
-        if (offset !== undefined) payload.offset = offset
+        if (offset !== undefined) {payload.offset = offset}
         const updates = await callApi({
           method: "getUpdates",
           payload,
@@ -237,7 +237,7 @@ export function createTelegramOperatorAdapter({
           throw new TypeError("Telegram getUpdates did not return an update array")
         }
         for (const update of updates) {
-          if (signal.aborted) break
+          if (signal.aborted) {break}
           if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
             throw new TypeError("Telegram update has no valid update_id")
           }
@@ -246,7 +246,7 @@ export function createTelegramOperatorAdapter({
         }
         currentRetryDelay = retryDelayMs
       } catch (error) {
-        if (signal.aborted) break
+        if (signal.aborted) {break}
         logger?.warn?.({
           message: "Telegram operator polling failed; retrying",
           error: error?.message ?? String(error),
@@ -262,9 +262,9 @@ export function createTelegramOperatorAdapter({
 
   return Object.freeze({
     async start() {
-      if (stopPromise) await stopPromise
-      if (startPromise) return startPromise
-      if (controller) return Object.freeze({ started: true, alreadyStarted: true })
+      if (stopPromise) {await stopPromise}
+      if (startPromise) {return startPromise}
+      if (controller) {return Object.freeze({ started: true, alreadyStarted: true })}
 
       const nextController = new AbortController()
       controller = nextController
@@ -286,7 +286,7 @@ export function createTelegramOperatorAdapter({
           return Object.freeze({ started: true, alreadyStarted: false })
         } catch (error) {
           nextController.abort()
-          if (controller === nextController) controller = undefined
+          if (controller === nextController) {controller = undefined}
           throw error
         } finally {
           startPromise = undefined
@@ -295,17 +295,17 @@ export function createTelegramOperatorAdapter({
       return startPromise
     },
     async stop() {
-      if (stopPromise) return stopPromise
+      if (stopPromise) {return stopPromise}
       if (!controller) {
-        if (startPromise) await startPromise.catch(() => {})
-        if (!controller) return Object.freeze({ stopped: true, alreadyStopped: true })
+        if (startPromise) {await startPromise.catch(() => {})}
+        if (!controller) {return Object.freeze({ stopped: true, alreadyStopped: true })}
       }
       const activeController = controller
       activeController.abort()
       stopPromise = (async () => {
-        if (startPromise) await startPromise.catch(() => {})
-        if (pollPromise) await pollPromise
-        if (controller === activeController) controller = undefined
+        if (startPromise) {await startPromise.catch(() => {})}
+        if (pollPromise) {await pollPromise}
+        if (controller === activeController) {controller = undefined}
         pollPromise = undefined
         botUsername = undefined
         offset = undefined

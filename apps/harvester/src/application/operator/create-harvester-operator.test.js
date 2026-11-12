@@ -20,14 +20,14 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
     pauseMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "pause-start", symbol })
       const committed = await beforeApply({ symbol, action: "PAUSE" })
-      if (!committed?.ok) return committed
+      if (!committed?.ok) {return committed}
       calls.push({ type: "pause-applied", symbol })
       return { ok: true, data: { symbol, paused: true, durable: true } }
     },
     resumeMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "resume-start", symbol })
       const committed = await beforeApply({ symbol, action: "RESUME" })
-      if (!committed?.ok) return committed
+      if (!committed?.ok) {return committed}
       calls.push({ type: "resume-applied", symbol })
       return { ok: true, data: { symbol, resumed: true, durable: true } }
     },

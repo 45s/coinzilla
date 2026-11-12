@@ -87,7 +87,7 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
       const params = JSON.parse(options.body)
       pollRequests.push(params)
       pollCount += 1
-      if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
       finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => {
@@ -135,10 +135,10 @@ test("does not invoke the application for a user outside the private-chat allowl
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (url, options = {}) => {
     const method = url.split("/").pop()
-    if (method === "getMe") return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
       pollCount += 1
-      if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
       finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => {
@@ -177,10 +177,10 @@ test("ignores group messages even when their sender ID is allowlisted", async ()
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (url, options = {}) => {
     const method = url.split("/").pop()
-    if (method === "getMe") return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
       pollCount += 1
-      if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
       finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => {
@@ -210,7 +210,7 @@ test("ignores group messages even when their sender ID is allowlisted", async ()
 })
 
 test("fails adapter startup when Telegram bot identity cannot be verified", async () => {
-  let updateRequests = 0
+  const updateRequests = 0
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],
@@ -231,10 +231,10 @@ test("retries an unacknowledged Telegram update with the same application reques
   const thirdPoll = new Promise((resolve) => { finishThirdPoll = resolve })
   const fetchImpl = async (url, options = {}) => {
     const method = url.split("/").pop()
-    if (method === "getMe") return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
       updatePollCount += 1
-      if (updatePollCount <= 2) return makeResponse({ ok: true, result: [update] })
+      if (updatePollCount <= 2) {return makeResponse({ ok: true, result: [update] })}
       finishThirdPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
@@ -242,7 +242,7 @@ test("retries an unacknowledged Telegram update with the same application reques
     }
     if (method === "sendMessage") {
       sendCount += 1
-      if (sendCount === 1) throw new Error("temporary reply delivery failure")
+      if (sendCount === 1) {throw new Error("temporary reply delivery failure")}
       return makeResponse({ ok: true, result: { message_id: 303 } })
     }
     throw new Error("Unexpected Telegram API method: " + method)
@@ -334,10 +334,10 @@ test("ignores a private-chat update whose chat identity does not match its allow
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (url, options = {}) => {
     const method = url.split("/").pop()
-    if (method === "getMe") return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
       pollCount += 1
-      if (pollCount === 1) return makeResponse({ ok: true, result: [update] })
+      if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
       finishSecondPoll()
       return new Promise((resolve, reject) => {
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
