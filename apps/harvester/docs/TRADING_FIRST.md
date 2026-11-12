@@ -16,7 +16,7 @@ The selected safety work is [Harvester Volatility Protection](./volatility-prote
 
 ## Explicitly selected operator-control work — non-blocking
 
-The user explicitly selected Harvester operator control as a separate engineering task. Its engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045), and disabled-by-default Telegram runtime wiring is implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067), following [ADR-0003 — Process-lifetime operator pause](./architecture/decisions/0003-process-lifetime-operator-pause.md). The only Telegram command is `/pause <SYMBOL>`; no existing exchange order is canceled or modified, and a resting BUY may still fill. The pause is durably recorded in the current process session but is not restored after restart. This initial process-lifetime capability does not wait for full recovery Steps 7–9. Separately, ADR-0001 startup currently blocks every second process start until Step 8 reconciliation and Step 9 crash/restart proof are accepted. No exchange operation is authorized by this work.
+The user explicitly selected Harvester operator control as a separate engineering task. Its engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045), and disabled-by-default Telegram runtime wiring is implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067), following [ADR-0003 — Process-lifetime operator pause](./architecture/decisions/0003-process-lifetime-operator-pause.md). The Telegram Command Center exposes `/start`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-4 menu/navigation/confirmation hardening is implemented in [PR #1088](https://github.com/45s/coinzilla/pull/1088), with exact-head verification in progress. No existing exchange order is canceled or modified, and a resting BUY may still fill. The pause is durably recorded in the current process session but is not restored after restart. This process-lifetime capability does not wait for full recovery Steps 7–9. Separately, ADR-0001 startup currently blocks every second process start until Step 8 reconciliation and Step 9 crash/restart proof are accepted. No exchange operation is authorized by this work.
 
 ## Journal contract boundary
 
@@ -106,7 +106,7 @@ Unless one narrowly scoped part is essential to prevent an immediate unsafe TEST
 - Full process-restart recovery, account-wide reconciliation readiness and exactly-once crash/restart guarantees (ADR-0001 Steps 8 parity and 9).
 - Comprehensive reconciliation of all historical exchange executions and long-term account history.
 - Generic recovery frameworks, storage abstractions, or app-local persistence frameworks.
-- Advanced health dashboards, alerting, analytics, and performance optimization. Initial Telegram `/pause <SYMBOL>` operator control is runtime-wired but disabled by default and process-lifetime only.
+- Advanced analytics and performance optimization. The separately selected Telegram Command Center remains optional, disabled by default and process-lifetime only; it is not a prerequisite for the first TESTNET cycle.
 - Aggressive strategy, multiple strategy modes, or additional trading features.
 - Refactoring or expanding architecture solely for theoretical future extensibility.
 
