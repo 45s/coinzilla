@@ -23,6 +23,8 @@ import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
 import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
+import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
+import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -88,6 +90,18 @@ export async function startHarvester({
     : undefined
   const onDurableSubmissionOutcome = durableFactsStore
     ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ durableFactsStore, order, outcome, purpose })
+    : undefined
+  const onDurableCancellationIntent = durableFactsStore
+    ? ({ order, reason }) => recordOrderCancellationIntent({ durableFactsStore, order, reason })
+    : undefined
+  const onDurableCancellationOutcome = durableFactsStore
+    ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
+        durableFactsStore,
+        order,
+        canceledOrder,
+        reason,
+        outcome,
+      })
     : undefined
 
   let accountSnapshotManager
@@ -274,6 +288,8 @@ export async function startHarvester({
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
       onDurableSubmissionIntent,
       onDurableSubmissionOutcome,
+      onDurableCancellationIntent,
+      onDurableCancellationOutcome,
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,

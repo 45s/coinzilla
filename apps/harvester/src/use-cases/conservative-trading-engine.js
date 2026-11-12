@@ -166,6 +166,8 @@ export function makeConservativeTradingEngine({
   getVolatilityData,
   onDurableSubmissionIntent,
   onDurableSubmissionOutcome,
+  onDurableCancellationIntent,
+  onDurableCancellationOutcome,
   logger,
   initialState = {},
 } = {}) {
@@ -186,6 +188,15 @@ export function makeConservativeTradingEngine({
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
+  if (onDurableCancellationIntent !== undefined && typeof onDurableCancellationIntent !== "function") {
+    throw new TypeError("onDurableCancellationIntent must be a function")
+  }
+  if (onDurableCancellationOutcome !== undefined && typeof onDurableCancellationOutcome !== "function") {
+    throw new TypeError("onDurableCancellationOutcome must be a function")
+  }
+  if ((onDurableCancellationIntent === undefined) !== (onDurableCancellationOutcome === undefined)) {
+    throw new TypeError("onDurableCancellationIntent and onDurableCancellationOutcome must be provided together")
+  }
   if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
   }
@@ -587,6 +598,93 @@ export function makeConservativeTradingEngine({
     return result
   }
 
+  const cancelOrderWithDurableFacts = async ({ order, reason } = {}) => {
+    if (onDurableCancellationIntent) {
+      let intentResult
+      try {
+        intentResult = await onDurableCancellationIntent({ order, reason })
+      } catch (error) {
+        return { ok: false, cancellationOutcome: "NOT_SENT", errors: [error] }
+      }
+      if (intentResult?.ok !== true || intentResult.data?.durable !== true) {
+        return {
+          ok: false,
+          cancellationOutcome: "NOT_SENT",
+          errors: intentResult?.errors?.length ? intentResult.errors : [new Error("Durable order-cancellation intent was not acknowledged")],
+        }
+      }
+    }
+    let cancelResult
+    try {
+      cancelResult = await broker.cancelOrder({ order })
+    } catch (error) {
+      if (onDurableCancellationOutcome) {
+        let outcomeResult
+        try {
+          outcomeResult = await onDurableCancellationOutcome({ order, reason, outcome: "OUTCOME_UNKNOWN" })
+        } catch (outcomeError) {
+          return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [outcomeError] }
+        }
+        if (outcomeResult?.ok !== true || outcomeResult.data?.durable !== true) {
+          return {
+            ok: false,
+            cancellationOutcome: "OUTCOME_UNKNOWN",
+            errors: outcomeResult?.errors?.length ? outcomeResult.errors : [new Error("Durable cancellation outcome was not acknowledged")],
+          }
+        }
+      }
+      return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
+    }
+    if (!onDurableCancellationOutcome) return cancelResult
+    let outcome
+    let canceledOrder
+    if (cancelResult?.ok === true && cancelResult.data instanceof CanonicalOrder) {
+      canceledOrder = cancelResult.data
+      const identityMatches = canceledOrder.clientOrderId === order.clientOrderId &&
+        canceledOrder.brokerOrderId === order.brokerOrderId &&
+        canceledOrder.market.id === order.market.id &&
+        canceledOrder.side === order.side
+      if (!identityMatches) {
+        outcome = "UNKNOWN"
+        canceledOrder = undefined
+      } else if (["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(canceledOrder.status)) {
+        outcome = canceledOrder.status
+      } else if (["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
+        outcome = "NOT_CANCELED"
+      } else {
+        outcome = "UNCONFIRMED"
+        canceledOrder = undefined
+      }
+    } else if (cancelResult?.cancellationOutcome === "NOT_SENT") {
+      outcome = "NOT_SENT"
+    } else if (cancelResult?.cancellationOutcome === "OUTCOME_UNKNOWN") {
+      outcome = "OUTCOME_UNKNOWN"
+    } else {
+      outcome = "UNCONFIRMED"
+    }
+    let outcomeResult
+    try {
+      outcomeResult = await onDurableCancellationOutcome({ order, canceledOrder, reason, outcome })
+    } catch (error) {
+      return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
+    }
+    if (outcomeResult?.ok !== true || outcomeResult.data?.durable !== true) {
+      return {
+        ok: false,
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+        errors: outcomeResult?.errors?.length ? outcomeResult.errors : [new Error("Durable order-cancellation outcome was not acknowledged")],
+      }
+    }
+    if (outcome === "UNKNOWN" || outcome === "UNCONFIRMED") {
+      return {
+        ok: false,
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+        errors: [new Error("Broker cancellation response did not confirm the owned order identity and terminal state")],
+      }
+    }
+    return cancelResult
+  }
+
   const submit = makeExecuteStrategyDecision({
     broker,
     onDurableSubmissionIntent,
@@ -757,7 +855,7 @@ export function makeConservativeTradingEngine({
       }
       let cancelResult
       try {
-        cancelResult = await broker.cancelOrder({ order })
+        cancelResult = await cancelOrderWithDurableFacts({ order, reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL" })
       } catch (error) {
         return withFailure(
           await markCancellationUnknown({
@@ -919,7 +1017,7 @@ export function makeConservativeTradingEngine({
     }
     let cancelResult
     try {
-      cancelResult = await broker.cancelOrder({ order })
+      cancelResult = await cancelOrderWithDurableFacts({ order, reason: "TRAILING_BUY_REPRICE" })
     } catch (error) {
       return markCancellationUnknown({
         symbol,
@@ -2425,7 +2523,7 @@ export function makeConservativeTradingEngine({
 
         let cancelResult
         try {
-          cancelResult = await broker.cancelOrder({ order })
+          cancelResult = await cancelOrderWithDurableFacts({ order, reason })
         } catch (error) {
           const failed = await markCancellationUnknown({
             symbol,
