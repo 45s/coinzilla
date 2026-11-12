@@ -11,7 +11,9 @@ async function removeIfPresent(filePath) {
   try {
     await unlink(filePath)
   } catch (error) {
-    if (error?.code !== "ENOENT") throw error
+    if (error?.code !== "ENOENT") {
+      throw error
+    }
   }
 }
 
@@ -73,7 +75,7 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
       lockHandle = await open(lockPath, "wx", 0o600)
     } catch (error) {
       if (error?.code === "EEXIST") {
-        throw new Error("Another config:symbol operation holds the configuration lock; inspect its PID/timestamp and remove a stale lock only after confirming no generator is running")
+        throw new Error("Another config:symbol operation holds the configuration lock; inspect its PID/timestamp and remove a stale lock only after confirming no generator is running", { cause: error })
       }
       throw error
     }
@@ -121,7 +123,9 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
     return absoluteConfigPath
   } finally {
     try {
-      if (temporaryCreated) await removeIfPresent(temporaryPath)
+      if (temporaryCreated) {
+        await removeIfPresent(temporaryPath)
+      }
     } finally {
       if (lockHandle) {
         try {

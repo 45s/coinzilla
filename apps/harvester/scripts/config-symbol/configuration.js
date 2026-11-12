@@ -1,6 +1,5 @@
 import {
   compareDecimal,
-  divideDecimal,
   multiplyDecimal,
   normalizeDecimalString,
   roundDecimalToIncrement,
@@ -9,7 +8,6 @@ import { validateAppConfig } from "../../src/domain/app-config.js"
 
 const ZERO = "0"
 const HUNDRED = "100"
-const ORDER_QUANTITY_SCALE = 18
 
 /**
  * Normalize and validate an operator-entered Binance Spot symbol.
@@ -122,7 +120,9 @@ export function validateOrderQuantity({
 } = {}) {
   const values = { orderQuantity, investment, price, stepSize, minQuantity, maxQuantity, minNotional }
   for (const [field, value] of Object.entries(values)) {
-    if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
+    if (typeof value !== "string") {
+      throw new TypeError(field + " must be an exact decimal string")
+    }
   }
   const quantity = parseDecimalInput(orderQuantity, "orderQuantity", { exclusiveMin: true })
   const budget = parseDecimalInput(investment, "investment", { exclusiveMin: true })
@@ -138,12 +138,20 @@ export function validateOrderQuantity({
   if (compareDecimal({ left: roundDecimalToIncrement({ value: quantity, increment: step, direction: "down" }), right: quantity }) !== 0) {
     throw new RangeError("orderQuantity must align exactly with the exchange LOT_SIZE stepSize")
   }
-  if (compareDecimal({ left: quantity, right: minimum }) < 0) throw new RangeError("orderQuantity is below exchange MIN_QUANTITY")
-  if (compareDecimal({ left: quantity, right: maximum }) > 0) throw new RangeError("orderQuantity exceeds exchange MAX_QUANTITY")
+  if (compareDecimal({ left: quantity, right: minimum }) < 0) {
+    throw new RangeError("orderQuantity is below exchange MIN_QUANTITY")
+  }
+  if (compareDecimal({ left: quantity, right: maximum }) > 0) {
+    throw new RangeError("orderQuantity exceeds exchange MAX_QUANTITY")
+  }
 
   const notional = multiplyDecimal({ left: quantity, right: referencePrice })
-  if (compareDecimal({ left: notional, right: minQuote }) < 0) throw new RangeError("orderQuantity is below exchange MIN_NOTIONAL at the current reference price")
-  if (maxQuote && compareDecimal({ left: notional, right: maxQuote }) > 0) throw new RangeError("orderQuantity exceeds exchange MAX_NOTIONAL at the current reference price")
+  if (compareDecimal({ left: notional, right: minQuote }) < 0) {
+    throw new RangeError("orderQuantity is below exchange MIN_NOTIONAL at the current reference price")
+  }
+  if (maxQuote && compareDecimal({ left: notional, right: maxQuote }) > 0) {
+    throw new RangeError("orderQuantity exceeds exchange MAX_NOTIONAL at the current reference price")
+  }
   if (compareDecimal({ left: notional, right: budget }) >= 0) {
     throw new RangeError("orderQuantity must be smaller than the total investment so the pair allocation can be split across multiple orders")
   }
