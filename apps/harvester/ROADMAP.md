@@ -10,7 +10,7 @@
 
 ### Delivery phases
 
-1. [ ] **CC-1 — Operator essentials:** add transport-neutral, immutable read-only status/market queries; expose `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, and `/resume SYMBOL`; report readiness, blockers, timestamps/freshness and unknown states truthfully. Resume may clear only the operator-owned pause and must retain all safety/recovery/volatility blockers.
+1. [~] **CC-1 — Operator essentials:** add transport-neutral, immutable read-only status/market queries; expose `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, and `/resume SYMBOL`; report readiness, blockers, timestamps/freshness and unknown states truthfully. Resume may clear only the operator-owned pause and must retain all safety/recovery/volatility blockers. `/start`, `/help`, and `/resume SYMBOL` adapter support and offline regressions are in progress; `/status` and `/markets` remain open.
 2. [ ] **CC-2 — Trading visibility:** add `/positions`, `/orders`, and `/balances` backed by application query ports/snapshots. Clearly distinguish Harvester-owned orders from external/manual orders; expose portfolio/recovery accounting and source freshness. Queries must be read-only.
 3. [ ] **CC-3 — Proactive alerts:** lifecycle/readiness changes, safety blockers, order/fill/recovery events, and Telegram transport health. Reuse `@coinzilla/notifiers`; alert delivery must remain best-effort and must never block trading transitions.
 4. [ ] **CC-4 — Usability and hardening:** command menu, safe inline navigation/refresh, explicit confirmation for supported controls, authorization/idempotency/retry/outage/shutdown regression matrix, and an operator runbook.
