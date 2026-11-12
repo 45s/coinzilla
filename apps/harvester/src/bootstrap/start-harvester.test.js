@@ -4,7 +4,6 @@ import os from "node:os"
 import path from "node:path"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
-import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
 import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
@@ -258,7 +257,7 @@ const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
     volume: "1",
     isClosed: true,
   })
-  broker.getCandles = async ({ symbol, interval, limit } = {}) => ({
+  broker.getCandles = async ({ symbol, limit } = {}) => ({
     ok: true,
     data: symbols.includes(symbol)
       ? Array.from({ length: Math.min(limit ?? 100, 100) }, (_, index) =>
@@ -2086,8 +2085,6 @@ test("stops broker intake before draining queued user-data and disconnects after
     }
   }
   const originalSubscribeForUserData = broker.subscribeForUserData.bind(broker)
-  let resolveUserDataUnsubscribe
-  const userDataUnsubscribed = new Promise((resolve) => { resolveUserDataUnsubscribe = resolve })
   broker.subscribeForUserData = async (handlers) => {
     const result = await originalSubscribeForUserData(handlers)
     return {
@@ -2096,7 +2093,6 @@ test("stops broker intake before draining queued user-data and disconnects after
         ...result.data,
         disconnect: async () => {
           calls.push("unsubscribe:user-data")
-          resolveUserDataUnsubscribe()
           return result.data.disconnect()
         },
       },
