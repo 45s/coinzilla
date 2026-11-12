@@ -1,6 +1,7 @@
 import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
+import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
@@ -176,7 +177,7 @@ export function makeConservativeTradingEngine({
     volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
-    (pairs[symbol]?.externalOrdersPolicy === "block" && hasUnownedOpenOrdersForSymbol({ symbol }))
+    (pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK && hasUnownedOpenOrdersForSymbol({ symbol }))
   if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
     throw new TypeError("getVolatilityData must be a function when provided")
   }
@@ -1847,8 +1848,8 @@ export function makeConservativeTradingEngine({
           event.clientOrderId,
           event.originalClientOrderId,
         ].some(isHarvesterClientOrderId)
-        const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? "ignore"
-        if (!hasHarvesterIdentity && externalOrdersPolicy === "ignore") {
+        const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
+        if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
           return toResult({ data: { ignored: true, externalOrder: true } })
         }
         await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })

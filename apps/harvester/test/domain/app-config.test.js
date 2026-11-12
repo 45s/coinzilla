@@ -127,17 +127,30 @@ test("the default app config includes the trader Telegram profile without creden
   )
 })
 
-test("preserves the committed enabled market scope during the configuration migration", () => {
-  const enabledSymbols = Object.entries(strategy(validConfig).pairs)
-    .filter(([, pairConfig]) => pairConfig.enabled)
-    .map(([symbol]) => symbol)
-    .sort();
+test("accepts different enabled-market selections without freezing deployment-specific symbols", () => {
+  const config = structuredClone(validConfig);
+  const pairs = Object.values(strategy(config).pairs);
 
-  assert.deepEqual(
-    enabledSymbols,
-    ["LINKFDUSD", "ZROFDUSD"],
-    "The ESM migration must preserve both enabled pairs without changing any pair enablement.",
+  for (const pairConfig of pairs) {
+    pairConfig.enabled = false;
+  }
+  pairs[0].enabled = true;
+  assert.equal(
+    validateAppConfig(config),
+    config,
+    "A valid configuration with one selected market must not depend on a hard-coded market name.",
   );
+
+  pairs[0].enabled = false;
+  pairs[1].enabled = true;
+  assert.equal(
+    validateAppConfig(config),
+    config,
+    "Changing the selected market must remain a configuration edit, not require rewriting a unit-test snapshot.",
+  );
+});
+
+test("keeps named Telegram notification profile identifiers immutable", () => {
   assert.ok(
     Object.isFrozen(NOTIFICATIONS_TG_PROFILES),
     "Notification profile identifiers must be exposed as an immutable named constant object.",
