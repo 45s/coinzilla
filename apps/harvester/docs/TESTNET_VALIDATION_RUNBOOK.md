@@ -90,9 +90,9 @@ The primary account-audit evidence is the automatic PREFLIGHT audit performed by
 
 ## 4. Account baseline and ownership boundary
 
-Before starting Harvester, its trading-enabled startup audit now collects and journals the authoritative account balances and all account-wide open orders automatically. The manual read-only commands in section 3 remain available for ad-hoc diagnosis, but are no longer a required repeated precondition. Preserve the two startup audit events from the same Journal session as the baseline evidence:
+Before starting Harvester, its broker-connected startup audit (including read-only mode) collects and journals the authoritative configured-market account balances and all account-wide open orders automatically. The manual read-only commands in section 3 remain available for ad-hoc diagnosis, but are no longer a required repeated precondition. Preserve the two startup audit events from the same Journal session as the baseline evidence:
 
-- `account.snapshot_captured`: every returned asset, exact free/locked/total quantities, exchange source timestamp.
+- `account.snapshot_captured`: configured-market base/quote assets (including disabled configured pairs) plus third-asset commission baselines actually used, with exact free/locked/total quantities and exchange source timestamp. Unrelated wallet assets are excluded.
 - `account.open_orders_captured`: all account-wide open orders, including symbol, broker/client order IDs, side, type, price, original/executed quantity, status, and observation time.
 - Historical incident evidence: relevant account trades for ZROUSDT, including trade ID, order ID, side, price, base quantity, quote quantity, commission amount, commission asset, and timestamp. ZROUSDT is not currently enabled.
 - Any deposits, withdrawals, transfers, conversions, or manual trades relevant to the session window.
@@ -153,7 +153,7 @@ Portfolio/RecoveryLedger agreement does not by itself prove account-wide reconci
 1. During the joint session, agree whether any final Harvester-owned order must remain open. Prefer no outstanding owned orders for the first closed-session audit.
 2. If an order must be canceled, authorize that exact order only, wait for the terminal acknowledgement, and reconcile all fills including cancel/fill races. Never use cancel-all.
 3. Stop Harvester gracefully. Shutdown stops market-price/book intake and drains accepted market callbacks, reconciles owned orders before cancellation, cancels only acknowledged strategy-owned BUY orders once, keeps user-data intake active while cancellation-racing fills are processed, preserves all SELL orders, drains accepted user-data work, and performs a second owned-order reconciliation as verification only (there is no second BUY-cancellation pass). It then stops user-data intake and captures CLOSING while the broker WebSocket API remains connected.
-4. Verify one durable CLOSING snapshot exists for the same Journal session and includes every returned asset with exact free, locked, and total amounts.
+4. Verify one durable CLOSING snapshot exists for the same Journal session and includes the configured-market base/quote assets plus third-asset commission baselines actually used, with exact free, locked, and total amounts. Unrelated wallet assets are excluded.
 5. Verify CLOSING is COMPLETE. Known open SELL orders are expected to remain active and are not unresolved. If a BUY remains open, an order state is unknown, reconciliation fails, intake/accounting is unsafe, or flush fails, CLOSING must be INCOMPLETE; shutdown reports failure and retains the process lock.
 6. Run the read-only `journal:balance-audit` against that closed session. Capture its full output and exit code.
 7. Retrieve complete TESTNET trade history for the session window and verify pagination/completeness. Correlate every trade with the order journal and commission facts. Preserve raw read-only evidence securely.
