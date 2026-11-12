@@ -190,7 +190,14 @@ export function makeExecuteStrategyDecision({
           const errors = brokerResult?.errors ?? [
             new TypeError("Broker did not return an acknowledged canonical order"),
           ]
-          const outcome = brokerResult?.ok ? "UNKNOWN" : "REJECTED_OR_UNKNOWN"
+          const submissionError = errors[0]
+          const definitePostOnlyRejection = pendingOrder.type === "LIMIT_MAKER" &&
+            submissionError?.code === "POST_ONLY_WOULD_TAKE"
+          const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
+            submissionError?.outcomeUnknown !== true
+          const outcome = definitePostOnlyRejection || definiteFilterRejection
+            ? "REJECTED"
+            : brokerResult?.ok ? "UNKNOWN" : "REJECTED_OR_UNKNOWN"
           const durableOutcome = await persistDurableSubmissionOutcome({ order: pendingOrder, outcome, purpose })
           if (!durableOutcome.ok) {
             await onSubmissionFailure({ order: pendingOrder, errors: durableOutcome.errors, outcome: "UNKNOWN" })
