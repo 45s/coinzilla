@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -182,11 +183,11 @@ test("replays a completed recovery cycle before later-session fills when non-pro
   const firstBuyFillId = "binance:BTCUSDT:cycle-one-buy-trade"
   const firstSellFillId = "binance:BTCUSDT:cycle-one-sell-trade"
   const secondBuyFillId = "binance:BTCUSDT:cycle-two-buy-trade"
-  const cycleCompletedSequence = 31
-  const secondSessionStartedSequence = 33
-  const secondBuyIntentSequence = 34
-  const secondBuyOutcomeSequence = 35
-  const secondBuyFillSequence = 36
+  const cycleCompletedSequence = 51
+  const secondSessionStartedSequence = 53
+  const secondBuyIntentSequence = 54
+  const secondBuyOutcomeSequence = 55
+  const secondBuyFillSequence = 56
   const cycleEvidence = [
     record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
     record(1, "CONFIGURATION_BASELINE", {
@@ -238,15 +239,25 @@ test("replays a completed recovery cycle before later-session fills when non-pro
       price: "105", quantity: "0.4", quoteQuantity: "42", liquidityRole: "MAKER",
       executedAt: 1001, commissionStatus: "COMPLETE", commissions: [],
     }, "execution-fill-applied:" + firstSellFillId),
-    ...Array.from({ length: 20 }, (_, index) => record(
-      11 + index,
-      "MARKET_HISTORY_COVERAGE_CONFIRMED",
-      {
-        symbol: market.symbol, coveredFromTime: 1, verifiedAt: 200 + index,
-        evidenceDigest: String(index + 1).padStart(64, "0"), verifiedBy: "operator:recovery-audit",
-      },
-      "market-history-coverage:" + market.symbol + ":" + index,
-    )),
+    ...Array.from({ length: 20 }, (_, index) => {
+      const reason = "TEST_EVIDENCE_" + index
+      const evidenceDigest = String(index + 1).padStart(64, "0")
+      const resolutionDigest = String(index + 101).padStart(64, "0")
+      const blockerId = createHash("sha256")
+        .update(["MARKET", market.symbol, reason, evidenceDigest].join("\\0"))
+        .digest("hex")
+      return [
+        record(11 + index * 2, "SAFETY_BLOCKER_RAISED", {
+          blockerId, scope: "MARKET", symbol: market.symbol, reason, evidenceDigest,
+        }, "safety-blocker-raised:" + blockerId),
+        record(12 + index * 2, "SAFETY_BLOCKER_RESOLVED", {
+          blockerId,
+          resolvedBy: "reconciliation:test-fixture",
+          resolution: "AUTHORITATIVE_RECONCILIATION",
+          evidenceDigest: resolutionDigest,
+        }, "safety-blocker-resolved:" + blockerId),
+      ]
+    }).flat(),
     record(cycleCompletedSequence, "RECOVERY_CYCLE_COMPLETED", {
       cycleId: "c".repeat(64), marketId: market.id, venue: market.venue, symbol: market.symbol,
       baseAssetId: market.baseAsset.id, quoteAssetId: market.quoteAsset.id,
