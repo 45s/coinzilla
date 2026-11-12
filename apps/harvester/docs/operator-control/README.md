@@ -35,7 +35,7 @@ Already-open exchange orders are not canceled or modified by pause; a resting BU
 
 ## Proactive alerts — CC-3
 
-The current implementation phase reports confirmed readiness after startup PREFLIGHT account/open-order snapshots (before market-price subscription) and every subsequent user-data readiness loss/restoration, warns when the WebSocket transport reconnects before authoritative application reconciliation completes, alerts on failed recovery and blocked recovery-cycle outcomes, and exposes structured Telegram delivery diagnostics. Readiness restoration is non-disableable in every profile, including `minimal` and `custom`; event overrides cannot hide it. Alerts reuse the existing best-effort notifier; Telegram I/O never participates in trading transitions, and no automatic retry or durable outbox is introduced.
+CC-3 is implemented in [PR #1087](https://github.com/45s/coinzilla/pull/1087), with all eight exact-head workflows passing. It reports confirmed readiness after startup PREFLIGHT account/open-order snapshots (before market-price subscription) and every subsequent user-data readiness loss/restoration, warns when the WebSocket transport reconnects before authoritative application reconciliation completes, alerts on failed recovery and blocked recovery-cycle outcomes, and exposes structured Telegram delivery diagnostics. Readiness restoration is non-disableable in every profile, including `minimal` and `custom`; event overrides cannot hide it. Alerts reuse the existing best-effort notifier; Telegram I/O never participates in trading transitions, and no automatic retry or durable outbox is introduced.
 
 ## Ownership
 
@@ -61,5 +61,5 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Telegram `/start`, `/help`, `/pause`, and safe `/resume` | Implemented in PR #1079; merged |
 | Read-only `/status` and `/markets` application queries and Telegram formatting | Implemented in PR #1081; regression-tested |
 | Read-only `/positions`, `/orders`, and `/balances` application queries and Telegram formatting | Merged in PR #1086; offline contract tests and all seven exact-head workflows passed |
-| Proactive readiness, recovery-blocker and Telegram delivery-health alerts | In progress under CC-3 / issue #1077 |
+| Proactive readiness, recovery-blocker and Telegram delivery-health alerts | Implemented in PR #1087; all eight exact-head workflows passed |
 | Process-restart restoration of operator pause state | Explicitly out of scope under ADR-0003; separate ADR-0001 / #654 workstream |
