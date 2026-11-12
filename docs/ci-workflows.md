@@ -6,7 +6,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
-| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
+| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, changed-file ESLint enforcement, agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
 | `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
 | `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage` in both active rulesets. |
 | `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests` in both active rulesets. |
@@ -76,11 +76,14 @@ Run these commands from the repository root with the Node.js and pnpm versions s
 # Workspace package tests
 pnpm test
 
-# ESLint across all JavaScript with the committed legacy baseline
+# Full-workspace JavaScript lint report (may expose legacy findings)
 pnpm lint
 
-# Auto-fix supported ESLint findings and prune resolved baseline entries
+# Auto-fix supported ESLint findings across the workspace
 pnpm lint:fix
+
+# Pull-request changed-file gate (use the exact base commit SHA)
+BASE_SHA="replace-with-exact-pr-base-sha" pnpm lint:changed
 
 # Local aggregate: workspace tests, syntax, agent-policy, and mocked external-link tests
 # (does not run the full-tree formatting report, PR changed-file style gate, or live URL checks)

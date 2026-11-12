@@ -1,6 +1,7 @@
-import { extname } from "node:path";
+import { extname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 const javascriptExtensions = new Set([".js", ".mjs", ".cjs"]);
 const ignoredPathSegments = new Set([
@@ -62,8 +63,6 @@ function lintChangedFiles({ baseSha }) {
       "node_modules/eslint/bin/eslint.js",
       "--max-warnings",
       "0",
-      "--suppressions-location",
-      "eslint-empty-suppressions.json",
       ...changedFiles,
     ],
     { stdio: "inherit" },
@@ -79,7 +78,7 @@ function lintChangedFiles({ baseSha }) {
 
 const isMainModule =
   process.argv[1] &&
-  new URL(import.meta.url).pathname === process.argv[1];
+  fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 
 if (isMainModule) {
   const baseSha = process.env.BASE_SHA ?? process.argv[2];

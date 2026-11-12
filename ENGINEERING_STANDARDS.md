@@ -137,15 +137,15 @@ The workspace uses the root ESLint flat configuration in `eslint.config.js`. It 
 
 The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting and stylistic rules are intentionally out of scope.
 
-Gradual adoption is enforced with ESLint bulk suppressions in the committed `eslint-suppressions.json` baseline:
+Gradual adoption is enforced by the changed-file gate rather than a permanent suppression file:
 
-- `pnpm lint` checks the complete JavaScript workspace and fails when violations exceed the recorded per-file/per-rule baseline.
-- Pull requests lint every changed JavaScript file without baseline suppressions. A changed legacy file must therefore be clean, not merely avoid adding more findings.
-- New JavaScript files have no baseline entries and must pass from the start.
-- `pnpm lint:fix` applies supported fixes and prunes resolved baseline entries. Review its complete diff before committing.
-- Do not regenerate or expand the baseline to hide newly introduced findings. Baseline changes are limited to a deliberate rule-adoption review.
+- `pnpm lint` runs ESLint across the complete JavaScript workspace. It may report pre-existing violations in untouched legacy files until those files are migrated.
+- Pull requests lint every changed JavaScript file without suppressions. A changed legacy file must therefore be clean.
+- New JavaScript files must pass from the start.
+- `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing.
+- Do not disable rules globally or add inline suppressions merely to silence existing findings. Fix the touched file or document a narrowly justified exception.
 
-The baseline is a migration aid, not a permanent exemption. Reduce it as files are touched and keep changed-file enforcement active.
+The full-workspace report makes remaining debt visible; the changed-file CI gate prevents that debt from growing.
 
 ### 5. Functions and side effects
 

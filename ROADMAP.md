@@ -82,7 +82,7 @@
 
 11. **Workspace JavaScript linting — IN PROGRESS.**
    - **Why:** syntax checks alone do not catch many correctness and maintainability defects across the 554-file JavaScript workspace.
-   - **Plan:** introduce ESLint flat config with recommended correctness rules and the approved low-noise safety rules; baseline existing findings, require all changed JavaScript files to pass without suppressions, and preserve the existing required CI status contexts.
+   - **Plan:** introduce ESLint flat config with recommended correctness rules and the approved low-noise safety rules; report existing findings across the workspace, require all changed JavaScript files to pass without suppressions, and preserve the existing required CI status contexts.
    - **Owner:** shared infrastructure (root manifests, lockfile, workspace scripts, CI and engineering documentation).
 
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
