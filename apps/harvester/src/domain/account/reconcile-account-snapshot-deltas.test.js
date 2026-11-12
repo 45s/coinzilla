@@ -14,6 +14,26 @@ const copySnapshot = (value) => ({
   auditReasons: [...value.auditReasons],
 })
 
+test("reconciles current PREFLIGHT/CLOSING snapshots", () => {
+  const result = reconcileAccountSnapshotDeltas({
+    openingSnapshot: snapshot({
+      phase: "PREFLIGHT",
+      sourceTime: 100,
+      balances: [balance("DOGE", "10", "0", "10")],
+    }),
+    closingSnapshot: snapshot({
+      phase: "CLOSING",
+      sourceTime: 200,
+      balances: [balance("DOGE", "11", "0", "11")],
+    }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.auditStatus, "COMPLETE")
+  assert.equal(result.data.assetDeltas[0].delta.total, "1")
+  assert.deepEqual(result.data.auditReasons, [])
+})
+
 test("reconciles exact per-asset wallet deltas and assets appearing/disappearing", () => {
   const result = reconcileAccountSnapshotDeltas({
     openingSnapshot: snapshot({
