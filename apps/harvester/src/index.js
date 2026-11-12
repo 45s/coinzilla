@@ -17,6 +17,7 @@ import { resolveRuntimeConfig } from "./domain/app-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
+import { createFileDurableFactsStore } from "./infrastructure/durable-facts/create-file-durable-facts-store.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -141,12 +142,16 @@ const describeError = (error) => {
 const resolveHostProcessLockDirectory = () =>
   path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
 
+const resolveHostDurableFactsDirectory = () =>
+  path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts")
+
 export async function main({
   start = startHarvester,
   logger = defaultLogger,
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
   acquireProcessLock = acquireHarvesterProcessLocks,
+  createDurableFactsStore = createFileDurableFactsStore,
   loadConfig = loadAppConfig,
   configSource,
   env = process.env,
@@ -191,6 +196,21 @@ export async function main({
       throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
     processLock = lockResult
+    const durableFactsStore = createDurableFactsStore({
+      directory: resolveHostDurableFactsDirectory(),
+      runtimeSessionId: processIdentity.runtimeSessionId,
+    })
+    if (typeof durableFactsStore?.verify !== "function") {
+      throw new Error("Harvester requires the application-owned durable recovery-facts store")
+    }
+    const durableFactsVerification = await durableFactsStore.verify()
+    if (durableFactsVerification?.ok !== true || durableFactsVerification.data?.durableWriteSupported !== true) {
+      const details = durableFactsVerification?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        "Harvester requires an existing verified durable recovery-facts ledger; initialize it explicitly with pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize" +
+        (details ? ": " + details : ""),
+      )
+    }
     journalService = createJournalService({
       eventBus,
       logger,
@@ -273,7 +293,7 @@ export async function main({
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, appConfig, env })
+    const runtime = await start({ eventPublisher, appConfig, env, durableFactsStore })
     const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
     const enabledMarkets = configuredPairs
       ? Object.entries(configuredPairs)
