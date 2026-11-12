@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"

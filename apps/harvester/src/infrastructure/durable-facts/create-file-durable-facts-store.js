@@ -260,9 +260,6 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       throw new TypeError("Configuration baseline requires the supported schema and SHA-256 fingerprint")
     }
     requireNonEmptyString({ value: canonicalData.strategyName, field: "data.strategyName", maxLength: 64 })
-    if (typeof canonicalData.tradingEnabled !== "boolean") {
-      throw new TypeError("Process-start fact tradingEnabled must be boolean")
-    }
     if (!Array.isArray(canonicalData.markets) || canonicalData.markets.length === 0 ||
         canonicalData.markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
         canonicalData.markets.join("\\0") !== [...new Set(canonicalData.markets)].sort().join("\\0")) {
@@ -282,6 +279,9 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       throw new TypeError("Process-start fact requires a SHA-256 configuration fingerprint")
     }
     requireNonEmptyString({ value: canonicalData.strategyName, field: "data.strategyName", maxLength: 64 })
+    if (typeof canonicalData.tradingEnabled !== "boolean") {
+      throw new TypeError("Process-start fact tradingEnabled must be boolean")
+    }
     if (!Array.isArray(canonicalData.markets) || canonicalData.markets.length === 0 ||
         canonicalData.markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
         canonicalData.markets.join("\\0") !== [...new Set(canonicalData.markets)].sort().join("\\0")) {

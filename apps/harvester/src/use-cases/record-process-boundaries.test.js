@@ -59,6 +59,7 @@ test("binds process start and clean/unclean stop facts to the durable store runt
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
+    tradingEnabled: true,
   })
   const stopped = await recordProcessStopped({
     durableFactsStore,
