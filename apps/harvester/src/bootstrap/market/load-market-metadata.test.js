@@ -39,7 +39,7 @@ test("loads every configured market and validates/emits trading rules only for e
     },
     pairs: {
       BTCUSDT: { enabled: true, enableVolatilityProtection: true, orderQuantity: 0.01, investment: 100, makerPercent: 0, takerPercent: 0.1 },
-      ETHUSDT: { enabled: false },
+      ETHUSDT: { enabled: false, enableVolatilityProtection: true },
     },
     marketMetadata,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
