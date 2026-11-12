@@ -248,7 +248,7 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 - Twelve-BUY stale-state race: root cause confirmed; awaited fill-reconciliation barrier and deterministic regression coverage committed.
 - Post-cycle residual inventory / MIN_NOTIONAL behavior: policy guard, pair pause, and engine-level regressions committed; exact-head test result still pending.
 - Full lifecycle overlap matrix: incomplete.
-- New-session OPENING/CLOSING balance audit: implemented, but no post-fix session exists yet.
+- Current PREFLIGHT/RECOVERY/CLOSING account audits and targeted COMMISSION_BASELINE are implemented; no successful controlled TESTNET acceptance is claimed.
 - TESTNET: stopped; no restart/order submission.
 - Merge: authorized once required CI passes on the exact current PR head; TESTNET restart remains separately gated.
 
@@ -260,9 +260,9 @@ Trading-enabled startup MUST NOT open user-data readiness or start market-data s
 
 Account-level balance changes are a cross-check only. They cannot be labeled profit until executions, commission asset/amount, external deposits/withdrawals/transfers, and remaining inventory valuation are reconciled. Do not assign external balances to strategy Portfolio.
 
-The historical +0.20730 USDT scope mismatch and twelve-BUY acknowledgement/fill race are resolved and source-remediated in PR #513. Follow-up blockers are the lifecycle overlap matrix, a future closed-session opening-balance reconciliation, ownership separation, and commission-setting verification. No TESTNET restart or order submission is permitted until those gates are complete.
+The historical +0.20730 USDT scope mismatch and twelve-BUY acknowledgement/fill race were resolved and source-remediated in PR #513. The remaining current gates are ADR-0001 process-restart reconciliation Steps 8–9 (#654) and separately authorized controlled TESTNET acceptance; the current runbook remains CLOSED / PAUSED. No TESTNET restart or order submission is authorized by this document.
 
-After a session has been stopped gracefully, use `pnpm run journal:balance-audit` from `apps/harvester` to compare its OPENING and CLOSING snapshots. The command reports exact per-asset quantity deltas and fails if either endpoint is absent or the closing audit is incomplete. It does not claim profit from balances alone.
+After a session has been stopped gracefully, use `pnpm run journal:balance-audit` from `apps/harvester` to compare its PREFLIGHT and CLOSING snapshots. The command reports exact per-asset quantity deltas and fails if either endpoint is absent or the closing audit is incomplete. Legacy historical `OPENING` records remain readable; new runtime sessions use `PREFLIGHT`. It does not claim profit from balances alone.
 
 ### Post-PR #515 status correction — 2026-11-04
 
