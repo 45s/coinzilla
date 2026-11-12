@@ -506,7 +506,7 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
       },
     }),
     append: async (fact) => {
-      calls.push("append-operator-fact")
+      calls.push(fact.factType === "OPERATOR_MARKET_PAUSED" || fact.factType === "OPERATOR_MARKET_RESUMED" ? "append-operator-fact" : "append-process-fact")
       appendedFacts.push({
         ...fact,
         sequence: String(appendedFacts.length + 1),
