@@ -2,6 +2,31 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## P0 — Telegram Command Center (CC) — highest Harvester priority
+
+**Status: [~] ACTIVE WORKSTREAM — tracking [issue #undefined](https://github.com/45s/coinzilla/issues/undefined).** CC supersedes other Harvester roadmap work in priority. ADR-0001 process-restart recovery Steps 8–9 are explicitly deferred and must not block CC implementation. The delivered initial operator-control foundation remains available in [PR #1045](https://github.com/45s/coinzilla/pull/1045), [PR #1067](https://github.com/45s/coinzilla/pull/1067), and the process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065).
+
+**Current baseline:** Telegram is optional/disabled by default and currently supports only `/pause <SYMBOL>`. The application facade already has `pauseMarket` and `resumeMarket`; Telegram does not yet expose resume or read-only command-center queries. Operator pause is process-lifetime only and is not restored after restart. Do not imply otherwise.
+
+### Delivery phases
+
+1. [ ] **CC-1 — Operator essentials:** add transport-neutral, immutable read-only status/market queries; expose `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, and `/resume SYMBOL`; report readiness, blockers, timestamps/freshness and unknown states truthfully. Resume may clear only the operator-owned pause and must retain all safety/recovery/volatility blockers.
+2. [ ] **CC-2 — Trading visibility:** add `/positions`, `/orders`, and `/balances` backed by application query ports/snapshots. Clearly distinguish Harvester-owned orders from external/manual orders; expose portfolio/recovery accounting and source freshness. Queries must be read-only.
+3. [ ] **CC-3 — Proactive alerts:** lifecycle/readiness changes, safety blockers, order/fill/recovery events, and Telegram transport health. Reuse `@coinzilla/notifiers`; alert delivery must remain best-effort and must never block trading transitions.
+4. [ ] **CC-4 — Usability and hardening:** command menu, safe inline navigation/refresh, explicit confirmation for supported controls, authorization/idempotency/retry/outage/shutdown regression matrix, and an operator runbook.
+
+### Engineering and safety gates
+
+- TDD/DDD: define application query contracts before transport formatting; keep Telegram as a thin adapter; do not read engine internals or call the broker from Telegram.
+- Named exports only; no default exports. Reuse existing application workflows and notifier infrastructure; no speculative shared packages or command bus.
+- Each implementation commit includes focused tests and relevant docs/roadmap updates. Each phase is a focused PR into `develop`; phase completion requires merge and successful required checks on the exact PR head.
+- Telegram remains disabled by default; private-chat allowlist and actor authorization remain mandatory.
+- No order placement, cancellation, adoption, arbitrary broker mutation, configuration editing, strategy mutation, or safety bypass.
+- No TESTNET/LIVE exchange operation is authorized or needed for CC.
+- ADR-0001 Steps 8–9 are deferred; the current operator-pause process-lifetime limitation remains explicit until a separate proven restoration change is completed.
+
+---
+
 ## Operator control — initial Telegram pause
 
 **Status: IMPLEMENTED AND MERGED in [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); process-lifetime scope/docs clarified in [PR #1065](https://github.com/45s/coinzilla/pull/1065); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
