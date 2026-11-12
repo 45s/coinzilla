@@ -3481,3 +3481,24 @@ test("identifies user-data events received during application recovery as recove
     await runtime.stop()
   }
 })
+
+
+test("verifies an injected durable-fact ledger before connecting to the broker", async () => {
+  const calls = []
+  await assert.rejects(
+    () => startHarvesterForTest({
+      appConfig,
+      durableFactsStore: {
+        append: async () => ({ ok: true, data: { durable: true } }),
+        verify: async () => ({ ok: false, errors: [new Error("durable ledger integrity failed")] }),
+        readAll: async () => ({ ok: true, data: { records: [] } }),
+      },
+      brokerAdapterFactory: () => {
+        calls.push("broker-factory")
+        return createBroker(calls)
+      },
+    }),
+    /durable ledger integrity failed/,
+  )
+  assert.deepEqual(calls, [], "An unverified durable-fact ledger must block broker connection and subscriptions.")
+})
