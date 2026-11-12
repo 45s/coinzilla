@@ -23,14 +23,14 @@ const makeFill = ({ tradeId, side, quantity, quoteQuantity, price }) => new Fill
   quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
   commissionStatus: "COMPLETE",
 })
-const makeSellOrder = ({ status = "FILLED", executedQuantity = "1" } = {}) => new CanonicalOrder({
+const makeSellOrder = ({ status = "FILLED", quantity = "1", executedQuantity = quantity, price = "130005" } = {}) => new CanonicalOrder({
   clientOrderId: "harvester-sell-cycle-1",
   brokerOrderId: "broker-sell-cycle-1",
   market,
   side: "SELL",
   type: "LIMIT",
-  limitPrice: new Money({ amount: "130005", asset: quoteAsset }),
-  originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+  limitPrice: new Money({ amount: price, asset: quoteAsset }),
+  originalQuantity: new Quantity({ amount: quantity, asset: baseAsset }),
   executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
   status,
   createdAt: 1,
@@ -73,6 +73,22 @@ const makeCycle = () => {
   }
 }
 
+const makeNotCompletedCycle = () => {
+  const buyFill = makeFill({ tradeId: "cycle-not-completed-buy", side: "BUY", quantity: "0.42", quoteQuantity: "39.75", price: "94.642857142857142857" })
+  const sellFill = makeFill({ tradeId: "cycle-not-completed-sell", side: "SELL", quantity: "0.4", quoteQuantity: "40", price: "100" })
+  const portfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+  return {
+    portfolio,
+    recoveryLedger,
+    position: portfolio.getPosition({ marketId: market.id }),
+  }
+}
+
 test("persists a completed recovery cycle with its exact terminal SELL identity", async (t) => {
   const durableFactsStore = await makeStore(t)
   const cycle = makeCycle()
@@ -108,20 +124,11 @@ test("requires a canonical fully filled SELL before recording a completed cycle"
 
 test("persists an explicit CONTINUE_SELL_THROUGH outcome tied to the full SELL and current cycle evidence", async (t) => {
   const durableFactsStore = await makeStore(t)
-  const sellOrder = makeSellOrder()
+  const cycle = makeNotCompletedCycle()
+  const sellOrder = makeSellOrder({ quantity: "0.4", price: "100" })
   const result = await recordRecoveryCycleNotCompleted({
     durableFactsStore,
-    recoveryLedger: {
-      market,
-      buyCost: "39.75",
-      netSellProceeds: "40",
-      appliedFillIds: ["binance:BTCUSDT:buy-1", "binance:BTCUSDT:sell-1"],
-    },
-    position: {
-      market,
-      spent: { amount: "39.75" },
-      baseQuantity: { amount: "0.02" },
-    },
+    ...cycle,
     sellOrder,
     completion: {
       eligible: false,
@@ -140,17 +147,17 @@ test("persists an explicit CONTINUE_SELL_THROUGH outcome tied to the full SELL a
   assert.equal(result.data.record.data.outcome, "CONTINUE_SELL_THROUGH")
   assert.equal(result.data.record.data.sellOrderClientId, sellOrder.clientOrderId)
   assert.equal(result.data.record.data.sellOrderBrokerOrderId, sellOrder.brokerOrderId)
-  assert.deepEqual(result.data.record.data.appliedFillIds, ["binance:BTCUSDT:buy-1", "binance:BTCUSDT:sell-1"])
+  assert.deepEqual(result.data.record.data.appliedFillIds, cycle.recoveryLedger.appliedFillIds)
 })
 
 test("does not persist a non-completion outcome for an unfilled or non-SELL order", async () => {
   let appendCalls = 0
   const durableFactsStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
+  const cycle = makeNotCompletedCycle()
   const result = await recordRecoveryCycleNotCompleted({
     durableFactsStore,
-    recoveryLedger: { market, buyCost: "39.75", netSellProceeds: "40", appliedFillIds: ["fill-1"] },
-    position: { market, spent: { amount: "39.75" }, baseQuantity: { amount: "0.02" } },
-    sellOrder: makeSellOrder({ status: "OPEN", executedQuantity: "0" }),
+    ...cycle,
+    sellOrder: makeSellOrder({ status: "OPEN", quantity: "0.4", executedQuantity: "0", price: "100" }),
     completion: {
       eligible: false,
       pause: false,
