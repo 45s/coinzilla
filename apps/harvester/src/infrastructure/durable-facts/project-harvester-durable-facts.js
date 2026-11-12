@@ -215,6 +215,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     const strategyPauses = new Map()
     const activeBlockers = new Map()
     const marketHistoryCoverage = []
+    const marketHistoryCoverageBySymbol = new Map()
     const orderIntents = new Map()
     let previousSequence = -1n
 
@@ -271,7 +272,16 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       if (record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
         const coverageSession = sessions.get(record.runtimeSessionId)
         if (!coverageSession || coverageSession.stopped) { throw new Error("Market-history coverage fact is outside an active process session") }
-        marketHistoryCoverage.push(Object.freeze({ ...record.data, sequence: record.sequence }))
+        const previousCoverage = marketHistoryCoverageBySymbol.get(record.data.symbol)
+        if (previousCoverage && (
+          record.data.coveredFromTime > previousCoverage.coveredFromTime ||
+          record.data.verifiedAt < previousCoverage.verifiedAt
+        )) {
+          throw new Error("Market-history coverage facts must be monotonic and may never narrow a previously verified history window")
+        }
+        const coverage = Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence })
+        marketHistoryCoverageBySymbol.set(record.data.symbol, coverage)
+        marketHistoryCoverage.push(coverage)
         continue
       }
 
