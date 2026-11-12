@@ -990,5 +990,5 @@ export function createFileDurableFactsStore({
     }
   })
 
-  return Object.freeze({ initialize, append, verify, readAll })
+  return Object.freeze({ runtimeSessionId, initialize, append, verify, readAll })
 }
