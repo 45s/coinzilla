@@ -53,20 +53,14 @@ The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harne
 
 The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @coinzilla/harvester recovery:market -- --context ./recovery-evidence/linkusdt.json`. Audit-only is the default; `--confirm` is an explicit durable-fact append and requires an already initialized ledger. The command does not connect to Binance, place/cancel orders, or enable startup restoration. See the [recovery operator guide](./docs/recovery/README.md) for the evidence schema and safety contract.
 
-## Application-owned recovery-facts ledger (ADR-0001 Step 8)
+## Process-restart recovery
 
-With `strategies.CG_coinGrabber.settings.recovery.enabled: false`, normal startup skips durable-facts store construction, verification, projection and restart-session checks. No `DURABLE_FACTS_DIRECTORY` or genesis initialization is required to start Harvester. Keep recovery disabled until ADR-0001 runtime recovery has completed its exchange-reconciliation and crash/restart acceptance gates.
+Process-restart recovery is disabled in the current configuration:
+`strategies.CG_coinGrabber.settings.recovery.enabled: false`.
 
-The explicit `durable-facts:init` command remains reserved for a future approved recovery rollout; do not initialize a ledger as part of ordinary startup or to work around a startup failure while recovery is disabled.
+When disabled, normal startup does not construct or verify the durable-facts store, project previous process facts, or apply the ADR-0001 second-start fence. No `DURABLE_FACTS_DIRECTORY` or genesis initialization is required. Keep this switch disabled until exchange reconciliation, recovery-state parity and crash/restart acceptance are complete.
 
-```sh
-export DURABLE_FACTS_DIRECTORY="$HOME/.coinzilla/harvester/recovery-facts"
-pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize
-```
-
-The command requires exactly `--confirm-initialize`, rejects unknown arguments and non-absolute directories, acquires the same broker-wide and Journal process locks as Harvester, creates the selected private directory (0700) and its fact/manifest files (0600), and refuses to overwrite any existing ledger. The runtime reads the same `DURABLE_FACTS_DIRECTORY` value; do not initialize one directory and run against another. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
-
-The durable-facts implementation supports fact production and offline candidate projection only. It is currently disconnected from normal startup by the recovery setting. Acknowledged orders remain UNKNOWN until exchange reconciliation; automatic restoration and READY publication from recovered state are not implemented.
+The ADR-0001 durable-facts implementation, offline candidate projection and recovery audit tools remain available for future work. They are not part of the current startup path. Conservative same-process BUY/SELL recovery-cycle accounting remains enabled and unchanged.
 
 ## Configuration
 
