@@ -258,7 +258,7 @@ test("rejects non-canonical fill input without mutating Portfolio state", async 
 
 
 
-test("leaves both accounting projections unchanged when recovery ledger reset fails", () => {
+test("leaves both accounting projections unchanged when recovery ledger reset fails", async () => {
   const buyFill = createFill({
     tradeId: "recovery-reset-buy",
     quantity: "2",

@@ -26,6 +26,9 @@ import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
 import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
+import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
+import { recordProcessStarted } from "../use-cases/record-process-started.js"
+import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -81,6 +84,25 @@ export async function startHarvester({
       const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 durable-fact ledger: " + (cause.message ?? String(cause)), { cause })
       error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
       throw error
+    }
+  }
+  let processConfigurationFingerprint
+  if (durableFactsStore) {
+    const baseline = await recordConfigurationBaseline({ durableFactsStore, appConfig })
+    if (baseline?.ok !== true || baseline.data?.durable !== true) {
+      throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
+        (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    }
+    processConfigurationFingerprint = baseline.data.fingerprint
+    const started = await recordProcessStarted({
+      durableFactsStore,
+      configurationFingerprint: processConfigurationFingerprint,
+      strategyName: baseline.data.strategyName,
+      markets: baseline.data.markets,
+    })
+    if (started?.ok !== true || started.data?.durable !== true) {
+      throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
+        (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
     }
   }
   const onDurableExecutionFill = durableFactsStore
@@ -329,7 +351,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
 
     userDataSubscription = await subscribeToUserData({
       broker,
@@ -390,7 +412,7 @@ export async function startHarvester({
   userDataState.startupComplete = true
   if (userDataState.pendingRecovery) startUserDataRecovery()
 
-  const stop = createShutdownHandler({
+  const stopRuntime = createShutdownHandler({
     state: userDataState,
     logger,
     tradingEnabled,
@@ -404,6 +426,20 @@ export async function startHarvester({
     eventPublisher,
     publishAccountSnapshot,
   })
+  const stop = async () => {
+    await stopRuntime()
+    if (durableFactsStore) {
+      const stopped = await recordProcessStopped({
+        durableFactsStore,
+        reason: "SHUTDOWN_COMPLETED",
+        clean: true,
+      })
+      if (stopped?.ok !== true || stopped.data?.durable !== true) {
+        throw new Error("Harvester shutdown completed but its clean process-stop boundary was not durable: " +
+          (stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+      }
+    }
+  }
 
   return Object.freeze({
     appConfig,
