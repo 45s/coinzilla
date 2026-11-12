@@ -1,4 +1,4 @@
-# Coinzilla — develop engineering roadmap
+# Repository — develop engineering roadmap
 
 **Scope:** cross-workspace engineering priorities for the active `develop` branch. Application- and package-specific backlogs remain in their owning roadmaps; this file is a concise priority index, not a duplicate task tracker.
 
@@ -132,3 +132,23 @@
 6. Preserve historical reports and provenance. Correct stale historical conclusions with a dated addendum or link to the current living source; never silently rewrite evidence.
 7. Run focused checks, repository agent-policy/link checks and applicable CI on the exact PR head. A skipped integration check is not a pass.
 8. Keep task branches short-lived and delete them after merge when repository permissions allow. Never bypass branch protection or release approval.
+
+
+## IMPORTANT — cross-workspace engineering foundations
+
+- **Structured, package-owned application errors — PLANNED; incremental adoption.**
+  - **Why:** generic errors and inconsistent wrapping make it difficult to identify which package, service, operation, or boundary failed. Losing the original cause makes diagnosis and safe recovery harder.
+  - **Standard:** introduce one shared `SystemCustomError` base. Each owning package/application/feature defines only the specific subclasses and stable, domain-scoped error codes it needs (for example, Journal read/write/validation, notification delivery, command operations, authentication, trading execution, configuration, and broker connection/order/market-data failures). Preserve native `cause`, attach bounded safe context, and classify retryability only where meaningful.
+  - **Ownership:** the base implementation must have one shared owner selected after dependency-direction and shared-utility review. Domain-specific subclasses remain with their owning component; do not build a central catalogue of every application's errors or introduce cross-domain dependency cycles.
+  - **Adoption policy:** new functionality follows the standard immediately. During bug fixes and maintenance, migrate the error paths being materially changed when relevant and safe. Refactor untouched legacy paths only through focused tasks with a concrete diagnostic benefit. No mass rename or one-shot repository-wide rewrite.
+  - **Implementation order:**
+    1. Audit existing error types, exports, package dependency directions, catch/wrap/log boundaries, and current consumers. Select the shared owner and define the minimal `SystemCustomError` contract.
+    2. Implement the base and focused unit tests: native `Error` behavior, subclass name, stable code, native `cause`, safe context, and optional retryability. Document public exports and compatibility.
+    3. Introduce package-owned error classes and codes when adding or changing functionality in shared infrastructure packages. Start with high-value boundaries where errors currently lose component or operation identity.
+    4. Adopt the standard in applications and services as features are developed and bug fixes touch the relevant paths. Wrap only at meaningful architectural boundaries; preserve lower-level causes and avoid duplicate logs.
+    5. Standardize structured logging/reporting fields and safe serialization where the relevant logger/telemetry contracts support them. Ensure reporter failures never mask the original operation failure.
+    6. Add targeted compatibility/regression tests and update each affected package's README, API docs, local AGENTS and roadmap when its public error contract changes. Keep the root standard and root roadmap synchronized.
+    7. Track remaining legacy migrations as evidence-based, owner-scoped tasks; do not treat repository-wide replacement of native `Error` as a completion criterion.
+  - **Acceptance criteria:** a single shared base with no duplicate implementations; stable and tested error codes; package-owned subclasses; preserved cause chains across meaningful boundaries; safe, actionable context; no secrets in logs or notifications; deterministic tests for important error paths; and a documented gradual migration process. Do not claim full adoption while legacy paths remain.
+  - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/ERROR_HANDLING_STANDARD.md).
+  - **Owner:** cross-workspace engineering; implementation ownership is assigned per shared package or consuming application during each focused task.
