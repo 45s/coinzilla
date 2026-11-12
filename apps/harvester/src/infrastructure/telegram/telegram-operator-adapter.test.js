@@ -994,3 +994,45 @@ test("keeps authorized text commands available when Telegram command-menu regist
   assert.equal(sentMessages.length, 1, "The adapter must continue handling authorized text commands.")
   assert.match(sentMessages[0].text, /Harvester Command Center/)
 })
+
+
+test("shows only enabled configured markets as inline pause or resume controls", async () => {
+  const update = makeCallbackUpdate({ updateId: 1001, data: "cc:nav:markets", messageId: 1001 })
+  const edits = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [update] }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
+    if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async () => assert.fail("Rendering market controls must not mutate trading state."),
+      getMarkets: async () => ({ ok: true, data: { markets: [
+        { symbol: "LINKUSDT", enabled: true, readiness: "READY", latestPrice: "10", priceFresh: true, operatorPaused: false, blockers: [] },
+        { symbol: "BTCUSDT", enabled: true, readiness: "READY", latestPrice: "20", priceFresh: true, operatorPaused: true, blockers: [] },
+        { symbol: "ETHUSDT", enabled: false, readiness: "DISABLED", latestPrice: null, priceFresh: false, operatorPaused: false, blockers: [] },
+      ] } }),
+    },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  const buttons = edits[0].reply_markup.inline_keyboard.flat()
+  assert.ok(buttons.some(button => button.callback_data === "cc:ask:PAUSE:LINKUSDT"), "An enabled unpaused market must offer only a pause request.")
+  assert.ok(buttons.some(button => button.callback_data === "cc:ask:RESUME:BTCUSDT"), "An enabled operator-paused market must offer only a resume request.")
+  assert.equal(buttons.some(button => button.callback_data?.includes("ETHUSDT")), false, "Disabled markets must not expose operator controls.")
+})

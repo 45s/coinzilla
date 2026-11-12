@@ -8,7 +8,7 @@ The Command Center is not an exchange kill switch. It cannot place, cancel, adop
 
 ## Command menu and navigation
 
-Use `/start` or `/help` to display the supported command vocabulary. Telegram's command menu mirrors the text commands. Inline navigation opens read-only status, markets, positions, orders and balances pages. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
+Use `/start` or `/help` to display the supported command vocabulary. Telegram's command menu mirrors the text commands. Inline navigation opens read-only status, markets, positions, orders and balances pages. Enabled markets expose a pause request when not operator-paused and a resume request when the operator pause is active; disabled markets expose no inline control. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
 
 Text commands remain available:
 
