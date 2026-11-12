@@ -91,7 +91,9 @@ export async function prepareTelegramOperatorControl({
       const activeAdapter = adapter
       try {
         const result = await activeAdapter.stop()
-        if (result?.ok === false || result?.stopped === false) throw new Error("Telegram adapter did not confirm that polling stopped")
+        if (result?.ok === false || result?.stopped === false) {
+          throw new Error("Telegram adapter did not confirm that polling stopped")
+        }
         adapter = undefined
         return result
       } catch (error) {
