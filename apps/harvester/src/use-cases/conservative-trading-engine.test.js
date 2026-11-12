@@ -6604,6 +6604,20 @@ test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs",
   assert.deepEqual(harness.pauses, [], "The opt-out must not touch independent account-integrity pause behavior.")
 })
 
+test("per-pair opt-out bypasses the volatility submission gate while retaining normal strategy execution", async () => {
+  const unavailable = { ok: true, data: { status: { isReady: false, reason: "INSUFFICIENT_HISTORY" }, metrics: null } }
+  const config = structuredClone(appConfig)
+  config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
+  const harness = await createHarness({ appConfig: config, getVolatilityData: () => unavailable })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+  assert.equal(result.ok, true)
+  assert.ok(harness.orders.length > 0, "The disabled pair must not be held behind volatility-history readiness; ordinary strategy gates still decide whether an order can be sent.")
+  assert.equal(harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }), undefined)
+})
+
 test("high volatility cancels only acknowledged owned BUYs and keeps the market protected", async () => {
   const buyOrder = makeShutdownOrder({
     side: "BUY",
