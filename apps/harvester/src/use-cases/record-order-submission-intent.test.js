@@ -54,8 +54,8 @@ test("records the canonical immutable order intent and requires a durable append
     quoteAssetId: "binance:USDT",
     side: "BUY",
     type: "LIMIT_MAKER",
-    price: "0.099000",
-    quantity: "100.000",
+    price: "0.099",
+    quantity: "100",
     purpose: "RECOVERY_SELL",
   }, "The fact must preserve canonical market/order identities, exact decimal strings, and strategy purpose.")
 })
