@@ -4,7 +4,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Start here
 
-- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the named `appConfig` export in `config/index.js`, named constants in `config/notifications-tg-profiles.js`, profile behavior, event overrides, and environment-only credentials.
+- [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
 
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Interactive pair configuration generator](../README.md#generate-a-new-trading-pair) — create a validated, enabled-by-default Binance Spot pair through `pnpm run config:symbol`

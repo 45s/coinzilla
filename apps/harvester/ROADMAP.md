@@ -4,7 +4,7 @@
 
 ## Operator control — initial Telegram pause
 
-**Status: IMPLEMENTED IN [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation is merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is ready for verification/closeout.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+**Status: IMPLEMENTED AND MERGED in [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); process-lifetime scope/docs clarified in [PR #1065](https://github.com/45s/coinzilla/pull/1065); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
 
 - Initial Telegram command: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
 - Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
@@ -15,15 +15,15 @@
 - [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
 - [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid durable-store verification — PR #1067.
 - [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
-- [x] Exact-head workspace CI passed on PR #1067: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The read-only Binance TESTNET integration was skipped. User review/merge remains pending; no exchange operation was performed.
+- [x] Exact-head workspace CI passed on PR #1067 head `baf21f7ca4a42b6622d2282dda53e7d5c7c03699`: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The optional read-only Binance TESTNET integration was skipped. PR #1067 merged at `96293daa5ee3b831e55c49b56af22ce1857f936c`; no exchange operation was performed.
 
-**Out of scope:** projecting operator facts into startup state, restoring a pause after restart, and completing recovery Steps 7–9. Those remain in the separate ADR-0001 / issue #654 workstream and do not block the initial process-lifetime operator-control capability.
+**Out of scope:** projecting operator facts into startup state and restoring a pause after restart. These remain part of the separate ADR-0001 / issue #654 Steps 8–9 workstream and do not block the delivered process-lifetime operator-control capability.
 
 ---
 
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED; regression matrix and exact-head CI complete; candle-stream freshness correction merged in PR #1049; historical threshold calibration open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -44,8 +44,8 @@
 5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
 7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
-8. [~] Synchronize living documentation and roadmaps — this closeout PR.
-9. [~] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — implementation in [PR #1046](https://github.com/45s/coinzilla/pull/1046); exact-head CI and merge remain pending.
+8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
+9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
 10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
@@ -197,7 +197,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 5. **[x] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041; [PR #1024](https://github.com/45s/coinzilla/pull/1024)).**
    - [x] Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation; completed cycles reset basis while explicit residual sell-through preserves active inventory and cost basis.
-   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance remains a Step 7 gate.
+   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance is required evidence in the Step 7 operator audit; it remains fail-closed until supplied and verified for the target market.
    - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
    - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
@@ -208,7 +208,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
+7. **[x] Step 7 — Offline one-market reconciliation and guarded coverage confirmation implemented (audit primitives PRs #1034/#1036; orchestration/confirmation PR #1047; offline CLI/evidence matrix PR #1053).**
    - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
@@ -1587,6 +1587,8 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [ ] Merge after final-head CI passes.
 
 ### Per-pair external-order policy — PR #1062
+
+**Configuration cleanup — PR #1069:** named `EXTERNAL_ORDERS_POLICIES` constants now define the supported values, operator-control defaults are isolated in named `OPERATOR_CONTROL_CONFIG` and composed into the single `appConfig`, and config tests validate schema invariants without freezing deployment-specific enabled symbols.
 
 The owner-approved follow-up separates manual/external orders from orders previously generated by Harvester. The default is to ignore manual Binance Web/CScalp orders without adopting them or changing Harvester Portfolio/RecoveryLedger. A pair may opt back into same-symbol blocking with `externalOrdersPolicy: "block"`. The reserved Harvester `h-` client-ID namespace remains fail-closed across process boundaries until #654 restart restoration can reconcile those orders and fills.
 
