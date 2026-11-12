@@ -1,6 +1,6 @@
 # Repository documentation
 
-This index is the entry point for maintained Coinzilla documentation. The repository-wide migration/adoption work is tracked in [#795](https://github.com/45s/coinzilla/issues/795). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The repository-wide migration/adoption work is tracked in [#795](https://github.com/45s/coinzilla/issues/795). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
