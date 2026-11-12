@@ -34,6 +34,7 @@ export function makeOrderEventWorkflow({
   resolveRecoveryManagedCancellation,
   cancelAndReconcileRecoverySells,
   evaluateLatestTransition,
+  getReconciledBuyExecutionPrice,
   assertReconciledSellExecution,
   completeRecoveryCycle,
   publishRecoveryCycleNotCompleted,
