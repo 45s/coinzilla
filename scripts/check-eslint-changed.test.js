@@ -53,3 +53,47 @@ test("selectChangedJavaScriptFiles returns sorted unique paths", () => {
     "Changed source paths must be deterministic and duplicate-free.",
   );
 });
+
+
+import { ESLint } from "eslint";
+
+test("ESLint rejects default ESM exports in application and package source files", async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText(
+    "export default { value: true };\n",
+    { filePath: "apps/harvester/config/example.js" },
+  );
+
+  assert.ok(
+    result.messages.some((message) => message.ruleId === "no-restricted-syntax"),
+    "A default ESM export must be rejected by the repository-wide named-export policy.",
+  );
+});
+
+test("ESLint accepts named exports under the repository export policy", async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText(
+    "export const value = true;\n",
+    { filePath: "apps/harvester/config/example.js" },
+  );
+
+  assert.equal(
+    result.errorCount,
+    0,
+    "A valid named ESM export must pass the repository export policy.",
+  );
+});
+
+test("ESLint permits the loader-required default export in its own configuration file", async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText(
+    "export default [];\n",
+    { filePath: "eslint.config.js" },
+  );
+
+  assert.equal(
+    result.messages.filter((message) => message.ruleId === "no-restricted-syntax").length,
+    0,
+    "ESLint's own configuration file must retain the default export required by its config loader.",
+  );
+});

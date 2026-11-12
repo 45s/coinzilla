@@ -13,7 +13,7 @@ Journal JSONL session inside the matching
 `apps/harvester/logs/sessions/<UTC timestamp>-<runtime session ID>/`
 directory, beside that process's structured logs. Cumulative diagnostic files
 remain under `apps/harvester/logs/cumulative/`. The application entrypoint
-does not expose environment or `config.json` settings to disable the
+does not expose environment or `config/index.js` settings to disable the
 Journal or change its directory. The lower-level `prepareOptionalJournal()`
 helper accepts `enabled` and `directory` options for controlled programmatic
 composition and tests; these are not deployment settings.

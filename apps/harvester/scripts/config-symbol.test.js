@@ -68,9 +68,9 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
     },
     writeConfig: async (args) => {
       writes.push(args)
-      return "/repo/apps/harvester/config.json"
+      return "/repo/apps/harvester/config/index.js"
     },
-    configPath: "/repo/apps/harvester/config.json",
+    configPath: "/repo/apps/harvester/config/index.js",
   })
 
   assert.equal(metadataCalls.length, 1, "Valid operator input must trigger one public exchange metadata lookup.")
@@ -197,7 +197,7 @@ test("refuses metadata for a different symbol or exchange environment", async ()
       /metadata symbol\/environment does not match/i,
       "The generator must not combine operator input with exchange metadata for a different symbol or environment.",
     )
-    assert.equal(writes, 0, "Mismatched metadata must never be written into config.json.")
+    assert.equal(writes, 0, "Mismatched metadata must never be written into config/index.js.")
   }
 })
 
