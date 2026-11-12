@@ -1665,102 +1665,29 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
 })
 
 
-test("verifies and injects the application-owned durable-fact store before Journal and runtime startup", async () => {
-  const events = []
-  const store = { verify: async () => { events.push("verify"); return { ok: true, data: { valid: true, durableWriteSupported: true } } } }
-  const processIdentity = {
-    application: "harvester",
-    version: "1.0.001",
-    runtimeSessionId: "runtime-session-durable",
-    processId: 123,
-    startedAt: "2026-11-09T12:34:56.789Z",
-    source: { branch: null, commit: null, shortCommit: null, commitMessage: null, commitDate: null, workingTree: "unknown", metadataSource: "unavailable" },
-  }
+test("does not construct, verify, or inject durable facts even when a stale ledger path is configured", async () => {
+  let storeCreated = false
+  let journalCreated = false
+  let runtimeStarted = false
   await runMain({
-    processIdentity,
-    createDurableFactsStore: ({ directory, runtimeSessionId }) => {
-      assert.match(directory, /\.coinzilla[\\/]harvester[\\/]recovery-facts$/, "The production ledger must use its dedicated private application directory.")
-      assert.equal(runtimeSessionId, processIdentity.runtimeSessionId, "The store must bind writes to the immutable OS process identity.")
-      return store
+    env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
+    createDurableFactsStore: () => {
+      storeCreated = true
+      throw new Error("restart recovery is disabled")
     },
-    createJournalService: () => { events.push("journal"); return disabledJournalService() },
+    createJournalService: () => {
+      journalCreated = true
+      return disabledJournalService()
+    },
     start: async (input) => {
-      events.push("runtime")
-      assert.equal(input.durableFactsStore, store, "The verified store must be injected into the application composition.")
+      runtimeStarted = true
+      assert.equal(input.durableFactsStore, undefined)
       return { connected: false }
     },
     logger: { info() {}, system() {}, error() {} },
   })
-  assert.deepEqual(events, ["verify", "journal", "runtime"], "Ledger integrity must be verified before Journal composition and before any broker-capable runtime startup.")
+  assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the durable-facts store.")
+  assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
+  assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })
 
-test("fails closed before Journal or broker startup when the durable-fact ledger is missing or corrupt", async () => {
-  let runtimeStarted = false
-  let journalCreated = false
-  let lockReleased = false
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  try {
-    await runMain({
-      createDurableFactsStore: () => ({ verify: async () => ({ ok: false, errors: [new Error("ledger missing")] }) }),
-      createJournalService: () => { journalCreated = true; return disabledJournalService() },
-      acquireProcessLock: async () => ({ ok: true, release: async () => { lockReleased = true; return { ok: true } } }),
-      start: async () => { runtimeStarted = true; return { connected: true } },
-      logger: { info() {}, system() {}, error() {} },
-    })
-    assert.equal(runtimeStarted, false, "A missing/corrupt recovery ledger must prevent runtime startup.")
-    assert.equal(journalCreated, false, "Ledger verification must precede Journal/runtime activation.")
-    assert.equal(lockReleased, true, "A pre-runtime ledger verification failure must release the acquired process lock.")
-    assert.equal(process.exitCode, 1)
-  } finally {
-    process.exitCode = previousExitCode
-  }
-})
-
-
-test("uses the same absolute DURABLE_FACTS_DIRECTORY override as the genesis command", async () => {
-  const directory = path.join(os.tmpdir(), "harvester-custom-recovery-facts")
-  let receivedDirectory
-  await runMain({
-    env: { DURABLE_FACTS_DIRECTORY: directory },
-    createDurableFactsStore: (input) => {
-      receivedDirectory = input.directory
-      return { verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }
-    },
-    start: async () => ({ connected: false }),
-    logger: { info() {}, system() {}, error() {} },
-  })
-  assert.equal(receivedDirectory, directory, "Runtime verification must use the exact directory initialized by the operator.")
-})
-
-test("rejects a relative DURABLE_FACTS_DIRECTORY before Journal or broker-capable startup", async () => {
-  let storeCreated = false
-  let journalCreated = false
-  let runtimeStarted = false
-  let lockReleased = false
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  try {
-    await runMain({
-      env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
-      acquireProcessLock: async () => ({
-        ok: true,
-        release: async () => { lockReleased = true; return { ok: true } },
-      }),
-      createDurableFactsStore: () => {
-        storeCreated = true
-        return { verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }
-      },
-      createJournalService: () => { journalCreated = true; return disabledJournalService() },
-      start: async () => { runtimeStarted = true; return { connected: false } },
-      logger: { info() {}, system() {}, error() {} },
-    })
-    assert.equal(storeCreated, false, "A relative path must be rejected before creating a ledger adapter.")
-    assert.equal(journalCreated, false, "Ledger path validation must precede Journal composition.")
-    assert.equal(runtimeStarted, false, "An invalid ledger path must never reach broker-capable startup.")
-    assert.equal(lockReleased, true, "A pre-runtime path validation failure must release the process lock.")
-    assert.equal(process.exitCode, 1)
-  } finally {
-    process.exitCode = previousExitCode
-  }
-})
