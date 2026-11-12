@@ -76,6 +76,12 @@ Run these commands from the repository root with the Node.js and pnpm versions s
 # Workspace package tests
 pnpm test
 
+# ESLint across all JavaScript with the committed legacy baseline
+pnpm lint
+
+# Auto-fix supported ESLint findings and prune resolved baseline entries
+pnpm lint:fix
+
 # Local aggregate: workspace tests, syntax, agent-policy, and mocked external-link tests
 # (does not run the full-tree formatting report, PR changed-file style gate, or live URL checks)
 pnpm run quality

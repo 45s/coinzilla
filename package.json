@@ -10,7 +10,10 @@
     "check:agent-policy": "node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js",
     "quality": "pnpm test && pnpm run check:syntax && pnpm run check:agent-policy && pnpm run test:external-links",
     "check:external-links": "node scripts/check-external-links.js",
-    "test:external-links": "node --test scripts/check-external-links.test.js"
+    "test:external-links": "node --test scripts/check-external-links.test.js",
+    "lint": "eslint . --suppressions-location eslint-suppressions.json",
+    "lint:fix": "eslint . --fix --suppressions-location eslint-suppressions.json --prune-suppressions",
+    "lint:changed": "node scripts/check-eslint-changed.js"
   },
   "keywords": [],
   "author": "",
@@ -31,5 +34,10 @@
     "overrides": {
       "follow-redirects": "1.16.2"
     }
+  },
+  "devDependencies": {
+    "@eslint/js": "~10.0.1",
+    "eslint": "~10.14.0",
+    "globals": "~17.14.0"
   }
 }

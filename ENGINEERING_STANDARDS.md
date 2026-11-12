@@ -131,6 +131,22 @@ A materially edited test case must comply with these practices throughout that c
 - Do not use nested ternary operators. Use `if`/`else` statements or extract a clearly named helper when conditional logic needs multiple branches.
 - Always use braces for control statements, including single-line bodies: `if`, `else`, `for`, `while`, `do`, and other block-controlled statements. Do not write unbraced one-line control flow.
 
+### JavaScript linting
+
+The workspace uses the root ESLint flat configuration in `eslint.config.js`. It applies to JavaScript in `apps/`, `packages/`, and repository tooling, including tests. The configuration uses the `@eslint/js` recommended rules and Node built-in globals; browser globals and implicit test-runner globals are not enabled.
+
+The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting and stylistic rules are intentionally out of scope.
+
+Gradual adoption is enforced with ESLint bulk suppressions in the committed `eslint-suppressions.json` baseline:
+
+- `pnpm lint` checks the complete JavaScript workspace and fails when violations exceed the recorded per-file/per-rule baseline.
+- Pull requests lint every changed JavaScript file without baseline suppressions. A changed legacy file must therefore be clean, not merely avoid adding more findings.
+- New JavaScript files have no baseline entries and must pass from the start.
+- `pnpm lint:fix` applies supported fixes and prunes resolved baseline entries. Review its complete diff before committing.
+- Do not regenerate or expand the baseline to hide newly introduced findings. Baseline changes are limited to a deliberate rule-adoption review.
+
+The baseline is a migration aid, not a permanent exemption. Reduce it as files are touched and keep changed-file enforcement active.
+
 ### 5. Functions and side effects
 
 - Prefer small, cohesive functions with one clear responsibility.
