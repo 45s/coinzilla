@@ -9,6 +9,7 @@ function text(value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH) {
   }
 
   const normalized = String(value)
+    // eslint-disable-next-line no-control-regex -- Strip control characters before sending plain text to Telegram.
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
