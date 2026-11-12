@@ -21,8 +21,7 @@ const fill = new Fill({
 
 test("commits the durable fill before publishing the new Portfolio and RecoveryLedger", async () => {
   const order = []
-  let workflow
-  workflow = createPortfolioWorkflow({
+  const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ actions: [] }),
     logger: {},
     onDurableExecutionFill: async ({ fill: received }) => {

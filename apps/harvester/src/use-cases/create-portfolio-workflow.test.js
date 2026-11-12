@@ -40,8 +40,7 @@ const test = (name, ...args) => nodeTest("[create-portfolio-workflow.test.js] " 
 
 test("captures the third-asset baseline before applying the fill to Portfolio and RecoveryLedger", async () => {
   const baselineCalls = []
-  let workflow
-  workflow = createPortfolioWorkflow({
+  const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
     onCommissionAsset: async (asset) => {
