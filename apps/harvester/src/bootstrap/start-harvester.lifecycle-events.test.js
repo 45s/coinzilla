@@ -297,11 +297,18 @@ test("publishes market-price subscription failure and broker disconnect outcome"
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
     HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
   ])
-  assert.equal(eventPublisher.events[6].data.stream, "market-price")
-  assert.equal(eventPublisher.events[6].data.market, "BTCUSDT")
+  assert.deepEqual(eventPublisher.events[6].data, {
+    broker: "binance",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
+  })
+  assert.equal(eventPublisher.events[7].data.stream, "market-price")
+  assert.equal(eventPublisher.events[7].data.market, "BTCUSDT")
 })
 
 
