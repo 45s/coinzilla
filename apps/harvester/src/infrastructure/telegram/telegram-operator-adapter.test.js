@@ -40,6 +40,12 @@ test("parses help, start, pause and resume commands", () => {
   assert.deepEqual(parseTelegramOperatorCommand("/resume"), { type: "INVALID", command: "RESUME" })
 })
 
+test("parses read-only status and market queries without arguments", () => {
+  assert.deepEqual(parseTelegramOperatorCommand("/status"), { type: "STATUS" })
+  assert.deepEqual(parseTelegramOperatorCommand("/markets"), { type: "MARKETS" })
+  assert.deepEqual(parseTelegramOperatorCommand("/status extra"), { type: "INVALID", command: "STATUS" })
+})
+
 test("parses only the initial pause command and accepts a command addressed to this bot", () => {
   assert.deepEqual(parseTelegramOperatorCommand("/pause linkusdt", { botUsername: "coinzilla_bot" }), {
     type: "PAUSE",
@@ -466,4 +472,100 @@ test("ignores a private-chat update whose chat identity does not match its allow
     [],
     "A mismatched private-chat identity must be ignored without replying to an unrelated chat.",
   )
+})
+
+test("dispatches authorized read-only status and market queries without invoking trading controls", async () => {
+  const updates = [
+    makeUpdate({ updateId: 112, text: "/status" }),
+    makeUpdate({ updateId: 113, text: "/markets" }),
+  ]
+  const queryCalls = []
+  const sentMessages = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) {return makeResponse({ ok: true, result: updates })}
+      if (pollCount === 2) {
+        finishSecondPoll()
+        return makeResponse({ ok: true, result: [] })
+      }
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      })
+    }
+    if (method === "sendMessage") {
+      sentMessages.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: { message_id: 212 } })
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const operator = {
+    pauseMarket: async () => assert.fail("Read-only queries must never invoke pauseMarket."),
+    resumeMarket: async () => assert.fail("Read-only queries must never invoke resumeMarket."),
+    getStatus: async (request) => {
+      queryCalls.push({ type: "status", request })
+      return {
+        ok: true,
+        data: {
+          connected: true,
+          tradingMode: "testnet",
+          tradingEnabled: true,
+          strategyMode: "conservative",
+          readiness: { state: "BLOCKED", blockers: ["AUTHORITATIVE_RECONCILIATION_REQUIRED"] },
+          userData: { ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", ageMs: 1000 },
+          markets: { configured: 2, enabled: 2, blocked: 1 },
+        },
+      }
+    },
+    getMarkets: async (request) => {
+      queryCalls.push({ type: "markets", request })
+      return {
+        ok: true,
+        data: {
+          tradingEnabled: true,
+          markets: [{
+            symbol: "DOGEUSDT",
+            enabled: true,
+            readiness: "BLOCKED",
+            latestPrice: "0.12",
+            priceFresh: false,
+            blockers: ["USER_DATA_NOT_READY", "MARKET_PRICE_STALE"],
+            operatorPaused: false,
+            safetyPaused: false,
+            volatilityProtection: { mode: "PROTECTED", reason: "HIGH_VOLATILITY" },
+          }],
+        },
+      }
+    },
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator,
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+
+  assert.deepEqual(
+    queryCalls.map(({ type }) => type),
+    ["status", "markets"],
+    "The adapter must route /status and /markets to their read-only application queries in update order.",
+  )
+  assert.equal(queryCalls[0].request.actor.id, "telegram-user:12345", "The status query must receive the authenticated application actor.")
+  assert.equal(queryCalls[1].request.actor.roles.includes("trading-operator"), true, "The market query must receive the authorized operator role.")
+  assert.equal(sentMessages.length, 2, "Each read-only command must receive exactly one Telegram response.")
+  assert.match(sentMessages[0].text, /Readiness: BLOCKED/, "The status response must not hide a closed readiness gate.")
+  assert.match(sentMessages[0].text, /AUTHORITATIVE_RECONCILIATION_REQUIRED/, "The status response must name its actual readiness blocker.")
+  assert.match(sentMessages[1].text, /DOGEUSDT/, "The market response must identify the configured market.")
+  assert.match(sentMessages[1].text, /MARKET_PRICE_STALE/, "The market response must identify stale price data.")
+  assert.match(sentMessages[1].text, /PROTECTED/, "The market response must expose the volatility protection state.")
 })
