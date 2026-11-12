@@ -77,9 +77,8 @@ test("records a deterministic completed-cycle fact with its fill boundary and ex
 })
 
 test("commits the cycle fact before publishing the reset Portfolio and RecoveryLedger", async () => {
-  let workflow
   let observed = false
-  workflow = createPortfolioWorkflow({
+  const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ actions: [] }),
     logger: {},
     initialPortfolio,

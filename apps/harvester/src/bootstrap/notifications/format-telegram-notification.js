@@ -4,8 +4,8 @@ function text(value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH) {
   if (typeof value !== "string" && typeof value !== "number") {return fallback}
   if (typeof value === "number" && !Number.isFinite(value)) {return fallback}
 
-  // eslint-disable-next-line no-control-regex -- remove untrusted control characters before Telegram formatting.
   const normalized = String(value)
+    // eslint-disable-next-line no-control-regex -- remove untrusted control characters before Telegram formatting.
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
