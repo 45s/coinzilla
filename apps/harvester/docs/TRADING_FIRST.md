@@ -159,6 +159,8 @@ At the end of each task, state:
 4. Why any secondary work was necessary to unblock that step.
 5. Exact tests/checks run and their outcomes.
 
+> **Historical evidence note:** the incident-handoff entries below preserve the 2026-11-04 state and terminology. Their references to OPENING and PR #515 being pending are historical/superseded; the current runtime uses PREFLIGHT, RECOVERY, CLOSING, and targeted COMMISSION_BASELINE as specified above. Current restart and TESTNET blockers are #654 and the CLOSED / PAUSED runbook.
+
 ### 2026-11-04 exchange trade reconciliation update
 
 The operator-provided DOGEUSDT order-history response contained 102 orders
