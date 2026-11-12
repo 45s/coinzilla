@@ -301,7 +301,7 @@ function validateFactData({ factType, data, factId }) {
     const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
     if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(reason) || venue !== venue.toLowerCase() ||
         marketId !== venue + ":" + canonicalData.symbol ||
-        factId !== "order-cancellation-intent:" + clientOrderId + ":" + reason + ":" + canonicalData.status + ":" + canonicalData.executedQuantity) {
+        factId !== factIdForCancellationIntent(clientOrderId, reason, canonicalData.status, canonicalData.executedQuantity)) {
       throw new TypeError("Order-cancellation intent identity or reason is not canonical")
     }
     if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Order-cancellation symbol must be canonical uppercase alphanumeric")
@@ -327,7 +327,7 @@ function validateFactData({ factType, data, factId }) {
     const outcomes = ["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED", "NOT_SENT", "OUTCOME_UNKNOWN", "UNCONFIRMED", "UNKNOWN"]
     if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(reason) || !outcomes.includes(canonicalData.outcome) ||
         venue !== venue.toLowerCase() || marketId !== venue + ":" + canonicalData.symbol ||
-        factId !== "order-cancellation-outcome:" + clientOrderId + ":" + reason + ":" + canonicalData.outcome) {
+        factId !== factIdForCancellationOutcome(clientOrderId, reason, canonicalData.outcome)) {
       throw new TypeError("Order-cancellation outcome identity or classification is not canonical")
     }
     if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Order-cancellation outcome symbol must be canonical uppercase alphanumeric")
