@@ -521,7 +521,9 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         sellOrderClientId: fact.data.sellOrderClientId,
         sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
         factId: fact.factId,
-        sequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+        // Keep the synthetic replay sequence in the same ordering domain as
+        // projected fills. The durable stream sequence is separate metadata.
+        durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
       })
     })
     if (recoveryCycles.length !== recoveryCycleCompletedFacts.length) {
@@ -553,7 +555,9 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         sellOrderClientId: fact.data.sellOrderClientId,
         sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
         factId: fact.factId,
-        sequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+        // Keep the synthetic replay sequence in the same ordering domain as
+        // projected fills. The durable stream sequence is separate metadata.
+        durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
       })
     })
     if (recoveryCycleEvaluations.length !== recoveryCycleNotCompletedFacts.length) {
