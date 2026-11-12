@@ -35,7 +35,7 @@ apps/harvester/src/
       resume-market.js
   infrastructure/
     telegram/
-      telegram-operator-adapter.js       # implemented; runtime wiring remains gated
+      telegram-operator-adapter.js       # implemented; optional runtime wiring is active
   bootstrap/
     operator-control/
       prepare-telegram-operator-control.js # runtime lifecycle composition
@@ -214,13 +214,18 @@ The target configuration is intentionally separate from outbound notification po
 
 When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime configuration validation and lifecycle wiring are implemented in PR #1067; the feature remains disabled by default.
 
-The first and only Telegram command in this milestone is:
+## Telegram Command Center expansion
 
-```text
-/pause <SYMBOL>
-```
+The initial `/pause <SYMBOL>` adapter is the foundation, not the finished operator experience. The Command Center is tracked in [issue #1077](https://github.com/45s/coinzilla/issues/1077) and is the highest-priority Harvester workstream. Delivery is phased:
 
-No status, resume, start/stop, order-cancel, configuration-edit or arbitrary command execution is included. No HTTP server is part of this work.
+1. **CC-1 — Operator essentials:** `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, `/resume SYMBOL`; status and market queries must be read-only application snapshots with explicit readiness, blockers and freshness.
+2. **CC-2 — Trading visibility:** `/positions`, `/orders`, `/balances`; distinguish Harvester-owned orders from external/manual orders and expose accounting/source freshness.
+3. **CC-3 — Proactive alerts:** lifecycle/readiness, safety blockers, execution/recovery events and Telegram health; reuse `@coinzilla/notifiers` and never block trading transitions.
+4. **CC-4 — Usability and hardening:** command menu, safe navigation/refresh, confirmations, comprehensive transport/auth/retry/shutdown coverage and an operator runbook.
+
+The adapter now exposes `/start` and `/help` guidance and routes `/resume <SYMBOL>` to the existing application use case. Resume clears only the operator-owned pause. A safety, recovery or volatility blocker causes a refusal before durable append; the transport must explain that the blocker remains active. `/status` and `/markets` are not implemented until their read-only application query contracts are wired and tested.
+
+The initial `/pause` semantics remain unchanged: it does not cancel existing orders, and a resting order may still fill. No order-cancel, order-placement, configuration-edit, strategy-edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator pause remains process-lifetime only and is not restored after restart.
 
 ## Failure behavior
 
