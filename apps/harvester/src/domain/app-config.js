@@ -1,4 +1,5 @@
 import { NOTIFICATIONS_TG_PROFILES } from "../../config/notifications-tg-profiles.js"
+import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
 export class ConfigValidationError extends TypeError {
@@ -131,8 +132,11 @@ function validateTelegramOperatorControlConfig(config) {
     requireRecord(pair, pairPath)
     requireBoolean(pair.enabled, `${pairPath}.enabled`)
     requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
-    if (pair.externalOrdersPolicy !== undefined && !["ignore", "block"].includes(pair.externalOrdersPolicy)) {
-      fail(`${pairPath}.externalOrdersPolicy`, "ignore or block")
+    if (pair.externalOrdersPolicy !== undefined && !Object.values(EXTERNAL_ORDERS_POLICIES).includes(pair.externalOrdersPolicy)) {
+      fail(
+        `${pairPath}.externalOrdersPolicy`,
+        Object.values(EXTERNAL_ORDERS_POLICIES).join(" or "),
+      )
     }
     requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true })
     requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true })

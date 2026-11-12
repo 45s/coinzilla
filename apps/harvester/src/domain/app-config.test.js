@@ -5,6 +5,9 @@ import {
   resolveRuntimeConfig,
   validateAppConfig,
 } from "./app-config.js"
+import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
+import { OPERATOR_CONTROL_CONFIG } from "../../config/operator-control.js"
+import { appConfig } from "../../config/index.js"
 
 const createAppConfig = () => ({
   strategies: {
@@ -287,3 +290,35 @@ test("rejects malformed operator-control configuration and unknown Telegram fiel
   )
 })
 
+
+
+test("uses one named immutable source for supported external-order policy values", () => {
+  assert.deepEqual(
+    EXTERNAL_ORDERS_POLICIES,
+    { IGNORE: "ignore", BLOCK: "block" },
+    "The supported manual/external order policies must have stable serialized values.",
+  )
+  assert.equal(
+    Object.isFrozen(EXTERNAL_ORDERS_POLICIES),
+    true,
+    "Consumers must not be able to mutate the shared external-order policy identifiers.",
+  )
+})
+
+test("composes the named operator-control defaults into the single application config", () => {
+  assert.equal(
+    appConfig.operatorControl,
+    OPERATOR_CONTROL_CONFIG,
+    "The application config must import the focused operator-control module rather than duplicate its settings.",
+  )
+  assert.equal(
+    OPERATOR_CONTROL_CONFIG.telegram.enabled,
+    false,
+    "Inbound Telegram operator control must remain disabled by default.",
+  )
+  assert.deepEqual(
+    OPERATOR_CONTROL_CONFIG.telegram.allowedUserIds,
+    [],
+    "The operator allowlist must remain empty until explicitly configured.",
+  )
+})

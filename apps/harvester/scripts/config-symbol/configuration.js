@@ -5,6 +5,7 @@ import {
   roundDecimalToIncrement,
 } from "@coinzilla/utils"
 import { validateAppConfig } from "../../src/domain/app-config.js"
+import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
 
 const ZERO = "0"
 const HUNDRED = "100"
@@ -236,7 +237,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   return Object.freeze({
     enabled: true,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: toConfigNumber(investment, "investment"),
     orderQuantity: toConfigNumber(orderQuantity, "orderQuantity"),
     keepQuantity: toConfigNumber(keepQuantity, "keepQuantity"),
