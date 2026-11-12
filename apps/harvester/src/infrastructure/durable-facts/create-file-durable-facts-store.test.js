@@ -548,3 +548,19 @@ test("rejects malformed market-history coverage facts", async (t) => {
     assert.equal(result.ok, false, invalid.factId)
   }
 })
+
+
+test("rejects a recovery-cycle NOT_COMPLETED fact without its complete cycle and terminal SELL evidence", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+
+  const result = await store.append({
+    factId: "recovery-cycle-not-completed:invalid",
+    factType: "RECOVERY_CYCLE_NOT_COMPLETED",
+    data: { outcome: "BLOCKED" },
+  })
+
+  assert.equal(result.ok, false, "NOT_COMPLETED facts must validate the full cycle boundary and exact terminal SELL identity.")
+})

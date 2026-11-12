@@ -289,6 +289,8 @@ test("projects a durable completed recovery cycle only after its full SELL execu
     baseAssetId: "asset:BTC",
     quoteAssetId: "asset:USDT",
     appliedFillIds: ["binance:BTCUSDT:recovery-trade-1"],
+    sellOrderClientId: "harvester-recovery-sell-1",
+    sellOrderBrokerOrderId: "broker-recovery-sell-1",
     buyCost: "39.75",
     spent: "39.75",
     netSellProceeds: "40",
@@ -307,6 +309,9 @@ test("projects a durable completed recovery cycle only after its full SELL execu
   assert.equal(result.data.recoveryCycles.length, 1, "The durable completion fact must be projected only after the fully filled SELL.")
   assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "harvester-recovery-sell-1")
   assert.equal(result.data.recoveryCycles[0].completedOrderBrokerOrderId, "broker-recovery-sell-1")
+  assert.equal(result.data.recoveryCycles[0].cycleId, cycle.data.cycleId, "The durable cycle identity must survive projection.")
+  assert.deepEqual(result.data.recoveryCycles[0].appliedFillIds, cycle.data.appliedFillIds, "The exact applied-fill boundary must survive projection.")
+  assert.equal(result.data.recoveryCycles[0].buyCost, cycle.data.buyCost)
   assert.equal(result.data.requiresExchangeReconciliation, true, "A completed cycle projection still requires exchange reconciliation.")
 })
 
@@ -329,4 +334,164 @@ test("rejects market-history coverage facts that narrow a previously verified wi
   })
 
   assert.equal(result.ok, false, "Later evidence may extend coverage but must never silently narrow a previously verified history window.")
+})
+
+
+test("projects an explicit durable NOT_COMPLETED outcome for a fully filled recovery SELL", () => {
+  const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
+    clientOrderId: "harvester-recovery-sell-continue",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.4",
+    purpose: "RECOVERY_SELL",
+  }, "order-submission-intent:harvester-recovery-sell-continue")
+  const sellOutcome = record(6, "ORDER_SUBMISSION_OUTCOME", {
+    clientOrderId: "harvester-recovery-sell-continue",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.4",
+    executedQuantity: "0.4",
+    purpose: "RECOVERY_SELL",
+    outcome: "ACKNOWLEDGED",
+    brokerOrderId: "broker-recovery-sell-continue",
+    status: "FILLED",
+  }, "order-submission-outcome:harvester-recovery-sell-continue:ACKNOWLEDGED")
+  const sellFill = record(7, "EXECUTION_FILL_APPLIED", {
+    fillId: "binance:BTCUSDT:recovery-trade-continue",
+    tradeId: "recovery-trade-continue",
+    brokerOrderId: "broker-recovery-sell-continue",
+    clientOrderId: "harvester-recovery-sell-continue",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    price: "100",
+    quantity: "0.4",
+    quoteQuantity: "40",
+    liquidityRole: "MAKER",
+    executedAt: 1_700_000_000_010,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  }, "execution-fill-applied:binance:BTCUSDT:recovery-trade-continue")
+  const nonCompletion = record(8, "RECOVERY_CYCLE_NOT_COMPLETED", {
+    evaluationId: "d".repeat(64),
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    appliedFillIds: ["binance:BTCUSDT:recovery-trade-continue"],
+    buyCost: "39.75",
+    spent: "39.75",
+    netSellProceeds: "40",
+    realizedNetProfit: "0.25",
+    minProfit: "0.01",
+    activeQuantity: "0.02",
+    keepQuantity: "0.01",
+    sellOrderClientId: "harvester-recovery-sell-continue",
+    sellOrderBrokerOrderId: "broker-recovery-sell-continue",
+    outcome: "CONTINUE_SELL_THROUGH",
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+  }, "recovery-cycle-not-completed:binance:BTCUSDT:" + "d".repeat(64))
+  const result = projectHarvesterDurableFacts({
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, nonCompletion],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.recoveryCycleEvaluations.length, 1)
+  assert.equal(result.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(result.data.recoveryCycleEvaluations[0].sellOrderClientId, "harvester-recovery-sell-continue")
+  assert.equal(result.data.recoveryCycleEvaluations[0].evaluationId, nonCompletion.data.evaluationId)
+  assert.equal(result.data.recoveryCycleEvaluations[0].appliedFillIds.length, 1)
+})
+
+test("rejects a completed-cycle fact that names a different terminal SELL order", () => {
+  const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
+    clientOrderId: "harvester-recovery-sell-identity",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.4",
+    purpose: "RECOVERY_SELL",
+  }, "order-submission-intent:harvester-recovery-sell-identity")
+  const sellOutcome = record(6, "ORDER_SUBMISSION_OUTCOME", {
+    clientOrderId: "harvester-recovery-sell-identity",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.4",
+    executedQuantity: "0.4",
+    purpose: "RECOVERY_SELL",
+    outcome: "ACKNOWLEDGED",
+    brokerOrderId: "broker-recovery-sell-identity",
+    status: "FILLED",
+  }, "order-submission-outcome:harvester-recovery-sell-identity:ACKNOWLEDGED")
+  const sellFill = record(7, "EXECUTION_FILL_APPLIED", {
+    fillId: "binance:BTCUSDT:recovery-trade-identity",
+    tradeId: "recovery-trade-identity",
+    brokerOrderId: "broker-recovery-sell-identity",
+    clientOrderId: "harvester-recovery-sell-identity",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    side: "SELL",
+    price: "100",
+    quantity: "0.4",
+    quoteQuantity: "40",
+    liquidityRole: "MAKER",
+    executedAt: 1_700_000_000_010,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  }, "execution-fill-applied:binance:BTCUSDT:recovery-trade-identity")
+  const cycle = record(8, "RECOVERY_CYCLE_COMPLETED", {
+    cycleId: "c".repeat(64),
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    appliedFillIds: ["binance:BTCUSDT:recovery-trade-identity"],
+    sellOrderClientId: "another-client-order",
+    sellOrderBrokerOrderId: "another-broker-order",
+    buyCost: "39.75",
+    spent: "39.75",
+    netSellProceeds: "40",
+    realizedNetProfit: "0.25",
+    minProfit: "0.01",
+    activeQuantity: "0.01",
+    keepQuantity: "0.01",
+    freeQuantity: "0.01",
+    inventoryDisposition: null,
+  }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
+  const result = projectHarvesterDurableFacts({
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
+  })
+
+  assert.equal(result.ok, false, "A cycle cannot be committed against a different fully filled SELL order.")
 })

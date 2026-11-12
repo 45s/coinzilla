@@ -419,3 +419,138 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     quoteNetCashFlow: "5 USDT",
   })
 })
+
+
+test("persists a non-completed full-SELL outcome before returning and leaves accounting projections unchanged", async () => {
+  const buyFill = createFill({ tradeId: "not-completed-buy", quantity: "2", quoteQuantity: "130000" })
+  const sellFill = createFill({
+    tradeId: "not-completed-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+  const sellOrder = Object.freeze({
+    clientOrderId: "harvester-sell-not-completed",
+    brokerOrderId: "broker-sell-not-completed",
+    market,
+  })
+  const calls = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+    onDurableRecoveryCycleNotCompleted: async (input) => {
+      calls.push(input)
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  const result = await workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "0.5",
+    minProfit: "5",
+    sellOrder,
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.eligible, false)
+  assert.equal(result.data.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(calls.length, 1, "Every fully filled SELL must durably record its explicit non-completion outcome.")
+  assert.equal(calls[0].sellOrder, sellOrder, "The outcome must be tied to the exact terminal SELL order.")
+  assert.equal(calls[0].recoveryLedger, initialLedger)
+  assert.equal(calls[0].position, initialPortfolio.getPosition({ marketId: market.id }))
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "A non-completed cycle must not allocate free inventory or reset basis.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+})
+
+test("does not return a non-completed cycle when its durable outcome was not committed", async () => {
+  const buyFill = createFill({ tradeId: "not-completed-failure-buy", quantity: "2", quoteQuantity: "130000" })
+  const sellFill = createFill({
+    tradeId: "not-completed-failure-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+    onDurableRecoveryCycleNotCompleted: async () => ({
+      ok: false,
+      errors: [new Error("cycle outcome manifest was not committed")],
+    }),
+  })
+
+  const result = await workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "0.5",
+    minProfit: "5",
+    sellOrder: { clientOrderId: "sell-failed", brokerOrderId: "broker-failed", market },
+  })
+
+  assert.equal(result.ok, false, "A missing durable non-completion outcome must block the next strategy action.")
+  assert.match(result.errors[0].message, /manifest was not committed/)
+  assert.equal(workflow.getPortfolio(), initialPortfolio)
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+})
+
+test("binds a durable completed-cycle outcome to the exact fully filled SELL order before committing the reset", async () => {
+  const buyFill = createFill({ tradeId: "completed-order-buy", quantity: "2", quoteQuantity: "130000" })
+  const sellFill = createFill({
+    tradeId: "completed-order-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+  const sellOrder = Object.freeze({
+    clientOrderId: "harvester-sell-completed",
+    brokerOrderId: "broker-sell-completed",
+    market,
+  })
+  let durableInput
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+    onDurableRecoveryCycleCompleted: async (input) => {
+      durableInput = input
+      assert.equal(workflow.getPortfolio(), initialPortfolio, "The durable fact must commit before either accounting projection is reset.")
+      assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  const result = await workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "1",
+    minProfit: "5",
+    sellOrder,
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(durableInput.sellOrder, sellOrder, "The completion fact must identify the exact terminal SELL.")
+})
