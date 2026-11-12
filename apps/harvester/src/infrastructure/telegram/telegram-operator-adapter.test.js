@@ -918,3 +918,43 @@ test("cancels an inline pause confirmation without invoking the operator", async
   assert.deepEqual(operatorCalls, [], "Cancelling a pending confirmation must never reach the application control use case.")
   assert.match(edits[1].text, /cancelled/i, "The inline message must clearly acknowledge cancellation.")
 })
+
+
+test("rejects malformed callbacks and private-chat identity mismatches before application access", async () => {
+  const updates = [
+    makeCallbackUpdate({ updateId: 801, callbackId: "malformed-801", data: "cc:confirm:PAUSE:LINKUSDT:not-a-token" }),
+    makeCallbackUpdate({ updateId: 802, callbackId: "mismatched-802", userId: 12345, chatId: 54321, data: "cc:nav:status" }),
+  ]
+  const callbackAnswers = []
+  const queryCalls = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: updates }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async () => assert.fail("Malformed or mismatched callbacks must never invoke a control use case."),
+      getStatus: async request => { queryCalls.push(request); return { ok: true, data: {} } },
+    },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(callbackAnswers.length, 1, "An authorized malformed callback is acknowledged as invalid.")
+  assert.match(callbackAnswers[0].text, /Unknown or expired action/)
+  assert.deepEqual(queryCalls, [], "A callback from a private chat that does not match its sender must be ignored.")
+})
