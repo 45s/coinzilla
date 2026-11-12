@@ -126,7 +126,7 @@ test("refuses to overwrite an existing pair and leaves the original module byte-
     assert.equal(await readFile(configPath, "utf8"), before, "A rejected overwrite must leave the original configuration source untouched.")
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["index.mjs", "notifications-tg-profiles.mjs"],
+      ["cg-coin-grabber.mjs"],
       "A rejected write must release its lock without leaving a temporary module.",
     )
   })
@@ -161,7 +161,7 @@ test("rejects malformed JavaScript without replacing the operator's original sou
     )
     assert.equal(
       await readFile(configPath, "utf8"),
-      "export const appConfig = {",
+      "export const CG_COIN_GRABBER_CONFIG = {",
       "Malformed operator configuration must remain untouched for manual repair.",
     )
   })
