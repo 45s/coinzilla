@@ -36,7 +36,7 @@
 - Extract deterministic domain/serialization policy into pure functions only where this improves independent testing and responsibility boundaries; avoid mechanical one-function files and speculative frameworks.
 - Improve test diagnostics, exact-decimal boundary cases, concurrency/failure paths and integration coverage without weakening existing assertions or broad mechanical test rewrites.
 - Reconcile living documentation against current source, tests, configuration and merged PR status. Preserve dated audit evidence and explicitly label historical snapshots.
-- **Initial RED regressions:** the durable-facts store documents an injected `Date|string` clock but the market-history coverage append path calls `.getTime()` directly; its canonical JSON validation also currently permits negative zero to be serialized as ordinary zero. Both defects are being captured by regression tests before implementation changes.
+- **RED/GREEN evidence in this PR:** GitHub Actions reproduced both regression failures on the test-only commit `af111b10147b1f9cceda818c5cb001fd6fcdd7c4`. The implementation now normalizes the injected clock once per new append and rejects negative zero before canonical JSON serialization. Pure canonicalization, digest and timestamp helpers are isolated in `durable-facts-canonical.js` with direct unit coverage; exact-head full-suite verification is still pending.
 - **Safety:** default tests remain offline and credential-free. No TESTNET/LIVE connection, order placement, cancellation, or account mutation is part of this audit.
 
 ---
