@@ -88,7 +88,9 @@ const EVENT_MAPPINGS = Object.freeze({
     },
   }),
   [HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED]: ({ data }) => {
-    if (data.readiness !== "BLOCKED") return null
+    if (data.readiness !== "BLOCKED") {
+      return null
+    }
     const symbols = [...new Set((data.orders ?? []).map(({ symbol }) => symbol).filter(Boolean))]
     return {
       name: "account.safety_alert",
@@ -154,11 +156,13 @@ export async function subscribeHarvesterTelegramNotifications({
       subscriptions.push(result.subscription)
     }
   } catch (error) {
-    for (const subscription of subscriptions) subscription.unsubscribe()
+    for (const subscription of subscriptions) {
+      subscription.unsubscribe()
+    }
     try {
       await notificationSubscriber.close()
     } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], "Telegram subscription setup and cleanup failed", { cause: error })
+      throw new AggregateError([error, cleanupError], "Telegram subscription setup and cleanup failed", { cause: cleanupError })
     }
     throw error
   }
@@ -169,7 +173,9 @@ export async function subscribeHarvesterTelegramNotifications({
       for (const subscription of subscriptions) {
         try {
           const result = subscription.unsubscribe()
-          if (result?.ok === false) errors.push(new Error("Unable to unsubscribe Harvester Telegram event bridge"))
+          if (result?.ok === false) {
+            errors.push(new Error("Unable to unsubscribe Harvester Telegram event bridge"))
+          }
         } catch (error) {
           errors.push(error)
         }
@@ -179,7 +185,9 @@ export async function subscribeHarvesterTelegramNotifications({
       } catch (error) {
         errors.push(error)
       }
-      if (errors.length > 0) throw new AggregateError(errors, "Telegram notification shutdown was incomplete")
+      if (errors.length > 0) {
+        throw new AggregateError(errors, "Telegram notification shutdown was incomplete")
+      }
     },
     getDiagnostics: notificationSubscriber.getDiagnostics,
     supportedEventNames: HARVESTER_TELEGRAM_NOTIFICATION_EVENTS,
