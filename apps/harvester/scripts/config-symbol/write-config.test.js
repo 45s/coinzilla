@@ -23,42 +23,30 @@ const generatedPair = {
 
 function createConfigSource() {
   return [
-    'import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.mjs";',
     "// This operator-maintained comment must survive pair generation.",
-    "export const appConfig = {",
-    "  notifications: {",
-    "    telegram: {",
-    "      enabled: true,",
-    "      profile: NOTIFICATIONS_TG_PROFILES.TRADER,",
-    "      markets: [],",
-    "      events: {},",
-    "    },",
+    "export const CG_COIN_GRABBER_CONFIG = {",
+    "  enabled: true,",
+    "  settings: {",
+    "    conservative: { enabled: true },",
+    "    aggressive: { enabled: false },",
+    "    recovery: { enabled: false },",
     "  },",
-    "  strategies: {",
-    "    CG_coinGrabber: {",
+    "  pairs: {",
+    "    // BEGIN GENERATED PAIR CONFIGURATION",
+    '    "LINKFDUSD": {',
     "      enabled: true,",
-    "      settings: {",
-    "        conservative: { enabled: true },",
-    "        aggressive: { enabled: false },",
-    "      },",
-    "      pairs: {",
-    "        // BEGIN GENERATED PAIR CONFIGURATION",
-    '        "LINKFDUSD": {',
-    "          enabled: true,",
-    "          enableVolatilityProtection: true,",
-    "          investment: 200,",
-    "          orderQuantity: 2,",
-    "          keepQuantity: 0.01,",
-    "          minProfit: 0.01,",
-    "          priceStepPercent: 0.3,",
-    "          pricePrecision: 3,",
-    "          quantityPrecision: 2,",
-    "          makerPercent: 0,",
-    "          takerPercent: 0.075,",
-    "        },",
-    "        // END GENERATED PAIR CONFIGURATION",
-    "      },",
+    "      enableVolatilityProtection: true,",
+    "      investment: 200,",
+    "      orderQuantity: 2,",
+    "      keepQuantity: 0.01,",
+    "      minProfit: 0.01,",
+    "      priceStepPercent: 0.3,",
+    "      pricePrecision: 3,",
+    "      quantityPrecision: 2,",
+    "      makerPercent: 0,",
+    "      takerPercent: 0.075,",
     "    },",
+    "    // END GENERATED PAIR CONFIGURATION",
     "  },",
     "};",
     "",
@@ -67,13 +55,8 @@ function createConfigSource() {
 
 async function withConfigFile(run, { source = createConfigSource() } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-config-symbol-"))
-  const configPath = path.join(directory, "index.mjs")
+  const configPath = path.join(directory, "cg-coin-grabber.mjs")
   await writeFile(configPath, source, "utf8")
-  await writeFile(
-    path.join(directory, "notifications-tg-profiles.mjs"),
-    'export const NOTIFICATIONS_TG_PROFILES = Object.freeze({ TRADER: "trader" });\n',
-    "utf8",
-  )
   try {
     await run({ directory, configPath })
   } finally {
@@ -84,7 +67,7 @@ async function withConfigFile(run, { source = createConfigSource() } = {}) {
 async function readConfig(configPath) {
   const url = pathToFileURL(configPath)
   url.searchParams.set("test-load", randomUUID())
-  return (await import(url.href)).appConfig
+  return (await import(url.href)).CG_COIN_GRABBER_CONFIG
 }
 
 test("atomically merges a pair while preserving imports, comments, unrelated settings, and cleanups", async () => {
@@ -95,9 +78,9 @@ test("atomically merges a pair while preserving imports, comments, unrelated set
     const files = (await readdir(directory)).sort()
 
     assert.equal(result, configPath, "The writer must return the exact configuration module path it updated.")
-    assert.deepEqual(written.strategies.CG_coinGrabber.pairs.ADAFDUSD, generatedPair, "The new pair must be persisted under the canonical strategy pair map.")
+    assert.deepEqual(written.pairs.ADAFDUSD, generatedPair, "The new pair must be persisted under the canonical strategy pair map.")
     assert.deepEqual(
-      written.strategies.CG_coinGrabber.pairs.LINKFDUSD,
+      written.pairs.LINKFDUSD,
       {
         enabled: true,
         enableVolatilityProtection: true,
@@ -113,20 +96,20 @@ test("atomically merges a pair while preserving imports, comments, unrelated set
       },
       "The pre-existing pair must remain unchanged after another pair is added.",
     )
-    assert.deepEqual(written.notifications.telegram.profile, "trader", "The named profile import must resolve to the original profile identifier.")
-    assert.ok(writtenSource.includes('import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.mjs";'), "The profile-module import must remain intact after pair generation.")
+    assert.deepEqual(written.settings.recovery.enabled, false, "The extracted strategy module must preserve its disabled recovery setting.")
+    assert.ok(writtenSource.includes("export const CG_COIN_GRABBER_CONFIG"), "The named strategy export must remain intact after pair generation.")
     assert.ok(writtenSource.includes("// This operator-maintained comment must survive pair generation."), "Comments outside the generated pair region must remain intact.")
-    assert.deepEqual(files, ["index.mjs", "notifications-tg-profiles.mjs"], "Successful writes must remove their lock and temporary module files.")
+    assert.deepEqual(files, ["cg-coin-grabber.mjs"], "Successful writes must remove their lock and temporary module files.")
   })
 })
 
 test("cleans abandoned JavaScript temporary modules only after acquiring the generator lock", async () => {
   await withConfigFile(async ({ directory, configPath }) => {
-    await writeFile(path.join(directory, ".index.mjs.abandoned.tmp.mjs"), "partial configuration", "utf8")
+    await writeFile(path.join(directory, ".cg-coin-grabber.mjs.abandoned.tmp.mjs"), "partial configuration", "utf8")
     await writePairConfigAtomically({ configPath, symbol: "ADAFDUSD", pairConfig: generatedPair })
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["index.mjs", "notifications-tg-profiles.mjs"],
+      ["cg-coin-grabber.mjs"],
       "A successful locked generation must remove abandoned temporary modules without deleting unrelated files.",
     )
   })
@@ -143,7 +126,7 @@ test("refuses to overwrite an existing pair and leaves the original module byte-
     assert.equal(await readFile(configPath, "utf8"), before, "A rejected overwrite must leave the original configuration source untouched.")
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["index.mjs", "notifications-tg-profiles.mjs"],
+      ["cg-coin-grabber.mjs"],
       "A rejected write must release its lock without leaving a temporary module.",
     )
   })
@@ -162,7 +145,7 @@ test("fails closed when another generator already owns the configuration lock", 
     assert.equal(await readFile(configPath, "utf8"), before, "A lock conflict must not modify the source module.")
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["index.mjs", "index.mjs.config-symbol.lock", "notifications-tg-profiles.mjs"],
+      ["cg-coin-grabber.mjs", "cg-coin-grabber.mjs.config-symbol.lock"],
       "A lock owned by another process must not be removed.",
     )
   })
@@ -170,7 +153,7 @@ test("fails closed when another generator already owns the configuration lock", 
 
 test("rejects malformed JavaScript without replacing the operator's original source", async () => {
   await withConfigFile(async ({ configPath }) => {
-    await writeFile(configPath, "export const appConfig = {", "utf8")
+    await writeFile(configPath, "export const CG_COIN_GRABBER_CONFIG = {", "utf8")
     await assert.rejects(
       writePairConfigAtomically({ configPath, symbol: "ADAFDUSD", pairConfig: generatedPair }),
       /unable to load|syntax|parse/i,
@@ -178,7 +161,7 @@ test("rejects malformed JavaScript without replacing the operator's original sou
     )
     assert.equal(
       await readFile(configPath, "utf8"),
-      "export const appConfig = {",
+      "export const CG_COIN_GRABBER_CONFIG = {",
       "Malformed operator configuration must remain untouched for manual repair.",
     )
   })

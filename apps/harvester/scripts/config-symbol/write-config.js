@@ -35,21 +35,21 @@ async function importAppConfig(configPath) {
   try {
     configModule = await import(moduleUrl.href)
   } catch (cause) {
-    const message = "Unable to load Harvester app config module at " + configPath + ": " + cause.message
+    const message = "Unable to load CG coin-grabber strategy config module at " + configPath + ": " + cause.message
     if (cause instanceof SyntaxError) {
       throw new SyntaxError(message, { cause })
     }
     throw new Error(message, { cause })
   }
 
-  if (!Object.hasOwn(configModule, "appConfig")) {
-    throw new TypeError("Harvester app config module must export a named appConfig value")
+  if (!Object.hasOwn(configModule, "CG_COIN_GRABBER_CONFIG")) {
+    throw new TypeError("CG coin-grabber config module must export a named CG_COIN_GRABBER_CONFIG value")
   }
-  return configModule.appConfig
+  return { strategies: { CG_coinGrabber: configModule.CG_COIN_GRABBER_CONFIG } }
 }
 
 /**
- * Merge a new pair into the marked pair region in the ESM config module and atomically replace it.
+ * Merge a new pair into the marked pair region in the CG coin-grabber strategy module and atomically replace it.
  *
  * @param {{configPath: string, symbol: string, pairConfig: object}} options - Target config and generated pair.
  * @returns {Promise<string>} Absolute path of the updated config module.
@@ -89,7 +89,7 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
     try {
       currentConfigText = await readFile(absoluteConfigPath, "utf8")
     } catch (cause) {
-      throw new Error("Unable to read Harvester app config module at " + absoluteConfigPath + ": " + cause.message, { cause })
+      throw new Error("Unable to read CG coin-grabber strategy config module at " + absoluteConfigPath + ": " + cause.message, { cause })
     }
 
     const currentConfig = await importAppConfig(absoluteConfigPath)
@@ -115,7 +115,7 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
     const temporaryConfig = await importAppConfig(temporaryPath)
     validateAppConfig(temporaryConfig)
     if (!isDeepStrictEqual(temporaryConfig, updatedConfig)) {
-      throw new Error("Generated Harvester app config module does not match the validated pair update")
+      throw new Error("Generated CG coin-grabber strategy module does not match the validated pair update")
     }
 
     await rename(temporaryPath, absoluteConfigPath)

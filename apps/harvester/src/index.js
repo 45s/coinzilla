@@ -207,22 +207,27 @@ export async function main({
       throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
     processLock = lockResult
-    const durableFactsStore = createDurableFactsStore({
-      directory: resolveHostDurableFactsDirectory({ env }),
-      runtimeSessionId: processIdentity.runtimeSessionId,
-    })
-    if (typeof durableFactsStore?.verify !== "function") {
-      throw new Error("Harvester requires the application-owned durable recovery-facts store")
-    }
-    const durableFactsVerification = await durableFactsStore.verify()
-    if (durableFactsVerification?.ok !== true ||
-        durableFactsVerification.data?.valid !== true ||
-        durableFactsVerification.data?.durableWriteSupported !== true) {
-      const details = durableFactsVerification?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error(
-        "Harvester requires an existing verified durable recovery-facts ledger; initialize it explicitly with pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize" +
-        (details ? ": " + details : ""),
-      )
+    const recoveryEnabled = appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+    const durableFactsStore = recoveryEnabled
+      ? createDurableFactsStore({
+          directory: resolveHostDurableFactsDirectory({ env }),
+          runtimeSessionId: processIdentity.runtimeSessionId,
+        })
+      : undefined
+    if (recoveryEnabled) {
+      if (typeof durableFactsStore?.verify !== "function") {
+        throw new Error("Harvester recovery requires the application-owned durable recovery-facts store")
+      }
+      const durableFactsVerification = await durableFactsStore.verify()
+      if (durableFactsVerification?.ok !== true ||
+          durableFactsVerification.data?.valid !== true ||
+          durableFactsVerification.data?.durableWriteSupported !== true) {
+        const details = durableFactsVerification?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error(
+          "Harvester recovery requires an existing verified durable recovery-facts ledger" +
+          (details ? ": " + details : ""),
+        )
+      }
     }
     journalService = createJournalService({
       eventBus,

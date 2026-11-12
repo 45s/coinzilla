@@ -43,6 +43,25 @@ test("validates strategy-owned pairs without requiring exchange-mode configurati
   assert.equal(config.strategies.CG_coinGrabber.pairs.ZROFDUSD.investment, 100, "The pair investment setting must remain part of strategy configuration.")
 })
 
+test("accepts disabled process-restart recovery and rejects enabling the unfinished feature", () => {
+  const config = createAppConfig()
+  config.strategies.CG_coinGrabber.settings.recovery = { enabled: false }
+  assert.equal(validateAppConfig(config), config)
+
+  config.strategies.CG_coinGrabber.settings.recovery.enabled = true
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "strategies.CG_coinGrabber.settings.recovery.enabled",
+    "Process-restart recovery must remain disabled until its complete readiness and crash/restart gates are accepted.",
+  )
+})
+
+test("composes the extracted named CG coin-grabber config with restart recovery disabled", () => {
+  assert.equal(appConfig.strategies.CG_coinGrabber.settings.recovery.enabled, false)
+  assert.equal(validateAppConfig(appConfig), appConfig)
+})
+
 test("accepts only ignore or block for each pair's external-order policy", () => {
   const config = createAppConfig()
   const pair = config.strategies.CG_coinGrabber.pairs.ZROFDUSD
