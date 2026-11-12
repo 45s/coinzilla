@@ -1,6 +1,6 @@
 # Harvester operator control
 
-> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). This document explains the current application boundary and delivery contract. It is not evidence that inbound Telegram control is runtime-enabled or that operator pause state survives a process restart.
+> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Runtime configuration and lifecycle wiring are implemented in PR #1067; inbound Telegram remains optional and disabled by default. Operator pause state is not restored after a process restart.
 
 ## Goal
 
@@ -14,8 +14,8 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the ADR-0001 durable-facts append port.
 - The use cases pass the durable append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
-- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. It is offline-testable but is not started or wired into the runtime.
-- The ADR-0001 file store and integrity checks already exist. The application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration validation and runtime lifecycle composition remain pending; they can be delivered independently of recovery Steps 7–9.
+- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
+- The ADR-0001 file store and integrity checks are verified by the process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same ledger. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
 
@@ -38,7 +38,7 @@ apps/harvester/src/
       telegram-operator-adapter.js       # implemented; runtime wiring remains gated
   bootstrap/
     operator-control/
-      start-telegram-operator.js         # runtime lifecycle composition
+      prepare-telegram-operator-control.js # runtime lifecycle composition
 ```
 
 The engine remains under `src/use-cases/conservative-trading-engine.js` because it coordinates existing application workflows and serialized broker/market transitions. Domain strategy policies remain transport- and persistence-independent.
@@ -144,7 +144,7 @@ The application writes through the ADR-0001 durable-facts port. It does not use 
 
 The durable-facts adapter must return `durable: true` only after the record and committed head satisfy ADR-0001. Exact duplicate fact identity/payload is idempotent; reuse of a fact identity with different data is an integrity failure.
 
-The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. The ADR-0001 file store exists, but the current runtime does not wire it to this operator facade. Runtime wiring remains pending. The initial process-lifetime scope deliberately does not restore operator facts before the first strategy evaluation; this limitation is explicit and is not a dependency on full recovery.
+The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the same process-owned ADR-0001 store into the operator facade; the operator must not open an independent store instance. The initial process-lifetime scope deliberately does not restore operator facts at startup; this limitation is explicit and is not a dependency on full recovery.
 
 ## Application result shape
 
@@ -187,7 +187,7 @@ Resume removes only the operator-owned pause. The engine refuses to invoke the d
 
 ## First transport: Telegram
 
-The first adapter uses Telegram Bot API Long Polling and is optional; its module is implemented and tested offline, but runtime startup remains disabled.
+The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime lifecycle are implemented and tested offline. Runtime control remains disabled unless explicitly enabled in app configuration.
 
 - Configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
 - Inbound control defaults disabled. Enabling it requires a non-empty list of allowed Telegram user IDs.
@@ -212,7 +212,7 @@ The target configuration is intentionally separate from outbound notification po
 }
 ```
 
-When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. This configuration is a target contract; runtime configuration validation and wiring are still pending.
+When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime configuration validation and lifecycle wiring are implemented in PR #1067; the feature remains disabled by default.
 
 The first and only Telegram command in this milestone is:
 

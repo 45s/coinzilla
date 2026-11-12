@@ -19,7 +19,7 @@ const disabledLifecycle = Object.freeze({
 
 /** Prepare optional Telegram control after verifying the pre-initialized ADR-0001 store. */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env, runtimeSessionId,
+  telegramConfig, env = process.env, runtimeSessionId, durableFactsStore: suppliedDurableFactsStore,
   createDurableFactsStore = createFileDurableFactsStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
@@ -37,11 +37,21 @@ export async function prepareTelegramOperatorControl({
   if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
     throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
   }
-  let durableFacts
-  try {
-    durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
-  } catch (cause) {
-    throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+  let durableFacts = suppliedDurableFactsStore
+  if (durableFacts === undefined) {
+    try {
+      durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
+    } catch (cause) {
+      throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+    }
+  }
+  if (runtimeSessionId !== undefined &&
+      durableFacts?.runtimeSessionId !== undefined &&
+      durableFacts.runtimeSessionId !== runtimeSessionId) {
+    throw new OperatorControlStartupError(
+      "Telegram operator control must share the current Harvester process-session durable-facts store",
+      "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+    )
   }
   if (typeof durableFacts?.verify !== "function" || typeof durableFacts?.append !== "function") {
     throw new OperatorControlStartupError("Configured ADR-0001 durable-facts store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
