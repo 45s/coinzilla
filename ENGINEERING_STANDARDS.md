@@ -108,7 +108,7 @@ A materially edited test case must comply with these practices throughout that c
 
 ### 3. Reliability, error handling, and observability
 
-Follow the canonical [Structured Error Handling Standard](docs/engineering/ERROR_HANDLING_STANDARD.md) for the shared `SystemCustomError` base, component-owned subclasses and codes, cause preservation, safe diagnostic context, and gradual adoption. New functionality and materially changed bug-fix paths must follow it; unrelated legacy code is migrated incrementally.
+Follow the canonical [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, component-owned subclasses and codes, cause preservation, safe diagnostic context, and gradual adoption. New functionality and materially changed bug-fix paths must follow it; unrelated legacy code is migrated incrementally.
 
 - Treat diagnostics as part of the feature design. A failure should be understandable from its error and logs without requiring guesswork.
 - Use structured logging with stable fields and relevant context (for example: operation, component, entity/event identifier, state, and original error) when that context exists.
