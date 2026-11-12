@@ -27,6 +27,17 @@
 
 ---
 
+## Startup reliability — account PREFLIGHT Journal barrier
+
+**Status: [~] FIX IN [PR #1084](https://github.com/45s/coinzilla/pull/1084).** A broker-connected startup can fail after the account snapshot succeeds but while the mandatory account-wide open-orders audit is flushed. When Telegram notifications are enabled and the audit is BLOCKED across multiple symbols, the notification bridge previously emitted `symbol: undefined`; the Journal correctly rejected that derived event under its lossless JSONL contract. The same optional-field defect existed for user-data subscription-failure alerts, which have no market symbol.
+
+- [x] Confirm the failure with a real EventBus + Journal regression: the pre-fix multi-symbol safety alert fails with `Journal source event contains unsupported undefined at $["data"]["symbol"]`.
+- [x] Omit `symbol` when a BLOCKED account audit has zero or multiple symbols, and when a user-data subscription failure has no market.
+- [ ] Verify both safety alerts remain emitted/delivered and the Journal flush is durable on the final exact PR head.
+- **Safety invariant:** keep the PREFLIGHT account snapshot and account-wide open-orders audit mandatory; keep unowned-order classification and safety notifications intact; keep Journal's strict serializer and fail-closed durability barrier unchanged. Disabling process-restart recovery skips only recovery-specific ledger/projection work.
+
+---
+
 ## Operator control — initial Telegram pause
 
 **Status: IMPLEMENTED AND MERGED in [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); process-lifetime scope/docs clarified in [PR #1065](https://github.com/45s/coinzilla/pull/1065); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).

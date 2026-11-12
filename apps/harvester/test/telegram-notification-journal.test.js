@@ -53,6 +53,21 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
     })
     assert.equal(published.ok, true, "The account-wide open-orders audit event must be accepted by EventBus.")
 
+    const subscriptionFailurePublished = eventBus.publish({
+      name: "broker.subscription_failed",
+      source: "harvester",
+      data: {
+        broker: "binance",
+        stream: "user-data",
+        error: { name: "Error", message: "user-data stream unavailable" },
+      },
+    })
+    assert.equal(
+      subscriptionFailurePublished.ok,
+      true,
+      "A user-data subscription failure without a market symbol must be accepted by EventBus.",
+    )
+
     const drained = await eventBus.flush()
     assert.equal(drained.ok, true, "The original audit and its derived Telegram safety alert must finish delivery.")
 
@@ -65,16 +80,29 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
     )
     assert.equal(flushed.durable, true, "A successful startup audit flush must confirm durable Journal persistence.")
 
-    assert.equal(safetyAlerts.length, 1, "A blocked open-orders audit must still publish exactly one account safety alert.")
     assert.equal(
-      Object.hasOwn(safetyAlerts[0].data, "symbol"),
+      safetyAlerts.length,
+      2,
+      "The blocked open-orders audit and market-independent user-data failure must each publish one safety alert.",
+    )
+    const accountAlert = safetyAlerts.find(({ data }) => data.category === "account-open-orders-blocked")
+    const subscriptionAlert = safetyAlerts.find(({ data }) => data.category === "broker-subscription-failed")
+    assert.ok(accountAlert, "The blocked account audit must retain its account-wide safety classification.")
+    assert.ok(subscriptionAlert, "A user-data subscription failure must retain its safety classification.")
+    assert.equal(
+      Object.hasOwn(accountAlert.data, "symbol"),
       false,
       "A multi-symbol safety alert must omit the optional symbol field rather than publish undefined.",
     )
     assert.equal(
+      Object.hasOwn(subscriptionAlert.data, "symbol"),
+      false,
+      "A user-data subscription alert without a market must omit the optional symbol field rather than publish undefined.",
+    )
+    assert.equal(
       notificationsSent.length,
-      1,
-      "The blocked open-orders audit must still produce its Telegram safety notification.",
+      2,
+      "Both the blocked open-orders audit and the user-data subscription failure must produce Telegram safety notifications.",
     )
 
     await notifications.close()
