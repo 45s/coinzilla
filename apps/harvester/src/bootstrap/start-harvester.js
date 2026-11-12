@@ -26,7 +26,7 @@ import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submissi
 import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
 import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
-import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
+import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"\nimport { recordRecoveryCycleNotCompleted } from "../use-cases/record-recovery-cycle-not-completed.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
@@ -120,13 +120,24 @@ export async function startHarvester({
     ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
     : undefined
   const onDurableRecoveryCycleCompleted = durableFactsStore
-    ? ({ recoveryLedger, position, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
+    ? ({ recoveryLedger, position, sellOrder, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
         durableFactsStore,
         recoveryLedger,
         position,
+        sellOrder,
         completion,
         minProfit,
         inventoryDisposition,
+      })
+    : undefined
+  const onDurableRecoveryCycleNotCompleted = durableFactsStore
+    ? ({ recoveryLedger, position, sellOrder, completion, minProfit }) => recordRecoveryCycleNotCompleted({
+        durableFactsStore,
+        recoveryLedger,
+        position,
+        sellOrder,
+        completion,
+        minProfit,
       })
     : undefined
   const onDurableSubmissionIntent = durableFactsStore
@@ -174,7 +185,7 @@ export async function startHarvester({
     }
     return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted, onDurableRecoveryCycleNotCompleted })
   const recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),

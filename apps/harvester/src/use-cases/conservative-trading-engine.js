@@ -1012,6 +1012,7 @@ export function makeConservativeTradingEngine({
           marketId: canceledOrder.market.id,
           keepQuantity: String(pairs[symbol].keepQuantity),
           minProfit: String(pairs[symbol].minProfit),
+          sellOrder: canceledOrder,
         })
         if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })

@@ -26,7 +26,7 @@ import {
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted } = {}) => {
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted, onDurableRecoveryCycleNotCompleted } = {}) => {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -276,7 +276,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: async ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
+    completeRecoveryCycle: async ({ marketId, keepQuantity, minProfit, inventoryDisposition, sellOrder } = {}) => {
       const recoveryLedger = recoveryLedgers.get(marketId)
       const position = portfolio.getPosition({ marketId })
       if (!recoveryLedger || !position) {
@@ -367,6 +367,23 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             if (portfolioStats) { logger.info?.(portfolioStats) }
           }
         } else {
+          if (onDurableRecoveryCycleNotCompleted) {
+            const durableResult = await onDurableRecoveryCycleNotCompleted({
+              marketId,
+              recoveryLedger,
+              position,
+              sellOrder,
+              completion,
+              minProfit,
+            })
+            if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+              return toResult({
+                errors: durableResult?.errors?.length
+                  ? durableResult.errors
+                  : [new Error("Recovery-cycle non-completion fact did not confirm durable commitment")],
+              })
+            }
+          }
           logger.debug?.({
             message: "recovery cycle not completed",
             marketId,
