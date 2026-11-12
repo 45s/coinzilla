@@ -17,6 +17,7 @@ import { resolveRuntimeConfig } from "./domain/app-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
+import { createFileDurableFactsStore } from "./infrastructure/durable-facts/create-file-durable-facts-store.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -141,12 +142,16 @@ const describeError = (error) => {
 const resolveHostProcessLockDirectory = () =>
   path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
 
+const resolveHostDurableFactsDirectory = () =>
+  path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts")
+
 export async function main({
   start = startHarvester,
   logger = defaultLogger,
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
   acquireProcessLock = acquireHarvesterProcessLocks,
+  createDurableFactsStore = createFileDurableFactsStore,
   loadConfig = loadAppConfig,
   configSource,
   env = process.env,
@@ -191,6 +196,21 @@ export async function main({
       throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
     processLock = lockResult
+    const durableFactsStore = createDurableFactsStore({
+      directory: resolveHostDurableFactsDirectory(),
+      runtimeSessionId: processIdentity.runtimeSessionId,
+    })
+    if (typeof durableFactsStore?.verify !== "function") {
+      throw new Error("Harvester requires the application-owned durable recovery-facts store")
+    }
+    const durableFactsVerification = await durableFactsStore.verify()
+    if (durableFactsVerification?.ok !== true || durableFactsVerification.data?.valid !== true || durableFactsVerification.data?.durableWriteSupported !== true) {
+      const details = durableFactsVerification?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        "Harvester requires an existing verified durable recovery-facts ledger; initialize it explicitly with pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize" +
+        (details ? ": " + details : ""),
+      )
+    }
     journalService = createJournalService({
       eventBus,
       logger,
@@ -205,7 +225,7 @@ export async function main({
           ok: false,
           errors: [new Error("Harvester Journal durable flush is unavailable")],
         }))
-        if (result?.ok !== false) return result
+        if (result?.ok !== false) { return result }
         return {
           ...result,
           recoveryFailure: classifyJournalFlushFailure({ status: journalService?.status }),
@@ -273,7 +293,7 @@ export async function main({
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, appConfig, env })
+    const runtime = await start({ eventPublisher, appConfig, env, durableFactsStore })
     const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
     const enabledMarkets = configuredPairs
       ? Object.entries(configuredPairs)
@@ -302,7 +322,7 @@ export async function main({
     if (typeof runtime.stop === "function") {
       let shutdownPromise
       const shutdown = (reason) => {
-        if (shutdownPromise) return shutdownPromise
+        if (shutdownPromise) { return shutdownPromise }
         shutdownPromise = (async () => {
           let shutdownError
           let runtimeStopped = false
@@ -339,7 +359,7 @@ export async function main({
           if (typeof eventBus?.flush === "function") {
             try {
               const flushResult = await eventBus.flush()
-              if (flushResult?.ok === false) notificationErrors.push(...(flushResult.errors ?? [new Error("EventBus flush failed before Telegram shutdown")]))
+              if (flushResult?.ok === false) { notificationErrors.push(...(flushResult.errors ?? [new Error("EventBus flush failed before Telegram shutdown")])) }
             } catch (error) {
               notificationErrors.push(error)
             }
@@ -363,7 +383,7 @@ export async function main({
             logger.error?.({ message: "Telegram notification shutdown was incomplete.", errors: notificationErrors })
             process.exitCode = 1
           }
-          if (cleanupErrors.length > 0) process.exitCode = 1
+          if (cleanupErrors.length > 0) { process.exitCode = 1 }
           try {
             await closeLogger()
           } catch (error) {
@@ -410,7 +430,7 @@ export async function main({
       allowProcessLockRelease: !runtimeStartAttempted,
       logger,
     })
-    if (cleanupErrors.length > 0) process.exitCode = 1
+    if (cleanupErrors.length > 0) { process.exitCode = 1 }
     try {
       logger.error({
         message: "startup failed.",
@@ -444,7 +464,7 @@ const isDirectExecution = process.argv[1]
 
 if (isDirectExecution) {
   const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
-  if (processStartedContext.ok) defaultLogger.setContext(processStartedContext.data)
+  if (processStartedContext.ok) { defaultLogger.setContext(processStartedContext.data) }
   const logging = await configureHarvesterLogging({ logger: defaultLogger, processIdentity: PROCESS_IDENTITY })
   let commandInterface
   try {

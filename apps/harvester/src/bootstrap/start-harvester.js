@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -20,14 +21,17 @@ import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
-
-function logSystem(logger, data) {
-  if (typeof logger?.system === "function") {
-    logger.system(data)
-    return
-  }
-  logger?.info?.(data)
-}
+import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
+import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
+import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
+import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
+import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
+import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
+import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
+import { recordProcessStarted } from "../use-cases/record-process-started.js"
+import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
+import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
+import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
 
 export async function startHarvester({
   configSource,
@@ -49,6 +53,7 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
+  durableFactsStore,
 } = {}) {
   const {
     appConfig,
@@ -60,16 +65,117 @@ export async function startHarvester({
     tradingMode,
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
+  if (durableFactsStore !== undefined) {
+    if (typeof durableFactsStore?.append !== "function" ||
+        typeof durableFactsStore?.verify !== "function" ||
+        typeof durableFactsStore?.readAll !== "function") {
+      throw new TypeError("durableFactsStore must provide append(), verify(), and readAll() when supplied")
+    }
+    const verification = await durableFactsStore.verify()
+    if (verification?.ok !== true ||
+        verification.data?.valid !== true ||
+        verification.data?.durableWriteSupported !== true) {
+      const cause = verification?.errors?.[0] ?? new Error("Durable-fact ledger verification was not confirmed")
+      const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 durable-fact ledger: " + (cause.message ?? String(cause)), { cause })
+      error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
+      throw error
+    }
+    const existingFacts = await durableFactsStore.readAll()
+    if (existingFacts?.ok !== true || existingFacts.data?.durableWriteSupported !== true || !Array.isArray(existingFacts.data.records)) {
+      const cause = existingFacts?.errors?.[0] ?? new Error("Durable-fact history could not be read and verified")
+      throw new Error("Harvester cannot connect to the broker without verified durable-fact history: " + (cause.message ?? String(cause)), { cause })
+    }
+    const existingProjection = projectHarvesterDurableFacts({ records: existingFacts.data.records })
+    if (existingProjection?.ok !== true) {
+      const cause = existingProjection?.errors?.[0] ?? new Error("Durable-fact history projection failed")
+      throw new Error("Harvester cannot restart from an unprojectable durable-fact history: " + (cause.message ?? String(cause)), { cause })
+    }
+    if (existingProjection.data.sessions.length > 0) {
+      throw new Error(
+        "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
+      )
+    }
+  }
+  let processConfigurationFingerprint
+  if (durableFactsStore) {
+    const baseline = await recordConfigurationBaseline({ durableFactsStore, appConfig })
+    if (baseline?.ok !== true || baseline.data?.durable !== true) {
+      throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
+        (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    }
+    processConfigurationFingerprint = baseline.data.fingerprint
+    const started = await recordProcessStarted({
+      durableFactsStore,
+      configurationFingerprint: processConfigurationFingerprint,
+      strategyName: baseline.data.strategyName,
+      markets: baseline.data.markets,
+      tradingEnabled,
+    })
+    if (started?.ok !== true || started.data?.durable !== true) {
+      throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
+        (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    }
+  }
+  const onDurableExecutionFill = durableFactsStore
+    ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
+    : undefined
+  const onDurableRecoveryCycleCompleted = durableFactsStore
+    ? ({ recoveryLedger, position, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
+        durableFactsStore,
+        recoveryLedger,
+        position,
+        completion,
+        minProfit,
+        inventoryDisposition,
+      })
+    : undefined
+  const onDurableSubmissionIntent = durableFactsStore
+    ? ({ order, purpose }) => recordOrderSubmissionIntent({ durableFactsStore, order, purpose })
+    : undefined
+  const onDurableSubmissionOutcome = durableFactsStore
+    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ durableFactsStore, order, outcome, purpose })
+    : undefined
+  const onDurableCancellationIntent = durableFactsStore
+    ? ({ order, reason }) => recordOrderCancellationIntent({ durableFactsStore, order, reason })
+    : undefined
+  let strategyPauseTransitionSequence = 0
+  const onDurableStrategyMarketPaused = durableFactsStore
+    ? ({ symbol, reason }) => recordStrategyMarketControl({
+        durableFactsStore,
+        action: "PAUSE",
+        transitionId: durableFactsStore.runtimeSessionId + ":" + (++strategyPauseTransitionSequence),
+        symbol,
+        reason,
+      })
+    : undefined
+  const onSafetyBlockerRaised = durableFactsStore
+    ? ({ scope, symbol, reason, evidence }) => {
+        const canonicalEvidence = Object.fromEntries(
+          Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right)),
+        )
+        const evidenceDigest = createHash("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
+        return recordSafetyBlockerRaised({ durableFactsStore, scope, symbol, reason, evidenceDigest })
+      }
+    : undefined
+  const onDurableCancellationOutcome = durableFactsStore
+    ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
+        durableFactsStore,
+        order,
+        canceledOrder,
+        reason,
+        outcome,
+      })
+    : undefined
 
-  let accountSnapshotManager
+  const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
-    if (!accountSnapshotManager) {
+    if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
-  let recoveredState = Object.freeze({
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
+  const recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
@@ -94,7 +200,7 @@ export async function startHarvester({
   const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
   const marketMetadata = new Map()
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
-  const getAccountSnapshot = () => accountSnapshotManager?.getAccountSnapshot()
+  const getAccountSnapshot = () => accountSnapshotManagerRef.current?.getAccountSnapshot()
   let tradingEngine
   let hasCanonicalOwnershipReconciliation = false
 
@@ -104,8 +210,7 @@ export async function startHarvester({
   const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
-  let candleHistoryService
-  candleHistoryService = createCandleHistoryService({
+  const candleHistoryService = createCandleHistoryService({
     broker,
     logger,
     now,
@@ -142,7 +247,7 @@ export async function startHarvester({
     pendingRecovery: false,
     intakeStopped: false,
   }
-  accountSnapshotManager = createAccountSnapshotManager({
+  accountSnapshotManagerRef.current = createAccountSnapshotManager({
     broker,
     eventPublisher,
     marketMetadata,
@@ -152,16 +257,17 @@ export async function startHarvester({
     getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
     logger,
     now,
+    durableFactsStore,
   })
   const {
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
     publishAccountSnapshot,
-  } = accountSnapshotManager
-  const resumeDeferredStrategyEvaluations = ({} = {}) => {
-    if (!tradingEngine || !userDataState.ready || userDataState.stopped) return
+  } = accountSnapshotManagerRef.current
+  const resumeDeferredStrategyEvaluations = () => {
+    if (!tradingEngine || !userDataState.ready || userDataState.stopped) {return}
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
-      if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
+      if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })}
     }).catch((error) => {
       logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
@@ -185,13 +291,14 @@ export async function startHarvester({
     updateTradingAccounting,
     cancelOwnedBuysAfterAccountingFailure,
     resumeDeferredStrategyEvaluations,
+    onSafetyBlockerRaised,
   })
 
   const drainUserDataEvents = async () => {
     while (true) {
       const queuedEvents = userDataState.eventQueue
       await queuedEvents
-      if (queuedEvents === userDataState.eventQueue) return
+      if (queuedEvents === userDataState.eventQueue) {return}
     }
   }
 
@@ -239,10 +346,15 @@ export async function startHarvester({
       updateTradingAccounting,
       completeRecoveryCycle,
       canTrade: () => userDataState.ready,
-      hasUnownedOpenOrdersForSymbol: accountSnapshotManager.hasUnownedOpenOrdersForSymbol,
+      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
+      onDurableSubmissionIntent,
+      onDurableSubmissionOutcome,
+      onDurableCancellationIntent,
+      onDurableCancellationOutcome,
+      onDurableStrategyMarketPaused,
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
@@ -271,7 +383,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
 
     userDataSubscription = await subscribeToUserData({
       broker,
@@ -324,15 +436,16 @@ export async function startHarvester({
       throw new AggregateError(
         [error, ...cleanupErrors],
         "Harvester market-data startup failed and cleanup was incomplete",
+        { cause: error },
       )
     }
     throw error
   }
 
   userDataState.startupComplete = true
-  if (userDataState.pendingRecovery) startUserDataRecovery()
+  if (userDataState.pendingRecovery) {startUserDataRecovery()}
 
-  const stop = createShutdownHandler({
+  const stopRuntime = createShutdownHandler({
     state: userDataState,
     logger,
     tradingEnabled,
@@ -346,6 +459,20 @@ export async function startHarvester({
     eventPublisher,
     publishAccountSnapshot,
   })
+  const stop = async () => {
+    await stopRuntime()
+    if (durableFactsStore) {
+      const stopped = await recordProcessStopped({
+        durableFactsStore,
+        reason: "SHUTDOWN_COMPLETED",
+        clean: true,
+      })
+      if (stopped?.ok !== true || stopped.data?.durable !== true) {
+        throw new Error("Harvester shutdown completed but its clean process-stop boundary was not durable: " +
+          (stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+      }
+    }
+  }
 
   return Object.freeze({
     appConfig,

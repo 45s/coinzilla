@@ -8,7 +8,7 @@ function resolveUserDataFailure(failure) {
   const validStage = typeof failure?.stage === "string" && failure.stage.trim().length > 0
   const validRetryable = retryableFailureCategories.has(failure?.category) && failure?.retryable === true
   const validTerminal = terminalFailureCategories.has(failure?.category) && failure?.retryable === false
-  if (validStage && (validRetryable || validTerminal)) return failure
+  if (validStage && (validRetryable || validTerminal)) { return failure }
   return { category: "ACCOUNTING_INTEGRITY", stage: "UNCLASSIFIED_ENGINE_FAILURE", retryable: false }
 }
 
@@ -38,12 +38,12 @@ function getUserDataFailureMessage(failure) {
 export function createUserDataEventHandler({
   state, getTradingEngine, isTradingEnabled, isStopped, logger, onUserDataEvent,
   getPortfolio, getRecoveryLedger, updatePortfolio, updateTradingAccounting,
-  cancelOwnedBuysAfterAccountingFailure, resumeDeferredStrategyEvaluations,
+  cancelOwnedBuysAfterAccountingFailure, resumeDeferredStrategyEvaluations, onSafetyBlockerRaised,
 } = {}) {
   return ({ event } = {}) => {
     const tradingEngine = getTradingEngine()
     const tradingEnabled = isTradingEnabled()
-    if (state.intakeStopped) return
+    if (state.intakeStopped) { return }
     const isExecution = event?.eventType === "executionReport" &&
       event?.executionType === "TRADE"
     const isOrderUpdate = event?.eventType === "executionReport"
@@ -103,6 +103,48 @@ export function createUserDataEventHandler({
           const brokerIdMatch = registeredOrders.find((order) =>
             incomingBrokerOrderId !== undefined &&
             order.brokerOrderId === incomingBrokerOrderId)
+          const eventSymbol = rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol
+          const isUnownedExecution = event.executionType === "TRADE" || event.fill instanceof Fill
+          const requiresStickyBlocker = failure.category === "ACCOUNTING_INTEGRITY" ||
+            (failure.category === "OWNERSHIP_INTEGRITY" && isUnownedExecution)
+          if (requiresStickyBlocker && typeof onSafetyBlockerRaised === "function") {
+            const evidence = {
+              failureCategory: failure.category,
+              failureStage: failure.stage,
+              eventType: event.eventType ?? null,
+              executionType: event.executionType ?? null,
+              symbol: eventSymbol ?? null,
+              brokerOrderId: incomingBrokerOrderId ?? null,
+              clientOrderId: incomingClientOrderId ?? null,
+              executionId: event.fill?.id ?? event.executionId ?? null,
+              orderStatus: rejectedOrder?.status ?? null,
+            }
+            try {
+              const blocker = await onSafetyBlockerRaised({
+                scope: eventSymbol ? "MARKET" : "ACCOUNT",
+                symbol: eventSymbol ?? null,
+                reason: failure.stage,
+                evidence,
+              })
+              if (blocker?.ok !== true || blocker.data?.durable !== true) {
+                logger.error?.({
+                  message: "terminal user-data safety blocker could not be durably committed",
+                  symbol: eventSymbol,
+                  failureCategory: failure.category,
+                  failureStage: failure.stage,
+                  errors: blocker?.errors,
+                })
+              }
+            } catch (error) {
+              logger.error?.({
+                message: "terminal user-data safety blocker append failed",
+                symbol: eventSymbol,
+                failureCategory: failure.category,
+                failureStage: failure.stage,
+                error,
+              })
+            }
+          }
           logger.error?.({
             message: getUserDataFailureMessage(failure),
             failureCategory: failure.category,
@@ -154,7 +196,7 @@ export function createUserDataEventHandler({
           ignored: processed.data?.ignored === true,
           fillApplied: event.executionType === "TRADE" && processed.data?.ignored !== true,
         })
-        if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
+        if (processed.data?.reevaluate === true) { reevaluateSymbol = event.executedOrder.market.symbol }
       } else if (isOrderUpdate && tradingEnabled) {
         state.accountingFailed = true
         state.ready = false
@@ -218,7 +260,7 @@ export function createUserDataEventHandler({
       state.status = "READY"
       if (reevaluateSymbol && tradingEngine) {
         const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
-        if (!reevaluated.ok) logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors })
+        if (!reevaluated.ok) { logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors }) }
       }
       resumeDeferredStrategyEvaluations()
     })

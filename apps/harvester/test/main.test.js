@@ -11,7 +11,7 @@ const disabledJournalService = () => ({
 
 const runMain = (options = {}) => {
   const { env = {}, ...rest } = options;
-  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), ...rest, env: { TRADING_MODE: 'testnet', ...env } });
+  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }), ...rest, env: { TRADING_MODE: 'testnet', ...env } });
 };
 
 test('reports successful Binance TESTNET startup without claiming a workflow ran', async () => {
