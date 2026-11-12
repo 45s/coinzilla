@@ -26,12 +26,15 @@ import {
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset } = {}) => {
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill } = {}) => {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
   if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
     throw new TypeError("initialRecoveryLedgers must be a Map")
+  }
+  if (onDurableExecutionFill !== undefined && typeof onDurableExecutionFill !== "function") {
+    throw new TypeError("onDurableExecutionFill must be a function")
   }
   let portfolio = initialPortfolio ?? new Portfolio()
   let recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
@@ -128,6 +131,21 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedger: currentLedger,
         fill,
       })
+      if (result.ok && result.data.applied === true && onDurableExecutionFill) {
+        let durableResult
+        try {
+          durableResult = await onDurableExecutionFill({ fill })
+        } catch (error) {
+          return toResult({ error })
+        }
+        if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+          return toResult({
+            errors: durableResult?.errors?.length
+              ? durableResult.errors
+              : [new Error("Execution-fill fact append did not confirm durable commitment")],
+          })
+        }
+      }
       // Journal is optional: a failed baseline write must not block a validated fill.
       // The later account audit detects the missing baseline and fails closed.
       if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
