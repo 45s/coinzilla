@@ -6588,6 +6588,22 @@ test("volatility data unavailable blocks new strategy orders without using the g
   assert.deepEqual(harness.pauses, [], "Volatility protection must remain separate from the full accounting safety pause.")
 })
 
+test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs", async () => {
+  const buyOrder = makeShutdownOrder({ side: "BUY", clientOrderId: "volatility-disabled-owned-buy", brokerOrderId: "broker-volatility-disabled-owned-buy" })
+  const highVolatility = { ok: true, data: { status: { isReady: true, isFresh: true, reason: null, lastClosedCandleOpenTime: 60_000 }, metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" } } }
+  const config = structuredClone(appConfig)
+  config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
+  const harness = await createHarness({ appConfig: config, initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) }, eventPublisher: { publish: () => ({ ok: true }) }, getVolatilityData: () => highVolatility })
+  const result = await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: highVolatility })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.skipped, true, "A disabled pair must not enter the volatility state machine.")
+  assert.equal(result.data.reason, "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR")
+  assert.equal(harness.engine.getVolatilityProtectionState({ symbol: "DOGEUSDT" }), undefined, "A disabled pair must not allocate a startup-PROTECTED state.")
+  assert.deepEqual(harness.cancellationIds, [], "Volatility opt-out must not initiate volatility-specific BUY cancellation.")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-disabled-owned-buy").status, "OPEN")
+  assert.deepEqual(harness.pauses, [], "The opt-out must not touch independent account-integrity pause behavior.")
+})
+
 test("high volatility cancels only acknowledged owned BUYs and keeps the market protected", async () => {
   const buyOrder = makeShutdownOrder({
     side: "BUY",
