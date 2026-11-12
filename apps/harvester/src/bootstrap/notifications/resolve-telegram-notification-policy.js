@@ -75,8 +75,8 @@ export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) 
     shouldNotify({ name, data = {} } = {}) {
       if (NON_DISABLEABLE_EVENT_SET.has(name)) { return true }
       if (name === "bot.stopped" && data.outcome === "failed") { return true }
-      if (!selectedEvents.has(name)) return false
-      if (markets.length > 0 && typeof data.symbol === "string" && !markets.includes(data.symbol)) return false
+      if (!selectedEvents.has(name)) { return false }
+      if (markets.length > 0 && typeof data.symbol === "string" && !markets.includes(data.symbol)) { return false }
       return true
     },
   })
