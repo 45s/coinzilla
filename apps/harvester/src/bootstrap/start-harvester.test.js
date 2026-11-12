@@ -3919,6 +3919,20 @@ test("reuses the process-owned durable-facts store for Telegram operator pause f
       symbol: "BTCUSDT",
     })
     assert.equal(pause.ok, true, "An authorized operator pause must append through the process-owned store.")
+    const status = await operator.getStatus({
+      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+    })
+    assert.equal(status.ok, true, "The process-composed operator facade must expose an authorized read-only runtime status.")
+    assert.equal(status.data.connected, true, "The runtime status must reflect the already connected broker lifecycle.")
+    assert.equal(typeof status.data.userData.ready, "boolean", "The runtime status must expose the live user-data readiness gate.")
+    const markets = await operator.getMarkets({
+      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+    })
+    assert.equal(markets.ok, true, "The process-composed operator facade must expose read-only configured market snapshots.")
+    assert.ok(
+      markets.data.markets.some(({ symbol }) => symbol === "BTCUSDT"),
+      "The market query must include the configured BTCUSDT market loaded by bootstrap.",
+    )
   } finally {
     await runtime.stop()
   }
