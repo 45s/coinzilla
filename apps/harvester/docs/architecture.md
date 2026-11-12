@@ -398,7 +398,7 @@ The central final order-submission gate and serialized state application remain
 engine-owned; the engine is not a domain policy and does not parse raw Binance
 messages.
 
-P3 introduces two cohesive use-case boundaries on the current branch:
+P3 has introduced three cohesive use-case boundaries on the current branch:
 
 - `makeCollectOwnedOrderSnapshots` in
   `src/use-cases/collect-owned-order-snapshots.js` performs read-only REST
@@ -415,10 +415,18 @@ P3 introduces two cohesive use-case boundaries on the current branch:
   serialized transition, owned-BUY cancellation, and latest-evaluation
   callbacks. The central order gate still reads the protection state and
   prevents disallowed submissions.
+- `makeReconcileTerminalOrderFills` in
+  `src/use-cases/reconcile-terminal-order-fills.js` reads canonical REST fill
+  history, unions it with already-processed and current stream fills, validates
+  order identity and duplicate facts, proves cumulative executed-quantity and
+  terminal-status parity, then delegates each fill to the engine's existing
+  serialized accounting transition. It owns no Portfolio/RecoveryLedger state
+  and does not bypass the engine's durable fill barriers.
 
-The extraction is incremental, not a completed lifecycle redesign. Strategy
-evaluation/commitment allocation, execution-fill application, terminal
-fill-history reconciliation, user-data order-event transitions, owned-order
+The engine has reduced from 3,335 lines at the verified `develop` baseline to
+2,680 lines on this branch. The extraction is incremental, not a completed
+lifecycle redesign. Strategy evaluation/commitment allocation, per-fill
+accounting and state mutation, user-data order-event transitions, owned-order
 cancellation/replacement, and operator pause/resume orchestration remain in
 the engine for subsequent behavior-protected extraction. See the
 [Harvester roadmap](../ROADMAP.md)
