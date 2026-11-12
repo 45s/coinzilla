@@ -26,12 +26,14 @@ export function makeExecuteStrategyDecision({
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
-    onDurableSubmissionIntent,
     onOrderValidationFailure,
     canSubmit,
     onSubmissionDeferred,
   })) {
-    if (callback !== undefined && typeof callback !== "function") throw new TypeError(name + " must be a function")
+    if (typeof callback !== "function") throw new TypeError(name + " must be a function")
+  }
+  if (onDurableSubmissionIntent !== undefined && typeof onDurableSubmissionIntent !== "function") {
+    throw new TypeError("onDurableSubmissionIntent must be a function")
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
