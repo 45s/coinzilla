@@ -133,6 +133,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
         pairs: {
       ZROUSDT: {
         enabled: true,
+        enableVolatilityProtection: true,
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,

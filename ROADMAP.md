@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-11
-**Last source-verified develop checkpoint:** `8964b34ab80073beb1aa507c5b4fcb2b454abc30` (after PR #1049: Harvester candle-stream freshness correction)
+**Last reviewed:** 2026-11-12
+**Last source-verified develop checkpoint:** `397127e2360b5b3dcab05f22e73c9be2cf108e91` (PR #1047 merged; ADR-0001 Step 7 orchestration/confirmation is now on develop)
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -22,11 +22,13 @@
 - **Shutdown diagnostics — merged in [PR #977](https://github.com/45s/coinzilla/pull/977), commit `597b01d3836d74d1c4a409005c844d76102e4a34`.** The shutdown handler distinguishes `SHUTDOWN_INCOMPLETE` from confirmed `STOPPED`, preserves the pre-shutdown readiness state, and exposes stage-specific recovery/cleanup failures plus exact safe summaries of unresolved owned orders. Existing process-lock retention is unchanged. Exact-head verification: 935/935 Harvester tests; 75.83% line / 78.98% branch / 75.32% function coverage; all seven configured workflows passed.
   - **Historical incident cause remains unresolved:** the original event-level Journal/session records and complete shutdown diagnostic snapshot for the earlier incomplete shutdown are not present in the evidence reviewed for this follow-up. PR #977 improves future diagnosis but does not retroactively identify that occurrence's failed stage. Do not infer a cause from the aggregate incomplete-shutdown status; preserve the full session JSONL and shutdown summary if the scenario is reproduced.
 
-2. **Process-restart reconciliation (#654) — recovery contract frozen; runtime implementation not started.**
+2. **Process-restart reconciliation (#654) — ADR-0001 and durable-fact foundation implemented; startup restoration remains disabled.**
    - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.
-   - **Completed in PR #1003:** the accepted target contract is defined in [Harvester ADR-0001](apps/harvester/docs/architecture/decisions/0001-application-owned-recovery-facts.md): one application-owned append-only durable-fact stream, committed-head integrity, explicit write acknowledgement, Journal observer separation, immutable fact projection, and a closed startup reconciliation gate.
-   - **Remaining:** build the deterministic offline crash/replay harness; assess legacy Journal sessions only for forensic/baseline purposes; prove historical market-universe and exchange-retention coverage; then implement durable facts and exchange reconciliation in the Harvester roadmap's small steps.
-   - **Safety:** unattended restart readiness remains blocked. The ADR is design-only; do not wire replay, change runtime source, or treat legacy Journal history as complete.
+   - **Completed:** ADR-0001 was accepted in [PR #1003](https://github.com/45s/coinzilla/pull/1003); recovery Steps 1–6 and the durable-fact store/coverage primitives are merged through [PR #1036](https://github.com/45s/coinzilla/pull/1036).
+   - **Completed:** [PR #1047](https://github.com/45s/coinzilla/pull/1047) merged the read-only one-market orchestration and READY-gated MARKET_HISTORY_COVERAGE_CONFIRMED append/readback.
+   - **In review:** [PR #1053](https://github.com/45s/coinzilla/pull/1053) implements the offline JSON context/CLI adapter and production-audit end-to-end evidence matrix. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the PR remains draft/unmerged pending user review.
+   - **Remaining:** complete Step 7 verification, then implement Step 8 closed-gate candidate restoration and Step 9 crash/restart proof.
+   - **Safety:** unattended restart readiness remains blocked. The Journal is not the recovery authority; do not wire runtime replay or claim legacy Journal history is complete.
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
 - **Conservative order/accounting hardening (#985, #654/F-041) — IN PROGRESS.** Same-symbol external-order protection is tracked by [#985](https://github.com/45s/coinzilla/issues/985); [PR #987](https://github.com/45s/coinzilla/pull/987) remains a test-only RED stage, with no production guard yet. F-039 third-asset commission accounting, fee-asset reconciliation, live/DTO/replay parity and invalid-fee atomicity are complete in merged [PR #1002](https://github.com/45s/coinzilla/pull/1002) (956 Harvester tests; seven workflows passed on its exact final head). Recovery SELL cycle-completion proof (F-041) remains open under [#654](https://github.com/45s/coinzilla/issues/654). See the [Harvester roadmap](apps/harvester/ROADMAP.md); do not mark remaining work complete until implementation and exact-head checks pass.

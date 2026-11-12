@@ -3,6 +3,7 @@
 Start with the procedure matching the task. Do not treat a runbook as standing authorization to interact with TESTNET or place/cancel orders.
 
 - [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/CLOSING durability, process locks, shutdown ordering and failure diagnosis.
+- [One-market recovery reconciliation](../recovery/README.md) — offline ADR-0001 Step 7 evidence bundle, audit-only CLI and explicit coverage confirmation.
 - [Error vocabulary](../error-vocabulary.md) — stable diagnostic identifiers, meanings and safe recovery steps.
 - [Logging](../LOGGING.md) — cumulative and timestamped session files, shared process identity, stream lifecycle, logger levels and diagnostics.
 - [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; the earlier DOGEUSDT/ZROUSDT scope no longer matches the LINKFDUSD-only default config. Reconcile before any future session.

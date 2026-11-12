@@ -237,6 +237,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
 
   return Object.freeze({
     enabled: true,
+    enableVolatilityProtection: true,
     investment: toConfigNumber(investment, "investment"),
     orderQuantity: toConfigNumber(orderQuantity, "orderQuantity"),
     keepQuantity: toConfigNumber(keepQuantity, "keepQuantity"),

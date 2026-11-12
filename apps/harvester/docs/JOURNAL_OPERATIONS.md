@@ -64,6 +64,23 @@ The Harvester reader:
 
 A successful scan means the discovered forensic files were readable and could be ordered under these legacy rules. It does **not** make Journal authoritative restart state, prove that missing exchange fills did not occur, establish a complete historical baseline, or open the ADR-0001 startup readiness gate. Multiple-session ambiguity and any missing/unreadable session remain hard failures. Any one-time baseline still requires the explicit operator-assisted reconciliation rules in [ADR-0001](./architecture/decisions/0001-application-owned-recovery-facts.md).
 
+## Step 7 — one-market recovery confirmation
+
+The one-market recovery workflow is separate from Journal persistence. Journal history is projected and restored only as a candidate; the ADR-0001 durable-facts stream remains the sole authority for confirmed market-history coverage.
+
+The read-only reconciliation sequence is:
+
+1. Restore the candidate state from the discovered Journal history.
+2. Reconcile every Harvester-owned order by canonical client/broker identity and exchange status before auditing balances. This updates the candidate recovery state through the existing serialized engine reconciliation boundary.
+3. Read a fresh canonical account snapshot and the complete account-wide open-order set.
+4. Exhaust exchange fill history for exactly the target market from the operator-reviewed coverage start time.
+5. Run `auditRecoveredAccountState()` with `tradeHistoryScope: "MARKET"`, complete-history enforcement and the candidate `MARKET_HISTORY_COVERAGE_CONFIRMED` evidence.
+6. Append the coverage fact only when the target market is READY, then read the fact back and verify its symbol, time boundary, evidence digest and verifier identity.
+
+An unowned order on the target market blocks confirmation; external orders remain unowned and untouched. Unowned orders in another market remain a symbol-scoped blocker and do not automatically invalidate an otherwise-ready target market. Incomplete history, ambiguous owned-order identity/status, missing asset/market metadata, account-balance mismatch, invalid evidence or an unreadable durable-fact ledger all fail closed.
+
+The orchestration and guarded confirmation use cases were merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047). The offline JSON context adapter, audit-only/explicit-confirmation CLI and production-audit evidence matrix are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053); all required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`. PR #1053 remains draft and unmerged pending user review. See the [Step 7 recovery operator guide](recovery/README.md) for the evidence-bundle contract and command. This workflow is not invoked by runtime startup and does not add a Telegram command. It has no order-placement or cancellation dependency; no exchange writes are performed by the workflow.
+
 ## Event inventory
 
 All events use source `harvester`. Payloads are created by Harvester-owned allowlist mappers; fields not listed below are not copied into the event DTO.
