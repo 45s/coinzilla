@@ -358,7 +358,9 @@ export async function startHarvester({
     let operatorStopError
     try { await operatorControlLifecycle.stop() } catch (error) { operatorStopError = error }
     const stopResult = await stopTradingRuntime()
-    if (operatorStopError) return { ok: false, errors: [operatorStopError] }
+    if (operatorStopError) {
+      return { ok: false, errors: [operatorStopError] }
+    }
     return stopResult
   }
 
