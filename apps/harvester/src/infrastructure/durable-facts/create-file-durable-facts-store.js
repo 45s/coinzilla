@@ -1177,7 +1177,7 @@ export function createFileDurableFactsStore({
         factId: input.factId,
         factType: input.factType,
         runtimeSessionId: input.runtimeSessionId,
-        recordedAt: normalizeDurableFactRecordedAt(now()),
+        recordedAt,
         previousDigest: state.lastRecord.digest,
         data: input.data,
       }
