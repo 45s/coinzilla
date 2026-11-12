@@ -203,7 +203,6 @@ The accepted contract remains the authority for recovery boundaries; delivery st
 - `startHarvester` and `makeConservativeTradingEngine` accept an injected initialized durable-fact store and wire the order/fill barriers when supplied. When an initialized store is injected, `startHarvester` verifies ledger integrity and durable-write support before creating or connecting the broker; it never initializes a missing ledger. The process-level `main()` composition does not yet initialize or inject the production store.
 - Cancellation facts, recovery-cycle outcomes, process/configuration boundaries, safety/control facts, deterministic candidate projection, invariant validation and exchange reconciliation remain pending. Step 9 crash/restart proof also remains pending. Runtime restoration and unattended restart readiness stay disabled.
 
-
 ## Offline durable-fact candidate projection
 
 The application-owned stream is read and integrity-verified independently of Journal. `projectHarvesterDurableFacts` validates the global committed sequence, immutable configuration fingerprint, per-runtime PROCESS_STARTED/PROCESS_STOPPED boundaries, and cross-fact order/blocker transitions. It translates durable facts into the existing pure canonical recovery reducer's domain-event vocabulary; it does not read Journal files or treat Journal records as recovery authority. PREFLIGHT balance/open-order evidence is projected before the synthetic trading-session activation boundary so the reducer preserves its existing preflight contract.

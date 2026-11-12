@@ -6964,6 +6964,7 @@ test("retries a volatility BUY cancellation only after a known NOT_SENT outcome 
 test("commits a strategy pause fact before publishing the Journal pause event", async () => {
   const sequence = []
   const harness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
     onDurableStrategyMarketPaused: async ({ symbol, reason }) => {
       sequence.push("durable-fact")
       assert.equal(symbol, "DOGEUSDT", "The durable pause must retain the exact affected market.")

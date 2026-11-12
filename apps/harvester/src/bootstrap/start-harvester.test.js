@@ -74,6 +74,22 @@ const appConfig = {
     },
   },
 }
+const withExternalOrdersPolicy = (symbol, externalOrdersPolicy) => ({
+  ...appConfig,
+  strategies: {
+    ...appConfig.strategies,
+    CG_coinGrabber: {
+      ...appConfig.strategies.CG_coinGrabber,
+      pairs: {
+        ...appConfig.strategies.CG_coinGrabber.pairs,
+        [symbol]: {
+          ...appConfig.strategies.CG_coinGrabber.pairs[symbol],
+          externalOrdersPolicy,
+        },
+      },
+    },
+  },
+})
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
   if (!quoteCode) {throw new Error("Unsupported test market quote asset for " + symbol)}
@@ -2149,7 +2165,7 @@ test("logs safe correlation details when an execution report is not owned", asyn
   const broker = createBroker()
   const errors = []
   const result = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
+    loadConfig: async () => withExternalOrdersPolicy("BTCUSDT", "block"),
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -3131,6 +3147,10 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
         ...appConfig.strategies.CG_coinGrabber,
         pairs: {
           ...appConfig.strategies.CG_coinGrabber.pairs,
+          ETHUSDT: {
+            ...appConfig.strategies.CG_coinGrabber.pairs.ETHUSDT,
+            externalOrdersPolicy: "block",
+          },
           BTCUSDT: {
             ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
             makerPercent: 0.1,
@@ -3184,7 +3204,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
   )
 
-  const metadata = createMarketMetadata("ZROUSDT")
+  const metadata = createMarketMetadata("ETHUSDT")
   const externalOrder = new CanonicalOrder({
     clientOrderId: "external-client-id",
     brokerOrderId: "987654",
