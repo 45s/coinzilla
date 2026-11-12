@@ -1,3 +1,5 @@
+import { NOTIFICATIONS_TG_PROFILES } from "../../config/notifications-tg-profiles.js"
+
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
 export class ConfigValidationError extends TypeError {
   constructor(path, expected) {
@@ -21,7 +23,7 @@ const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max
 const requirePrecision = (value, path) => { if (!Number.isInteger(value) || value < 0) {fail(path, "a non-negative integer")} }
 
 
-const TELEGRAM_NOTIFICATION_PROFILES = Object.freeze(["minimal", "trader", "verbose", "custom"])
+const TELEGRAM_NOTIFICATION_PROFILES = Object.freeze(Object.values(NOTIFICATIONS_TG_PROFILES))
 export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
   "orderSubmitted", "orderCancelled", "orderFailed", "fillReceived", "pairPaused",
   "recoveryCompleted", "recoveryFailed", "botStarted", "botStopped", "startupFailed",
@@ -92,6 +94,9 @@ export function validateAppConfig(config) {
     requireRecord(pair, pairPath)
     requireBoolean(pair.enabled, `${pairPath}.enabled`)
     requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
+    if (pair.externalOrdersPolicy !== undefined && !["ignore", "block"].includes(pair.externalOrdersPolicy)) {
+      fail(`${pairPath}.externalOrdersPolicy`, "ignore or block")
+    }
     requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true })
     requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true })
     requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 })
