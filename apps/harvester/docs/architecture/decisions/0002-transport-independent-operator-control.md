@@ -156,6 +156,6 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 - [x] Reuse the ADR-0001 file durable-facts store through the application append port.
 - [ ] **Deferred to ADR-0001 / issue #654:** project operator facts into candidate startup state and restore them before strategy evaluation. This is not a prerequisite for the initial process-lifetime operator-control rollout.
 - [x] Implement the offline-testable Telegram `/pause <SYMBOL>` parser, private-chat allowlist, serial Long Polling, stable update identity, retry and stop lifecycle.
-- [ ] Add disabled-by-default `operatorControl.telegram` configuration validation and fail-closed bootstrap lifecycle.
-- [ ] **Out of scope for the initial rollout:** restore operator pause state after restart or complete recovery Steps 7–9. Track this only in the separate process-restart recovery workstream.
+- [x] Add disabled-by-default `operatorControl.telegram` configuration validation and fail-closed bootstrap lifecycle — PR #1067. Runtime verifies the initialized ADR-0001 store before broker connection, starts the Telegram poller before trading subscriptions, and stops polling before broker shutdown.
+- [x] **Out of scope for the initial rollout:** restore operator pause state after restart or complete recovery Steps 7–9. Track this only in the separate process-restart recovery workstream; no dependency on issue #654.
 - [ ] Run exact-head required CI and review the complete diff.

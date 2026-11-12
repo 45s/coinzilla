@@ -15,7 +15,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the ADR-0001 durable-facts append port.
 - The use cases pass the durable append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
 - `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. It is offline-testable but is not started or wired into the runtime.
-- The ADR-0001 file store and integrity checks already exist. The application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration validation and runtime lifecycle composition remain pending; they can be delivered independently of recovery Steps 7–9.
+- The ADR-0001 file store and integrity checks already exist. Runtime bootstrap verifies the explicitly initialized store before broker connection, then the application use cases append operator facts before applying in-memory state. Runtime never initializes or repairs the store. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration validation and Telegram lifecycle composition are implemented in PR #1067 independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
 
@@ -35,7 +35,10 @@ apps/harvester/src/
       resume-market.js
   infrastructure/
     telegram/
-      telegram-operator-adapter.js       # implemented; runtime wiring remains gated
+      telegram-operator-adapter.js       # Telegram Bot API boundary
+  bootstrap/
+    operator-control/
+      prepare-telegram-operator-control.js # verifies store; composes adapter lifecycle
   bootstrap/
     operator-control/
       start-telegram-operator.js         # runtime lifecycle composition
@@ -187,7 +190,7 @@ Resume removes only the operator-owned pause. The engine refuses to invoke the d
 
 ## First transport: Telegram
 
-The first adapter uses Telegram Bot API Long Polling and is optional; its module is implemented and tested offline, but runtime startup remains disabled.
+The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime composition are implemented and tested offline. Runtime startup remains disabled unless the operator explicitly enables it in configuration.
 
 - Configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
 - Inbound control defaults disabled. Enabling it requires a non-empty list of allowed Telegram user IDs.
@@ -212,7 +215,7 @@ The target configuration is intentionally separate from outbound notification po
 }
 ```
 
-When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. This configuration is a target contract; runtime configuration validation and wiring are still pending.
+When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime validates this configuration before broker connection. When enabled, it also requires `TELEGRAM_BOT_TOKEN`, an absolute `DURABLE_FACTS_DIRECTORY`, the current runtime-session identity, and a successfully verified initialized store. Runtime does not call the store initialization operation.
 
 The first and only Telegram command in this milestone is:
 
@@ -234,6 +237,9 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 | Existing BUY fills after pause | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
+| Enabled configuration has no token, absolute store path, runtime identity or verified durable store | Fail startup before Binance broker connection; never initialize or repair the store automatically. |
+| Telegram `getMe` identity verification fails | Abort startup, stop the partially started adapter, and disconnect the broker before market/user-data subscriptions begin. |
+| Harvester shutdown begins | Stop inbound polling before the existing broker shutdown sequence; retain the process lock if adapter shutdown cannot be confirmed. |
 
 ## TDD and delivery sequence
 
@@ -242,8 +248,8 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
 4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
-6. **Configuration/bootstrap — pending, independent of restart recovery:** add disabled-by-default config validation, fail-closed enablement and runtime lifecycle tests; keep this independent from outbound notification settings. The process-lifetime limitation must be explicit to operators.
-7. **Verification — in progress:** focused engine/application/adapter tests are present; exact-head workspace CI and documentation-link checks remain required. No Binance/TESTNET/LIVE operations.
+6. **Configuration/bootstrap — implemented in PR #1067:** strict disabled-by-default config validation, environment-only token, absolute initialized-store verification before broker connection, adapter startup before trading subscriptions, and poller shutdown before broker shutdown. Startup fails closed when any required dependency or Telegram identity verification is unavailable.
+7. **Verification — required on the final PR head:** focused engine/application/adapter/bootstrap tests, exact-head workspace CI and documentation-link checks. No Binance/TESTNET/LIVE operations.
 
 ## References
 

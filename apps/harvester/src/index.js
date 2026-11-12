@@ -273,7 +273,7 @@ export async function main({
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, appConfig, env })
+    const runtime = await start({ eventPublisher, appConfig, env, runtimeSessionId: processIdentity.runtimeSessionId })
     const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
     const enabledMarkets = configuredPairs
       ? Object.entries(configuredPairs)

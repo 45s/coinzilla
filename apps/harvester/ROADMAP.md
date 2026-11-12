@@ -4,7 +4,7 @@
 
 ## Operator control — initial Telegram pause
 
-**Status: RUNTIME WIRING IN PROGRESS — tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066); engine/adapter foundation is merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045).** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+**Status: IMPLEMENTED IN [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation is merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is ready for verification/closeout.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
 
 - Initial Telegram command: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
 - Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
@@ -13,9 +13,8 @@
 - Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
 - [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
 - [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
-- [x] TDD RED: add configuration-boundary regressions for disabled-by-default operator control and strict Telegram user allowlist validation — commit `f201c277` on PR #1067; Harvester unit/coverage jobs failed on the new assertions while JavaScript syntax and configured regression checks passed.
-- [ ] TDD RED: add startup fail-closed regressions for missing Telegram credentials, missing durable-store directory and invalid durable-store verification — issue #1066.
-- [ ] GREEN: verify the initialized ADR-0001 store, compose the operator facade and Telegram poller into runtime startup/shutdown, and fail closed on invalid enablement — issue #1066.
+- [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid durable-store verification — PR #1067.
+- [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and clean up on Telegram identity failure — PR #1067.
 - [ ] Exact-head workspace CI and final review. No Binance/TESTNET/LIVE operations are part of this work.
 
 **Out of scope:** projecting operator facts into startup state, restoring a pause after restart, and completing recovery Steps 7–9. Those remain in the separate ADR-0001 / issue #654 workstream and do not block the initial process-lifetime operator-control capability.
