@@ -1,4 +1,4 @@
-import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
+import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js";
 
 export const CG_COIN_GRABBER_CONFIG = {
   enabled: true,
@@ -113,6 +113,20 @@ export const CG_COIN_GRABBER_CONFIG = {
       makerPercent: 0,
       takerPercent: 0.075,
     },
+    WLDFDUSD: {
+      enabled: true,
+      enableVolatilityProtection: true,
+      externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
+      investment: 100,
+      orderQuantity: 20,
+      keepQuantity: 0.1,
+      minProfit: 0.01,
+      priceStepPercent: 0.5,
+      pricePrecision: 4,
+      quantityPrecision: 1,
+      makerPercent: 0,
+      takerPercent: 0.075,
+    },
     // END GENERATED PAIR CONFIGURATION
   },
-}
+};

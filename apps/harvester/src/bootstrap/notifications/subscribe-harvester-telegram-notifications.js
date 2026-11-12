@@ -23,7 +23,7 @@ const EVENT_MAPPINGS = Object.freeze({
   [HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED]: ({ data }) => ({
     name: "account.safety_alert",
     data: {
-      symbol: data.market,
+      ...(data.market === undefined ? {} : { symbol: data.market }),
       category: "broker-subscription-failed",
       message: data.broker + " " + data.stream + " subscription failed: " + (data.error?.message ?? "unknown error"),
     },
@@ -93,7 +93,7 @@ const EVENT_MAPPINGS = Object.freeze({
     return {
       name: "account.safety_alert",
       data: {
-        symbol: symbols.length === 1 ? symbols[0] : undefined,
+        ...(symbols.length === 1 ? { symbol: symbols[0] } : {}),
         category: "account-open-orders-blocked",
         message: `Account-wide open-orders audit is BLOCKED (${data.orderCount} open order(s))${symbols.length > 0 ? ": " + symbols.join(", ") : ""}. ${(data.blockReasons ?? []).join("; ")}`,
       },

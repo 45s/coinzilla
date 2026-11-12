@@ -370,6 +370,7 @@ A separate Harvester P0 recovery track may consume the Journal as validated reco
 - Journal-owned recursive serialization and durability propagation merged in [PR #920](https://github.com/45s/coinzilla/pull/920).
 - Harvester consumer hardening was implemented in [PR #925](https://github.com/45s/coinzilla/pull/925) and [issue #923](https://github.com/45s/coinzilla/issues/923) is closed. Exact PR head `9329fe2dc2fb1af785548261f23dff4757e0282b` passed 875/875 Harvester tests and all six required checks.
 - Keep [#889](https://github.com/45s/coinzilla/issues/889) open until the Journal README/roadmap contract closeout in [PR #934](https://github.com/45s/coinzilla/pull/934) is merged.
+- **Telegram notification serialization regression — fix in [PR #1084](https://github.com/45s/coinzilla/pull/1084):** account-wide BLOCKED open-order alerts spanning multiple symbols and user-data subscription-failure alerts without a market must omit the optional `symbol` property. A real EventBus + Journal regression verifies both safety alerts remain published/delivered and the startup flush reaches `durable: true`; EventBus and Journal contracts remain unchanged. Exact head `d61f7cce52bf5a46a89ad47019d18edf1b02805a` passed 1,444/1,444 Harvester tests, coverage, targeted tests, workspace tests, Utils tests, syntax, dependency audit, and external documentation links.
 
 ## Status
 
