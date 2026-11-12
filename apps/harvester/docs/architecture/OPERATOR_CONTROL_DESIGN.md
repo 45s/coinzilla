@@ -268,7 +268,7 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
 | Enabled configuration has no token, absolute store path, runtime identity or verified durable store | Fail startup before Binance broker connection; never initialize or repair the store automatically. |
-| Telegram `getMe` identity verification fails | Abort startup, stop the partially started adapter, and disconnect the broker before market/user-data subscriptions begin. |
+| Telegram `getMe` identity verification fails | Abort startup, stop the partially started adapter (retry once during outer startup rollback if the first stop is unconfirmed), and disconnect the broker before market/user-data subscriptions begin. |
 | Harvester shutdown begins | Stop inbound polling before the existing broker shutdown sequence; retain the process lock if adapter shutdown cannot be confirmed. |
 
 ## TDD and delivery sequence

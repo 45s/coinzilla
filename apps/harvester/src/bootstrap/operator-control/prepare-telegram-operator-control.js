@@ -73,14 +73,18 @@ export async function prepareTelegramOperatorControl({
         return Object.freeze({ started: true, alreadyStarted: false })
       } catch (cause) {
         let failure = cause
+        let cleanupConfirmed = false
         if (typeof adapter?.stop === "function") {
           try {
             await adapter.stop()
+            cleanupConfirmed = true
           } catch (cleanupError) {
             failure = new AggregateError([cause, cleanupError], "Telegram operator startup and cleanup both failed")
           }
         }
-        adapter = undefined
+        if (cleanupConfirmed || !adapter) {
+          adapter = undefined
+        }
         throw new OperatorControlStartupError("Telegram operator adapter failed to authenticate or start; Harvester startup is aborted", "OPERATOR_CONTROL_TELEGRAM_START_FAILED", failure)
       }
     },
