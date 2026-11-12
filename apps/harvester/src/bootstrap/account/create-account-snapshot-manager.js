@@ -18,8 +18,8 @@ function withRecoveryFailure(error, category, stage, retryable) {
 
 function resolveAuditFlushFailure(flushed, stage) {
   const failure = flushed?.recoveryFailure
-  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) return failure
-  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) return failure
+  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) { return failure }
+  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) { return failure }
   return { category: "DURABILITY", stage: stage + "_UNCLASSIFIED", retryable: false }
 }
 
@@ -203,14 +203,14 @@ export function createAccountSnapshotManager({
       const symbol = order?.market?.symbol ?? order?.symbol
       if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
           typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-          typeof symbol !== "string" || !symbol.trim()) return true
+          typeof symbol !== "string" || !symbol.trim()) { return true }
       const owned = restoredOrders.find((candidate) =>
         candidate.clientOrderId === clientOrderId ||
         (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId)
       )
-      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) return true
-      if (owned.status === "CANCELED" || owned.status === "REJECTED") return true
-      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) return true
+      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) { return true }
+      if (owned.status === "CANCELED" || owned.status === "REJECTED") { return true }
+      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) { return true }
       const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
       const expectedPrice = owned.limitPrice?.amount
       const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
@@ -223,7 +223,7 @@ export function createAccountSnapshotManager({
         (expectedPrice === undefined
           ? actualPrice !== undefined
           : actualPrice === undefined || compareDecimal({ left: expectedPrice, right: String(actualPrice) }) !== 0)
-      ) return true
+      ) { return true }
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
     })

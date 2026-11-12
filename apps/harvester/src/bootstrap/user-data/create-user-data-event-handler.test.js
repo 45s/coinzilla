@@ -244,7 +244,7 @@ test("keeps a queued owned BUY fill in recovery mode across executionPending wit
   const engine = {
     processUserDataEvent: async ({ recoveryMode }) => {
       receivedRecoveryMode = recoveryMode
-      if (!recoveryMode) exchangeMutationCount += 1
+      if (!recoveryMode) { exchangeMutationCount += 1 }
       return { ok: true, data: { reevaluate: false } }
     },
     getOrders: () => [],

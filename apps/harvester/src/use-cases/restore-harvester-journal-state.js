@@ -141,7 +141,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     }
     const data = projection.data
     for (const field of ["orders", "fills", "recoveryCycles", "pausedMarkets"]) {
-      if (!Array.isArray(data[field])) throw new TypeError("Recovery projection " + field + " must be an array")
+      if (!Array.isArray(data[field])) { throw new TypeError("Recovery projection " + field + " must be an array") }
     }
     const stickySafetyBlockers = data.stickySafetyBlockers ?? []
     if (!Array.isArray(stickySafetyBlockers)) {
@@ -201,10 +201,10 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         const fill = restoreFill({ data: item, market })
         const recoveryLedger = recoveryLedgers.get(market.id) ?? RecoveryLedger.empty({ market })
         const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
-        if (!result.ok) throw result.errors?.[0] ?? new Error("Unable to replay recovered fill " + fill.id)
+        if (!result.ok) { throw result.errors?.[0] ?? new Error("Unable to replay recovered fill " + fill.id) }
         portfolio = result.data.portfolio
         recoveryLedgers.set(market.id, result.data.recoveryLedger)
-        if (fill.side === "BUY") trailingBuySequenceBySymbol.set(item.symbol, event.sequence)
+        if (fill.side === "BUY") { trailingBuySequenceBySymbol.set(item.symbol, event.sequence) }
         continue
       }
 
@@ -280,7 +280,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     ])
     const pausedMarkets = new Set(durablePausedMarkets)
     for (const order of data.orders) {
-      if (order.submissionOutcome === "REJECTED") continue
+      if (order.submissionOutcome === "REJECTED") { continue }
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
       restoredOrders.push(restoreOrder({ order, market }))
       if (order.cancellationState === "NONE") {

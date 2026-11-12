@@ -26,9 +26,9 @@ export async function restoreHarvesterDurableFactsState({ durableFactsStore, mar
       })
     }
     const projection = projectHarvesterDurableFacts({ records: read.data.records })
-    if (projection?.ok !== true) return projection
+    if (projection?.ok !== true) { return projection }
     const restored = restoreHarvesterJournalState({ projection, marketMetadata })
-    if (restored?.ok !== true) return restored
+    if (restored?.ok !== true) { return restored }
     return toResult({
       data: Object.freeze({
         ...restored.data,

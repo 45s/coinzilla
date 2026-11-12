@@ -103,7 +103,7 @@ function mapFact({ record, orderIntents }) {
   }
   if (factType === "ORDER_SUBMISSION_OUTCOME") {
     const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) throw new Error("Durable submission outcome has no preceding intent: " + data.clientOrderId)
+    if (!intent) { throw new Error("Durable submission outcome has no preceding intent: " + data.clientOrderId) }
     const immutableIntent = {
       clientOrderId: data.clientOrderId,
       symbol: data.symbol,
@@ -142,7 +142,7 @@ function mapFact({ record, orderIntents }) {
   }
   if (factType === "ORDER_CANCELLATION_OUTCOME") {
     const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) throw new Error("Durable cancellation outcome has no preceding submission intent: " + data.clientOrderId)
+    if (!intent) { throw new Error("Durable cancellation outcome has no preceding submission intent: " + data.clientOrderId) }
     if (data.outcome === "CANCELED") {
       return [{
         name: EVENT.CANCELLED,
@@ -160,7 +160,7 @@ function mapFact({ record, orderIntents }) {
       }]
     }
     const outcome = CANCELLATION_FAILURE_OUTCOMES.get(data.outcome)
-    if (!outcome) throw new Error("Unsupported durable cancellation outcome: " + data.outcome)
+    if (!outcome) { throw new Error("Unsupported durable cancellation outcome: " + data.outcome) }
     return [{
       name: EVENT.CANCEL_FAILED,
       data: {
@@ -207,7 +207,7 @@ function mapFact({ record, orderIntents }) {
  */
 export function projectHarvesterDurableFacts({ records } = {}) {
   try {
-    if (!Array.isArray(records)) throw new TypeError("Durable-fact projection requires a verified records array")
+    if (!Array.isArray(records)) { throw new TypeError("Durable-fact projection requires a verified records array") }
     const configurationBaselines = new Map()
     const sessions = new Map()
     const seenFactIds = new Set()
@@ -221,12 +221,12 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     for (const [index, rawRecord] of records.entries()) {
       const record = requireRecord({ record: rawRecord, index })
       const sequence = BigInt(record.sequence)
-      if (sequence <= previousSequence) throw new Error("Durable-fact sequence must be strictly increasing")
+      if (sequence <= previousSequence) { throw new Error("Durable-fact sequence must be strictly increasing") }
       previousSequence = sequence
-      if (seenFactIds.has(record.factId)) throw new Error("Durable-fact stream contains duplicate factId " + record.factId)
+      if (seenFactIds.has(record.factId)) { throw new Error("Durable-fact stream contains duplicate factId " + record.factId) }
       seenFactIds.add(record.factId)
 
-      if (record.factType === "LEDGER_INITIALIZED") continue
+      if (record.factType === "LEDGER_INITIALIZED") { continue }
       if (record.factType === "CONFIGURATION_BASELINE") {
         const { fingerprint, strategyName, markets, schemaVersion } = record.data
         if (schemaVersion !== 1 || typeof fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(fingerprint) ||
@@ -242,7 +242,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         continue
       }
       if (record.factType === "PROCESS_STARTED") {
-        if (sessions.has(record.runtimeSessionId)) throw new Error("Runtime session has multiple PROCESS_STARTED facts")
+        if (sessions.has(record.runtimeSessionId)) { throw new Error("Runtime session has multiple PROCESS_STARTED facts") }
         const baseline = configurationBaselines.get(record.data.configurationFingerprint)
         if (!baseline || baseline.strategyName !== record.data.strategyName ||
             JSON.stringify(baseline.markets) !== JSON.stringify(record.data.markets) ||
@@ -261,7 +261,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
 
       if (record.factType === "PROCESS_STOPPED") {
         const session = sessions.get(record.runtimeSessionId)
-        if (!session || session.stopped) throw new Error("Process-stop fact has no unique preceding process-start fact")
+        if (!session || session.stopped) { throw new Error("Process-stop fact has no unique preceding process-start fact") }
         session.stopped = true
         session.stop = record.data
         session.stopSequence = sequence
@@ -270,14 +270,14 @@ export function projectHarvesterDurableFacts({ records } = {}) {
 
       if (record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
         const coverageSession = sessions.get(record.runtimeSessionId)
-        if (!coverageSession || coverageSession.stopped) throw new Error("Market-history coverage fact is outside an active process session")
+        if (!coverageSession || coverageSession.stopped) { throw new Error("Market-history coverage fact is outside an active process session") }
         marketHistoryCoverage.push(Object.freeze({ ...record.data, sequence: record.sequence }))
         continue
       }
 
       if (record.factType === "SAFETY_BLOCKER_RAISED") {
         const blockerSession = sessions.get(record.runtimeSessionId)
-        if (!blockerSession || blockerSession.stopped) throw new Error("Safety-blocker fact is outside an active process session")
+        if (!blockerSession || blockerSession.stopped) { throw new Error("Safety-blocker fact is outside an active process session") }
         if (activeBlockers.has(record.data.blockerId)) {
           throw new Error("Safety blocker was raised more than once without an intervening resolution")
         }
@@ -286,7 +286,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       }
       if (record.factType === "SAFETY_BLOCKER_RESOLVED") {
         const resolutionSession = sessions.get(record.runtimeSessionId)
-        if (!resolutionSession || resolutionSession.stopped) throw new Error("Safety-blocker resolution is outside an active process session")
+        if (!resolutionSession || resolutionSession.stopped) { throw new Error("Safety-blocker resolution is outside an active process session") }
         if (!activeBlockers.has(record.data.blockerId)) {
           throw new Error("Safety blocker resolution has no preceding active raised fact")
         }
@@ -296,25 +296,25 @@ export function projectHarvesterDurableFacts({ records } = {}) {
 
       if (record.factType === "OPERATOR_MARKET_PAUSED") {
         const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) throw new Error("Operator pause fact is outside an active process session")
+        if (!controlSession || controlSession.stopped) { throw new Error("Operator pause fact is outside an active process session") }
         operatorPauses.set(record.data.symbol, { reason: "OPERATOR_MARKET_PAUSED", sequence: record.sequence })
         continue
       }
       if (record.factType === "OPERATOR_MARKET_RESUMED") {
         const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) throw new Error("Operator resume fact is outside an active process session")
+        if (!controlSession || controlSession.stopped) { throw new Error("Operator resume fact is outside an active process session") }
         operatorPauses.delete(record.data.symbol)
         continue
       }
       if (record.factType === "STRATEGY_MARKET_PAUSED") {
         const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) throw new Error("Strategy pause fact is outside an active process session")
+        if (!controlSession || controlSession.stopped) { throw new Error("Strategy pause fact is outside an active process session") }
         strategyPauses.set(record.data.symbol, { reason: record.data.reason, sequence: record.sequence })
         continue
       }
       if (record.factType === "STRATEGY_MARKET_RESUMED") {
         const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) throw new Error("Strategy resume fact is outside an active process session")
+        if (!controlSession || controlSession.stopped) { throw new Error("Strategy resume fact is outside an active process session") }
         strategyPauses.delete(record.data.symbol)
         continue
       }
@@ -335,7 +335,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     const activePauses = new Map()
     for (const [symbol, pause] of [...operatorPauses, ...strategyPauses]) {
       const current = activePauses.get(symbol)
-      if (!current || BigInt(pause.sequence) > BigInt(current.sequence)) activePauses.set(symbol, pause)
+      if (!current || BigInt(pause.sequence) > BigInt(current.sequence)) { activePauses.set(symbol, pause) }
     }
     const syntheticRecords = []
     let lineNumber = 0
@@ -367,7 +367,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
 
       for (const record of remaining) {
         const events = mapFact({ record, orderIntents })
-        for (const event of events) emit(event.name, event.data)
+        for (const event of events) { emit(event.name, event.data) }
       }
       if (session.stop) {
         emit(EVENT.STOPPED, {

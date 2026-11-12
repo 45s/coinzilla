@@ -16,11 +16,11 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
   const manager = createAccountSnapshotManager({
     broker: {
       getAccountSnapshot: async () => {
-        if (accountSnapshotError) throw accountSnapshotError
+        if (accountSnapshotError) { throw accountSnapshotError }
         return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
       },
       getOpenOrders: async () => {
-        if (openOrdersError) throw openOrdersError
+        if (openOrdersError) { throw openOrdersError }
         return openOrdersResult ?? ({ ok: true, data: openOrders })
       },
     },

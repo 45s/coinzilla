@@ -8,7 +8,7 @@ function resolveUserDataFailure(failure) {
   const validStage = typeof failure?.stage === "string" && failure.stage.trim().length > 0
   const validRetryable = retryableFailureCategories.has(failure?.category) && failure?.retryable === true
   const validTerminal = terminalFailureCategories.has(failure?.category) && failure?.retryable === false
-  if (validStage && (validRetryable || validTerminal)) return failure
+  if (validStage && (validRetryable || validTerminal)) { return failure }
   return { category: "ACCOUNTING_INTEGRITY", stage: "UNCLASSIFIED_ENGINE_FAILURE", retryable: false }
 }
 
@@ -43,7 +43,7 @@ export function createUserDataEventHandler({
   return ({ event } = {}) => {
     const tradingEngine = getTradingEngine()
     const tradingEnabled = isTradingEnabled()
-    if (state.intakeStopped) return
+    if (state.intakeStopped) { return }
     const isExecution = event?.eventType === "executionReport" &&
       event?.executionType === "TRADE"
     const isOrderUpdate = event?.eventType === "executionReport"
@@ -196,7 +196,7 @@ export function createUserDataEventHandler({
           ignored: processed.data?.ignored === true,
           fillApplied: event.executionType === "TRADE" && processed.data?.ignored !== true,
         })
-        if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
+        if (processed.data?.reevaluate === true) { reevaluateSymbol = event.executedOrder.market.symbol }
       } else if (isOrderUpdate && tradingEnabled) {
         state.accountingFailed = true
         state.ready = false
@@ -260,7 +260,7 @@ export function createUserDataEventHandler({
       state.status = "READY"
       if (reevaluateSymbol && tradingEngine) {
         const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
-        if (!reevaluated.ok) logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors })
+        if (!reevaluated.ok) { logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors }) }
       }
       resumeDeferredStrategyEvaluations()
     })

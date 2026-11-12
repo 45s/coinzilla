@@ -6923,7 +6923,7 @@ test("commits a strategy pause fact before publishing the Journal pause event", 
     },
     eventPublisher: {
       publish: (event) => {
-        if (event.name === "strategy.paused") sequence.push("journal-event")
+        if (event.name === "strategy.paused") { sequence.push("journal-event") }
         return { ok: true }
       },
     },
