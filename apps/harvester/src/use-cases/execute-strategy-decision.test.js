@@ -221,8 +221,12 @@ test("durably records the exact order submission intent before calling the broke
       })
       return { ok: true, data: { durable: true } }
     },
+    onDurableSubmissionOutcome: async ({ order, outcome }) => {
+      calls.push({ stage: "durable-outcome", clientOrderId: order.clientOrderId, outcome })
+      return { ok: true, data: { durable: true } }
+    },
     onPendingOrder: async () => {},
-    onAcknowledgedOrder: async () => {},
+    onAcknowledgedOrder: async () => calls.push({ stage: "acknowledged" }),
     onSubmissionFailure: async () => assert.fail("unexpected submission failure while recording a durable order intent"),
   })
 
@@ -231,6 +235,9 @@ test("durably records the exact order submission intent before calling the broke
   assert.equal(result.ok, true, "A strategy order with a durably recorded intent should proceed to broker submission.")
   assert.equal(calls[0].stage, "durable-intent", "The durable order intent must be acknowledged before the broker can receive a placement request.")
   assert.equal(calls[1].stage, "broker", "The broker placement must happen only after the durable intent append succeeds.")
+  assert.equal(calls[2].stage, "durable-outcome", "The broker acknowledgement must be durably recorded before local order acknowledgement.")
+  assert.equal(calls[2].outcome, "ACKNOWLEDGED")
+  assert.equal(calls[3].stage, "acknowledged", "Local order state may advance only after the durable outcome is committed.")
   assert.equal(calls[0].clientOrderId, calls[1].clientOrderId, "The durable intent and broker request must share the exact stable client order identity.")
   assert.equal(calls[0].marketId, market.id, "The durable intent must preserve the canonical market identity.")
   assert.equal(calls[0].symbol, market.symbol, "The durable intent must preserve the canonical market symbol.")
@@ -254,6 +261,7 @@ test("does not call the broker when durable order-intent acknowledgement fails",
       ok: false,
       errors: [new Error("durable fact store unavailable")],
     }),
+    onDurableSubmissionOutcome: async () => assert.fail("outcome must not be written when intent persistence fails"),
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => {},
@@ -264,4 +272,30 @@ test("does not call the broker when durable order-intent acknowledgement fails",
   assert.equal(result.ok, false, "A failed durable intent append must fail the strategy submission workflow.")
   assert.equal(brokerCalls, 0, "No broker placement may occur unless the immutable order intent was durably acknowledged first.")
   assert.match(result.errors[0].message, /durable fact store unavailable/, "The durable-fact failure must remain actionable at the application boundary.")
+})
+
+
+test("does not apply a broker acknowledgement when its durable outcome append fails", async () => {
+  let acknowledged = false
+  const failureOutcomes = []
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => ({ ok: true, data: makeAcknowledgement(order) }),
+    },
+    onDurableSubmissionIntent: async () => ({ ok: true, data: { durable: true } }),
+    onDurableSubmissionOutcome: async () => ({
+      ok: false,
+      errors: [new Error("outcome checkpoint unavailable")],
+    }),
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => { acknowledged = true },
+    onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
+  })
+
+  const result = await execute({ decision, marketMetadata })
+
+  assert.equal(result.ok, false, "A broker acknowledgement without a durable outcome must fail the submission workflow.")
+  assert.equal(acknowledged, false, "In-memory order acknowledgement must not advance before its durable outcome.")
+  assert.deepEqual(failureOutcomes, ["UNKNOWN"], "The uncommitted acknowledgement must trigger the existing fail-closed unknown-outcome path.")
+  assert.match(result.errors[0].message, /outcome checkpoint unavailable/)
 })
