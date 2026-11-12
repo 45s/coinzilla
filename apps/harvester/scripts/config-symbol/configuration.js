@@ -1,15 +1,14 @@
 import {
   compareDecimal,
-  divideDecimal,
   multiplyDecimal,
   normalizeDecimalString,
   roundDecimalToIncrement,
 } from "@coinzilla/utils"
 import { validateAppConfig } from "../../src/domain/app-config.js"
+import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
 
 const ZERO = "0"
 const HUNDRED = "100"
-const ORDER_QUANTITY_SCALE = 18
 
 /**
  * Normalize and validate an operator-entered Binance Spot symbol.
@@ -122,7 +121,7 @@ export function validateOrderQuantity({
 } = {}) {
   const values = { orderQuantity, investment, price, stepSize, minQuantity, maxQuantity, minNotional }
   for (const [field, value] of Object.entries(values)) {
-    if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
+    if (typeof value !== "string") {throw new TypeError(field + " must be an exact decimal string")}
   }
   const quantity = parseDecimalInput(orderQuantity, "orderQuantity", { exclusiveMin: true })
   const budget = parseDecimalInput(investment, "investment", { exclusiveMin: true })
@@ -138,12 +137,12 @@ export function validateOrderQuantity({
   if (compareDecimal({ left: roundDecimalToIncrement({ value: quantity, increment: step, direction: "down" }), right: quantity }) !== 0) {
     throw new RangeError("orderQuantity must align exactly with the exchange LOT_SIZE stepSize")
   }
-  if (compareDecimal({ left: quantity, right: minimum }) < 0) throw new RangeError("orderQuantity is below exchange MIN_QUANTITY")
-  if (compareDecimal({ left: quantity, right: maximum }) > 0) throw new RangeError("orderQuantity exceeds exchange MAX_QUANTITY")
+  if (compareDecimal({ left: quantity, right: minimum }) < 0) {throw new RangeError("orderQuantity is below exchange MIN_QUANTITY")}
+  if (compareDecimal({ left: quantity, right: maximum }) > 0) {throw new RangeError("orderQuantity exceeds exchange MAX_QUANTITY")}
 
   const notional = multiplyDecimal({ left: quantity, right: referencePrice })
-  if (compareDecimal({ left: notional, right: minQuote }) < 0) throw new RangeError("orderQuantity is below exchange MIN_NOTIONAL at the current reference price")
-  if (maxQuote && compareDecimal({ left: notional, right: maxQuote }) > 0) throw new RangeError("orderQuantity exceeds exchange MAX_NOTIONAL at the current reference price")
+  if (compareDecimal({ left: notional, right: minQuote }) < 0) {throw new RangeError("orderQuantity is below exchange MIN_NOTIONAL at the current reference price")}
+  if (maxQuote && compareDecimal({ left: notional, right: maxQuote }) > 0) {throw new RangeError("orderQuantity exceeds exchange MAX_NOTIONAL at the current reference price")}
   if (compareDecimal({ left: notional, right: budget }) >= 0) {
     throw new RangeError("orderQuantity must be smaller than the total investment so the pair allocation can be split across multiple orders")
   }
@@ -238,6 +237,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   return Object.freeze({
     enabled: true,
     enableVolatilityProtection: true,
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: toConfigNumber(investment, "investment"),
     orderQuantity: toConfigNumber(orderQuantity, "orderQuantity"),
     keepQuantity: toConfigNumber(keepQuantity, "keepQuantity"),
@@ -268,7 +268,7 @@ export function addPairToAppConfig({ appConfig, symbol, pairConfig } = {}) {
   }
   const existingSymbol = Object.keys(pairs).find((candidate) => candidate.trim().toUpperCase() === normalizedSymbol)
   if (existingSymbol) {
-    throw new Error("Pair " + normalizedSymbol + " already exists in config.json; refusing to overwrite it")
+    throw new Error("Pair " + normalizedSymbol + " already exists in config/index.js; refusing to overwrite it")
   }
   const updated = structuredClone(appConfig)
   updated.strategies.CG_coinGrabber.pairs[normalizedSymbol] = structuredClone(pairConfig)

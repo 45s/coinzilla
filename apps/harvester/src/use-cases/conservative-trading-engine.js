@@ -1,6 +1,7 @@
 import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
+import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
@@ -24,6 +25,7 @@ import {
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import { isHarvesterClientOrderId } from "../application/orders/is-harvester-client-order-id.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
@@ -55,7 +57,7 @@ const failureResult = ({ error, errors, category, stage, retryable }) => {
 }
 
 const withFailure = (result, failure) => {
-  if (result?.failure) return result
+  if (result?.failure) {return result}
   return toResult({ ...result, failure })
 }
 
@@ -81,14 +83,14 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     fill.side !== journalFill.side ||
     fill.liquidityRole !== journalFill.liquidityRole ||
     fill.commissionStatus !== journalFill.commissionStatus
-  ) mismatch("identity or execution metadata")
+  ) {mismatch("identity or execution metadata")}
 
   for (const [field, actual, expected] of [
     ["price", fill.price.amount, journalFill.price],
     ["quantity", fill.quantity.amount, journalFill.quantity],
     ["quoteQuantity", fill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
-    if (compareDecimal({ left: actual, right: expected }) !== 0) mismatch(field)
+    if (compareDecimal({ left: actual, right: expected }) !== 0) {mismatch(field)}
   }
   if (journalFill.executedAt !== undefined && fill.executedAt !== journalFill.executedAt) {
     mismatch("transaction timestamp")
@@ -106,7 +108,7 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     (left.assetId + ":" + left.asset + ":" + left.amount)
       .localeCompare(right.assetId + ":" + right.asset + ":" + right.amount)
   )
-  if (actualCommissions.length !== expectedCommissions.length) mismatch("commission count")
+  if (actualCommissions.length !== expectedCommissions.length) {mismatch("commission count")}
   for (let index = 0; index < actualCommissions.length; index += 1) {
     const actual = actualCommissions[index]
     const expected = expectedCommissions[index]
@@ -114,7 +116,7 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
       actual.assetId !== expected.assetId ||
       actual.asset !== expected.asset ||
       compareDecimal({ left: actual.amount, right: expected.amount }) !== 0
-    ) mismatch("commission facts")
+    ) {mismatch("commission facts")}
   }
 }
 
@@ -131,7 +133,7 @@ export function createMarketBook({ bookTicker } = {}) {
   }
   const positive = (value, field) => {
     assertDecimalString({ value, field })
-    if (compareDecimal({ left: value, right: "0" }) <= 0) throw new RangeError(field + " must be positive")
+    if (compareDecimal({ left: value, right: "0" }) <= 0) {throw new RangeError(field + " must be positive")}
     return value
   }
   const bestBidPrice = positive(bookTicker.bestBidPrice, "bestBidPrice")
@@ -145,14 +147,14 @@ export function createMarketBook({ bookTicker } = {}) {
 }
 
 export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
-  if (order?.type !== "LIMIT_MAKER") return false
+  if (order?.type !== "LIMIT_MAKER") {return false}
   if (!marketBook || order.market?.symbol !== marketBook.symbol) {
     throw new TypeError("Post-only order and market book must refer to the same symbol")
   }
   const price = order.limitPrice?.amount
   assertDecimalString({ value: price, field: "post-only limit price" })
-  if (order.side === "BUY") return compareDecimal({ left: price, right: marketBook.bestAskPrice }) >= 0
-  if (order.side === "SELL") return compareDecimal({ left: price, right: marketBook.bestBidPrice }) <= 0
+  if (order.side === "BUY") {return compareDecimal({ left: price, right: marketBook.bestAskPrice }) >= 0}
+  if (order.side === "SELL") {return compareDecimal({ left: price, right: marketBook.bestBidPrice }) <= 0}
   throw new TypeError("Post-only order side must be BUY or SELL")
 }
 
@@ -161,9 +163,15 @@ export function makeConservativeTradingEngine({
   broker, strategyPolicy, appConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
   hasUnownedOpenOrdersForSymbol = () => false,
+  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   getVolatilityData,
+  onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
+  onDurableCancellationIntent,
+  onDurableCancellationOutcome,
+  onDurableStrategyMarketPaused,
   logger,
   initialState = {},
 } = {}) {
@@ -172,6 +180,9 @@ export function makeConservativeTradingEngine({
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
   const isVolatilityProtectionEnabledForSymbol = (symbol) =>
     volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
+  const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
+    hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
+    (pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK && hasUnownedOpenOrdersForSymbol({ symbol }))
   if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
     throw new TypeError("getVolatilityData must be a function when provided")
   }
@@ -183,25 +194,45 @@ export function makeConservativeTradingEngine({
     getPortfolio, getRecoveryLedger, getMarketMetadata, getAccountSnapshot, updateTradingAccounting,
     completeRecoveryCycle, canTrade, onPause, isStopping,
   })) {
-    if (typeof callback !== "function") throw new TypeError(name + " must be a function")
+    if (typeof callback !== "function") {throw new TypeError(name + " must be a function")}
   }
-  if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
+  if (typeof isMarketPriceFresh !== "function") {throw new TypeError("isMarketPriceFresh must be a function")}
+  if (onDurableCancellationIntent !== undefined && typeof onDurableCancellationIntent !== "function") {
+    throw new TypeError("onDurableCancellationIntent must be a function")
+  }
+  if (onDurableCancellationOutcome !== undefined && typeof onDurableCancellationOutcome !== "function") {
+    throw new TypeError("onDurableCancellationOutcome must be a function")
+  }
+  if ((onDurableCancellationIntent === undefined) !== (onDurableCancellationOutcome === undefined)) {
+    throw new TypeError("onDurableCancellationIntent and onDurableCancellationOutcome must be provided together")
+  }
+  if (onDurableStrategyMarketPaused !== undefined && typeof onDurableStrategyMarketPaused !== "function") {
+    throw new TypeError("onDurableStrategyMarketPaused must be a function")
+  }
   if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
   }
-  if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
+  if (typeof hasUnresolvedHarvesterOpenOrdersForSymbol !== "function") {
+    throw new TypeError("hasUnresolvedHarvesterOpenOrdersForSymbol must be a function")
+  }
+  if (typeof isMarketBookFresh !== "function") {throw new TypeError("isMarketBookFresh must be a function")}
   if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
     throw new TypeError("initialState must be an object")
   }
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
-  if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
-  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
+  if (!(initialRegistry instanceof OrderRegistry)) {throw new TypeError("initialState.orderRegistry must be an OrderRegistry")}
+  for (const field of ["pausedMarkets", "operatorPausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
     const values = initialState[field]
     if (values !== undefined && (
       !(Array.isArray(values) || values instanceof Set) ||
       [...values].some((value) => typeof value !== "string" || !value.trim())
     )) {
       throw new TypeError("initialState." + field + " must contain non-empty strings")
+    }
+  }
+  for (const symbol of initialState.operatorPausedMarkets ?? []) {
+    if (!Object.hasOwn(pairs, symbol)) {
+      throw new TypeError("initialState.operatorPausedMarkets contains an unconfigured market: " + symbol)
     }
   }
   if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
@@ -241,6 +272,7 @@ export function makeConservativeTradingEngine({
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
     paused: new Set(initialState.pausedMarkets ?? []),
+    operatorPausedMarkets: new Set(initialState.operatorPausedMarkets ?? []),
     durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
     recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
     recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
@@ -271,13 +303,13 @@ export function makeConservativeTradingEngine({
       state.durablePausedMarkets.has(symbol) ||
       state.replacementIntents.has(symbol) ||
       state.trailingBuyRepriceIntents.has(symbol)
-    ) return false
+    ) {return false}
     state.recoveryManagedPausedMarkets.delete(symbol)
     state.paused.delete(symbol)
     return true
   }
   const resolveRecoveryManagedCancellation = ({ order } = {}) => {
-    if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) return false
+    if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) {return false}
     const symbol = order.market.symbol
     if (order.side === "SELL" &&
         !hasPendingRecoveryManagedCancellation({ symbol, side: "SELL" })) {
@@ -292,7 +324,7 @@ export function makeConservativeTradingEngine({
   }
   const rememberProcessedFill = ({ fill }) => {
     const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
-    if (fillIds.has(fill.id)) return false
+    if (fillIds.has(fill.id)) {return false}
     fillIds.add(fill.id)
     state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
     const fills = state.processedFillsByOrder.get(fill.brokerOrderId) ?? new Map()
@@ -302,7 +334,7 @@ export function makeConservativeTradingEngine({
   }
 
   const recordBuyExecutionFill = ({ fill }) => {
-    if (!rememberProcessedFill({ fill })) return
+    if (!rememberProcessedFill({ fill })) {return}
     const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
       quantity: "0",
       quoteQuantity: "0",
@@ -330,7 +362,7 @@ export function makeConservativeTradingEngine({
   }
 
   const recordSellExecutionFill = ({ fill }) => {
-    if (!rememberProcessedFill({ fill })) return
+    if (!rememberProcessedFill({ fill })) {return}
     const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
       quantity: "0",
       fillIds: new Set(),
@@ -369,8 +401,8 @@ export function makeConservativeTradingEngine({
         }),
       )
     } else {
-      if (published?.ok === false) return published
-      if (published?.skipped === true) return toResult({ data: { skipped: true } })
+      if (published?.ok === false) {return published}
+      if (published?.skipped === true) {return toResult({ data: { skipped: true } })}
     }
     if (typeof eventPublisher?.flush !== "function") {
       return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
@@ -390,7 +422,7 @@ export function makeConservativeTradingEngine({
 
   const publishRecoveryCycleNotCompleted = ({ order, completion }) => {
     const data = completion?.data
-    if (!data) return
+    if (!data) {return}
     const marketId = order.market.id
     const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
     const position = portfolio?.getPosition({ marketId })
@@ -433,6 +465,17 @@ export function makeConservativeTradingEngine({
 
   const pause = async ({ symbol, reason, error }) => {
     const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
+    if (!wasDurablyPaused && onDurableStrategyMarketPaused) {
+      const durable = await onDurableStrategyMarketPaused({ symbol, reason })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        logger?.error?.({
+          message: "strategy pause could not be committed to the durable-fact ledger",
+          symbol,
+          reason,
+          errors: durable?.errors,
+        })
+      }
+    }
     state.paused.add(symbol)
     state.durablePausedMarkets.add(symbol)
     if (!wasDurablyPaused) {
@@ -450,7 +493,7 @@ export function makeConservativeTradingEngine({
   // and applied. Keep this inside the current serialized transition so market
   // events cannot observe the acknowledgement/fill gap.
   const reconcileFilledAcknowledgement = async ({ order } = {}) => {
-    if (order.status !== "FILLED") return toResult({ data: { reconciled: false } })
+    if (order.status !== "FILLED") {return toResult({ data: { reconciled: false } })}
     const fillsResult = await broker.getFills({
       symbol: order.market.symbol,
       orderId: order.brokerOrderId,
@@ -476,11 +519,11 @@ export function makeConservativeTradingEngine({
         await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_HISTORY_CONFLICTING_DUPLICATE", error })
         return toResult({ error })
       }
-      if (!previous) fillsById.set(fill.id, fill)
+      if (!previous) {fillsById.set(fill.id, fill)}
     }
     const fills = [...fillsById.values()].sort((left, right) => {
       if (left.executedAt !== undefined && right.executedAt !== undefined &&
-          left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+          left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
       return left.tradeId.localeCompare(right.tradeId)
     })
     const reconciledQuantity = fills.reduce(
@@ -552,14 +595,14 @@ export function makeConservativeTradingEngine({
       outcome: "UNCONFIRMED",
       error,
     })
-    if (pauseOnFailure) await pause({ symbol, reason, error })
+    if (pauseOnFailure) {await pause({ symbol, reason, error })}
     return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
   }
 
   const markCancellationNotSent = async ({ symbol, order, reason, error, pauseOnFailure = true } = {}) => {
     publishOrderCancelFailed({ order, outcome: "NOT_SENT", error })
     const notSentReason = reason.replace(/_UNCONFIRMED$/, "_NOT_SENT")
-    if (pauseOnFailure) await pause({ symbol, reason: notSentReason, error })
+    if (pauseOnFailure) {await pause({ symbol, reason: notSentReason, error })}
     return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
   }
 
@@ -580,20 +623,124 @@ export function makeConservativeTradingEngine({
 
   const ensureCancellationEligible = async ({ symbol, order, reason, pauseOnFailure = true }) => {
     const result = validateCancellationEligibility({ order })
-    if (result.ok) return result
+    if (result.ok) {return result}
     const error = result.errors[0]
     publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
-    if (pauseOnFailure) await pause({ symbol, reason, error })
+    if (pauseOnFailure) {await pause({ symbol, reason, error })}
     return result
+  }
+
+  const cancelOrderWithDurableFacts = async ({ order, reason } = {}) => {
+    if (onDurableCancellationIntent) {
+      let intentResult
+      try {
+        intentResult = await onDurableCancellationIntent({ order, reason })
+      } catch (error) {
+        return { ok: false, cancellationOutcome: "NOT_SENT", errors: [error] }
+      }
+      if (intentResult?.ok !== true || intentResult.data?.durable !== true) {
+        return {
+          ok: false,
+          cancellationOutcome: "NOT_SENT",
+          errors: intentResult?.errors?.length ? intentResult.errors : [new Error("Durable order-cancellation intent was not acknowledged")],
+        }
+      }
+    }
+    let cancelResult
+    try {
+      cancelResult = await broker.cancelOrder({ order })
+    } catch (error) {
+      if (onDurableCancellationOutcome) {
+        let outcomeResult
+        try {
+          outcomeResult = await onDurableCancellationOutcome({ order, reason, outcome: "OUTCOME_UNKNOWN" })
+        } catch (outcomeError) {
+          return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [outcomeError] }
+        }
+        if (outcomeResult?.ok !== true || outcomeResult.data?.durable !== true) {
+          return {
+            ok: false,
+            cancellationOutcome: "OUTCOME_UNKNOWN",
+            errors: outcomeResult?.errors?.length ? outcomeResult.errors : [new Error("Durable cancellation outcome was not acknowledged")],
+          }
+        }
+      }
+      return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
+    }
+    if (!onDurableCancellationOutcome) {return cancelResult}
+    let outcome
+    let canceledOrder
+    if (cancelResult?.ok === true && cancelResult.data instanceof CanonicalOrder) {
+      canceledOrder = cancelResult.data
+      const identityMatches = canceledOrder.clientOrderId === order.clientOrderId &&
+        canceledOrder.brokerOrderId === order.brokerOrderId &&
+        canceledOrder.market.id === order.market.id &&
+        canceledOrder.side === order.side
+      if (!identityMatches) {
+        outcome = "UNKNOWN"
+        canceledOrder = undefined
+      } else if (["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(canceledOrder.status)) {
+        outcome = canceledOrder.status
+      } else if (["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
+        outcome = "NOT_CANCELED"
+      } else {
+        outcome = "UNCONFIRMED"
+        canceledOrder = undefined
+      }
+    } else if (cancelResult?.cancellationOutcome === "NOT_SENT") {
+      outcome = "NOT_SENT"
+    } else if (cancelResult?.cancellationOutcome === "OUTCOME_UNKNOWN") {
+      outcome = "OUTCOME_UNKNOWN"
+    } else {
+      outcome = "UNCONFIRMED"
+    }
+    let outcomeResult
+    try {
+      outcomeResult = await onDurableCancellationOutcome({ order, canceledOrder, reason, outcome })
+    } catch (error) {
+      return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
+    }
+    if (outcomeResult?.ok !== true || outcomeResult.data?.durable !== true) {
+      return {
+        ok: false,
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+        errors: outcomeResult?.errors?.length ? outcomeResult.errors : [new Error("Durable order-cancellation outcome was not acknowledged")],
+      }
+    }
+    if (outcome === "UNKNOWN" || outcome === "UNCONFIRMED") {
+      return {
+        ok: false,
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+        errors: [new Error("Broker cancellation response did not confirm the owned order identity and terminal state")],
+      }
+    }
+    return cancelResult
   }
 
   const submit = makeExecuteStrategyDecision({
     broker,
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
     canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
+      const defer = (reason, details = {}) => ({
+        allowed: false,
+        reason,
+        details: { symbol, ...details },
+      })
       const marketPrice = state.prices.get(symbol)
-      if (state.paused.has(symbol) || hasUnownedOpenOrdersForSymbol({ symbol }) ||
-          !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
+      if (state.paused.has(symbol)) {return defer("MARKET_PAUSED")}
+      if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
+        return defer("OPERATOR_MARKET_PAUSED")
+      }
+      if (hasBlockingOpenOrdersForSymbol({ symbol })) {
+        return defer("UNOWNED_OPEN_ORDERS_PRESENT")
+      }
+      if (!canTrade({ symbol })) {return defer("TRADING_DISABLED")}
+      if (!marketPrice) {return defer("MARKET_PRICE_UNAVAILABLE")}
+      if (!isMarketPriceFresh(marketPrice)) {
+        return defer("MARKET_PRICE_STALE", { priceTimestamp: marketPrice.timestamp })
+      }
       if (isVolatilityProtectionEnabledForSymbol(symbol)) {
         let volatility
         try {
@@ -608,18 +755,40 @@ export function makeConservativeTradingEngine({
         const latestRatioProtected = typeof latestRatio === "string" &&
           compareDecimal({ left: latestRatio, right: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio }) >= 0
         const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
-        if ((!volatility?.status?.isReady || protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL ||
-            latestRatioProtected) && !recoverySell) return false
+        if (!volatility?.status?.isReady && !recoverySell) {
+          return defer("VOLATILITY_DATA_UNAVAILABLE", {
+            protectionMode: protection.mode,
+            volatilityRatio: latestRatio ?? null,
+          })
+        }
+        if ((protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL || latestRatioProtected) && !recoverySell) {
+          return defer("VOLATILITY_PROTECTION_ACTIVE", {
+            protectionMode: protection.mode,
+            volatilityRatio: latestRatio ?? null,
+          })
+        }
       }
-      if (order.type !== "LIMIT_MAKER") return true
+      if (order.type !== "LIMIT_MAKER") {return { allowed: true }}
       const marketBook = state.books.get(symbol)
-      return Boolean(marketBook && isMarketBookFresh(marketBook) &&
-        !isPostOnlyOrderCrossing({ order, marketBook }))
+      if (!marketBook) {return defer("MARKET_BOOK_UNAVAILABLE")}
+      if (!isMarketBookFresh(marketBook)) {
+        return defer("MARKET_BOOK_STALE", { bookTimestamp: marketBook.timestamp })
+      }
+      if (isPostOnlyOrderCrossing({ order, marketBook })) {
+        return defer("POST_ONLY_WOULD_CROSS", {
+          side: order.side,
+          limitPrice: order.limitPrice.amount,
+          bestBidPrice: marketBook.bestBidPrice,
+          bestAskPrice: marketBook.bestAskPrice,
+          bookTimestamp: marketBook.timestamp,
+        })
+      }
+      return { allowed: true }
     },
     onSubmissionDeferred: ({ order, registered } = {}) => {
       if (registered) {
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) throw new Error("Cannot remove a pending order deferred before broker submission")
+        if (!removal.removed) {throw new Error("Cannot remove a pending order deferred before broker submission")}
         state.registry = removal.registry
       }
       state.deferredEvaluations.add(order.market.symbol)
@@ -636,7 +805,7 @@ export function makeConservativeTradingEngine({
       })
       if (!persisted.ok) {
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (removal.removed) state.registry = removal.registry
+        if (removal.removed) {state.registry = removal.registry}
         const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
         await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
         throw error
@@ -647,11 +816,11 @@ export function makeConservativeTradingEngine({
         const registered = state.registry.orders.some(
           (item) => item.clientOrderId === order.clientOrderId,
         )
-        if (!registered) throw new Error("Broker acknowledged an unregistered Harvester order")
+        if (!registered) {throw new Error("Broker acknowledged an unregistered Harvester order")}
         state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
       } else {
         const update = state.registry.applyUpdate({ order })
-        if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
+        if (update.unknown) {throw new Error("Broker acknowledged an unregistered Harvester order")}
         state.registry = update.registry
       }
       publishLifecycleEvent({
@@ -660,7 +829,7 @@ export function makeConservativeTradingEngine({
         dataResult: mapOrderSubmittedData({ order }),
       })
       const reconciliation = await reconcileFilledAcknowledgement({ order })
-      if (!reconciliation.ok) throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
+      if (!reconciliation.ok) {throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")}
     },
     onOrderValidationFailure: async ({ order, error }) => {
       await pause({
@@ -684,9 +853,9 @@ export function makeConservativeTradingEngine({
       })
       if (definiteRejection) {
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) throw new Error("Cannot remove a definitively rejected pending order")
+        if (!removal.removed) {throw new Error("Cannot remove a definitively rejected pending order")}
         state.registry = removal.registry
-        if (definitePostOnlyRejection) state.books.delete(order.market.symbol)
+        if (definitePostOnlyRejection) {state.books.delete(order.market.symbol)}
         state.deferredEvaluations.add(order.market.symbol)
         return
       }
@@ -755,7 +924,7 @@ export function makeConservativeTradingEngine({
       }
       let cancelResult
       try {
-        cancelResult = await broker.cancelOrder({ order })
+        cancelResult = await cancelOrderWithDurableFacts({ order, reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL" })
       } catch (error) {
         return withFailure(
           await markCancellationUnknown({
@@ -829,7 +998,7 @@ export function makeConservativeTradingEngine({
       }
 
       const terminalReconciliation = await reconcileTerminalOrderFills({ order: canceledOrder })
-      if (!terminalReconciliation?.ok) return terminalReconciliation
+      if (!terminalReconciliation?.ok) {return terminalReconciliation}
       state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
       if (canceledOrder.status === "FILLED") {
         state.completedOrderTransitions.add(canceledOrder.clientOrderId)
@@ -852,12 +1021,13 @@ export function makeConservativeTradingEngine({
           marketId: canceledOrder.market.id,
           keepQuantity: String(pairs[symbol].keepQuantity),
           minProfit: String(pairs[symbol].minProfit),
+          sellOrder: canceledOrder,
         })
         if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
         }
-        if (!completion.data?.eligible) publishRecoveryCycleNotCompleted({ order: canceledOrder, completion })
+        if (!completion.data?.eligible) {publishRecoveryCycleNotCompleted({ order: canceledOrder, completion })}
         if (!completion.data?.eligible &&
             !["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason)) {
           await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
@@ -902,7 +1072,7 @@ export function makeConservativeTradingEngine({
       order,
       reason: "TRAILING_BUY_CANCELLATION_INELIGIBLE",
     })
-    if (!eligibility.ok) return eligibility
+    if (!eligibility.ok) {return eligibility}
     const cancelIntent = await publishDurableIntent({
       eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
       dataResult: mapOrderCancellationRequestedData({
@@ -917,7 +1087,7 @@ export function makeConservativeTradingEngine({
     }
     let cancelResult
     try {
-      cancelResult = await broker.cancelOrder({ order })
+      cancelResult = await cancelOrderWithDurableFacts({ order, reason: "TRAILING_BUY_REPRICE" })
     } catch (error) {
       return markCancellationUnknown({
         symbol,
@@ -997,7 +1167,7 @@ export function makeConservativeTradingEngine({
     const pairConfig = pairs[symbol]
     const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .find((order) => order.side === "BUY")
-    if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatestTransition({ symbol })
+    if (!activeBuy || state.trailingBuy.get(symbol) === false) {return evaluateLatestTransition({ symbol })}
 
     // Portfolio is authoritative: retained free inventory is excluded because
     // only baseQuantity represents active strategy inventory. This check runs
@@ -1035,8 +1205,8 @@ export function makeConservativeTradingEngine({
       priceStepPercent: String(pairConfig.priceStepPercent),
       trigger,
     })
-    if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
-    if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+    if (!trigger.shouldReplace) {return evaluateLatestTransition({ symbol })}
+    if (isStopping?.()) {return toResult({ data: { skipped: true, reason: "STOPPING" } })}
 
     let refreshedMetadata
     try {
@@ -1085,14 +1255,14 @@ export function makeConservativeTradingEngine({
     }
 
     const cancellation = await cancelAndReconcileTrailingBuy({ symbol, order: activeBuy })
-    if (!cancellation.ok) return cancellation
+    if (!cancellation.ok) {return cancellation}
     state.buyReferenceOverrides.set(symbol, marketPrice.price)
     if (!canTrade({ symbol }) || isStopping?.()) {
       return toResult({ data: { canceled: true, waitingForTradingReadiness: true } })
     }
 
     const result = await evaluateLatestTransition({ symbol })
-    if (!result.ok) return result
+    if (!result.ok) {return result}
     return toResult({
       data: {
         ...result.data,
@@ -1112,7 +1282,7 @@ export function makeConservativeTradingEngine({
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
     }
-    if (hasUnownedOpenOrdersForSymbol({ symbol })) {
+    if (hasBlockingOpenOrdersForSymbol({ symbol })) {
       state.deferredEvaluations.add(symbol)
       return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
     }
@@ -1122,7 +1292,7 @@ export function makeConservativeTradingEngine({
     }
     state.deferredEvaluations.delete(symbol)
     const marketPrice = state.prices.get(symbol)
-    if (!marketPrice) return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })
+    if (!marketPrice) {return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })}
     if (!isMarketPriceFresh(marketPrice)) {
       return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
     }
@@ -1159,6 +1329,13 @@ export function makeConservativeTradingEngine({
         pairConfig: pairs[symbol],
       })
       const decision = strategyPolicy.evaluate(evaluationInput)
+      const operatorPaused = state.operatorPausedMarkets.has(symbol)
+      const operatorSuppressedActions = operatorPaused
+        ? decision.actions.filter((action) => action.side === "BUY")
+        : []
+      const effectiveActions = operatorPaused
+        ? decision.actions.filter((action) => action.side === "SELL")
+        : decision.actions
       logger?.debug?.({
         message: "Harvester Conservative evaluation decided",
         evaluationId,
@@ -1167,6 +1344,8 @@ export function makeConservativeTradingEngine({
         action: decision.action,
         reason: decision.reason,
         actions: decision.actions,
+        operatorPaused,
+        operatorSuppressedActions,
         position: decision.position,
         portfolio: portfolioBefore.value,
         recoveryLedger: recoveryLedgerBefore?.value ?? null,
@@ -1193,7 +1372,7 @@ export function makeConservativeTradingEngine({
           state.completedRecoverySellSymbols.delete(symbol)
           state.completedRecoverySellOrdersBySymbol.delete(symbol)
           state.trailingBuy.set(symbol, true)
-          if (decision.actions.length > 0) return evaluateLatestTransition({ symbol })
+          if (effectiveActions.length > 0) {return evaluateLatestTransition({ symbol })}
         } else {
           publishRecoveryCycleNotCompleted({ order: completedSellOrder, completion })
           if (completion.data?.pause !== false) {
@@ -1202,14 +1381,14 @@ export function makeConservativeTradingEngine({
           }
         }
       }
-      if (decision.actions.length === 0) {
-        if (preflightOnly) return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_ACTION" } })
+      if (effectiveActions.length === 0) {
+        if (preflightOnly) {return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_ACTION" } })}
         logger?.debug?.({ message: "Harvester Conservative evaluation submitted no orders",
           evaluationId, symbol, reason: decision.reason, activeOrders: activeOrdersBefore.map((order) => order.value) })
-        return toResult({ data: { decision, submittedOrders: [] } })
+        return toResult({ data: { decision, submittedOrders: [], operatorSuppressedActions } })
       }
       const accountSnapshot = getAccountSnapshot()
-      if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
+      if (!accountSnapshot) {throw new Error("Current account snapshot is unavailable")}
       const position = portfolioBefore.getPosition({ marketId: metadata.market.id })
       const allPositions = portfolioBefore.positions
       const portfolioQuoteCashFlow = allPositions
@@ -1263,7 +1442,7 @@ export function makeConservativeTradingEngine({
         throw new Error("Current account snapshot is missing an enabled market asset balance")
       }
       const allocation = allocateOrderCommitments({
-        actions: decision.actions,
+        actions: effectiveActions,
         quoteFreeBalance: quoteBalance.amount,
         baseFreeBalance: baseBalance.amount,
         quoteCashFlow,
@@ -1313,12 +1492,13 @@ export function makeConservativeTradingEngine({
         quoteCashFlowBaseline,
       })
       if (executableActions.length === 0) {
-        if (preflightOnly) return toResult({ data: { preflightValid: false, reason: "NO_EXECUTABLE_REPLACEMENT" } })
+        if (preflightOnly) {return toResult({ data: { preflightValid: false, reason: "NO_EXECUTABLE_REPLACEMENT" } })}
         return toResult({
           data: {
             decision,
             submittedOrders: [],
             deferredActions,
+            operatorSuppressedActions,
             waitingForAvailableQuoteBalance: deferredActions.some(({ reason }) => reason === "INSUFFICIENT_QUOTE_BALANCE"),
             waitingForInvestmentLimit: deferredActions.some(({ reason }) => reason === "PAIR_INVESTMENT_LIMIT"),
           },
@@ -1368,7 +1548,7 @@ export function makeConservativeTradingEngine({
           marketMetadata: metadata,
           notifyValidationFailure: false,
         })
-        if (!validation.ok) return validation
+        if (!validation.ok) {return validation}
         if (validation.data?.deferred === true) {
           return toResult({ data: { preflightValid: false, reason: "REPLACEMENT_MARKET_DATA_UNAVAILABLE" } })
         }
@@ -1400,6 +1580,9 @@ export function makeConservativeTradingEngine({
         evaluationId,
         symbol,
         ok: result.ok,
+        deferred: result.data?.deferred === true,
+        deferralReason: result.data?.reason ?? null,
+        deferralDetails: result.data?.details ?? null,
         submittedOrders: result.data?.submittedOrders?.map((order) => order.value) ?? [],
         errors: (result.errors ?? []).map((error) => ({
           name: error?.name,
@@ -1408,14 +1591,16 @@ export function makeConservativeTradingEngine({
         lastBuyPriceAfter: state.lastBuyPrices.get(symbol) ?? null,
         activeOrdersAfter: state.registry.getActiveOrders({ marketId: metadata.market.id }).map((order) => order.value),
       })
-      if (!result.ok) return result
+      if (!result.ok) {return result}
       if (result.data?.deferred === true) {
         return toResult({
           data: {
             decision,
             submittedOrders: result.data.submittedOrders ?? [],
             deferred: true,
-            reason: "TRADING_NOT_READY",
+            reason: result.data.reason ?? "SUBMISSION_NOT_ALLOWED",
+            deferralDetails: result.data.details ?? null,
+            operatorSuppressedActions,
           },
         })
       }
@@ -1436,10 +1621,10 @@ export function makeConservativeTradingEngine({
   const processMarketBookTransition = async ({ symbol, bookTicker } = {}) => {
     try {
       const marketBook = createMarketBook({ bookTicker })
-      if (marketBook.symbol !== symbol) throw new Error("Market book symbol does not match subscription")
-      if (!isMarketBookFresh(marketBook)) return toResult({ data: { skipped: true, reason: "STALE_MARKET_BOOK" } })
+      if (marketBook.symbol !== symbol) {throw new Error("Market book symbol does not match subscription")}
+      if (!isMarketBookFresh(marketBook)) {return toResult({ data: { skipped: true, reason: "STALE_MARKET_BOOK" } })}
       state.books.set(symbol, marketBook)
-      if (state.deferredEvaluations.has(symbol) && !state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
+      if (state.deferredEvaluations.has(symbol) && !state.paused.has(symbol)) {return evaluateLatestTransition({ symbol })}
       return toResult({ data: { updated: true } })
     } catch (error) {
       state.books.delete(symbol)
@@ -1450,7 +1635,7 @@ export function makeConservativeTradingEngine({
   const processMarketPriceTransition = async ({ symbol, priceEvent } = {}) => {
     try {
       const price = createMarketPrice({ priceEvent })
-      if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
+      if (price.symbol !== symbol) {throw new Error("Market price symbol does not match subscription")}
       const marketEventId = ++marketPriceEventSequence
       const previousPrice = state.prices.get(symbol)
       const metadata = getCurrentMarketMetadata({ symbol })
@@ -1484,10 +1669,10 @@ export function makeConservativeTradingEngine({
       }
       state.marketPriceEventIds.set(symbol, marketEventId)
       state.prices.set(symbol, price)
-      if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
+      if (!canTrade({ symbol }) || state.paused.has(symbol)) {return evaluateLatestTransition({ symbol })}
       const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
         .find((order) => order.side === "BUY")
-      if (activeBuy && state.trailingBuy.get(symbol) !== false) {
+      if (activeBuy && state.trailingBuy.get(symbol) !== false && !state.operatorPausedMarkets.has(symbol)) {
         return maybeReplaceTrailingBuy({ symbol, marketPrice: price })
       }
       return evaluateLatestTransition({ symbol })
@@ -1559,7 +1744,7 @@ export function makeConservativeTradingEngine({
         state.completedRecoverySellSymbols.delete(symbol)
         state.completedRecoverySellOrdersBySymbol.delete(symbol)
       }
-      if (fill.side === "SELL") recordSellExecutionFill({ fill })
+      if (fill.side === "SELL") {recordSellExecutionFill({ fill })}
       if (accounting.data?.applied === true) {
         publishLifecycleEvent({
           eventPublisher,
@@ -1667,7 +1852,7 @@ export function makeConservativeTradingEngine({
           retryable: false,
         })
       }
-      if (!previous) fillsById.set(fill.id, fill)
+      if (!previous) {fillsById.set(fill.id, fill)}
     }
     for (const fill of fillsResult.data) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
@@ -1675,7 +1860,7 @@ export function makeConservativeTradingEngine({
           (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         // A valid stream execution can supersede a contradictory REST row,
         // but only if the union still proves the terminal cumulative quantity.
-        if (streamFills.length > 0) continue
+        if (streamFills.length > 0) {continue}
         const error = new Error("Terminal execution history does not match its canonical order")
         await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
         return failureResult({ error, category: "OWNERSHIP_INTEGRITY", stage: "TERMINAL_REST_FILL_IDENTITY", retryable: false })
@@ -1686,11 +1871,11 @@ export function makeConservativeTradingEngine({
         await pause({ symbol, reason: "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE", error })
         return failureResult({ error, category: "ACCOUNTING_INTEGRITY", stage: "TERMINAL_REST_FILL_DUPLICATE", retryable: false })
       }
-      if (!previous) fillsById.set(fill.id, fill)
+      if (!previous) {fillsById.set(fill.id, fill)}
     }
     const fills = [...fillsById.values()].sort((left, right) => {
       if (left.executedAt !== undefined && right.executedAt !== undefined &&
-          left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+          left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
       return left.tradeId.localeCompare(right.tradeId)
     })
     const reconciledQuantity = fills.reduce(
@@ -1776,6 +1961,15 @@ export function makeConservativeTradingEngine({
           eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
           dataResult: mapExecutionUnownedOrderData({ order }),
         })
+        const hasHarvesterIdentity = [
+          order.clientOrderId,
+          event.clientOrderId,
+          event.originalClientOrderId,
+        ].some(isHarvesterClientOrderId)
+        const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
+        if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
+          return toResult({ data: { ignored: true, externalOrder: true } })
+        }
         await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
         return failureResult({
           error: new Error("Order update does not belong to a Harvester order"),
@@ -1814,7 +2008,7 @@ export function makeConservativeTradingEngine({
 
       if (event.executionType === "TRADE") {
         const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
-        if (!fillResult.ok) return fillResult
+        if (!fillResult.ok) {return fillResult}
       }
 
       if (!terminalFillsReconciled &&
@@ -1823,7 +2017,7 @@ export function makeConservativeTradingEngine({
           order,
           ...(event.executionType === "TRADE" ? { eventFill: event.fill } : {}),
         })
-        if (!terminal?.ok) return terminal
+        if (!terminal?.ok) {return terminal}
       }
       if (update.duplicate || update.stale) {
         const isUnprocessedFill = order.status === "FILLED" &&
@@ -1832,13 +2026,13 @@ export function makeConservativeTradingEngine({
           if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
             const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
-            if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
+            if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
             if (cancellation.data?.deferred === true) {
               return toResult({ data: { ignored: true, replacementDeferred: true } })
             }
             state.replacementIntents.delete(symbol)
             const replacement = await evaluateLatestTransition({ symbol })
-            if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
+            if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
             return toResult({ data: { ignored: true, recoverySellReplaced: true, ...replacement.data } })
           }
           return toResult({ data: { ignored: true } })
@@ -1858,13 +2052,13 @@ export function makeConservativeTradingEngine({
           symbol,
           marketId: order.market.id,
         })
-        if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
+        if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
         if (cancellation.data?.deferred === true) {
           return toResult({ data: { order, replacementDeferred: true } })
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
+        if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
         return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
       }
       if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
@@ -1873,13 +2067,13 @@ export function makeConservativeTradingEngine({
           symbol,
           marketId: order.market.id,
         })
-        if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
+        if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
         if (cancellation.data?.deferred === true) {
           return toResult({ data: { order, replacementDeferred: true, waitingForFullFill: true } })
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
+        if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
         return toResult({
           data: {
             ...replacement.data,
@@ -1907,8 +2101,8 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { order, waitingForTerminalState: true } })
       }
       if (order.status === "FILLED" && order.side === "BUY") {
-        if (recoveryMode) resolveRecoveryManagedCancellation({ order })
-        if (isStopping?.()) return toResult({ data: { order, shutdown: true } })
+        if (recoveryMode) {resolveRecoveryManagedCancellation({ order })}
+        if (isStopping?.()) {return toResult({ data: { order, shutdown: true } })}
         let executionPrice
         try {
           executionPrice = getReconciledBuyExecutionPrice({ order })
@@ -1926,7 +2120,7 @@ export function makeConservativeTradingEngine({
             symbol,
             marketId: order.market.id,
           })
-          if (!cancellation.ok) return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
+          if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
         }
         state.trailingBuy.set(symbol, false)
         state.buyReferenceOverrides.delete(symbol)
@@ -1953,7 +2147,7 @@ export function makeConservativeTradingEngine({
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })
+        if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
         return toResult({
           data: {
             ...replacement.data,
@@ -2416,14 +2610,14 @@ export function makeConservativeTradingEngine({
         })
         if (!cancelIntent.ok) {
           const error = cancelIntent.errors?.[0] ?? new Error("BUY cancellation intent was not durably journaled during " + reasonPrefix)
-          if (pauseOnFailure) await pause({ symbol, reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE", error })
+          if (pauseOnFailure) {await pause({ symbol, reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE", error })}
           errors.push(error)
           continue
         }
 
         let cancelResult
         try {
-          cancelResult = await broker.cancelOrder({ order })
+          cancelResult = await cancelOrderWithDurableFacts({ order, reason })
         } catch (error) {
           const failed = await markCancellationUnknown({
             symbol,
@@ -2510,7 +2704,7 @@ export function makeConservativeTradingEngine({
           continue
         }
         state.registry = update.registry
-        let reconciledOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId })
+        const reconciledOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId })
         if (update.stale && !["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(reconciledOrder.status)) {
           const error = new Error("BUY cancellation response is stale and the owned order remains open")
           const failed = await markCancellationUnknown({
@@ -2555,7 +2749,7 @@ export function makeConservativeTradingEngine({
             invalidFill = new Error("BUY execution history contains conflicting duplicate fill facts during " + reasonPrefix)
             break
           }
-          if (!previous) fillsById.set(fill.id, fill)
+          if (!previous) {fillsById.set(fill.id, fill)}
         }
         if (invalidFill) {
           await pause({ symbol, reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH", error: invalidFill })
@@ -2565,7 +2759,7 @@ export function makeConservativeTradingEngine({
 
         const fills = [...fillsById.values()].sort((left, right) => {
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
-              left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+              left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
           return left.tradeId.localeCompare(right.tradeId)
         })
         const reconciledQuantity = fills.reduce(
@@ -2595,7 +2789,7 @@ export function makeConservativeTradingEngine({
           }
           reconciled += 1
         }
-        if (fillFailed) continue
+        if (fillFailed) {continue}
 
         if (reconciledOrder.status === "CANCELED") {
           publishOrderCancelled({ order: reconciledOrder })
@@ -2609,7 +2803,7 @@ export function makeConservativeTradingEngine({
         }
       }
 
-      if (errors.length > 0) return toResult({ errors })
+      if (errors.length > 0) {return toResult({ errors })}
       return toResult({ data: { canceled, reconciled } })
     },
   })
@@ -2621,7 +2815,7 @@ export function makeConservativeTradingEngine({
     const initialOrdersResult = await runTransition({
       task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
     })
-    if (!initialOrdersResult?.ok) return initialOrdersResult
+    if (!initialOrdersResult?.ok) {return initialOrdersResult}
     const pendingOrders = initialOrdersResult.data.ownedOrders.filter((order) => !order.brokerOrderId)
 
     for (const pendingOrder of pendingOrders) {
@@ -2759,15 +2953,15 @@ export function makeConservativeTradingEngine({
     const ownedOrdersResult = await runTransition({
       task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
     })
-    if (!ownedOrdersResult?.ok) return ownedOrdersResult
+    if (!ownedOrdersResult?.ok) {return ownedOrdersResult}
     const ownedOrders = ownedOrdersResult.data.ownedOrders
     const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
-    if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
+    if (ownedOrders.length === 0) {return toResult({ data: { reconciled: 0, symbols: [] } })}
 
     let snapshots
     try {
       snapshots = await collectOwnedOrderSnapshots({ ownedOrders })
-      if (typeof beforeApply === "function") await beforeApply()
+      if (typeof beforeApply === "function") {await beforeApply()}
     } catch (error) {
       return runTransition({
         task: async () => {
@@ -2792,7 +2986,7 @@ export function makeConservativeTradingEngine({
 
 
   const processVolatilitySnapshot = async ({ symbol, snapshot } = {}) => {
-    if (isStopping()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+    if (isStopping()) {return toResult({ data: { skipped: true, reason: "STOPPING" } })}
     if (typeof symbol !== "string" || !symbol.trim()) {
       return toResult({ error: new TypeError("processVolatilitySnapshot requires a symbol") })
     }
@@ -2916,7 +3110,7 @@ export function makeConservativeTradingEngine({
     if (!update) {
       return toResult({ error: new Error("Volatility protection transition returned no result") })
     }
-    if (update.skipped) return toResult({ data: update })
+    if (update.skipped) {return toResult({ data: update })}
 
     let settled = {
       recovered: update.recovered,
@@ -2977,7 +3171,7 @@ export function makeConservativeTradingEngine({
         volatilityRatio: settled.state.volatilityRatio,
       })
       const resumed = await evaluateLatest({ symbol })
-      if (!resumed?.ok) return resumed
+      if (!resumed?.ok) {return resumed}
     }
     return toResult({
       data: {
@@ -2990,7 +3184,7 @@ export function makeConservativeTradingEngine({
   }
 
   const refreshVolatilityProtectionIfNeeded = async ({ symbol } = {}) => {
-    if (!isVolatilityProtectionEnabledForSymbol(symbol)) return toResult({ data: { skipped: true } })
+    if (!isVolatilityProtectionEnabledForSymbol(symbol)) {return toResult({ data: { skipped: true } })}
     let snapshot
     try {
       snapshot = getVolatilityData({ symbol })
@@ -3007,25 +3201,100 @@ export function makeConservativeTradingEngine({
     const needsRefresh = unavailableReason
       ? current.reason !== unavailableReason
       : current.lastEvaluatedCandleOpenTime !== candleOpenTime
-    if (!needsRefresh) return toResult({ data: { skipped: true, state: current } })
+    if (!needsRefresh) {return toResult({ data: { skipped: true, state: current } })}
     return processVolatilitySnapshot({ symbol, snapshot })
   }
 
+  const pauseMarket = ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
+        const error = new TypeError("Operator pause requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      if (typeof beforeApply !== "function") {
+        return toResult({ error: new TypeError("Operator pause requires a durable-fact commit callback") })
+      }
+      if (state.operatorPausedMarkets.has(symbol)) {
+        return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: true } })
+      }
+      let committed
+      try {
+        committed = await beforeApply({ symbol, action: "PAUSE" })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (committed?.ok !== true || committed?.data?.durable !== true) {
+        return committed?.ok === false
+          ? committed
+          : toResult({ error: new Error("Operator pause fact was not durably committed") })
+      }
+      state.operatorPausedMarkets.add(symbol)
+      return toResult({ data: { symbol, paused: true, alreadyPaused: false, durable: true } })
+    },
+  })
+
+  const resumeMarket = ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
+        const error = new TypeError("Operator resume requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      const volatilityState = state.volatilityProtection.get(symbol)
+      const volatilityBlocked = volatilityProtectionEnabled &&
+        volatilityState !== undefined &&
+        volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
+      const safetyBlocked =
+        state.paused.has(symbol) ||
+        state.durablePausedMarkets.has(symbol) ||
+        state.recoveryManagedPausedMarkets.has(symbol) ||
+        state.replacementIntents.has(symbol) ||
+        state.trailingBuyRepriceIntents.has(symbol) ||
+        hasPendingRecoveryManagedCancellation({ symbol }) ||
+        volatilityBlocked
+      if (safetyBlocked) {
+        const error = new Error("Market cannot be resumed while a safety or recovery blocker is active")
+        error.code = "SAFETY_BLOCKER_ACTIVE"
+        return toResult({ error })
+      }
+      if (!state.operatorPausedMarkets.has(symbol)) {
+        return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
+      }
+      if (typeof beforeApply !== "function") {
+        return toResult({ error: new TypeError("Operator resume requires a durable-fact commit callback") })
+      }
+      let committed
+      try {
+        committed = await beforeApply({ symbol, action: "RESUME" })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (committed?.ok !== true || committed?.data?.durable !== true) {
+        return committed?.ok === false
+          ? committed
+          : toResult({ error: new Error("Operator resume fact was not durably committed") })
+      }
+      state.operatorPausedMarkets.delete(symbol)
+      return toResult({ data: { symbol, resumed: true, durable: true } })
+    },
+  })
+
   const processMarketPrice = async ({ symbol, priceEvent } = {}) => {
     const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) return protection
+    if (!protection?.ok) {return protection}
     return runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
   }
   const processBookTicker = async ({ symbol, bookTicker } = {}) => {
     const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) return protection
+    if (!protection?.ok) {return protection}
     return runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
   }
   const processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
     runTransition({ task: () => processUserDataEventTransition({ event, recoveryMode }) })
   const evaluateLatest = ({ symbol } = {}) =>
     runTransition({ task: () => evaluateLatestTransition({ symbol }) })
-  const resumeDeferredEvaluations = ({} = {}) => runTransition({
+  const resumeDeferredEvaluations = () => runTransition({
     task: async () => {
       const results = []
       for (const symbol of [...state.deferredEvaluations]) {
@@ -3051,11 +3320,15 @@ export function makeConservativeTradingEngine({
     getActiveOrders: () => state.registry.getActiveOrders(),
     getRecoveryIntents: () => Object.freeze({
       pausedMarkets: Object.freeze([...state.paused]),
+      operatorPausedMarkets: Object.freeze([...state.operatorPausedMarkets]),
       replacementIntents: Object.freeze([...state.replacementIntents]),
       trailingBuyRepriceIntents: Object.freeze([...state.trailingBuyRepriceIntents]),
       deferredEvaluations: Object.freeze([...state.deferredEvaluations]),
     }),
     getPausedMarkets: () => [...state.paused],
+    getOperatorPausedMarkets: () => [...state.operatorPausedMarkets],
+    pauseMarket,
+    resumeMarket,
     getLastBuyPrice: ({ symbol } = {}) => state.lastBuyPrices.get(symbol),
   })
 }

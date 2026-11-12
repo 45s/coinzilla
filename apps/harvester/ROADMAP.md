@@ -2,9 +2,28 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Operator control — initial Telegram pause
+
+**Status: IMPLEMENTED AND MERGED in [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); process-lifetime scope/docs clarified in [PR #1065](https://github.com/45s/coinzilla/pull/1065); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+
+- Initial Telegram command: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
+- Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
+- The engine commits the operator fact to the ADR-0001 durable-facts stream before applying in-memory state. Journal is not the control-state store.
+- **Process-lifetime limitation:** operator pause state is not restored after a process restart. The process starts without the previous operator pause; reissue `/pause <SYMBOL>` if it must remain paused. This is an explicit scope boundary, not a claim that restart recovery is complete.
+- Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
+- [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
+- [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
+- [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid durable-store verification — PR #1067.
+- [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
+- [x] Exact-head workspace CI passed on PR #1067 head `baf21f7ca4a42b6622d2282dda53e7d5c7c03699`: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The optional read-only Binance TESTNET integration was skipped. PR #1067 merged at `96293daa5ee3b831e55c49b56af22ce1857f936c`; no exchange operation was performed.
+
+**Out of scope:** projecting operator facts into startup state and restoring a pause after restart. These remain part of the separate ADR-0001 / issue #654 Steps 8–9 workstream and do not block the delivered process-lifetime operator-control capability.
+
+---
+
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED; regression matrix and exact-head CI complete; candle-stream freshness correction merged in PR #1049; historical threshold calibration open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -25,9 +44,21 @@
 5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
 7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
-8. [~] Synchronize living documentation and roadmaps — this closeout PR.
-9. [~] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — implementation in [PR #1046](https://github.com/45s/coinzilla/pull/1046); exact-head CI and merge remain pending.
+8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
+9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
 10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
+
+---
+
+## Submission deferral diagnostics — issue #1025
+
+**Status: IMPLEMENTED AND MERGED IN PR #1026 (2026-11-12).** The Conservative submission gate now preserves stable reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).
+
+- Preserve `ok` as execution-use-case success, not proof of broker submission; callers and logs distinguish `deferred`, `deferralReason`, and acknowledged `submittedOrders`.
+- Recheck all submission gates after durable PENDING registration; if readiness changes, remove the local PENDING record and do not call the broker.
+- Keep `LIMIT_MAKER` fail-closed for missing/stale book data and crossing prices. Volatility data/protection reasons are explicit; the recovery-SELL exception remains purpose-specific.
+- Regression tests cover structured reason propagation, post-registration PENDING cleanup, no-broker-call guarantees, and post-only crossing/freshness checks.
+- Implementation and exact-head CI evidence are recorded in [PR #1026](https://github.com/45s/coinzilla/pull/1026); the original incident's exact historical gate reason remains unproven in [issue #1025](https://github.com/45s/coinzilla/issues/1025).
 
 ---
 
@@ -101,7 +132,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Command:** `pnpm run config:symbol` (also available from the repository root through `pnpm --filter @coinzilla/harvester config:symbol`).
 
-**Canonical destination:** merge the generated pair into `apps/harvester/config.json` at `strategies.CG_coinGrabber.pairs.<SYMBOL>`. Harvester has one application-wide configuration file; do not create a parallel `config/strategies/CG/pair/` format.
+**Canonical destination:** merge the generated pair into `apps/harvester/config/index.js` at `strategies.CG_coinGrabber.pairs.<SYMBOL>`. Harvester has one application-wide `appConfig` object; supporting constants modules may be imported by its entrypoint, but do not create parallel feature-specific configuration formats.
 
 **Operator inputs:** symbol, quote investment budget, `keepQuantity`, maker percentage, taker percentage, minimum profit (quote units), and price-step percentage; both are required strategy inputs because their values are market-specific and must not be guessed. Derive `orderQuantity` from the quote budget and a current public ticker-price snapshot, rounded down to the exchange step and capped by active maximum quantity/notional bounds. Derive price/quantity precision from Binance filters and check the reference price against active minimum/maximum price bounds.
 
@@ -112,8 +143,8 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 - Preserve exact decimal strings while parsing inputs and calculating order quantity. Reject malformed/negative/non-finite values, invalid percentages, a budget below minimum notional, quantities below minimum quantity, and `keepQuantity` not aligned to `LOT_SIZE.stepSize`.
 - Keep maker/taker assumptions as separate operator inputs; do not treat public exchange metadata as account commission data.
 - Generate a complete pair object and validate the merged application configuration with the runtime `validateAppConfig` contract.
-- New pairs are disabled by default. Refuse an already configured symbol; never silently replace an existing pair.
-- Serialize writes under an exclusive lock and atomically replace `config.json`; preserve all existing pairs and unrelated application settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
+- New pairs are enabled by default. Refuse an already configured symbol; never silently replace an existing pair.
+- Serialize writes under an exclusive lock and atomically replace `config/index.js`; preserve all existing pairs and unrelated application settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
 - Show the generated pair and exchange constraints for operator review before writing. Declining confirmation changes nothing.
 
 **Implementation and verification checklist:**
@@ -121,20 +152,20 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 1. [x] Inspect/reuse the canonical config loader/schema and public decimal utilities; keep the CLI and Binance adapter at the application tooling boundary.
 2. [x] RED/GREEN — symbol/input validation, percentage boundaries, exact decimal sizing, exchange precision and min/max/notional boundaries.
 3. [x] RED/GREEN — mocked Binance exchange-info/ticker responses, unsupported symbols/status/order types, malformed/duplicate filters, HTTP/JSON/network failures.
-4. [x] RED/GREEN — complete config generation, runtime-schema validation, disabled-by-default behavior and existing-pair preservation.
+4. [x] RED/GREEN — complete config generation, runtime-schema validation, enabled-by-default behavior and existing-pair preservation.
 5. [x] RED/GREEN — interactive confirmation/cancellation, atomic persistence, lock contention, malformed existing config and cleanup on failure.
 6. [x] Register the package command; document prompts, defaults, generated fields, safety behavior and operator invocation.
 7. [x] Run Harvester tests/coverage and all required repository CI on the exact PR head. No TESTNET/LIVE order activity is needed or authorized for this feature.
 
 **Verification:** exact PR head `a680ad6e612d088c3565beae9b039618f1496a20` passed the full Harvester suite (1,025/1,025), workspace package tests, Harvester/workspace coverage, JavaScript syntax, actionlint, production dependency audit, Utils tests and external documentation links. The optional read-only Binance TESTNET integration workflow was skipped; no live/testnet trading or order placement was performed.
 
-**Acceptance:** the operator supplies strategy-owned inputs without guessing exchange filters; the generator obtains and validates Binance Spot metadata, creates a complete runtime-valid disabled pair in the canonical config, and cannot silently overwrite existing pair settings or leave a partial config after failure.
+**Acceptance:** the operator supplies strategy-owned inputs without guessing exchange filters; the generator obtains and validates Binance Spot metadata, creates a complete runtime-valid enabled pair in the canonical config, and cannot silently overwrite existing pair settings or leave a partial config after failure.
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–7 complete; Step 8 is in progress; runtime restart restoration remains disabled pending Steps 8–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
-**Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
+**Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, offline candidate projection/reconciliation, and a closed runtime startup gate. Runtime restoration is not enabled until Step 9 is accepted. Keep existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
 ### Delivery sequence
 
@@ -166,7 +197,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 5. **[x] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041; [PR #1024](https://github.com/45s/coinzilla/pull/1024)).**
    - [x] Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation; completed cycles reset basis while explicit residual sell-through preserves active inventory and cost basis.
-   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance remains a Step 7 gate.
+   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance is required evidence in the Step 7 operator audit; it remains fail-closed until supplied and verified for the target market.
    - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
    - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
@@ -177,7 +208,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
+7. **[x] Step 7 — Offline one-market reconciliation and guarded coverage confirmation implemented (audit primitives PRs #1034/#1036; orchestration/confirmation PR #1047; offline CLI/evidence matrix PR #1053).**
    - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
@@ -185,12 +216,22 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
    - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
    - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
-   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the draft PR remains unmerged and awaits review, so Step 7 remains in progress on `develop`.
+   - [x] The offline JSON context adapter and explicit audit-only/confirmation CLI merged in [PR #1053](https://github.com/45s/coinzilla/pull/1053) at `a6dd3412b21daa85b9767164e3619ad45a4de777`. The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on the merged PR head; Step 7 is complete on `develop`.
 
-8. **[ ] Step 8 — Restore behind a closed readiness gate.**
-   - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
-   - Compare candidate state with authoritative exchange state. Publish READY only after every required reconciliation and safety check succeeds.
-   - On any ambiguity, keep trading paused and provide actionable operator diagnostics. Never auto-adopt or auto-cancel external orders.
+8. **[~] Step 8 — Restore behind a closed readiness gate (in progress in [PR #1055](https://github.com/45s/coinzilla/pull/1055)).**
+   - [x] Define and enforce canonical `ORDER_SUBMISSION_INTENT` and `ORDER_SUBMISSION_OUTCOME` payloads and add application recorders; preserve exact canonical market/order identities and decimal strings. The executor supports paired durable callbacks, removes a locally registered PENDING order when the pre-broker intent barrier fails, and blocks local acknowledgement when outcome persistence fails. `startHarvester` verifies an injected ledger before broker connection and wires order/fill producers; it never initializes a missing ledger. Production `main()` now creates and verifies the store before Journal/runtime startup, injects it into `startHarvester`, and fails closed when the ledger is absent or corrupt. Genesis remains a separate explicit one-time command.
+   - [x] Persist canonical execution-fill facts, including every commission identity and historical quote valuation, before committing Portfolio/RecoveryLedger references; failed durability leaves both projections unchanged. `startHarvester` accepts the initialized store through dependency injection; `main()` verifies/injects the store; only the explicit genesis command may initialize an empty ledger.
+   - [x] Define strict canonical `ORDER_CANCELLATION_INTENT` and `ORDER_CANCELLATION_OUTCOME` payloads and application recorders that preserve the expected owned order state and distinguish NOT_SENT/unknown/confirmed results. All three engine-owned cancellation paths now commit intent before the broker RPC and classified outcome before registry mutation; failure remains fail-closed.
+   - [x] Persist eligible recovery-cycle completion facts with a deterministic cycle identity, exact fill/accounting boundary, and validated exchange-constrained dust evidence before resetting Portfolio or RecoveryLedger; failed durability leaves both projections unchanged.
+   - [x] Persist a secret-free configuration fingerprint and process-start boundary before broker connection; append a clean process-stop boundary only after runtime shutdown completes. Production `main()` verification/injection is implemented; the explicit one-time genesis command is never run automatically.
+   - [x] Define strict `ACCOUNT_SNAPSHOT_CAPTURED` and `ACCOUNT_OPEN_ORDERS_CAPTURED` schemas and deterministic negative tests for exact free/locked/total parity, asset completeness/counts, duplicate identities, open-order quantities/statuses, and readiness consistency. Add application recorders with immutable phase/source-time identities and exact-retry idempotency.
+   - [x] Wire account snapshot recorders into `createAccountSnapshotManager`: durable-fact append must succeed before the existing Journal publication/flush/readiness barrier; preserve the Journal contract and fail closed on an uncertain append.
+   - [x] Define strict operator/strategy pause-resume and sticky safety-blocker raise/resolution schemas; add application recorders with stable identities, explicit scope/reason, evidence digests, and a committed-raised-fact prerequisite for resolution.
+   - [x] Wire strategy pause persistence before the Journal pause event and persist sticky blockers from the serialized user-data failure boundary for terminal accounting failures and actual unowned executions. Passive external NEW/open-order observations do not create an account-wide sticky blocker.
+   - [~] Integrate explicit safety-blocker resolution with authoritative reconciliation/operator workflows. A READY one-market audit now resolves only matching MARKET-scoped blockers using a separate evidence digest; ACCOUNT blockers and blockers for other markets remain active. Operator pause/resume writes its own strict control facts and cannot clear a safety blocker.
+   - [~] Project durable facts deterministically into a candidate recovery state. Order intent/outcome and exact fill facts now rebuild canonical OrderRegistry/Portfolio/RecoveryLedger projections; active pauses/blockers and account snapshots are retained. Recovery-cycle and cross-session cancellation projection now have focused tests; replay keeps synthetic event order separate from durable global sequence, and a later-session fill cannot cross a completed-cycle reset. The full invariant matrix, crash/restart proof, and complete projection parity remain pending. Candidate restoration is offline-only and never marks READY.
+   - [~] Add an offline candidate reconciliation wrapper around the existing read-only `reconcileRecoveredMarketState` use case. It requires a committed per-market history-retention fact, reconciles owned orders, account snapshot, account-wide open orders, and target-market trade history, and may certify only that one market. It never publishes runtime READY; account-wide market-universe completeness and every-market reconciliation remain pending.
+   - [~] Missing/corrupt/unprojectable durable history and any prior process session now block startup before broker connection; no automatic restart is permitted, even after clean shutdown. Actionable operator resolution/diagnostics and the full ambiguity matrix remain pending. Never auto-adopt or auto-cancel external orders.
 
 9. **[ ] Step 9 — Prove crash/restart behavior, then consider controlled TESTNET validation.**
    - Run the full crash-point matrix, duplicate/reordered event tests, missing-record/session tests, legacy-session tests, and restart-twice idempotency tests.
@@ -483,7 +524,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
-- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed `config.json` enables only LINKFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed `config/index.js` enables LINKFDUSD and ZROFDUSD, while the controlled runbook still describes the earlier DOGEUSDT/ZROUSDT plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -511,7 +552,7 @@ This section is the current operational status and supersedes older statements b
 
 - [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected application events and owns Telegram message formatting; the notifier package provides generic bounded serialized delivery and Telegram transport.
 - Telegram transport is constructed only when `notifications.telegram.enabled` is not false and both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
-- [~] Add Harvester-owned `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filtering, and non-disableable safety alerts through the single `config.json`; depend on the Notifiers event-selection contract tracked by [#996](https://github.com/45s/coinzilla/issues/996).
+- [~] Add Harvester-owned `minimal`, `trader`, `verbose`, and `custom` profile identifiers in `config/notifications-tg-profiles.js`; select them from `config/index.js` and keep event overrides, market filtering, and non-disableable safety alerts in `appConfig.notifications.telegram`; depend on the Notifiers event-selection contract tracked by [#996](https://github.com/45s/coinzilla/issues/996).
 - Delivery is best-effort, in-memory, and not a durable outbox. No trading behavior, exchange integration, or financial accounting rules are changed.
 
 ### Other active and deferred work
@@ -571,7 +612,7 @@ These items are intentionally recorded for future work. They are not current tra
 - [x] Map low-volume Harvester lifecycle, broker, order, fill, recovery, and account-safety events to the shared notifier vocabulary; do not publish market ticks or routine strategy decisions. The expanded event contract is provided by Notifiers PR #997 and Harvester integration is tracked by [#998](https://github.com/45s/coinzilla/issues/998).
 - [x] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
 - [x] Reuse the Notifiers event-selection contract and event bus; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
-- [~] Configure `minimal`, `trader`, `verbose`, and `custom` profiles, event overrides, market filters, and non-disableable safety alerts in the single `config.json`; keep credentials environment-only. The default profile is `trader`, but Telegram transport is created only when both credentials are present and `notifications.telegram.enabled` is not false. Implementation and documentation are in [#998](https://github.com/45s/coinzilla/issues/998).
+- [~] Configure the named `minimal`, `trader`, `verbose`, and `custom` profile constants from `config/notifications-tg-profiles.js`, select the profile in `config/index.js`, and keep event overrides, market filters, and non-disableable safety alerts in `appConfig.notifications.telegram`; keep credentials environment-only. The default profile is `trader`, but Telegram transport is created only when both credentials are present and `notifications.telegram.enabled` is not false. Implementation and documentation are in [#998](https://github.com/45s/coinzilla/issues/998).
 
 ## Current work selection
 
@@ -587,7 +628,9 @@ Trading safety requirements remain in force: the operator selects TESTNET or LIV
 
 ## Strategy-scoped trading configuration
 
-- [x] Keep strategy-owned trading configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs, within the single application-wide `config.json`.
+- [~] Move the single application-wide configuration object from JSON into named native ESM modules; keep Telegram profile constants named, preserve runtime validation, and retain safe `config:symbol` pair updates ([PR #1064](https://github.com/45s/coinzilla/pull/1064)).
+
+- [x] Keep strategy-owned trading configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs, within the single application-wide `config/index.js`.
 - [~] Keep application-wide notification policy in the sibling `notifications.telegram` section; do not mix Telegram credentials or delivery logic into strategy configuration.
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
 - [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together — completed in [PR #839](https://github.com/45s/coinzilla/pull/839).
@@ -602,7 +645,7 @@ Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independentl
 
 **Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
 
-**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `config.json` under `strategies`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Application-wide notification policy is a sibling `notifications` section and does not change strategy or exchange selection. Architecture expansion, optional features, and optimization come after that.
+**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `config/index.js` under `strategies`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Application-wide notification policy is a sibling `notifications` section and does not change strategy or exchange selection. Architecture expansion, optional features, and optimization come after that.
 
 The paragraph below was an earlier audit snapshot and is superseded by the current implementation status and checklist in this roadmap. On `develop`, Harvester now composes the Conservative trading engine when TESTNET trading is explicitly enabled, submits strategy intents through the engine, tracks owned orders, processes canonical fills, updates Portfolio/RecoveryLedger, and has fake-broker coverage for a complete recovery cycle. A real Binance TESTNET cycle is still unverified; do not treat the offline simulation as exchange proof.
 
@@ -715,7 +758,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
 - [x] Implement minimum process readiness for the first TESTNET cycle. When `TRADING_MODE=testnet` is selected, startup requires at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite; genuine reconnect/reconciliation requirements still fail closed.
 - [x] Enable order execution after the selected `TRADING_MODE` is validated and strategy configuration, enabled-pair exchange filters, a fresh account snapshot, and an active user-data stream are ready. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
-- [x] Replace legacy runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Completed on [PR #841](https://github.com/45s/coinzilla/pull/841), merged 2026-11-09: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings were stored in the previous configuration file at the time; the current single application-wide filename is `config.json`. All six required exact-head CI contexts passed; the optional read-only Binance TESTNET integration check was skipped. This completes explicit mode/endpoint selection, not live-trading or TESTNET acceptance.
+- [x] Replace legacy runtime profiles and `NODE_ENV`-based exchange selection with the single `TRADING_MODE=testnet|live` environment variable. Completed on [PR #841](https://github.com/45s/coinzilla/pull/841), merged 2026-11-09: Binance is the fixed broker; trading is enabled in either mode; missing or invalid mode fails startup; strategy and pair settings were stored in the previous configuration file at the time; the current single application-wide filename is `config/index.js`. All six required exact-head CI contexts passed; the optional read-only Binance TESTNET integration check was skipped. This completes explicit mode/endpoint selection, not live-trading or TESTNET acceptance.
 - [x] Validate enabled pair configuration against exchange assets/filters at startup: `orderQuantity` is rounded down by the actual base-asset step and checked against supported min/max quantity; quote-asset `investment` is checked against minimum notional. The symbol must match the exchange market metadata. Actual price/quantity/notional validation remains at order submission.
 
 ### P0.3 — Order intent, safety checks, and reservations
@@ -790,7 +833,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ## P1 — Implement Aggressive after Conservative is proven
 
-- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `config.json`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
+- [x] Keep Aggressive disabled through `strategies.CG_coinGrabber.settings.aggressive.enabled=false` in `config/index.js`; configuration validation rejects attempts to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
 
 Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
 
@@ -1542,6 +1585,18 @@ The detailed historical audit snapshots, implementation progress reports, incide
 - [x] Refresh or clear the symbol guard only from authoritative startup/reconnect snapshots after their durable Journal barrier.
 - [x] Remove the unused `blockOnExistingOrders` recovery argument and cover snapshot lifecycle, symbol isolation, and the final submission race with offline regressions.
 - [ ] Merge after final-head CI passes.
+
+### Per-pair external-order policy — PR #1062
+
+**Configuration cleanup — PR #1069:** named `EXTERNAL_ORDERS_POLICIES` constants now define the supported values, operator-control defaults are isolated in named `OPERATOR_CONTROL_CONFIG` and composed into the single `appConfig`, and config tests validate schema invariants without freezing deployment-specific enabled symbols.
+
+The owner-approved follow-up separates manual/external orders from orders previously generated by Harvester. The default is to ignore manual Binance Web/CScalp orders without adopting them or changing Harvester Portfolio/RecoveryLedger. A pair may opt back into same-symbol blocking with `externalOrdersPolicy: "block"`. The reserved Harvester `h-` client-ID namespace remains fail-closed across process boundaries until #654 restart restoration can reconcile those orders and fills.
+
+- [x] Add RED regressions for config validation, default-ignore behavior, explicit block behavior, and unresolved Harvester identities.
+- [x] Implement per-pair policy in evaluation, final submission, user-data processing and durable startup/reconnect open-order classification.
+- [x] Update pair generator, checked-in config and living documentation.
+- [x] Pass focused tests, full Harvester tests/coverage, workspace CI and documentation/agent policy on the implementation head (all checks passed; no TESTNET/LIVE actions).
+- [x] No TESTNET/LIVE operations; no automatic restart recovery is enabled.
 
 ## 2026-11-11 — Exchange constraint safety / issue #957 (historical decision)
 

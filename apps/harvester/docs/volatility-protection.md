@@ -1,6 +1,6 @@
 # Harvester Volatility Protection
 
-- Status: **Protection implementation merged in PR #1041; regression matrix and exact-head CI complete; historical threshold calibration outstanding**
+- Status: **Protection implementation, regression matrix, freshness correction (PR #1049), and local offline calibration CLI (PR #1046) merged; representative historical threshold calibration outstanding**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
 - Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
@@ -9,26 +9,26 @@
 This document is the behavior and safety contract for Harvester's volatility protection. It does not change the authoritative [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md), recovery accounting, or existing order lifecycle rules.
 ## Per-pair configuration
 
-Every configured pair must explicitly declare its volatility-protection policy. Set the required boolean to `true` to retain protection or `false` to opt that pair out in `config.json`:
+Every configured pair must explicitly declare its volatility-protection policy. Set the required boolean to `true` to retain protection or `false` to opt that pair out in `config/index.js`:
 
-```json
-{
-  "strategies": {
-    "CG_coinGrabber": {
-      "pairs": {
-        "LINKFDUSD": {
-          "enabled": true,
-          "enableVolatilityProtection": false
-        }
-      }
-    }
-  }
-}
+```js
+export const appConfig = {
+  strategies: {
+    CG_coinGrabber: {
+      pairs: {
+        LINKFDUSD: {
+          enabled: true,
+          enableVolatilityProtection: false,
+        },
+      },
+    },
+  },
+};
 ```
 
 - `true`: retain the existing protection behavior, including startup warm-up, freshness checks, submission gating and owned-BUY cancellation. The key is mandatory; omission is a configuration error.
 - `false`: skip this pair's volatility state machine, Kline subscription/history warm-up, periodic refresh, volatility submission gate and volatility-triggered BUY cancellation.
-- The setting must be present and must be a JSON boolean. Missing keys, `null`, strings and numbers are rejected during config validation with a `ConfigValidationError` containing the offending pair path.
+- The setting must be present and must be a JavaScript boolean. Missing keys, `null`, strings and numbers are rejected during config validation with a `ConfigValidationError` containing the offending pair path.
 - The opt-out is strictly scoped to volatility protection. It does not disable market-price/order-book freshness, account-integrity checks, unowned-order blocking, durable intent requirements, exchange filters, shutdown BUY cancellation, or other safety controls.
 - Recovery/accounting behavior is unchanged. No recovery SELL exception is broadened; the normal Conservative recovery-purpose and accounting rules continue to apply.
 
@@ -81,6 +81,42 @@ Illustrative initial thresholds, subject to offline historical validation before
 | Protection | >= 2.0 | Enter PROTECTED; block new non-recovery actions and cancel owned active BUYs. |
 | Recovery | <= 1.3 | Count one stable completed candle while all data remains valid. |
 | Resume | <= 1.3 for 3 consecutive completed candles | Transition to NORMAL after cancellation/reconciliation is resolved. |
+
+### Worked example: reference NATR is 0.30%
+
+The ratio is a **multiplier**, not a percentage by itself:
+
+`volatility ratio = current candle NATR / average NATR of the previous 60 completed candles`
+
+Assume the average of the previous 60 NATR observations is **0.30%**. The current candle's NATR is compared with that reference:
+
+| Current NATR | Calculation | Ratio | Meaning |
+| ---: | ---: | ---: | --- |
+| 0.30% | 0.30% / 0.30% | 1.0 | Same volatility as the reference. |
+| 0.39% | 0.39% / 0.30% | 1.3 | Recovery boundary: this candle may count toward recovery if protection is already active. |
+| 0.45% | 0.45% / 0.30% | 1.5 | Warning threshold; this alone does not activate protection. |
+| 0.60% | 0.60% / 0.30% | 2.0 | Protection threshold: enter PROTECTED and block new non-recovery actions. |
+| 0.75% | 0.75% / 0.30% | 2.5 | 2.5 times the reference; protection is active. |
+
+In this example, **0.60% or higher** activates protection. It is not 0.39%: `0.30% × 1.3 = 0.39%` is the recovery boundary, not the activation boundary. Likewise, a ratio of `2.0` means “twice the reference volatility”; it does not mean “2% NATR”.
+
+The absolute NATR values move with the reference. If the previous-60 average later becomes 0.20%, the protection boundary becomes 0.40% (`0.20% × 2.0`) and the recovery boundary becomes 0.26% (`0.20% × 1.3`). The runtime recalculates the reference from each market's own candle history; 0.30% is only the example baseline here.
+
+### What happens after protection activates?
+
+Suppose the reference is still 0.30% and a candle reaches 0.60% NATR (ratio 2.0). The market enters PROTECTED. A later candle at 0.50% NATR has ratio 1.67: it is below the activation threshold, but it is **not** low enough to recover. The market remains PROTECTED and the stable-candle count resets to zero.
+
+Recovery requires three **different, consecutive completed** 1-minute candles, each with ratio at or below 1.3 (at or below 0.39% NATR in this example):
+
+| Completed candle | NATR | Ratio | Recovery count |
+| --- | ---: | ---: | ---: |
+| First | 0.38% | 1.27 | 1 of 3 |
+| Second | 0.36% | 1.20 | 2 of 3 |
+| Third | 0.39% | 1.30 | 3 of 3 — volatility condition satisfied |
+
+The market can return to NORMAL after the third candle only if the candle feed is still ready/current and all Harvester-owned BUY cancellation and fill reconciliation is resolved. If an owned BUY remains active or unresolved, the state stays RECOVERING with reason `OWNED_BUY_ORDERS_UNRESOLVED` until that order is resolved. Repeated updates for the same candle do not count as additional stable candles.
+
+**The important distinction:** a ratio from above 1.3 but below 2.0 does not newly trigger protection in a NORMAL market, but it cannot recover a market that is already protected. A ratio at or below 1.3 is required to build the three-candle recovery sequence.
 
 The thresholds are initial policy candidates, not calibrated production guarantees. They must be tested against representative historical data before the feature is enabled for unattended trading. A ratio between the recovery and protection thresholds does not resume a protected market; it resets the stable-candle count.
 
@@ -227,8 +263,8 @@ Volatility state is process-local in the first implementation. It is not a subst
 5. [x] **Harvester protection:** per-market states, thresholds/hysteresis, freshness monitor, central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041).
 6. [x] **Regression matrix and exact-head CI:** offline coverage is in the domain state, candle-history, order-gate, engine and startup tests; all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 7. [x] **Candle-stream freshness correction:** one 1-minute interval plus a 5-second grace, with quiet-stream regressions — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049).
-8. [~] **Documentation and offline calibration CLI:** synchronize the runtime contract and add the local-only analyzer, CSV validation and candidate-threshold options — PR #1046.
-9. [ ] **Historical calibration:** validate the provisional warning/protection/recovery thresholds against representative offline Spot market history before treating them as production-calibrated.
+8. [x] **Documentation and offline calibration CLI:** runtime contract synchronized; local-only analyzer, CSV validation and candidate-threshold options merged in [PR #1046](https://github.com/45s/coinzilla/pull/1046). Exact-head CI passed; no exchange operations were performed.
+9. [ ] **Historical calibration:** run the analyzer against representative multi-symbol offline Spot market history, review threshold trade-offs, and accept or revise the provisional warning/protection/recovery thresholds before treating them as production-calibrated.
 
 ## 10. Offline historical threshold calibration
 

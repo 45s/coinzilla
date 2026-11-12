@@ -1,10 +1,11 @@
 const MAX_FIELD_LENGTH = 320
 
 function text(value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH) {
-  if (typeof value !== "string" && typeof value !== "number") return fallback
-  if (typeof value === "number" && !Number.isFinite(value)) return fallback
+  if (typeof value !== "string" && typeof value !== "number") {return fallback}
+  if (typeof value === "number" && !Number.isFinite(value)) {return fallback}
 
   const normalized = String(value)
+    // eslint-disable-next-line no-control-regex -- remove untrusted control characters before Telegram formatting.
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -17,7 +18,7 @@ const QUOTE_ASSETS = ["FDUSD", "USDT", "USDC", "BUSD", "TUSD", "BTC", "ETH", "BN
 
 function symbol(value) {
   const normalized = text(value, "n/a", 64).toUpperCase()
-  if (normalized.includes("/")) return normalized
+  if (normalized.includes("/")) {return normalized}
 
   const quote = QUOTE_ASSETS.find((asset) => normalized.length > asset.length && normalized.endsWith(asset))
   const base = quote ? normalized.slice(0, -quote.length) : ""
@@ -27,6 +28,11 @@ function symbol(value) {
 function side(value) {
   const normalized = text(value, "UNKNOWN", 24).toUpperCase()
   return { label: normalized, icon: normalized === "BUY" ? "🟢" : normalized === "SELL" ? "🔴" : "⚪" }
+}
+
+function fillIcon(value) {
+  const normalized = text(value, "", 24).toUpperCase()
+  return normalized === "BUY" ? "✅" : normalized === "SELL" ? "💰" : "💰"
 }
 
 function orderId(data) {
@@ -44,14 +50,14 @@ function compactOrder(data, icon, status = "") {
 }
 
 const formatters = Object.freeze({
-  "order.filled": ({ data }) => compactOrder(data, "💰", "ORDER FILLED"),
+  "order.filled": ({ data }) => compactOrder(data, fillIcon(data.side), "ORDER FILLED"),
   "fill.received": ({ data }) => {
     const fill = data.fill && typeof data.fill === "object" && !Array.isArray(data.fill) ? data.fill : {}
     const price = text(fill.price, "n/a", 96)
     const quantity = text(fill.quantity, "n/a", 96)
     const trade = fill.tradeId ?? fill.id
     return [
-      `💰 FILL RECEIVED · ${symbol(data.symbol)} @ ${price} × ${quantity}`,
+      `${fillIcon(data.side)} FILL RECEIVED · ${symbol(data.symbol)} @ ${price} × ${quantity}`,
       trade === undefined || trade === null ? null : `#${text(trade, "n/a", 96)}`,
     ].filter(Boolean).join("\n")
   },
@@ -70,13 +76,13 @@ const formatters = Object.freeze({
     orderId(data),
   ].filter(Boolean).join("\n"),
   "order.failed": ({ data }) => `❌ ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
-  "account.safety_alert": ({ data }) => `⚠️ ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
-  "bot.started": () => "🚀 BOT STARTED",
+  "account.safety_alert": ({ data }) => `${data.category === "account-open-orders-blocked" ? "🚨" : "⚠️"} ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
+  "bot.started": () => "▶️ BOT STARTED",
   "bot.stopped": ({ data }) => {
     const reason = data.reason ?? data.message
     const outcome = data.outcome && data.outcome !== "completed" ? data.outcome : null
     const detail = reason ?? outcome
-    return detail ? `🔚 BOT STOPPED · ${text(detail, "completed", 96)}` : "🔚 BOT STOPPED"
+    return detail ? `⏹️ BOT STOPPED · ${text(detail, "completed", 96)}` : "⏹️ BOT STOPPED"
   },
 })
 
@@ -93,7 +99,7 @@ export function formatHarvesterTelegramNotification(event) {
   if (typeof event.name !== "string") {
     throw new TypeError("event.name must be a string")
   }
-  if (!Object.hasOwn(formatters, event.name)) return null
+  if (!Object.hasOwn(formatters, event.name)) {return null}
 
   const data = event.data && typeof event.data === "object" && !Array.isArray(event.data)
     ? event.data

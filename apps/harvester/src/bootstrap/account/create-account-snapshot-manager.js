@@ -4,10 +4,12 @@ import { assertAccountSnapshotCoversMarkets } from "../../domain/account/assert-
 import { calculateAccountSnapshotBaselines } from "../../domain/account/calculate-account-snapshot-baselines.js"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
+import { isHarvesterClientOrderId } from "../../application/orders/is-harvester-client-order-id.js"
 import {
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
 } from "../../application/events/lifecycle-event-dtos.js"
+import { recordAccountSnapshotCaptured, recordAccountOpenOrdersCaptured } from "../../use-cases/record-account-reconciliation-facts.js"
 
 function withRecoveryFailure(error, category, stage, retryable) {
   const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
@@ -17,8 +19,8 @@ function withRecoveryFailure(error, category, stage, retryable) {
 
 function resolveAuditFlushFailure(flushed, stage) {
   const failure = flushed?.recoveryFailure
-  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) return failure
-  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) return failure
+  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) { return failure }
+  if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) { return failure }
   return { category: "DURABILITY", stage: stage + "_UNCLASSIFIED", retryable: false }
 }
 
@@ -52,12 +54,13 @@ function logSystem(logger, data) {
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
  * @param {object} options.logger Structured logger.
+ * @param {object} [options.durableFactsStore] Optional initialized ADR-0001 durable-fact store.
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
+  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, durableFactsStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
@@ -65,6 +68,7 @@ export function createAccountSnapshotManager({
   const commissionBaselineAssetIds = new Map()
   // Updated only after the corresponding account-wide open-orders audit is durable.
   let unownedOpenOrderSymbols = new Set()
+  let unresolvedHarvesterOpenOrderSymbols = new Set()
   const commissionBaselineAssetCodesById = new Map()
 
   const refreshAccountSnapshot = async ({ capturePreflightBaseline = false } = {}) => {
@@ -201,14 +205,14 @@ export function createAccountSnapshotManager({
       const symbol = order?.market?.symbol ?? order?.symbol
       if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
           typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-          typeof symbol !== "string" || !symbol.trim()) return true
+          typeof symbol !== "string" || !symbol.trim()) { return true }
       const owned = restoredOrders.find((candidate) =>
         candidate.clientOrderId === clientOrderId ||
         (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId)
       )
-      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) return true
-      if (owned.status === "CANCELED" || owned.status === "REJECTED") return true
-      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) return true
+      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) { return true }
+      if (owned.status === "CANCELED" || owned.status === "REJECTED") { return true }
+      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) { return true }
       const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
       const expectedPrice = owned.limitPrice?.amount
       const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
@@ -221,7 +225,7 @@ export function createAccountSnapshotManager({
         (expectedPrice === undefined
           ? actualPrice !== undefined
           : actualPrice === undefined || compareDecimal({ left: expectedPrice, right: String(actualPrice) }) !== 0)
-      ) return true
+      ) { return true }
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
     })
@@ -248,6 +252,13 @@ export function createAccountSnapshotManager({
         "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
         false,
       )
+    }
+    if (durableFactsStore) {
+      const durable = await recordAccountOpenOrdersCaptured({ durableFactsStore, data: dataResult.data })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
+        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
+      }
     }
     const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED, dataResult })
     if (!published?.ok) {
@@ -276,8 +287,20 @@ export function createAccountSnapshotManager({
         "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY", false,
       )
     }
-    // The strategy guard changes only after the audit has passed its durable Journal barrier.
-    unownedOpenOrderSymbols = new Set(unownedOrders
+    // Strategy guards change only after the audit has passed its durable Journal barrier.
+    // Manual/external IDs obey the per-pair policy; prior-process Harvester orders remain blocked.
+    const externalOrders = unownedOrders.filter((order) =>
+      typeof order?.clientOrderId === "string" &&
+      order.clientOrderId.trim().length > 0 &&
+      !isHarvesterClientOrderId(order.clientOrderId))
+    const unresolvedHarvesterOrders = unownedOrders.filter((order) =>
+      typeof order?.clientOrderId !== "string" ||
+      !order.clientOrderId.trim() ||
+      isHarvesterClientOrderId(order.clientOrderId))
+    unownedOpenOrderSymbols = new Set(externalOrders
+      .map((order) => order?.market?.symbol ?? order?.symbol)
+      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
+    unresolvedHarvesterOpenOrderSymbols = new Set(unresolvedHarvesterOrders
       .map((order) => order?.market?.symbol ?? order?.symbol)
       .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
     logger.info?.({
@@ -324,6 +347,13 @@ export function createAccountSnapshotManager({
         "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
         false,
       )
+    }
+    if (durableFactsStore) {
+      const durable = await recordAccountSnapshotCaptured({ durableFactsStore, data: dataResult.data })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
+        throw withRecoveryFailure(new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_SNAPSHOT_DURABLE_FACT", false)
+      }
     }
     const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED, dataResult })
     if (!published?.ok) {
@@ -448,6 +478,8 @@ export function createAccountSnapshotManager({
     getAccountSnapshot: () => accountSnapshot,
     hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
       typeof symbol === "string" && unownedOpenOrderSymbols.has(symbol),
+    hasUnresolvedHarvesterOpenOrdersForSymbol: ({ symbol } = {}) =>
+      typeof symbol === "string" && unresolvedHarvesterOpenOrderSymbols.has(symbol),
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
     publishAccountSnapshot,

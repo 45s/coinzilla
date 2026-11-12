@@ -6,7 +6,7 @@ import { createAccountSnapshotManager } from "./create-account-snapshot-manager.
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [] } = {}) => {
+const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [], durableFactsStore } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -16,11 +16,11 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
   const manager = createAccountSnapshotManager({
     broker: {
       getAccountSnapshot: async () => {
-        if (accountSnapshotError) throw accountSnapshotError
+        if (accountSnapshotError) { throw accountSnapshotError }
         return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
       },
       getOpenOrders: async () => {
-        if (openOrdersError) throw openOrdersError
+        if (openOrdersError) { throw openOrdersError }
         return openOrdersResult ?? ({ ok: true, data: openOrders })
       },
     },
@@ -41,6 +41,7 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
     getHasCanonicalOwnershipReconciliation: () => false,
     logger: {},
     now: () => 123,
+    durableFactsStore,
   })
   return {
     manager,
@@ -643,4 +644,166 @@ test("retains the first recovery account audit publication after a transient flu
     2,
     "The successful retry must perform a second flush that confirms durability for the retry sequence.",
   )
+})
+
+
+test("commits account balance and open-order facts before publishing their Journal audit events", async () => {
+  const durableFacts = []
+  const durableFactsStore = {
+    append: async (fact) => {
+      durableFacts.push(fact)
+      return { ok: true, data: { durable: true, record: fact } }
+    },
+  }
+  const market = createFixture().market
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    durableFactsStore,
+  })
+
+  await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+  await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT", orders: [] })
+
+  assert.deepEqual(
+    durableFacts.map(({ factType }) => factType),
+    ["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED"],
+    "Both recovery-critical account snapshots must be committed to the durable-fact stream.",
+  )
+  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after durable-fact acknowledgement.")
+  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after durable-fact commits.")
+})
+
+test("fails closed before Journal publication when the durable balance snapshot append is not acknowledged", async () => {
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market: createFixture().market, sourceTime: 100 })],
+    durableFactsStore: {
+      append: async () => ({ ok: false, errors: [new Error("simulated durable balance snapshot failure")] }),
+    },
+  })
+
+  await assert.rejects(
+    fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" }),
+    /Unable to durably persist account snapshot: simulated durable balance snapshot failure/,
+    "A failed durable account fact must prevent the Journal publication and readiness barrier.",
+  )
+  assert.equal(fixture.publishedEvents.length, 0, "No Journal audit may imply durable recovery evidence when the fact append failed.")
+  assert.equal(fixture.getFlushCount(), 0, "A failed durable fact must not advance to the Journal flush.")
+})
+
+test("fails closed before Journal publication when the durable open-order snapshot append is not acknowledged", async () => {
+  const fixture = createFixture({
+    durableFactsStore: {
+      append: async () => ({ ok: false, errors: [new Error("simulated durable open-order snapshot failure")] }),
+    },
+  })
+
+  await assert.rejects(
+    fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT", orders: [] }),
+    /Unable to durably persist account open-orders snapshot: simulated durable open-order snapshot failure/,
+    "A failed durable open-order fact must prevent the Journal publication and readiness barrier.",
+  )
+  assert.equal(fixture.publishedEvents.length, 0, "No Journal audit may imply durable open-order evidence when the fact append failed.")
+  assert.equal(fixture.getFlushCount(), 0, "A failed durable open-order fact must not advance to the Journal flush.")
+})
+
+
+test("durably records a Binance NEW external order without inventing its Harvester identity", async () => {
+  const durableFacts = []
+  const externalOrder = {
+    id: "external-new-order-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    originalPrice: "65000",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
+    clientOrderId: "manual-client-order-1",
+  }
+  const fixture = createFixture({
+    openOrders: [externalOrder],
+    durableFactsStore: {
+      append: async (fact) => {
+        durableFacts.push(fact)
+        return { ok: true, data: { durable: true, record: fact } }
+      },
+    },
+  })
+
+  await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "The observed external client ID is evidence only and does not confer ownership.")
+})
+
+
+test("durably records a Binance NEW external order without treating its client ID as ownership", async () => {
+  const durableFacts = []
+  const fixture = createFixture({
+    openOrders: [{
+      id: "external-new-order-1",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      originalPrice: "65000",
+      originalQuantity: "0.01",
+      executedQuantity: "0",
+      status: "NEW",
+      clientOrderId: "manual-client-order-1",
+    }],
+    durableFactsStore: {
+      append: async (fact) => {
+        durableFacts.push(fact)
+        return { ok: true, data: { durable: true, record: fact } }
+      },
+    },
+  })
+
+  await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "An observed external client ID is evidence only and does not confer ownership.")
+})
+
+
+test("separates manual external orders from unresolved prior-process Harvester orders", async () => {
+  const fixture = createFixture({
+    openOrders: [
+      {
+        id: "manual-broker-order",
+        symbol: "DOGEUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        originalPrice: "100",
+        originalQuantity: "1",
+        executedQuantity: "0",
+        status: "NEW",
+        clientOrderId: "manual-order-1",
+      },
+      {
+        id: "prior-harvester-broker-order",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        originalPrice: "100",
+        originalQuantity: "1",
+        executedQuantity: "0",
+        status: "NEW",
+        clientOrderId: "h-0123456789abcdef012345-7",
+      },
+    ],
+  })
+
+  await fixture.manager.publishOpenOrdersSnapshot()
+
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true, "Manual orders must be exposed to the configured per-pair policy.")
+  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false, "Manual orders must not be mistaken for unresolved Harvester orders.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false, "A prior-process Harvester order must not be classified as manual.")
+  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true, "A prior-process Harvester order must remain a symbol-scoped blocker.")
 })

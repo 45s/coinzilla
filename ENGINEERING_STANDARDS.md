@@ -131,6 +131,23 @@ A materially edited test case must comply with these practices throughout that c
 - Do not use nested ternary operators. Use `if`/`else` statements or extract a clearly named helper when conditional logic needs multiple branches.
 - Always use braces for control statements, including single-line bodies: `if`, `else`, `for`, `while`, `do`, and other block-controlled statements. Do not write unbraced one-line control flow.
 
+### JavaScript linting
+
+The workspace uses the root ESLint flat configuration in `eslint.config.js`. It applies to JavaScript in `apps/`, `packages/`, and repository tooling, including tests. The configuration uses the `@eslint/js` recommended rules and Node built-in globals; browser globals and implicit test-runner globals are not enabled.
+
+The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting and stylistic rules are intentionally out of scope.
+
+Gradual adoption is enforced by the changed-file gate rather than a permanent suppression file:
+
+- `pnpm lint` runs ESLint across the complete JavaScript workspace and exits non-zero for findings.
+- `pnpm lint:report` reports the complete-workspace finding count and most frequent rules without blocking on legacy findings.
+- Pull requests lint every changed JavaScript file without suppressions. A changed legacy file must therefore be clean.
+- New JavaScript files must pass from the start.
+- `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing.
+- Do not disable rules globally or add inline suppressions merely to silence existing findings. Fix the touched file or document a narrowly justified exception.
+
+The full-workspace report makes remaining debt visible; the changed-file CI gate prevents that debt from growing.
+
 ### 5. Functions and side effects
 
 - Prefer small, cohesive functions with one clear responsibility.
@@ -255,6 +272,12 @@ The repository's GitHub Actions workflows currently run package tests and test c
 ## AI-agent workflow authority
 
 The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
+
+### ECMAScript module exports
+
+- Use named exports for application, package, script, and test modules. Do not add ESM default exports.
+- ESLint enforces this rule with an AST-level restriction on `ExportDefaultDeclaration`.
+- The root `eslint.config.js` is the sole loader-contract exception: ESLint's flat-config loader requires that file to provide its configuration as a default export. Do not extend this exception to application or package modules.
 
 ## JavaScript and JSDoc
 

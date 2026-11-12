@@ -173,6 +173,7 @@ test("creates a runtime-valid enabled pair using exchange-derived precision and 
   assert.deepEqual(pair, {
     enabled: true,
     enableVolatilityProtection: true,
+    externalOrdersPolicy: "ignore",
     investment: 100,
     orderQuantity: 20,
     keepQuantity: 0.1,

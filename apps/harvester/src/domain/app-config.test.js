@@ -5,6 +5,9 @@ import {
   resolveRuntimeConfig,
   validateAppConfig,
 } from "./app-config.js"
+import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
+import { OPERATOR_CONTROL_CONFIG } from "../../config/operator-control.js"
+import { appConfig } from "../../config/index.js"
 
 const createAppConfig = () => ({
   strategies: {
@@ -36,8 +39,26 @@ const createAppConfig = () => ({
 test("validates strategy-owned pairs without requiring exchange-mode configuration in JSON", () => {
   const config = createAppConfig()
   assert.equal(validateAppConfig(config), config, "Strategy and pair settings must remain valid without a runtime profile block.")
-  assert.equal(Object.hasOwn(config, "runtime"), false, "Exchange selection must not be stored in config.json.")
+  assert.equal(Object.hasOwn(config, "runtime"), false, "Exchange selection must not be stored in config/index.js.")
   assert.equal(config.strategies.CG_coinGrabber.pairs.ZROFDUSD.investment, 100, "The pair investment setting must remain part of strategy configuration.")
+})
+
+test("accepts only ignore or block for each pair's external-order policy", () => {
+  const config = createAppConfig()
+  const pair = config.strategies.CG_coinGrabber.pairs.ZROFDUSD
+
+  assert.equal(validateAppConfig(config), config, "Omitted policy must retain the default ignore behavior.")
+  pair.externalOrdersPolicy = "ignore"
+  assert.equal(validateAppConfig(config), config)
+  pair.externalOrdersPolicy = "block"
+  assert.equal(validateAppConfig(config), config)
+  pair.externalOrdersPolicy = "adopt"
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "strategies.CG_coinGrabber.pairs.ZROFDUSD.externalOrdersPolicy" &&
+      error.expected === "ignore or block",
+  )
 })
 
 
@@ -204,5 +225,100 @@ test("uses generic app config wording for validation errors", () => {
     () => validateAppConfig(null),
     (error) => error instanceof ConfigValidationError && error instanceof TypeError && error.message.startsWith("Invalid app config"),
     "Configuration validation errors must identify the generic app config, not the application name or trading domain.",
+  )
+})
+
+test("accepts omitted operator-control configuration as disabled", () => {
+  const config = createAppConfig()
+  assert.equal(validateAppConfig(config), config, "Existing configurations without inbound operator control must remain valid and disabled.")
+})
+
+test("accepts explicitly disabled Telegram operator control without an allowlist", () => {
+  const config = createAppConfig()
+  config.operatorControl = { telegram: { enabled: false, allowedUserIds: [] } }
+  assert.equal(validateAppConfig(config), config, "Disabled inbound control must not require credentials or trusted users.")
+})
+
+test("requires trusted Telegram user IDs before enabling operator control", () => {
+  const config = createAppConfig()
+  config.operatorControl = { telegram: { enabled: true, allowedUserIds: [] } }
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "operatorControl.telegram.allowedUserIds" &&
+      error.expected === "a non-empty array of unique positive decimal Telegram user IDs",
+    "Enabled inbound control must fail configuration validation when no trusted Telegram users are configured.",
+  )
+})
+
+test("rejects malformed or duplicate Telegram operator user IDs", () => {
+  for (const allowedUserIds of [["0"], ["01"], ["-1"], ["not-a-user"], [12345], ["12345", "12345"]]) {
+    const config = createAppConfig()
+    config.operatorControl = { telegram: { enabled: false, allowedUserIds } }
+    assert.throws(
+      () => validateAppConfig(config),
+      (error) => error instanceof ConfigValidationError &&
+        error.path === "operatorControl.telegram.allowedUserIds",
+      "Operator allowlists must contain unique canonical positive decimal string IDs: " + JSON.stringify(allowedUserIds),
+    )
+  }
+})
+
+test("accepts an enabled Telegram operator allowlist with canonical user IDs", () => {
+  const config = createAppConfig()
+  config.operatorControl = { telegram: { enabled: true, allowedUserIds: ["12345", "67890"] } }
+  assert.equal(validateAppConfig(config), config, "A valid explicit private-user allowlist must enable the inbound adapter.")
+})
+
+test("rejects malformed operator-control configuration and unknown Telegram fields", () => {
+  const invalidEnabled = createAppConfig()
+  invalidEnabled.operatorControl = { telegram: { enabled: "true", allowedUserIds: ["12345"] } }
+  assert.throws(
+    () => validateAppConfig(invalidEnabled),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "operatorControl.telegram.enabled",
+    "The inbound-control switch must be a boolean, never a truthy string.",
+  )
+
+  const unknownField = createAppConfig()
+  unknownField.operatorControl = { telegram: { enabled: false, allowedUserIds: [], chatId: "12345" } }
+  assert.throws(
+    () => validateAppConfig(unknownField),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "operatorControl.telegram.chatId",
+    "The inbound-control configuration must reject unsupported fields and keep Telegram identity policy explicit.",
+  )
+})
+
+
+
+test("uses one named immutable source for supported external-order policy values", () => {
+  assert.deepEqual(
+    EXTERNAL_ORDERS_POLICIES,
+    { IGNORE: "ignore", BLOCK: "block" },
+    "The supported manual/external order policies must have stable serialized values.",
+  )
+  assert.equal(
+    Object.isFrozen(EXTERNAL_ORDERS_POLICIES),
+    true,
+    "Consumers must not be able to mutate the shared external-order policy identifiers.",
+  )
+})
+
+test("composes the named operator-control defaults into the single application config", () => {
+  assert.equal(
+    appConfig.operatorControl,
+    OPERATOR_CONTROL_CONFIG,
+    "The application config must import the focused operator-control module rather than duplicate its settings.",
+  )
+  assert.equal(
+    OPERATOR_CONTROL_CONFIG.telegram.enabled,
+    false,
+    "Inbound Telegram operator control must remain disabled by default.",
+  )
+  assert.deepEqual(
+    OPERATOR_CONTROL_CONFIG.telegram.allowedUserIds,
+    [],
+    "The operator allowlist must remain empty until explicitly configured.",
   )
 })

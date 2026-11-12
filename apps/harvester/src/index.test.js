@@ -26,13 +26,22 @@ const main = (options = {}) => {
   const { createJournalService = disabledJournalService, env = {}, ...rest } = options
   return startMain({
     acquireProcessLock,
+    createDurableFactsStore: () => ({
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+    }),
     ...rest,
     env: { TRADING_MODE: "testnet", ...env },
     createJournalService: (...args) => {
       const service = createJournalService(...args) ?? {}
-      if (!Object.hasOwn(service, "ready")) service.ready = Promise.resolve({ ok: true })
-      if (!Object.hasOwn(service, "flush")) service.flush = async () => ({ ok: true, durable: true })
-      if (!Object.hasOwn(service, "close")) service.close = async () => ({ ok: true, closed: true })
+      if (!Object.hasOwn(service, "ready")) {
+        service.ready = Promise.resolve({ ok: true })
+      }
+      if (!Object.hasOwn(service, "flush")) {
+        service.flush = async () => ({ ok: true, durable: true })
+      }
+      if (!Object.hasOwn(service, "close")) {
+        service.close = async () => ({ ok: true, closed: true })
+      }
       return service
     },
   })
@@ -83,16 +92,21 @@ test("passes the immutable process identity into Journal composition", async () 
     },
   }
   let observedIdentity
+  let observedRuntimeSessionId
   await runMain({
     processIdentity,
     createJournalService: (input) => {
       observedIdentity = input.processIdentity
       return disabledJournalService()
     },
-    start: async () => ({ connected: false }),
+    start: async ({ runtimeSessionId }) => {
+      observedRuntimeSessionId = runtimeSessionId
+      return { connected: false }
+    },
     logger: { info() {}, system() {}, error() {} },
   })
   assert.equal(observedIdentity, processIdentity)
+  assert.equal(observedRuntimeSessionId, processIdentity.runtimeSessionId, "The exact process session ID must reach bootstrap for durable operator-fact attribution.")
 })
 
 test("logs startup failures as one structured logger argument", async () => {
@@ -839,7 +853,9 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -891,7 +907,9 @@ test("acquires the process lock before starting Journal and releases it after cl
         }
       },
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -930,7 +948,9 @@ test("retains the process lock when runtime shutdown throws", async () => {
         stop: async () => { throw new Error("broker intake did not stop") },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -1621,6 +1641,107 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
     assert.deepEqual(startupFailure.errorDetails.details.constraints, error.constraints, "The structured error details must retain every unvalidated exchange filter.")
     assert.match(startupFailure.errorDetails.stack, /LINKFDUSD/, "The fatal startup stack must point to the exact blocked market.")
     assert.equal(process.exitCode, 1, "A blocked market must continue to fail startup rather than bypass readiness.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+test("verifies and injects the application-owned durable-fact store before Journal and runtime startup", async () => {
+  const events = []
+  const store = { verify: async () => { events.push("verify"); return { ok: true, data: { valid: true, durableWriteSupported: true } } } }
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "runtime-session-durable",
+    processId: 123,
+    startedAt: "2026-11-09T12:34:56.789Z",
+    source: { branch: null, commit: null, shortCommit: null, commitMessage: null, commitDate: null, workingTree: "unknown", metadataSource: "unavailable" },
+  }
+  await runMain({
+    processIdentity,
+    createDurableFactsStore: ({ directory, runtimeSessionId }) => {
+      assert.match(directory, /\.coinzilla[\\/]harvester[\\/]recovery-facts$/, "The production ledger must use its dedicated private application directory.")
+      assert.equal(runtimeSessionId, processIdentity.runtimeSessionId, "The store must bind writes to the immutable OS process identity.")
+      return store
+    },
+    createJournalService: () => { events.push("journal"); return disabledJournalService() },
+    start: async (input) => {
+      events.push("runtime")
+      assert.equal(input.durableFactsStore, store, "The verified store must be injected into the application composition.")
+      return { connected: false }
+    },
+    logger: { info() {}, system() {}, error() {} },
+  })
+  assert.deepEqual(events, ["verify", "journal", "runtime"], "Ledger integrity must be verified before Journal composition and before any broker-capable runtime startup.")
+})
+
+test("fails closed before Journal or broker startup when the durable-fact ledger is missing or corrupt", async () => {
+  let runtimeStarted = false
+  let journalCreated = false
+  let lockReleased = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await runMain({
+      createDurableFactsStore: () => ({ verify: async () => ({ ok: false, errors: [new Error("ledger missing")] }) }),
+      createJournalService: () => { journalCreated = true; return disabledJournalService() },
+      acquireProcessLock: async () => ({ ok: true, release: async () => { lockReleased = true; return { ok: true } } }),
+      start: async () => { runtimeStarted = true; return { connected: true } },
+      logger: { info() {}, system() {}, error() {} },
+    })
+    assert.equal(runtimeStarted, false, "A missing/corrupt recovery ledger must prevent runtime startup.")
+    assert.equal(journalCreated, false, "Ledger verification must precede Journal/runtime activation.")
+    assert.equal(lockReleased, true, "A pre-runtime ledger verification failure must release the acquired process lock.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+test("uses the same absolute DURABLE_FACTS_DIRECTORY override as the genesis command", async () => {
+  const directory = path.join(os.tmpdir(), "harvester-custom-recovery-facts")
+  let receivedDirectory
+  await runMain({
+    env: { DURABLE_FACTS_DIRECTORY: directory },
+    createDurableFactsStore: (input) => {
+      receivedDirectory = input.directory
+      return { verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }
+    },
+    start: async () => ({ connected: false }),
+    logger: { info() {}, system() {}, error() {} },
+  })
+  assert.equal(receivedDirectory, directory, "Runtime verification must use the exact directory initialized by the operator.")
+})
+
+test("rejects a relative DURABLE_FACTS_DIRECTORY before Journal or broker-capable startup", async () => {
+  let storeCreated = false
+  let journalCreated = false
+  let runtimeStarted = false
+  let lockReleased = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await runMain({
+      env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { lockReleased = true; return { ok: true } },
+      }),
+      createDurableFactsStore: () => {
+        storeCreated = true
+        return { verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }
+      },
+      createJournalService: () => { journalCreated = true; return disabledJournalService() },
+      start: async () => { runtimeStarted = true; return { connected: false } },
+      logger: { info() {}, system() {}, error() {} },
+    })
+    assert.equal(storeCreated, false, "A relative path must be rejected before creating a ledger adapter.")
+    assert.equal(journalCreated, false, "Ledger path validation must precede Journal composition.")
+    assert.equal(runtimeStarted, false, "An invalid ledger path must never reach broker-capable startup.")
+    assert.equal(lockReleased, true, "A pre-runtime path validation failure must release the process lock.")
+    assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
   }

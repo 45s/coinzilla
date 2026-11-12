@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { appConfig } from '../../config/index.js';
+import { NOTIFICATIONS_TG_PROFILES } from '../../config/notifications-tg-profiles.js';
 import { validateAppConfig } from '../../src/domain/app-config.js';
-const configUrl = new URL('../../config.json', import.meta.url);
-const validConfig = JSON.parse(await readFile(configUrl, 'utf8'));
+const validConfig = structuredClone(appConfig);
 const strategy = (config) => config.strategies.CG_coinGrabber;
 
 test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal(validateAppConfig(validConfig), validConfig);
-  assert.equal(Object.hasOwn(validConfig, 'runtime'), false, 'exchange selection must not be stored in config.json');
+  assert.equal(Object.hasOwn(validConfig, 'runtime'), false, 'exchange selection must not be stored in the application config module');
   assert.equal(strategy(validConfig).enabled, true);
   assert.equal(strategy(validConfig).settings.minProfit, undefined);
   assert.equal(strategy(validConfig).pairs.LINKUSDT.minProfit, 0.1);
@@ -112,8 +112,8 @@ test("the default app config includes the trader Telegram profile without creden
   )
   assert.equal(
     validConfig.notifications.telegram.profile,
-    "trader",
-    "The default Telegram profile must provide useful trading alerts without verbose event noise.",
+    NOTIFICATIONS_TG_PROFILES.TRADER,
+    "The default Telegram profile must use the named trader profile constant without verbose event noise.",
   )
   assert.deepEqual(
     validConfig.notifications.telegram.markets,
@@ -126,3 +126,33 @@ test("the default app config includes the trader Telegram profile without creden
     "The default profile must not require custom overrides.",
   )
 })
+
+test("accepts different enabled-market selections without freezing deployment-specific symbols", () => {
+  const config = structuredClone(validConfig);
+  const pairs = Object.values(strategy(config).pairs);
+
+  for (const pairConfig of pairs) {
+    pairConfig.enabled = false;
+  }
+  pairs[0].enabled = true;
+  assert.equal(
+    validateAppConfig(config),
+    config,
+    "A valid configuration with one selected market must not depend on a hard-coded market name.",
+  );
+
+  pairs[0].enabled = false;
+  pairs[1].enabled = true;
+  assert.equal(
+    validateAppConfig(config),
+    config,
+    "Changing the selected market must remain a configuration edit, not require rewriting a unit-test snapshot.",
+  );
+});
+
+test("keeps named Telegram notification profile identifiers immutable", () => {
+  assert.ok(
+    Object.isFrozen(NOTIFICATIONS_TG_PROFILES),
+    "Notification profile identifiers must be exposed as an immutable named constant object.",
+  );
+});
