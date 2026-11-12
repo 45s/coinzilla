@@ -58,18 +58,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate temporary ESLint autofix patch
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          mapfile -d '' changed_files < <(git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD)
-          if (("${#changed_files[@]}" > 0)); then
-            pnpm exec eslint --fix "${changed_files[@]}" || true
-          fi
-          git diff --binary
-
       - name: Check JavaScript syntax
         run: node scripts/check-syntax.js
 
