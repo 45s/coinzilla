@@ -8,6 +8,7 @@ import {
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
 } from "../../application/events/lifecycle-event-dtos.js"
+import { recordAccountSnapshotCaptured, recordAccountOpenOrdersCaptured } from "../../use-cases/record-account-reconciliation-facts.js"
 
 function withRecoveryFailure(error, category, stage, retryable) {
   const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
@@ -57,7 +58,7 @@ function logSystem(logger, data) {
  */
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
+  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, durableFactsStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
@@ -249,6 +250,13 @@ export function createAccountSnapshotManager({
         false,
       )
     }
+    if (durableFactsStore) {
+      const durable = await recordAccountOpenOrdersCaptured({ durableFactsStore, data: dataResult.data })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
+        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
+      }
+    }
     const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED, dataResult })
     if (!published?.ok) {
       const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -324,6 +332,13 @@ export function createAccountSnapshotManager({
         "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
         false,
       )
+    }
+    if (durableFactsStore) {
+      const durable = await recordAccountSnapshotCaptured({ durableFactsStore, data: dataResult.data })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
+        throw withRecoveryFailure(new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_SNAPSHOT_DURABLE_FACT", false)
+      }
     }
     const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED, dataResult })
     if (!published?.ok) {

@@ -29,6 +29,7 @@ import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
+import { recordAccountSnapshotCaptured, recordAccountOpenOrdersCaptured } from "../use-cases/record-account-reconciliation-facts.js"
 
 export async function startHarvester({
   configSource,
@@ -219,6 +220,7 @@ export async function startHarvester({
     getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
     logger,
     now,
+    durableFactsStore,
   })
   const {
     refreshAccountSnapshot,
