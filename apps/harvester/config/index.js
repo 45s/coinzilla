@@ -9,6 +9,12 @@ export const appConfig = {
       "events": {}
     }
   },
+  "operatorControl": {
+    "telegram": {
+      "enabled": false,
+      "allowedUserIds": []
+    }
+  },
   "strategies": {
     "CG_coinGrabber": {
       "enabled": true,
