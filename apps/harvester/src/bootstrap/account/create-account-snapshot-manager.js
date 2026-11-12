@@ -43,7 +43,7 @@ function logSystem(logger, data) {
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *
  * This is a bootstrap lifecycle manager: it performs broker reads and enforces the
- * existing PREFLIGHT/OPENING/CLOSING publication and flush barriers.
+ * PREFLIGHT/RECOVERY/CLOSING account and open-order audit barriers plus targeted COMMISSION_BASELINE publication.
  *
  * @param {object} options
  * @param {object} options.broker Broker port.
