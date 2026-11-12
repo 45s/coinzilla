@@ -7,6 +7,8 @@
 
 This document maps machine-readable error codes to symptoms, likely causes, and safe recovery procedures. The error code does not replace the original error or cause.
 
+These operator-facing diagnostic codes are distinct from JavaScript error class names. Error classes, stable internal codes, wrapping and cause preservation follow the repository-wide [Structured Error Handling Standard](../../../docs/engineering/structured-error-handling.md); this vocabulary remains the Harvester-specific reference for operator symptoms and safe recovery.
+
 ## Journal errors
 
 ### Journal directory is locked

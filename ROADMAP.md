@@ -1,4 +1,4 @@
-# Coinzilla — develop engineering roadmap
+# Repository — develop engineering roadmap
 
 **Scope:** cross-workspace engineering priorities for the active `develop` branch. Application- and package-specific backlogs remain in their owning roadmaps; this file is a concise priority index, not a duplicate task tracker.
 
@@ -77,11 +77,14 @@
    - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
-10. **Domain-owned custom error classes and typed error handling ([#1028](https://github.com/45s/coinzilla/issues/1028)) — PLANNED.**
-   - **Why:** generic `Error` instances and message-based classification make failure handling and tests brittle; callers need reliable semantic categories at selected boundaries.
-   - **Plan:** audit concrete throw/catch sites; define package ownership and a minimal convention; introduce specific subclasses (for example `ConfigValidationError`) only where consumers need typed distinction; preserve `cause`, stack traces and structured diagnostic context; migrate incrementally with tests and documentation.
-   - **Safety:** no blanket conversion of all errors, no premature global error framework/shared package, and no message parsing when typed classification is available. Keep ordinary control flow out of exceptions.
-   - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
+10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — PLANNED; gradual adoption.**
+   - **Why:** generic errors and inconsistent wrapping make it difficult to identify the failing component/operation and preserve the underlying cause.
+   - **Standard:** one shared `SystemCustomError` base; specific subclasses and stable domain-scoped codes owned by the package/application/feature that owns the failure. Preserve native `cause` and attach bounded, safe diagnostic context; classify retryability only where meaningful.
+   - **Plan:** (1) audit existing errors, consumers and dependency directions; select one shared base owner; (2) implement and test the minimal base contract; (3) add package-owned error types/codes at high-value boundaries; (4) adopt them in new features and bug fixes as relevant paths are touched; (5) standardize safe structured reporting; (6) add compatibility/regression tests and update affected local docs/AGENTS/roadmaps.
+   - **Adoption:** new functionality follows the standard immediately; bug fixes migrate the touched error path where relevant and safe. Migrate untouched legacy code only through focused tasks with a concrete diagnostic benefit.
+   - **Safety:** no duplicate base implementations, dependency cycles, message-based classification, blanket native-Error conversion or one-shot rewrite. Do not let logging/reporting failures mask the original failure.
+   - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
+   - **Owner:** cross-workspace engineering, with implementation owned by the relevant shared package or consuming application.
 
 11. **Workspace JavaScript linting — DONE ([PR #1058](https://github.com/45s/coinzilla/pull/1058)).**
    - ESLint 10 flat configuration, full-workspace inventory reporting, strict changed-JavaScript CI enforcement, and named-export-only enforcement for ESM modules (with the required ESLint config-loader exception).
