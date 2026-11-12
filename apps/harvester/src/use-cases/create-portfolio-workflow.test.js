@@ -301,7 +301,7 @@ test("leaves both accounting projections unchanged when recovery ledger reset fa
   const initialPortfolioValue = initialPortfolio.value
   const initialLedgerValue = failingLedger.value
 
-  const result = workflow.completeRecoveryCycle({
+  const result = await workflow.completeRecoveryCycle({
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",

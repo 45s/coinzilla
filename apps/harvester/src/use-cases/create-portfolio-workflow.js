@@ -26,7 +26,7 @@ import {
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill } = {}) => {
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted } = {}) => {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -35,6 +35,9 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
   }
   if (onDurableExecutionFill !== undefined && typeof onDurableExecutionFill !== "function") {
     throw new TypeError("onDurableExecutionFill must be a function")
+  }
+  if (onDurableRecoveryCycleCompleted !== undefined && typeof onDurableRecoveryCycleCompleted !== "function") {
+    throw new TypeError("onDurableRecoveryCycleCompleted must be a function")
   }
   let portfolio = initialPortfolio ?? new Portfolio()
   let recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
@@ -273,7 +276,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
+    completeRecoveryCycle: async ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
       const recoveryLedger = recoveryLedgers.get(marketId)
       const position = portfolio.getPosition({ marketId })
       if (!recoveryLedger || !position) {
@@ -318,6 +321,25 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           const nextRecoveryLedgers = new Map(recoveryLedgers)
           nextRecoveryLedgers.set(marketId, resetLedger)
           const nextPosition = nextPortfolio.getPosition({ marketId })
+
+
+          if (onDurableRecoveryCycleCompleted) {
+            const durableResult = await onDurableRecoveryCycleCompleted({
+              marketId,
+              recoveryLedger: previousLedger,
+              position,
+              completion,
+              minProfit,
+              inventoryDisposition: inventoryDisposition ?? null,
+            })
+            if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+              return toResult({
+                errors: durableResult?.errors?.length
+                  ? durableResult.errors
+                  : [new Error("Recovery-cycle completion fact did not confirm durable commitment")],
+              })
+            }
+          }
 
           logger.debug?.({
             message: "Recovery cycle completed",

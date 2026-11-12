@@ -139,6 +139,10 @@ function factIdForOrderIntent(clientOrderId) {
   return "order-submission-intent:" + clientOrderId
 }
 
+function factIdForRecoveryCycle(marketId, cycleId) {
+  return "recovery-cycle-completed:" + marketId + ":" + cycleId
+}
+
 function factIdForCancellationIntent(clientOrderId, reason, status, executedQuantity) {
   return "order-cancellation-intent:" + clientOrderId + ":" + reason + ":" + status + ":" + executedQuantity
 }
@@ -383,6 +387,42 @@ function validateFactData({ factType, data, factId }) {
         }
         requireNonEmptyString({ value: quoteValue.assetCode, field: "commission.quoteValue.assetCode", maxLength: 32 })
       }
+    }
+  }
+  if (factType === "RECOVERY_CYCLE_COMPLETED") {
+    const allowedFields = new Set(["cycleId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "appliedFillIds", "buyCost", "spent", "netSellProceeds", "realizedNetProfit", "minProfit", "activeQuantity", "keepQuantity", "freeQuantity", "inventoryDisposition"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) throw new TypeError("Recovery-cycle completion fact contains unsupported fields")
+    const cycleId = requireNonEmptyString({ value: canonicalData.cycleId, field: "data.cycleId", maxLength: 64 })
+    const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (!/^[0-9a-f]{64}$/.test(cycleId) || venue !== venue.toLowerCase() ||
+        marketId !== venue + ":" + canonicalData.symbol ||
+        factId !== factIdForRecoveryCycle(marketId, cycleId)) {
+      throw new TypeError("Recovery-cycle completion identity is not canonical")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
+    if (canonicalData.baseAssetId === canonicalData.quoteAssetId) throw new TypeError("Recovery-cycle base and quote assets must differ")
+    if (!Array.isArray(canonicalData.appliedFillIds) || canonicalData.appliedFillIds.length === 0 ||
+        canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
+        new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length) {
+      throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
+    }
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
+    if (!isDecimalString(canonicalData.buyCost) || canonicalData.buyCost !== canonicalData.spent ||
+        !isDecimalString(canonicalData.netSellProceeds) ||
+        !isPositiveDecimalString(canonicalData.realizedNetProfit) ||
+        !isPositiveDecimalString(canonicalData.minProfit) ||
+        !isDecimalString(canonicalData.activeQuantity) ||
+        !isDecimalString(canonicalData.keepQuantity) ||
+        !isDecimalString(canonicalData.freeQuantity)) {
+      throw new TypeError("Recovery-cycle completion accounting values must be exact canonical decimals")
+    }
+    if (canonicalData.inventoryDisposition !== null &&
+        (typeof canonicalData.inventoryDisposition !== "string" || !canonicalData.inventoryDisposition.trim())) {
+      throw new TypeError("Recovery-cycle inventory disposition must be a non-empty string or null")
     }
   }
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {

@@ -25,6 +25,7 @@ import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submissi
 import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
 import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
+import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -85,6 +86,16 @@ export async function startHarvester({
   const onDurableExecutionFill = durableFactsStore
     ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
     : undefined
+  const onDurableRecoveryCycleCompleted = durableFactsStore
+    ? ({ recoveryLedger, position, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
+        durableFactsStore,
+        recoveryLedger,
+        position,
+        completion,
+        minProfit,
+        inventoryDisposition,
+      })
+    : undefined
   const onDurableSubmissionIntent = durableFactsStore
     ? ({ order, purpose }) => recordOrderSubmissionIntent({ durableFactsStore, order, purpose })
     : undefined
@@ -111,7 +122,7 @@ export async function startHarvester({
     }
     return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill })
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
