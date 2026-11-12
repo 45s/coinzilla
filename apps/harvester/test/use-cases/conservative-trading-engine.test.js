@@ -170,14 +170,14 @@ const createFixture = ({
       }
       return result
     },
-    completeRecoveryCycle: ({} = {}) => toResult({ data: { eligible: true, freeQuantity: "1" } }),
-    canTrade: ({} = {}) => ready,
+    completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
+    canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
-    onPause: async ({} = {}) => {},
-    isStopping: ({} = {}) => false,
+    onPause: async () => {},
+    isStopping: () => false,
   })
 
   const createTradeEvent = ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status }) => {
@@ -247,7 +247,7 @@ test("readiness closing after PENDING registration removes the local order witho
         return toResult({ error: new Error("Broker must not be called") })
       },
     },
-    canSubmit: ({} = {}) => {
+    canSubmit: () => {
       readinessChecks += 1
       return readinessChecks === 1
     },
@@ -259,8 +259,8 @@ test("readiness closing after PENDING registration removes the local order witho
         registry = registry.removePending({ clientOrderId: order.clientOrderId }).registry
       }
     },
-    onAcknowledgedOrder: ({} = {}) => {},
-    onSubmissionFailure: ({} = {}) => {},
+    onAcknowledgedOrder: () => {},
+    onSubmissionFailure: () => {},
   })
 
   const result = await execute({

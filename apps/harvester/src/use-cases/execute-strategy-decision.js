@@ -16,9 +16,9 @@ export function makeExecuteStrategyDecision({
   onPendingOrder,
   onAcknowledgedOrder,
   onSubmissionFailure,
-  onOrderValidationFailure = async ({} = {}) => {},
-  canSubmit = ({} = {}) => true,
-  onSubmissionDeferred = async ({} = {}) => {},
+  onOrderValidationFailure = async () => {},
+  canSubmit = () => true,
+  onSubmissionDeferred = async () => {},
 } = {}) {
   if (typeof broker?.placeOrder !== "function") {
     throw new TypeError("makeExecuteStrategyDecision requires a broker placeOrder port")
@@ -31,7 +31,7 @@ export function makeExecuteStrategyDecision({
     canSubmit,
     onSubmissionDeferred,
   })) {
-    if (typeof callback !== "function") throw new TypeError(name + " must be a function")
+    if (typeof callback !== "function") {throw new TypeError(name + " must be a function")}
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
@@ -75,7 +75,7 @@ export function makeExecuteStrategyDecision({
         try {
           validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
         } catch (error) {
-          if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
+          if (notifyValidationFailure) {await onOrderValidationFailure({ order: pendingOrder, error })}
           throw error
         }
         const deferral = getSubmissionDeferral({ order: pendingOrder, purpose: action.purpose ?? null })
@@ -132,7 +132,7 @@ export function makeExecuteStrategyDecision({
           return toResult({ data: { deferred: true, ...initialDeferral, submittedOrders } })
         }
         const pendingResult = onPendingOrder({ order: pendingOrder, purpose })
-        if (pendingResult && typeof pendingResult.then === "function") await pendingResult
+        if (pendingResult && typeof pendingResult.then === "function") {await pendingResult}
         let dispatchDeferral
         try {
           dispatchDeferral = getSubmissionDeferral({ order: pendingOrder, purpose })
