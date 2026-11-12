@@ -33,6 +33,7 @@ import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
 import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
+import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
 
 export async function startHarvester({
   configSource,
@@ -55,6 +56,10 @@ export async function startHarvester({
   onUserDataStatus = () => {},
   now = Date.now,
   durableFactsStore,
+  runtimeSessionId,
+  createDurableFactsStore,
+  createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
+  telegramOperatorFetchImpl,
 } = {}) {
   const {
     appConfig,
@@ -117,6 +122,19 @@ export async function startHarvester({
         (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
     }
   }
+  if (appConfig.operatorControl?.telegram?.enabled === true && !durableFactsStore) {
+    throw new Error("Telegram operator control requires the initialized ADR-0001 durable-facts store used by this process session")
+  }
+  const operatorControlLifecycle = await prepareTelegramOperatorControl({
+    telegramConfig: appConfig.operatorControl?.telegram,
+    env,
+    runtimeSessionId,
+    durableFactsStore,
+    createDurableFactsStore,
+    createAdapter: createTelegramOperatorAdapterFactory,
+    fetchImpl: telegramOperatorFetchImpl,
+    logger,
+  })
   const onDurableExecutionFill = durableFactsStore
     ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
     : undefined
@@ -396,7 +414,15 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
+    await operatorControlLifecycle.start({ engine: tradingEngine })
+    portfolioWorkflow = createPortfolioWorkflow({
+      evaluateStrategy,
+      logger,
+      onCommissionAsset,
+      onDurableExecutionFill,
+      onDurableRecoveryCycleCompleted,
+      onDurableRecoveryCycleNotCompleted,
+    })
 
     userDataSubscription = await subscribeToUserData({
       broker,
@@ -444,11 +470,18 @@ export async function startHarvester({
       errorStack: error?.stack,
     })
     await userDataState.eventQueue
-    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
+    const operatorCleanupErrors = []
+    try {
+      await operatorControlLifecycle.stop()
+    } catch (cleanupError) {
+      operatorCleanupErrors.push(cleanupError)
+    }
+    const brokerCleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
+    const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
-        "Harvester market-data startup failed and cleanup was incomplete",
+        "Harvester startup failed and operator/broker cleanup was incomplete",
         { cause: error },
       )
     }
@@ -473,7 +506,16 @@ export async function startHarvester({
     publishAccountSnapshot,
   })
   const stop = async () => {
+    let operatorStopError
+    try {
+      await operatorControlLifecycle.stop()
+    } catch (error) {
+      operatorStopError = error
+    }
     await stopRuntime()
+    if (operatorStopError) {
+      throw operatorStopError
+    }
     if (durableFactsStore) {
       const stopped = await recordProcessStopped({
         durableFactsStore,

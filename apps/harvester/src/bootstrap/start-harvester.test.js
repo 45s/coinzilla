@@ -319,6 +319,116 @@ const createFill = ({ tradeId = "trade-1", quantity = "0.01" } = {}) => {
   })
 }
 
+
+test("rejects enabled Telegram operator control without a bot token before connecting to Binance", async () => {
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+  }
+  let brokerFactoryCalled = false
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => config,
+      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: undefined, DURABLE_FACTS_DIRECTORY: process.cwd() },
+      brokerAdapterFactory: () => {
+        brokerFactoryCalled = true
+        throw new Error("Broker connection must not start before operator-control configuration is validated.")
+      },
+    }),
+    (error) => error.code === "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED",
+    "Enabled inbound control must reject missing Telegram credentials before any broker connection is attempted.",
+  )
+
+  assert.equal(brokerFactoryCalled, false, "Invalid operator-control configuration must fail before Binance adapter construction.")
+})
+
+test("rejects enabled Telegram operator control without an explicit durable-facts directory", async () => {
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+  }
+  let brokerFactoryCalled = false
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => config,
+      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: undefined },
+      brokerAdapterFactory: () => {
+        brokerFactoryCalled = true
+        throw new Error("Broker connection must not start without the configured durable-facts store.")
+      },
+    }),
+    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED",
+    "Enabled inbound control must require the operator's explicitly configured ADR-0001 store directory.",
+  )
+
+  assert.equal(brokerFactoryCalled, false, "A missing durable-facts directory must fail before connecting to Binance.")
+})
+
+test("verifies the existing durable-facts store before connecting when Telegram operator control is enabled", async () => {
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+  }
+  const calls = []
+  let brokerFactoryCalled = false
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => config,
+      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+      runtimeSessionId: "test-runtime-session",
+      createDurableFactsStore: ({ directory, runtimeSessionId }) => {
+        calls.push({ type: "create-store", directory, runtimeSessionId })
+        return {
+          verify: async () => ({ ok: false, errors: [new Error("ledger genesis is missing")] }),
+          append: async () => ({ ok: true, data: { durable: true } }),
+        }
+      },
+      brokerAdapterFactory: () => {
+        brokerFactoryCalled = true
+        throw new Error("Broker connection must not start when durable-facts verification fails.")
+      },
+    }),
+    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+    "An absent or invalid initialized ADR-0001 store must prevent inbound operator control and broker startup.",
+  )
+
+  assert.equal(calls.length, 1, "Enabled operator control must construct exactly one durable-facts adapter for verification.")
+  assert.equal(calls[0].runtimeSessionId, "test-runtime-session", "Durable facts must be attributed to this Harvester process session.")
+  assert.equal(brokerFactoryCalled, false, "Durable-facts verification must complete before connecting to Binance.")
+})
+
+test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
+  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const calls = []
+  let stopAttempts = 0
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    runtimeSessionId: "test-runtime-session",
+    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createTelegramOperatorAdapter: () => ({
+      start: async () => { throw new Error("Telegram getMe unauthorized") },
+      stop: async () => {
+        stopAttempts += 1
+        if (stopAttempts === 1) {
+          throw new Error("temporary adapter shutdown failure")
+        }
+        calls.push("telegram-stop-confirmed")
+        return { stopped: true }
+      },
+    }),
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  }), (error) => error.code === "OPERATOR_CONTROL_TELEGRAM_START_FAILED", "Telegram startup must still fail after cleanup is retried.")
+  assert.equal(stopAttempts, 2, "The outer startup rollback must retry adapter shutdown when the adapter start rollback could not confirm it.")
+  assert.ok(calls.includes("telegram-stop-confirmed"), "The retry must confirm the poller has stopped before broker cleanup completes.")
+  assert.ok(calls.includes("disconnect"), "The broker must still be disconnected after failed Telegram startup.")
+})
+
 test("requires an explicit TRADING_MODE before connecting to Binance", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({
@@ -339,6 +449,89 @@ test("rejects enabling the deferred Aggressive strategy in app config", async ()
     }),
     /Aggressive strategy is disabled and deferred/,
   )
+})
+
+test("keeps inbound operator control disabled without constructing its store or Telegram adapter", async () => {
+  let storeFactoryCalls = 0
+  let adapterFactoryCalls = 0
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    createDurableFactsStore: () => { storeFactoryCalls += 1; throw new Error("Disabled operator control must not open the durable-facts store.") },
+    createTelegramOperatorAdapter: () => { adapterFactoryCalls += 1; throw new Error("Disabled operator control must not construct a Telegram adapter.") },
+    logger: { info() {}, error() {} },
+  })
+  try {
+    assert.equal(storeFactoryCalls, 0, "Disabled operator control must not inspect or open the durable-facts store.")
+    assert.equal(adapterFactoryCalls, 0, "Disabled operator control must not construct an inbound Telegram adapter.")
+  } finally { await runtime.stop() }
+})
+
+test("verifies durable facts before broker connect and starts/stops Telegram around the trading runtime", async () => {
+  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const calls = []
+  const appendedFacts = []
+  let operator
+  const broker = createBroker(calls)
+  let placeOrderCalls = 0
+  let cancelOrderCalls = 0
+  broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
+  broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
+  const durableFacts = {
+    verify: async () => { calls.push("verify-durable-facts"); return { ok: true, data: { valid: true, durableWriteSupported: true } } },
+    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } } },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    runtimeSessionId: "test-runtime-session",
+    createDurableFactsStore: ({ directory, runtimeSessionId }) => {
+      calls.push("create-durable-facts-store")
+      assert.equal(directory, process.cwd(), "The configured absolute store directory must be passed unchanged to the ADR-0001 adapter.")
+      assert.equal(runtimeSessionId, "test-runtime-session", "The current process identity must scope appended durable facts.")
+      return durableFacts
+    },
+    createTelegramOperatorAdapter: ({ botToken, allowedUserIds, operator: suppliedOperator }) => {
+      calls.push("create-telegram-adapter")
+      assert.equal(botToken, "test-telegram-token", "The Telegram bot token must come from the environment and never app config.")
+      assert.deepEqual(allowedUserIds, ["12345"], "Only configured trusted Telegram user IDs may reach the adapter.")
+      operator = suppliedOperator
+      return { start: async () => calls.push("start-telegram-poller"), stop: async () => calls.push("stop-telegram-poller") }
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+  try {
+    assert.ok(calls.indexOf("verify-durable-facts") < calls.indexOf("connect"), "Durable-facts integrity must be verified before Binance broker connection.")
+    assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
+    const pauseResult = await operator.pauseMarket({ actor: { id: "telegram-user:12345", roles: ["trading-operator"] }, requestId: "telegram:9001", symbol: "BTCUSDT" })
+    assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
+    assert.equal(appendedFacts.length, 1, "A successful operator pause must append exactly one durable fact.")
+    assert.equal(appendedFacts[0].factType, "OPERATOR_MARKET_PAUSED", "The operator facade must persist the existing ADR-0001 pause fact type.")
+    assert.equal(appendedFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
+    assert.ok(calls.indexOf("append-operator-fact") > calls.indexOf("start-telegram-poller"), "A pause fact is appended only after the adapter is running and a request is received.")
+    assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
+    assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
+  } finally { await runtime.stop() }
+  assert.ok(calls.indexOf("stop-telegram-poller") < calls.indexOf("disconnect"), "Inbound commands must stop before broker shutdown begins.")
+})
+
+test("stops Telegram and broker when Telegram identity verification fails during startup", async () => {
+  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const calls = []
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    runtimeSessionId: "test-runtime-session",
+    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createTelegramOperatorAdapter: () => ({ start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") }, stop: async () => calls.push("stop-telegram-poller") }),
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  }), (error) => error.code === "OPERATOR_CONTROL_TELEGRAM_START_FAILED", "Telegram identity verification failure must abort startup.")
+  assert.ok(calls.includes("stop-telegram-poller"), "A partially started Telegram adapter must be stopped during startup rollback.")
+  assert.ok(calls.includes("disconnect"), "The broker must be disconnected during startup rollback.")
+  assert.equal(calls.includes("subscribe:user-data"), false, "Trading subscriptions must not begin after Telegram identity verification fails.")
 })
 
 test("subscribes only enabled pairs for Binance trading", async () => {
