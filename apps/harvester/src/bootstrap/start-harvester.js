@@ -409,9 +409,11 @@ export async function startHarvester({
   }
   try {
     await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
-    // Durable Journal replay is intentionally disabled. Harvester starts with
-    // fresh in-process trading state; only current-session executions are owned.
-    // The separate account PREFLIGHT/CLOSING audit remains mandatory.
+    // Journal replay and runtime state restoration are intentionally disabled.
+    // ADR-0001 durable facts are verified separately and prior process sessions
+    // fail closed until restart recovery is accepted.
+    // PREFLIGHT/RECOVERY/CLOSING account audits and targeted commission
+    // baselines remain independent, mandatory account-integrity boundaries.
     activateTradingEngine()
     await operatorControlLifecycle.start({ engine: tradingEngine })
     portfolioWorkflow = createPortfolioWorkflow({
