@@ -36,7 +36,20 @@ jobs:
             apps/harvester/src/use-cases/conservative-trading-engine.js \
             apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js \
             apps/harvester/src/use-cases/operator-control/pause-market.js \
-            apps/harvester/src/use-cases/operator-control/resume-market.js
+            apps/harvester/src/use-cases/operator-control/resume-market.js || true
+      - name: Fix the two remaining non-autofixable findings
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          adapter = Path("apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js")
+          source = adapter.read_text()
+          source = source.replace("    let timer\\n    const finish = () => {", "    const finish = () => {")
+          source = source.replace("    timer = setTimeout(finish, milliseconds)", "    const timer = setTimeout(finish, milliseconds)")
+          adapter.write_text(source)
+          engine = Path("apps/harvester/src/use-cases/conservative-trading-engine.js")
+          source = engine.read_text().replace("const resumeDeferredEvaluations = ({} = {}) =>", "const resumeDeferredEvaluations = () =>")
+          engine.write_text(source)
+          PY
       - name: Commit safe fixes
         run: |
           if git diff --quiet; then
