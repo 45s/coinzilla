@@ -197,7 +197,7 @@ function validateFactData({ factType, data, factId }) {
     }
     const isPositiveDecimalString = (value) =>
       typeof value === "string" &&
-      /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value) &&
+      /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value) &&
       /[1-9]/.test(value)
     if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity)) {
       throw new TypeError("Order-submission intent price and quantity must be positive exact decimal strings")
