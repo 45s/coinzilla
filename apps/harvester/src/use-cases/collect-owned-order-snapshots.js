@@ -60,15 +60,6 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
  * This workflow does not mutate the order registry or apply execution fills.
  */
 export function makeCollectOwnedOrderSnapshots({ broker, journalFillsById } = {}) {
-  if (!broker || typeof broker.getOpenOrders !== "function" ||
-      typeof broker.getCanonicalOrderHistory !== "function" ||
-      typeof broker.getFills !== "function") {
-    throw new TypeError("makeCollectOwnedOrderSnapshots requires open-order, canonical-history, and fill-history broker reads")
-  }
-  if (!(journalFillsById instanceof Map)) {
-    throw new TypeError("makeCollectOwnedOrderSnapshots requires journalFillsById to be a Map")
-  }
-
   return async function collectOwnedOrderSnapshots({ ownedOrders } = {}) {
     const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
     let affectedSymbol = symbols[0]
