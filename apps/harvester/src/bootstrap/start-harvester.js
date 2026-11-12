@@ -64,8 +64,21 @@ export async function startHarvester({
     tradingMode,
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
-  if (durableFactsStore !== undefined && typeof durableFactsStore?.append !== "function") {
-    throw new TypeError("durableFactsStore must provide append() when supplied")
+  if (durableFactsStore !== undefined) {
+    if (typeof durableFactsStore?.append !== "function" ||
+        typeof durableFactsStore?.verify !== "function" ||
+        typeof durableFactsStore?.readAll !== "function") {
+      throw new TypeError("durableFactsStore must provide append(), verify(), and readAll() when supplied")
+    }
+    const verification = await durableFactsStore.verify()
+    if (verification?.ok !== true ||
+        verification.data?.valid !== true ||
+        verification.data?.durableWriteSupported !== true) {
+      const cause = verification?.errors?.[0] ?? new Error("Durable-fact ledger verification was not confirmed")
+      const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 durable-fact ledger: " + (cause.message ?? String(cause)), { cause })
+      error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
+      throw error
+    }
   }
   const onDurableExecutionFill = durableFactsStore
     ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
