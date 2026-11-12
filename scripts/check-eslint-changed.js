@@ -32,7 +32,7 @@ function selectChangedJavaScriptFiles(paths) {
 function getChangedFiles({ baseSha }) {
   const result = spawnSync(
     "git",
-    ["diff", "--name-only", "--diff-filter=ACMR", "-z", `${baseSha}...HEAD`],
+    ["diff", "--name-only", "--diff-filter=ACMR", "-z", baseSha, "HEAD"],
     { encoding: "utf8" },
   );
 
