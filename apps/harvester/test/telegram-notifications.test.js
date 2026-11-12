@@ -514,7 +514,7 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
         ["user_data.readiness_changed", { broker: "binance", ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" }],
         ["user_data.readiness_changed", { broker: "binance", ready: true, status: "READY", trigger: "reconciled" }],
         ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recoveryFailed", recoveryRequired: true, error: { message: "REST snapshot failed" } }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recoveryFailed", recoveryRequired: false, error: { message: "REST snapshot failed" } }],
         ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovering", recoveryRequired: true }],
         ["broker.status_changed", { broker: "binance", stream: "market-price", status: "recoveryFailed", recoveryRequired: true }],
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-1", sellOrderBrokerOrderId: "123", outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT", realizedNetProfit: "-0.02", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01" }],

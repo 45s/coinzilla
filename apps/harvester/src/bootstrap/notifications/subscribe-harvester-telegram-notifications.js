@@ -42,7 +42,6 @@ const EVENT_MAPPINGS = Object.freeze({
         },
       }
     }
-    if (data.recoveryRequired !== true) {return null}
     const categories = {
       recoveryFailed: "user-data-recovery-failed",
       terminated: "user-data-stream-terminated",
@@ -51,6 +50,8 @@ const EVENT_MAPPINGS = Object.freeze({
     }
     const category = categories[data.status]
     if (!category) {return null}
+    const failureAlwaysActionable = data.status === "recoveryFailed" || data.status === "executionNormalizationFailed"
+    if (!failureAlwaysActionable && data.recoveryRequired !== true) {return null}
     return {
       name: "account.safety_alert",
       data: {
