@@ -196,3 +196,72 @@ test("preserves explicit strategy purpose through both submission-gate checks wi
   assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"])
   assert.equal(Object.hasOwn(brokerOrder, "purpose"), false, "Application-only recovery purpose must not leak into the broker order request.")
 })
+
+
+test("durably records the exact order submission intent before calling the broker", async () => {
+  const calls = []
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        calls.push({ stage: "broker", clientOrderId: order.clientOrderId })
+        return { ok: true, data: makeAcknowledgement(order) }
+      },
+    },
+    onDurableSubmissionIntent: async ({ order, purpose }) => {
+      calls.push({
+        stage: "durable-intent",
+        clientOrderId: order.clientOrderId,
+        marketId: order.market.id,
+        symbol: order.market.symbol,
+        side: order.side,
+        type: order.type,
+        price: order.limitPrice.amount,
+        quantity: order.originalQuantity.amount,
+        purpose,
+      })
+      return { ok: true, data: { durable: true } }
+    },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure while recording a durable order intent"),
+  })
+
+  const result = await execute({ decision, marketMetadata })
+
+  assert.equal(result.ok, true, "A strategy order with a durably recorded intent should proceed to broker submission.")
+  assert.equal(calls[0].stage, "durable-intent", "The durable order intent must be acknowledged before the broker can receive a placement request.")
+  assert.equal(calls[1].stage, "broker", "The broker placement must happen only after the durable intent append succeeds.")
+  assert.equal(calls[0].clientOrderId, calls[1].clientOrderId, "The durable intent and broker request must share the exact stable client order identity.")
+  assert.equal(calls[0].marketId, market.id, "The durable intent must preserve the canonical market identity.")
+  assert.equal(calls[0].symbol, market.symbol, "The durable intent must preserve the canonical market symbol.")
+  assert.equal(calls[0].side, "BUY", "The durable intent must preserve the exact strategy order side.")
+  assert.equal(calls[0].type, "LIMIT_MAKER", "The durable intent must preserve the exact exchange order type.")
+  assert.equal(calls[0].price, "0.099", "The durable intent must preserve the exact decimal limit price.")
+  assert.equal(calls[0].quantity, "100", "The durable intent must preserve the exact decimal base quantity.")
+  assert.equal(calls[0].purpose, null, "An order without an explicit strategy purpose must persist a canonical null purpose.")
+})
+
+test("does not call the broker when durable order-intent acknowledgement fails", async () => {
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        brokerCalls += 1
+        return { ok: true, data: makeAcknowledgement(order) }
+      },
+    },
+    onDurableSubmissionIntent: async () => ({
+      ok: false,
+      errors: [new Error("durable fact store unavailable")],
+    }),
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+  })
+
+  const result = await execute({ decision, marketMetadata })
+
+  assert.equal(result.ok, false, "A failed durable intent append must fail the strategy submission workflow.")
+  assert.equal(brokerCalls, 0, "No broker placement may occur unless the immutable order intent was durably acknowledged first.")
+  assert.match(result.errors[0].message, /durable fact store unavailable/, "The durable-fact failure must remain actionable at the application boundary.")
+})
