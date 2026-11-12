@@ -16,9 +16,9 @@ export function makeExecuteStrategyDecision({
   onSubmissionFailure,
   onDurableSubmissionIntent,
   onDurableSubmissionOutcome,
-  onOrderValidationFailure = async ({} = {}) => {},
-  canSubmit = ({} = {}) => true,
-  onSubmissionDeferred = async ({} = {}) => {},
+  onOrderValidationFailure = async () => {},
+  canSubmit = () => true,
+  onSubmissionDeferred = async () => {},
 } = {}) {
   if (typeof broker?.placeOrder !== "function") {
     throw new TypeError("makeExecuteStrategyDecision requires a broker placeOrder port")

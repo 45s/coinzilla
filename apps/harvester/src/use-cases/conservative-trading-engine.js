@@ -3127,7 +3127,7 @@ export function makeConservativeTradingEngine({
     runTransition({ task: () => processUserDataEventTransition({ event, recoveryMode }) })
   const evaluateLatest = ({ symbol } = {}) =>
     runTransition({ task: () => evaluateLatestTransition({ symbol }) })
-  const resumeDeferredEvaluations = ({} = {}) => runTransition({
+  const resumeDeferredEvaluations = () => runTransition({
     task: async () => {
       const results = []
       for (const symbol of [...state.deferredEvaluations]) {
