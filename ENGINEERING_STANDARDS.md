@@ -1,6 +1,6 @@
 # Engineering Standards
 
-This document is the engineering contract for Coinzilla. Apply it to new code and to code materially changed by a pull request. Automated checks are authoritative where available; principles that cannot be reliably automated require explicit review.
+This document is the repository-wide engineering contract. Apply it to new code and to code materially changed by a pull request. Automated checks are authoritative where available; principles that cannot be reliably automated require explicit review.
 
 ## Definition of Done
 
@@ -107,6 +107,8 @@ Required practices:
 A materially edited test case must comply with these practices throughout that case, not only on newly added lines. Review the full changed test file for opaque names, tuple-based comparisons, missing assertion messages, and unexplained expected values before delivery.
 
 ### 3. Reliability, error handling, and observability
+
+Follow the canonical [Structured Error Handling Standard](docs/engineering/ERROR_HANDLING_STANDARD.md) for the shared `SystemCustomError` base, component-owned subclasses and codes, cause preservation, safe diagnostic context, and gradual adoption. New functionality and materially changed bug-fix paths must follow it; unrelated legacy code is migrated incrementally.
 
 - Treat diagnostics as part of the feature design. A failure should be understandable from its error and logs without requiring guesswork.
 - Use structured logging with stable fields and relevant context (for example: operation, component, entity/event identifier, state, and original error) when that context exists.
@@ -253,7 +255,7 @@ Before approving a pull request, ask:
 4. Are test names, variables, comparisons, and failure messages understandable in plain English without decoding tuples or asking for context?
 5. Are names and control flow easy to understand?
 6. Are side effects and state changes explicit?
-7. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
+7. Are logs and errors actionable, appropriately contextual, and free of sensitive data? Do changed error paths use the owning component's specific error type/code and preserve the original cause?
 8. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
 9. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
 10. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
@@ -281,7 +283,7 @@ The repository-wide workflow, domain ownership, cross-domain request process, an
 
 ## JavaScript and JSDoc
 
-Coinzilla's default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.
+The default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.
 
 - Keep implementation files as JavaScript (`.js`). Do not add `tsconfig.json`, TypeScript build steps, `.ts` source, or generated `.d.ts` files unless a separately approved requirement explicitly calls for TypeScript interoperability or migration.
 - Use JSDoc selectively to describe public/exported APIs, non-obvious parameter and return shapes, callbacks, important invariants, and meaningful exceptions.
