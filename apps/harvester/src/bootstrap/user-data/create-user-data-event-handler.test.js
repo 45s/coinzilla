@@ -19,7 +19,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createHandler = ({ state = createState(), engine, onUserDataEvent = async () => {}, logger = {} } = {}) => {
+const createHandler = ({ state = createState(), engine, onUserDataEvent = async () => {}, onSafetyBlockerRaised, logger = {} } = {}) => {
   const actions = { cancellations: 0, resumptions: 0, observations: [] }
   const handler = createUserDataEventHandler({
     state,
@@ -37,6 +37,7 @@ const createHandler = ({ state = createState(), engine, onUserDataEvent = async 
     updateTradingAccounting: () => ({ ok: true }),
     cancelOwnedBuysAfterAccountingFailure: async () => { actions.cancellations += 1 },
     resumeDeferredStrategyEvaluations: () => { actions.resumptions += 1 },
+    onSafetyBlockerRaised,
   })
   return { handler, state, actions }
 }
@@ -298,4 +299,72 @@ test("passes recovery mode to both the trading engine and observer while applica
   assert.equal(engineRecoveryMode, true, "Queued order events must use recovery mode while authoritative application reconciliation is pending.")
   assert.equal(observerRecoveryMode, true, "The observer must receive the same recovery-mode classification as the trading engine.")
   assert.equal(actions.observations.length, 1, "The recovery-mode event must still be delivered to the observer.")
+})
+
+
+test("persists a sticky market blocker for an actual unowned execution", async () => {
+  const blockers = []
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      failure: { category: "OWNERSHIP_INTEGRITY", stage: "FILL_ORDER_IDENTITY", retryable: false },
+      errors: [new Error("unowned execution")],
+    }),
+    getOrders: () => [],
+  }
+  const { handler, state, actions } = createHandler({
+    engine,
+    onSafetyBlockerRaised: async (blocker) => {
+      blockers.push(blocker)
+      return { ok: true, data: { durable: true } }
+    },
+  })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        market: { symbol: "BTCUSDT" },
+        brokerOrderId: "external-order",
+        clientOrderId: "manual-order",
+        side: "BUY",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, true, "An unowned execution must keep the application accounting gate closed.")
+  assert.equal(actions.cancellations, 1, "The existing owned-BUY safety halt must still run.")
+  assert.equal(blockers.length, 1, "An actual unowned execution must append one sticky blocker.")
+  assert.equal(blockers[0].scope, "MARKET", "A symbol-specific execution blocker must remain market-scoped.")
+  assert.equal(blockers[0].symbol, "BTCUSDT")
+  assert.equal(blockers[0].reason, "FILL_ORDER_IDENTITY")
+  assert.equal(blockers[0].evidence.executionType, "TRADE", "The evidence must distinguish a trade from a passive order update.")
+})
+
+test("does not raise an account-wide sticky blocker for an unowned NEW order report", async () => {
+  let blockerCount = 0
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      failure: { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+      errors: [new Error("unowned order update")],
+    }),
+    getOrders: () => [],
+  }
+  const { handler, state } = createHandler({
+    engine,
+    onSafetyBlockerRaised: async () => { blockerCount += 1; return { ok: true, data: { durable: true } } },
+  })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "external-order", clientOrderId: "manual-order", side: "BUY" },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, true, "The existing ownership failure must still close readiness.")
+  assert.equal(blockerCount, 0, "A passive external NEW order observation is not an actual unowned execution blocker.")
 })

@@ -38,7 +38,7 @@ function getUserDataFailureMessage(failure) {
 export function createUserDataEventHandler({
   state, getTradingEngine, isTradingEnabled, isStopped, logger, onUserDataEvent,
   getPortfolio, getRecoveryLedger, updatePortfolio, updateTradingAccounting,
-  cancelOwnedBuysAfterAccountingFailure, resumeDeferredStrategyEvaluations,
+  cancelOwnedBuysAfterAccountingFailure, resumeDeferredStrategyEvaluations, onSafetyBlockerRaised,
 } = {}) {
   return ({ event } = {}) => {
     const tradingEngine = getTradingEngine()
@@ -103,6 +103,48 @@ export function createUserDataEventHandler({
           const brokerIdMatch = registeredOrders.find((order) =>
             incomingBrokerOrderId !== undefined &&
             order.brokerOrderId === incomingBrokerOrderId)
+          const eventSymbol = rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol
+          const isUnownedExecution = event.executionType === "TRADE" || event.fill instanceof Fill
+          const requiresStickyBlocker = failure.category === "ACCOUNTING_INTEGRITY" ||
+            (failure.category === "OWNERSHIP_INTEGRITY" && isUnownedExecution)
+          if (requiresStickyBlocker && typeof onSafetyBlockerRaised === "function") {
+            const evidence = {
+              failureCategory: failure.category,
+              failureStage: failure.stage,
+              eventType: event.eventType ?? null,
+              executionType: event.executionType ?? null,
+              symbol: eventSymbol ?? null,
+              brokerOrderId: incomingBrokerOrderId ?? null,
+              clientOrderId: incomingClientOrderId ?? null,
+              executionId: event.fill?.id ?? event.executionId ?? null,
+              orderStatus: rejectedOrder?.status ?? null,
+            }
+            try {
+              const blocker = await onSafetyBlockerRaised({
+                scope: eventSymbol ? "MARKET" : "ACCOUNT",
+                symbol: eventSymbol ?? null,
+                reason: failure.stage,
+                evidence,
+              })
+              if (blocker?.ok !== true || blocker.data?.durable !== true) {
+                logger.error?.({
+                  message: "terminal user-data safety blocker could not be durably committed",
+                  symbol: eventSymbol,
+                  failureCategory: failure.category,
+                  failureStage: failure.stage,
+                  errors: blocker?.errors,
+                })
+              }
+            } catch (error) {
+              logger.error?.({
+                message: "terminal user-data safety blocker append failed",
+                symbol: eventSymbol,
+                failureCategory: failure.category,
+                failureStage: failure.stage,
+                error,
+              })
+            }
+          }
           logger.error?.({
             message: getUserDataFailureMessage(failure),
             failureCategory: failure.category,
