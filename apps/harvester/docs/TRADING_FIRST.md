@@ -33,7 +33,7 @@ These are existing requirements, not permission to add more blocking Journal I/O
 
 The accepted restart-critical fact contract is defined in [ADR-0001 — Application-owned durable facts](./architecture/decisions/0001-application-owned-recovery-facts.md). Its append-only file store, integrity checks, durable order/fill/cycle/process/operator fact producers and offline candidate projection are merged in [PR #1055](https://github.com/45s/coinzilla/pull/1055). The candidate remains offline-only: `candidateOnly`, `restorationEnabled: false`, `requiresExchangeReconciliation: true`, and `historyCoverageComplete: false`. Projection/invariant parity, account-wide readiness, the full reconciliation matrix and Step 9 crash/restart proof remain pending. Startup restoration remains disabled, and a second process start is blocked before broker connection. Journal remains a separate operational observer.
 
-Journal records are not trading-state authority. Neither Journal replay nor runtime activation of the ADR-0001 candidate state is enabled until the separate reconciliation and crash-test gates are accepted.
+Journal records are not trading-state authority. The ADR-0001 durable-facts ledger is the restart-evidence authority; its offline candidate projection is not runtime restoration. Neither Journal replay nor candidate-state activation is enabled until #654 Step 8 projection/invariant parity and Step 9 crash/restart proof are accepted.
 
 ---
 
@@ -45,7 +45,7 @@ Journal records are not trading-state authority. Neither Journal replay nor runt
 
 Harvester's first product deliverable is a running trading application that can repeatedly execute its selected strategy on Binance TESTNET. The main task is TRADING: read configuration, receive prices, decide, place orders, process executions, and repeat.
 
-Do not make unrequested persistence, Journal expansion, recovery frameworks, observability, architecture work, or optimization prerequisites for implementing or demonstrating the first working trading cycle. The user has explicitly selected the narrowly scoped P3 H7/H8 maintainability task in [issue #1073](https://github.com/45s/coinzilla/issues/1073) / [PR #1075](https://github.com/45s/coinzilla/pull/1075); that exception is strictly behavior-preserving and does not authorize exchange operations or delay the trading/TESTNET acceptance gate. The separately selected Journal evidence scope in issue [#650](https://github.com/45s/coinzilla/issues/650) may proceed independently; optional investigation evidence remains best-effort and must not block trading.
+Do not make unrequested persistence, Journal expansion, recovery frameworks, observability, architecture work, or optimization prerequisites for implementing or demonstrating the first working trading cycle. The user has explicitly selected ADR-0001 process-restart reconciliation in [issue #654](https://github.com/45s/coinzilla/issues/654) and the narrowly scoped P3 H7/H8 maintainability task in [issue #1073](https://github.com/45s/coinzilla/issues/1073) / [PR #1075](https://github.com/45s/coinzilla/pull/1075); these are explicit task-selection exceptions, not a change to Conservative trading priority. P3 is strictly behavior-preserving and neither task authorizes exchange operations or removes the TESTNET acceptance gate. The separately selected Journal evidence scope in issue [#650](https://github.com/45s/coinzilla/issues/650) may proceed independently; optional investigation evidence remains best-effort and must not block trading.
 
 ## Current TESTNET incident safety gate — 2026-11-04 (post-PR #515)
 
@@ -147,7 +147,7 @@ All of the following must be demonstrated, not merely described:
 - [x] Deterministic regression tests and fixes for the rapid-BUY race and post-cycle MIN_NOTIONAL intent are merged into develop and pass all five required workflows on the PR #515 merge commit; live TESTNET effectiveness remains unproven.
 - [x] The execution evidence recorded in this document is Binance Spot TESTNET only; no LIVE orders are claimed or authorized by this validation record. A deliberate `TRADING_MODE=live` selection is the separate environment choice for real Binance execution.
 
-Only after this definition of done is met should the team move the main priority to durable Journal integration, restart recovery, comprehensive reconciliation, operational hardening, or Aggressive strategy work.
+This checklist records the first trading milestone's exchange-acceptance criteria; it does not defer already selected ADR-0001 restart recovery (#654) or P3 H7/H8 maintainability (#1073). Neither is permission to claim TESTNET acceptance or change Conservative trading behavior.
 
 ## Required agent progress report
 
@@ -264,7 +264,7 @@ After a session has been stopped gracefully, use `pnpm run journal:balance-audit
 
 ### Post-PR #515 status correction — 2026-11-04
 
-This status supersedes older incident-handoff text in this document that describes PR #515 as pending or its lifecycle/accounting matrix as incomplete. PR #515 is merged; its offline acceptance matrix and exact-head CI are complete. The only remaining critical milestone is the separately authorized joint TESTNET validation and real opening/closing account reconciliation. No TESTNET write has been performed during this documentation preparation.
+This status supersedes older incident-handoff text in this document that describes PR #515 as pending or its lifecycle/accounting matrix as incomplete. PR #515 is merged; its offline acceptance matrix and exact-head CI are complete. The first live TESTNET lifecycle and opening/closing account reconciliation remain unaccepted; the controlled runbook is CLOSED / PAUSED. ADR-0001 Step 8 projection/invariant parity and Step 9 crash/restart proof also remain open under #654. Current account audit phases and tracked asset scope are defined above and in [Journal Operations](./JOURNAL_OPERATIONS.md). No TESTNET/LIVE write is authorized by this document update or P3.
 
 ### Latest ZROUSDT TESTNET reconciliation incident — 2026-11-04
 
