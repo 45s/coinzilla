@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { loadAppConfig } from "../../../src/infrastructure/config/load-app-config.js"
+import { loadAppConfig } from "../../../src/infrastructure/config/load-app-config.mjs"
 
 function createValidConfig() {
   return {
@@ -83,7 +83,7 @@ test("loads and validates the default named ESM app config export", async () => 
 
 test("loads a named appConfig export from a supplied JavaScript path", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "config.js")
+  const path = join(directory, "config.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
   await writeFile(path, createConfigModule(createValidConfig()), "utf8")
 
@@ -93,7 +93,7 @@ test("loads a named appConfig export from a supplied JavaScript path", async (t)
 
 test("loads a named appConfig export from a supplied file URL", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "config.js")
+  const path = join(directory, "config.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
   await writeFile(path, createConfigModule(createValidConfig()), "utf8")
 
@@ -103,7 +103,7 @@ test("loads a named appConfig export from a supplied file URL", async (t) => {
 
 test("reports the source path and preserves the syntax cause for malformed JavaScript", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "invalid.js")
+  const path = join(directory, "invalid.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
   await writeFile(path, "export const appConfig = {", "utf8")
 
@@ -117,7 +117,7 @@ test("reports the source path and preserves the syntax cause for malformed JavaS
 })
 
 test("reports a useful error when the config module does not exist", async () => {
-  const missingPath = join(tmpdir(), "missing-harvester-config.js")
+  const missingPath = join(tmpdir(), "missing-harvester-config.mjs")
   await assert.rejects(
     loadAppConfig(missingPath),
     (error) => error instanceof Error && error.message.includes(missingPath),
@@ -127,7 +127,7 @@ test("reports a useful error when the config module does not exist", async () =>
 
 test("rejects a module that does not export the named appConfig value", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "missing-export.js")
+  const path = join(directory, "missing-export.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
   await writeFile(path, "export const otherConfig = {};", "utf8")
 
@@ -140,7 +140,7 @@ test("rejects a module that does not export the named appConfig value", async (t
 
 test("rejects structurally invalid named appConfig exports", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "invalid-shape.js")
+  const path = join(directory, "invalid-shape.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
   await writeFile(path, createConfigModule({ strategies: {} }), "utf8")
 

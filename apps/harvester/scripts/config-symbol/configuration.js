@@ -268,7 +268,7 @@ export function addPairToAppConfig({ appConfig, symbol, pairConfig } = {}) {
   }
   const existingSymbol = Object.keys(pairs).find((candidate) => candidate.trim().toUpperCase() === normalizedSymbol)
   if (existingSymbol) {
-    throw new Error("Pair " + normalizedSymbol + " already exists in config.json; refusing to overwrite it")
+    throw new Error("Pair " + normalizedSymbol + " already exists in config/index.js; refusing to overwrite it")
   }
   const updated = structuredClone(appConfig)
   updated.strategies.CG_coinGrabber.pairs[normalizedSymbol] = structuredClone(pairConfig)

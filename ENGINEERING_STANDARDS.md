@@ -273,6 +273,12 @@ The repository's GitHub Actions workflows currently run package tests and test c
 
 The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
 
+### ECMAScript module exports
+
+- Use named exports for application, package, script, and test modules. Do not add ESM default exports.
+- ESLint enforces this rule with an AST-level restriction on `ExportDefaultDeclaration`.
+- The root `eslint.config.js` is the sole loader-contract exception: ESLint's flat-config loader requires that file to provide its configuration as a default export. Do not extend this exception to application or package modules.
+
 ## JavaScript and JSDoc
 
 Coinzilla's default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.

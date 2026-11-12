@@ -1,8 +1,10 @@
-{
+import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";
+
+export const appConfig = {
   "notifications": {
     "telegram": {
       "enabled": true,
-      "profile": "trader",
+      "profile": NOTIFICATIONS_TG_PROFILES.TRADER,
       "markets": [],
       "events": {}
     }
@@ -19,6 +21,7 @@
         }
       },
       "pairs": {
+        // BEGIN GENERATED PAIR CONFIGURATION
         "LINKUSDT": {
           "enabled": false,
           "enableVolatilityProtection": true,
@@ -110,7 +113,8 @@
           "makerPercent": 0,
           "takerPercent": 0.075
         }
+        // END GENERATED PAIR CONFIGURATION
       }
     }
   }
-}
+};

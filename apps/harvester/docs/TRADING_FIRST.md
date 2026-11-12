@@ -59,7 +59,7 @@ The historical incident facts remain: twelve distinct 400-DOGE BUY orders at 0.0
 
 When implementing or changing the trading runtime, follow this order:
 
-1. **Start the application.** Read and validate the single application-wide `config/index.js`. Resolve enabled strategy pairs and their settings; resolve optional notification policy independently. Fail with actionable errors for invalid configuration.
+1. **Start the application.** Import and validate the named `appConfig` export from the single application-wide ESM module `config/index.js`. Resolve enabled strategy pairs and their settings; resolve optional notification policy independently. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
 3. **Receive usable market prices.** Validate incoming prices and make the latest usable price available to the trading workflow. Handle missing/stale prices safely.
 4. **Evaluate the first strategy.** Conservative is the first executable policy. Its complete BUY/SELL, accounting, commission, retained-inventory, partial-fill, cancellation/replacement, dust, and completion behavior is defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not duplicate those rules here. Do not start Aggressive first or place runtime/broker concerns inside the domain.

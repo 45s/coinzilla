@@ -4,7 +4,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Start here
 
-- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the single `config/index.js`, profile behavior, event overrides, and environment-only credentials.
+- [Application configuration and Telegram notification profiles](../README.md#optional-telegram-notifications) — the named `appConfig` export in `config/index.js`, named constants in `config/notifications-tg-profiles.js`, profile behavior, event overrides, and environment-only credentials.
 
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Interactive pair configuration generator](../README.md#generate-a-new-trading-pair) — create a validated, enabled-by-default Binance Spot pair through `pnpm run config:symbol`
@@ -32,7 +32,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 - [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
 
-- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD-only default config. Reconcile scope before any future session.
+- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD and ZROFDUSD default config. Reconcile scope before any future session.
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Error vocabulary](error-vocabulary.md) — stable operator-facing diagnostic identifiers and recovery procedures.
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)

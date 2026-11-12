@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ESLint } from "eslint";
 
 import { selectChangedJavaScriptFiles } from "./check-eslint-changed.js";
 
@@ -55,8 +56,6 @@ test("selectChangedJavaScriptFiles returns sorted unique paths", () => {
 });
 
 
-import { ESLint } from "eslint";
-
 test("ESLint rejects default ESM exports in application and package source files", async () => {
   const eslint = new ESLint();
   const [result] = await eslint.lintText(
@@ -95,5 +94,24 @@ test("ESLint permits the loader-required default export in its own configuration
     result.messages.filter((message) => message.ruleId === "no-restricted-syntax").length,
     0,
     "ESLint's own configuration file must retain the default export required by its config loader.",
+  );
+});
+
+
+test("the full workspace contains no ESM default exports outside the ESLint loader configuration", async () => {
+  const eslint = new ESLint();
+  const results = await eslint.lintFiles(["**/*.{js,mjs,cjs}"]);
+  const violations = results.flatMap((result) => result.messages
+    .filter((message) => message.ruleId === "no-restricted-syntax")
+    .map((message) => ({
+      filePath: result.filePath,
+      line: message.line,
+      message: message.message,
+    })));
+
+  assert.deepEqual(
+    violations,
+    [],
+    "Every workspace ESM module must use named exports; only the root ESLint loader configuration is exempt.",
   );
 });
