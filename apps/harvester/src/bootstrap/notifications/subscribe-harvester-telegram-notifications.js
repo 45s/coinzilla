@@ -56,6 +56,7 @@ const EVENT_MAPPINGS = Object.freeze({
     name: "fill.received",
     data: {
       symbol: data.symbol,
+      side: data.side,
       fill: { price: data.price, quantity: data.quantity, tradeId: data.tradeId },
     },
   }),
