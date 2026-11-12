@@ -9,11 +9,10 @@ const testEventPublisher = Object.freeze({
   flush: async () => ({ ok: true, durable: true }),
 })
 const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? typeof input.eventPublisher.flush !== "function"
-      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
-      : input.eventPublisher
-    : testEventPublisher
+  let eventPublisher = input.eventPublisher ?? testEventPublisher
+  if (input.eventPublisher && typeof input.eventPublisher.flush !== "function") {
+    eventPublisher = { ...input.eventPublisher, flush: testEventPublisher.flush }
+  }
   return startHarvester({ ...input, eventPublisher })
 }
 

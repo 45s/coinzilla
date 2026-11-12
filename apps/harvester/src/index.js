@@ -356,12 +356,15 @@ export async function main({
       }),
     })
 
-    const startupMessage = runtime.connected
-      ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
-        ? "Connected; subscribed to " + runtime.subscriptions.length +
-          " enabled market(s). Conservative " + runtimeConfig.tradingMode.toUpperCase() + " trading is enabled; waiting for validated market prices and user-data readiness."
-        : "Connected; Binance trading mode is " + runtimeConfig.tradingMode.toUpperCase() + "."
-      : "Binance connection was not established."
+    let startupMessage
+    if (!runtime.connected) {
+      startupMessage = "Binance connection was not established."
+    } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
+      startupMessage = "Connected; subscribed to " + runtime.subscriptions.length +
+        " enabled market(s). Conservative " + runtimeConfig.tradingMode.toUpperCase() + " trading is enabled; waiting for validated market prices and user-data readiness."
+    } else {
+      startupMessage = "Connected; Binance trading mode is " + runtimeConfig.tradingMode.toUpperCase() + "."
+    }
     logSystem(logger, startupMessage)
 
     if (typeof runtime.stop === "function") {

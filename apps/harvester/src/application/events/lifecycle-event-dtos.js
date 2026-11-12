@@ -298,15 +298,6 @@ export const mapBrokerStatusChangedData = (input = {}) =>
     }
   })
 
-/** Map an application readiness transition after the user-data status handler applies it. */
-export const mapUserDataReadinessChangedData = (input = {}) =>
-  mapData(input, "User-data-readiness-changed event mapping", ({ broker, ready, status, trigger }) => ({
-    broker: requireString({ value: broker, field: "broker" }),
-    ready: requireBoolean({ value: ready, field: "ready" }),
-    status: requireString({ value: status, field: "status" }),
-    ...(trigger === undefined ? {} : { trigger: requireString({ value: trigger, field: "trigger" }) }),
-  }))
-
 
 const requireDecimalString = ({ value, field }) => {
   if (typeof value !== "string") throw new TypeError(field + " must be a decimal string")

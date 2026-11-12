@@ -54,11 +54,11 @@ export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) 
   for (const eventKey of TELEGRAM_NOTIFICATION_EVENT_KEYS) {
     const eventName = EVENT_NAME_BY_KEY[eventKey]
     const override = telegramConfig.events?.[eventKey]
-    if (override === true) selectedEvents.add(eventName)
-    if (override === false) selectedEvents.delete(eventName)
+    if (override === true) { selectedEvents.add(eventName) }
+    if (override === false) { selectedEvents.delete(eventName) }
   }
 
-  for (const eventName of NON_DISABLEABLE_EVENT_NAMES) selectedEvents.add(eventName)
+  for (const eventName of NON_DISABLEABLE_EVENT_NAMES) { selectedEvents.add(eventName) }
 
   const markets = Object.freeze([...(telegramConfig.markets ?? [])])
   const eventNames = Object.freeze(
@@ -73,8 +73,8 @@ export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) 
     markets,
     eventNames,
     shouldNotify({ name, data = {} } = {}) {
-      if (NON_DISABLEABLE_EVENT_SET.has(name)) return true
-      if (name === "bot.stopped" && data.outcome === "failed") return true
+      if (NON_DISABLEABLE_EVENT_SET.has(name)) { return true }
+      if (name === "bot.stopped" && data.outcome === "failed") { return true }
       if (!selectedEvents.has(name)) return false
       if (markets.length > 0 && typeof data.symbol === "string" && !markets.includes(data.symbol)) return false
       return true

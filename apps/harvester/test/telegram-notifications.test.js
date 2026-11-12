@@ -520,7 +520,9 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-1", sellOrderBrokerOrderId: "123", outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT", realizedNetProfit: "-0.02", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01" }],
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-2", sellOrderBrokerOrderId: "124", outcome: "CONTINUE_SELL_THROUGH", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", realizedNetProfit: "0", activeQuantity: "0.02", keepQuantity: "0.01", minProfit: "0.01" }],
       ]
-      for (const [name, data] of events) eventPublisher.publish({ name, source: "harvester", data })
+      for (const [name, data] of events) {
+        eventPublisher.publish({ name, source: "harvester", data })
+      }
       return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: ["LINKUSDT"], stop: async () => ({ ok: true }) }
     },
     registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),

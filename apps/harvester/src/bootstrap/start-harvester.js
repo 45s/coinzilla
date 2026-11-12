@@ -35,7 +35,7 @@ import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-c
 import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
 import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
-import { mapUserDataReadinessChangedData } from "../application/events/lifecycle-event-dtos.js"
+import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
 export async function startHarvester({
