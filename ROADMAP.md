@@ -80,10 +80,9 @@
    - **Safety:** no blanket conversion of all errors, no premature global error framework/shared package, and no message parsing when typed classification is available. Keep ordinary control flow out of exceptions.
    - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
 
-11. **Workspace JavaScript linting — IN PROGRESS.**
-   - **Why:** syntax checks alone do not catch many correctness and maintainability defects across the 554-file JavaScript workspace.
-   - **Plan:** introduce ESLint flat config with recommended correctness rules and the approved low-noise safety rules; report existing findings across the workspace, require all changed JavaScript files to pass without suppressions, and preserve the existing required CI status contexts.
-   - **Owner:** shared infrastructure (root manifests, lockfile, workspace scripts, CI and engineering documentation).
+11. **Workspace JavaScript linting — DONE ([PR #1058](https://github.com/45s/coinzilla/pull/1058)).**
+   - ESLint 10 flat configuration, full-workspace inventory reporting, and strict changed-JavaScript CI enforcement.
+   - **Owner:** shared infrastructure.
 
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
 
