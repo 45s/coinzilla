@@ -80,6 +80,11 @@
    - **Safety:** no blanket conversion of all errors, no premature global error framework/shared package, and no message parsing when typed classification is available. Keep ordinary control flow out of exceptions.
    - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
 
+11. **Workspace JavaScript linting — IN PROGRESS.**
+   - **Why:** syntax checks alone do not catch many correctness and maintainability defects across the 554-file JavaScript workspace.
+   - **Plan:** introduce ESLint flat config with recommended correctness rules and the approved low-noise safety rules; report existing findings across the workspace, require all changed JavaScript files to pass without suppressions, and preserve the existing required CI status contexts.
+   - **Owner:** shared infrastructure (root manifests, lockfile, workspace scripts, CI and engineering documentation).
+
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
 
 - **Decision:** Binance endpoint selection uses only explicit `TRADING_MODE=testnet|live`; `NODE_ENV` must never influence exchange routing. Missing/invalid mode fails closed. See [ADR-0002](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md).
