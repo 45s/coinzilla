@@ -248,8 +248,9 @@ test("durably records the exact order submission intent before calling the broke
   assert.equal(calls[0].purpose, null, "An order without an explicit strategy purpose must persist a canonical null purpose.")
 })
 
-test("does not call the broker when durable order-intent acknowledgement fails", async () => {
+test("does not call the broker and removes PENDING registration when durable order-intent acknowledgement fails", async () => {
   let brokerCalls = 0
+  const deferredRegistrations = []
   const execute = makeExecuteStrategyDecision({
     broker: {
       placeOrder: async ({ order }) => {
@@ -263,6 +264,7 @@ test("does not call the broker when durable order-intent acknowledgement fails",
     }),
     onDurableSubmissionOutcome: async () => assert.fail("outcome must not be written when intent persistence fails"),
     onPendingOrder: async () => {},
+    onSubmissionDeferred: async ({ registered }) => deferredRegistrations.push(registered),
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => {},
   })
@@ -271,6 +273,7 @@ test("does not call the broker when durable order-intent acknowledgement fails",
 
   assert.equal(result.ok, false, "A failed durable intent append must fail the strategy submission workflow.")
   assert.equal(brokerCalls, 0, "No broker placement may occur unless the immutable order intent was durably acknowledged first.")
+  assert.deepEqual(deferredRegistrations, [true], "A failed pre-broker durability barrier must remove the locally registered PENDING order.")
   assert.match(result.errors[0].message, /durable fact store unavailable/, "The durable-fact failure must remain actionable at the application boundary.")
 })
 
