@@ -46,6 +46,14 @@ test("subscribes every enabled market before requesting approximately 100 comple
   )
 })
 
+test("does not subscribe to or warm candle history for an enabled pair with volatility protection disabled", async () => {
+  const fixture = createFixture({ pairs: { BTCUSDT: { enabled: true }, DOGEUSDT: { enabled: true, enableVolatilityProtection: false }, ZROUSDT: { enabled: false } } })
+  await fixture.start()
+  assert.deepEqual(fixture.calls.filter((call) => call.method === "subscribeForCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Only enabled pairs that retain volatility protection may receive Kline subscriptions.")
+  assert.deepEqual(fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Opted-out pairs must not incur historical candle requests or warm-up work.")
+  assert.equal(fixture.service.getSnapshot({ symbol: "DOGEUSDT" }).ok, false, "The service must not expose a synthetic candle snapshot for an opted-out pair.")
+})
+
 test("filters a forming historical candle and calculates ATR, NATR and the previous-60-observation ratio", async () => {
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
