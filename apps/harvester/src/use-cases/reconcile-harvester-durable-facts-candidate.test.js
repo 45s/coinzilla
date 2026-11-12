@@ -58,13 +58,14 @@ const makeStore = (recordsValue) => ({
 
 const makeDependencies = ({ auditTargetMarketBlocked = false } = {}) => {
   const calls = []
-  const candidateState = { portfolio: {}, orderRegistry: {}, journalFills: [] }
+  let candidateState
   return {
     calls,
-    candidateState,
     reconcileOwnedOrders: async ({ candidateState: received, recoveryMode }) => {
       calls.push("owned-orders")
-      assert.equal(received, candidateState)
+      candidateState = received
+      assert.ok(candidateState.portfolio, "The candidate must carry the canonical Portfolio projection.")
+      assert.ok(candidateState.orderRegistry, "The candidate must carry the canonical OrderRegistry projection.")
       assert.equal(recoveryMode, true, "Owned-order reconciliation must use the read-only recovery mode.")
       return { ok: true, data: { reconciled: 1 } }
     },

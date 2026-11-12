@@ -36,9 +36,9 @@ export async function reconcileHarvesterDurableFactsCandidate({
       })
     }
     const projection = projectHarvesterDurableFacts({ records: read.data.records })
-    if (projection?.ok !== true) return projection
+    if (projection?.ok !== true) { return projection }
     const candidate = restoreHarvesterJournalState({ projection, marketMetadata })
-    if (candidate?.ok !== true) return candidate
+    if (candidate?.ok !== true) { return candidate }
 
     const coverage = [...projection.data.marketHistoryCoverage].reverse().find(({ symbol }) =>
       symbol === targetMarket?.symbol
@@ -54,7 +54,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
     let reconciledCandidateState
     const readCandidateState = async () => {
       const result = await getRecoveredState({ candidateState: candidate.data })
-      if (result?.ok === false) throw result.errors?.[0] ?? new Error("Candidate state read failed")
+      if (result?.ok === false) { throw result.errors?.[0] ?? new Error("Candidate state read failed") }
       reconciledCandidateState = result?.ok === true ? result.data : result
       return reconciledCandidateState
     }
@@ -73,7 +73,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
       historyRetentionEvidence,
       ...(auditAccountState ? { auditAccountState } : {}),
     })
-    if (reconciliation?.ok !== true) return reconciliation
+    if (reconciliation?.ok !== true) { return reconciliation }
     const finalCandidate = await readCandidateState()
     return toResult({
       data: Object.freeze({
