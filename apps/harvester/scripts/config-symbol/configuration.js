@@ -1,6 +1,5 @@
 import {
   compareDecimal,
-  divideDecimal,
   multiplyDecimal,
   normalizeDecimalString,
   roundDecimalToIncrement,
@@ -9,7 +8,6 @@ import { validateAppConfig } from "../../src/domain/app-config.js"
 
 const ZERO = "0"
 const HUNDRED = "100"
-const ORDER_QUANTITY_SCALE = 18
 
 /**
  * Normalize and validate an operator-entered Binance Spot symbol.

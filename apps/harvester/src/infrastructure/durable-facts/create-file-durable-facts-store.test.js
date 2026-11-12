@@ -29,7 +29,7 @@ const canonicalize = (value) => {
 }
 const canonicalStringify = (value) => JSON.stringify(canonicalize(value))
 const digestRecord = (record) => {
-  const { digest, ...body } = record
+  const body = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "digest"))
   return createHash("sha256").update(canonicalStringify(body), "utf8").digest("hex")
 }
 const readLines = async (filePath) => (await readFile(filePath, "utf8")).trimEnd().split("\n")

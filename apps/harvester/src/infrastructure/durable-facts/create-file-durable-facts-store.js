@@ -121,7 +121,7 @@ function sha256(value) {
 }
 
 function digestRecord(record) {
-  const { digest, ...body } = record
+  const body = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "digest"))
   return sha256(canonicalStringify(body))
 }
 

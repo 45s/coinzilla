@@ -158,7 +158,7 @@ export async function subscribeHarvesterTelegramNotifications({
     try {
       await notificationSubscriber.close()
     } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], "Telegram subscription setup and cleanup failed", { cause: error })
+      throw new AggregateError([error, cleanupError], "Telegram subscription setup and cleanup failed", { cause: cleanupError })
     }
     throw error
   }
