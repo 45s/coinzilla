@@ -597,11 +597,24 @@ export function makeConservativeTradingEngine({
     broker,
     canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
+      const defer = (reason, details = {}) => ({
+        allowed: false,
+        reason,
+        details: { symbol, ...details },
+      })
       const marketPrice = state.prices.get(symbol)
-      if (state.paused.has(symbol) ||
-          (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") ||
-          hasUnownedOpenOrdersForSymbol({ symbol }) ||
-          !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) {return false}
+      if (state.paused.has(symbol)) {return defer("MARKET_PAUSED")}
+      if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
+        return defer("OPERATOR_MARKET_PAUSED")
+      }
+      if (hasUnownedOpenOrdersForSymbol({ symbol })) {
+        return defer("UNOWNED_OPEN_ORDERS_PRESENT")
+      }
+      if (!canTrade({ symbol })) {return defer("TRADING_DISABLED")}
+      if (!marketPrice) {return defer("MARKET_PRICE_UNAVAILABLE")}
+      if (!isMarketPriceFresh(marketPrice)) {
+        return defer("MARKET_PRICE_STALE", { priceTimestamp: marketPrice.timestamp })
+      }
       if (isVolatilityProtectionEnabledForSymbol(symbol)) {
         let volatility
         try {
@@ -616,13 +629,35 @@ export function makeConservativeTradingEngine({
         const latestRatioProtected = typeof latestRatio === "string" &&
           compareDecimal({ left: latestRatio, right: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio }) >= 0
         const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
-        if ((!volatility?.status?.isReady || protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL ||
-            latestRatioProtected) && !recoverySell) {return false}
+        if (!volatility?.status?.isReady && !recoverySell) {
+          return defer("VOLATILITY_DATA_UNAVAILABLE", {
+            protectionMode: protection.mode,
+            volatilityRatio: latestRatio ?? null,
+          })
+        }
+        if ((protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL || latestRatioProtected) && !recoverySell) {
+          return defer("VOLATILITY_PROTECTION_ACTIVE", {
+            protectionMode: protection.mode,
+            volatilityRatio: latestRatio ?? null,
+          })
+        }
       }
-      if (order.type !== "LIMIT_MAKER") {return true}
+      if (order.type !== "LIMIT_MAKER") {return { allowed: true }}
       const marketBook = state.books.get(symbol)
-      return Boolean(marketBook && isMarketBookFresh(marketBook) &&
-        !isPostOnlyOrderCrossing({ order, marketBook }))
+      if (!marketBook) {return defer("MARKET_BOOK_UNAVAILABLE")}
+      if (!isMarketBookFresh(marketBook)) {
+        return defer("MARKET_BOOK_STALE", { bookTimestamp: marketBook.timestamp })
+      }
+      if (isPostOnlyOrderCrossing({ order, marketBook })) {
+        return defer("POST_ONLY_WOULD_CROSS", {
+          side: order.side,
+          limitPrice: order.limitPrice.amount,
+          bestBidPrice: marketBook.bestBidPrice,
+          bestAskPrice: marketBook.bestAskPrice,
+          bookTimestamp: marketBook.timestamp,
+        })
+      }
+      return { allowed: true }
     },
     onSubmissionDeferred: ({ order, registered } = {}) => {
       if (registered) {
@@ -1418,6 +1453,9 @@ export function makeConservativeTradingEngine({
         evaluationId,
         symbol,
         ok: result.ok,
+        deferred: result.data?.deferred === true,
+        deferralReason: result.data?.reason ?? null,
+        deferralDetails: result.data?.details ?? null,
         submittedOrders: result.data?.submittedOrders?.map((order) => order.value) ?? [],
         errors: (result.errors ?? []).map((error) => ({
           name: error?.name,
@@ -1433,7 +1471,8 @@ export function makeConservativeTradingEngine({
             decision,
             submittedOrders: result.data.submittedOrders ?? [],
             deferred: true,
-            reason: "TRADING_NOT_READY",
+            reason: result.data.reason ?? "SUBMISSION_NOT_ALLOWED",
+            deferralDetails: result.data.details ?? null,
             operatorSuppressedActions,
           },
         })

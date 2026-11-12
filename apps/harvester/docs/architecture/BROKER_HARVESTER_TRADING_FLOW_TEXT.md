@@ -72,12 +72,16 @@ The central submission gate blocks ordinary strategy orders when candle data is 
 
 ### 3. Order submission and acknowledgement
 
-1. Before broker I/O, the central submission gate evaluates market readiness, volatility protection and the remaining order-safety conditions. A protected/unready market blocks ordinary actions; only an explicitly marked recovery SELL can pass the volatility gate.
-2. For an action admitted by the gate, the engine creates/submits the application order through `broker.placeOrder({ order })`.
-3. The adapter selects `createCanonicalOrder(order)` when the Binance client supports it; otherwise it calls `createOrder(order)`.
-4. Binance responds with an order acknowledgement.
-5. The adapter returns a normalized acknowledged order to the engine.
-6. The engine updates its order lifecycle / registry state.
+1. Before broker I/O, the central submission gate evaluates pause state, unowned orders, trading readiness, fresh market price, volatility readiness/protection and the remaining order-safety conditions. Only an explicitly marked recovery SELL may pass the volatility-specific exception.
+2. A denied intent returns `deferred: true` with a stable reason and safe context; no broker call is made. For a multi-action decision, any earlier acknowledged orders remain in `submittedOrders`.
+3. For an action admitted by the gate, the engine registers a local PENDING order and durably publishes the submission intent.
+4. The engine repeats the submission gate after the durable-intent barrier. If readiness changed, it removes the local PENDING order and returns the exact deferral reason without calling the broker.
+5. Only an action that passes both checks reaches `broker.placeOrder({ order })`.
+6. The adapter selects `createCanonicalOrder(order)` when the Binance client supports it; otherwise it calls `createOrder(order)`.
+7. Binance responds with an order acknowledgement.
+8. The adapter returns a normalized acknowledged order to the engine, which updates its order lifecycle / registry state.
+
+A successful deferral is not a broker rejection or acknowledgement. `ok: true` means the use case completed without an execution error; inspect `deferred`, `reason`, `deferralDetails`, and `submittedOrders` to determine whether an order reached the broker. See [Submission deferrals and missing-order diagnostics](../operations/submission-deferrals.md) for the complete reason catalogue.
 
 **Important:** an acknowledgement is not a fill. It confirms the submission response; it does not prove that any quantity traded and does not update Portfolio or RecoveryLedger holdings.
 

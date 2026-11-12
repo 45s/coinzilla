@@ -49,6 +49,18 @@
 
 ---
 
+## Submission deferral diagnostics — issue #1025
+
+**Status: IMPLEMENTED ON PR #1026 — NOT YET MERGED.** The Conservative submission gate now preserves stable reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).
+
+- Preserve `ok` as execution-use-case success, not proof of broker submission; callers and logs distinguish `deferred`, `deferralReason`, and acknowledged `submittedOrders`.
+- Recheck all submission gates after durable PENDING registration; if readiness changes, remove the local PENDING record and do not call the broker.
+- Keep `LIMIT_MAKER` fail-closed for missing/stale book data and crossing prices. Volatility data/protection reasons are explicit; the recovery-SELL exception remains purpose-specific.
+- Regression tests cover structured reason propagation, post-registration PENDING cleanup, no-broker-call guarantees, and post-only crossing/freshness checks.
+- Merge status and exact-head CI evidence remain tracked in [PR #1026](https://github.com/45s/coinzilla/pull/1026) and [issue #1025](https://github.com/45s/coinzilla/issues/1025).
+
+---
+
 ## Adaptive price step — volatility-adjusted spacing
 
 **Status: PROPOSED — STRATEGY POLICY NOT FROZEN; NOT IMPLEMENTED.** This is a strategy enhancement proposal, not permission to change current trading behavior. The configured `priceStepPercent` remains the strategy baseline. Harvester may derive an effective step from a normalized volatility coefficient supplied by the shared [Indicators package](../../packages/indicators/README.md). The package now provides parameterized ATR, NATR and volatility-ratio calculations; adaptive-step reference-window, coefficient bounds, baseline-floor and order-replacement policy remain open.

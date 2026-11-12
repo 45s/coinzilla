@@ -5,6 +5,7 @@ Start with the procedure matching the task. Do not treat a runbook as standing a
 - [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/CLOSING durability, process locks, shutdown ordering and failure diagnosis.
 - [One-market recovery reconciliation](../recovery/README.md) — offline ADR-0001 Step 7 evidence bundle, audit-only CLI and explicit coverage confirmation.
 - [Error vocabulary](../error-vocabulary.md) — stable diagnostic identifiers, meanings and safe recovery steps.
+- [Submission deferrals and missing-order diagnostics](submission-deferrals.md) — interpret successful-but-deferred results, stable gate reasons, structured logs, and LIMIT_MAKER safety.
 - [Logging](../LOGGING.md) — cumulative and timestamped session files, shared process identity, stream lifecycle, logger levels and diagnostics.
 - [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; the earlier DOGEUSDT/ZROUSDT scope no longer matches the LINKFDUSD-only default config. Reconcile before any future session.
 - [TESTNET order tools](../testnet-order-tools.md) — read-only diagnostics plus legacy ZROUSDT market-sell and account-wide cancel writes; neither write is authorized by the paused runbook. The account-wide cancel proceeds after a warning without interactive confirmation; the menu adds no confirmation layer. The menu's read-only exchange account audit and local Journal balance audit are documented in the runbook and Journal Operations.
