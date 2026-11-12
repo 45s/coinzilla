@@ -132,7 +132,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Command:** `pnpm run config:symbol` (also available from the repository root through `pnpm --filter @coinzilla/harvester config:symbol`).
 
-**Canonical destination:** merge the generated pair into `apps/harvester/config/index.js` at `strategies.CG_coinGrabber.pairs.<SYMBOL>`. Harvester has one application-wide `appConfig` object; supporting constants modules may be imported by its entrypoint, but do not create parallel feature-specific configuration formats.
+**Canonical destination:** merge the generated pair into `apps/harvester/config/strategies/cg-coin-grabber.js` at `CG_COIN_GRABBER_CONFIG.pairs.<SYMBOL>`. `config/index.js` composes this named strategy export into the single application-wide `appConfig`; do not create parallel runtime configuration boundaries.
 
 **Operator inputs:** symbol, quote investment budget, `keepQuantity`, maker percentage, taker percentage, minimum profit (quote units), and price-step percentage; both are required strategy inputs because their values are market-specific and must not be guessed. Derive `orderQuantity` from the quote budget and a current public ticker-price snapshot, rounded down to the exchange step and capped by active maximum quantity/notional bounds. Derive price/quantity precision from Binance filters and check the reference price against active minimum/maximum price bounds.
 
@@ -144,7 +144,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 - Keep maker/taker assumptions as separate operator inputs; do not treat public exchange metadata as account commission data.
 - Generate a complete pair object and validate the merged application configuration with the runtime `validateAppConfig` contract.
 - New pairs are enabled by default. Refuse an already configured symbol; never silently replace an existing pair.
-- Serialize writes under an exclusive lock and atomically replace `config/index.js`; preserve all existing pairs and unrelated application settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
+- Serialize writes under an exclusive lock and atomically replace `config/strategies/cg-coin-grabber.js`; preserve all existing pairs and unrelated strategy settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
 - Show the generated pair and exchange constraints for operator review before writing. Declining confirmation changes nothing.
 
 **Implementation and verification checklist:**
@@ -164,6 +164,8 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 ## Process-restart recovery — small-step delivery plan (#654)
 
 **Status: IN PROGRESS — Steps 1–7 complete; Step 8 durable-fact producers/barriers and offline candidate projection merged in PR #1055; Step 8 projection/invariant parity and account-wide readiness remain open; Step 9 crash/restart proof is pending. Runtime restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+
+**Current runtime configuration:** `strategies.CG_coinGrabber.settings.recovery.enabled` is explicitly `false`. The production entry point skips durable-facts store creation/verification and does not pass a recovery store into runtime startup. Keep it disabled until the remaining projection, exchange-reconciliation and crash/restart acceptance work is complete.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, offline candidate projection/reconciliation, and a closed runtime startup gate. Runtime restoration is not enabled until Step 9 is accepted. Keep existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
