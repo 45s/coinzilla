@@ -55,6 +55,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_CONNECTION_FAILED: "broker.connection_failed",
     BROKER_DISCONNECTED: "broker.disconnected",
     BROKER_STATUS_CHANGED: "broker.status_changed",
+    USER_DATA_READINESS_CHANGED: "user_data.readiness_changed",
     BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
     BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
     STRATEGY_DECISION: "strategy.decision",
