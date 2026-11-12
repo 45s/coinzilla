@@ -120,11 +120,12 @@ test("the full workspace contains no ESM default exports outside the ESLint load
 test("ESLint rejects nested ternary operators and accepts explicit branches", async () => {
   const eslint = new ESLint();
   const [nestedTernary] = await eslint.lintText(
-    'export const status = enabled ? "ON" : ready ? "READY" : "OFF";\n',
+    'const enabled = true; const ready = false; export const status = enabled ? "ON" : ready ? "READY" : "OFF";\n',
     { filePath: "apps/harvester/config/nested-ternary-example.js" },
   );
   const [explicitBranches] = await eslint.lintText(
     [
+      "const enabled = true; const ready = false;",
       'export let status = "READY";',
       "if (!enabled) {",
       '  status = "OFF";',
@@ -149,7 +150,7 @@ test("ESLint rejects nested ternary operators and accepts explicit branches", as
 test("ESLint requires braces around single-statement control-flow bodies", async () => {
   const eslint = new ESLint();
   const [unbracedControlFlow] = await eslint.lintText(
-    'export let status = "READY"; if (!enabled) status = "OFF";\n',
+    'const enabled = true; export let status = "READY"; if (!enabled) status = "OFF";\n',
     { filePath: "apps/harvester/config/unbraced-control-flow-example.js" },
   );
 
