@@ -48,7 +48,12 @@ export function formatTelegramOperatorMarkets({ snapshot } = {}) {
     lines.push("")
     lines.push(market.symbol + " — " + String(market.readiness ?? "UNKNOWN"))
     const hasPrice = market.latestPrice !== null && market.latestPrice !== undefined
-    const priceStatus = !hasPrice ? "unavailable" : market.priceFresh === true ? "fresh" : "stale"
+    let priceStatus = "stale"
+    if (!hasPrice) {
+      priceStatus = "unavailable"
+    } else if (market.priceFresh === true) {
+      priceStatus = "fresh"
+    }
     lines.push("Price: " + (market.latestPrice ?? "unavailable") + " (" + priceStatus + ")")
     if (market.priceTimestamp !== null && market.priceTimestamp !== undefined) {
       lines.push("Price updated: " + formatTimestamp(market.priceTimestamp))

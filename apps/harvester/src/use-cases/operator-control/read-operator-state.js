@@ -53,13 +53,14 @@ function createMarketReadModels({ markets, runtime }) {
         !blockers.includes("USER_DATA_NOT_READY")) {
       blockers.push("USER_DATA_NOT_READY")
     }
-    const readiness = !market.enabled
-      ? "DISABLED"
-      : !runtime.tradingEnabled
-        ? "OBSERVATION_ONLY"
-        : blockers.length > 0
-          ? "BLOCKED"
-          : "READY"
+    let readiness = "READY"
+    if (!market.enabled) {
+      readiness = "DISABLED"
+    } else if (!runtime.tradingEnabled) {
+      readiness = "OBSERVATION_ONLY"
+    } else if (blockers.length > 0) {
+      readiness = "BLOCKED"
+    }
     const volatilityProtection = market.volatilityProtection
       ? Object.freeze({ ...market.volatilityProtection })
       : null
@@ -171,11 +172,12 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
       blockers.push(runtime.userData.status || "USER_DATA_NOT_READY")
     }
     if (runtime.stopping) {blockers.push("RUNTIME_STOPPING")}
-    const state = !runtime.tradingEnabled
-      ? "TRADING_DISABLED"
-      : blockers.length > 0
-        ? "BLOCKED"
-        : "READY"
+    let state = "READY"
+    if (!runtime.tradingEnabled) {
+      state = "TRADING_DISABLED"
+    } else if (blockers.length > 0) {
+      state = "BLOCKED"
+    }
     return toResult({
       data: Object.freeze({
         observedAt: runtime.observedAt,

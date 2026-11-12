@@ -293,20 +293,27 @@ export function createTelegramOperatorAdapter({
 
     if (!result?.ok) {
       const code = result?.errors?.[0]?.code
-      const reply = code === "INVALID_OPERATOR_MARKET"
-        ? "Unknown configured market: " + parsed.symbol + "."
-        : code === "SAFETY_BLOCKER_ACTIVE"
-          ? "Cannot resume " + parsed.symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
-          : (parsed.type === "RESUME" ? "Resume" : "Pause") + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+      let reply
+      if (code === "INVALID_OPERATOR_MARKET") {
+        reply = "Unknown configured market: " + parsed.symbol + "."
+      } else if (code === "SAFETY_BLOCKER_ACTIVE") {
+        reply = "Cannot resume " + parsed.symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
+      } else {
+        const action = parsed.type === "RESUME" ? "Resume" : "Pause"
+        reply = action + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+      }
       await sendMessage({ chatId: message.chat.id, text: reply, signal })
       return
     }
 
-    const reply = parsed.type === "RESUME"
-      ? "Resumed " + parsed.symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
-      : result.data?.alreadyPaused === true
-        ? "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
-        : "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+    let reply
+    if (parsed.type === "RESUME") {
+      reply = "Resumed " + parsed.symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
+    } else if (result.data?.alreadyPaused === true) {
+      reply = "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
+    } else {
+      reply = "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+    }
     await sendMessage({ chatId: message.chat.id, text: reply, signal })
   }
 

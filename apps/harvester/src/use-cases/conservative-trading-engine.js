@@ -1713,9 +1713,12 @@ export function makeConservativeTradingEngine({
 
   const cancelOwnedBuyOrders = ({ reason = "PROCESS_SHUTDOWN", symbol: onlySymbol, pauseOnFailure = true } = {}) => runTransition({
     task: async () => {
-      const reasonPrefix = reason === "PROCESS_SHUTDOWN" ? "SHUTDOWN"
-        : reason === "HIGH_VOLATILITY_PROTECTION" ? "VOLATILITY_PROTECTION"
-          : "ACCOUNT_INTEGRITY_HALT"
+      let reasonPrefix = "ACCOUNT_INTEGRITY_HALT"
+      if (reason === "PROCESS_SHUTDOWN") {
+        reasonPrefix = "SHUTDOWN"
+      } else if (reason === "HIGH_VOLATILITY_PROTECTION") {
+        reasonPrefix = "VOLATILITY_PROTECTION"
+      }
       const activeBuyOrders = state.registry.getActiveOrders()
         .filter((order) =>
           order.side === "BUY" && (!onlySymbol || order.market.symbol === onlySymbol) &&
