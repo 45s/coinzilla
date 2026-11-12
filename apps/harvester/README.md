@@ -314,3 +314,7 @@ See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for process identity, Jou
 ## Conservative Strategy authority
 
 The [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authority for Conservative behavior. Aggressive remains deferred; see [Trading strategies](./docs/trading-strategies.md) for non-authoritative proposal context.
+
+## Operator control
+
+The transport-independent operator application, market-scoped engine pause and offline-testable Telegram adapter are implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). The first Telegram command is `/pause <SYMBOL>` only. It blocks new strategy BUYs and trailing-BUY replacements for one configured market; existing exchange orders remain open and may still fill, while fill accounting and recovery SELLs continue. The adapter is not started by Harvester: operator-fact projection, closed-gate startup restoration and process-restart recovery Steps 7–9 must be completed first. See the [operator-control contract](./docs/operator-control/README.md).

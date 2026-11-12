@@ -9,6 +9,7 @@ Start with the procedure matching the task. Do not treat a runbook as standing a
 - [TESTNET validation runbook](../TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; the earlier DOGEUSDT/ZROUSDT scope no longer matches the LINKFDUSD-only default config. Reconcile before any future session.
 - [TESTNET order tools](../testnet-order-tools.md) — read-only diagnostics plus legacy ZROUSDT market-sell and account-wide cancel writes; neither write is authorized by the paused runbook. The account-wide cancel proceeds after a warning without interactive confirmation; the menu adds no confirmation layer. The menu's read-only exchange account audit and local Journal balance audit are documented in the runbook and Journal Operations.
 - [Trading First](../TRADING_FIRST.md) — priority and non-negotiable trading safety constraints.
+- [Operator control](../operator-control/README.md) — initial Telegram `/pause <SYMBOL>` behavior, authorization, durable acknowledgement and runtime-enable blockers.
 - [Incident audit playbook](../INCIDENT_AUDIT_PLAYBOOK.md) — evidence capture and incident investigation workflow.
 
 ## Important safety boundaries
