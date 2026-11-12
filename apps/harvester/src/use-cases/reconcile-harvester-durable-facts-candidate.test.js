@@ -62,7 +62,7 @@ const records = ({ includeCoverage = true, blockerScope } = {}) => {
 const makeStore = (recordsValue) => {
   const storedRecords = [...recordsValue]
   return {
-    runtimeSessionId: "recovery-cli-session",
+    runtimeSessionId: sessionId,
     records: storedRecords,
     readAll: async () => ({
       ok: true,

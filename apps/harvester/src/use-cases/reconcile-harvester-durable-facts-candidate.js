@@ -11,7 +11,7 @@ import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.
  * establishes account-wide readiness or enables runtime restoration.
  */
 const canonicalizeEvidence = (value) => {
-  if (Array.isArray(value)) return value.map(canonicalizeEvidence)
+  if (Array.isArray(value)) { return value.map(canonicalizeEvidence) }
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.keys(value).sort().map((key) => [key, canonicalizeEvidence(value[key])]),

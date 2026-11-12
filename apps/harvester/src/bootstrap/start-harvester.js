@@ -55,7 +55,7 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
-  durableFactsStore,
+  durableFactsStore: suppliedDurableFactsStore,
   runtimeSessionId,
   createDurableFactsStore,
   createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
@@ -76,13 +76,13 @@ export async function startHarvester({
     telegramConfig: appConfig.operatorControl?.telegram,
     env,
     runtimeSessionId,
-    durableFactsStore,
+    durableFactsStore: suppliedDurableFactsStore,
     createDurableFactsStore,
     createAdapter: createTelegramOperatorAdapterFactory,
     fetchImpl: telegramOperatorFetchImpl,
     logger,
   })
-  durableFactsStore ??= operatorControlLifecycle.durableFactsStore
+  const durableFactsStore = suppliedDurableFactsStore ?? operatorControlLifecycle.durableFactsStore
   if (durableFactsStore !== undefined) {
     if (typeof durableFactsStore?.append !== "function" ||
         typeof durableFactsStore?.verify !== "function" ||

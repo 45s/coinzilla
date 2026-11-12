@@ -496,13 +496,24 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
     readAll: async () => ({
       ok: true,
       data: {
-        records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+        records: [
+          { sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } },
+          ...appendedFacts,
+        ],
         durableWriteSupported: true,
-        lastCommittedSequence: "0",
+        lastCommittedSequence: String(appendedFacts.length),
         lastCommittedDigest: "a".repeat(64),
       },
     }),
-    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } } },
+    append: async (fact) => {
+      calls.push("append-operator-fact")
+      appendedFacts.push({
+        ...fact,
+        sequence: String(appendedFacts.length + 1),
+        runtimeSessionId: "test-runtime-session",
+      })
+      return { ok: true, data: { durable: true, duplicate: false } }
+    },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
