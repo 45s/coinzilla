@@ -61,8 +61,11 @@ jobs:
       - name: Check JavaScript syntax
         run: node scripts/check-syntax.js
 
-      - name: Test changed-file ESLint selection
-        run: node --test scripts/check-eslint-changed.test.js
+      - name: Test ESLint tooling
+        run: node --test scripts/check-eslint-changed.test.js scripts/report-eslint-baseline.test.js
+
+      - name: Report full-workspace ESLint inventory
+        run: pnpm lint:report
 
       - name: Lint changed JavaScript files
         if: github.event_name == 'pull_request'

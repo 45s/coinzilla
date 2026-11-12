@@ -139,7 +139,8 @@ The additional enforced rules are `eqeqeq` (with intentional `null` comparisons 
 
 Gradual adoption is enforced by the changed-file gate rather than a permanent suppression file:
 
-- `pnpm lint` runs ESLint across the complete JavaScript workspace. It may report pre-existing violations in untouched legacy files until those files are migrated.
+- `pnpm lint` runs ESLint across the complete JavaScript workspace and exits non-zero for findings.
+- `pnpm lint:report` reports the complete-workspace finding count and most frequent rules without blocking on legacy findings.
 - Pull requests lint every changed JavaScript file without suppressions. A changed legacy file must therefore be clean.
 - New JavaScript files must pass from the start.
 - `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing.
