@@ -182,7 +182,7 @@ test("replays a completed recovery cycle before later-session fills when non-pro
   const firstBuyFillId = "binance:BTCUSDT:cycle-one-buy-trade"
   const firstSellFillId = "binance:BTCUSDT:cycle-one-sell-trade"
   const secondBuyFillId = "binance:BTCUSDT:cycle-two-buy-trade"
-  const cycleCompletedSequence = 32
+  const cycleCompletedSequence = 31
   const secondSessionStartedSequence = 33
   const secondBuyIntentSequence = 34
   const secondBuyOutcomeSequence = 35
