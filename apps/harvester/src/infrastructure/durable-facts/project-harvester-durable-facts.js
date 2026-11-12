@@ -215,6 +215,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     const strategyPauses = new Map()
     const activeBlockers = new Map()
     const marketHistoryCoverage = []
+    const orderIntents = new Map()
     let previousSequence = -1n
 
     for (const [index, rawRecord] of records.entries()) {
@@ -268,11 +269,15 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       }
 
       if (record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+        const coverageSession = sessions.get(record.runtimeSessionId)
+        if (!coverageSession || coverageSession.stopped) throw new Error("Market-history coverage fact is outside an active process session")
         marketHistoryCoverage.push(Object.freeze({ ...record.data, sequence: record.sequence }))
         continue
       }
 
       if (record.factType === "SAFETY_BLOCKER_RAISED") {
+        const blockerSession = sessions.get(record.runtimeSessionId)
+        if (!blockerSession || blockerSession.stopped) throw new Error("Safety-blocker fact is outside an active process session")
         if (activeBlockers.has(record.data.blockerId)) {
           throw new Error("Safety blocker was raised more than once without an intervening resolution")
         }
@@ -280,6 +285,8 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         continue
       }
       if (record.factType === "SAFETY_BLOCKER_RESOLVED") {
+        const resolutionSession = sessions.get(record.runtimeSessionId)
+        if (!resolutionSession || resolutionSession.stopped) throw new Error("Safety-blocker resolution is outside an active process session")
         if (!activeBlockers.has(record.data.blockerId)) {
           throw new Error("Safety blocker resolution has no preceding active raised fact")
         }
@@ -288,18 +295,26 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       }
 
       if (record.factType === "OPERATOR_MARKET_PAUSED") {
+        const controlSession = sessions.get(record.runtimeSessionId)
+        if (!controlSession || controlSession.stopped) throw new Error("Operator pause fact is outside an active process session")
         operatorPauses.set(record.data.symbol, { reason: "OPERATOR_MARKET_PAUSED", sequence: record.sequence })
         continue
       }
       if (record.factType === "OPERATOR_MARKET_RESUMED") {
+        const controlSession = sessions.get(record.runtimeSessionId)
+        if (!controlSession || controlSession.stopped) throw new Error("Operator resume fact is outside an active process session")
         operatorPauses.delete(record.data.symbol)
         continue
       }
       if (record.factType === "STRATEGY_MARKET_PAUSED") {
+        const controlSession = sessions.get(record.runtimeSessionId)
+        if (!controlSession || controlSession.stopped) throw new Error("Strategy pause fact is outside an active process session")
         strategyPauses.set(record.data.symbol, { reason: record.data.reason, sequence: record.sequence })
         continue
       }
       if (record.factType === "STRATEGY_MARKET_RESUMED") {
+        const controlSession = sessions.get(record.runtimeSessionId)
+        if (!controlSession || controlSession.stopped) throw new Error("Strategy resume fact is outside an active process session")
         strategyPauses.delete(record.data.symbol)
         continue
       }
@@ -308,13 +323,20 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       if (!session || session.stopped) {
         throw new Error("Durable trading fact is outside an active process session: " + record.factType)
       }
+      if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED"].includes(record.factType)) {
+        throw new Error("Unsupported durable-fact projection type: " + record.factType)
+      }
       session.facts.push(record)
     }
 
     const sessionList = [...sessions.values()].sort((left, right) =>
       left.startedSequence < right.startedSequence ? -1 : left.startedSequence > right.startedSequence ? 1 : 0)
     const latestSession = sessionList[sessionList.length - 1]
-    const activePauses = new Map([...operatorPauses, ...strategyPauses])
+    const activePauses = new Map()
+    for (const [symbol, pause] of [...operatorPauses, ...strategyPauses]) {
+      const current = activePauses.get(symbol)
+      if (!current || BigInt(pause.sequence) > BigInt(current.sequence)) activePauses.set(symbol, pause)
+    }
     const syntheticRecords = []
     let lineNumber = 0
     for (const session of sessionList) {
@@ -343,7 +365,6 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         }
       }
 
-      const orderIntents = new Map()
       for (const record of remaining) {
         const events = mapFact({ record, orderIntents })
         for (const event of events) emit(event.name, event.data)
@@ -361,7 +382,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       return projected
     }
     const stickySafetyBlockers = Object.freeze([...activeBlockers.values()].map((blocker) =>
-      Object.freeze({ ...blocker, sequence: Number(blocker.sequence), scope: blocker.scope })))
+      Object.freeze({ ...blocker, scope: blocker.scope })))
     const pausedMarkets = Object.freeze([...activePauses].map(([symbol, pause]) =>
       Object.freeze({ symbol, reason: pause.reason })))
     return toResult({
