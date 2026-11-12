@@ -123,6 +123,13 @@ function validateTelegramOperatorControlConfig(config) {
   requireRecord(strategy.settings.aggressive, `${settingsPath}.aggressive`)
   requireBoolean(strategy.settings.aggressive.enabled, `${settingsPath}.aggressive.enabled`)
   if (strategy.settings.aggressive.enabled) {fail(`${settingsPath}.aggressive.enabled`, "Aggressive strategy is deferred and must remain disabled")}
+  if (strategy.settings.recovery !== undefined) {
+    requireRecord(strategy.settings.recovery, `${settingsPath}.recovery`)
+    requireBoolean(strategy.settings.recovery.enabled, `${settingsPath}.recovery.enabled`)
+    if (strategy.settings.recovery.enabled) {
+      fail(`${settingsPath}.recovery.enabled`, "process-restart recovery is deferred and must remain disabled")
+    }
+  }
   requireRecord(strategy.pairs, "strategies.CG_coinGrabber.pairs")
   const pairs = Object.entries(strategy.pairs)
   if (pairs.length === 0) {fail("strategies.CG_coinGrabber.pairs", "at least one pair")}
