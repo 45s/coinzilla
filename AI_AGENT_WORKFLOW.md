@@ -80,6 +80,29 @@ Use the authoritative [cross-domain request process](docs/engineering/CROSS_DOMA
 
 ## 5. Task PR requirements and automated integration
 
+## 5.1 Pull-request title convention — mandatory
+
+Every task PR title MUST communicate the actual change in a short, specific phrase. Use this format:
+
+`<type>(<app-or-package>): <specific change and outcome>`
+
+- **Type:** use `feat` for new behavior/capability, `fix` for correcting broken or unsafe behavior, and `docs` for documentation-only changes.
+- **Scope:** name the owning application or package, using its repository directory name (for example, `harvester`, `brokers`, or `utils`). For a genuinely repository-wide change with no single app/package owner, use `repo`.
+- **Description:** start with a clear action verb and name the behavior being added, corrected, or documented. Include a short outcome when it makes the functionality clearer.
+- Keep the title concise (normally 50–90 characters). A reader should understand the PR's purpose without opening it.
+- Describe the delivered functionality, not the implementation phase, internal milestone, architecture jargon, or issue number alone.
+- Avoid vague titles such as `build operator control`, `begin Step 8`, `update Harvester`, or `fix issue #123`. Do not claim a capability is runtime-enabled when the PR only adds its foundation.
+- Do not put a list of changed files, test status, or the full PR summary in the title; keep those in the PR body.
+
+Examples:
+
+- `feat(harvester): add transport-independent operator pause controls`
+- `feat(harvester): record durable order facts for future recovery`
+- `fix(harvester): preserve reasons when order submission is deferred`
+- `docs(harvester): explain volatility protection thresholds with examples`
+
+The PR template reminds contributors of this format. Apply it to new PRs and improve existing titles when updating those PRs, after completing the required branch-freshness check.
+
 A task PR targeting `develop` must:
 
 - Be focused on one task and one primary owning domain.
