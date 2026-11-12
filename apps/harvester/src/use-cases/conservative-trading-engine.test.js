@@ -1501,7 +1501,7 @@ test("publishes a Fill only after the accounting workflow commits it", async () 
 
   assert.equal(result.ok, true)
   assert.equal(result.data.waitingForFullFill, true)
-  assert.ok(accountedFills.includes(fill))
+  assert.ok(accountedFills.includes(fillRef.current))
   const applied = events.find(({ name }) => name === "execution.fill_applied")
   assert.ok(applied)
   assert.deepEqual(applied.data, {
@@ -2159,7 +2159,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
       return { ok: true, data: result }
     },
     onPlaceOrder: ({ order }) => {
-      if (order.side !== "BUY" || !engine) {return}
+      if (order.side !== "BUY" || !harness.engine) {return}
       const previousSell = harness.engine.getOrders().filter((item) => item.side === "SELL").at(-1)
       if (previousSell) {
         assert.equal(previousSell.status, "OPEN")
