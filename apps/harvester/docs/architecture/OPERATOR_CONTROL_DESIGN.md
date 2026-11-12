@@ -108,7 +108,6 @@ sequenceDiagram
 
 If the durable append fails or is uncertain, the engine does not mutate operator state. If the process crashes after the fact is committed but before the in-memory update, the fact remains in the durable stream but is not replayed by this initial scope. A process restart starts without the operator pause; an operator who still wants the market paused must issue the command again.
 
-
 ### Runtime startup and shutdown
 
 The bootstrap order prevents the command adapter from running without a verified durable append path and prevents strategy subscriptions from starting before Telegram identity verification succeeds:
