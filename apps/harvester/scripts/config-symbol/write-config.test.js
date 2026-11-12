@@ -50,18 +50,13 @@ function createConfigSource() {
     "  },",
     "};",
     "",
-  ].join("\\n")
+  ].join("\n")
 }
 
 async function withConfigFile(run, { source = createConfigSource() } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-config-symbol-"))
   const configPath = path.join(directory, "cg-coin-grabber.mjs")
   await writeFile(configPath, source, "utf8")
-  await writeFile(
-    path.join(directory, "notifications-tg-profiles.mjs"),
-    'export const NOTIFICATIONS_TG_PROFILES = Object.freeze({ TRADER: "trader" });\n',
-    "utf8",
-  )
   try {
     await run({ directory, configPath })
   } finally {
@@ -110,11 +105,11 @@ test("atomically merges a pair while preserving imports, comments, unrelated set
 
 test("cleans abandoned JavaScript temporary modules only after acquiring the generator lock", async () => {
   await withConfigFile(async ({ directory, configPath }) => {
-    await writeFile(path.join(directory, ".index.mjs.abandoned.tmp.mjs"), "partial configuration", "utf8")
+    await writeFile(path.join(directory, ".cg-coin-grabber.mjs.abandoned.tmp.mjs"), "partial configuration", "utf8")
     await writePairConfigAtomically({ configPath, symbol: "ADAFDUSD", pairConfig: generatedPair })
     assert.deepEqual(
       (await readdir(directory)).sort(),
-      ["index.mjs", "notifications-tg-profiles.mjs"],
+      ["cg-coin-grabber.mjs"],
       "A successful locked generation must remove abandoned temporary modules without deleting unrelated files.",
     )
   })
@@ -158,7 +153,7 @@ test("fails closed when another generator already owns the configuration lock", 
 
 test("rejects malformed JavaScript without replacing the operator's original source", async () => {
   await withConfigFile(async ({ configPath }) => {
-    await writeFile(configPath, "export const appConfig = {", "utf8")
+    await writeFile(configPath, "export const CG_COIN_GRABBER_CONFIG = {", "utf8")
     await assert.rejects(
       writePairConfigAtomically({ configPath, symbol: "ADAFDUSD", pairConfig: generatedPair }),
       /unable to load|syntax|parse/i,
