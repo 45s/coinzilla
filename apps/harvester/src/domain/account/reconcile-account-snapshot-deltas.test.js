@@ -79,7 +79,7 @@ test("returns the exact failure and leaves both snapshots unchanged for invalid 
     {
       name: "closing snapshot predates opening snapshot",
       closingSnapshot: snapshot({ phase: "CLOSING", sourceTime: 99, balances: [] }),
-      expectedError: "CLOSING account snapshot predates OPENING snapshot",
+      expectedError: "CLOSING account snapshot predates the PREFLIGHT/OPENING baseline",
     },
     {
       name: "closing balance total is inconsistent",
