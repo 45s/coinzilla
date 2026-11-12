@@ -904,7 +904,9 @@ test("acquires the process lock before starting Journal and releases it after cl
         }
       },
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -943,7 +945,9 @@ test("retains the process lock when runtime shutdown throws", async () => {
         stop: async () => { throw new Error("broker intake did not stop") },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
