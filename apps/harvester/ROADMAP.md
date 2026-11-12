@@ -2,6 +2,24 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Operator control — initial Telegram pause
+
+**Status: IMPLEMENTED IN [PR #1045](https://github.com/45s/coinzilla/pull/1045); inbound runtime remains disabled.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+
+- Initial Telegram command: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
+- Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
+- The engine commits the operator fact to the ADR-0001 durable-facts stream before applying in-memory state. Journal is not the control-state store.
+- Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
+- [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
+- [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
+- [ ] Project operator pause/resume facts and restore them before the first strategy evaluation.
+- [ ] Complete recovery Steps 7–9, disabled-by-default configuration validation and fail-closed runtime lifecycle integration before enabling inbound control.
+- [ ] Exact-head workspace CI and final review. No Binance/TESTNET/LIVE operations are part of this work.
+
+**Hard dependency:** the Telegram adapter must not start until ADR-0001 recovery reconciliation and the closed startup-readiness gate are complete.
+
+---
+
 ## High-volatility protection — issue #1016
 
 **Status: PROTECTION IMPLEMENTED; regression matrix and exact-head CI complete; candle-stream freshness correction merged in PR #1049; historical threshold calibration open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).

@@ -14,6 +14,10 @@ This does not authorize exchange writes during documentation or engineering prep
 
 The selected safety work is [Harvester Volatility Protection](./volatility-protection.md). Its per-market protection state machine, central order gate, owned-BUY cancellation and recovery-SELL exception are implemented in merged [PR #1041](https://github.com/45s/coinzilla/pull/1041); the one-minute candle-stream freshness correction is merged in [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio thresholds remain provisional pending offline historical validation, so do not enable unattended trading based on them. The protection remains separate from the Conservative strategy specification: it blocks all new BUY and non-recovery strategy actions per affected market, cancels only Harvester-owned active BUY orders, and preserves recovery SELL execution/accounting. Recovery SELL is the only strategy order lifecycle allowed while protection is active. The implementation uses the existing durable order/cancellation barriers and does not change recovery economics. This work does not authorize exchange operations and does not close process-restart recovery issue #654.
 
+## Explicitly selected operator-control work — non-blocking
+
+The user explicitly selected Harvester operator control as a separate engineering task. Its engine, application and offline Telegram adapter are implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045) without changing the Conservative trading workflow. The initial Telegram vocabulary is only `/pause <SYMBOL>`; no existing exchange order is canceled or modified, and a resting BUY may still fill. The adapter **must not be started by the runtime** until operator pause facts are projected from the ADR-0001 store and restored before the first strategy evaluation behind the closed readiness gate. Complete recovery Steps 7–9 before enabling inbound control. No exchange operation is authorized by this work.
+
 ## Journal contract boundary
 
 Journal is not wholly optional during trading. These existing durability barriers remain mandatory and fail closed:
@@ -27,7 +31,7 @@ Journal is not wholly optional during trading. These existing durability barrier
 
 These are existing requirements, not permission to add more blocking Journal I/O. Additional investigation evidence in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md) remains best-effort and must not make strategy evaluation, market processing, broker-event handling, or fill accounting wait for Journal persistence. Any optional evidence loss must be observable as an evidence gap.
 
-The accepted target design for restart-critical facts is defined in [ADR-0001 — Application-owned durable facts](./architecture/decisions/0001-application-owned-recovery-facts.md). It deliberately separates that future application-owned store from the Journal observer. This is a design decision only: the current runtime and every mandatory Journal barrier remain unchanged, and process-restart recovery stays disabled.
+The accepted restart-critical fact contract is defined in [ADR-0001 — Application-owned durable facts](./architecture/decisions/0001-application-owned-recovery-facts.md). Its append-only file store, integrity checks and history-coverage primitives are implemented; one-market reconciliation, complete candidate projection and startup restoration remain pending. Journal remains a separate operational observer. The current runtime and mandatory Journal barriers remain unchanged, and process-restart recovery stays disabled.
 
 Journal records are not trading-state authority. Replay and process-restart recovery remain disabled until the separate implementation, reconciliation, and crash-test gates are complete.
 
