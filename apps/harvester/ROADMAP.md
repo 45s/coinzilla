@@ -4,7 +4,7 @@
 
 ## Operator control — initial Telegram pause
 
-**Status: IMPLEMENTED IN [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation is merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is ready for verification/closeout.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+**Status: IMPLEMENTED AND MERGED in [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); process-lifetime scope/docs clarified in [PR #1065](https://github.com/45s/coinzilla/pull/1065); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
 
 - Initial Telegram command: `/pause <SYMBOL>` only. The application-level resume use case is retained for a future trusted adapter; Telegram does not expose `/resume`.
 - Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
@@ -15,15 +15,15 @@
 - [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
 - [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid durable-store verification — PR #1067.
 - [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
-- [x] Exact-head workspace CI passed on PR #1067: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The read-only Binance TESTNET integration was skipped. User review/merge remains pending; no exchange operation was performed.
+- [x] Exact-head workspace CI passed on PR #1067 head `baf21f7ca4a42b6622d2282dda53e7d5c7c03699`: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The optional read-only Binance TESTNET integration was skipped. PR #1067 merged at `96293daa5ee3b831e55c49b56af22ce1857f936c`; no exchange operation was performed.
 
-**Out of scope:** projecting operator facts into startup state, restoring a pause after restart, and completing recovery Steps 7–9. Those remain in the separate ADR-0001 / issue #654 workstream and do not block the initial process-lifetime operator-control capability.
+**Out of scope:** projecting operator facts into startup state and restoring a pause after restart. These remain part of the separate ADR-0001 / issue #654 Steps 8–9 workstream and do not block the delivered process-lifetime operator-control capability.
 
 ---
 
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED; regression matrix and exact-head CI complete; candle-stream freshness correction merged in PR #1049; historical threshold calibration open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -44,8 +44,8 @@
 5. [x] Harvester: per-market protection state, central order gate, explicit recovery SELL exception, owned-BUY cancellation and freshness monitoring — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041). All seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 6. [x] Offline regression matrix and exact-head CI — PR #1041 covers per-market isolation, fail-closed history, thresholds/hysteresis, owned-BUY cancellation, uncertain outcomes, recovery-SELL exception and order-gate behavior; all seven required workflows passed on the exact PR head.
 7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
-8. [~] Synchronize living documentation and roadmaps — this closeout PR.
-9. [~] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — implementation in [PR #1046](https://github.com/45s/coinzilla/pull/1046); exact-head CI and merge remain pending.
+8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
+9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
 10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
@@ -163,7 +163,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–7 implementation complete offline; controlled startup restoration and crash/restart proof remain in Steps 8–9. Runtime restart restoration and unattended restart readiness remain disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -197,7 +197,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 5. **[x] Step 5 — Preserve accounting facts exactly (F-038, F-039, F-041; [PR #1024](https://github.com/45s/coinzilla/pull/1024)).**
    - [x] Restore Position cost basis and RecoveryLedger atomically, with exact active/free inventory allocation; completed cycles reset basis while explicit residual sell-through preserves active inventory and cost basis.
-   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance remains a Step 7 gate.
+   - [x] Preserve third-asset commission amount, asset identity, and historical quote valuation end to end; reconciliation of the related asset balance is required evidence in the Step 7 operator audit; it remains fail-closed until supplied and verified for the target market.
    - [x] Represent cycle completion explicitly. A full SELL without a proven completed/not-completed outcome fails closed. `CONTINUE_SELL_THROUGH` preserves active inventory; `BLOCKED` restores a market pause. A subsequent full SELL is accepted only after an explicit continue outcome, and completion pairs with the latest SELL identity.
    - Exact PR head `bdc1e6f`: **1,024 Harvester tests passed, 0 failed**; all six required workflows passed. TESTNET integration was skipped.
 
@@ -208,7 +208,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
+7. **[x] Step 7 — Offline one-market reconciliation and guarded coverage confirmation implemented (audit primitives PRs #1034/#1036; orchestration/confirmation PR #1047; offline CLI/evidence matrix PR #1053).**
    - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
@@ -216,7 +216,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
    - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
    - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
-   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the draft PR remains unmerged and awaits review, so Step 7 remains in progress on `develop`.
+   - [x] The offline JSON context adapter and explicit audit-only/confirmation CLI merged in [PR #1053](https://github.com/45s/coinzilla/pull/1053). Its production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required core CI workflows passed on exact head `2c3a48442f893521403d53e4816631a9de4b0878`; optional read-only TESTNET integration was skipped. Step 7 implementation is complete; operator-supplied evidence still requires review and explicit execution of the offline workflow when a market baseline is to be confirmed.
 
 8. **[ ] Step 8 — Restore behind a closed readiness gate.**
    - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.

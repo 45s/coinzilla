@@ -1,6 +1,6 @@
 # Harvester Volatility Protection
 
-- Status: **Protection implementation merged in PR #1041; regression matrix and exact-head CI complete; historical threshold calibration outstanding**
+- Status: **Protection implementation, regression matrix, freshness correction (PR #1049), and local offline calibration CLI (PR #1046) merged; representative historical threshold calibration outstanding**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
 - Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
@@ -263,8 +263,8 @@ Volatility state is process-local in the first implementation. It is not a subst
 5. [x] **Harvester protection:** per-market states, thresholds/hysteresis, freshness monitor, central submission gate, explicit recovery-SELL purpose and owned-BUY cancellation — merged [PR #1041](https://github.com/45s/coinzilla/pull/1041).
 6. [x] **Regression matrix and exact-head CI:** offline coverage is in the domain state, candle-history, order-gate, engine and startup tests; all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`.
 7. [x] **Candle-stream freshness correction:** one 1-minute interval plus a 5-second grace, with quiet-stream regressions — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049).
-8. [~] **Documentation and offline calibration CLI:** synchronize the runtime contract and add the local-only analyzer, CSV validation and candidate-threshold options — PR #1046.
-9. [ ] **Historical calibration:** validate the provisional warning/protection/recovery thresholds against representative offline Spot market history before treating them as production-calibrated.
+8. [x] **Documentation and offline calibration CLI:** runtime contract synchronized; local-only analyzer, CSV validation and candidate-threshold options merged in [PR #1046](https://github.com/45s/coinzilla/pull/1046). Exact-head CI passed; no exchange operations were performed.
+9. [ ] **Historical calibration:** run the analyzer against representative multi-symbol offline Spot market history, review threshold trade-offs, and accept or revise the provisional warning/protection/recovery thresholds before treating them as production-calibrated.
 
 ## 10. Offline historical threshold calibration
 
