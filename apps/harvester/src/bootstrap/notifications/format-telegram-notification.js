@@ -29,6 +29,11 @@ function side(value) {
   return { label: normalized, icon: normalized === "BUY" ? "🟢" : normalized === "SELL" ? "🔴" : "⚪" }
 }
 
+function fillIcon(value) {
+  const normalized = text(value, "", 24).toUpperCase()
+  return normalized === "BUY" ? "✅" : normalized === "SELL" ? "💰" : "💰"
+}
+
 function orderId(data) {
   const id = data.brokerOrderId ?? data.orderId ?? data.clientOrderId
   return id === undefined || id === null ? null : `#${text(id, "n/a", 96)}`
@@ -44,14 +49,14 @@ function compactOrder(data, icon, status = "") {
 }
 
 const formatters = Object.freeze({
-  "order.filled": ({ data }) => compactOrder(data, "💰", "ORDER FILLED"),
+  "order.filled": ({ data }) => compactOrder(data, fillIcon(data.side), "ORDER FILLED"),
   "fill.received": ({ data }) => {
     const fill = data.fill && typeof data.fill === "object" && !Array.isArray(data.fill) ? data.fill : {}
     const price = text(fill.price, "n/a", 96)
     const quantity = text(fill.quantity, "n/a", 96)
     const trade = fill.tradeId ?? fill.id
     return [
-      `💰 FILL RECEIVED · ${symbol(data.symbol)} @ ${price} × ${quantity}`,
+      `${fillIcon(data.side)} FILL RECEIVED · ${symbol(data.symbol)} @ ${price} × ${quantity}`,
       trade === undefined || trade === null ? null : `#${text(trade, "n/a", 96)}`,
     ].filter(Boolean).join("\n")
   },
@@ -70,13 +75,13 @@ const formatters = Object.freeze({
     orderId(data),
   ].filter(Boolean).join("\n"),
   "order.failed": ({ data }) => `❌ ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
-  "account.safety_alert": ({ data }) => `⚠️ ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
-  "bot.started": () => "🚀 BOT STARTED",
+  "account.safety_alert": ({ data }) => `${data.category === "account-open-orders-blocked" ? "🚨" : "⚠️"} ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
+  "bot.started": () => "▶️ BOT STARTED",
   "bot.stopped": ({ data }) => {
     const reason = data.reason ?? data.message
     const outcome = data.outcome && data.outcome !== "completed" ? data.outcome : null
     const detail = reason ?? outcome
-    return detail ? `🔚 BOT STOPPED · ${text(detail, "completed", 96)}` : "🔚 BOT STOPPED"
+    return detail ? `⏹️ BOT STOPPED · ${text(detail, "completed", 96)}` : "⏹️ BOT STOPPED"
   },
 })
 
