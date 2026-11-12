@@ -32,19 +32,21 @@ export async function prepareTelegramOperatorControl({
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
   const directory = env.DURABLE_FACTS_DIRECTORY?.trim()
-  if (!directory || !path.isAbsolute(directory)) {
-    throw new OperatorControlStartupError("Telegram operator control requires an absolute DURABLE_FACTS_DIRECTORY containing an initialized ADR-0001 store", "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED")
-  }
-  if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
-    throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
-  }
   let durableFacts = suppliedDurableFactsStore
   if (durableFacts === undefined) {
+    if (!directory || !path.isAbsolute(directory)) {
+      throw new OperatorControlStartupError("Telegram operator control requires an absolute DURABLE_FACTS_DIRECTORY containing an initialized ADR-0001 store", "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED")
+    }
+    if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
+      throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
+    }
     try {
       durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
     } catch (cause) {
       throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
     }
+  } else if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
+    throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
   }
   if (runtimeSessionId !== undefined &&
       durableFacts?.runtimeSessionId !== undefined &&

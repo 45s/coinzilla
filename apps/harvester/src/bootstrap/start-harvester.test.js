@@ -3889,7 +3889,7 @@ test("reuses the process-owned durable-facts store for Telegram operator pause f
     appConfig: config,
     durableFactsStore,
     runtimeSessionId,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: directory },
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
     createDurableFactsStore: () => {
       secondaryStoreFactoryCalls += 1
       throw new Error("The process must not create a second writer for its durable-facts ledger.")
