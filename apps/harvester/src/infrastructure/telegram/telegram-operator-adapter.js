@@ -482,6 +482,7 @@ export function createTelegramOperatorAdapter({
               signal: nextController.signal,
             })
           } catch (error) {
+            if (nextController.signal.aborted) { throw error }
             logger?.warn?.({
               message: "Telegram command menu registration failed; text commands remain available",
               component: "harvester.operator",

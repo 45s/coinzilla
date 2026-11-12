@@ -677,7 +677,7 @@ test("registers the supported command menu and requests callback updates", async
   assert.deepEqual(polling.payload.allowed_updates, ["message", "callback_query"], "Long polling must receive both text commands and inline callback actions.")
 })
 
-test("requires explicit confirmation before applying a text pause command", async () => {
+test("requires explicit confirmation before applying an inline pause control", async () => {
   const update = makeCallbackUpdate({ updateId: 501, data: "cc:ask:PAUSE:LINKUSDT", messageId: 701 })
   const editedMessages = []
   const operatorCalls = []

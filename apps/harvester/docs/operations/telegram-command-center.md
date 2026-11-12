@@ -13,7 +13,7 @@ Use `/start` or `/help` to display the supported command vocabulary. Telegram's 
 Text commands remain available:
 
 - `/status`, `/markets`, `/positions`, `/orders`, and `/balances` are read-only.
-- `/pause SYMBOL` and `/resume SYMBOL` request a confirmation before the application use case is called.
+- `/pause SYMBOL` and `/resume SYMBOL` are explicit text requests and call the existing application use case directly; inline market controls require a separate confirmation.
 - `/start` and `/help` show the command center entry point.
 
 ## Confirming a control
