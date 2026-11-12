@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-12
-**Last source-verified develop checkpoint:** `947882b118cf33636b916af340928b9bf14b2fd8` (PR #1067 operator-control runtime integration and PR #1069 configuration/policy module updates are on `develop`; ADR-0001 Step 7 offline CLI/evidence adapter from PR #1053 is also merged).
+**Last source-verified develop checkpoint:** `18438578004f0bf3cfbb023678d9e8adc3d95d90` (merge of PR #1055, ADR-0001 Step 8 durable-fact producers and offline candidate projection; PRs #1067 operator-control runtime integration and #1069 configuration/policy module updates are also on `develop`; ADR-0001 Step 7 offline CLI/evidence adapter from PR #1053 is merged).
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -22,13 +22,14 @@
 - **Shutdown diagnostics — merged in [PR #977](https://github.com/45s/coinzilla/pull/977), commit `597b01d3836d74d1c4a409005c844d76102e4a34`.** The shutdown handler distinguishes `SHUTDOWN_INCOMPLETE` from confirmed `STOPPED`, preserves the pre-shutdown readiness state, and exposes stage-specific recovery/cleanup failures plus exact safe summaries of unresolved owned orders. Existing process-lock retention is unchanged. Exact-head verification: 935/935 Harvester tests; 75.83% line / 78.98% branch / 75.32% function coverage; all seven configured workflows passed.
   - **Historical incident cause remains unresolved:** the original event-level Journal/session records and complete shutdown diagnostic snapshot for the earlier incomplete shutdown are not present in the evidence reviewed for this follow-up. PR #977 improves future diagnosis but does not retroactively identify that occurrence's failed stage. Do not infer a cause from the aggregate incomplete-shutdown status; preserve the full session JSONL and shutdown summary if the scenario is reproduced.
 
-2. **Process-restart reconciliation (#654) — Steps 1–7 complete; Step 8 is in progress in [PR #1055](https://github.com/45s/coinzilla/pull/1055); Step 9 crash/restart proof remains pending. Runtime restoration and unattended restart readiness remain disabled.**
+2. **Process-restart reconciliation (#654) — Steps 1–7 complete; Step 8 durable-fact producers and offline candidate projection merged in [PR #1055](https://github.com/45s/coinzilla/pull/1055); Step 8 parity and Step 9 crash/restart proof remain pending. Runtime restoration and unattended restart readiness remain disabled.**
    - **Why:** Portfolio, RecoveryLedger and order ownership are process-local. A restart can lose reservations and accounting context while exchange orders or fills still exist.
    - **Completed:** ADR-0001 was accepted in [PR #1003](https://github.com/45s/coinzilla/pull/1003); recovery Steps 1–6 and durable-fact store/coverage primitives merged through [PR #1036](https://github.com/45s/coinzilla/pull/1036); Step 7 one-market reconciliation, operator confirmation, offline JSON adapter and audit-only CLI merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047) and [PR #1053](https://github.com/45s/coinzilla/pull/1053).
    - **Completed:** [PR #1047](https://github.com/45s/coinzilla/pull/1047) merged the read-only one-market orchestration and READY-gated MARKET_HISTORY_COVERAGE_CONFIRMED append/readback.
    - **Completed:** [PR #1053](https://github.com/45s/coinzilla/pull/1053) merged the offline JSON context/CLI adapter and production-audit end-to-end evidence matrix. All required CI checks passed on exact code head `2c3a48442f893521403d53e4816631a9de4b0878`; the optional read-only TESTNET job was skipped.
-   - **Remaining:** Steps 8–9 only: implement controlled candidate restoration behind a closed readiness gate, then complete crash/restart proof and separately authorized acceptance.
-   - **Safety:** unattended restart readiness remains blocked. The Journal is not the recovery authority; do not wire runtime replay or claim legacy Journal history is complete.
+   - **Completed:** [PR #1055](https://github.com/45s/coinzilla/pull/1055) merged the Step 8 durable-fact producers and ordering barriers, process-boundary facts, offline candidate Portfolio/RecoveryLedger/OrderRegistry projection, and one-market read-only exchange-audit wrapper. Candidate state remains `candidateOnly`, `restorationEnabled: false`, `requiresExchangeReconciliation: true`, and `historyCoverageComplete: false`.
+   - **Remaining:** complete projection/invariant parity and account-wide/all-market readiness, then Step 9 crash/restart proof and separately authorized acceptance.
+   - **Safety:** unattended restart readiness remains blocked; a second process start is rejected after a prior process session. The Journal remains an observer, not recovery authority. Do not wire runtime replay or claim legacy Journal history is complete.
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
 - **Harvester external-order ownership policy — IMPLEMENTED.** [PR #1062](https://github.com/45s/coinzilla/pull/1062) merged default-ignore/manual-order isolation and explicit per-pair block opt-in; [PR #1069](https://github.com/45s/coinzilla/pull/1069) centralizes policy identifiers and composes named configuration modules. Unmatched Harvester-generated `h-` orders remain fail-closed until restart recovery #654; the separate F-041 recovery SELL cycle-completion proof also remains open under [#654](https://github.com/45s/coinzilla/issues/654). See the [Harvester roadmap](apps/harvester/ROADMAP.md).
@@ -42,10 +43,12 @@
    - **Remaining:** build a read-only CLI report from confirmed, deduplicated fills and existing Portfolio/RecoveryLedger facts: BUY/SELL totals, commissions by asset, invested quote, recovered net proceeds, outstanding recovery, realized net profit, retained inventory/dust and open/partial orders.
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-4. **Harvester Conservative architecture decomposition.**
-   - **Why:** the trading engine and its tests are large orchestration hotspots; this increases review cost and regression risk.
-   - **Remaining:** extract one behavior-protected workflow at a time, preserving domain decisions, accounting, reservations, event order and broker boundaries. Do not perform a broad rewrite.
-   - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
+4. **Harvester Conservative architecture and documentation reconciliation (P3 — H7/H8) — IN PROGRESS in [issue #1073](https://github.com/45s/coinzilla/issues/1073) / [PR #1075](https://github.com/45s/coinzilla/pull/1075).**
+   - **Why:** the Conservative engine is a large orchestration boundary; unclear ownership raises review cost and regression risk. Living architecture/account-audit docs also lag the merged runtime.
+   - **H7 delivered in the current PR so far:** read-only owned-order REST snapshot collection and per-market volatility-protection coordination are extracted behind named application factories. The engine retains serialized state mutation, the central order-submission gate and workflow composition. The 3,335-line develop baseline is 2,835 lines on the current PR branch; no Conservative behavior or safety barrier is intended to change.
+   - **H7 remaining:** continue with execution-fill/terminal reconciliation and owned-order cancellation/replacement only at cohesive boundaries; retain the 7,002-line engine integration suite and add focused use-case tests. Do not split by callback or rewrite the engine.
+   - **H8:** reconcile runtime composition, account snapshot asset scope and PREFLIGHT/RECOVERY/CLOSING/COMMISSION_BASELINE phases, Trading First, Journal/runbook language, and the root/Harvester roadmaps against source. Preserve historical audit evidence.
+   - **Owner/evidence:** [Harvester roadmap](apps/harvester/ROADMAP.md), [issue #1073](https://github.com/45s/coinzilla/issues/1073), [PR #1075](https://github.com/45s/coinzilla/pull/1075).
 
 5. **Broker protocol and multi-market TESTNET acceptance.**
    - **Why:** offline fakes cannot prove endpoint compatibility, account reads, recovery acknowledgement, shared-asset reservations or real exchange filter behavior.
