@@ -493,9 +493,21 @@ export async function startHarvester({
       getAccountSnapshot,
       resumeDeferredStrategyEvaluations,
     })
-    // The initial PREFLIGHT/user-data gate is reported by the normal startup
-    // lifecycle. Only subsequent readiness transitions are emitted here.
+    // The initial PREFLIGHT/user-data gate is reported after its authoritative
+    // snapshots pass. Later reconnect/reconciliation transitions use the same event.
     lastReportedUserDataReady = userDataState.ready
+    if (lastReportedUserDataReady) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
+        dataResult: mapUserDataReadinessChangedData({
+          broker: brokerName,
+          ready: true,
+          status: userDataState.status,
+          trigger: "startup-preflight-completed",
+        }),
+      })
+    }
 
     await subscribeToMarketData({
       broker,

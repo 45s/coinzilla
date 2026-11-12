@@ -514,6 +514,9 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
         ["user_data.readiness_changed", { broker: "binance", ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" }],
         ["user_data.readiness_changed", { broker: "binance", ready: true, status: "READY", trigger: "reconciled" }],
         ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recoveryFailed", recoveryRequired: true, error: { message: "REST snapshot failed" } }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovering", recoveryRequired: true }],
+        ["broker.status_changed", { broker: "binance", stream: "market-price", status: "recoveryFailed", recoveryRequired: true }],
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-1", sellOrderBrokerOrderId: "123", outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT", realizedNetProfit: "-0.02", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01" }],
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-2", sellOrderBrokerOrderId: "124", outcome: "CONTINUE_SELL_THROUGH", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", realizedNetProfit: "0", activeQuantity: "0.02", keepQuantity: "0.01", minProfit: "0.01" }],
       ]
@@ -526,10 +529,12 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
 
   await signalHandlers.get("SIGTERM")()
 
-  assert.equal(sentMessages.length, 4, "CC-3 must deliver two readiness transitions, a recovered-but-not-reconciled warning, and a blocked recovery alert only.")
+  assert.equal(sentMessages.length, 5, "CC-3 must deliver two readiness transitions, reconnect/recovery-failure warnings, and a blocked recovery alert only.")
   assert.ok(sentMessages.some((message) => message.includes("USER-DATA READINESS BLOCKED") && message.includes("connectionClosed")), "A readiness loss must explain its triggering stream status.")
   assert.ok(sentMessages.some((message) => message === "🟢 USER-DATA READY · BINANCE"), "A confirmed readiness restoration must be reported.")
   assert.ok(sentMessages.some((message) => message.includes("RECONNECTED") && message.includes("reconciliation")), "A recovered transport must not be reported as trading-ready before application reconciliation.")
+  assert.ok(sentMessages.some((message) => message.includes("user-data-recovery-failed") && message.includes("REST snapshot failed")), "A failed authoritative user-data recovery must be visible.")
+  assert.equal(sentMessages.some((message) => message.includes("recovering") || message.includes("market-price")), false, "Retry progress and non-user-data status events must not create notification noise.")
   assert.ok(sentMessages.some((message) => message.includes("recovery-cycle-blocked") && message.includes("RECOVERY_SELL_FAILED_MIN_PROFIT")), "A blocked recovery cycle must be a non-disableable safety alert.")
   assert.equal(sentMessages.some((message) => message.includes("CONTINUE_SELL_THROUGH")), false, "Expected residual sell-through must not generate a false safety alarm.")
 })

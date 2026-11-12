@@ -158,6 +158,7 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
@@ -173,6 +174,12 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   assert.equal(eventPublisher.events[4].name, HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED)
   assert.equal(eventPublisher.events[5].name, HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED)
   assert.deepEqual(eventPublisher.events[6].data, {
+    broker: "binance",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
+  })
+  assert.deepEqual(eventPublisher.events[7].data, {
     broker: "binance",
     stream: "market-price",
     market: "BTCUSDT",
@@ -197,7 +204,10 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     "connectionClosed",
     "recovered",
   ])
-  assert.equal(eventPublisher.events[8].data.recoveryRequired, true)
+  const connectionClosed = eventPublisher.events.find((event) =>
+    event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED && event.data.status === "connectionClosed"
+  )
+  assert.equal(connectionClosed.data.recoveryRequired, true)
   await recoveryAcknowledged
   assert.equal(runtime.userDataReady, true)
 
@@ -205,9 +215,10 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     .filter((event) => event.name === HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED)
     .map(({ data }) => ({ ready: data.ready, status: data.status, trigger: data.trigger }))
   assert.deepEqual(readinessTransitions, [
+    { ready: true, status: "READY", trigger: "startup-preflight-completed" },
     { ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" },
     { ready: true, status: "READY", trigger: "reconciled" },
-  ], "Only real user-data readiness transitions after startup must publish one event each.")
+  ], "Startup readiness and subsequent reconnect transitions must each publish exactly once.")
 
   const beforePrice = eventPublisher.events.length
   await broker.emitPrice({ eventType: "aggTrade", symbol: "BTCUSDT", price: "65000", timestamp: 1 })

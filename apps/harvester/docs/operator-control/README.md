@@ -35,7 +35,7 @@ Already-open exchange orders are not canceled or modified by pause; a resting BU
 
 ## Proactive alerts — CC-3
 
-The current implementation phase adds user-data readiness transitions, recovered-but-not-yet-reconciled warnings, blocked recovery-cycle safety alerts, and structured Telegram delivery diagnostics. Alerts reuse the existing best-effort notifier; Telegram I/O never participates in trading transitions, and no automatic retry or durable outbox is introduced.
+The current implementation phase reports confirmed readiness after startup PREFLIGHT and every subsequent user-data readiness loss/restoration, warns when the WebSocket transport reconnects before authoritative application reconciliation completes, alerts on failed recovery and blocked recovery-cycle outcomes, and exposes structured Telegram delivery diagnostics. Alerts reuse the existing best-effort notifier; Telegram I/O never participates in trading transitions, and no automatic retry or durable outbox is introduced.
 
 ## Ownership
 
