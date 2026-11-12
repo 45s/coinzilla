@@ -99,6 +99,45 @@ test("projects verified durable order facts into a candidate recovery projection
   assert.equal(result.data.sessions[0].uncleanTradingShutdown, true, "An unclosed trading-capable session must remain classified as unclean.")
 })
 
+test("does not replay process-lifetime operator pauses into a durable-facts restart candidate", () => {
+  const multiMarketBaseline = record(1, "CONFIGURATION_BASELINE", {
+    schemaVersion: 1,
+    strategyName: "conservative",
+    markets: ["BTCUSDT", "ETHUSDT"],
+    fingerprint,
+  }, "configuration-baseline:" + fingerprint)
+  const multiMarketStarted = record(2, "PROCESS_STARTED", {
+    configurationFingerprint: fingerprint,
+    strategyName: "conservative",
+    markets: ["BTCUSDT", "ETHUSDT"],
+    tradingEnabled: true,
+  }, "process-started:" + sessionId)
+  const result = projectHarvesterDurableFacts({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      multiMarketBaseline,
+      multiMarketStarted,
+      ...preflightFacts(),
+      record(5, "OPERATOR_MARKET_PAUSED", {
+        requestId: "telegram-request-1",
+        actorId: "telegram-actor-1",
+        symbol: "BTCUSDT",
+      }, "operator-control:telegram-request-1"),
+      record(6, "STRATEGY_MARKET_PAUSED", {
+        symbol: "ETHUSDT",
+        reason: "FILL_RECONCILIATION_FAILED",
+      }, "strategy-market-paused:session:1"),
+    ],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(
+    result.data.pausedMarkets,
+    [{ symbol: "ETHUSDT", reason: "FILL_RECONCILIATION_FAILED" }],
+    "ADR-0003 operator pauses are process-lifetime instructions and must not be replayed into a restart candidate; durable strategy pauses remain projected.",
+  )
+})
+
 test("retains only unresolved pause and safety-blocker controls in the candidate projection", () => {
   const blocker = {
     blockerId,
