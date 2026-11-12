@@ -29,6 +29,7 @@ export function makeVolatilityProtectionWorkflow({
   logger,
   transitionVolatilityProtection: transitionVolatilityProtectionPolicy = transitionVolatilityProtection,
 } = {}) {
+  const transitionVolatilityProtection = transitionVolatilityProtectionPolicy
   const processVolatilitySnapshot = async ({ symbol, snapshot } = {}) => {
     if (isStopping()) {return toResult({ data: { skipped: true, reason: "STOPPING" } })}
     if (typeof symbol !== "string" || !symbol.trim()) {
