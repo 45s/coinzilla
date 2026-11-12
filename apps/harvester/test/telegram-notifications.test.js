@@ -52,6 +52,17 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
         },
       })
       eventPublisher.publish({
+        name: "execution.fill_applied",
+        source: "harvester",
+        data: {
+          symbol: "DOGEUSDT",
+          side: "SELL",
+          price: "0.076",
+          quantity: "399",
+          tradeId: "trade-124",
+        },
+      })
+      eventPublisher.publish({
         name: "recovery.cycle_completed",
         source: "harvester",
         data: {
@@ -83,11 +94,12 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
 
   await signalHandlers.get("SIGTERM")()
 
-  assert.equal(sentMessages.length, 5, "Telegram must receive startup, pause, canonical fill, recovery completion, and shutdown notifications")
+  assert.equal(sentMessages.length, 6, "Telegram must receive startup, pause, canonical fill, recovery completion, and shutdown notifications")
   assert.ok(sentMessages.includes("▶️ BOT STARTED"), "A successful Harvester startup must use the selected start icon")
   assert.ok(sentMessages.some((message) => message.includes("PAUSED") && message.includes("DOGE/USDT")), "A paused market must produce a Telegram safety notification with its symbol")
   assert.ok(sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
-  assert.ok(sentMessages.includes("✅ FILL RECEIVED · DOGE/USDT @ 0.075 × 400\n#trade-123"), "Harvester must deliver the exact compact, normalized fill message from its application-owned formatter")
+  assert.ok(sentMessages.includes("✅ FILL RECEIVED · DOGE/USDT @ 0.075 × 400\n#trade-123"), "A canonical BUY fill must retain its side through the event bridge and use the selected BUY icon")
+  assert.ok(sentMessages.includes("💰 FILL RECEIVED · DOGE/USDT @ 0.076 × 399\n#trade-124"), "A canonical SELL fill must retain its side through the event bridge and use the selected SELL icon")
   assert.ok(sentMessages.some((message) => message.includes("BOT RECOVERY COMPLETED") && message.includes("0.25")), "A completed recovery cycle must produce a Telegram completion notification")
   assert.ok(sentMessages.includes("⏹️ BOT STOPPED"), "A completed Harvester shutdown must use the selected stop icon")
   assert.deepEqual(loggerErrors, [], "Successful optional Telegram delivery must not create application error diagnostics")
