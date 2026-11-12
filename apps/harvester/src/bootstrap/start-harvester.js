@@ -30,14 +30,6 @@ import { recordConfigurationBaseline } from "../use-cases/record-configuration-b
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 
-function logSystem(logger, data) {
-  if (typeof logger?.system === "function") {
-    logger.system(data)
-    return
-  }
-  logger?.info?.(data)
-}
-
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -137,12 +129,12 @@ export async function startHarvester({
       })
     : undefined
 
-  let accountSnapshotManager
+  const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
-    if (!accountSnapshotManager) {
+    if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
   }
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
   const recoveredState = Object.freeze({
@@ -170,7 +162,7 @@ export async function startHarvester({
   const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
   const marketMetadata = new Map()
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
-  const getAccountSnapshot = () => accountSnapshotManager?.getAccountSnapshot()
+  const getAccountSnapshot = () => accountSnapshotManagerRef.current?.getAccountSnapshot()
   let tradingEngine
   let hasCanonicalOwnershipReconciliation = false
 
@@ -180,8 +172,7 @@ export async function startHarvester({
   const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
-  let candleHistoryService
-  candleHistoryService = createCandleHistoryService({
+  const candleHistoryService = createCandleHistoryService({
     broker,
     logger,
     now,
@@ -218,7 +209,7 @@ export async function startHarvester({
     pendingRecovery: false,
     intakeStopped: false,
   }
-  accountSnapshotManager = createAccountSnapshotManager({
+  accountSnapshotManagerRef.current = createAccountSnapshotManager({
     broker,
     eventPublisher,
     marketMetadata,
@@ -233,8 +224,8 @@ export async function startHarvester({
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
     publishAccountSnapshot,
-  } = accountSnapshotManager
-  const resumeDeferredStrategyEvaluations = ({} = {}) => {
+  } = accountSnapshotManagerRef.current
+  const resumeDeferredStrategyEvaluations = () => {
     if (!tradingEngine || !userDataState.ready || userDataState.stopped) {return}
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
       if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })}
@@ -315,7 +306,7 @@ export async function startHarvester({
       updateTradingAccounting,
       completeRecoveryCycle,
       canTrade: () => userDataState.ready,
-      hasUnownedOpenOrdersForSymbol: accountSnapshotManager.hasUnownedOpenOrdersForSymbol,
+      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
@@ -404,6 +395,7 @@ export async function startHarvester({
       throw new AggregateError(
         [error, ...cleanupErrors],
         "Harvester market-data startup failed and cleanup was incomplete",
+        { cause: error },
       )
     }
     throw error
