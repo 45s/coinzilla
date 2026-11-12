@@ -276,7 +276,6 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     const configurationBaselines = new Map()
     const sessions = new Map()
     const seenFactIds = new Set()
-    const operatorPauses = new Map()
     const strategyPauses = new Map()
     const activeBlockers = new Map()
     const marketHistoryCoverage = []
@@ -381,16 +380,16 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         continue
       }
 
+      // ADR-0003 keeps operator pause process-lifetime only. Validate its session
+      // placement, but retain the fact only as durable audit evidence.
       if (record.factType === "OPERATOR_MARKET_PAUSED") {
         const controlSession = sessions.get(record.runtimeSessionId)
         if (!controlSession || controlSession.stopped) { throw new Error("Operator pause fact is outside an active process session") }
-        operatorPauses.set(record.data.symbol, { reason: "OPERATOR_MARKET_PAUSED", sequence: record.sequence })
         continue
       }
       if (record.factType === "OPERATOR_MARKET_RESUMED") {
         const controlSession = sessions.get(record.runtimeSessionId)
         if (!controlSession || controlSession.stopped) { throw new Error("Operator resume fact is outside an active process session") }
-        operatorPauses.delete(record.data.symbol)
         continue
       }
       if (record.factType === "STRATEGY_MARKET_PAUSED") {
@@ -446,11 +445,9 @@ export function projectHarvesterDurableFacts({ records } = {}) {
     const sessionList = [...sessions.values()].sort((left, right) =>
       left.startedSequence < right.startedSequence ? -1 : left.startedSequence > right.startedSequence ? 1 : 0)
     const latestSession = sessionList[sessionList.length - 1]
-    const activePauses = new Map()
-    for (const [symbol, pause] of [...operatorPauses, ...strategyPauses]) {
-      const current = activePauses.get(symbol)
-      if (!current || BigInt(pause.sequence) > BigInt(current.sequence)) { activePauses.set(symbol, pause) }
-    }
+    // Strategy pauses are durable recovery state; operator pauses are not
+    // replayed after restart and were intentionally excluded above.
+    const activePauses = strategyPauses
     const syntheticRecords = []
     for (const session of sessionList) {
       let lineNumber = 0

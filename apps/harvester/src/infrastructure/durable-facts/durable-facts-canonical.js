@@ -131,7 +131,7 @@ export function digestDurableFactRecord(record) {
  *
  * @param {Date|string} value
  * @returns {string}
- * @throws {TypeError} When a string is not already canonical ISO-8601.
+ * @throws {TypeError|RangeError} When the value is not a canonical ISO-8601 timestamp.
  */
 export function normalizeDurableFactRecordedAt(value) {
   const recordedAt = value instanceof Date ? value.toISOString() : String(value)
