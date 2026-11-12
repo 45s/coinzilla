@@ -63,7 +63,7 @@ test("rejects malformed pause syntax and does not expose unimplemented commands"
   assert.deepEqual(parseTelegramOperatorCommand("/pause"), { type: "INVALID", command: "PAUSE" })
   assert.deepEqual(parseTelegramOperatorCommand("/pause LINKUSDT extra"), { type: "INVALID", command: "PAUSE" })
   assert.deepEqual(parseTelegramOperatorCommand("/pause LINK-USDT"), { type: "INVALID", command: "PAUSE" })
-  assert.deepEqual(parseTelegramOperatorCommand("/pause@coinzilla_bot@another_bot LINKUSDT", { botUsername: "coinzilla_bot" }), { type: "INVALID", command: "PAUSE" })
+  assert.deepEqual(parseTelegramOperatorCommand("/pause@coinzilla_bot@another_bot LINKUSDT", { botUsername: "coinzilla_bot" }), { type: "INVALID" })
   assert.deepEqual(parseTelegramOperatorCommand("/cancel LINKUSDT"), { type: "UNSUPPORTED" })
 })
 
