@@ -268,7 +268,7 @@ test("removes a registered PENDING order when the final readiness check returns 
     onSubmissionFailure: async () => {},
     onSubmissionDeferred: async ({ order, registered, reason, details }) => {
       deferredCallbacks.push({ registered, reason, details })
-      if (registered) pendingClientOrderIds.delete(order.clientOrderId)
+      if (registered) {pendingClientOrderIds.delete(order.clientOrderId)}
     },
   })
 
@@ -343,7 +343,7 @@ test("cleans up PENDING when the final submission gate returns an invalid struct
     },
     onPendingOrder: async ({ order }) => pendingClientOrderIds.add(order.clientOrderId),
     onSubmissionDeferred: async ({ order, registered }) => {
-      if (registered) pendingClientOrderIds.delete(order.clientOrderId)
+      if (registered) {pendingClientOrderIds.delete(order.clientOrderId)}
     },
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => {},

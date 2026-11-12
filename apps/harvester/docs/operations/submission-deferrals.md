@@ -84,7 +84,7 @@ The execution use case checks readiness at more than one point because market st
 1. The execution use case constructs and validates every canonical order candidate against the current exchange trading rules before submitting any action.
 2. Immediately before local PENDING registration, it checks the submission gate. If the gate defers the intent, no PENDING order is registered and no broker call occurs.
 3. Harvester registers a local PENDING canonical order and durably publishes `order.submission_requested`. The durable-intent barrier must succeed before broker I/O.
-4. After that asynchronous registration/persistence step, the execution use case checks the gate again. If readiness changed, the deferred callback removes the local PENDING order and preserves the reason/details. Failure to remove it is an error. The broker is not called.
+4. After that asynchronous registration/persistence step, the execution use case checks the gate again. If readiness changed, the deferred callback removes the local PENDING order and preserves the reason/details. Failure to remove it is an error. The broker is not called. If the gate itself throws or returns a malformed structured decision at this point, the executor also invokes cleanup with `SUBMISSION_GATE_ERROR` and returns an execution error rather than leaving a local PENDING order behind.
 5. Only if both gate checks pass does the use case call `broker.placeOrder({ order })`.
 
 The trailing-BUY replacement workflow also uses the executor's separate `.validate()` preflight before canceling the existing BUY. That preflight does not register PENDING or call the broker; after confirmed cancellation, the rebuilt replacement order goes through the normal two-gate submission sequence above.
