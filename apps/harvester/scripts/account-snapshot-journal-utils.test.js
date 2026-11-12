@@ -35,6 +35,21 @@ test("pairs snapshots by Journal session and computes exact asset deltas", () =>
   assert.equal(result.data.profitAssessment, "NOT_DETERMINABLE_FROM_BALANCE_DELTAS_ALONE")
 })
 
+
+test("pairs current PREFLIGHT/CLOSING snapshots by Journal session", () => {
+  const result = reconcileJournalAccountSnapshotRecords({
+    records: [
+      record("preflight-session.jsonl", event("PREFLIGHT", 100, [balance("DOGE", "10"), balance("USDT", "20")])),
+      record("preflight-session.jsonl", event("CLOSING", 200, [balance("DOGE", "10.25"), balance("USDT", "19.5")])),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reports[0].auditStatus, "COMPLETE")
+  assert.deepEqual(result.data.reports[0].assetDeltas[0].delta.total, "0.25")
+  assert.deepEqual(result.data.reports[0].assetDeltas[1].delta.total, "-0.5")
+})
+
 test("reports missing or duplicate snapshot endpoints as incomplete instead of inventing deltas", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
