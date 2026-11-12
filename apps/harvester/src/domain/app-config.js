@@ -1,5 +1,14 @@
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
-const fail = (path, expectation) => { throw new TypeError(`Invalid app config at "${path}": expected ${expectation}`) }
+export class ConfigValidationError extends TypeError {
+  constructor(path, expected) {
+    super(`Invalid app config at "${path}": expected ${expected}`)
+    this.name = "ConfigValidationError"
+    this.path = path
+    this.expected = expected
+  }
+}
+
+const fail = (path, expectation) => { throw new ConfigValidationError(path, expectation) }
 const requireRecord = (value, path) => { if (!isRecord(value)) fail(path, "an object") }
 const requireBoolean = (value, path) => { if (typeof value !== "boolean") fail(path, "a boolean") }
 const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false } = {}) => {
@@ -82,6 +91,7 @@ export function validateAppConfig(config) {
     if (!symbol.trim()) fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")
     requireRecord(pair, pairPath)
     requireBoolean(pair.enabled, `${pairPath}.enabled`)
+    requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
     requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true })
     requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true })
     requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 })

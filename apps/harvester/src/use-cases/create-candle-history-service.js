@@ -490,7 +490,7 @@ function createCandleHistoryService({
     }
 
     const enabledSymbols = Object.entries(pairs)
-      .filter(([, pairConfig]) => pairConfig?.enabled === true)
+      .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
       .map(([symbol]) => symbol)
     for (const symbol of enabledSymbols) {
       markets.set(symbol, createMarketState(symbol))

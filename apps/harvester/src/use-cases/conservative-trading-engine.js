@@ -170,6 +170,8 @@ export function makeConservativeTradingEngine({
   const strategyConfig = appConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
+  const isVolatilityProtectionEnabledForSymbol = (symbol) =>
+    volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
   if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
     throw new TypeError("getVolatilityData must be a function when provided")
   }
@@ -252,7 +254,7 @@ export function makeConservativeTradingEngine({
     reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
     volatilityProtection: new Map(Object.entries(pairs)
-      .filter(([, pairConfig]) => pairConfig?.enabled === true)
+      .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
       .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
     volatilityCancellationAttemptBySymbol: new Map(),
     volatilitySnapshotSignatureBySymbol: new Map(),
@@ -592,7 +594,7 @@ export function makeConservativeTradingEngine({
       const marketPrice = state.prices.get(symbol)
       if (state.paused.has(symbol) || hasUnownedOpenOrdersForSymbol({ symbol }) ||
           !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
-      if (volatilityProtectionEnabled) {
+      if (isVolatilityProtectionEnabledForSymbol(symbol)) {
         let volatility
         try {
           const volatilityResult = getVolatilityData({ symbol })
@@ -2791,11 +2793,11 @@ export function makeConservativeTradingEngine({
 
   const processVolatilitySnapshot = async ({ symbol, snapshot } = {}) => {
     if (isStopping()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
-    if (!volatilityProtectionEnabled) {
-      return toResult({ data: { skipped: true, reason: "VOLATILITY_PROTECTION_NOT_CONFIGURED" } })
-    }
     if (typeof symbol !== "string" || !symbol.trim()) {
       return toResult({ error: new TypeError("processVolatilitySnapshot requires a symbol") })
+    }
+    if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
+      return toResult({ data: { skipped: true, reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR" } })
     }
 
     let currentSnapshot = snapshot
@@ -2988,7 +2990,7 @@ export function makeConservativeTradingEngine({
   }
 
   const refreshVolatilityProtectionIfNeeded = async ({ symbol } = {}) => {
-    if (!volatilityProtectionEnabled) return toResult({ data: { skipped: true } })
+    if (!isVolatilityProtectionEnabledForSymbol(symbol)) return toResult({ data: { skipped: true } })
     let snapshot
     try {
       snapshot = getVolatilityData({ symbol })

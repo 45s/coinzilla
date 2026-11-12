@@ -24,7 +24,7 @@ const config = {
       enabled: true,
       settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
+        BTCUSDT: { enabled: true, enableVolatilityProtection: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
       },
     },
   },
