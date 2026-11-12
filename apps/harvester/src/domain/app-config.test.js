@@ -39,6 +39,25 @@ test("validates strategy-owned pairs without requiring exchange-mode configurati
 })
 
 
+test("keeps volatility protection enabled by default and accepts an explicit per-pair opt-out", () => {
+  const config = createAppConfig()
+  const pair = config.strategies.CG_coinGrabber.pairs.ZROFDUSD
+  assert.equal(validateAppConfig(config), config, "Omitting the optional flag must preserve protected-by-default behavior.")
+  pair.enableVolatilityProtection = false
+  assert.equal(validateAppConfig(config), config, "An explicit false value must be accepted for an opted-out pair.")
+  pair.enableVolatilityProtection = true
+  assert.equal(validateAppConfig(config), config, "An explicit true value must retain protection.")
+})
+
+test("rejects non-boolean per-pair volatility protection values", () => {
+  for (const invalidValue of [null, 0, 1, "false", "true"]) {
+    const config = createAppConfig()
+    config.strategies.CG_coinGrabber.pairs.ZROFDUSD.enableVolatilityProtection = invalidValue
+    assert.throws(() => validateAppConfig(config), /enableVolatilityProtection.*boolean/,
+      "The optional volatility setting must reject non-boolean values: " + JSON.stringify(invalidValue))
+  }
+})
+
 test("requires a minimum-profit threshold on every pair", () => {
   const config = createAppConfig()
   delete config.strategies.CG_coinGrabber.pairs.ZROFDUSD.minProfit
