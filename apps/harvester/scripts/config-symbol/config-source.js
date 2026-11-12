@@ -2,7 +2,7 @@ const START_MARKER = "// BEGIN GENERATED PAIR CONFIGURATION"
 const END_MARKER = "// END GENERATED PAIR CONFIGURATION"
 
 /**
- * Replace only the explicitly marked pair entries in the application config module.
+ * Replace only the explicitly marked pair entries in the CG coin-grabber strategy module.
  *
  * The generator intentionally does not parse and re-serialize the whole ESM
  * module: imports, expressions, comments, and operator-maintained formatting
@@ -23,14 +23,14 @@ export function replacePairConfiguration({ source, pairs } = {}) {
   const startCount = source.split(START_MARKER).length - 1
   const endCount = source.split(END_MARKER).length - 1
   if (startCount !== 1 || endCount !== 1) {
-    throw new TypeError("App config module must contain exactly one generated pair-region marker pair")
+    throw new TypeError("CG coin-grabber strategy module must contain exactly one generated pair-region marker pair")
   }
 
   const startIndex = source.indexOf(START_MARKER)
   const contentStart = startIndex + START_MARKER.length
   const endIndex = source.indexOf(END_MARKER)
   if (endIndex < contentStart) {
-    throw new TypeError("App config module generated pair-region markers are out of order")
+    throw new TypeError("CG coin-grabber strategy module generated pair-region markers are out of order")
   }
 
   const serializedPairs = JSON.stringify(pairs, null, 2)
