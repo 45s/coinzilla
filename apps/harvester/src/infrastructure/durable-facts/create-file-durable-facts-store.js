@@ -609,7 +609,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       if (compareDecimal({ left: order.executedQuantity, right: order.quantity }) > 0) {
         throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
       }
-      if (order.status !== "OPEN" && order.status !== "PARTIALLY_FILLED") {
+      if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
         throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
       }
       const identity = symbol + ":" + brokerOrderId

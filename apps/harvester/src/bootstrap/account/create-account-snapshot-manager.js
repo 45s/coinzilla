@@ -53,6 +53,7 @@ function logSystem(logger, data) {
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
  * @param {object} options.logger Structured logger.
+ * @param {object} [options.durableFactsStore] Optional initialized ADR-0001 durable-fact store.
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */

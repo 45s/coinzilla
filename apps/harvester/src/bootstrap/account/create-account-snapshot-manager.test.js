@@ -705,3 +705,36 @@ test("fails closed before Journal publication when the durable open-order snapsh
   assert.equal(fixture.publishedEvents.length, 0, "No Journal audit may imply durable open-order evidence when the fact append failed.")
   assert.equal(fixture.getFlushCount(), 0, "A failed durable open-order fact must not advance to the Journal flush.")
 })
+
+
+test("durably records a Binance NEW external order without inventing its Harvester identity", async () => {
+  const durableFacts = []
+  const externalOrder = {
+    id: "external-new-order-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    originalPrice: "65000",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
+    clientOrderId: "manual-client-order-1",
+  }
+  const fixture = createFixture({
+    openOrders: [externalOrder],
+    durableFactsStore: {
+      append: async (fact) => {
+        durableFacts.push(fact)
+        return { ok: true, data: { durable: true, record: fact } }
+      },
+    },
+  })
+
+  await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "The observed external client ID is evidence only and does not confer ownership.")
+})
