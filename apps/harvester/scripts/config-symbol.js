@@ -16,7 +16,7 @@ const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config/strategies/cg-coin-
  * @param {(line: string) => void} [options.writeLine] - Operator-facing output function.
  * @param {typeof fetch} [options.fetchImpl] - Public metadata transport.
  * @param {Function} [options.metadataFetcher] - Binance metadata adapter.
- * @param {string} [options.configPath] - Canonical Harvester config module path.
+ * @param {string} [options.configPath] - Canonical CG coin-grabber strategy config module path.
  * @param {Function} [options.loadConfig] - Existing app-config loader.
  * @param {Function} [options.writeConfig] - Atomic pair-config writer.
  * @returns {Promise<object>} Generated pair and whether the operator confirmed persistence.
