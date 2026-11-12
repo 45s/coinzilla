@@ -3288,7 +3288,7 @@ test("account snapshots include every configured pair asset, including disabled 
             makerPercent: 0, takerPercent: 0.1,
           },
           ZROFDUSD: {
-            enabled: false, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
+            enabled: false, enableVolatilityProtection: true, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
             minProfit: 0.01,
             priceStepPercent: 0.5, pricePrecision: 3, quantityPrecision: 1,
             makerPercent: 0, takerPercent: 0.1,
