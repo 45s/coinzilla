@@ -163,6 +163,7 @@ test("does not construct Telegram transport when credentials are absent", async 
 test("Telegram delivery failure is logged but does not fail runtime shutdown", async () => {
   const signalHandlers = new Map()
   const loggerErrors = []
+  const loggerInfos = []
   const previousExitCode = process.exitCode
   process.exitCode = 0
 
@@ -188,14 +189,20 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
       }),
       registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
       logger: {
-        info() {},
+        info(entry) { loggerInfos.push(entry) },
         error(entry) { loggerErrors.push(entry) },
       },
     })
 
     await signalHandlers.get("SIGTERM")()
     assert.equal(process.exitCode, 0, "Telegram transport failure must not change Harvester's shutdown result")
-    assert.ok(loggerErrors.some((entry) => entry.message === "Telegram notification delivery failed"))
+    const deliveryFailure = loggerErrors.find((entry) => entry.message === "Telegram notification delivery failed")
+    assert.ok(deliveryFailure, "A Telegram delivery failure must remain visible in the application logger.")
+    assert.equal(deliveryFailure.notificationDiagnostics.failedCount, 1, "Failure logs must include delivery counters after the failed send.")
+    const deliverySummary = loggerInfos.find((entry) => entry.message === "Telegram notification delivery summary")
+    assert.equal(deliverySummary.failedCount, 2, "Shutdown must report every failed API send, including the final stop notification.")
+    assert.equal(deliverySummary.pendingCount, 0, "The final delivery summary must be captured after accepted sends drain.")
+    assert.equal(deliverySummary.closed, true, "The final delivery summary must confirm the subscriber is closed.")
   } finally {
     process.exitCode = previousExitCode
   }
@@ -490,4 +497,39 @@ test("delivers startup, broker, order, and execution safety failures in custom m
       `The non-disableable safety policy must retain the ${description} notification.`,
     )
   }
+})
+
+
+test("sends readiness, reconnect, and blocked recovery alerts without notifying routine sell-through", async () => {
+  const sentMessages = []
+  const signalHandlers = new Map()
+
+  await runMain({
+    env: { TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_CHAT_ID: "test-chat" },
+    loadConfig: async () => ({ notifications: { telegram: { enabled: true, profile: "custom", markets: ["LINKUSDT"], events: { accountSafetyAlert: false } } } }),
+    createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
+    createJournalService: disabledJournalService,
+    start: async ({ eventPublisher }) => {
+      const events = [
+        ["user_data.readiness_changed", { broker: "binance", ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" }],
+        ["user_data.readiness_changed", { broker: "binance", ready: true, status: "READY", trigger: "reconciled" }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true }],
+        ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-1", sellOrderBrokerOrderId: "123", outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT", realizedNetProfit: "-0.02", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01" }],
+        ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-2", sellOrderBrokerOrderId: "124", outcome: "CONTINUE_SELL_THROUGH", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", realizedNetProfit: "0", activeQuantity: "0.02", keepQuantity: "0.01", minProfit: "0.01" }],
+      ]
+      for (const [name, data] of events) eventPublisher.publish({ name, source: "harvester", data })
+      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: ["LINKUSDT"], stop: async () => ({ ok: true }) }
+    },
+    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    logger: { info() {}, error() {} },
+  })
+
+  await signalHandlers.get("SIGTERM")()
+
+  assert.equal(sentMessages.length, 4, "CC-3 must deliver two readiness transitions, a recovered-but-not-reconciled warning, and a blocked recovery alert only.")
+  assert.ok(sentMessages.some((message) => message.includes("USER-DATA READINESS BLOCKED") && message.includes("connectionClosed")), "A readiness loss must explain its triggering stream status.")
+  assert.ok(sentMessages.some((message) => message === "🟢 USER-DATA READY · BINANCE"), "A confirmed readiness restoration must be reported.")
+  assert.ok(sentMessages.some((message) => message.includes("RECONNECTED") && message.includes("reconciliation")), "A recovered transport must not be reported as trading-ready before application reconciliation.")
+  assert.ok(sentMessages.some((message) => message.includes("recovery-cycle-blocked") && message.includes("RECOVERY_SELL_FAILED_MIN_PROFIT")), "A blocked recovery cycle must be a non-disableable safety alert.")
+  assert.equal(sentMessages.some((message) => message.includes("CONTINUE_SELL_THROUGH")), false, "Expected residual sell-through must not generate a false safety alarm.")
 })

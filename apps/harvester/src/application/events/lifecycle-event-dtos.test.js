@@ -35,6 +35,7 @@ import {
   mapOrderSubmittedData,
   mapStrategyDecisionData,
   mapStrategyPausedData,
+  mapUserDataReadinessChangedData,
 } from "./lifecycle-event-dtos.js"
 
 const validLifecycle = {
@@ -55,6 +56,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_CONNECTION_FAILED: "broker.connection_failed",
     BROKER_DISCONNECTED: "broker.disconnected",
     BROKER_STATUS_CHANGED: "broker.status_changed",
+    USER_DATA_READINESS_CHANGED: "user_data.readiness_changed",
     BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
     BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
     STRATEGY_DECISION: "strategy.decision",
@@ -1307,4 +1309,28 @@ test("maps explicit residual sell-through and blocked recovery-cycle outcomes", 
   assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT" }).ok, false)
   assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", activeQuantity: "0.01" }).ok, false)
   assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "BLOCKED", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" }).ok, false)
+})
+
+
+test("maps user-data readiness changes to a small immutable lifecycle DTO", () => {
+  const blocked = mapUserDataReadinessChangedData({
+    broker: "binance",
+    ready: false,
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    trigger: "connectionClosed",
+    account: { balances: ["must-not-leak"] },
+  })
+
+  assert.equal(blocked.ok, true, "A valid blocked-readiness transition must map successfully.")
+  assert.deepEqual(blocked.data, {
+    broker: "binance",
+    ready: false,
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    trigger: "connectionClosed",
+  }, "The readiness DTO must expose only bounded lifecycle facts.")
+  assert.equal(mapUserDataReadinessChangedData({
+    broker: "binance",
+    ready: "false",
+    status: "READY",
+  }).ok, false, "Readiness must reject non-boolean values instead of guessing.")
 })

@@ -201,6 +201,14 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   await recoveryAcknowledged
   assert.equal(runtime.userDataReady, true)
 
+  const readinessTransitions = eventPublisher.events
+    .filter((event) => event.name === HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED)
+    .map(({ data }) => ({ ready: data.ready, status: data.status, trigger: data.trigger }))
+  assert.deepEqual(readinessTransitions, [
+    { ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" },
+    { ready: true, status: "READY", trigger: "reconciled" },
+  ], "Only real user-data readiness transitions after startup must publish one event each.")
+
   const beforePrice = eventPublisher.events.length
   await broker.emitPrice({ eventType: "aggTrade", symbol: "BTCUSDT", price: "65000", timestamp: 1 })
   assert.equal(eventPublisher.events.length, beforePrice)
