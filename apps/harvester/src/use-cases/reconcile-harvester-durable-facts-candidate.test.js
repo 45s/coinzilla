@@ -23,27 +23,27 @@ const record = (sequence, factType, data, factId = factType + ":" + sequence) =>
 
 const records = ({ includeCoverage = true, blockerScope } = {}) => {
   const result = [
-  record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-  record(1, "CONFIGURATION_BASELINE", {
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    record(1, "CONFIGURATION_BASELINE", {
     schemaVersion: 1, strategyName: "conservative", markets: ["BTCUSDT"], fingerprint,
   }, "configuration-baseline:" + fingerprint),
-  record(2, "PROCESS_STARTED", {
+    record(2, "PROCESS_STARTED", {
     configurationFingerprint: fingerprint, strategyName: "conservative", markets: ["BTCUSDT"], tradingEnabled: true,
   }, "process-started:" + sessionId),
-  record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
+    record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
     phase: "PREFLIGHT", auditStatus: "COMPLETE", sourceTime: 100,
     assetCount: 0, balances: [], auditReasons: [],
   }),
-  record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
+    record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
     phase: "PREFLIGHT", observedAt: 101, readiness: "READY", orderCount: 0, orders: [], blockReasons: [],
   }),
-  ...(includeCoverage ? [record(5, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
+    ...(includeCoverage ? [record(5, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
     symbol: "BTCUSDT",
     coveredFromTime: 100,
     verifiedAt: 200,
     evidenceDigest: "a".repeat(64),
     verifiedBy: "operator:trader",
-  }, "market-history-coverage:BTCUSDT:1")] : []),
+    }, "market-history-coverage:BTCUSDT:1")] : []),
   ]
   if (blockerScope) {
     const symbol = blockerScope === "ACCOUNT" ? null : "BTCUSDT"
