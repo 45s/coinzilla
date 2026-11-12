@@ -91,6 +91,14 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
     evidenceDigest: "e".repeat(64),
   })
   assert.equal(raised.ok, true, "The account-level blocker fixture must be recorded.")
+  const reusedEvidence = await recordSafetyBlockerResolved({
+    durableFactsStore,
+    blockerId: raised.data.record.data.blockerId,
+    resolvedBy: "operator:trader",
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "e".repeat(64),
+  })
+  assert.equal(reusedEvidence.ok, false, "The triggering evidence digest cannot also serve as independent resolution proof.")
   const implicit = await recordSafetyBlockerResolved({
     durableFactsStore,
     blockerId: raised.data.record.data.blockerId,

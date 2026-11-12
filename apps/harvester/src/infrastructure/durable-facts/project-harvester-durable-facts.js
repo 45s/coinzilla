@@ -344,8 +344,8 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       if (!current || BigInt(pause.sequence) > BigInt(current.sequence)) { activePauses.set(symbol, pause) }
     }
     const syntheticRecords = []
-    let lineNumber = 0
     for (const session of sessionList) {
+      let lineNumber = 0
       const preflight = session.facts.filter((record) =>
         (record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" || record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") &&
         record.data.phase === "PREFLIGHT")
