@@ -7,6 +7,32 @@
 - Owner: Harvester, with Brokers and Indicators package work
 
 This document is the behavior and safety contract for Harvester's volatility protection. It does not change the authoritative [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md), recovery accounting, or existing order lifecycle rules.
+## Per-pair configuration
+
+Volatility protection is enabled by default for every configured pair. To opt one pair out, add the optional boolean to that pair in `config.json`:
+
+```json
+{
+  "strategies": {
+    "CG_coinGrabber": {
+      "pairs": {
+        "LINKFDUSD": {
+          "enabled": true,
+          "enableVolatilityProtection": false
+        }
+      }
+    }
+  }
+}
+```
+
+- Omitted or `true`: retain the existing protection behavior, including startup warm-up, freshness checks, submission gating and owned-BUY cancellation.
+- `false`: skip this pair's volatility state machine, Kline subscription/history warm-up, periodic refresh, volatility submission gate and volatility-triggered BUY cancellation.
+- The setting must be a JSON boolean. `null`, strings and numbers are rejected during config validation.
+- The opt-out is strictly scoped to volatility protection. It does not disable market-price/order-book freshness, account-integrity checks, unowned-order blocking, durable intent requirements, exchange filters, shutdown BUY cancellation, or other safety controls.
+- Recovery/accounting behavior is unchanged. No recovery SELL exception is broadened; the normal Conservative recovery-purpose and accounting rules continue to apply.
+
+The implementation deliberately does not remove the shared `cancelOwnedBuyOrders` workflow or weaken the central execution infrastructure. It prevents the volatility-specific path from invoking that workflow for opted-out pairs.
 
 ## 1. Goal
 
