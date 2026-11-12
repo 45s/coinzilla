@@ -14,6 +14,7 @@ export function makeExecuteStrategyDecision({
   onPendingOrder,
   onAcknowledgedOrder,
   onSubmissionFailure,
+  onDurableSubmissionIntent,
   onOrderValidationFailure = async ({} = {}) => {},
   canSubmit = ({} = {}) => true,
   onSubmissionDeferred = async ({} = {}) => {},
@@ -25,11 +26,12 @@ export function makeExecuteStrategyDecision({
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
+    onDurableSubmissionIntent,
     onOrderValidationFailure,
     canSubmit,
     onSubmissionDeferred,
   })) {
-    if (typeof callback !== "function") throw new TypeError(name + " must be a function")
+    if (callback !== undefined && typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
@@ -118,6 +120,14 @@ export function makeExecuteStrategyDecision({
         if (!canSubmit({ order: pendingOrder, purpose })) {
           await onSubmissionDeferred({ order: pendingOrder, purpose, registered: true })
           return toResult({ data: { deferred: true, submittedOrders } })
+        }
+        if (onDurableSubmissionIntent) {
+          const durableIntent = await onDurableSubmissionIntent({ order: pendingOrder, purpose })
+          if (durableIntent?.ok !== true || durableIntent.data?.durable !== true) {
+            const error = durableIntent?.errors?.[0] ??
+              new Error("Durable order-submission intent was not acknowledged")
+            return toResult({ errors: durableIntent?.errors ?? [error] })
+          }
         }
         let brokerResult
         try {
