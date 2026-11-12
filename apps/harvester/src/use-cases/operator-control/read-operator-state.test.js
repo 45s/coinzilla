@@ -160,13 +160,53 @@ test("rejects an unauthorized query before reading runtime or engine state", asy
   assert.deepEqual(calls, [], "Unauthorized queries must be rejected before runtime or engine state is accessed.")
 })
 
-test("propagates an unsuccessful engine snapshot instead of returning partial or healthy market data", async () => {
+test("wraps an untyped engine snapshot failure with a stable operator code and preserves its cause", async () => {
+  const engineFailure = new Error("account snapshot unavailable")
   const { readState } = createHarness({
-    marketResult: { ok: false, errors: [{ code: "SNAPSHOT_UNAVAILABLE" }] },
+    marketResult: { ok: false, errors: [engineFailure] },
   })
 
   const result = await readState.getMarkets({ actor })
 
   assert.equal(result.ok, false, "A failed engine snapshot must make the market query fail rather than return partial data.")
-  assert.equal(result.errors[0].code, "SNAPSHOT_UNAVAILABLE", "The query must preserve the engine's stable snapshot failure code.")
+  assert.equal(result.errors[0].name, "OperatorQueryError", "The operator query boundary must identify its owning failure type.")
+  assert.equal(result.errors[0].code, "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED", "The operator market read failure must expose its stable code.")
+  assert.equal(result.errors[0].cause, engineFailure, "The operator query error must preserve the original engine failure by identity.")
+  assert.equal(result.errors[0].context.operation, "READ_MARKETS", "The operator query error must identify the failed application operation.")
+  assert.equal(result.errors[0].context.component, "harvester.operator", "The operator query error must identify its owning component.")
+})
+
+test("returns a typed runtime-snapshot validation failure with safe operation context", async () => {
+  const { readState } = createHarness({
+    runtimeSnapshot: {
+      observedAt: "not-a-timestamp",
+      tradingEnabled: true,
+      userData: { ready: false },
+    },
+  })
+
+  const result = await readState.getStatus({ actor })
+
+  assert.equal(result.ok, false, "An invalid runtime snapshot must fail closed instead of producing a healthy status.")
+  assert.equal(result.errors[0].name, "OperatorQueryError", "Runtime snapshot validation must use the feature-owned error type.")
+  assert.equal(result.errors[0].code, "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_INVALID", "Runtime snapshot validation must expose its stable error code.")
+  assert.equal(result.errors[0].cause instanceof TypeError, true, "The validation failure must preserve the underlying input-shape cause.")
+  assert.equal(result.errors[0].context.operation, "READ_STATUS", "Runtime snapshot diagnostics must identify the failed status query.")
+})
+
+test("returns a typed market-snapshot validation failure with the affected symbol", async () => {
+  const { readState } = createHarness({
+    marketResult: {
+      ok: true,
+      data: { markets: [{ symbol: "DOGEUSDT", enabled: true, blockers: "invalid" }] },
+    },
+  })
+
+  const result = await readState.getMarkets({ actor })
+
+  assert.equal(result.ok, false, "A malformed market snapshot must fail closed instead of returning incomplete market data.")
+  assert.equal(result.errors[0].name, "OperatorQueryError", "Market snapshot validation must use the feature-owned error type.")
+  assert.equal(result.errors[0].code, "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID", "Market snapshot validation must expose its stable error code.")
+  assert.equal(result.errors[0].cause instanceof TypeError, true, "The market validation failure must preserve its underlying shape error.")
+  assert.equal(result.errors[0].context.symbol, "DOGEUSDT", "Market snapshot diagnostics must identify the affected symbol.")
 })

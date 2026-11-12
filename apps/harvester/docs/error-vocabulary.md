@@ -53,3 +53,15 @@ These operator-facing diagnostic codes are distinct from JavaScript error class 
 **Safety invariant:** The lock is acquired using exclusive file creation. Normal Journal close releases the lock after the session is synced and closed. Abrupt process termination can leave it behind. Automatic stale-lock takeover is intentionally not supported because a contender cannot safely distinguish a crashed owner from a live writer. See the [Journal package locking contract](../../../packages/journal/README.md) for the package-owned behavior.
 
 **If the error persists:** Preserve the lock and original error details. Check the actual Journal directory reported in the error; do not assume every caller uses `apps/harvester/logs/`. Confirm all writers of that exact directory have stopped before considering manual lock removal.
+
+## Operator query diagnostics
+
+The Telegram Command Center uses the feature-owned `OperatorQueryError` for failures while building read-only status and market snapshots. The application preserves the original cause and attaches only bounded component/operation/symbol context. Telegram replies remain generic; detailed errors are written to the structured Harvester logger.
+
+| Code | Symptom | Likely cause | Safe recovery |
+| --- | --- | --- | --- |
+| `HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED` | `/status` or `/markets` reports that the runtime snapshot is unavailable | The bootstrap-owned runtime snapshot provider failed | Inspect the structured error and cause in Harvester logs; verify runtime lifecycle state. No trading state was changed. |
+| `HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_INVALID` | The runtime query fails closed instead of returning status | The runtime provider returned an incomplete or malformed snapshot | Inspect the provider contract and runtime/user-data state; do not treat the failed query as READY. |
+| `HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED` | `/markets` or `/status` cannot collect engine market state | The serialized engine snapshot failed or returned an unclassified failure | Inspect the preserved cause and engine diagnostics; retry the read-only command after the engine is healthy. |
+| `HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID` | Market status is unavailable for a malformed engine snapshot | A market DTO is missing its symbol, enabled flag, blocker list, or market collection | Inspect the affected symbol and engine snapshot producer; do not return partial market state. |
+| `HARVESTER_OPERATOR_QUERY_FAILED` | An unexpected operator read query failure is returned | An unclassified exception crossed the application query boundary | Inspect the preserved cause and operation context in Harvester logs. No trading action is performed. |

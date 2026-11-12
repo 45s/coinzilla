@@ -221,12 +221,19 @@ export function createTelegramOperatorAdapter({
       } catch (error) {
         logger?.error?.({
           message: "Telegram operator read query failed",
-          command: parsed.type,
-          error: error?.message ?? String(error),
+          component: "harvester.operator",
+          operation: method,
+          error,
         })
         result = { ok: false }
       }
       if (result?.ok !== true) {
+        logger?.error?.({
+          message: "Telegram operator read query returned a failure",
+          component: "harvester.operator",
+          operation: method,
+          error: result?.errors ?? result?.error ?? "Unclassified query failure",
+        })
         await sendMessage({
           chatId: message.chat.id,
           text: "Unable to read the Harvester " + (parsed.type === "STATUS" ? "runtime status" : "market snapshot") +

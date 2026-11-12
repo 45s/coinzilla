@@ -569,3 +569,62 @@ test("dispatches authorized read-only status and market queries without invoking
   assert.match(sentMessages[1].text, /MARKET_PRICE_STALE/, "The market response must identify stale price data.")
   assert.match(sentMessages[1].text, /PROTECTED/, "The market response must expose the volatility protection state.")
 })
+
+test("logs structured operator query failures without exposing diagnostics to Telegram", async () => {
+  const updates = [makeUpdate({ updateId: 114, text: "/status" })]
+  const sentMessages = []
+  const loggedErrors = []
+  let pollCount = 0
+  let finishFirstPoll
+  const firstPoll = new Promise((resolve) => { finishFirstPoll = resolve })
+  const internalCause = new Error("private internal snapshot failure")
+  const queryError = Object.assign(new Error("Operator runtime snapshot could not be read"), {
+    name: "OperatorQueryError",
+    code: "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED",
+    cause: internalCause,
+    context: { component: "harvester.operator", operation: "READ_STATUS" },
+  })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) {return makeResponse({ ok: true, result: updates })}
+      if (pollCount === 2) {
+        finishFirstPoll()
+        return makeResponse({ ok: true, result: [] })
+      }
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      })
+    }
+    if (method === "sendMessage") {
+      sentMessages.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: { message_id: 213 } })
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async () => assert.fail("A failed read-only query must not invoke the pause command."),
+      getStatus: async () => ({ ok: false, errors: [queryError] }),
+    },
+    logger: { error: (entry) => loggedErrors.push(entry) },
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+
+  await adapter.start()
+  await firstPoll
+  await adapter.stop()
+
+  assert.equal(loggedErrors.length, 1, "A failed operator query must emit one actionable structured diagnostic.")
+  assert.equal(loggedErrors[0].component, "harvester.operator", "The diagnostic must identify the owning operator component.")
+  assert.equal(loggedErrors[0].operation, "getStatus", "The diagnostic must identify the failed query operation.")
+  assert.equal(loggedErrors[0].error[0], queryError, "The logger must receive the original typed error object without stringification.")
+  assert.equal(loggedErrors[0].error[0].cause, internalCause, "The diagnostic must preserve the original lower-level cause.")
+  assert.equal(sentMessages.length, 1, "The operator must receive one safe failure response for the failed query.")
+  assert.doesNotMatch(sentMessages[0].text, /private internal snapshot failure/, "Telegram must not expose internal error messages or causes.")
+})
