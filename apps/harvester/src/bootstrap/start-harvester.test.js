@@ -391,7 +391,9 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
       start: async () => { throw new Error("Telegram getMe unauthorized") },
       stop: async () => {
         stopAttempts += 1
-        if (stopAttempts === 1) throw new Error("temporary adapter shutdown failure")
+        if (stopAttempts === 1) {
+          throw new Error("temporary adapter shutdown failure")
+        }
         calls.push("telegram-stop-confirmed")
         return { stopped: true }
       },

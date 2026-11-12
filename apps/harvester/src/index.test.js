@@ -30,9 +30,15 @@ const main = (options = {}) => {
     env: { TRADING_MODE: "testnet", ...env },
     createJournalService: (...args) => {
       const service = createJournalService(...args) ?? {}
-      if (!Object.hasOwn(service, "ready")) service.ready = Promise.resolve({ ok: true })
-      if (!Object.hasOwn(service, "flush")) service.flush = async () => ({ ok: true, durable: true })
-      if (!Object.hasOwn(service, "close")) service.close = async () => ({ ok: true, closed: true })
+      if (!Object.hasOwn(service, "ready")) {
+        service.ready = Promise.resolve({ ok: true })
+      }
+      if (!Object.hasOwn(service, "flush")) {
+        service.flush = async () => ({ ok: true, durable: true })
+      }
+      if (!Object.hasOwn(service, "close")) {
+        service.close = async () => ({ ok: true, closed: true })
+      }
       return service
     },
   })
@@ -844,7 +850,9 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
