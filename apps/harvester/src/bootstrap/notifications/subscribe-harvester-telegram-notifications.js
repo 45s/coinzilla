@@ -119,7 +119,9 @@ export async function subscribeHarvesterTelegramNotifications({
     subscribe: ({ name, handler }) => eventBus.subscribe({
       name,
       handler: (event) => {
-        if (!policy.shouldNotify({ name: event.name, data: event.data })) return
+        if (!policy.shouldNotify({ name: event.name, data: event.data })) {
+          return
+        }
         return handler(event)
       },
     }),
@@ -139,7 +141,9 @@ export async function subscribeHarvesterTelegramNotifications({
         name: eventName,
         handler: (event) => {
           const mapped = mapEvent(event)
-          if (!mapped || !policy.shouldNotify(mapped)) return
+          if (!mapped || !policy.shouldNotify(mapped)) {
+            return
+          }
           const publishResult = eventBus.publish({
             name: mapped.name,
             source: HARVESTER_EVENT_SOURCE,
