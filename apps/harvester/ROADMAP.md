@@ -35,7 +35,8 @@
 - [x] Omit `symbol` when a BLOCKED account audit has zero or multiple symbols, and when a user-data subscription failure has no market.
 - [x] Verify both safety alerts remain emitted/delivered and the Journal flush is durable on the final exact PR head.
 
-**Verified on PR head `d61f7cce52bf5a46a89ad47019d18edf1b02805a`:** Harvester unit tests passed 1,444/1,444; Harvester coverage passed at 80.73% line / 81.19% branch / 80.02% function; Harvester targeted tests, workspace tests, workspace coverage, Utils tests, JavaScript syntax, dependency audit, and External Documentation Links all passed. The PR remains unmerged pending the normal review/merge gate. No exchange operation was performed.
+**Implementation verification on code commit `d61f7cce52bf5a46a89ad47019d18edf1b02805a` (before the final documentation-only sync):** Harvester unit tests passed 1,444/1,444; Harvester coverage passed at 80.73% line / 81.19% branch / 80.02% function; Harvester targeted tests, workspace tests, workspace coverage, Utils tests, JavaScript syntax, dependency audit, and External Documentation Links all passed. The PR remains unmerged pending the normal review/merge gate. No exchange operation was performed.
+
 - **Safety invariant:** keep the PREFLIGHT account snapshot and account-wide open-orders audit mandatory; keep unowned-order classification and safety notifications intact; keep Journal's strict serializer and fail-closed durability barrier unchanged. Disabling process-restart recovery skips only recovery-specific ledger/projection work.
 
 ---
