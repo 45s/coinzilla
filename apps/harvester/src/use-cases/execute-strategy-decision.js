@@ -183,6 +183,10 @@ export function makeExecuteStrategyDecision({
           })
           throw error
         }
+        if (dispatchDeferral) {
+          await onSubmissionDeferred({ order: pendingOrder, purpose, registered: true, ...dispatchDeferral })
+          return toResult({ data: { deferred: true, ...dispatchDeferral, submittedOrders } })
+        }
         if (onDurableSubmissionIntent) {
           let durableIntent
           try {
