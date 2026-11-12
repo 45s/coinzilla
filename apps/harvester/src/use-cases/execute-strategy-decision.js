@@ -15,6 +15,7 @@ export function makeExecuteStrategyDecision({
   onAcknowledgedOrder,
   onSubmissionFailure,
   onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
   onOrderValidationFailure = async ({} = {}) => {},
   canSubmit = ({} = {}) => true,
   onSubmissionDeferred = async ({} = {}) => {},
@@ -34,6 +35,12 @@ export function makeExecuteStrategyDecision({
   }
   if (onDurableSubmissionIntent !== undefined && typeof onDurableSubmissionIntent !== "function") {
     throw new TypeError("onDurableSubmissionIntent must be a function")
+  }
+  if (onDurableSubmissionOutcome !== undefined && typeof onDurableSubmissionOutcome !== "function") {
+    throw new TypeError("onDurableSubmissionOutcome must be a function")
+  }
+  if ((onDurableSubmissionIntent === undefined) !== (onDurableSubmissionOutcome === undefined)) {
+    throw new TypeError("onDurableSubmissionIntent and onDurableSubmissionOutcome must be provided together")
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
@@ -72,6 +79,23 @@ export function makeExecuteStrategyDecision({
         validatedOrders.push(pendingOrder)
       }
       return toResult({ data: { validatedOrders } })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+
+  const persistDurableSubmissionOutcome = async ({ order, outcome, purpose }) => {
+    if (!onDurableSubmissionOutcome) return toResult({ data: { skipped: true } })
+    try {
+      const result = await onDurableSubmissionOutcome({ order, outcome, purpose })
+      if (result?.ok !== true || result.data?.durable !== true) {
+        return toResult({
+          errors: result?.errors?.length
+            ? result.errors
+            : [new Error("Durable order-submission outcome was not acknowledged")],
+        })
+      }
+      return result
     } catch (error) {
       return toResult({ error })
     }
@@ -135,6 +159,15 @@ export function makeExecuteStrategyDecision({
         try {
           brokerResult = await broker.placeOrder({ order: orderIntent })
         } catch (error) {
+          const durableOutcome = await persistDurableSubmissionOutcome({
+            order: pendingOrder,
+            outcome: "UNKNOWN",
+            purpose,
+          })
+          if (!durableOutcome.ok) {
+            await onSubmissionFailure({ order: pendingOrder, errors: durableOutcome.errors, outcome: "UNKNOWN" })
+            return durableOutcome
+          }
           await onSubmissionFailure({ order: pendingOrder, error, outcome: "UNKNOWN" })
           throw error
         }
@@ -142,18 +175,38 @@ export function makeExecuteStrategyDecision({
           const errors = brokerResult?.errors ?? [
             new TypeError("Broker did not return an acknowledged canonical order"),
           ]
-          await onSubmissionFailure({
-            order: pendingOrder,
-            errors,
-            outcome: brokerResult?.ok ? "UNKNOWN" : "REJECTED_OR_UNKNOWN",
-          })
+          const outcome = brokerResult?.ok ? "UNKNOWN" : "REJECTED_OR_UNKNOWN"
+          const durableOutcome = await persistDurableSubmissionOutcome({ order: pendingOrder, outcome, purpose })
+          if (!durableOutcome.ok) {
+            await onSubmissionFailure({ order: pendingOrder, errors: durableOutcome.errors, outcome: "UNKNOWN" })
+            return durableOutcome
+          }
+          await onSubmissionFailure({ order: pendingOrder, errors, outcome })
           return toResult({ errors })
         }
         const acknowledgedOrder = brokerResult.data
         if (acknowledgedOrder.clientOrderId !== pendingOrder.clientOrderId) {
           const error = new Error("Broker acknowledgement clientOrderId does not match submitted order")
+          const durableOutcome = await persistDurableSubmissionOutcome({
+            order: pendingOrder,
+            outcome: "UNKNOWN",
+            purpose,
+          })
+          if (!durableOutcome.ok) {
+            await onSubmissionFailure({ order: pendingOrder, errors: durableOutcome.errors, outcome: "UNKNOWN" })
+            return durableOutcome
+          }
           await onSubmissionFailure({ order: pendingOrder, error, outcome: "UNKNOWN" })
           return toResult({ error })
+        }
+        const durableOutcome = await persistDurableSubmissionOutcome({
+          order: acknowledgedOrder,
+          outcome: "ACKNOWLEDGED",
+          purpose,
+        })
+        if (!durableOutcome.ok) {
+          await onSubmissionFailure({ order: pendingOrder, errors: durableOutcome.errors, outcome: "UNKNOWN" })
+          return durableOutcome
         }
         try {
           await onAcknowledgedOrder({ order: acknowledgedOrder })
