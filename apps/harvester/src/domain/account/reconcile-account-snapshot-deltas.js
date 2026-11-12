@@ -32,7 +32,7 @@ const validateSnapshot = ({ snapshot, phase }) => {
     if (typeof asset !== "string" || !asset.trim()) {
       throw new TypeError(phase + " snapshot asset " + index + " must have a non-empty code")
     }
-    if (balances.has(asset)) throw new TypeError(phase + " snapshot contains duplicate asset " + asset)
+    if (balances.has(asset)) {throw new TypeError(phase + " snapshot contains duplicate asset " + asset)}
     for (const field of ["free", "locked", "total"]) {
       assertDecimalString({ value: balance[field], field: phase + "." + asset + "." + field })
       if (compareDecimal({ left: balance[field], right: "0" }) < 0) {
