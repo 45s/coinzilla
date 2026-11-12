@@ -30,6 +30,7 @@ export default defineConfig([
     rules: {
       eqeqeq: ["error", "always", { null: "ignore" }],
       curly: ["error", "all"],
+      "no-nested-ternary": "error",
       "prefer-const": "error",
       "no-eval": "error",
       "no-new-func": "error",

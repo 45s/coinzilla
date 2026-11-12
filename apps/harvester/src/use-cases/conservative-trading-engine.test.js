@@ -6999,3 +6999,30 @@ test("commits a strategy pause fact before publishing the Journal pause event", 
   assert.deepEqual(sequence, ["durable-fact", "journal-event"], "The recovery-authoritative pause fact must commit before its Journal observer event.")
   assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "The affected market must remain paused after the unowned order event.")
 })
+
+test("exposes a serialized immutable operator market snapshot with current price and pause blockers", async () => {
+  const harness = await createHarness({
+    initialState: { operatorPausedMarkets: ["DOGEUSDT"] },
+  })
+
+  const priceResult = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "0.12", timestamp: 1 },
+  })
+  assert.equal(priceResult.ok, true, "A valid market price must be accepted before the operator snapshot is inspected.")
+
+  const snapshotResult = await harness.engine.getOperatorMarketSnapshots()
+  assert.equal(snapshotResult.ok, true, "The engine must return a successful read-only snapshot for configured markets.")
+  const dogeMarket = snapshotResult.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
+
+  assert.ok(dogeMarket, "The configured DOGE market must be present in the operator market snapshot.")
+  assert.equal(dogeMarket.enabled, true, "The operator snapshot must expose the configured market enabled state.")
+  assert.equal(dogeMarket.marketMetadataReady, true, "The snapshot must distinguish validated market metadata from missing metadata.")
+  assert.equal(dogeMarket.latestPrice, "0.12", "The snapshot must expose the latest normalized market price without numeric conversion.")
+  assert.equal(dogeMarket.priceTimestamp, 1, "The snapshot must preserve the source market-price timestamp.")
+  assert.equal(dogeMarket.priceFresh, true, "The snapshot must use the engine's current market-price freshness policy.")
+  assert.equal(dogeMarket.operatorPaused, true, "The snapshot must expose only the operator-owned pause as its own control state.")
+  assert.equal(dogeMarket.blockers.includes("OPERATOR_PAUSED"), true, "The operator-owned pause must be visible as a market blocker.")
+  assert.equal(Object.isFrozen(snapshotResult.data.markets), true, "The market collection must be immutable to operator-query consumers.")
+  assert.equal(Object.isFrozen(dogeMarket.blockers), true, "The market blocker collection must not expose mutable engine state.")
+})

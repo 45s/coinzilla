@@ -6,7 +6,9 @@ This is the entry point for Harvester's operator-control capability.
 
 The engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Disabled-by-default runtime configuration, Telegram adapter startup/shutdown, and fail-closed bootstrap validation are implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067).
 
-The initial Telegram vocabulary is only `/pause <SYMBOL>`. The operator pause is **process-lifetime only**: the fact is durably appended before the in-memory pause is applied, but the pause is not restored into a later process. ADR-0003 explicitly keeps this capability independent from full ADR-0001 restart recovery. The separate #654 startup fence currently blocks every second process start until recovery Steps 8–9 are accepted.
+The Telegram Command Center exposes `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-1 read-only status/market queries and their application contracts are implemented in PR #1081. Status includes the live user-data readiness gate and blocker codes; markets include normalized prices, source timestamps/freshness, pause ownership and volatility protection.
+
+The operator pause is **process-lifetime only**: the fact is durably appended before the in-memory pause is applied, but the pause is not restored into a later process. ADR-0003 explicitly keeps this capability independent from full ADR-0001 restart recovery. The separate #654 startup fence currently blocks every second process start until recovery Steps 8–9 are accepted.
 
 Do not use Journal as the control-state store. Do not claim that a pause survives a process restart. Existing exchange orders are not canceled or modified; a resting BUY may still fill.
 
@@ -18,11 +20,15 @@ Do not use Journal as the control-state store. Do not claim that a pause survive
 - [ADR-0001 — Application-owned durable facts](../architecture/decisions/0001-application-owned-recovery-facts.md) — authoritative persistence and restart-recovery contract.
 - [Harvester roadmap](../../ROADMAP.md) — current implementation status and dependencies.
 
-## First command
+## Command Center commands
 
-`/pause <SYMBOL>` suppresses new strategy BUY intents and trailing-BUY repricing for one configured market, while preserving fill accounting and recovery SELL decisions.
+- `/start` and `/help` — show the available command vocabulary and safety semantics.
+- `/status` — read-only runtime lifecycle, trading mode, user-data readiness, blocker and freshness summary.
+- `/markets` — read-only configured-market state, latest price/source timestamp/freshness, pause ownership and volatility-protection blockers.
+- `/pause <SYMBOL>` — suppress new strategy BUY intents and trailing-BUY repricing for one configured market.
+- `/resume <SYMBOL>` — remove only the operator-owned pause when the engine confirms no safety/recovery/volatility blocker is active.
 
-Already-open exchange orders are not canceled or modified; a resting BUY may still fill. The command response must make this explicit. The application-level `resumeMarket` use case exists for a future trusted adapter, but resume is not exposed as a Telegram command.
+Already-open exchange orders are not canceled or modified by pause; a resting BUY may still fill. Fill accounting and risk-reducing recovery SELL decisions continue. The status and market queries are read-only and never invoke broker APIs or change trading state.
 
 ## Ownership
 
@@ -45,4 +51,6 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Actor authorization and durable-before-apply application use cases | Implemented in PR #1045; port-tested |
 | Telegram parser, private-chat allowlist and serial polling | Implemented in PR #1045; mocked-transport tested |
 | Disabled-by-default runtime configuration and lifecycle wiring | Implemented in PR #1067; regression-tested |
+| Telegram `/start`, `/help`, `/pause`, and safe `/resume` | Implemented in PR #1079; merged |
+| Read-only `/status` and `/markets` application queries and Telegram formatting | Implemented in PR #1081; regression-tested |
 | Process-restart restoration of operator pause state | Explicitly out of scope under ADR-0003; separate ADR-0001 / #654 workstream |

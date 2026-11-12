@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-12
-**Last source-verified develop checkpoint:** `18438578004f0bf3cfbb023678d9e8adc3d95d90` (merge of PR #1055, ADR-0001 Step 8 durable-fact producers and offline candidate projection; PRs #1067 operator-control runtime integration and #1069 configuration/policy module updates are also on `develop`; ADR-0001 Step 7 offline CLI/evidence adapter from PR #1053 is merged).
+**Last source-verified develop checkpoint:** `c273622276880cf535145e004dc11b13f4ea2770` (merge of PR #1055, ADR-0001 Step 8 durable-fact producers and offline candidate projection; PRs #1067 operator-control runtime integration and #1069 configuration/policy module updates are also on `develop`; ADR-0001 Step 7 offline CLI/evidence adapter from PR #1053 is merged).
 
 ## CRITICAL — Harvester readiness and recovery
 
@@ -33,6 +33,8 @@
    - **Remaining:** complete projection/invariant parity and account-wide/all-market readiness, then Step 9 crash/restart proof and separately authorized acceptance.
    - **Safety:** unattended restart readiness remains blocked; a second process start is rejected after a prior process session. The Journal remains an observer, not recovery authority. Do not wire runtime replay or claim legacy Journal history is complete.
    - **Owner:** [Harvester roadmap](apps/harvester/ROADMAP.md).
+
+- **Harvester Telegram Command Center (#1077) — CC-1 delivered in [PR #1079](https://github.com/45s/coinzilla/pull/1079) and read-only query slice [PR #1081](https://github.com/45s/coinzilla/pull/1081).** Telegram remains disabled by default. Status/markets are read-only application snapshots with readiness, blocker and freshness reporting; pause/resume remain market-scoped application use cases. Operator pause is process-lifetime only. ADR-0001 Steps 8–9 remain deferred and do not block CC. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [issue #1077](https://github.com/45s/coinzilla/issues/1077).
 
 - **Harvester external-order ownership policy — IMPLEMENTED.** [PR #1062](https://github.com/45s/coinzilla/pull/1062) merged default-ignore/manual-order isolation and explicit per-pair block opt-in; [PR #1069](https://github.com/45s/coinzilla/pull/1069) centralizes policy identifiers and composes named configuration modules. Unmatched Harvester-generated `h-` orders remain fail-closed until restart recovery #654; the separate F-041 recovery SELL cycle-completion proof also remains open under [#654](https://github.com/45s/coinzilla/issues/654). See the [Harvester roadmap](apps/harvester/ROADMAP.md).
 

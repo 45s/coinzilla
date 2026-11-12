@@ -1,3 +1,8 @@
+import {
+  formatTelegramOperatorMarkets,
+  formatTelegramOperatorStatus,
+} from "./format-telegram-operator-response.js"
+
 const DEFAULT_POLL_TIMEOUT_SECONDS = 30
 const DEFAULT_RETRY_DELAY_MS = 1000
 const MAX_RETRY_DELAY_MS = 30000
@@ -55,6 +60,12 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
     return argumentsList.length === 0
       ? Object.freeze({ type: "HELP" })
       : Object.freeze({ type: "INVALID" })
+  }
+  if (command === "/status" || command === "/markets") {
+    if (argumentsList.length !== 0) {
+      return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
+    }
+    return Object.freeze({ type: command === "/status" ? "STATUS" : "MARKETS" })
   }
   if (command !== "/pause" && command !== "/resume") {return Object.freeze({ type: "UNSUPPORTED" })}
   if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
@@ -176,8 +187,9 @@ export function createTelegramOperatorAdapter({
         chatId: message.chat.id,
         text: [
           "Harvester Command Center",
-          "/status — runtime status (coming in CC-1)",
-          "/markets — configured market status (coming in CC-1)",
+          "/start — show this help",
+          "/status — runtime readiness and blockers",
+          "/markets — configured market prices, freshness and blockers",
           "/pause SYMBOL — block new strategy BUYs for one market",
           "/resume SYMBOL — remove only the operator pause when safety permits",
           "/help — show this help",
@@ -188,6 +200,55 @@ export function createTelegramOperatorAdapter({
       })
       return
     }
+    if (parsed.type === "STATUS" || parsed.type === "MARKETS") {
+      const method = parsed.type === "STATUS" ? "getStatus" : "getMarkets"
+      if (typeof operator[method] !== "function") {
+        await sendMessage({
+          chatId: message.chat.id,
+          text: "This read-only query is not available in the current operator configuration.",
+          signal,
+        })
+        return
+      }
+      let result
+      try {
+        result = await operator[method]({
+          actor: {
+            id: "telegram-user:" + userId,
+            roles: ["trading-operator"],
+          },
+        })
+      } catch (error) {
+        logger?.error?.({
+          message: "Telegram operator read query failed",
+          component: "harvester.operator",
+          operation: method,
+          error,
+        })
+        result = { ok: false }
+      }
+      if (result?.ok !== true) {
+        logger?.error?.({
+          message: "Telegram operator read query returned a failure",
+          component: "harvester.operator",
+          operation: method,
+          error: result?.errors ?? result?.error ?? "Unclassified query failure",
+        })
+        await sendMessage({
+          chatId: message.chat.id,
+          text: "Unable to read the Harvester " + (parsed.type === "STATUS" ? "runtime status" : "market snapshot") +
+            ". No trading state was changed; check Harvester diagnostics.",
+          signal,
+        })
+        return
+      }
+      const reply = parsed.type === "STATUS"
+        ? formatTelegramOperatorStatus({ status: result.data })
+        : formatTelegramOperatorMarkets({ snapshot: result.data })
+      await sendMessage({ chatId: message.chat.id, text: reply, signal })
+      return
+    }
+
     if (parsed.type === "UNSUPPORTED") {
       await sendMessage({
         chatId: message.chat.id,
@@ -232,20 +293,27 @@ export function createTelegramOperatorAdapter({
 
     if (!result?.ok) {
       const code = result?.errors?.[0]?.code
-      const reply = code === "INVALID_OPERATOR_MARKET"
-        ? "Unknown configured market: " + parsed.symbol + "."
-        : code === "SAFETY_BLOCKER_ACTIVE"
-          ? "Cannot resume " + parsed.symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
-          : (parsed.type === "RESUME" ? "Resume" : "Pause") + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+      let reply
+      if (code === "INVALID_OPERATOR_MARKET") {
+        reply = "Unknown configured market: " + parsed.symbol + "."
+      } else if (code === "SAFETY_BLOCKER_ACTIVE") {
+        reply = "Cannot resume " + parsed.symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
+      } else {
+        const action = parsed.type === "RESUME" ? "Resume" : "Pause"
+        reply = action + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+      }
       await sendMessage({ chatId: message.chat.id, text: reply, signal })
       return
     }
 
-    const reply = parsed.type === "RESUME"
-      ? "Resumed " + parsed.symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
-      : result.data?.alreadyPaused === true
-        ? "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
-        : "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+    let reply
+    if (parsed.type === "RESUME") {
+      reply = "Resumed " + parsed.symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
+    } else if (result.data?.alreadyPaused === true) {
+      reply = "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
+    } else {
+      reply = "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+    }
     await sendMessage({ chatId: message.chat.id, text: reply, signal })
   }
 

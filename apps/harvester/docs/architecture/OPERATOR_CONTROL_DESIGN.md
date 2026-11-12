@@ -14,7 +14,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the ADR-0001 durable-facts append port.
 - The use cases pass the durable append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
-- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
+- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
 - The ADR-0001 file store and integrity checks are verified by the process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same ledger. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
@@ -146,6 +146,17 @@ The durable-facts adapter must return `durable: true` only after the record and 
 
 The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the same process-owned ADR-0001 store into the operator facade; the operator must not open an independent store instance. The initial process-lifetime scope deliberately does not restore operator facts at startup; this limitation is explicit and is not a dependency on full recovery.
 
+## Read-only query contract
+
+The application facade exposes two explicit read-only methods to authenticated operators:
+
+- `getStatus({ actor })` returns the process lifecycle, broker identity, trading mode, strategy mode, user-data readiness and last status-event age, global readiness blockers, and configured/enabled/blocked market counts.
+- `getMarkets({ actor })` returns one immutable snapshot per configured market: enabled state, canonical base/quote assets, latest normalized price and source timestamp, price freshness, operator/safety/recovery pause ownership, pending replacement/repricing state, volatility-protection state, and stable blocker codes.
+
+Both queries enforce the `trading-operator` role before reading runtime or engine state. The engine builds market snapshots inside its serialized transition queue; bootstrap contributes only a read-only process/user-data snapshot. The application combines these sources and returns immutable DTOs. Telegram formats those DTOs but does not inspect engine state, Portfolio, RecoveryLedger, OrderRegistry or broker APIs.
+
+A market with trading disabled is reported as `OBSERVATION_ONLY`; it is not described as trading-ready. An enabled market remains `BLOCKED` while user-data readiness is closed or any market-local blocker is active. Missing market prices/metadata are reported as unavailable, never as healthy. A failed snapshot is returned as a failed application result rather than a partial healthy response.
+
 ## Application result shape
 
 The application returns the repository's structured result envelope. A successful pause includes the configured market and whether it was already paused:
@@ -181,7 +192,7 @@ This is not an exchange kill switch. The initial Telegram response must explicit
 
 ### Resume safety
 
-The application-level `resumeMarket` use case is available for a future trusted adapter, but the initial Telegram command set exposes only `/pause <SYMBOL>`.
+The Telegram adapter exposes `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. Read commands use the same authorized application facade as state-changing commands; they never call the broker or mutate trading state.
 
 Resume removes only the operator-owned pause. The engine refuses to invoke the durable resume callback if a safety/recovery blocker, durable safety pause, unresolved replacement/trailing intent or pending recovery-managed cancellation, or an active high-volatility protection state remains. It never clears a safety blocker or opens the global startup readiness gate.
 
@@ -223,7 +234,7 @@ The initial `/pause <SYMBOL>` adapter is the foundation, not the finished operat
 3. **CC-3 — Proactive alerts:** lifecycle/readiness, safety blockers, execution/recovery events and Telegram health; reuse `@coinzilla/notifiers` and never block trading transitions.
 4. **CC-4 — Usability and hardening:** command menu, safe navigation/refresh, confirmations, comprehensive transport/auth/retry/shutdown coverage and an operator runbook.
 
-The adapter now exposes `/start` and `/help` guidance and routes `/resume <SYMBOL>` to the existing application use case. Resume clears only the operator-owned pause. A safety, recovery or volatility blocker causes a refusal before durable append; the transport must explain that the blocker remains active. `/status` and `/markets` are not implemented until their read-only application query contracts are wired and tested.
+The adapter exposes `/start` and `/help`, routes `/resume <SYMBOL>` through the existing safe application use case, and exposes `/status` and `/markets` through the read-only query facade. Resume clears only the operator-owned pause. A safety, recovery or volatility blocker causes a refusal before durable append; the transport explains that the blocker remains active. Status/market query failures are reported as unavailable and never trigger a trading action.
 
 The initial `/pause` semantics remain unchanged: it does not cancel existing orders, and a resting order may still fill. No order-cancel, order-placement, configuration-edit, strategy-edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator pause remains process-lifetime only and is not restored after restart.
 
@@ -249,6 +260,7 @@ The initial `/pause` semantics remain unchanged: it does not cancel existing ord
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
 6. **Configuration/bootstrap — implemented in PR #1067:** disabled-by-default `operatorControl.telegram` validation, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
 7. **Verification — completed for the initial process-lifetime rollout in PR #1067:** the runtime/config/lifecycle integration passed its exact-head required CI and merged. The read-only TESTNET integration was skipped; no exchange operations were performed.
+8. **CC-1 read-only visibility — implemented in PR #1081:** engine market snapshots are serialized and immutable; application queries enforce actor authorization and combine runtime readiness with market-local blockers; Telegram formats `/status` and `/markets` without broker access or trading-state mutation. Exact-head CI is required before merge.
 
 ## References
 
