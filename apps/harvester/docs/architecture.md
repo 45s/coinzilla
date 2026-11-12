@@ -58,6 +58,10 @@ Profiles are `minimal`, `trader`, `verbose`, and `custom`. Per-event overrides m
 
 Notification setup and delivery are best-effort. An explicit `enabled: false` or missing credentials disables notifications; malformed application configuration fails normal configuration validation rather than silently falling back. Transport/setup failures remain isolated from the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority.
 
+## Operator control
+
+Harvester operator control is an application capability, not a domain entity, strategy policy, broker adapter or generic command bus. The Conservative engine owns the serialized market-scoped operator-pause state; application use cases authorize a trusted `trading-operator` actor and append `OPERATOR_MARKET_PAUSED` / `OPERATOR_MARKET_RESUMED` through the ADR-0001 durable-facts port before applying in-memory state. The first inbound transport is a private-chat Telegram Long Polling adapter with an explicit user-ID allowlist and only `/pause <SYMBOL>` exposed. It never cancels existing exchange orders; resting BUYs may still fill, and recovery SELLs/accounting continue. See [ADR-0002](./architecture/decisions/0002-transport-independent-operator-control.md) and the [operator-control contract](./operator-control/README.md). The adapter is implemented but not started by the runtime: operator facts must first be projected and restored behind the closed ADR-0001 readiness gate, with recovery Steps 7–9 complete.
+
 ## Entity versus policy
 
 A **domain entity** represents something whose state and business invariants matter to the domain. Portfolio and Position are examples: actual executions change their state, and their rules govern valid accounting transitions.
