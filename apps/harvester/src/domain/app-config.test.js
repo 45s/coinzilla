@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
+  ConfigValidationError,
   resolveRuntimeConfig,
   validateAppConfig,
 } from "./app-config.js"
@@ -16,6 +17,7 @@ const createAppConfig = () => ({
       pairs: {
         ZROFDUSD: {
           enabled: true,
+          enableVolatilityProtection: true,
           investment: 100,
           orderQuantity: 5,
           keepQuantity: 0.01,
@@ -39,10 +41,15 @@ test("validates strategy-owned pairs without requiring exchange-mode configurati
 })
 
 
-test("keeps volatility protection enabled by default and accepts an explicit per-pair opt-out", () => {
+test("requires an explicit per-pair volatility protection boolean", () => {
   const config = createAppConfig()
   const pair = config.strategies.CG_coinGrabber.pairs.ZROFDUSD
-  assert.equal(validateAppConfig(config), config, "Omitting the optional flag must preserve protected-by-default behavior.")
+  delete pair.enableVolatilityProtection
+  assert.throws(() => validateAppConfig(config), (error) =>
+    error instanceof ConfigValidationError &&
+    error.path === "strategies.CG_coinGrabber.pairs.ZROFDUSD.enableVolatilityProtection" &&
+    error.expected === "a boolean",
+  "Every pair must explicitly declare whether volatility protection is enabled.")
   pair.enableVolatilityProtection = false
   assert.equal(validateAppConfig(config), config, "An explicit false value must be accepted for an opted-out pair.")
   pair.enableVolatilityProtection = true
@@ -53,8 +60,11 @@ test("rejects non-boolean per-pair volatility protection values", () => {
   for (const invalidValue of [null, 0, 1, "false", "true"]) {
     const config = createAppConfig()
     config.strategies.CG_coinGrabber.pairs.ZROFDUSD.enableVolatilityProtection = invalidValue
-    assert.throws(() => validateAppConfig(config), /enableVolatilityProtection.*boolean/,
-      "The optional volatility setting must reject non-boolean values: " + JSON.stringify(invalidValue))
+    assert.throws(() => validateAppConfig(config), (error) =>
+      error instanceof ConfigValidationError &&
+      error.path === "strategies.CG_coinGrabber.pairs.ZROFDUSD.enableVolatilityProtection" &&
+      error.expected === "a boolean",
+    "The required volatility setting must reject non-boolean values: " + JSON.stringify(invalidValue))
   }
 })
 
@@ -192,7 +202,7 @@ test("rejects duplicate or malformed Telegram market filters", () => {
 test("uses generic app config wording for validation errors", () => {
   assert.throws(
     () => validateAppConfig(null),
-    (error) => error instanceof TypeError && error.message.startsWith("Invalid app config"),
+    (error) => error instanceof ConfigValidationError && error instanceof TypeError && error.message.startsWith("Invalid app config"),
     "Configuration validation errors must identify the generic app config, not the application name or trading domain.",
   )
 })
