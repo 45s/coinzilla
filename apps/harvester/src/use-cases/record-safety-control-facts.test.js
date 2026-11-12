@@ -5,7 +5,6 @@ import path from "node:path"
 import test from "node:test"
 import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
 import {
-  recordOperatorMarketControl,
   recordSafetyBlockerRaised,
   recordSafetyBlockerResolved,
   recordStrategyMarketControl,
@@ -24,14 +23,8 @@ const createStore = async (t) => {
   return store
 }
 
-test("records operator pause/resume requests and strategy pause/resume transitions", async (t) => {
+test("records strategy pause/resume transitions with distinct durable identities", async (t) => {
   const durableFactsStore = await createStore(t)
-  const operatorPause = await recordOperatorMarketControl({
-    durableFactsStore, action: "PAUSE", requestId: "request-1", actorId: "telegram-actor-1", symbol: "BTCUSDT",
-  })
-  const operatorResume = await recordOperatorMarketControl({
-    durableFactsStore, action: "RESUME", requestId: "request-2", actorId: "telegram-actor-1", symbol: "BTCUSDT",
-  })
   const strategyPause = await recordStrategyMarketControl({
     durableFactsStore, action: "PAUSE", transitionId: "session-1:1", symbol: "ETHUSDT", reason: "FILL_RECONCILIATION_FAILED",
   })
@@ -39,15 +32,13 @@ test("records operator pause/resume requests and strategy pause/resume transitio
     durableFactsStore, action: "RESUME", transitionId: "session-1:2", symbol: "ETHUSDT", reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED",
   })
 
-  assert.equal(operatorPause.ok, true, "An operator pause request must be durably recorded.")
-  assert.equal(operatorResume.ok, true, "An operator resume request must be durably recorded as a distinct request.")
   assert.equal(strategyPause.ok, true, "A strategy pause transition must be durably recorded.")
   assert.equal(strategyResume.ok, true, "A strategy resume transition must be durably recorded.")
   const read = await durableFactsStore.readAll()
   assert.deepEqual(
-    read.data.records.slice(-4).map(({ factType }) => factType),
-    ["OPERATOR_MARKET_PAUSED", "OPERATOR_MARKET_RESUMED", "STRATEGY_MARKET_PAUSED", "STRATEGY_MARKET_RESUMED"],
-    "The fact stream must preserve each explicit control transition in order.",
+    read.data.records.slice(-2).map(({ factType }) => factType),
+    ["STRATEGY_MARKET_PAUSED", "STRATEGY_MARKET_RESUMED"],
+    "The fact stream must preserve each explicit strategy control transition in order.",
   )
 })
 

@@ -20,38 +20,6 @@ const appendDurably = async ({ durableFactsStore, fact, operation }) => {
   return result
 }
 
-/** Persist one operator-issued market pause or resume request. */
-export async function recordOperatorMarketControl({
-  durableFactsStore,
-  action,
-  requestId,
-  actorId,
-  symbol,
-} = {}) {
-  try {
-    requireStore({ durableFactsStore, operation: "recordOperatorMarketControl" })
-    if (action !== "PAUSE" && action !== "RESUME") {
-      throw new TypeError("Operator market-control action must be PAUSE or RESUME")
-    }
-    if (typeof requestId !== "string" || !requestId.trim() || requestId !== requestId.trim() ||
-        typeof actorId !== "string" || !actorId.trim() || actorId !== actorId.trim() ||
-        typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
-      throw new TypeError("Operator market control requires a request ID, actor ID, and canonical market symbol")
-    }
-    return await appendDurably({
-      durableFactsStore,
-      operation: "Operator market-control",
-      fact: {
-        factId: "operator-control:" + requestId,
-        factType: action === "PAUSE" ? "OPERATOR_MARKET_PAUSED" : "OPERATOR_MARKET_RESUMED",
-        data: { requestId, actorId, symbol },
-      },
-    })
-  } catch (error) {
-    return toResult({ error })
-  }
-}
-
 /** Persist a strategy pause/resume transition with a caller-owned unique transition ID. */
 export async function recordStrategyMarketControl({
   durableFactsStore,
