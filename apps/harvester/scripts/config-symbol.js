@@ -6,7 +6,7 @@ import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
 import { writePairConfigAtomically } from "./config-symbol/write-config.js"
 import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
 
-const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config/index.js", import.meta.url))
+const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../config/strategies/cg-coin-grabber.js", import.meta.url))
 
 /**
  * Run the interactive operator flow; all external effects are injected or isolated at this boundary.
@@ -58,11 +58,11 @@ export async function runConfigSymbol({
     ),
   })
 
-  const existingConfig = await loadConfig(configPath)
+  const existingConfig = await loadConfig()
   const existingSymbol = Object.keys(existingConfig.strategies.CG_coinGrabber.pairs)
     .find((candidate) => candidate.trim().toUpperCase() === symbol)
   if (existingSymbol) {
-    throw new Error("Pair " + symbol + " already exists in config/index.js; refusing to overwrite it")
+    throw new Error("Pair " + symbol + " already exists in CG coin-grabber strategy config; refusing to overwrite it")
   }
 
   writeLine("Fetching current public Binance Spot exchange information...")
@@ -72,10 +72,10 @@ export async function runConfigSymbol({
   }
   const pairConfig = createPairConfig({ inputs, metadata })
   writeLine("")
-  writeLine("Configuration preview — config/index.js pair entry:")
+  writeLine("Configuration preview — config/strategies/cg-coin-grabber.js pair entry:")
   writeLine(JSON.stringify({ [symbol]: pairConfig }, null, 2))
 
-  const confirmation = (await ask("Add this pair to apps/harvester/config/index.js? [Y/n]: ")).trim().toLowerCase()
+  const confirmation = (await ask("Add this pair to apps/harvester/config/strategies/cg-coin-grabber.js? [Y/n]: ")).trim().toLowerCase()
   if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
     writeLine("Cancelled. No configuration file was changed.")
     return Object.freeze({ written: false, symbol, pairConfig })
