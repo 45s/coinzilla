@@ -78,7 +78,7 @@ const makeOrder = ({
   updatedAt: 1_700_000_000_002,
   ...(status === "FILLED" ? { completedAt: 1_700_000_000_003 } : {}),
 })
-const acknowledge = ({ clientOrderId, side, quantity, price, purpose = null }) =>
+const acknowledge = ({ clientOrderId, side, quantity, price }) =>
   makeOrder({
     clientOrderId,
     brokerOrderId: "broker-" + clientOrderId,
@@ -274,6 +274,7 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))
   assert.equal(recovered.data.recoveryCycleEvaluations.length, 1)
   assert.equal(recovered.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
+  assert.ok(Number.isSafeInteger(recovered.data.recoveryCycleEvaluations[0].sequence), "Durable fact sequence must become a safe numeric replay sequence.")
   assert.equal(recovered.data.recoveryCycleEvaluations[0].sellOrderClientId, sellOrder.clientOrderId)
   assert.deepEqual(recovered.data.recoveryCycleEvaluations[0].appliedFillIds, recoveryLedger.appliedFillIds)
   assert.deepEqual([...recovered.data.durablePausedMarkets], [market.symbol])
@@ -352,6 +353,7 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
   assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))
   assert.equal(recovered.data.recoveryCycles.length, 1)
   assert.equal(recovered.data.recoveryCycles[0].cycleId, recorded.data.record.data.cycleId)
+  assert.ok(Number.isSafeInteger(recovered.data.recoveryCycles[0].sequence), "Durable fact sequence must become a safe numeric replay sequence.")
   assert.equal(recovered.data.recoveryCycles[0].sellOrderClientId, sellOrder.clientOrderId)
   assert.deepEqual(recovered.data.recoveryCycles[0].appliedFillIds, recoveryLedger.appliedFillIds)
   const recoveredPosition = recovered.data.portfolio.getPosition({ marketId: market.id })

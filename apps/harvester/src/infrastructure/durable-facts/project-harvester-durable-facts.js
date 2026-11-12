@@ -43,6 +43,14 @@ function requireRecord({ record, index }) {
   return record
 }
 
+function requireSafeSequence({ sequence, factId }) {
+  const numericSequence = Number(sequence)
+  if (!Number.isSafeInteger(numericSequence) || numericSequence < 0 || String(numericSequence) !== sequence) {
+    throw new RangeError("Durable fact " + factId + " exceeds the safe recovery sequence range")
+  }
+  return numericSequence
+}
+
 function makeEventRecord({ sessionId, lineNumber, name, data }) {
   return {
     position: { fileName: sessionId, lineNumber },
@@ -513,7 +521,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         sellOrderClientId: fact.data.sellOrderClientId,
         sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
         factId: fact.factId,
-        sequence: fact.sequence,
+        sequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
       })
     })
     if (recoveryCycles.length !== recoveryCycleCompletedFacts.length) {
@@ -545,7 +553,7 @@ export function projectHarvesterDurableFacts({ records } = {}) {
         sellOrderClientId: fact.data.sellOrderClientId,
         sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
         factId: fact.factId,
-        sequence: fact.sequence,
+        sequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
       })
     })
     if (recoveryCycleEvaluations.length !== recoveryCycleNotCompletedFacts.length) {
