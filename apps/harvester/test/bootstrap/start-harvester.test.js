@@ -276,7 +276,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       error(...args) { userDataErrors.push(args) },
     },
     onUserDataEvent: async ({ event } = {}) => {
-      if (event?.executionType === 'TRADE') observedTrade();
+      if (event?.executionType === 'TRADE') {observedTrade();}
     },
   });
 

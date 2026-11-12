@@ -88,13 +88,13 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
       orders.push(order)
       onPlaceOrder?.({ order })
       onPlaceOrderStarted?.({ order })
-      if (placeOrderGate && order.side === deferOrderSide) await placeOrderGate.promise
-      if (placeOrderThrow) throw new Error("socket closed")
+      if (placeOrderGate && order.side === deferOrderSide) {await placeOrderGate.promise}
+      if (placeOrderThrow) {throw new Error("socket closed")}
       if (placeOrderFailureAfterFirst && placeOrderCallCount > 1) {
         return { ok: false, errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
       }
       if (remainingPlaceOrderFailures > 0) {
-        if (Number.isFinite(remainingPlaceOrderFailures)) remainingPlaceOrderFailures -= 1
+        if (Number.isFinite(remainingPlaceOrderFailures)) {remainingPlaceOrderFailures -= 1}
         return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
       }
       const acknowledgedOrder = new CanonicalOrder({
@@ -127,11 +127,11 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     cancelOrder: async ({ order }) => {
       cancellationIds.push(order.brokerOrderId)
       onCancelOrderStarted?.({ order })
-      if (cancelOrderGate) await cancelOrderGate.promise
-      if (cancelThrow) throw new Error("cancel socket closed")
-      if (cancelNotSent) return { ok: false, cancellationOutcome: "NOT_SENT", errors: [new Error("user-data stream unavailable")] }
-      if (cancelNotSentOnSuccess) return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }
-      if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
+      if (cancelOrderGate) {await cancelOrderGate.promise}
+      if (cancelThrow) {throw new Error("cancel socket closed")}
+      if (cancelNotSent) {return { ok: false, cancellationOutcome: "NOT_SENT", errors: [new Error("user-data stream unavailable")] }}
+      if (cancelNotSentOnSuccess) {return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }}
+      if (cancelFailure) {return { ok: false, errors: [new Error("cancel denied")] }}
       canceledOrders.set(order.brokerOrderId, order)
       const executedQuantity = typeof cancelExecutedQuantity === "function"
         ? cancelExecutedQuantity({ order })
@@ -160,7 +160,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     },
     getFills: async ({ orderId }) => {
       if (acknowledgedFillsByOrder.has(orderId)) {
-        if (acknowledgedFillsGate) await acknowledgedFillsGate.promise
+        if (acknowledgedFillsGate) {await acknowledgedFillsGate.promise}
         const fills = acknowledgedFillsByOrder.get(orderId)
         return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
@@ -272,10 +272,10 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     onPause: async ({ reason }) => pauses.push(reason),
     initialState,
   })
-  if (initialBook) await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
+  if (initialBook) {await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
     symbol: "DOGEUSDT", bestBidPrice: "0.01", bestBidQuantity: "1",
     bestAskPrice: "1000", bestAskQuantity: "1", timestamp: 1,
-  } : initialBook })
+  } : initialBook })}
   return {
     engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds,
     getCurrentPortfolio: () => currentPortfolio,
@@ -794,7 +794,7 @@ test("does not await a pending EventBus publisher promise", async () => {
   ])
   clearTimeout(timeout)
   resolvePublisher({ ok: true })
-  if (result === null) await processing
+  if (result === null) {await processing}
   assert.ok(result, "strategy processing must not wait for the EventBus publisher promise")
   assert.equal(result.value.ok, true)
   assert.equal(orders.length, 1)
@@ -1122,7 +1122,7 @@ test("cancellation intent publication failure prevents broker cancellation and p
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
       publish: (event) => {
-        if (event.name === "order.cancel_requested") throw new Error("journal observer unavailable")
+        if (event.name === "order.cancel_requested") {throw new Error("journal observer unavailable")}
         return { ok: true }
       },
     },
@@ -1237,7 +1237,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     eventPublisher: {
       publish: (event) => {
         events.push(event)
-        if (event.name === "order.cancel_requested") sequence.push("publish:cancel_requested")
+        if (event.name === "order.cancel_requested") {sequence.push("publish:cancel_requested")}
         if (event.name === "order.cancelled") {
           const registered = engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
           assert.equal(registered.status, "CANCELED")
@@ -1558,7 +1558,7 @@ test("Fill event publication failure cannot interrupt successful accounting", as
   const { engine, accountedFills } = await createHarness({
     accountingApplied: true,
     eventPublisher: { publish: (event) => {
-      if (event.name === "execution.fill_applied") throw new Error("journal unavailable")
+      if (event.name === "execution.fill_applied") {throw new Error("journal unavailable")}
       return { ok: true }
     } },
   })
@@ -2169,7 +2169,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
       return { ok: true, data: result }
     },
     onPlaceOrder: ({ order }) => {
-      if (order.side !== "BUY" || !engine) return
+      if (order.side !== "BUY" || !engine) {return}
       const previousSell = engine.getOrders().filter((item) => item.side === "SELL").at(-1)
       if (previousSell) {
         assert.equal(previousSell.status, "OPEN")
@@ -2196,7 +2196,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   const originalGetFills = harness.broker.getFills.bind(harness.broker)
   harness.broker.getFills = async ({ orderId }) => {
     const result = await originalGetFills({ orderId })
-    if (!result.ok || !Array.isArray(result.data) || result.data.length === 0) return result
+    if (!result.ok || !Array.isArray(result.data) || result.data.length === 0) {return result}
     const canceledSell = engine.getOrders().find((order) => order.brokerOrderId === orderId)
     assert.ok(canceledSell)
     return {
@@ -2478,7 +2478,7 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
     baseFreeBalance: "1",
     eventPublisher: {
       publish: (event) => {
-        if (event.name === "recovery.cycle_completed") throw new Error("journal unavailable")
+        if (event.name === "recovery.cycle_completed") {throw new Error("journal unavailable")}
         return { ok: true }
       },
     },
@@ -2511,7 +2511,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     placeOrderGate,
-    onPlaceOrderStarted: ({ order }) => { if (order.side === "SELL") signalSellSubmission() },
+    onPlaceOrderStarted: ({ order }) => { if (order.side === "SELL") {signalSellSubmission()} },
   })
   const initialDecision = engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -2621,7 +2621,7 @@ test("serializes concurrent market updates while an initial BUY acknowledgement 
     placeOrderGate,
     deferOrderSide: "BUY",
     onPlaceOrderStarted: ({ order }) => {
-      if (order.side === "BUY") signalBuySubmission()
+      if (order.side === "BUY") {signalBuySubmission()}
     },
   })
 
@@ -2995,7 +2995,7 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
       getPortfolio: () => currentPortfolio,
       getRecoveryLedger: () => currentRecoveryLedger,
       getTerminalFills: ({ orderId }) => {
-        if (sellFill?.brokerOrderId !== orderId) return []
+        if (sellFill?.brokerOrderId !== orderId) {return []}
         return fillHistory === "conflicting" ? [sellFill, makeSellFill({
           order: sellOrderRef,
           tradeId: sellFill.tradeId,

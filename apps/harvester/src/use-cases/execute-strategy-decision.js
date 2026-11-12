@@ -31,7 +31,7 @@ export function makeExecuteStrategyDecision({
     canSubmit,
     onSubmissionDeferred,
   })) {
-    if (typeof callback !== "function") throw new TypeError(name + " must be a function")
+    if (typeof callback !== "function") {throw new TypeError(name + " must be a function")}
   }
   if (onDurableSubmissionIntent !== undefined && typeof onDurableSubmissionIntent !== "function") {
     throw new TypeError("onDurableSubmissionIntent must be a function")
@@ -70,7 +70,7 @@ export function makeExecuteStrategyDecision({
         try {
           validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
         } catch (error) {
-          if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
+          if (notifyValidationFailure) {await onOrderValidationFailure({ order: pendingOrder, error })}
           throw error
         }
         if (!canSubmit({ order: pendingOrder, purpose: action.purpose ?? null })) {
@@ -85,7 +85,7 @@ export function makeExecuteStrategyDecision({
   }
 
   const persistDurableSubmissionOutcome = async ({ order, outcome, purpose }) => {
-    if (!onDurableSubmissionOutcome) return toResult({ data: { skipped: true } })
+    if (!onDurableSubmissionOutcome) {return toResult({ data: { skipped: true } })}
     try {
       const result = await onDurableSubmissionOutcome({ order, outcome, purpose })
       if (result?.ok !== true || result.data?.durable !== true) {
@@ -151,7 +151,7 @@ export function makeExecuteStrategyDecision({
           return toResult({ data: { deferred: true, submittedOrders } })
         }
         const pendingResult = onPendingOrder({ order: pendingOrder, purpose })
-        if (pendingResult && typeof pendingResult.then === "function") await pendingResult
+        if (pendingResult && typeof pendingResult.then === "function") {await pendingResult}
         if (!canSubmit({ order: pendingOrder, purpose })) {
           await onSubmissionDeferred({ order: pendingOrder, purpose, registered: true })
           return toResult({ data: { deferred: true, submittedOrders } })
