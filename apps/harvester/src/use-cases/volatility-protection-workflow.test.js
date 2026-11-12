@@ -45,7 +45,9 @@ function makeWorkflow({
     runTransition: ({ task }) => task(),
     cancelOwnedBuyOrders: async (input) => {
       calls.cancellations.push(input)
-      if (input.reason === "HIGH_VOLATILITY_PROTECTION") currentOrders.length = 0
+      if (input.reason === "HIGH_VOLATILITY_PROTECTION") {
+        currentOrders.length = 0
+      }
       return cancelOwnedBuyOrders(input)
     },
     evaluateLatest: async (input) => {
