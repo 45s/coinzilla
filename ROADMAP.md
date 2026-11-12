@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-12
-**Last source-verified develop checkpoint:** PR #1067 merge commit `96293daa5ee3b831e55c49b56af22ce1857f936c` (operator-control runtime integration; ADR-0001 Step 7 offline CLI/evidence adapter from merged PR #1053 is also on `develop`).
+**Last source-verified develop checkpoint:** `947882b118cf33636b916af340928b9bf14b2fd8` (PR #1067 operator-control runtime integration and PR #1069 configuration/policy module updates are on `develop`; ADR-0001 Step 7 offline CLI/evidence adapter from PR #1053 is also merged).
 
 ## CRITICAL — Harvester readiness and recovery
 

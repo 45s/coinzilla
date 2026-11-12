@@ -242,8 +242,8 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
 4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
-6. **Configuration/bootstrap — pending, independent of restart recovery:** add disabled-by-default config validation, fail-closed enablement and runtime lifecycle tests; keep this independent from outbound notification settings. The process-lifetime limitation must be explicit to operators.
-7. **Verification — in progress:** focused engine/application/adapter tests are present; exact-head workspace CI and documentation-link checks remain required. No Binance/TESTNET/LIVE operations.
+6. **Configuration/bootstrap — implemented in PR #1067:** disabled-by-default `operatorControl.telegram` validation, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
+7. **Verification — completed for the initial process-lifetime rollout in PR #1067:** the runtime/config/lifecycle integration passed its exact-head required CI and merged. The read-only TESTNET integration was skipped; no exchange operations were performed.
 
 ## References
 
