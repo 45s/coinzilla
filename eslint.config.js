@@ -36,6 +36,19 @@ export default defineConfig([
       "no-alert": "error",
       "no-param-reassign": "error",
       "prefer-promise-reject-errors": "error",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ExportDefaultDeclaration",
+          message: "Use named exports; default exports are not allowed.",
+        },
+      ],
+    },
+  },
+  {
+    files: ["eslint.config.js"],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
 ]);
