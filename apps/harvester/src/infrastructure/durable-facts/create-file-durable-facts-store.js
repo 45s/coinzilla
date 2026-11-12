@@ -159,7 +159,7 @@ function factIdForOrderOutcome(clientOrderId, outcome) {
   return "order-submission-outcome:" + clientOrderId + ":" + outcome
 }
 
-function validateFactData({ factType, data, factId }) {
+function validateFactData({ factType, data, factId, runtimeSessionId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new TypeError("Durable fact data must be a plain object")
   }
@@ -176,6 +176,57 @@ function validateFactData({ factType, data, factId }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
+  }
+  if (factType === "CONFIGURATION_BASELINE") {
+    const allowedFields = new Set(["schemaVersion", "strategyName", "markets", "fingerprint"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Configuration baseline contains unsupported fields")
+    }
+    if (canonicalData.schemaVersion !== DEFAULT_SCHEMA_VERSION ||
+        typeof canonicalData.fingerprint !== "string" || !SHA256_PATTERN.test(canonicalData.fingerprint)) {
+      throw new TypeError("Configuration baseline requires the supported schema and SHA-256 fingerprint")
+    }
+    requireNonEmptyString({ value: canonicalData.strategyName, field: "data.strategyName", maxLength: 64 })
+    if (!Array.isArray(canonicalData.markets) || canonicalData.markets.length === 0 ||
+        canonicalData.markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
+        canonicalData.markets.join("\\0") !== [...new Set(canonicalData.markets)].sort().join("\\0")) {
+      throw new TypeError("Configuration baseline markets must be unique, sorted canonical symbols")
+    }
+    if (factId !== "configuration-baseline:" + canonicalData.fingerprint) {
+      throw new TypeError("Configuration baseline factId must match its fingerprint")
+    }
+  }
+  if (factType === "PROCESS_STARTED") {
+    const allowedFields = new Set(["configurationFingerprint", "strategyName", "markets"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Process-start fact contains unsupported fields")
+    }
+    if (typeof canonicalData.configurationFingerprint !== "string" ||
+        !SHA256_PATTERN.test(canonicalData.configurationFingerprint)) {
+      throw new TypeError("Process-start fact requires a SHA-256 configuration fingerprint")
+    }
+    requireNonEmptyString({ value: canonicalData.strategyName, field: "data.strategyName", maxLength: 64 })
+    if (!Array.isArray(canonicalData.markets) || canonicalData.markets.length === 0 ||
+        canonicalData.markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
+        canonicalData.markets.join("\\0") !== [...new Set(canonicalData.markets)].sort().join("\\0")) {
+      throw new TypeError("Process-start markets must be unique, sorted canonical symbols")
+    }
+    if (factId !== "process-started:" + runtimeSessionId) {
+      throw new TypeError("Process-start factId must match its runtime session identity")
+    }
+  }
+  if (factType === "PROCESS_STOPPED") {
+    const allowedFields = new Set(["reason", "clean"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Process-stop fact contains unsupported fields")
+    }
+    const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+    if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(reason) || typeof canonicalData.clean !== "boolean") {
+      throw new TypeError("Process-stop reason and clean marker are invalid")
+    }
+    if (factId !== "process-stopped:" + runtimeSessionId) {
+      throw new TypeError("Process-stop factId must match its runtime session identity")
+    }
   }
   if (factType === "ORDER_SUBMISSION_INTENT") {
     const allowedFields = new Set([
@@ -494,7 +545,7 @@ function validateFactInput({ fact, runtimeSessionId }) {
       field: "runtimeSessionId",
       maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
     }),
-    data: validateFactData({ factType, data: fact.data, factId }),
+    data: validateFactData({ factType, data: fact.data, factId, runtimeSessionId }),
   }
 }
 
@@ -545,7 +596,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
     throw new TypeError("Durable fact previousDigest must be a SHA-256 digest or null for genesis")
   }
   if (!SHA256_PATTERN.test(record.digest ?? "")) {throw new TypeError("Durable fact digest is malformed")}
-  validateFactData({ factType: record.factType, data: record.data, factId: record.factId })
+  validateFactData({ factType: record.factType, data: record.data, factId: record.factId, runtimeSessionId: record.runtimeSessionId })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
     throw new Error("Durable fact genesis schema version does not match the stream schema")
   }

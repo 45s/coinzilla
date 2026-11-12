@@ -77,6 +77,37 @@ test("binds process start and clean/unclean stop facts to the durable store runt
   assert.equal(processFacts[1].data.clean, true)
 })
 
+test("rejects malformed process-boundary and configuration-baseline facts", async (t) => {
+  const durableFactsStore = await createStore(t)
+  const fingerprint = "a".repeat(64)
+  const invalidFacts = [
+    {
+      factId: "configuration-baseline:" + fingerprint,
+      factType: "CONFIGURATION_BASELINE",
+      data: { schemaVersion: 1, strategyName: "CG_coinGrabber", markets: ["ETHUSDT", "BTCUSDT"], fingerprint },
+    },
+    {
+      factId: "configuration-baseline:" + fingerprint,
+      factType: "CONFIGURATION_BASELINE",
+      data: { schemaVersion: 1, strategyName: "CG_coinGrabber", markets: ["BTCUSDT"], fingerprint, apiToken: "must-not-persist" },
+    },
+    {
+      factId: "process-started:wrong-session",
+      factType: "PROCESS_STARTED",
+      data: { configurationFingerprint: fingerprint, strategyName: "CG_coinGrabber", markets: ["BTCUSDT"] },
+    },
+    {
+      factId: "process-stopped:process-facts-test-session",
+      factType: "PROCESS_STOPPED",
+      data: { reason: "SHUTDOWN_COMPLETED", clean: "true" },
+    },
+  ]
+  for (const fact of invalidFacts) {
+    const result = await durableFactsStore.append(fact)
+    assert.equal(result.ok, false, "Malformed or mismatched process facts must fail closed.")
+  }
+})
+
 test("rejects process boundaries that are not tied to the store runtime session", async (t) => {
   const durableFactsStore = await createStore(t)
   const result = await recordProcessStopped({
