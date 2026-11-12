@@ -55,3 +55,18 @@ test("does not claim successful initialization when the store refuses to overwri
   assert.equal(result.ok, false, "An existing ledger must never be overwritten.")
   assert.equal(released, true, "The process lock must be released after a refused initialization.")
 })
+
+
+test("does not claim genesis success if the process lock cannot be released", async () => {
+  const result = await initializeHarvesterDurableFactsLedger({
+    confirmed: true,
+    acquireProcessLock: async () => ({
+      ok: true,
+      release: async () => ({ ok: false, errors: [new Error("lock release failed")] }),
+    }),
+    createStore: () => ({
+      initialize: async () => ({ ok: true, data: { durable: true, record: { sequence: "0", digest: "a".repeat(64) } } }),
+    }),
+  })
+  assert.equal(result.ok, false, "A committed genesis must not be reported as fully initialized while the exclusive process lock remains uncertain.")
+})

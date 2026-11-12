@@ -18,16 +18,23 @@ export async function initializeHarvesterDurableFactsLedger({
   acquireProcessLock = acquireHarvesterProcessLocks,
   createStore = createFileDurableFactsStore,
 } = {}) {
+  if (confirmed !== true) {
+    return toResult({
+      error: new Error("Explicit confirmation is required; pass --confirm-initialize to create the one-time recovery-facts genesis"),
+    })
+  }
+  if (typeof directory !== "string" || !directory.trim() ||
+      typeof processLockDirectory !== "string" || !processLockDirectory.trim() ||
+      typeof runtimeSessionId !== "string" || !runtimeSessionId.trim()) {
+    return toResult({
+      error: new TypeError("Recovery-facts initialization requires a directory, process-lock directory, and runtime session ID"),
+    })
+  }
+
   let processLock
+  let initializationResult
+  let releaseError
   try {
-    if (confirmed !== true) {
-      throw new Error("Explicit confirmation is required; pass --confirm-initialize to create the one-time recovery-facts genesis")
-    }
-    if (typeof directory !== "string" || !directory.trim() ||
-        typeof processLockDirectory !== "string" || !processLockDirectory.trim() ||
-        typeof runtimeSessionId !== "string" || !runtimeSessionId.trim()) {
-      throw new TypeError("Recovery-facts initialization requires a directory, process-lock directory, and runtime session ID")
-    }
     const lock = await acquireProcessLock({
       journalDirectory: processLockDirectory,
       globalDirectory: processLockDirectory,
@@ -43,36 +50,45 @@ export async function initializeHarvesterDurableFactsLedger({
     if (typeof store?.initialize !== "function") {
       throw new TypeError("Recovery-facts initializer requires the explicit store.initialize capability")
     }
-    const initialized = await store.initialize()
-    if (initialized?.ok !== true || initialized.data?.durable !== true) {
-      return toResult({
-        errors: initialized?.errors?.length
-          ? initialized.errors
+    initializationResult = await store.initialize()
+    if (initializationResult?.ok === true && initializationResult.data?.durable === true) {
+      initializationResult = toResult({
+        data: Object.freeze({
+          directory: path.resolve(directory),
+          runtimeSessionId,
+          sequence: initializationResult.data.record.sequence,
+          digest: initializationResult.data.record.digest,
+          durable: true,
+        }),
+      })
+    } else if (initializationResult?.ok !== true) {
+      initializationResult = toResult({
+        errors: initializationResult?.errors?.length
+          ? initializationResult.errors
           : [new Error("Recovery-facts genesis initialization did not confirm durable commitment")],
       })
+    } else {
+      initializationResult = toResult({ error: new Error("Recovery-facts genesis initialization returned an incomplete durable acknowledgement") })
     }
-    return toResult({
-      data: Object.freeze({
-        directory: path.resolve(directory),
-        runtimeSessionId,
-        sequence: initialized.data.record.sequence,
-        digest: initialized.data.record.digest,
-        durable: true,
-      }),
-    })
   } catch (error) {
-    return toResult({ error })
+    initializationResult = toResult({ error })
   } finally {
     if (processLock) {
       try {
         const released = await processLock.release()
         if (released?.ok !== true) {
-          // A failed release is surfaced by the lock's own durable ownership state.
+          releaseError = released?.errors?.[0] ?? new Error("Harvester process lock release failed after recovery-facts initialization")
         }
-      } catch {
-        // The initialization result remains conservative; the lock file itself
-        // is left for the normal process-lock recovery policy to inspect.
+      } catch (error) {
+        releaseError = error
       }
     }
   }
+  if (releaseError) {
+    const errors = [...(initializationResult?.errors ?? []), releaseError]
+    return toResult({
+      errors: errors.length === 1 ? errors : [new AggregateError(errors, "Recovery-facts initialization or process-lock release failed")],
+    })
+  }
+  return initializationResult ?? toResult({ error: new Error("Recovery-facts initialization did not produce a result") })
 }

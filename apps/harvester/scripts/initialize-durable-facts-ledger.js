@@ -6,12 +6,7 @@ const result = await initializeHarvesterDurableFactsLedger({
 })
 
 if (result.ok) {
-  defaultLogger.system?.({
-    message: "Harvester recovery-facts genesis initialized.",
-    directory: result.data.directory,
-    sequence: result.data.sequence,
-    digest: result.data.digest,
-  })
+  defaultLogger.system?.("Harvester recovery-facts genesis initialized at " + result.data.directory + " (sequence " + result.data.sequence + ").")
 } else {
   defaultLogger.error?.({
     message: "Harvester recovery-facts genesis was not initialized.",
