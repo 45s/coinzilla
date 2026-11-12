@@ -34,6 +34,9 @@ import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
 import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
 import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
+import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
 export async function startHarvester({
   configSource,
@@ -240,6 +243,7 @@ export async function startHarvester({
   const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
+  let lastReportedUserDataReady
   const candleHistoryService = createCandleHistoryService({
     broker,
     logger,
@@ -382,7 +386,21 @@ export async function startHarvester({
   })
   const handleUserDataStatus = (status = {}) => {
     userDataState.lastStatusEventAt = now()
-    return handleUserDataStatusTransition(status)
+    const result = handleUserDataStatusTransition(status)
+    if (lastReportedUserDataReady !== undefined && userDataState.ready !== lastReportedUserDataReady) {
+      lastReportedUserDataReady = userDataState.ready
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
+        dataResult: mapUserDataReadinessChangedData({
+          broker: brokerName,
+          ready: userDataState.ready,
+          status: userDataState.status,
+          trigger: status.type ?? "UNKNOWN",
+        }),
+      })
+    }
+    return result
   }
 
   const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
@@ -475,6 +493,21 @@ export async function startHarvester({
       getAccountSnapshot,
       resumeDeferredStrategyEvaluations,
     })
+    // The initial PREFLIGHT/user-data gate is reported after its authoritative
+    // snapshots pass. Later reconnect/reconciliation transitions use the same event.
+    lastReportedUserDataReady = userDataState.ready
+    if (lastReportedUserDataReady) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
+        dataResult: mapUserDataReadinessChangedData({
+          broker: brokerName,
+          ready: true,
+          status: userDataState.status,
+          trigger: "startup-preflight-completed",
+        }),
+      })
+    }
 
     await subscribeToMarketData({
       broker,

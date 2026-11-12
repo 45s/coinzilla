@@ -5,7 +5,11 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-12
-**Last source-verified develop checkpoint:** `c273622276880cf535145e004dc11b13f4ea2770` (merge of PR #1055, ADR-0001 Step 8 durable-fact producers and offline candidate projection; PRs #1067 operator-control runtime integration and #1069 configuration/policy module updates are also on `develop`; ADR-0001 Step 7 offline CLI/evidence adapter from PR #1053 is merged).
+**Last source-verified develop checkpoint:** `e39dc1f70a83dbaadfd39d224000ee1a2e69eeec` (merge of PR #1086, Telegram Command Center CC-2 trading visibility; ADR-0001 Step 8 durable-fact producers and offline candidate projection remain merged through PR #1055).
+
+## HIGHEST PRIORITY — Harvester Telegram Command Center
+
+- **Command Center (#1077) — active highest-priority Harvester workstream.** CC-1 and CC-2 are merged in PRs #1079, #1081 and #1086; CC-3 is delivered in PR #1087 with all eight exact-head workflows passing; CC-4 usability and hardening follows. See the [Harvester roadmap](apps/harvester/ROADMAP.md) for phase scope. ADR-0001 restart-recovery Steps 8–9 remain deferred until Command Center delivery is complete. No exchange operation is part of CC.
 
 ## CRITICAL — Harvester readiness and recovery
 

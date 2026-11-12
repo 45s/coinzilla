@@ -9,11 +9,10 @@ const testEventPublisher = Object.freeze({
   flush: async () => ({ ok: true, durable: true }),
 })
 const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? typeof input.eventPublisher.flush !== "function"
-      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
-      : input.eventPublisher
-    : testEventPublisher
+  let eventPublisher = input.eventPublisher ?? testEventPublisher
+  if (input.eventPublisher && typeof input.eventPublisher.flush !== "function") {
+    eventPublisher = { ...input.eventPublisher, flush: testEventPublisher.flush }
+  }
   return startHarvester({ ...input, eventPublisher })
 }
 
@@ -158,6 +157,7 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
@@ -173,6 +173,12 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   assert.equal(eventPublisher.events[4].name, HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED)
   assert.equal(eventPublisher.events[5].name, HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED)
   assert.deepEqual(eventPublisher.events[6].data, {
+    broker: "binance",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
+  })
+  assert.deepEqual(eventPublisher.events[7].data, {
     broker: "binance",
     stream: "market-price",
     market: "BTCUSDT",
@@ -197,9 +203,21 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     "connectionClosed",
     "recovered",
   ])
-  assert.equal(eventPublisher.events[8].data.recoveryRequired, true)
+  const connectionClosed = eventPublisher.events.find((event) =>
+    event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED && event.data.status === "connectionClosed"
+  )
+  assert.equal(connectionClosed.data.recoveryRequired, true)
   await recoveryAcknowledged
   assert.equal(runtime.userDataReady, true)
+
+  const readinessTransitions = eventPublisher.events
+    .filter((event) => event.name === HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED)
+    .map(({ data }) => ({ ready: data.ready, status: data.status, trigger: data.trigger }))
+  assert.deepEqual(readinessTransitions, [
+    { ready: true, status: "READY", trigger: "startup-preflight-completed" },
+    { ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" },
+    { ready: true, status: "READY", trigger: "reconciled" },
+  ], "Startup readiness and subsequent reconnect transitions must each publish exactly once.")
 
   const beforePrice = eventPublisher.events.length
   await broker.emitPrice({ eventType: "aggTrade", symbol: "BTCUSDT", price: "65000", timestamp: 1 })
@@ -278,11 +296,18 @@ test("publishes market-price subscription failure and broker disconnect outcome"
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
     HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
   ])
-  assert.equal(eventPublisher.events[6].data.stream, "market-price")
-  assert.equal(eventPublisher.events[6].data.market, "BTCUSDT")
+  assert.deepEqual(eventPublisher.events[6].data, {
+    broker: "binance",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
+  })
+  assert.equal(eventPublisher.events[7].data.stream, "market-price")
+  assert.equal(eventPublisher.events[7].data.market, "BTCUSDT")
 })
 
 

@@ -137,3 +137,15 @@ test("omits unavailable broker mode and preserves failed shutdown details", () =
   })
   assert.equal(stopped, "⏹️ BOT STOPPED · cleanup incomplete")
 })
+
+
+test("formats successful user-data readiness restoration without claiming more than READY", () => {
+  assert.equal(
+    formatHarvesterTelegramNotification({
+      name: "bot.user_data_ready",
+      data: { broker: "binance", status: "READY" },
+    }),
+    "🟢 USER-DATA READY · BINANCE",
+    "A confirmed application readiness transition must have a distinct success notification.",
+  )
+})

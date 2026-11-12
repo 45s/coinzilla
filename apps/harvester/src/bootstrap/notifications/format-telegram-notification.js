@@ -71,6 +71,7 @@ const formatters = Object.freeze({
     ].filter(Boolean).join("\n")
   },
   "bot.pair_paused": ({ data }) => `⏹️ ${symbol(data.symbol)} PAUSED · ${text(data.message ?? data.reason)}`,
+  "bot.user_data_ready": ({ data }) => `🟢 USER-DATA READY · ${text(data.broker, "UNKNOWN", 64).toUpperCase()}`,
   "bot.recovery_failed": ({ data }) => `🚨 BOT RECOVERY FAILED · ${text(data.message ?? data.reason)}`,
   "bot.recovery_completed": ({ data }) => `📡 BOT RECOVERY COMPLETED · ${text(data.message ?? data.summary, "Recovery completed")}`,
   "bot.startup_failed": ({ data }) => `🛑 BOT STARTUP FAILED · ${text(data.stage, "n/a", 64)} · ${text(data.error?.message ?? data.message)}`,
@@ -85,7 +86,9 @@ const formatters = Object.freeze({
     orderId(data),
   ].filter(Boolean).join("\n"),
   "order.failed": ({ data }) => `❌ ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
-  "account.safety_alert": ({ data }) => `${data.category === "account-open-orders-blocked" ? "🚨" : "⚠️"} ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
+  "account.safety_alert": ({ data }) => data.category === "user-data-readiness-blocked"
+    ? `🚨 USER-DATA READINESS BLOCKED · ${text(data.message ?? data.reason)}`
+    : `${data.category === "account-open-orders-blocked" || data.category === "recovery-cycle-blocked" ? "🚨" : "⚠️"} ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
   "bot.started": () => "▶️ BOT STARTED",
   "bot.stopped": ({ data }) => {
     const reason = data.reason ?? data.message

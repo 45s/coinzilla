@@ -7,6 +7,8 @@ test("resolves the minimal, trader, verbose, and custom profile defaults", () =>
   const minimal = resolveTelegramNotificationPolicy({ telegramConfig: { profile: "minimal" } })
   assert.equal(minimal.shouldNotify({ name: "bot.started" }), false, "Minimal must suppress routine successful startup messages.")
   assert.equal(minimal.shouldNotify({ name: "account.safety_alert" }), true, "Minimal must always retain account safety alerts.")
+  assert.equal(minimal.shouldNotify({ name: "bot.user_data_ready" }), true, "Minimal must always report an application readiness restoration.")
+  assert.ok(minimal.eventNames.includes("bot.user_data_ready"), "Every profile must subscribe to non-disableable readiness restoration events.")
 
   const trader = resolveTelegramNotificationPolicy({ telegramConfig: { profile: "trader" } })
   assert.equal(trader.shouldNotify({ name: "fill.received", data: { symbol: "LINKUSDT" } }), true, "Trader must include canonical applied fills.")
@@ -22,6 +24,7 @@ test("resolves the minimal, trader, verbose, and custom profile defaults", () =>
   })
   assert.equal(custom.shouldNotify({ name: "fill.received", data: { symbol: "LINKUSDT" } }), true, "Custom must enable only explicitly selected ordinary events.")
   assert.equal(custom.shouldNotify({ name: "bot.started" }), false, "Custom must not inherit the trader profile.")
+  assert.equal(custom.shouldNotify({ name: "bot.user_data_ready" }), true, "Custom overrides must not suppress an application readiness restoration.")
 })
 
 test("applies market filters to ordinary messages but never suppresses safety alerts", () => {
