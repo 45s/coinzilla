@@ -16,6 +16,54 @@ permissions:
   contents: read
 
 jobs:
+  temporary-lint-autofix:
+    name: Temporary lint autofix
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out PR head branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ github.token }}
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply safe ESLint autofixes
+        run: |
+          pnpm exec eslint --fix \
+            apps/harvester/src/application/operator/authorize-operator-actor.js \
+            apps/harvester/src/application/operator/create-harvester-operator.js \
+            apps/harvester/src/application/operator/create-harvester-operator.test.js \
+            apps/harvester/src/application/ports/durable-facts.port.js \
+            apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js \
+            apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.test.js \
+            apps/harvester/src/use-cases/conservative-trading-engine.js \
+            apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js \
+            apps/harvester/src/use-cases/operator-control/pause-market.js \
+            apps/harvester/src/use-cases/operator-control/resume-market.js
+      - name: Commit and push safe fixes
+        run: |
+          if git diff --quiet; then
+            echo "No automatic fixes were needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/harvester/src/application/operator apps/harvester/src/application/ports/durable-facts.port.js apps/harvester/src/infrastructure/telegram apps/harvester/src/use-cases/conservative-trading-engine.js apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js apps/harvester/src/use-cases/operator-control
+          git commit -m "style: apply safe lint fixes to operator-control changes"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
   workflow-lint:
     name: actionlint
     runs-on: ubuntu-latest
