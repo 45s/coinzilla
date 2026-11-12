@@ -183,7 +183,7 @@ export function createTelegramOperatorAdapter({
           "/help — show this help",
           "",
           "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
-        ].join("\\n"),
+        ].join("\n"),
         signal,
       })
       return
