@@ -14,12 +14,12 @@ export async function recordOrderCancellationOutcome({
   outcome,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") throw new TypeError("recordOrderCancellationOutcome requires a durable-fact append port")
-    if (!(order instanceof CanonicalOrder)) throw new TypeError("recordOrderCancellationOutcome requires the original canonical order")
+    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordOrderCancellationOutcome requires a durable-fact append port") }
+    if (!(order instanceof CanonicalOrder)) { throw new TypeError("recordOrderCancellationOutcome requires the original canonical order") }
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
       throw new TypeError("Cancellation outcome requires the original active acknowledged order")
     }
-    if (!isReason(reason) || !OUTCOMES.has(outcome)) throw new TypeError("Cancellation reason or outcome is unsupported")
+    if (!isReason(reason) || !OUTCOMES.has(outcome)) { throw new TypeError("Cancellation reason or outcome is unsupported") }
     const hasCanonicalResult = CANONICAL_OUTCOMES.has(outcome)
     if (hasCanonicalResult) {
       if (!(canceledOrder instanceof CanonicalOrder) ||
