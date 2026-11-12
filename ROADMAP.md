@@ -150,5 +150,5 @@
     6. Add targeted compatibility/regression tests and update each affected package's README, API docs, local AGENTS and roadmap when its public error contract changes. Keep the root standard and root roadmap synchronized.
     7. Track remaining legacy migrations as evidence-based, owner-scoped tasks; do not treat repository-wide replacement of native `Error` as a completion criterion.
   - **Acceptance criteria:** a single shared base with no duplicate implementations; stable and tested error codes; package-owned subclasses; preserved cause chains across meaningful boundaries; safe, actionable context; no secrets in logs or notifications; deterministic tests for important error paths; and a documented gradual migration process. Do not claim full adoption while legacy paths remain.
-  - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/ERROR_HANDLING_STANDARD.md).
+  - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
   - **Owner:** cross-workspace engineering; implementation ownership is assigned per shared package or consuming application during each focused task.
