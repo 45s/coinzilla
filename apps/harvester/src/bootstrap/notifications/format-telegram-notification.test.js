@@ -87,7 +87,7 @@ test("formats critical lifecycle and recovery events", () => {
     ["bot.recovery_completed", { summary: "synced" }, /✅ BOT RECOVERY COMPLETED · synced/],
     ["bot.startup_failed", { stage: "broker-connect", message: "connection refused" }, /⚠️ BOT STARTUP FAILED · broker-connect · connection refused/],
     ["account.safety_alert", { symbol: "ZROFDUSD", category: "unowned-order", message: "manual order detected" }, /⚠️ ACCOUNT SAFETY · ZRO\/FDUSD · unowned-order · manual order detected/],
-    ["account.safety_alert", { symbol: "ZROFDUSD", category: "account-open-orders-blocked", message: "audit blocked" }, /🚨 ACCOUNT SAFETY · ZRO\\/FDUSD · account-open-orders-blocked · audit blocked/],
+    ["account.safety_alert", { symbol: "ZROFDUSD", category: "account-open-orders-blocked", message: "audit blocked" }, /🚨 ACCOUNT SAFETY · ZRO\/FDUSD · account-open-orders-blocked · audit blocked/],
   ]
 
   for (const [name, data, expected] of examples) {
