@@ -132,7 +132,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–7 complete; Step 8 producer/projection work and Step 9 crash/restart proof remain. Restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -177,7 +177,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - The fact stream is fsynced before its matching manifest checkpoint is appended and fsynced; startup verification flushes both streams before publishing the verified head. This avoids per-append directory fsync/rename dependencies and supports regular-file sync on Windows.
    - Do not claim legacy Journal files are complete when they lack integrity evidence; require reconciliation or operator resolution for ambiguous history.
 
-7. **[~] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
+7. **[x] Step 7 — Reconcile one market against the exchange (F-036 and existing history gaps; audit primitives merged in [PR #1034](https://github.com/45s/coinzilla/pull/1034) and [PR #1036](https://github.com/45s/coinzilla/pull/1036); orchestration/confirmation merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047); offline CLI/evidence matrix merged in [PR #1053](https://github.com/45s/coinzilla/pull/1053)).**
    - [x] Separate one-market page exhaustion from historical retention coverage; require a durable retention-baseline fact whose covered-from time is no later than the query start. Never treat a caller-supplied `marketUniverseComplete` boolean as proof.
    - [x] Keep external open orders unowned and untouched; include their exact remaining reservations and report symbol-scoped blockers without blanket-blocking unrelated markets.
    - [x] Require every baseline/current asset and canonical market identity needed by the audit; missing evidence is unresolved, never zero.
@@ -185,10 +185,12 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
    - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
    - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
-   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the draft PR remains unmerged and awaits review, so Step 7 remains in progress on `develop`.
+   - [x] The offline JSON context adapter and explicit audit-only/confirmation CLI merged in [PR #1053](https://github.com/45s/coinzilla/pull/1053), merge commit `a6dd3412b21daa85b9767164e3619ad45a4de777`. The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior.
 
-8. **[ ] Step 8 — Restore behind a closed readiness gate.**
-   - Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
+8. **[~] Step 8 — Restore behind a closed readiness gate (in progress in [PR #1055](https://github.com/45s/coinzilla/pull/1055)).**
+   - [x] Define and enforce the canonical `ORDER_SUBMISSION_INTENT` payload and add an application recorder; retain exact market/order identities and decimal strings. The executor seam is not yet wired into production composition.
+   - [ ] Persist all remaining order outcomes, cancellations, execution fills, recovery-cycle outcomes, process/configuration boundaries, and safety/control facts at their required durability barriers.
+   - [ ] Project durable facts deterministically and idempotently into a candidate state; validate all domain invariants before publishing it.
    - Compare candidate state with authoritative exchange state. Publish READY only after every required reconciliation and safety check succeeds.
    - On any ambiguity, keep trading paused and provide actionable operator diagnostics. Never auto-adopt or auto-cancel external orders.
 

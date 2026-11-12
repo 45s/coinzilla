@@ -135,7 +135,11 @@ function normalizeRecordedAt(now) {
   return recordedAt
 }
 
-function validateFactData({ factType, data }) {
+function factIdForOrderIntent(clientOrderId) {
+  return "order-submission-intent:" + clientOrderId
+}
+
+function validateFactData({ factType, data, factId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new TypeError("Durable fact data must be a plain object")
   }
@@ -152,6 +156,55 @@ function validateFactData({ factType, data }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
+  }
+  if (factType === "ORDER_SUBMISSION_INTENT") {
+    const allowedFields = new Set([
+      "clientOrderId",
+      "marketId",
+      "venue",
+      "symbol",
+      "baseAssetId",
+      "quoteAssetId",
+      "side",
+      "type",
+      "price",
+      "quantity",
+      "purpose",
+    ])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Order-submission intent fact contains unsupported fields")
+    }
+    const clientOrderId = requireNonEmptyString({
+      value: canonicalData.clientOrderId,
+      field: "data.clientOrderId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+    requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (factIdForOrderIntent(clientOrderId) !== currentFactId) {
+      throw new TypeError("Order-submission intent factId must match its stable clientOrderId identity")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Order-submission intent symbol must be canonical uppercase alphanumeric")
+    }
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
+      throw new TypeError("Order-submission intent side must be BUY or SELL")
+    }
+    if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") {
+      throw new TypeError("Order-submission intent type must be LIMIT or LIMIT_MAKER")
+    }
+    const isPositiveDecimalString = (value) =>
+      typeof value === "string" &&
+      /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value) &&
+      /[1-9]/.test(value)
+    if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity)) {
+      throw new TypeError("Order-submission intent price and quantity must be positive exact decimal strings")
+    }
+    if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+      throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
+    }
   }
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
     const allowedFields = new Set([
@@ -248,7 +301,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
     throw new TypeError("Durable fact previousDigest must be a SHA-256 digest or null for genesis")
   }
   if (!SHA256_PATTERN.test(record.digest ?? "")) throw new TypeError("Durable fact digest is malformed")
-  validateFactData({ factType: record.factType, data: record.data })
+  validateFactData({ factType: record.factType, data: record.data, factId: record.factId })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
     throw new Error("Durable fact genesis schema version does not match the stream schema")
   }
