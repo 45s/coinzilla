@@ -120,10 +120,17 @@ export async function recordSafetyBlockerResolved({
         errors: read?.errors?.length ? read.errors : [new Error("Safety blocker resolution requires a verified durable-fact stream")],
       })
     }
-    const raised = read.data.records.some((record) =>
+    const raised = read.data.records.find((record) =>
       record.factType === "SAFETY_BLOCKER_RAISED" && record.data?.blockerId === blockerId)
     if (!raised) {
       throw new Error("Cannot resolve a safety blocker without its committed raised fact")
+    }
+    if (raised.data.evidenceDigest === evidenceDigest) {
+      throw new Error("Safety-blocker resolution requires evidence independent from the triggering evidence")
+    }
+    if ((resolution === "AUTHORITATIVE_RECONCILIATION" && !resolvedBy.startsWith("reconciliation:")) ||
+        (resolution === "OPERATOR_ACTION" && !resolvedBy.startsWith("operator:"))) {
+      throw new TypeError("Safety-blocker resolver identity must match the explicit reconciliation or operator action")
     }
     return await appendDurably({
       durableFactsStore,

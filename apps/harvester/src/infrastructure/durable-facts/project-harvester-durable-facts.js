@@ -287,8 +287,14 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       if (record.factType === "SAFETY_BLOCKER_RESOLVED") {
         const resolutionSession = sessions.get(record.runtimeSessionId)
         if (!resolutionSession || resolutionSession.stopped) { throw new Error("Safety-blocker resolution is outside an active process session") }
-        if (!activeBlockers.has(record.data.blockerId)) {
+        const raisedBlocker = activeBlockers.get(record.data.blockerId)
+        if (!raisedBlocker) {
           throw new Error("Safety blocker resolution has no preceding active raised fact")
+        }
+        if (raisedBlocker.evidenceDigest === record.data.evidenceDigest ||
+            (record.data.resolution === "AUTHORITATIVE_RECONCILIATION" && !record.data.resolvedBy.startsWith("reconciliation:")) ||
+            (record.data.resolution === "OPERATOR_ACTION" && !record.data.resolvedBy.startsWith("operator:"))) {
+          throw new Error("Safety blocker resolution does not carry independent evidence and an explicit resolver identity")
         }
         activeBlockers.delete(record.data.blockerId)
         continue

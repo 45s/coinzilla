@@ -56,7 +56,7 @@ test("records a sticky safety blocker and resolves it only after a committed rai
   const resolved = await recordSafetyBlockerResolved({
     durableFactsStore,
     blockerId,
-    resolvedBy: "operator:trader",
+    resolvedBy: "reconciliation:binance-history-audit",
     resolution: "AUTHORITATIVE_RECONCILIATION",
     evidenceDigest: "b".repeat(64),
   })
@@ -65,7 +65,7 @@ test("records a sticky safety blocker and resolves it only after a committed rai
   const duplicate = await recordSafetyBlockerResolved({
     durableFactsStore,
     blockerId,
-    resolvedBy: "operator:trader",
+    resolvedBy: "reconciliation:binance-history-audit",
     resolution: "AUTHORITATIVE_RECONCILIATION",
     evidenceDigest: "b".repeat(64),
   })
@@ -78,7 +78,7 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   const absent = await recordSafetyBlockerResolved({
     durableFactsStore,
     blockerId: "c".repeat(64),
-    resolvedBy: "operator:trader",
+    resolvedBy: "reconciliation:binance-history-audit",
     resolution: "AUTHORITATIVE_RECONCILIATION",
     evidenceDigest: "d".repeat(64),
   })

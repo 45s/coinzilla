@@ -117,7 +117,7 @@ test("retains only unresolved pause and safety-blocker controls in the candidate
       record(6, "SAFETY_BLOCKER_RAISED", blocker, "safety-blocker-raised:" + blockerId),
       record(7, "SAFETY_BLOCKER_RESOLVED", {
         blockerId,
-        resolvedBy: "operator:trader",
+        resolvedBy: "reconciliation:binance-history-audit",
         resolution: "AUTHORITATIVE_RECONCILIATION",
         evidenceDigest: "c".repeat(64),
       }, "safety-blocker-resolved:" + blockerId),
