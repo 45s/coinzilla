@@ -144,7 +144,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 - Keep maker/taker assumptions as separate operator inputs; do not treat public exchange metadata as account commission data.
 - Generate a complete pair object and validate the merged application configuration with the runtime `validateAppConfig` contract.
 - New pairs are enabled by default. Refuse an already configured symbol; never silently replace an existing pair.
-- Serialize writes under an exclusive lock and atomically replace `config/index.js`; preserve all existing pairs and unrelated application settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
+- Serialize writes under an exclusive lock and atomically replace `config/strategies/cg-coin-grabber.js`; preserve all existing pairs and unrelated strategy settings. On errors, leave the original config intact and clean up temporary files/locks owned by this invocation.
 - Show the generated pair and exchange constraints for operator review before writing. Declining confirmation changes nothing.
 
 **Implementation and verification checklist:**
