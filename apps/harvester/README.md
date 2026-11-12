@@ -198,10 +198,12 @@ The broker-wide and Harvester process locks live under `~/.coinzilla/harvester/p
 Telegram policy lives in `config/index.js` under `notifications.telegram`; bot credentials remain in `.env.development` / deployment environment variables and must never be committed.
 
 - `enabled`: set to `false` to disable Telegram even when credentials exist. The default is `true`; transport is still created only when both credential variables are present.
-- `profile`: `minimal` (safety alerts only), `trader` (useful order/fill/recovery and lifecycle milestones), `verbose` (all supported low-volume operational events), or `custom` (only explicitly enabled ordinary events).
+- `profile`: `minimal` (safety and readiness alerts), `trader` (useful order/fill/recovery and lifecycle milestones), `verbose` (all supported low-volume operational events), or `custom` (only explicitly enabled ordinary events).
 - `markets`: an empty array means all markets; otherwise ordinary symbol-specific notifications are limited to the listed symbols.
 - `events`: optional boolean overrides keyed by `orderSubmitted`, `orderCancelled`, `orderFailed`, `fillReceived`, `pairPaused`, `recoveryCompleted`, `recoveryFailed`, `botStarted`, `botStopped`, `startupFailed`, `brokerConnected`, `brokerDisconnected`, and `accountSafetyAlert`. Overrides merge with the selected profile; with `custom`, unspecified ordinary events remain off.
-- Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, and account-safety alerts cannot be disabled and bypass market filters.
+- Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, account-safety, blocked user-data readiness, and confirmed user-data readiness-restoration alerts cannot be disabled and bypass market filters. A recovered WebSocket transport is explicitly reported as still awaiting authoritative application reconciliation; it is never described as READY.
+- A blocked `RECOVERY_CYCLE_NOT_COMPLETED` outcome is a safety alert; expected `CONTINUE_SELL_THROUGH` is intentionally suppressed to avoid false alarms.
+- Telegram delivery failures and queue overflow include immutable accepted/delivered/failed/overflow/pending counters in structured error logs. A final delivery summary is logged after shutdown drains and closes the subscriber. These are process-local diagnostics, not a Telegram self-alert; automatic retries and durable delivery remain intentionally unsupported.
 
 See [architecture — operational notifications](./docs/architecture.md#operational-notifications) and the [Notifiers package README](../../packages/notifiers/README.md) for the event vocabulary and delivery contract.
 

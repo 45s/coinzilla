@@ -25,7 +25,8 @@ const SAFETY_EVENT_NAMES = Object.freeze([
   "bot.recovery_failed",
   "account.safety_alert",
 ])
-const SAFETY_EVENT_SET = new Set(SAFETY_EVENT_NAMES)
+const NON_DISABLEABLE_EVENT_NAMES = Object.freeze([...SAFETY_EVENT_NAMES, "bot.user_data_ready"])
+const NON_DISABLEABLE_EVENT_SET = new Set(NON_DISABLEABLE_EVENT_NAMES)
 
 const PROFILE_EVENT_NAMES = Object.freeze({
   minimal: SAFETY_EVENT_NAMES,
@@ -44,7 +45,7 @@ const PROFILE_EVENT_NAMES = Object.freeze({
 
 /**
  * Resolve the Harvester-owned Telegram profile, event overrides, and market filter.
- * Safety events always bypass profile exclusions, explicit false overrides, and market filters.
+ * Safety alerts and confirmed readiness restoration bypass profile exclusions, explicit false overrides, and market filters.
  */
 export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) {
   const profile = telegramConfig.profile ?? "trader"
@@ -57,7 +58,7 @@ export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) 
     if (override === false) selectedEvents.delete(eventName)
   }
 
-  for (const eventName of SAFETY_EVENT_NAMES) selectedEvents.add(eventName)
+  for (const eventName of NON_DISABLEABLE_EVENT_NAMES) selectedEvents.add(eventName)
 
   const markets = Object.freeze([...(telegramConfig.markets ?? [])])
   const eventNames = Object.freeze(
@@ -72,7 +73,7 @@ export function resolveTelegramNotificationPolicy({ telegramConfig = {} } = {}) 
     markets,
     eventNames,
     shouldNotify({ name, data = {} } = {}) {
-      if (SAFETY_EVENT_SET.has(name)) return true
+      if (NON_DISABLEABLE_EVENT_SET.has(name)) return true
       if (name === "bot.stopped" && data.outcome === "failed") return true
       if (!selectedEvents.has(name)) return false
       if (markets.length > 0 && typeof data.symbol === "string" && !markets.includes(data.symbol)) return false

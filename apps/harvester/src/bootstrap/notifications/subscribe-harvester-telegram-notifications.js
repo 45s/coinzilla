@@ -16,6 +16,49 @@ const EVENT_MAPPINGS = Object.freeze({
     name: "bot.startup_failed",
     data: { stage: data.stage, error: data.error },
   }),
+  [HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED]: ({ data }) => {
+    if (data.ready === true) {
+      return {
+        name: "bot.user_data_ready",
+        data: { broker: data.broker, status: data.status },
+      }
+    }
+    return {
+      name: "account.safety_alert",
+      data: {
+        category: "user-data-readiness-blocked",
+        message: `${data.broker} user-data readiness BLOCKED (${data.status}) after ${data.trigger ?? "UNKNOWN"}`,
+      },
+    }
+  },
+  [HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED]: ({ data }) => {
+    if (data.stream !== "user-data") {return null}
+    if (data.status === "recovered" && data.recoveryRequired === true) {
+      return {
+        name: "account.safety_alert",
+        data: {
+          category: "user-data-reconnected-reconciliation-pending",
+          message: `${data.broker} user-data transport RECONNECTED; authoritative application reconciliation is still required`,
+        },
+      }
+    }
+    if (data.recoveryRequired !== true) {return null}
+    const categories = {
+      recoveryFailed: "user-data-recovery-failed",
+      terminated: "user-data-stream-terminated",
+      executionNormalizationFailed: "user-data-execution-normalization-failed",
+      rpcError: "user-data-stream-error",
+    }
+    const category = categories[data.status]
+    if (!category) {return null}
+    return {
+      name: "account.safety_alert",
+      data: {
+        category,
+        message: `${data.broker} user-data stream ${data.status}: ${data.error?.message ?? "recovery required"}`,
+      },
+    }
+  },
   [HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED]: ({ data }) => ({
     name: "broker.disconnected",
     data: { broker: data.broker, error: data.error },
@@ -67,6 +110,17 @@ const EVENT_MAPPINGS = Object.freeze({
         "; retained quantity " + data.freeQuantity,
     },
   }),
+  [HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED]: ({ data }) => {
+    if (data.outcome !== "BLOCKED") {return null}
+    return {
+      name: "account.safety_alert",
+      data: {
+        symbol: data.symbol,
+        category: "recovery-cycle-blocked",
+        message: `Recovery cycle blocked: ${data.reason}; realized net profit ${data.realizedNetProfit}; active quantity ${data.activeQuantity}`,
+      },
+    }
+  },
   [HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED]: ({ data }) => ({
     name: "bot.recovery_failed",
     data: { message: data.symbol + " execution accounting failed: " + data.error?.message },

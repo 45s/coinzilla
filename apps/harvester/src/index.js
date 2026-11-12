@@ -30,6 +30,18 @@ function logSystem(logger, message) {
   logger?.info?.(message)
 }
 
+function logTelegramNotificationSummary({ notifications, logger } = {}) {
+  if (typeof notifications?.getDiagnostics !== "function") {return}
+  try {
+    logger?.info?.({
+      message: "Telegram notification delivery summary",
+      ...notifications.getDiagnostics(),
+    })
+  } catch {
+    // Optional delivery diagnostics must never affect process shutdown.
+  }
+}
+
 function classifyJournalFlushFailure({ status } = {}) {
   if (status?.writeFailed === true) {
     return { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false }
@@ -291,7 +303,20 @@ export async function main({
     if (telegramConfig.enabled !== false && telegramToken && telegramChatId) {
       try {
         const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
-        telegramNotifications = await subscribeHarvesterTelegramNotifications({ eventBus, notifier, logger, telegramConfig })
+        const telegramLogger = typeof logger?.error === "function"
+          ? {
+              error: (entry) => logger.error({
+                ...entry,
+                notificationDiagnostics: telegramNotifications?.getDiagnostics?.() ?? null,
+              }),
+            }
+          : undefined
+        telegramNotifications = await subscribeHarvesterTelegramNotifications({
+          eventBus,
+          notifier,
+          logger: telegramLogger,
+          telegramConfig,
+        })
         logSystem(logger, "Telegram notifications enabled.")
       } catch (error) {
         logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
@@ -395,6 +420,7 @@ export async function main({
               notificationErrors.push(error)
               logger.error?.({ message: "Telegram notification shutdown failed.", error })
             }
+            logTelegramNotificationSummary({ notifications: telegramNotifications, logger })
           }
           const cleanupErrors = await closeObservability({
             journalService,
@@ -448,6 +474,7 @@ export async function main({
       } catch (notificationError) {
         logger.error?.({ message: "Telegram notification cleanup failed during startup failure.", error: notificationError })
       }
+      logTelegramNotificationSummary({ notifications: telegramNotifications, logger })
     }
     const cleanupErrors = await closeObservability({
       journalService,
