@@ -135,4 +135,3 @@
 6. Preserve historical reports and provenance. Correct stale historical conclusions with a dated addendum or link to the current living source; never silently rewrite evidence.
 7. Run focused checks, repository agent-policy/link checks and applicable CI on the exact PR head. A skipped integration check is not a pass.
 8. Keep task branches short-lived and delete them after merge when repository permissions allow. Never bypass branch protection or release approval.
-
