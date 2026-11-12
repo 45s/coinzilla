@@ -116,8 +116,8 @@ test("does not initialize a missing durable-fact store for safety controls", asy
     directory,
     runtimeSessionId: "safety-recorders-test-session",
   })
-  const result = await recordOperatorMarketControl({
-    durableFactsStore, action: "PAUSE", requestId: "request-1", actorId: "actor-1", symbol: "BTCUSDT",
+  const result = await recordStrategyMarketControl({
+    durableFactsStore, action: "PAUSE", transitionId: "missing-ledger:1", symbol: "BTCUSDT", reason: "FILL_RECONCILIATION_FAILED",
   })
   assert.equal(result.ok, false, "Safety recorders must never initialize a missing ledger.")
 })

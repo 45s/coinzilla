@@ -225,7 +225,7 @@ export async function main({
           ok: false,
           errors: [new Error("Harvester Journal durable flush is unavailable")],
         }))
-        if (result?.ok !== false) return result
+        if (result?.ok !== false) { return result }
         return {
           ...result,
           recoveryFailure: classifyJournalFlushFailure({ status: journalService?.status }),
@@ -322,7 +322,7 @@ export async function main({
     if (typeof runtime.stop === "function") {
       let shutdownPromise
       const shutdown = (reason) => {
-        if (shutdownPromise) return shutdownPromise
+        if (shutdownPromise) { return shutdownPromise }
         shutdownPromise = (async () => {
           let shutdownError
           let runtimeStopped = false
@@ -359,7 +359,7 @@ export async function main({
           if (typeof eventBus?.flush === "function") {
             try {
               const flushResult = await eventBus.flush()
-              if (flushResult?.ok === false) notificationErrors.push(...(flushResult.errors ?? [new Error("EventBus flush failed before Telegram shutdown")]))
+              if (flushResult?.ok === false) { notificationErrors.push(...(flushResult.errors ?? [new Error("EventBus flush failed before Telegram shutdown")])) }
             } catch (error) {
               notificationErrors.push(error)
             }
@@ -383,7 +383,7 @@ export async function main({
             logger.error?.({ message: "Telegram notification shutdown was incomplete.", errors: notificationErrors })
             process.exitCode = 1
           }
-          if (cleanupErrors.length > 0) process.exitCode = 1
+          if (cleanupErrors.length > 0) { process.exitCode = 1 }
           try {
             await closeLogger()
           } catch (error) {
@@ -430,7 +430,7 @@ export async function main({
       allowProcessLockRelease: !runtimeStartAttempted,
       logger,
     })
-    if (cleanupErrors.length > 0) process.exitCode = 1
+    if (cleanupErrors.length > 0) { process.exitCode = 1 }
     try {
       logger.error({
         message: "startup failed.",
@@ -464,7 +464,7 @@ const isDirectExecution = process.argv[1]
 
 if (isDirectExecution) {
   const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
-  if (processStartedContext.ok) defaultLogger.setContext(processStartedContext.data)
+  if (processStartedContext.ok) { defaultLogger.setContext(processStartedContext.data) }
   const logging = await configureHarvesterLogging({ logger: defaultLogger, processIdentity: PROCESS_IDENTITY })
   let commandInterface
   try {
