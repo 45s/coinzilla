@@ -1,6 +1,6 @@
 # Harvester operator control
 
-> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md). This document explains the current application boundary and delivery contract. It is not evidence that inbound Telegram control or restart recovery is enabled.
+> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). This document explains the current application boundary and delivery contract. It is not evidence that inbound Telegram control is runtime-enabled or that operator pause state survives a process restart.
 
 ## Goal
 
@@ -15,7 +15,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the ADR-0001 durable-facts append port.
 - The use cases pass the durable append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
 - `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. It is offline-testable but is not started or wired into the runtime.
-- The ADR-0001 file store and integrity checks already exist. Operator-fact projection, disabled-by-default configuration validation, closed-gate startup restoration and runtime lifecycle composition remain pending. Do not enable or advertise inbound control until those gates and recovery Steps 7–9 are complete.
+- The ADR-0001 file store and integrity checks already exist. The application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration validation and runtime lifecycle composition remain pending; they can be delivered independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
 
@@ -103,7 +103,7 @@ sequenceDiagram
   O-->>T: transport response
 ```
 
-If the durable append fails or is uncertain, the engine does not mutate operator state. If the process crashes after the fact is committed but before the in-memory update, the ADR-0001 startup projection restores the pause before market evaluation.
+If the durable append fails or is uncertain, the engine does not mutate operator state. If the process crashes after the fact is committed but before the in-memory update, the fact remains in the durable stream but is not replayed by this initial scope. A process restart starts without the operator pause; an operator who still wants the market paused must issue the command again.
 
 ## Application contracts
 
@@ -144,7 +144,7 @@ The application writes through the ADR-0001 durable-facts port. It does not use 
 
 The durable-facts adapter must return `durable: true` only after the record and committed head satisfy ADR-0001. Exact duplicate fact identity/payload is idempotent; reuse of a fact identity with different data is an integrity failure.
 
-The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. The ADR-0001 file store exists, but the current runtime does not wire it to this operator facade or restore operator facts before the first strategy evaluation. Therefore the application facade is not wired to an inbound transport.
+The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. The ADR-0001 file store exists, but the current runtime does not wire it to this operator facade. Runtime wiring remains pending. The initial process-lifetime scope deliberately does not restore operator facts before the first strategy evaluation; this limitation is explicit and is not a dependency on full recovery.
 
 ## Application result shape
 
@@ -195,7 +195,7 @@ The first adapter uses Telegram Bot API Long Polling and is optional; its module
 - Resolve `message.from.id` through the allowlist to a trusted `trading-operator` actor. Never authorize based on a display name, message text, chat title or caller-supplied role.
 - Use Telegram `update_id` as the stable request identity and the durable fact ID as the final idempotency boundary.
 - Process updates serially. Retry transport failures without advancing the update offset; duplicate delivery after a crash must be harmless.
-- Start and stop the poller with the Harvester runtime. If the feature is enabled without a valid durable-fact store and restored operator state, fail closed before strategy evaluation.
+- Start and stop the poller with the Harvester runtime. If the feature is enabled without a valid durable-fact append store, fail closed before strategy evaluation. Do not require full recovery projection for this initial process-lifetime capability; do not claim a pause survives restart.
 - Reuse the existing `TELEGRAM_BOT_TOKEN` environment secret. Never commit credentials.
 - Keep outbound notification delivery independent and best-effort.
 
@@ -230,7 +230,7 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 | Missing/invalid request ID or symbol | Return a stable application error; do not append a fact. |
 | Unknown configured market | Engine rejects before applying state. |
 | Durable fact write failed or uncertain | No state transition and no successful acknowledgement. |
-| Crash after fact commit | Startup projection restores operator pause before strategy evaluation. |
+| Process restart after a pause | The initial scope does not replay operator facts. The process starts without the operator pause; the operator must issue `/pause <SYMBOL>` again if needed. |
 | Existing BUY fills after pause | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
@@ -239,12 +239,11 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 
 1. **Engine semantics — implemented:** RED/GREEN tests cover market isolation, BUY suppression, recovery SELL continuity, no cancellation/repricing of existing orders, durable-before-apply, initial-state restoration, idempotent pause and safety-blocked resume.
 2. **Application capability — implemented:** tests cover actor-role authorization, stable fact identity/payload, durable append ordering, failed persistence and transport-neutral facade.
-3. **ADR-0001 durable facts — prerequisite:** implement the accepted single append-only stream, committed head, integrity checks, explicit initialization and projection. Follow the numbered recovery roadmap; do not create an operator-specific store.
-4. **Startup integration — pending:** restore operator pause facts and all required safety/recovery facts behind the closed readiness gate before the engine receives market events. Keep restart recovery disabled until ADR-0001 acceptance gates pass.
+3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
+4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
-6. **ADR-0001 recovery projection — pending:** project operator pause/resume facts and restore them before strategy evaluation behind the closed readiness gate; complete recovery Steps 7–9 first.
-7. **Configuration/bootstrap — pending:** disabled-by-default config validation, fail-closed enablement and runtime lifecycle tests; keep it independent from outbound notification settings.
-8. **Verification — in progress:** focused engine/application/adapter tests are present; exact-head workspace CI and documentation-link checks remain required. No Binance/TESTNET/LIVE operations.
+6. **Configuration/bootstrap — pending, independent of restart recovery:** add disabled-by-default config validation, fail-closed enablement and runtime lifecycle tests; keep this independent from outbound notification settings. The process-lifetime limitation must be explicit to operators.
+7. **Verification — in progress:** focused engine/application/adapter tests are present; exact-head workspace CI and documentation-link checks remain required. No Binance/TESTNET/LIVE operations.
 
 ## References
 

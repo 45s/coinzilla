@@ -10,7 +10,7 @@ created: 2026-11-11
 
 ## Status
 
-**Accepted — application and trading-engine contract.** The original design/prototype is preserved in [PR #1011](https://github.com/45s/coinzilla/pull/1011); the synchronized implementation continuation is [PR #1045](https://github.com/45s/coinzilla/pull/1045). The engine boundary, transport-independent application use cases and offline-testable Telegram adapter are implemented. The ADR-0001 file store exists, but operator-fact projection, closed-gate startup restoration, configuration and runtime wiring remain disabled.
+**Accepted — application and trading-engine contract; initial rollout scope narrowed by [ADR-0003](./0003-process-lifetime-operator-pause.md).** The original design/prototype is preserved in [PR #1011](https://github.com/45s/coinzilla/pull/1011); the synchronized implementation continuation is [PR #1045](https://github.com/45s/coinzilla/pull/1045). The engine boundary, transport-independent application use cases and offline-testable Telegram adapter are implemented. The initial operator-pause rollout is process-lifetime only: it does not restore pause state after a process restart. ADR-0003 supersedes only the previous requirement to complete full ADR-0001 restart recovery before enabling this initial operator-control capability. Durable-before-apply, fact idempotency, actor authorization and pause safety semantics remain in force. Full trading-state restart recovery remains a separate ADR-0001 / issue #654 workstream.
 
 **Owner:** Harvester
 
@@ -95,10 +95,10 @@ Operator pause/resume facts are appended to the **same ADR-0001 durable-fact str
 - Fact data includes `requestId`, `actorId` and configured `symbol`.
 - The application calls the durable-fact port from the engine's serialized transition callback. The engine applies the in-memory operator state only after the callback reports `{ ok: true, data: { durable: true } }`.
 - Missing, failed or uncertain persistence means no state transition and no successful acknowledgement.
-- Startup must validate and project the committed fact stream, including operator pause facts, before the first strategy evaluation. The resulting `operatorPausedMarkets` projection is supplied to the engine as initial state.
-- Missing or corrupt durable history, an unclean process boundary, unresolved safety facts or incomplete reconciliation must keep the readiness gate closed under ADR-0001.
+- **Full-recovery target only; not required for the initial process-lifetime rollout:** startup may validate and project the committed fact stream, including operator pause facts, before the first strategy evaluation. The resulting `operatorPausedMarkets` projection is supplied to the engine as initial state when restart restoration is implemented under ADR-0001.
+- Missing or corrupt durable history, an unclean process boundary, unresolved safety facts or incomplete reconciliation must keep the readiness gate closed for the separate ADR-0001 trading-state recovery workflow. This does not gate the initial process-lifetime operator pause.
 
-The ADR-0001 file durable-facts store and integrity checks are implemented. The operator application accepts that existing append port, but production runtime composition does not yet connect the store to the operator use cases or project operator pause facts into startup state. The command must remain unavailable until operator-fact projection, full recovery reconciliation and the closed startup-readiness gate are implemented and verified. Do not create an operator-specific store or substitute Journal.
+The ADR-0001 file durable-facts store and integrity checks are implemented. The operator application accepts that existing append port, but production runtime composition does not yet connect the store to the operator use cases. Startup projection is deliberately excluded from the initial process-lifetime rollout by ADR-0003: a committed pause fact is not replayed after restart, so the in-memory operator pause is lost when the process exits. Runtime configuration and lifecycle wiring remain separate pending work; they do not depend on completing full recovery Steps 7–9. Do not create an operator-specific store or substitute Journal.
 
 ### 6. Authorization and first Telegram adapter
 
@@ -110,7 +110,7 @@ The first adapter is optional Telegram Long Polling:
 - The bot token remains in `TELEGRAM_BOT_TOKEN`; no credential is committed to configuration or source.
 - The adapter maps the allowlisted sender to a trusted actor with the `trading-operator` role, then calls `operator.pauseMarket`.
 - The adapter uses Telegram `update_id` for request idempotency, processes updates serially, and advances its polling offset only after handling the update. Durable fact deduplication protects a retry after a process crash.
-- The adapter starts and stops with the Harvester runtime. If enabled without a valid durable-facts/recovery capability, startup fails closed before strategy evaluation.
+- The adapter starts and stops with the Harvester runtime. If enabled without a valid durable-fact append capability, startup fails closed before strategy evaluation. The initial rollout does not restore operator pauses after restart; operators must reissue a pause after each process restart when needed.
 - Outbound notification delivery remains an independent best-effort subscriber. Inbound command failures must not be disguised as notification delivery failures.
 
 No HTTP server, webhook, web session, generic command framework or extra Telegram command is part of this milestone.
@@ -123,7 +123,7 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 | Request ID or symbol is invalid | Return a stable application error; do not write a fact. |
 | Symbol is not configured | Engine rejects before applying operator state. |
 | Durable fact append fails or is uncertain | Do not apply pause/resume and do not acknowledge success. |
-| Process crashes after durable pause commit but before in-memory apply | Startup projection restores the pause before strategy evaluation. |
+| Process crashes after durable pause commit but before in-memory apply | The committed fact remains recorded, but the initial process-lifetime rollout does not replay it. The pause is not restored after restart and must be reissued. |
 | Existing BUY fills after pause | Process and account the fill normally; suppress new BUY intents and allow recovery SELL policy. |
 | Safety/recovery blocker exists during resume | Reject resume before appending a resume fact; preserve every blocker. |
 | Telegram polling or reply delivery fails | Log actionable transport diagnostics; never change trading state except through the committed application use case. |
@@ -133,7 +133,7 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 - Harvester retains ownership of trading semantics; transports remain thin.
 - The first engine slice can be tested offline without Telegram or Binance.
 - Existing exchange orders are deliberately not canceled by `pause`; operators must understand that an already-resting BUY may still fill.
-- A usable inbound command depends on the unfinished ADR-0001 durable-fact store and startup projection. The current engine/application foundations do not make restart recovery complete.
+- A usable inbound command depends on runtime configuration/lifecycle wiring and the ADR-0001 durable-fact append port, but not on full process-restart recovery. The initial operator pause is process-lifetime only; restart restoration is explicitly deferred.
 - The first Telegram release is deliberately small: one `/pause <SYMBOL>` command, private-chat allowlist, and no HTTP server.
 - A future shared operator package remains an evidence-based extraction, not a prerequisite.
 
@@ -154,10 +154,8 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 - [x] Add resume guard that cannot clear safety/recovery blockers.
 - [x] Add transport-independent application facade, actor-role authorization and durable-fact append contract.
 - [x] Reuse the ADR-0001 file durable-facts store through the application append port.
-- [ ] Project `OPERATOR_MARKET_PAUSED` and `OPERATOR_MARKET_RESUMED` facts into the candidate startup state.
-- [ ] Wire restored operator state into Harvester startup before strategy evaluation.
+- [ ] **Deferred to ADR-0001 / issue #654:** project operator facts into candidate startup state and restore them before strategy evaluation. This is not a prerequisite for the initial process-lifetime operator-control rollout.
 - [x] Implement the offline-testable Telegram `/pause <SYMBOL>` parser, private-chat allowlist, serial Long Polling, stable update identity, retry and stop lifecycle.
 - [ ] Add disabled-by-default `operatorControl.telegram` configuration validation and fail-closed bootstrap lifecycle.
-- [ ] Restore operator pause state before the first market evaluation behind ADR-0001's closed readiness gate.
-- [ ] Complete recovery Steps 7–9 before enabling inbound runtime control.
+- [ ] **Out of scope for the initial rollout:** restore operator pause state after restart or complete recovery Steps 7–9. Track this only in the separate process-restart recovery workstream.
 - [ ] Run exact-head required CI and review the complete diff.
