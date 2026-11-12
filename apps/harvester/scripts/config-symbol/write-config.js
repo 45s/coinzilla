@@ -1,14 +1,19 @@
 import { open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises"
-import path from "node:path"
 import { randomUUID } from "node:crypto"
+import { isDeepStrictEqual } from "node:util"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { validateAppConfig } from "../../src/domain/app-config.js"
 import { addPairToAppConfig } from "./configuration.js"
+import { replacePairConfiguration } from "./config-source.js"
 
 async function removeIfPresent(filePath) {
   try {
     await unlink(filePath)
   } catch (error) {
-    if (error?.code !== "ENOENT") throw error
+    if (error?.code !== "ENOENT") {
+      throw error
+    }
   }
 }
 
@@ -16,18 +21,39 @@ async function removeStaleTemporaryFiles(directory, configFileName) {
   const prefix = "." + configFileName + "."
   const entries = await readdir(directory)
   for (const entry of entries) {
-    if (entry.startsWith(prefix) && entry.endsWith(".tmp")) {
+    if (entry.startsWith(prefix) && entry.endsWith(".tmp.mjs")) {
       await removeIfPresent(path.join(directory, entry))
     }
   }
 }
 
+async function importAppConfig(configPath) {
+  const moduleUrl = pathToFileURL(configPath)
+  moduleUrl.searchParams.set("config-symbol-load", randomUUID())
+
+  let configModule
+  try {
+    configModule = await import(moduleUrl.href)
+  } catch (cause) {
+    const message = "Unable to load Harvester app config module at " + configPath + ": " + cause.message
+    if (cause instanceof SyntaxError) {
+      throw new SyntaxError(message, { cause })
+    }
+    throw new Error(message, { cause })
+  }
+
+  if (!Object.hasOwn(configModule, "appConfig")) {
+    throw new TypeError("Harvester app config module must export a named appConfig value")
+  }
+  return configModule.appConfig
+}
+
 /**
- * Merge a new pair into config.json and atomically replace the file under an exclusive generator lock.
+ * Merge a new pair into the marked pair region in the ESM config module and atomically replace it.
  *
  * @param {{configPath: string, symbol: string, pairConfig: object}} options - Target config and generated pair.
- * @returns {Promise<string>} Absolute path of the updated config file.
- * @throws {Error|TypeError} If the file is invalid, the pair exists, or the lock/write fails.
+ * @returns {Promise<string>} Absolute path of the updated config module.
+ * @throws {Error|TypeError} If the module, pair, marker region, lock, or write is invalid.
  */
 export async function writePairConfigAtomically({ configPath, symbol, pairConfig } = {}) {
   if (typeof configPath !== "string" || !configPath.trim()) {
@@ -36,9 +62,10 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
   const absoluteConfigPath = path.resolve(configPath)
   const lockPath = absoluteConfigPath + ".config-symbol.lock"
   const directory = path.dirname(absoluteConfigPath)
+  const configFileName = path.basename(absoluteConfigPath)
   const temporaryPath = path.join(
     directory,
-    "." + path.basename(absoluteConfigPath) + "." + randomUUID() + ".tmp",
+    "." + configFileName + "." + randomUUID() + ".tmp.mjs",
   )
 
   let lockHandle
@@ -48,7 +75,7 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
       lockHandle = await open(lockPath, "wx", 0o600)
     } catch (error) {
       if (error?.code === "EEXIST") {
-        throw new Error("Another config:symbol operation holds the configuration lock; inspect its PID/timestamp and remove a stale lock only after confirming no generator is running")
+        throw new Error("Another config:symbol operation holds the configuration lock; inspect its PID/timestamp and remove a stale lock only after confirming no generator is running", { cause: error })
       }
       throw error
     }
@@ -56,43 +83,49 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
       pid: process.pid,
       createdAt: new Date().toISOString(),
     }) + "\n", "utf8")
-    await removeStaleTemporaryFiles(directory, path.basename(absoluteConfigPath))
+    await removeStaleTemporaryFiles(directory, configFileName)
 
     let currentConfigText
     try {
       currentConfigText = await readFile(absoluteConfigPath, "utf8")
     } catch (cause) {
-      throw new Error("Unable to read Harvester config.json at " + absoluteConfigPath + ": " + cause.message, { cause })
+      throw new Error("Unable to read Harvester app config module at " + absoluteConfigPath + ": " + cause.message, { cause })
     }
 
-    let currentConfig
-    try {
-      currentConfig = JSON.parse(currentConfigText)
-    } catch (cause) {
-      throw new SyntaxError("Harvester config.json is not valid JSON: " + cause.message, { cause })
-    }
+    const currentConfig = await importAppConfig(absoluteConfigPath)
     validateAppConfig(currentConfig)
-
     const updatedConfig = addPairToAppConfig({
       appConfig: currentConfig,
       symbol,
       pairConfig,
     })
-    const serializedConfig = JSON.stringify(updatedConfig, null, 2) + "\n"
+    const updatedSource = replacePairConfiguration({
+      source: currentConfigText,
+      pairs: updatedConfig.strategies.CG_coinGrabber.pairs,
+    })
     const originalMode = (await stat(absoluteConfigPath)).mode & 0o777
 
     temporaryCreated = true
-    await writeFile(temporaryPath, serializedConfig, {
+    await writeFile(temporaryPath, updatedSource, {
       encoding: "utf8",
       flag: "wx",
       mode: originalMode,
     })
+
+    const temporaryConfig = await importAppConfig(temporaryPath)
+    validateAppConfig(temporaryConfig)
+    if (!isDeepStrictEqual(temporaryConfig, updatedConfig)) {
+      throw new Error("Generated Harvester app config module does not match the validated pair update")
+    }
+
     await rename(temporaryPath, absoluteConfigPath)
     temporaryCreated = false
     return absoluteConfigPath
   } finally {
     try {
-      if (temporaryCreated) await removeIfPresent(temporaryPath)
+      if (temporaryCreated) {
+        await removeIfPresent(temporaryPath)
+      }
     } finally {
       if (lockHandle) {
         try {

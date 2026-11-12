@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ESLint } from "eslint";
 
 import { selectChangedJavaScriptFiles } from "./check-eslint-changed.js";
 
@@ -51,5 +52,66 @@ test("selectChangedJavaScriptFiles returns sorted unique paths", () => {
     changedFiles,
     ["scripts/a.js", "scripts/z.js"],
     "Changed source paths must be deterministic and duplicate-free.",
+  );
+});
+
+
+test("ESLint rejects default ESM exports in application and package source files", async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText(
+    "export default { value: true };\n",
+    { filePath: "apps/harvester/config/example.js" },
+  );
+
+  assert.ok(
+    result.messages.some((message) => message.ruleId === "no-restricted-syntax"),
+    "A default ESM export must be rejected by the repository-wide named-export policy.",
+  );
+});
+
+test("ESLint accepts named exports under the repository export policy", async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText(
+    "export const value = true;\n",
+    { filePath: "apps/harvester/config/example.js" },
+  );
+
+  assert.equal(
+    result.errorCount,
+    0,
+    "A valid named ESM export must pass the repository export policy.",
+  );
+});
+
+test("ESLint permits the loader-required default export in its own configuration file", async () => {
+  const eslint = new ESLint();
+  const [result] = await eslint.lintText(
+    "export default [];\n",
+    { filePath: "eslint.config.js" },
+  );
+
+  assert.equal(
+    result.messages.filter((message) => message.ruleId === "no-restricted-syntax").length,
+    0,
+    "ESLint's own configuration file must retain the default export required by its config loader.",
+  );
+});
+
+
+test("the full workspace contains no ESM default exports outside the ESLint loader configuration", async () => {
+  const eslint = new ESLint();
+  const results = await eslint.lintFiles(["**/*.{js,mjs,cjs}"]);
+  const violations = results.flatMap((result) => result.messages
+    .filter((message) => message.ruleId === "no-restricted-syntax")
+    .map((message) => ({
+      filePath: result.filePath,
+      line: message.line,
+      message: message.message,
+    })));
+
+  assert.deepEqual(
+    violations,
+    [],
+    "Every workspace ESM module must use named exports; only the root ESLint loader configuration is exempt.",
   );
 });
