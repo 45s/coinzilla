@@ -156,7 +156,8 @@ export function createTelegramOperatorAdapter({
       throw new Error("Telegram API returned invalid JSON: " + method, { cause })
     }
     if (!response.ok || body?.ok !== true) {
-      const error = new Error("Telegram API " + method + " failed (HTTP " + response.status + ")")
+      const description = typeof body?.description === "string" ? body.description : undefined
+      const error = new Error("Telegram API " + method + " failed (HTTP " + response.status + ")" + (description ? ": " + description : ""))
       if (Number.isSafeInteger(body?.parameters?.retry_after) && body.parameters.retry_after > 0) {
         error.retryAfter = body.parameters.retry_after
       }
