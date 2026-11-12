@@ -292,7 +292,7 @@ function validateFactData({ factType, data, factId }) {
     const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
     requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
     requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
-    if (canonicalData.baseAssetId === canonicalData.quoteAssetId || venue !== venue.toLowerCase() || marketId !== venue + ":" + canonicalData.symbol || fillId !== marketId + ":" + tradeId || factId !== "execution-fill-applied:" + fillId) {
+    if (canonicalData.baseAssetId === canonicalData.quoteAssetId || venue !== venue.toLowerCase() || marketId !== venue + ":" + canonicalData.symbol || fillId !== marketId + ":" + tradeId || factId !== factIdForExecutionFill(fillId)) {
       throw new TypeError("Execution-fill fact identities must match its canonical market, trade and stable fact identity")
     }
     if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) throw new TypeError("Execution-fill symbol must be canonical uppercase alphanumeric")

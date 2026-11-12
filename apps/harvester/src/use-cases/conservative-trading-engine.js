@@ -164,6 +164,8 @@ export function makeConservativeTradingEngine({
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   getVolatilityData,
+  onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
   logger,
   initialState = {},
 } = {}) {
@@ -587,6 +589,8 @@ export function makeConservativeTradingEngine({
 
   const submit = makeExecuteStrategyDecision({
     broker,
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
     canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
       const marketPrice = state.prices.get(symbol)

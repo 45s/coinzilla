@@ -20,6 +20,9 @@ import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
+import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
+import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
+import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -49,6 +52,7 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
+  durableFactsStore,
 } = {}) {
   const {
     appConfig,
@@ -60,6 +64,18 @@ export async function startHarvester({
     tradingMode,
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
+  if (durableFactsStore !== undefined && typeof durableFactsStore?.append !== "function") {
+    throw new TypeError("durableFactsStore must provide append() when supplied")
+  }
+  const onDurableExecutionFill = durableFactsStore
+    ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
+    : undefined
+  const onDurableSubmissionIntent = durableFactsStore
+    ? ({ order, purpose }) => recordOrderSubmissionIntent({ durableFactsStore, order, purpose })
+    : undefined
+  const onDurableSubmissionOutcome = durableFactsStore
+    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ durableFactsStore, order, outcome, purpose })
+    : undefined
 
   let accountSnapshotManager
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
@@ -68,7 +84,7 @@ export async function startHarvester({
     }
     return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill })
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
@@ -243,6 +259,8 @@ export async function startHarvester({
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
+      onDurableSubmissionIntent,
+      onDurableSubmissionOutcome,
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
@@ -271,7 +289,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill })
 
     userDataSubscription = await subscribeToUserData({
       broker,
