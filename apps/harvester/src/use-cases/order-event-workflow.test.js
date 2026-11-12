@@ -83,6 +83,7 @@ function makeWorkflow({
     completedCycles: [],
     cancellations: [],
     evaluations: [],
+    buyExecutionPriceReads: [],
   }
   const state = {
     registry: {
@@ -138,6 +139,10 @@ function makeWorkflow({
     evaluateLatestTransition: async (input) => {
       calls.evaluations.push(input)
       return toResult({ data: {} })
+    },
+    getReconciledBuyExecutionPrice: ({ order }) => {
+      calls.buyExecutionPriceReads.push(order)
+      return "100"
     },
     isStopping: () => false,
     assertReconciledSellExecution: () => {},
@@ -232,6 +237,24 @@ test("reconciles a terminal SELL before durably completing its recovery cycle", 
   assert.equal(state.trailingBuy.get(market.symbol), true, "A completed recovery cycle must re-enable trailing BUY.")
   assert.equal(state.sellExecutionTotals.has(order.brokerOrderId), false, "Completed SELL execution totals must be reset.")
   assert.deepEqual(calls.pauses, [], "A fully reconciled and durably completed SELL must not pause the market.")
+})
+
+test("uses the reconciled weighted BUY execution price after terminal fill history", async () => {
+  const order = makeOrder({
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
+  const fill = makeFill({ quantity: "1", quoteQuantity: "100" })
+  const { workflow, state, calls } = makeWorkflow({ terminalFills: [fill] })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: { eventType: "executionReport", executedOrder: order },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(calls.buyExecutionPriceReads, [order])
+  assert.equal(state.lastBuyPrices.get(market.symbol), "100")
 })
 
 test("rejects a TRADE event without a canonical Fill before accounting", async () => {
