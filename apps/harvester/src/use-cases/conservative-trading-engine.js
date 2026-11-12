@@ -1608,6 +1608,7 @@ export function makeConservativeTradingEngine({
     resolveRecoveryManagedCancellation,
     cancelAndReconcileRecoverySells,
     evaluateLatestTransition,
+    getReconciledBuyExecutionPrice,
     assertReconciledSellExecution,
     completeRecoveryCycle,
     publishRecoveryCycleNotCompleted,
