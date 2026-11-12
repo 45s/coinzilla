@@ -82,6 +82,9 @@ export function validateAppConfig(config) {
     if (!symbol.trim()) fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")
     requireRecord(pair, pairPath)
     requireBoolean(pair.enabled, `${pairPath}.enabled`)
+    if (Object.hasOwn(pair, "enableVolatilityProtection")) {
+      requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
+    }
     requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true })
     requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true })
     requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 })
