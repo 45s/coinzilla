@@ -122,7 +122,7 @@ test("preserves fill-accounting failure classification and pauses the affected m
 test("rejects non-terminal order state before reading broker history", async () => {
   const { workflow, calls } = makeWorkflow()
 
-  const result = await workflow({ order: makeOrder({ status: "OPEN" }) })
+  const result = await workflow({ order: makeOrder({ status: "OPEN", executedQuantity: "0" }) })
 
   assert.equal(result.ok, false)
   assert.equal(result.failure.stage, "TERMINAL_ORDER_STATE")
