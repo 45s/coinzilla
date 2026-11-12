@@ -628,3 +628,11 @@ test("logs structured operator query failures without exposing diagnostics to Te
   assert.equal(sentMessages.length, 1, "The operator must receive one safe failure response for the failed query.")
   assert.doesNotMatch(sentMessages[0].text, /private internal snapshot failure/, "Telegram must not expose internal error messages or causes.")
 })
+
+
+test("parses CC-2 trading visibility commands without arguments", () => {
+  assert.deepEqual(parseTelegramOperatorCommand("/positions"), { type: "POSITIONS" })
+  assert.deepEqual(parseTelegramOperatorCommand("/orders"), { type: "ORDERS" })
+  assert.deepEqual(parseTelegramOperatorCommand("/balances"), { type: "BALANCES" })
+  assert.deepEqual(parseTelegramOperatorCommand("/orders extra"), { type: "INVALID", command: "ORDERS" })
+})

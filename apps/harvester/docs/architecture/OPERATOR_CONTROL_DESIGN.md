@@ -157,6 +157,16 @@ Both queries enforce the `trading-operator` role before reading runtime or engin
 
 A market with trading disabled is reported as `OBSERVATION_ONLY`; it is not described as trading-ready. An enabled market remains `BLOCKED` while user-data readiness is closed or any market-local blocker is active. Missing market prices/metadata are reported as unavailable, never as healthy. A failed snapshot is returned as a failed application result rather than a partial healthy response.
 
+### Trading visibility queries (CC-2)
+
+The application facade also exposes three authorized read-only queries:
+
+- `getPositions({ actor })` projects canonical Portfolio positions. Active strategy inventory and retained free inventory remain separate; invested quote and quote cash flow come from Position accounting. Per-market RecoveryLedger values expose buy cost, net sell proceeds, outstanding recovery amount and realized net profit. These are Harvester accounting projections, not a wallet-balance estimate.
+- `getOrders({ actor })` combines the engine's active canonical OrderRegistry entries with the account-wide broker open-order snapshot. Registry entries are labelled `HARVESTER`; unmatched exchange orders are labelled `EXTERNAL`. Matching uses broker order identity and client order identity. External orders are never adopted into OrderRegistry or mutated. If the account-wide open-order read fails, the query fails as a whole rather than returning a misleading partial list.
+- `getBalances({ actor })` projects the latest canonical AccountSnapshot, preserving its exchange `sourceTime` and the age measured at query time. Free and locked balances are exchange account availability, not strategy ownership; total is their exact decimal sum. Missing, malformed or future-dated snapshots fail closed.
+
+Bootstrap supplies the Portfolio, RecoveryLedger, AccountSnapshot and account-wide open-order providers. The application use case owns actor authorization, validation, immutable DTO projection and typed query failures. Telegram only parses commands and formats these DTOs. The account-wide open-order call is read-only; none of these queries can place, cancel, adopt or modify an order or change accounting state. The DTO timestamp records when the application assembled the response; balance age is separately measured from the exchange snapshot source time.
+
 ## Application result shape
 
 The application returns the repository's structured result envelope. A successful pause includes the configured market and whether it was already paused:

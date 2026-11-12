@@ -444,6 +444,10 @@ export async function startHarvester({
     await operatorControlLifecycle.start({
       engine: tradingEngine,
       getRuntimeSnapshot: getOperatorRuntimeSnapshot,
+      getPortfolio,
+      getRecoveryLedger,
+      getAccountSnapshot,
+      getOpenOrders: () => broker.getOpenOrders(),
     })
     portfolioWorkflow = createPortfolioWorkflow({
       evaluateStrategy,

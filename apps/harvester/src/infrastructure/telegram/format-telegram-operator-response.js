@@ -72,3 +72,73 @@ export function formatTelegramOperatorMarkets({ snapshot } = {}) {
   const message = lines.join("\n")
   return message.length <= 3900 ? message : message.slice(0, 3850) + "\n… additional market details omitted"
 }
+
+
+function formatObservedAt(snapshot) {
+  return "Observed: " + formatTimestamp(snapshot.observedAt)
+}
+
+export function formatTelegramOperatorPositions({ snapshot } = {}) {
+  if (!snapshot || !Array.isArray(snapshot.positions)) {
+    throw new TypeError("formatTelegramOperatorPositions requires a position snapshot")
+  }
+  const lines = ["Harvester positions"]
+  if (snapshot.positions.length === 0) { lines.push("No accounted positions.") }
+  for (const position of snapshot.positions) {
+    lines.push("")
+    lines.push(position.symbol + " — active " + position.activeQuantity + " " + position.baseAsset)
+    lines.push("Free inventory: " + position.freeQuantity + " " + position.baseAsset)
+    lines.push("Total inventory: " + position.totalQuantity + " " + position.baseAsset)
+    lines.push("Invested: " + position.investedQuote + " " + position.quoteAsset)
+    lines.push("Net quote cash flow: " + position.quoteNetCashFlow + " " + position.quoteAsset)
+    if (position.recovery) {
+      lines.push("Recovery buy cost: " + position.recovery.buyCost + " " + position.quoteAsset)
+      lines.push("Net sell proceeds: " + position.recovery.netSellProceeds + " " + position.quoteAsset)
+      lines.push("Outstanding recovery: " + position.recovery.outstandingRecoveryAmount + " " + position.quoteAsset)
+      lines.push("Realized net profit: " + position.recovery.realizedNetProfit + " " + position.quoteAsset)
+    }
+  }
+  lines.push(formatObservedAt(snapshot))
+  const message = lines.join("\n")
+  return message.length <= 3900 ? message : message.slice(0, 3850) + "\n… additional positions omitted"
+}
+
+export function formatTelegramOperatorOrders({ snapshot } = {}) {
+  if (!snapshot || !Array.isArray(snapshot.orders)) {
+    throw new TypeError("formatTelegramOperatorOrders requires an order snapshot")
+  }
+  const lines = ["Harvester orders"]
+  if (snapshot.orders.length === 0) { lines.push("No open orders reported.") }
+  for (const order of snapshot.orders) {
+    lines.push("")
+    lines.push(String(order.ownership ?? "UNKNOWN") + " " + String(order.symbol ?? "UNKNOWN") +
+      " " + String(order.side ?? "UNKNOWN") + " — " + String(order.status ?? "UNKNOWN"))
+    lines.push("Order: " + String(order.brokerOrderId ?? "unknown") +
+      " / client " + String(order.clientOrderId ?? "unknown"))
+    lines.push("Price: " + String(order.price ?? "unknown") +
+      " | quantity: " + String(order.quantity ?? "unknown") +
+      " | filled: " + String(order.executedQuantity ?? "unknown"))
+  }
+  lines.push(formatObservedAt(snapshot))
+  const message = lines.join("\n")
+  return message.length <= 3900 ? message : message.slice(0, 3850) + "\n… additional orders omitted"
+}
+
+export function formatTelegramOperatorBalances({ snapshot } = {}) {
+  if (!snapshot || !Array.isArray(snapshot.balances)) {
+    throw new TypeError("formatTelegramOperatorBalances requires a balance snapshot")
+  }
+  const lines = [
+    "Harvester exchange balances",
+    "Source: " + formatTimestamp(snapshot.sourceTime) + " (" + formatAge(snapshot.ageMs) + ")",
+  ]
+  if (snapshot.balances.length === 0) { lines.push("No balances reported.") }
+  for (const balance of snapshot.balances) {
+    lines.push(String(balance.asset ?? "UNKNOWN") + ": free " + String(balance.free ?? "unknown") +
+      " | locked " + String(balance.locked ?? "unknown") +
+      " | total " + String(balance.total ?? "unknown"))
+  }
+  lines.push(formatObservedAt(snapshot))
+  const message = lines.join("\n")
+  return message.length <= 3900 ? message : message.slice(0, 3850) + "\n… additional balances omitted"
+}
