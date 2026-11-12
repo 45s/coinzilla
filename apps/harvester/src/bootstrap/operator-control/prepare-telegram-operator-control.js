@@ -13,6 +13,7 @@ export class OperatorControlStartupError extends Error {
 
 const disabledLifecycle = Object.freeze({
   enabled: false,
+  durableFactsStore: undefined,
   async start() { return Object.freeze({ started: false, disabled: true }) },
   async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
 })

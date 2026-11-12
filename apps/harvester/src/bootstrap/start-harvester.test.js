@@ -502,7 +502,7 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
         lastCommittedDigest: "a".repeat(64),
       },
     }),
-    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } },
+    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } } },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
