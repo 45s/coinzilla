@@ -538,7 +538,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
         new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length) {
       throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
     }
-    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
     const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
     if (!isDecimalString(canonicalData.buyCost) || compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
         !isDecimalString(canonicalData.netSellProceeds) ||
@@ -634,8 +634,8 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
         new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length) {
       throw new TypeError("Recovery-cycle non-completion requires unique applied fill identities")
     }
-    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
-    const isSignedDecimalString = (value) => typeof value === "string" && /^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
+    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isSignedDecimalString = (value) => typeof value === "string" && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
     const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
     if (!isDecimalString(canonicalData.buyCost) || compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
         !isDecimalString(canonicalData.netSellProceeds) ||
