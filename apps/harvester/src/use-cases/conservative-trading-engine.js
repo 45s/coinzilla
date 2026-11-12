@@ -453,7 +453,7 @@ export function makeConservativeTradingEngine({
     if (!wasDurablyPaused && onDurableStrategyMarketPaused) {
       const durable = await onDurableStrategyMarketPaused({ symbol, reason })
       if (durable?.ok !== true || durable.data?.durable !== true) {
-        logger.error?.({
+        logger?.error?.({
           message: "strategy pause could not be committed to the durable-fact ledger",
           symbol,
           reason,
