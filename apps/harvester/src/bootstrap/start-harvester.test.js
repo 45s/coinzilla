@@ -74,7 +74,7 @@ const appConfig = {
 }
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
-  if (!quoteCode) throw new Error("Unsupported test market quote asset for " + symbol)
+  if (!quoteCode) {throw new Error("Unsupported test market quote asset for " + symbol)}
   const baseCode = symbol.slice(0, -quoteCode.length)
   const baseAsset = new Asset({ id: "asset:" + baseCode, code: baseCode })
   const quoteAsset = new Asset({ id: "asset:" + quoteCode, code: quoteCode })
@@ -415,7 +415,7 @@ test("subscribes every enabled market before waiting for the first market's REST
   const firstTicker = new Promise((resolve) => { resolveFirstTicker = resolve })
   broker.getPrices = async ({ symbol }) => {
     calls.push("prices:" + symbol)
-    if (symbol === "BTCUSDT") return firstTicker
+    if (symbol === "BTCUSDT") {return firstTicker}
     return { ok: true, data: { symbol, price: "65000" } }
   }
   let accountSnapshotTime = 0
@@ -464,7 +464,7 @@ test("subscribes every enabled market before waiting for the first market's REST
   const subscribeForPrices = broker.subscribeForPrices
   broker.subscribeForPrices = async (input) => {
     const result = await subscribeForPrices(input)
-    if (input.symbol === "ETHUSDT") resolveSecondSubscription()
+    if (input.symbol === "ETHUSDT") {resolveSecondSubscription()}
     return result
   }
 
@@ -899,7 +899,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   let accountReads = 0
   broker.getAccountSnapshot = async () => {
     accountReads += 1
-    if (accountReads === 2) return { ok: false, errors: [new Error("account endpoint unavailable")] }
+    if (accountReads === 2) {return { ok: false, errors: [new Error("account endpoint unavailable")] }}
     return getAccountSnapshot()
   }
   let acknowledgementCount = 0
@@ -1188,7 +1188,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
   let calls = 0
   broker.getAccountSnapshot = async () => {
     calls += 1
-    if (calls === 1) return getAccountSnapshot()
+    if (calls === 1) {return getAccountSnapshot()}
     return { ok: false, errors: [new Error("account endpoint unavailable")] }
   }
   const result = await startHarvesterForTest({
@@ -1355,7 +1355,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     getCandles: async () => ({ ok: true, data: [] }),
     subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     cancelOrder: async ({ order }) => {
-      if (order.side === "BUY") buyCancellationCount.value += 1
+      if (order.side === "BUY") {buyCancellationCount.value += 1}
       const canceledOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: order.brokerOrderId,
@@ -1375,7 +1375,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       return { ok: true, data: canceledOrder }
     },
     getFills: async ({ orderId } = {}) => {
-      if (recoveryPending) recoveryFillHistoryReads += 1
+      if (recoveryPending) {recoveryFillHistoryReads += 1}
       return { ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }
     },
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => {
@@ -1395,7 +1395,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
-      if (recoveryPending) recoveryAccountSnapshotReads += 1
+      if (recoveryPending) {recoveryAccountSnapshotReads += 1}
       snapshotTime += 1
       const balances = [
         new Balance({
@@ -1473,8 +1473,8 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     placeOrder: async ({ order }) => {
       calls.push({ side: order.side, price: order.price, quantity: order.quantity })
       submittedOrders.push(order)
-      if (submittedOrders.length === 3) resolveThreeOrders()
-      if (submittedOrders.length === 5) resolveFiveOrders()
+      if (submittedOrders.length === 3) {resolveThreeOrders()}
+      if (submittedOrders.length === 5) {resolveFiveOrders()}
       const acknowledgedOrder = new CanonicalOrder({
           clientOrderId: order.clientOrderId,
           brokerOrderId: "broker-" + order.clientOrderId,
@@ -1527,7 +1527,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     eventPublisher: {
       publish: (event) => {
         publishedEvents.push(event)
-        if (event.name === "recovery.cycle_completed") signalRecoveryCompleted()
+        if (event.name === "recovery.cycle_completed") {signalRecoveryCompleted()}
         return { ok: true }
       },
       flush: async () => {
@@ -2418,7 +2418,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
   const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
   broker.getOpenOrders = async ({ symbol } = {}) => {
-    if (symbol === undefined) return { ok: true, data: [] }
+    if (symbol === undefined) {return { ok: true, data: [] }}
     signalOpenOrdersStarted()
     await openOrdersGate
     return { ok: true }
@@ -2830,7 +2830,7 @@ test("blocks trading startup when either PREFLIGHT audit event cannot be durably
         publish: (event) => { events.push(event); return { ok: true } },
         flush: async () => {
           flushCount += 1
-          if (flushCount !== failedFlush) return { ok: true, durable: true }
+          if (flushCount !== failedFlush) {return { ok: true, durable: true }}
           return nonDurable
             ? { ok: true, durable: false }
             : { ok: false, errors: [new Error("journal fsync failed")] }
@@ -3067,8 +3067,8 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   } catch (error) {
     stopError = error
   }
-  if (testError) throw testError
-  if (stopError) throw stopError
+  if (testError) {throw testError}
+  if (stopError) {throw stopError}
 
   assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"), "the BUY cancellation request must complete before user-data intake is disconnected")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "user-data intake must be disconnected only after cancellation reconciliation and before broker disconnect")
@@ -3119,7 +3119,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
   broker.cancelOrder = async ({ order } = {}) => {
     cancelledBrokerOrderIds.push(order.brokerOrderId)
     const result = await cancelOrder({ order })
-    if (order.brokerOrderId === "owned-buy-1") resolveOwnedBuyCancellation(order.brokerOrderId)
+    if (order.brokerOrderId === "owned-buy-1") {resolveOwnedBuyCancellation(order.brokerOrderId)}
     return result
   }
 

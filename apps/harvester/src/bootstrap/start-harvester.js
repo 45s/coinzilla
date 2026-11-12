@@ -145,7 +145,7 @@ export async function startHarvester({
     return accountSnapshotManager.publishCommissionAssetBaseline({ assetId, assetCode })
   }
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted })
-  let recoveredState = Object.freeze({
+  const recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
@@ -235,9 +235,9 @@ export async function startHarvester({
     publishAccountSnapshot,
   } = accountSnapshotManager
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
-    if (!tradingEngine || !userDataState.ready || userDataState.stopped) return
+    if (!tradingEngine || !userDataState.ready || userDataState.stopped) {return}
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
-      if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
+      if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })}
     }).catch((error) => {
       logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
@@ -267,7 +267,7 @@ export async function startHarvester({
     while (true) {
       const queuedEvents = userDataState.eventQueue
       await queuedEvents
-      if (queuedEvents === userDataState.eventQueue) return
+      if (queuedEvents === userDataState.eventQueue) {return}
     }
   }
 
@@ -410,7 +410,7 @@ export async function startHarvester({
   }
 
   userDataState.startupComplete = true
-  if (userDataState.pendingRecovery) startUserDataRecovery()
+  if (userDataState.pendingRecovery) {startUserDataRecovery()}
 
   const stopRuntime = createShutdownHandler({
     state: userDataState,
