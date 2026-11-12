@@ -21,6 +21,7 @@
       "pairs": {
         "LINKUSDT": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
@@ -29,11 +30,11 @@
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0.075,
-          "takerPercent": 0.075,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.075
         },
         "LINKFDUSD": {
           "enabled": true,
+          "enableVolatilityProtection": true,
           "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
@@ -42,11 +43,11 @@
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0,
-          "takerPercent": 0.075,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.075
         },
         "DOGEUSDT": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 100,
           "orderQuantity": 400,
           "keepQuantity": 1,
@@ -55,11 +56,11 @@
           "pricePrecision": 5,
           "quantityPrecision": 0,
           "makerPercent": 0.1,
-          "takerPercent": 0.1,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.1
         },
         "SOLFDUSD": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 100,
           "orderQuantity": 1,
           "keepQuantity": 0.01,
@@ -68,11 +69,11 @@
           "pricePrecision": 2,
           "quantityPrecision": 3,
           "makerPercent": 0,
-          "takerPercent": 0.1,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.1
         },
         "ZROUSDT": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
@@ -81,11 +82,11 @@
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0.1,
-          "takerPercent": 0.1,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.1
         },
         "ZROFDUSD": {
           "enabled": true,
+          "enableVolatilityProtection": true,
           "investment": 120,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
@@ -94,11 +95,11 @@
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0,
-          "takerPercent": 0.1,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.1
         },
         "ADAFDUSD": {
           "enabled": false,
+          "enableVolatilityProtection": true,
           "investment": 120,
           "orderQuantity": 30,
           "keepQuantity": 0.1,
@@ -107,8 +108,7 @@
           "pricePrecision": 4,
           "quantityPrecision": 1,
           "makerPercent": 0,
-          "takerPercent": 0.075,
-          "enableVolatilityProtection": true
+          "takerPercent": 0.075
         }
       }
     }
