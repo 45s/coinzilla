@@ -169,9 +169,82 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
     throw new RangeError("Durable fact data exceeds the " + MAX_FACT_DATA_BYTES + " byte limit")
   }
   if (factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED") {
-    requireNonEmptyString({ value: canonicalData.requestId, field: "data.requestId", maxLength: MAX_FACT_ID_LENGTH })
+    const allowedFields = new Set(["requestId", "actorId", "symbol"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Operator market-control fact contains unsupported fields")
+    }
+    const requestId = requireNonEmptyString({ value: canonicalData.requestId, field: "data.requestId", maxLength: MAX_FACT_ID_LENGTH })
     requireNonEmptyString({ value: canonicalData.actorId, field: "data.actorId", maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.symbol, field: "data.symbol" })
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Operator market-control symbol must be canonical uppercase alphanumeric")
+    }
+    if (factId !== "operator-control:" + requestId) {
+      throw new TypeError("Operator market-control factId must match its stable requestId")
+    }
+  }
+  if (factType === "STRATEGY_MARKET_PAUSED" || factType === "STRATEGY_MARKET_RESUMED") {
+    const allowedFields = new Set(["symbol", "reason"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Strategy market-control fact contains unsupported fields")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Strategy market-control symbol must be canonical uppercase alphanumeric")
+    }
+    requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 256 })
+    const prefix = factType === "STRATEGY_MARKET_PAUSED" ? "strategy-market-paused:" : "strategy-market-resumed:"
+    if (!factId.startsWith(prefix) || factId.length === prefix.length) {
+      throw new TypeError("Strategy market-control factId must include its unique transition identity")
+    }
+  }
+  if (factType === "SAFETY_BLOCKER_RAISED") {
+    const allowedFields = new Set(["blockerId", "scope", "symbol", "reason", "evidenceDigest"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Safety-blocker fact contains unsupported fields")
+    }
+    if (canonicalData.scope !== "ACCOUNT" && canonicalData.scope !== "MARKET") {
+      throw new TypeError("Safety-blocker scope must be ACCOUNT or MARKET")
+    }
+    if (canonicalData.scope === "ACCOUNT" && canonicalData.symbol !== null) {
+      throw new TypeError("Account-scoped safety blockers must not name a market symbol")
+    }
+    if (canonicalData.scope === "MARKET" &&
+        (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol))) {
+      throw new TypeError("Market-scoped safety blockers require a canonical symbol")
+    }
+    const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 128 })
+    if (!/^[A-Z][A-Z0-9_]{1,127}$/.test(reason)) {
+      throw new TypeError("Safety-blocker reason must be a canonical uppercase reason code")
+    }
+    if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
+      throw new TypeError("Safety-blocker evidenceDigest must be a SHA-256 digest")
+    }
+    const expectedBlockerId = sha256([
+      canonicalData.scope,
+      canonicalData.symbol ?? "",
+      reason,
+      canonicalData.evidenceDigest,
+    ].join("\\0"))
+    if (canonicalData.blockerId !== expectedBlockerId ||
+        factId !== "safety-blocker-raised:" + expectedBlockerId) {
+      throw new TypeError("Safety-blocker identity must match its scope, reason, and immutable evidence digest")
+    }
+  }
+  if (factType === "SAFETY_BLOCKER_RESOLVED") {
+    const allowedFields = new Set(["blockerId", "resolvedBy", "resolution", "evidenceDigest"])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Safety-blocker resolution contains unsupported fields")
+    }
+    if (typeof canonicalData.blockerId !== "string" || !SHA256_PATTERN.test(canonicalData.blockerId) ||
+        factId !== "safety-blocker-resolved:" + canonicalData.blockerId) {
+      throw new TypeError("Safety-blocker resolution factId must match its blocker identity")
+    }
+    requireNonEmptyString({ value: canonicalData.resolvedBy, field: "data.resolvedBy", maxLength: MAX_FACT_ID_LENGTH })
+    if (!["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(canonicalData.resolution)) {
+      throw new TypeError("Safety-blocker resolution must identify authoritative reconciliation or operator action")
+    }
+    if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
+      throw new TypeError("Safety-blocker resolution evidenceDigest must be a SHA-256 digest")
+    }
   }
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
