@@ -1,6 +1,9 @@
 import {
   formatTelegramOperatorMarkets,
   formatTelegramOperatorStatus,
+  formatTelegramOperatorPositions,
+  formatTelegramOperatorOrders,
+  formatTelegramOperatorBalances,
 } from "./format-telegram-operator-response.js"
 
 const DEFAULT_POLL_TIMEOUT_SECONDS = 30
@@ -61,11 +64,11 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
       ? Object.freeze({ type: "HELP" })
       : Object.freeze({ type: "INVALID" })
   }
-  if (command === "/status" || command === "/markets") {
+  if (["/status", "/markets", "/positions", "/orders", "/balances"].includes(command)) {
     if (argumentsList.length !== 0) {
       return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
     }
-    return Object.freeze({ type: command === "/status" ? "STATUS" : "MARKETS" })
+    return Object.freeze({ type: ({ "/status": "STATUS", "/markets": "MARKETS", "/positions": "POSITIONS", "/orders": "ORDERS", "/balances": "BALANCES" })[command] })
   }
   if (command !== "/pause" && command !== "/resume") {return Object.freeze({ type: "UNSUPPORTED" })}
   if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
@@ -190,6 +193,9 @@ export function createTelegramOperatorAdapter({
           "/start — show this help",
           "/status — runtime readiness and blockers",
           "/markets — configured market prices, freshness and blockers",
+          "/positions — canonical active and retained inventory with recovery accounting",
+          "/orders — Harvester-owned and external open orders",
+          "/balances — latest exchange free and locked balances with snapshot age",
           "/pause SYMBOL — block new strategy BUYs for one market",
           "/resume SYMBOL — remove only the operator pause when safety permits",
           "/help — show this help",
@@ -200,8 +206,8 @@ export function createTelegramOperatorAdapter({
       })
       return
     }
-    if (parsed.type === "STATUS" || parsed.type === "MARKETS") {
-      const method = parsed.type === "STATUS" ? "getStatus" : "getMarkets"
+    if (["STATUS", "MARKETS", "POSITIONS", "ORDERS", "BALANCES"].includes(parsed.type)) {
+      const method = ({ STATUS: "getStatus", MARKETS: "getMarkets", POSITIONS: "getPositions", ORDERS: "getOrders", BALANCES: "getBalances" })[parsed.type]
       if (typeof operator[method] !== "function") {
         await sendMessage({
           chatId: message.chat.id,
@@ -236,15 +242,19 @@ export function createTelegramOperatorAdapter({
         })
         await sendMessage({
           chatId: message.chat.id,
-          text: "Unable to read the Harvester " + (parsed.type === "STATUS" ? "runtime status" : "market snapshot") +
+          text: "Unable to read the Harvester " + ({ STATUS: "runtime status", MARKETS: "market snapshot", POSITIONS: "position snapshot", ORDERS: "order snapshot", BALANCES: "balance snapshot" })[parsed.type] +
             ". No trading state was changed; check Harvester diagnostics.",
           signal,
         })
         return
       }
-      const reply = parsed.type === "STATUS"
-        ? formatTelegramOperatorStatus({ status: result.data })
-        : formatTelegramOperatorMarkets({ snapshot: result.data })
+      const reply = ({
+        STATUS: () => formatTelegramOperatorStatus({ status: result.data }),
+        MARKETS: () => formatTelegramOperatorMarkets({ snapshot: result.data }),
+        POSITIONS: () => formatTelegramOperatorPositions({ snapshot: result.data }),
+        ORDERS: () => formatTelegramOperatorOrders({ snapshot: result.data }),
+        BALANCES: () => formatTelegramOperatorBalances({ snapshot: result.data }),
+      })[parsed.type]()
       await sendMessage({ chatId: message.chat.id, text: reply, signal })
       return
     }
@@ -260,7 +270,9 @@ export function createTelegramOperatorAdapter({
     if (parsed.type === "INVALID") {
       await sendMessage({
         chatId: message.chat.id,
-        text: "Usage: /" + (parsed.command === "RESUME" ? "resume" : "pause") + " <SYMBOL>. Use /help for commands.",
+        text: parsed.command === "RESUME" || parsed.command === "PAUSE"
+          ? "Usage: /" + parsed.command.toLowerCase() + " <SYMBOL>. Use /help for commands."
+          : "Usage: /" + String(parsed.command ?? "command").toLowerCase() + " with no arguments. Use /help for commands.",
         signal,
       })
       return
