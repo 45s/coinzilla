@@ -4,12 +4,12 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-12
-**Last source-verified develop checkpoint:** `e39dc1f70a83dbaadfd39d224000ee1a2e69eeec` (merge of PR #1086, Telegram Command Center CC-2 trading visibility; ADR-0001 Step 8 durable-fact producers and offline candidate projection remain merged through PR #1055).
+**Last reviewed:** 2026-11-13
+**Last source-verified develop checkpoint:** `966141fbc1217d38f40e6e5faf84629251894a8c` (merge of PR #1088, Telegram Command Center CC-4 usability and hardening; ADR-0001 restart-recovery Steps 8–9 remain deferred).
 
 ## HIGHEST PRIORITY — Harvester Telegram Command Center
 
-- **Command Center (#1077) — active highest-priority Harvester workstream.** CC-1 and CC-2 are merged in PRs #1079, #1081 and #1086; CC-3 is delivered in PR #1087 with all eight exact-head workflows passing; CC-4 usability and hardening is in progress, including confirmed controls, inline navigation/refresh and an operator runbook; implementation and exact-head CI remain in progress. See the [Harvester roadmap](apps/harvester/ROADMAP.md) for phase scope. ADR-0001 restart-recovery Steps 8–9 remain deferred until Command Center delivery is complete. No exchange operation is part of CC.
+- **Command Center (#1077) — CC-1 through CC-4 complete.** CC-4 is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; its exact PR head passed 1,479/1,479 Harvester tests, all six required develop ruleset checks, workspace coverage and external documentation-link validation. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [operator runbook](apps/harvester/docs/operations/telegram-command-center.md). ADR-0001 restart-recovery Steps 8–9 remain deferred. No exchange operation was part of CC.
 
 ## CRITICAL — Harvester readiness and recovery
 
