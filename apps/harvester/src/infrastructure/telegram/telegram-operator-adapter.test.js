@@ -636,3 +636,183 @@ test("parses CC-2 trading visibility commands without arguments", () => {
   assert.deepEqual(parseTelegramOperatorCommand("/balances"), { type: "BALANCES" })
   assert.deepEqual(parseTelegramOperatorCommand("/orders extra"), { type: "INVALID", command: "ORDERS" })
 })
+
+
+function makeCallbackUpdate({ updateId = 500, callbackId = "callback-500", userId = 12345, chatId = 12345, messageId = 700, data = "cc:nav:status" } = {}) {
+  return {
+    update_id: updateId,
+    callback_query: {
+      id: callbackId,
+      from: { id: userId, is_bot: false },
+      message: { message_id: messageId, chat: { id: chatId, type: "private" } },
+      data,
+    },
+  }
+}
+
+test("registers the supported command menu and requests callback updates", async () => {
+  const calls = []
+  let finishPoll
+  const pollStarted = new Promise(resolve => { finishPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    calls.push({ method, payload: options.body ? JSON.parse(options.body) : {} })
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    if (method === "getUpdates") {
+      finishPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({ botToken: "test-token", allowedUserIds: ["12345"], operator: { pauseMarket: async () => ({ ok: true }) }, fetchImpl, retryDelayMs: 1 })
+  await adapter.start()
+  await pollStarted
+  await adapter.stop()
+  const menu = calls.find(call => call.method === "setMyCommands")
+  assert.ok(menu, "The adapter must register the Telegram command menu during startup.")
+  assert.ok(menu.payload.commands.some(command => command.command === "status"), "The registered menu must include read-only status.")
+  assert.ok(menu.payload.commands.some(command => command.command === "pause"), "The registered menu must include the supported pause control.")
+  const polling = calls.find(call => call.method === "getUpdates")
+  assert.deepEqual(polling.payload.allowed_updates, ["message", "callback_query"], "Long polling must receive both text commands and inline callback actions.")
+})
+
+test("requires explicit confirmation before applying a text pause command", async () => {
+  const update = makeUpdate({ updateId: 501, text: "/pause LINKUSDT" })
+  const sentMessages = []
+  const operatorCalls = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [update] }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "sendMessage") { sentMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: { message_id: 701 } }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: { pauseMarket: async request => { operatorCalls.push(request); return { ok: true, data: { symbol: request.symbol } } } },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.deepEqual(operatorCalls, [], "A text control command must not mutate operator state before explicit confirmation.")
+  assert.match(sentMessages[0].text, /Confirm pause of LINKUSDT/)
+  assert.equal(sentMessages[0].reply_markup.inline_keyboard[0][0].callback_data.startsWith("cc:confirm:"), true)
+  assert.equal(sentMessages[0].reply_markup.inline_keyboard[0][1].callback_data.startsWith("cc:cancel:"), true)
+})
+
+test("accepts an authorized one-time inline confirmation and executes the existing application use case", async () => {
+  const updates = [
+    makeUpdate({ updateId: 502, text: "/pause LINKUSDT" }),
+    makeCallbackUpdate({ updateId: 503, callbackId: "callback-503", messageId: 702, data: "cc:confirm:PAUSE:LINKUSDT:502" }),
+  ]
+  const operatorCalls = []
+  const callbackAnswers = []
+  const editedMessages = []
+  let pollCount = 0
+  let finishThirdPoll
+  const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [updates[0]] }) }
+      if (pollCount === 2) { return makeResponse({ ok: true, result: [updates[1]] }) }
+      finishThirdPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "sendMessage") { return makeResponse({ ok: true, result: { message_id: 702 } }) }
+    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "editMessageText") { editedMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: { pauseMarket: async request => { operatorCalls.push(request); return { ok: true, data: { symbol: request.symbol, alreadyPaused: false } } } },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await thirdPoll
+  await adapter.stop()
+  assert.equal(operatorCalls.length, 1, "The confirmed callback must execute exactly one operator action.")
+  assert.equal(operatorCalls[0].symbol, "LINKUSDT")
+  assert.equal(operatorCalls[0].requestId, "telegram:callback:callback-503", "The callback identity must remain stable for application-level durable idempotency.")
+  assert.equal(callbackAnswers.length, 1, "The Telegram callback must receive an acknowledgement.")
+  assert.match(editedMessages[0].text, /Paused LINKUSDT/)
+})
+
+test("rejects inline callbacks from users outside the allowlist without invoking the application", async () => {
+  const update = makeCallbackUpdate({ updateId: 504, userId: 99999, data: "cc:nav:status" })
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const calls = []
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [update] }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery") { calls.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({ botToken: "test-token", allowedUserIds: ["12345"], operator: { pauseMarket: async () => assert.fail("Unauthorized callback must not reach the operator."), getStatus: async () => assert.fail("Unauthorized callback must not read operator state.") }, fetchImpl, retryDelayMs: 1 })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(calls.length, 0, "An unauthorized callback must not be acknowledged as a valid operator action.")
+})
+
+test("renders an inline status navigation callback using the read-only application query", async () => {
+  const update = makeCallbackUpdate({ updateId: 505, data: "cc:nav:status", messageId: 705 })
+  const queries = []
+  const edits = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [update] }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
+    if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async () => assert.fail("Navigation must remain read-only."),
+      getStatus: async request => { queries.push(request); return { ok: true, data: { runtimeState: "RUNNING", tradingEnabled: false, userData: { ready: false }, readiness: { state: "TRADING_DISABLED", blockers: [] }, markets: { enabled: 1, configured: 1, blocked: 0 }, observedAt: 1700000000000 } } },
+    },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(queries.length, 1, "Inline status navigation must call only the authorized read-only query.")
+  assert.equal(queries[0].actor.id, "telegram-user:12345")
+  assert.match(edits[0].text, /Harvester status/)
+  assert.equal(edits[0].reply_markup.inline_keyboard.length > 0, true, "Rendered pages must retain safe navigation and refresh controls.")
+})

@@ -9,7 +9,7 @@
 
 ## HIGHEST PRIORITY — Harvester Telegram Command Center
 
-- **Command Center (#1077) — active highest-priority Harvester workstream.** CC-1 and CC-2 are merged in PRs #1079, #1081 and #1086; CC-3 is delivered in PR #1087 with all eight exact-head workflows passing; CC-4 usability and hardening follows. See the [Harvester roadmap](apps/harvester/ROADMAP.md) for phase scope. ADR-0001 restart-recovery Steps 8–9 remain deferred until Command Center delivery is complete. No exchange operation is part of CC.
+- **Command Center (#1077) — active highest-priority Harvester workstream.** CC-1 and CC-2 are merged in PRs #1079, #1081 and #1086; CC-3 is delivered in PR #1087 with all eight exact-head workflows passing; CC-4 usability and hardening is in progress, including confirmed controls, inline navigation/refresh and an operator runbook. See the [Harvester roadmap](apps/harvester/ROADMAP.md) for phase scope. ADR-0001 restart-recovery Steps 8–9 remain deferred until Command Center delivery is complete. No exchange operation is part of CC.
 
 ## CRITICAL — Harvester readiness and recovery
 
