@@ -81,7 +81,7 @@ const makeStore = (recordsValue) => {
         sequence: String(storedRecords.length),
         factId: fact.factId,
         factType: fact.factType,
-        runtimeSessionId: "recovery-cli-session",
+        runtimeSessionId: sessionId,
         data: fact.data,
       })
       return { ok: true, data: { durable: true, duplicate: false } }

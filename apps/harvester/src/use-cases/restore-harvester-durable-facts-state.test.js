@@ -310,7 +310,17 @@ test("replays a completed recovery cycle before later-session fills when non-pro
   )
   assert.equal(
     result.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount,
+    "0.2",
+    "Only the second cycle's BUY remains active strategy inventory after the earlier cycle completes.",
+  )
+  assert.equal(
+    result.data.portfolio.getPosition({ marketId: market.id }).freeBaseQuantity.amount,
+    "0.01",
+    "The first cycle's retained inventory remains permanently free and unavailable to strategy orders.",
+  )
+  assert.equal(
+    result.data.portfolio.getPosition({ marketId: market.id }).totalBaseQuantity.amount,
     "0.21",
-    "The retained 0.01 inventory plus the second cycle's 0.2 BUY must remain in the candidate Portfolio.",
+    "The candidate Portfolio must retain both active and free inventory across process sessions.",
   )
 })
