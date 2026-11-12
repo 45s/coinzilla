@@ -57,13 +57,14 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 The production entry point verifies the application-owned recovery-facts ledger before Journal composition or broker-capable runtime startup. Normal startup never creates a missing ledger, repairs a corrupt chain, or treats missing history as empty.
 
-For a new installation, initialize the ledger once while Harvester is stopped:
+For a new installation, initialize the ledger once while Harvester is stopped. Set `DURABLE_FACTS_DIRECTORY` to an absolute local-filesystem path; use the same value in the runtime environment. If the runtime variable is omitted, Harvester defaults to `~/.coinzilla/harvester/recovery-facts`.
 
 ```sh
+export DURABLE_FACTS_DIRECTORY="$HOME/.coinzilla/harvester/recovery-facts"
 pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize
 ```
 
-The command acquires the same broker-wide and Journal process locks as Harvester, creates the private `~/.coinzilla/harvester/recovery-facts` directory (0700) and its fact/manifest files (0600), and refuses to overwrite any existing ledger. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
+The command requires exactly `--confirm-initialize`, rejects unknown arguments and non-absolute directories, acquires the same broker-wide and Journal process locks as Harvester, creates the selected private directory (0700) and its fact/manifest files (0600), and refuses to overwrite any existing ledger. The runtime reads the same `DURABLE_FACTS_DIRECTORY` value; do not initialize one directory and run against another. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
 
 This ledger currently supports durable fact production and offline candidate projection only. Acknowledged orders remain UNKNOWN until exchange reconciliation. Any second process start is deliberately blocked after a prior PROCESS_STARTED fact—even after a clean shutdown—until the complete Step 8 reconciliation and Step 9 crash/restart proof are accepted. The first start is permitted only when the verified ledger contains no prior PROCESS_STARTED session (a pre-start configuration-baseline fact may remain after an aborted preflight). Automatic restoration and READY publication from recovered state remain disabled. The initialization command does not connect to Binance or place/cancel orders.
 
@@ -164,9 +165,9 @@ Harvester's high-volatility protection is implemented and wired into the runtime
 ## Runtime and safety
 
 - Journal is enabled by default and writes its JSONL session into the process-specific `logs/sessions/<timestamp>-<runtime-session-id>/` directory. Cumulative diagnostics live under `logs/cumulative/`. The process entrypoint requires a ready Journal and a `flush()` capability before invoking the runtime in both TESTNET and LIVE. Broker-connected trading startup must durably complete the PREFLIGHT account audit before market subscriptions; order-intent and cancellation durability barriers use the same Journal flush contract in both modes. A failed flush is retryable only when Journal status confirms an active, open writer with no recorded write failures; a poisoned writer or unclassified health state fails closed. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md).
-- Current startup creates fresh in-memory Portfolio, RecoveryLedger and OrderRegistry state; it does not replay prior Journal sessions. Do not treat a process restart after trading as reconciled or safe. Follow [#654](https://github.com/45s/coinzilla/issues/654).
+- Production `main()` verifies the application-owned ledger before Journal/runtime startup and injects it into `startHarvester`; `startHarvester` records the configuration baseline and PROCESS_STARTED boundary before broker connection. Any second process start is blocked before broker connection after a prior PROCESS_STARTED fact, whether the prior process stopped cleanly or crashed. This is a deliberate fence until Step 8 reconciliation and Step 9 crash/restart proof are accepted.
 - Pre-existing external/unowned orders are reported but are not adopted or canceled automatically.
-- `TRADING_MODE=testnet` executes on Binance Spot TESTNET; `TRADING_MODE=live` executes on Binance Spot LIVE and can submit real orders. Selecting `live` is the explicit environment choice; no separate trading-enable flag is used. The current startup path does not restore previous Portfolio, RecoveryLedger, or OrderRegistry state after a process restart (tracked in #654); do not assume restart-safe unattended operation until that work is implemented and verified.
+- `TRADING_MODE=testnet` executes on Binance Spot TESTNET; `TRADING_MODE=live` executes on Binance Spot LIVE and can submit real orders. Selecting `live` is the explicit environment choice; no separate trading-enable flag is used. Durable-fact projection and one-market candidate reconciliation remain offline-only; startup never restores previous Portfolio, RecoveryLedger, or OrderRegistry state and never publishes READY from a recovered candidate. Do not assume restart-safe unattended operation until Step 9 is accepted.
 - The process-ownership locks are described in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
 
 ## Documentation

@@ -162,9 +162,9 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–6 complete; restart restoration remains disabled pending Steps 7–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–7 complete; Step 8 is in progress; runtime restart restoration remains disabled pending Steps 8–9.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
-**Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, and a controlled startup restore. Keep the existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
+**Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, offline candidate projection/reconciliation, and a closed runtime startup gate. Runtime restoration is not enabled until Step 9 is accepted. Keep existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
 ### Delivery sequence
 
@@ -215,7 +215,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
    - [x] The operator confirmation use case gates the coverage append on a READY audit in merged [PR #1047](https://github.com/45s/coinzilla/pull/1047); no Telegram command is added as part of Step 7.
    - [x] The read-only orchestration use case composes canonical owned-order identity/status reconciliation, per-market fill history, account balances and account-wide open orders in PR #1047.
    - [x] Deterministic orchestration/confirmation tests were merged in PR #1047.
-   - [~] The offline JSON context adapter and explicit audit-only/confirmation CLI are implemented in [PR #1053](https://github.com/45s/coinzilla/pull/1053). The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on code head `837d2781492c53047b5c21345d3de8ef6b07badd`; the draft PR remains unmerged and awaits review, so Step 7 remains in progress on `develop`.
+   - [x] The offline JSON context adapter and explicit audit-only/confirmation CLI merged in [PR #1053](https://github.com/45s/coinzilla/pull/1053) at `a6dd3412b21daa85b9767164e3619ad45a4de777`. The production-audit end-to-end matrix covers READY, SKIPPED, incomplete history, mismatched market evidence, unowned-order isolation, durable-ledger failure, retry/idempotency and conflicting baseline behavior. All required CI checks passed on the merged PR head; Step 7 is complete on `develop`.
 
 8. **[~] Step 8 — Restore behind a closed readiness gate (in progress in [PR #1055](https://github.com/45s/coinzilla/pull/1055)).**
    - [x] Define and enforce canonical `ORDER_SUBMISSION_INTENT` and `ORDER_SUBMISSION_OUTCOME` payloads and add application recorders; preserve exact canonical market/order identities and decimal strings. The executor supports paired durable callbacks, removes a locally registered PENDING order when the pre-broker intent barrier fails, and blocks local acknowledgement when outcome persistence fails. `startHarvester` verifies an injected ledger before broker connection and wires order/fill producers; it never initializes a missing ledger. Production `main()` now creates and verifies the store before Journal/runtime startup, injects it into `startHarvester`, and fails closed when the ledger is absent or corrupt. Genesis remains a separate explicit one-time command.
