@@ -55,5 +55,5 @@ test("does not mutate Portfolio or RecoveryLedger when the durable fill append f
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /execution fact fsync failed/)
   assert.equal(workflow.getPortfolio().positions.length, 0)
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).appliedFillIds.length, 0)
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), undefined, "No empty recovery ledger should be published when the durable fill barrier fails.")
 })

@@ -97,3 +97,63 @@ test("rejects non-canonical fills before appending", async () => {
   assert.equal(result.ok, false)
   assert.equal(appendCalls, 0)
 })
+
+
+test("durable store rejects malformed or secret-bearing execution fill facts", async (t) => {
+  const durableFactsStore = await createStore(t)
+  const malformedFacts = [
+    { factId: "execution-fill-applied:bad", factType: "EXECUTION_FILL_APPLIED", data: {} },
+    {
+      factId: "execution-fill-applied:bad-2",
+      factType: "EXECUTION_FILL_APPLIED",
+      data: {
+        fillId: "binance:DOGEUSDT:trade-2",
+        tradeId: "trade-2",
+        brokerOrderId: "broker-2",
+        clientOrderId: null,
+        marketId: "binance:DOGEUSDT",
+        venue: "binance",
+        symbol: "DOGEUSDT",
+        baseAssetId: "binance:DOGE",
+        quoteAssetId: "binance:USDT",
+        side: "BUY",
+        price: 0.1,
+        quantity: "100",
+        quoteQuantity: "10",
+        liquidityRole: "MAKER",
+        executedAt: null,
+        commissionStatus: "COMPLETE",
+        commissions: [],
+      },
+    },
+    {
+      factId: "execution-fill-applied:bad-3",
+      factType: "EXECUTION_FILL_APPLIED",
+      data: {
+        fillId: "binance:DOGEUSDT:trade-3",
+        tradeId: "trade-3",
+        brokerOrderId: "broker-3",
+        clientOrderId: null,
+        marketId: "binance:DOGEUSDT",
+        venue: "binance",
+        symbol: "DOGEUSDT",
+        baseAssetId: "binance:DOGE",
+        quoteAssetId: "binance:USDT",
+        side: "BUY",
+        price: "0.1",
+        quantity: "100",
+        quoteQuantity: "10",
+        liquidityRole: "MAKER",
+        executedAt: null,
+        commissionStatus: "COMPLETE",
+        commissions: [],
+        apiSecret: "never persist",
+      },
+    },
+  ]
+
+  for (const fact of malformedFacts) {
+    const result = await durableFactsStore.append(fact)
+    assert.equal(result.ok, false, "Malformed or secret-bearing fill facts must fail closed.")
+  }
+})
