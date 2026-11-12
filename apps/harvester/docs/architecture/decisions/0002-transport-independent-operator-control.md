@@ -158,4 +158,5 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 - [x] Implement the offline-testable Telegram `/pause <SYMBOL>` parser, private-chat allowlist, serial Long Polling, stable update identity, retry and stop lifecycle.
 - [x] Add disabled-by-default `operatorControl.telegram` configuration validation and fail-closed bootstrap lifecycle — PR #1067. Runtime verifies the initialized ADR-0001 store before broker connection, starts the Telegram poller before trading subscriptions, and stops polling before broker shutdown.
 - [x] **Out of scope for the initial rollout:** restore operator pause state after restart or complete recovery Steps 7–9. Track this only in the separate process-restart recovery workstream; no dependency on issue #654.
-- [ ] Run exact-head required CI and review the complete diff.
+- [x] Exact-head required CI passed on PR #1067: workspace unit tests/coverage, syntax/lint, documentation links, dependency audit, actionlint, and Linux/Windows process-lock checks. The read-only Binance TESTNET integration was skipped.
+- [ ] User review and merge.
