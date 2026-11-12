@@ -139,6 +139,10 @@ function factIdForOrderIntent(clientOrderId) {
   return "order-submission-intent:" + clientOrderId
 }
 
+function factIdForOrderOutcome(clientOrderId, outcome) {
+  return "order-submission-outcome:" + clientOrderId + ":" + outcome
+}
+
 function validateFactData({ factType, data, factId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new TypeError("Durable fact data must be a plain object")
@@ -204,6 +208,73 @@ function validateFactData({ factType, data, factId }) {
     }
     if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
       throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
+    }
+  }
+  if (factType === "ORDER_SUBMISSION_OUTCOME") {
+    const allowedFields = new Set([
+      "clientOrderId",
+      "marketId",
+      "venue",
+      "symbol",
+      "baseAssetId",
+      "quoteAssetId",
+      "side",
+      "type",
+      "price",
+      "quantity",
+      "executedQuantity",
+      "purpose",
+      "outcome",
+      "brokerOrderId",
+      "status",
+    ])
+    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+      throw new TypeError("Order-submission outcome fact contains unsupported fields")
+    }
+    const clientOrderId = requireNonEmptyString({
+      value: canonicalData.clientOrderId,
+      field: "data.clientOrderId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+    requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+    requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+    if (factIdForOrderOutcome(clientOrderId, canonicalData.outcome) !== factId) {
+      throw new TypeError("Order-submission outcome factId must match its stable clientOrderId and outcome identity")
+    }
+    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+      throw new TypeError("Order-submission outcome symbol must be canonical uppercase alphanumeric")
+    }
+    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
+      throw new TypeError("Order-submission outcome side must be BUY or SELL")
+    }
+    if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") {
+      throw new TypeError("Order-submission outcome type must be LIMIT or LIMIT_MAKER")
+    }
+    const isDecimalString = (value) =>
+      typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
+    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
+    if (!isPositiveDecimalString(canonicalData.price) ||
+        !isPositiveDecimalString(canonicalData.quantity) ||
+        !isDecimalString(canonicalData.executedQuantity)) {
+      throw new TypeError("Order-submission outcome amounts must be canonical exact decimal strings")
+    }
+    if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+      throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
+    }
+    if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
+      throw new TypeError("Order-submission outcome classification is unsupported")
+    }
+    requireNonEmptyString({ value: canonicalData.status, field: "data.status", maxLength: 32 })
+    if (canonicalData.outcome === "ACKNOWLEDGED") {
+      requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+      if (canonicalData.status === "PENDING") {
+        throw new TypeError("Acknowledged order-submission outcome cannot have PENDING status")
+      }
+    } else if (canonicalData.brokerOrderId !== null || canonicalData.status !== "PENDING" ||
+        canonicalData.executedQuantity !== "0") {
+      throw new TypeError("Unacknowledged order-submission outcome must preserve a PENDING order without broker identity or execution")
     }
   }
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
