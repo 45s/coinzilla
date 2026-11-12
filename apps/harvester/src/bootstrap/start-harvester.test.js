@@ -3583,3 +3583,42 @@ test("blocks even a clean second process start until the restart-recovery gate i
   )
   assert.deepEqual(brokerCalls, [], "Even a clean prior process must not reconnect before Step 9 proves restart safety.")
 })
+
+
+test("blocks a second process start after an unclean prior session before broker connection", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const firstStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "crashed-process-session",
+  })
+  await firstStore.initialize()
+  const baseline = await recordConfigurationBaseline({ durableFactsStore: firstStore, appConfig })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const started = await recordProcessStarted({
+    durableFactsStore: firstStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+
+  const restartStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "post-crash-process-session",
+  })
+  const brokerCalls = []
+  await assert.rejects(
+    () => startHarvesterForTest({
+      appConfig,
+      durableFactsStore: restartStore,
+      brokerAdapterFactory: () => {
+        brokerCalls.push("broker-factory")
+        return createBroker(brokerCalls)
+      },
+    }),
+    /Automatic Harvester process restart is disabled/,
+  )
+  assert.deepEqual(brokerCalls, [], "An unclean prior session must not reconnect before restart-recovery proof.")
+})
