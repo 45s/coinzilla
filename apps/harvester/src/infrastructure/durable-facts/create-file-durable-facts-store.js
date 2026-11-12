@@ -548,7 +548,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       assets.add(asset)
       for (const field of ["free", "locked", "total"]) {
         const value = balance[field]
-        if (typeof value !== "string" || !/^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)) {
+        if (typeof value !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)) {
           throw new TypeError("Account snapshot " + field + " balance must be a non-negative exact decimal string")
         }
       }
@@ -599,11 +599,11 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       }
       requireNonEmptyString({ value: order.type, field: "orders[" + index + "].type", maxLength: 32 })
       if (order.price !== undefined &&
-          (typeof order.price !== "string" || !/^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(order.price) || !/[1-9]/.test(order.price))) {
+          (typeof order.price !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(order.price) || !/[1-9]/.test(order.price))) {
         throw new TypeError("Account open-order price must be a positive exact decimal string when present")
       }
-      if (typeof order.quantity !== "string" || !/^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(order.quantity) || !/[1-9]/.test(order.quantity) ||
-          typeof order.executedQuantity !== "string" || !/^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(order.executedQuantity)) {
+      if (typeof order.quantity !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(order.quantity) || !/[1-9]/.test(order.quantity) ||
+          typeof order.executedQuantity !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(order.executedQuantity)) {
         throw new TypeError("Account open-order quantities must be exact canonical decimal strings")
       }
       if (compareDecimal({ left: order.executedQuantity, right: order.quantity }) > 0) {
