@@ -1060,6 +1060,7 @@ export function createFileDurableFactsStore({
       const entries = await fileSystem.readdir(absoluteDirectory)
       if (entries.length > 0) {throw new Error("Durable-fact initialization refuses to overwrite an existing directory")}
       if (supportsPosixModeBits) {await fileSystem.chmod(absoluteDirectory, 0o700)}
+      const recordedAt = normalizeDurableFactRecordedAt(now())
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
