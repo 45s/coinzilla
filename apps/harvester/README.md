@@ -306,7 +306,7 @@ See the preserved [README historical material](./docs/audits/README_HISTORY.md).
 
 See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for PREFLIGHT/RECOVERY/CLOSING account snapshots, targeted commission baselines and balance evidence.
 
-### Compare persisted opening and closing balances
+### Compare persisted PREFLIGHT and CLOSING balances
 
 See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for account snapshot comparison and durability rules.
 
