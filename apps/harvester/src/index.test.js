@@ -1681,3 +1681,51 @@ test("fails closed before Journal or broker startup when the durable-fact ledger
     process.exitCode = previousExitCode
   }
 })
+
+
+test("uses the same absolute DURABLE_FACTS_DIRECTORY override as the genesis command", async () => {
+  const directory = path.join(os.tmpdir(), "harvester-custom-recovery-facts")
+  let receivedDirectory
+  await runMain({
+    env: { DURABLE_FACTS_DIRECTORY: directory },
+    createDurableFactsStore: (input) => {
+      receivedDirectory = input.directory
+      return { verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }
+    },
+    start: async () => ({ connected: false }),
+    logger: { info() {}, system() {}, error() {} },
+  })
+  assert.equal(receivedDirectory, directory, "Runtime verification must use the exact directory initialized by the operator.")
+})
+
+test("rejects a relative DURABLE_FACTS_DIRECTORY before Journal or broker-capable startup", async () => {
+  let storeCreated = false
+  let journalCreated = false
+  let runtimeStarted = false
+  let lockReleased = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await runMain({
+      env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { lockReleased = true; return { ok: true } },
+      }),
+      createDurableFactsStore: () => {
+        storeCreated = true
+        return { verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }
+      },
+      createJournalService: () => { journalCreated = true; return disabledJournalService() },
+      start: async () => { runtimeStarted = true; return { connected: false } },
+      logger: { info() {}, system() {}, error() {} },
+    })
+    assert.equal(storeCreated, false, "A relative path must be rejected before creating a ledger adapter.")
+    assert.equal(journalCreated, false, "Ledger path validation must precede Journal composition.")
+    assert.equal(runtimeStarted, false, "An invalid ledger path must never reach broker-capable startup.")
+    assert.equal(lockReleased, true, "A pre-runtime path validation failure must release the process lock.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
