@@ -29,7 +29,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0.075,
-          "takerPercent": 0.075
+          "takerPercent": 0.075,
+          "enableVolatilityProtection": true
         },
         "LINKFDUSD": {
           "enabled": true,
@@ -41,7 +42,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 2,
           "makerPercent": 0,
-          "takerPercent": 0.075
+          "takerPercent": 0.075,
+          "enableVolatilityProtection": true
         },
         "DOGEUSDT": {
           "enabled": false,
@@ -53,7 +55,8 @@
           "pricePrecision": 5,
           "quantityPrecision": 0,
           "makerPercent": 0.1,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "enableVolatilityProtection": true
         },
         "SOLFDUSD": {
           "enabled": false,
@@ -65,7 +68,8 @@
           "pricePrecision": 2,
           "quantityPrecision": 3,
           "makerPercent": 0,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "enableVolatilityProtection": true
         },
         "ZROUSDT": {
           "enabled": false,
@@ -77,7 +81,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0.1,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "enableVolatilityProtection": true
         },
         "ZROFDUSD": {
           "enabled": true,
@@ -89,7 +94,8 @@
           "pricePrecision": 3,
           "quantityPrecision": 1,
           "makerPercent": 0,
-          "takerPercent": 0.1
+          "takerPercent": 0.1,
+          "enableVolatilityProtection": true
         },
         "ADAFDUSD": {
           "enabled": false,
@@ -101,7 +107,8 @@
           "pricePrecision": 4,
           "quantityPrecision": 1,
           "makerPercent": 0,
-          "takerPercent": 0.075
+          "takerPercent": 0.075,
+          "enableVolatilityProtection": true
         }
       }
     }
