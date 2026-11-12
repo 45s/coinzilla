@@ -40,8 +40,7 @@ const test = (name, ...args) => nodeTest("[create-portfolio-workflow.test.js] " 
 
 test("captures the third-asset baseline before applying the fill to Portfolio and RecoveryLedger", async () => {
   const baselineCalls = []
-  let workflow
-  workflow = createPortfolioWorkflow({
+  const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
     onCommissionAsset: async (asset) => {
@@ -258,7 +257,7 @@ test("rejects non-canonical fill input without mutating Portfolio state", async 
 
 
 
-test("leaves both accounting projections unchanged when recovery ledger reset fails", () => {
+test("leaves both accounting projections unchanged when recovery ledger reset fails", async () => {
   const buyFill = createFill({
     tradeId: "recovery-reset-buy",
     quantity: "2",
@@ -301,7 +300,7 @@ test("leaves both accounting projections unchanged when recovery ledger reset fa
   const initialPortfolioValue = initialPortfolio.value
   const initialLedgerValue = failingLedger.value
 
-  const result = workflow.completeRecoveryCycle({
+  const result = await workflow.completeRecoveryCycle({
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
@@ -378,7 +377,7 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
 })
 
 
-test("logs Portfolio Stats when recovery completion changes Portfolio accounting without changing total inventory", () => {
+test("logs Portfolio Stats when recovery completion changes Portfolio accounting without changing total inventory", async () => {
   const infoLogs = []
   const buyFill = createFill({ tradeId: "stats-cycle-buy", quantity: "2", quoteQuantity: "130000" })
   const sellFill = createFill({
@@ -401,7 +400,7 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
   })
 
-  const result = workflow.completeRecoveryCycle({
+  const result = await workflow.completeRecoveryCycle({
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",

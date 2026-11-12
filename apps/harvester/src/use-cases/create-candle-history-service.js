@@ -34,7 +34,7 @@ function logSystem(logger, data) {
 function logUnavailable(logger, state, reason, error) {
   const changed = state.reason !== reason
   state.reason = reason
-  if (!changed) return
+  if (!changed) {return}
   logger.warn?.({
     message: "Volatility candle data is unavailable",
     symbol: state.symbol,
@@ -151,11 +151,11 @@ function createCandleHistoryService({
       maxAgeMs: CANDLE_STREAM_MAX_AGE_MS,
     })
     const blockers = []
-    if (!state.subscriptionReady) blockers.push("SUBSCRIPTION_FAILED")
-    if (state.reason) blockers.push(state.reason)
-    else if (state.pendingGapOpenTime !== null) blockers.push("GAP_DETECTED")
-    if (state.stopped) blockers.push("STOPPED")
-    if (!isFresh) blockers.push(state.lastEventAt === null ? "AWAITING_LIVE_DATA" : "STALE_STREAM")
+    if (!state.subscriptionReady) {blockers.push("SUBSCRIPTION_FAILED")}
+    if (state.reason) {blockers.push(state.reason)}
+    else if (state.pendingGapOpenTime !== null) {blockers.push("GAP_DETECTED")}
+    if (state.stopped) {blockers.push("STOPPED")}
+    if (!isFresh) {blockers.push(state.lastEventAt === null ? "AWAITING_LIVE_DATA" : "STALE_STREAM")}
     const reason = blockers[0] ?? null
     const isReady = blockers.length === 0 && state.metrics !== null
 
@@ -196,8 +196,8 @@ function createCandleHistoryService({
   }
 
   function failMarket({ state, reason, error, fatal = false } = {}) {
-    if (fatal && !state.fatalReason) state.fatalReason = reason
-    if (fatal) state.pendingGapOpenTime = null
+    if (fatal && !state.fatalReason) {state.fatalReason = reason}
+    if (fatal) {state.pendingGapOpenTime = null}
     state.metrics = null
     logUnavailable(logger, state, state.fatalReason ?? reason, error)
   }
@@ -281,7 +281,7 @@ function createCandleHistoryService({
         return
       }
       if (latest && validated.openTime < latest.openTime) {
-        if (validated.openTime < oldest.openTime) return
+        if (validated.openTime < oldest.openTime) {return}
         failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
         return
       }
@@ -309,7 +309,7 @@ function createCandleHistoryService({
     }
 
     if (validated.openTime < latest.openTime) {
-      if (validated.openTime < oldest.openTime) return
+      if (validated.openTime < oldest.openTime) {return}
       failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
       return
     }
@@ -325,7 +325,7 @@ function createCandleHistoryService({
   }
 
   function receiveCandle({ state, candle } = {}) {
-    if (state.stopped) return Promise.resolve()
+    if (state.stopped) {return Promise.resolve()}
     const receivedAt = now()
 
     if (!state.initialized) {
@@ -481,7 +481,7 @@ function createCandleHistoryService({
   }
 
   function start({ pairs, subscriptions = [] } = {}) {
-    if (startPromise) return startPromise
+    if (startPromise) {return startPromise}
     if (!pairs || typeof pairs !== "object" || Array.isArray(pairs)) {
       throw new TypeError("candle history service pairs must be an object")
     }
@@ -506,7 +506,7 @@ function createCandleHistoryService({
       if (enabledSymbols.some((symbol) => markets.get(symbol)?.subscriptionReady) && onSnapshot && !freshnessMonitor) {
         freshnessMonitor = setInterval(() => {
           for (const state of markets.values()) {
-            if (state.subscriptionReady && !state.stopped) notifySnapshot({ state })
+            if (state.subscriptionReady && !state.stopped) {notifySnapshot({ state })}
           }
         }, 1_000)
         freshnessMonitor.unref?.()
