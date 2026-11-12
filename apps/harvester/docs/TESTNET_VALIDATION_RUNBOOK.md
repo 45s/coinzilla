@@ -35,7 +35,7 @@ Hard operational limits for any future session (none is currently approved):
 - Pair selection is unresolved. The previous plan targeted DOGEUSDT and ZROUSDT; the current config enables only LINKFDUSD. Do not enable or disable pairs to make these documents agree without an explicit scope decision.
 - Exactly one Harvester process and one operator-controlled session.
 - At most one active Harvester-owned BUY and one active recovery SELL per pair. A replacement SELL is allowed only after the previous SELL's terminal exchange state and all actual fills/commissions are reconciled.
-- No manual orders during the run. Record and classify every pre-existing/external open order before starting.
+- No manual orders during the run. This is a controlled validation/reproducibility constraint, not the normal runtime ownership policy: manual Binance Web/CScalp orders are ignored by default, but they can still change free balances and make exchange submissions fail. Record and classify every pre-existing/external open order before starting.
 - The previous plan's 100 USDT per-pair / 200 USDT combined caps are historical only; no current TESTNET quote/base or combined limits are approved for ZROFDUSD.
 - Do not infer or modify order quantity, investment, keep quantity, or fee assumptions. Any future session requires an explicitly agreed scope and limits.
 - The previous one-cycle-per-pair target is not an active target until the pair scope is reconciled.
@@ -285,4 +285,6 @@ contracts, not TESTNET acceptance. The runbook execution gate remains
 
 ## External open-order handling
 
-External/manual open orders remain unowned and untouched. Harvester defers strategy activity only for the affected trading symbol after the account-wide open-orders audit is durably recorded; unrelated enabled symbols continue normally. Reconnect reconciliation refreshes the symbol guard from its authoritative snapshot, and a symbol becomes eligible again only after the empty/changed snapshot is durably flushed. Do not cancel, modify, or adopt external orders. This is offline source/test behavior only; it does not authorize live/TESTNET operations or process restarts.
+Account-wide open orders are always audited and remain unowned/untouched unless their identity matches an already tracked Harvester order. Manual Binance Web/CScalp orders are ignored by default for strategy eligibility. Set `externalOrdersPolicy: "block"` on a pair to restore same-symbol blocking for manual/external orders. External execution reports under the default `"ignore"` policy are diagnostic-only and are never added to Portfolio or RecoveryLedger.
+
+Harvester-generated client IDs use the reserved `h-` prefix. An unmatched open order or execution report in that namespace may belong to a previous Harvester process and remains fail-closed for its symbol regardless of the external-order policy; automatic restart restoration is still not implemented. Manual trading can consume or add exchange inventory, so Harvester's independent strategy accounting does not guarantee that Binance will have sufficient free balance for every Harvester order. This is offline source/test behavior only; it does not authorize live/TESTNET operations or process restarts.
