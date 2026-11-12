@@ -20,6 +20,13 @@ test("formats filled orders as compact profit notifications", () => {
     }),
     "✅ BUY BTC/USDT ORDER FILLED @ 65000 × 0.1\n#42",
   )
+  assert.equal(
+    formatHarvesterTelegramNotification({
+      name: "order.filled",
+      data: { side: "SELL", symbol: "BTCUSDT", price: "65000", quantity: "0.1", orderId: 43 },
+    }),
+    "💰 SELL BTC/USDT ORDER FILLED @ 65000 × 0.1\n#43",
+  )
 })
 
 test("formats execution fills and safely handles missing nested fill data", () => {
@@ -35,14 +42,14 @@ test("formats execution fills and safely handles missing nested fill data", () =
       name: "fill.received",
       data: { symbol: "LINKFDUSD", side: "BUY", fill: { price: "10.2", quantity: "2", tradeId: "buy-fill" } },
     }),
-    "✅ FILL RECEIVED · LINK/FDUSD @ 10.2 × 2\\n#buy-fill",
+    "✅ FILL RECEIVED · LINK/FDUSD @ 10.2 × 2\n#buy-fill",
   )
   assert.equal(
     formatHarvesterTelegramNotification({
       name: "fill.received",
       data: { symbol: "LINKFDUSD", side: "SELL", fill: { price: "10.3", quantity: "1.99", tradeId: "sell-fill" } },
     }),
-    "💰 FILL RECEIVED · LINK/FDUSD @ 10.3 × 1.99\\n#sell-fill",
+    "💰 FILL RECEIVED · LINK/FDUSD @ 10.3 × 1.99\n#sell-fill",
   )
   assert.match(formatHarvesterTelegramNotification({ name: "fill.received", data: {} }), /💰 FILL RECEIVED/)
   assert.match(
@@ -80,6 +87,7 @@ test("formats critical lifecycle and recovery events", () => {
     ["bot.recovery_completed", { summary: "synced" }, /✅ BOT RECOVERY COMPLETED · synced/],
     ["bot.startup_failed", { stage: "broker-connect", message: "connection refused" }, /⚠️ BOT STARTUP FAILED · broker-connect · connection refused/],
     ["account.safety_alert", { symbol: "ZROFDUSD", category: "unowned-order", message: "manual order detected" }, /⚠️ ACCOUNT SAFETY · ZRO\/FDUSD · unowned-order · manual order detected/],
+    ["account.safety_alert", { symbol: "ZROFDUSD", category: "account-open-orders-blocked", message: "audit blocked" }, /🚨 ACCOUNT SAFETY · ZRO\\/FDUSD · account-open-orders-blocked · audit blocked/],
   ]
 
   for (const [name, data, expected] of examples) {
