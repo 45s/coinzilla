@@ -217,10 +217,11 @@ test("projects cancellation outcomes in a later process session against the orig
         baseAssetId: "asset:BTC",
         quoteAssetId: "asset:USDT",
         side: "BUY",
+        reason: "TRAILING_BUY_REPRICE",
         outcome: "CANCELED",
         status: "CANCELED",
         executedQuantity: "0",
-      }, "order-cancellation-outcome:harvester-client-1:CANCELED", nextSession),
+      }, "order-cancellation-outcome:harvester-client-1:TRAILING_BUY_REPRICE:CANCELED", nextSession),
     ],
   })
 

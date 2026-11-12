@@ -540,7 +540,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
     }
     const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
     const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
-    if (!isDecimalString(canonicalData.buyCost) || canonicalData.buyCost !== canonicalData.spent ||
+    if (!isDecimalString(canonicalData.buyCost) || compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
         !isDecimalString(canonicalData.netSellProceeds) ||
         !isPositiveDecimalString(canonicalData.realizedNetProfit) ||
         !isPositiveDecimalString(canonicalData.minProfit) ||
@@ -637,7 +637,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
     const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
     const isSignedDecimalString = (value) => typeof value === "string" && /^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
     const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
-    if (!isDecimalString(canonicalData.buyCost) || canonicalData.buyCost !== canonicalData.spent ||
+    if (!isDecimalString(canonicalData.buyCost) || compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
         !isDecimalString(canonicalData.netSellProceeds) ||
         !isSignedDecimalString(canonicalData.realizedNetProfit) ||
         !isPositiveDecimalString(canonicalData.minProfit) ||

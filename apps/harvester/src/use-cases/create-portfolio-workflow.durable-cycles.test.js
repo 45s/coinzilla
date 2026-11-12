@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
@@ -29,6 +29,21 @@ const buyFill = makeFill({ tradeId: "cycle-buy", side: "BUY", price: "100", quan
 const sellFill = makeFill({ tradeId: "cycle-sell", side: "SELL", price: "210", quantity: "1", quoteQuantity: "210" })
 const initialPortfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio.applyFill({ fill: sellFill }).portfolio
 const initialLedger = RecoveryLedger.empty({ market }).applyFill({ fill: buyFill }).ledger.applyFill({ fill: sellFill }).ledger
+const sellOrder = new CanonicalOrder({
+  clientOrderId: "client-cycle-sell",
+  brokerOrderId: "broker-cycle-sell",
+  market,
+  side: "SELL",
+  type: "LIMIT",
+  limitPrice: new Money({ amount: "210", asset: quoteAsset }),
+  originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+  executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+  status: "FILLED",
+  createdAt: 1,
+  acknowledgedAt: 1,
+  updatedAt: 2,
+  completedAt: 2,
+})
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-recovery-cycle-"))
@@ -57,6 +72,7 @@ test("records a deterministic completed-cycle fact with its fill boundary and ex
     durableFactsStore,
     recoveryLedger: initialLedger,
     position,
+    sellOrder,
     completion,
     minProfit: "5",
     inventoryDisposition: null,
@@ -98,6 +114,7 @@ test("commits the cycle fact before publishing the reset Portfolio and RecoveryL
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder,
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
