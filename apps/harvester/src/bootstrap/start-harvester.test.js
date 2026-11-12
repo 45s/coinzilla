@@ -3282,7 +3282,7 @@ test("account snapshots include every configured pair asset, including disabled 
         pairs: {
           ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
-            enabled: false, investment: 100, orderQuantity: 400, keepQuantity: 1,
+            enabled: false, enableVolatilityProtection: true, investment: 100, orderQuantity: 400, keepQuantity: 1,
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
             makerPercent: 0, takerPercent: 0.1,
