@@ -26,6 +26,18 @@ function requireMarket({ marketMetadata, symbol }) {
   return market
 }
 
+function configuredMarketSymbols({ marketMetadata }) {
+  const entries = marketMetadata instanceof Map
+    ? [...marketMetadata.values()]
+    : Array.isArray(marketMetadata)
+      ? marketMetadata
+      : []
+  return [...new Set(entries.map((entry) => {
+    const market = entry instanceof Market ? entry : entry?.market
+    return market instanceof Market ? market.symbol : entry?.symbol
+  }).filter((symbol) => typeof symbol === "string" && symbol.trim()))]
+}
+
 function restoreFill({ data, market }) {
   const commissions = data.commissions.map((item) => {
     const isThirdAsset = item.assetId !== market.baseAsset.id && item.assetId !== market.quoteAsset.id
@@ -117,7 +129,7 @@ function restoreOrder({ order, market }) {
 }
 
 /**
- * Rehydrate immutable domain values from a validated Journal projection.
+ * Rehydrate immutable domain values from a validated recovery projection.
  * This function is offline and performs no broker calls or exchange mutations.
  * Every non-rejected order is restored as UNKNOWN/CANCELED and still requires
  * canonical read-only exchange reconciliation before trading can resume.
@@ -136,7 +148,11 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       throw new TypeError("Recovery projection stickySafetyBlockers must be an array")
     }
     for (const blocker of stickySafetyBlockers) {
-      if (!blocker || typeof blocker.symbol !== "string" || !blocker.symbol.trim()) {
+      const scope = blocker?.scope ?? "MARKET"
+      if (!blocker || typeof blocker.reason !== "string" || !blocker.reason.trim() ||
+          (scope === "ACCOUNT" && blocker.symbol !== null) ||
+          (scope === "MARKET" && (typeof blocker.symbol !== "string" || !blocker.symbol.trim())) ||
+          !["ACCOUNT", "MARKET"].includes(scope)) {
         throw new TypeError("Recovery projection contains an invalid sticky safety blocker")
       }
     }
@@ -249,9 +265,17 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
+    const accountScopedBlockers = stickySafetyBlockers.filter(({ scope }) => scope === "ACCOUNT")
+    const accountBlockedSymbols = accountScopedBlockers.length > 0
+      ? configuredMarketSymbols({ marketMetadata })
+      : []
+    if (accountScopedBlockers.length > 0 && accountBlockedSymbols.length === 0) {
+      throw new Error("Account-scoped safety blocker cannot be expanded without canonical configured market metadata")
+    }
     const durablePausedMarkets = new Set([
       ...data.pausedMarkets.map(({ symbol }) => symbol),
-      ...stickySafetyBlockers.map(({ symbol }) => symbol),
+      ...stickySafetyBlockers.filter(({ scope }) => scope !== "ACCOUNT").map(({ symbol }) => symbol),
+      ...accountBlockedSymbols,
       ...recoveryCycleEvaluations.filter(({ outcome }) => outcome === "BLOCKED").map(({ symbol }) => symbol),
     ])
     const pausedMarkets = new Set(durablePausedMarkets)
