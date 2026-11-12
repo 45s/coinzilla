@@ -83,16 +83,21 @@ test("passes the immutable process identity into Journal composition", async () 
     },
   }
   let observedIdentity
+  let observedRuntimeSessionId
   await runMain({
     processIdentity,
     createJournalService: (input) => {
       observedIdentity = input.processIdentity
       return disabledJournalService()
     },
-    start: async () => ({ connected: false }),
+    start: async ({ runtimeSessionId }) => {
+      observedRuntimeSessionId = runtimeSessionId
+      return { connected: false }
+    },
     logger: { info() {}, system() {}, error() {} },
   })
   assert.equal(observedIdentity, processIdentity)
+  assert.equal(observedRuntimeSessionId, processIdentity.runtimeSessionId, "The exact process session ID must reach bootstrap for durable operator-fact attribution.")
 })
 
 test("logs startup failures as one structured logger argument", async () => {

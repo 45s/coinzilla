@@ -377,6 +377,33 @@ test("verifies the existing durable-facts store before connecting when Telegram 
   assert.equal(brokerFactoryCalled, false, "Durable-facts verification must complete before connecting to Binance.")
 })
 
+test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
+  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const calls = []
+  let stopAttempts = 0
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    runtimeSessionId: "test-runtime-session",
+    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createTelegramOperatorAdapter: () => ({
+      start: async () => { throw new Error("Telegram getMe unauthorized") },
+      stop: async () => {
+        stopAttempts += 1
+        if (stopAttempts === 1) throw new Error("temporary adapter shutdown failure")
+        calls.push("telegram-stop-confirmed")
+        return { stopped: true }
+      },
+    }),
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  }), (error) => error.code === "OPERATOR_CONTROL_TELEGRAM_START_FAILED", "Telegram startup must still fail after cleanup is retried.")
+  assert.equal(stopAttempts, 2, "The outer startup rollback must retry adapter shutdown when the adapter start rollback could not confirm it.")
+  assert.ok(calls.includes("telegram-stop-confirmed"), "The retry must confirm the poller has stopped before broker cleanup completes.")
+  assert.ok(calls.includes("disconnect"), "The broker must still be disconnected after failed Telegram startup.")
+})
+
 test("requires an explicit TRADING_MODE before connecting to Binance", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({

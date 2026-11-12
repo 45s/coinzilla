@@ -14,7 +14,7 @@
 - [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
 - [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
 - [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid durable-store verification — PR #1067.
-- [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and clean up on Telegram identity failure — PR #1067.
+- [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
 - [ ] Exact-head workspace CI and final review. No Binance/TESTNET/LIVE operations are part of this work.
 
 **Out of scope:** projecting operator facts into startup state, restoring a pause after restart, and completing recovery Steps 7–9. Those remain in the separate ADR-0001 / issue #654 workstream and do not block the initial process-lifetime operator-control capability.
