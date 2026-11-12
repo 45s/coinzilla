@@ -27,7 +27,7 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock,
     createDurableFactsStore: () => ({
-      verify: async () => ({ ok: true, data: { durableWriteSupported: true } }),
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
     }),
     ...rest,
     env: { TRADING_MODE: "testnet", ...env },
@@ -1632,7 +1632,7 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
 
 test("verifies and injects the application-owned durable-fact store before Journal and runtime startup", async () => {
   const events = []
-  const store = { verify: async () => { events.push("verify"); return { ok: true, data: { durableWriteSupported: true } } } }
+  const store = { verify: async () => { events.push("verify"); return { ok: true, data: { valid: true, durableWriteSupported: true } } } }
   const processIdentity = {
     application: "harvester",
     version: "1.0.001",

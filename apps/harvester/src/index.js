@@ -204,7 +204,7 @@ export async function main({
       throw new Error("Harvester requires the application-owned durable recovery-facts store")
     }
     const durableFactsVerification = await durableFactsStore.verify()
-    if (durableFactsVerification?.ok !== true || durableFactsVerification.data?.durableWriteSupported !== true) {
+    if (durableFactsVerification?.ok !== true || durableFactsVerification.data?.valid !== true || durableFactsVerification.data?.durableWriteSupported !== true) {
       const details = durableFactsVerification?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       throw new Error(
         "Harvester requires an existing verified durable recovery-facts ledger; initialize it explicitly with pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize" +

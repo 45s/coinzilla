@@ -11,7 +11,7 @@ const disabledJournalService = () => ({
 
 const runMain = (options = {}) => {
   const { env = {}, ...rest } = options
-  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { durableWriteSupported: true } }) }), ...rest, env: { TRADING_MODE: "testnet", ...env } })
+  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }), ...rest, env: { TRADING_MODE: "testnet", ...env } })
 }
 
 test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notifications", async () => {
