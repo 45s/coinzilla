@@ -678,8 +678,8 @@ test("registers the supported command menu and requests callback updates", async
 })
 
 test("requires explicit confirmation before applying a text pause command", async () => {
-  const update = makeUpdate({ updateId: 501, text: "/pause LINKUSDT" })
-  const sentMessages = []
+  const update = makeCallbackUpdate({ updateId: 501, data: "cc:ask:PAUSE:LINKUSDT", messageId: 701 })
+  const editedMessages = []
   const operatorCalls = []
   let pollCount = 0
   let finishSecondPoll
@@ -693,7 +693,8 @@ test("requires explicit confirmation before applying a text pause command", asyn
       finishSecondPoll()
       return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
     }
-    if (method === "sendMessage") { sentMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: { message_id: 701 } }) }
+    if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
+    if (method === "editMessageText") { editedMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
     throw new Error("Unexpected Telegram API method: " + method)
   }
@@ -705,15 +706,15 @@ test("requires explicit confirmation before applying a text pause command", asyn
   await adapter.start()
   await secondPoll
   await adapter.stop()
-  assert.deepEqual(operatorCalls, [], "A text control command must not mutate operator state before explicit confirmation.")
-  assert.match(sentMessages[0].text, /Confirm pause of LINKUSDT/)
-  assert.equal(sentMessages[0].reply_markup.inline_keyboard[0][0].callback_data.startsWith("cc:confirm:"), true)
-  assert.equal(sentMessages[0].reply_markup.inline_keyboard[0][1].callback_data.startsWith("cc:cancel:"), true)
+  assert.deepEqual(operatorCalls, [], "Opening an inline control confirmation must not mutate operator state.")
+  assert.match(editedMessages[0].text, /Confirm PAUSE of LINKUSDT/)
+  assert.equal(editedMessages[0].reply_markup.inline_keyboard[0][0].callback_data.startsWith("cc:confirm:"), true)
+  assert.equal(editedMessages[0].reply_markup.inline_keyboard[0][1].callback_data.startsWith("cc:cancel:"), true)
 })
 
 test("accepts an authorized one-time inline confirmation and executes the existing application use case", async () => {
   const updates = [
-    makeUpdate({ updateId: 502, text: "/pause LINKUSDT" }),
+    makeCallbackUpdate({ updateId: 502, callbackId: "callback-502", messageId: 702, data: "cc:ask:PAUSE:LINKUSDT" }),
     makeCallbackUpdate({ updateId: 503, callbackId: "callback-503", messageId: 702, data: "cc:confirm:PAUSE:LINKUSDT:502" }),
   ]
   const operatorCalls = []
@@ -749,7 +750,7 @@ test("accepts an authorized one-time inline confirmation and executes the existi
   assert.equal(operatorCalls.length, 1, "The confirmed callback must execute exactly one operator action.")
   assert.equal(operatorCalls[0].symbol, "LINKUSDT")
   assert.equal(operatorCalls[0].requestId, "telegram:callback:callback-503", "The callback identity must remain stable for application-level durable idempotency.")
-  assert.equal(callbackAnswers.length, 1, "The Telegram callback must receive an acknowledgement.")
+  assert.equal(callbackAnswers.length, 2, "Both the request and confirmation callbacks must receive acknowledgements.")
   assert.match(editedMessages[0].text, /Paused LINKUSDT/)
 })
 

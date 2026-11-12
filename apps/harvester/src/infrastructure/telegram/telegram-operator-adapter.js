@@ -417,6 +417,7 @@ export function createTelegramOperatorAdapter({
         if (pollPromise) {await pollPromise}
         if (controller === activeController) {controller = undefined}
         pollPromise = undefined
+        pendingConfirmations.clear()
         botUsername = undefined
         offset = undefined
         return Object.freeze({ stopped: true, alreadyStopped: false })

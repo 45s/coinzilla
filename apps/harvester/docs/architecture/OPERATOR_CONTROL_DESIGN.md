@@ -242,11 +242,19 @@ The initial `/pause <SYMBOL>` adapter is the foundation, not the finished operat
 1. **CC-1 — Operator essentials:** `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, `/resume SYMBOL`; status and market queries must be read-only application snapshots with explicit readiness, blockers and freshness.
 2. **CC-2 — Trading visibility:** `/positions`, `/orders`, `/balances`; distinguish Harvester-owned orders from external/manual orders and expose accounting/source freshness.
 3. **CC-3 — Proactive alerts:** lifecycle/readiness, safety blockers, execution/recovery events and Telegram health; reuse `@coinzilla/notifiers` and never block trading transitions.
-4. **CC-4 — Usability and hardening:** command menu, safe navigation/refresh, confirmations, comprehensive transport/auth/retry/shutdown coverage and an operator runbook.
+4. **CC-4 — Usability and hardening:** Telegram command menu, authorized inline navigation/refresh, one-time confirmations for inline pause/resume controls, callback authorization/idempotency/retry/outage/shutdown coverage and an operator runbook.
 
 The adapter exposes `/start` and `/help`, routes `/resume <SYMBOL>` through the existing safe application use case, and exposes `/status` and `/markets` through the read-only query facade. Resume clears only the operator-owned pause. A safety, recovery or volatility blocker causes a refusal before durable append; the transport explains that the blocker remains active. Status/market query failures are reported as unavailable and never trigger a trading action.
 
 The initial `/pause` semantics remain unchanged: it does not cancel existing orders, and a resting order may still fill. No order-cancel, order-placement, configuration-edit, strategy-edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator pause remains process-lifetime only and is not restored after restart.
+
+## Inline Command Center interaction (CC-4)
+
+Telegram startup registers the supported text-command menu through `setMyCommands`; registration is best-effort and does not affect adapter authorization or text-command availability. Long polling explicitly requests both `message` and `callback_query` updates. Inline navigation and refresh call only the existing authorized application read queries and edit the current private-chat message; they never call broker APIs or mutate trading state.
+
+Market rows expose an inline pause or resume request according to the current read-only operator-pause snapshot. Selecting a control displays a confirmation prompt and performs no application call. The pending confirmation is bound to the allowlisted Telegram user ID, private chat ID, originating message ID, exact action and market, and expires after five minutes. A valid confirmation is consumed before dispatch and uses the callback query ID as its stable application request ID. Stale, replayed, malformed, mismatched and unauthorized callbacks do not reach operator use cases. Cancel removes the pending request without changing operator state. Telegram callback acknowledgements and message edits are transport-only; application authorization and durable-before-apply behavior remain authoritative.
+
+Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations and retain their existing stable update-derived request IDs. All other pages remain read-only. The adapter clears pending inline confirmations during shutdown.
 
 ## Failure behavior
 

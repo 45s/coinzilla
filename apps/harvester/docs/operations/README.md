@@ -21,3 +21,5 @@ Start with the procedure matching the task. Do not treat a runbook as standing a
 - Runtime startup does not restore prior Portfolio/RecoveryLedger/OrderRegistry state from Journal history or the offline ADR-0001 candidate projection. The production entry point rejects a second process session while a prior `PROCESS_STARTED` fact remains; process-restart parity and crash proof remain tracked by [#654](https://github.com/45s/coinzilla/issues/654).
 - External/unowned orders and balances are not adopted automatically.
 - Read-only tools do not authorize or imply permission to run destructive commands.
+
+- [Telegram Command Center operator runbook](telegram-command-center.md) — command menu, inline navigation, confirmed controls, authorization and troubleshooting.

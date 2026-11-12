@@ -339,3 +339,8 @@ The [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIF
 ## Operator control
 
 The transport-independent operator application, market-scoped engine pause and offline-testable Telegram adapter are implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045); disabled-by-default runtime configuration and lifecycle wiring are implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067). The only Telegram command is `/pause <SYMBOL>`. It blocks new strategy BUYs and trailing-BUY replacements for one configured market; existing exchange orders remain open and may still fill, while fill accounting and recovery SELLs continue. The pause is durable within the current process session but is not restored after restart (ADR-0003). The separate ADR-0001 startup fence blocks any second process start until recovery Steps 8–9 are accepted. See the [operator-control contract](./docs/operator-control/README.md).
+
+
+## Telegram Command Center
+
+The optional inbound operator interface, its inline navigation and control-confirmation behavior are documented in the [Telegram Command Center operator runbook](docs/operations/telegram-command-center.md). Inbound control remains disabled by default; process-lifetime operator pauses are not restored after restart.
