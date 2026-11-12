@@ -359,6 +359,7 @@ export async function startHarvester({
       completeRecoveryCycle,
       canTrade: () => userDataState.ready,
       hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+      hasUnresolvedHarvesterOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnresolvedHarvesterOpenOrdersForSymbol,
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),

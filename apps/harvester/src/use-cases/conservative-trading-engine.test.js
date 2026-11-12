@@ -63,7 +63,24 @@ const appConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onDurableCancellationIntent, onDurableCancellationOutcome, onDurableStrategyMarketPaused, initialState } = {}) {
+const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
+  ...appConfig,
+  strategies: {
+    ...appConfig.strategies,
+    CG_coinGrabber: {
+      ...appConfig.strategies.CG_coinGrabber,
+      pairs: {
+        ...appConfig.strategies.CG_coinGrabber.pairs,
+        DOGEUSDT: {
+          ...appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
+          externalOrdersPolicy,
+        },
+      },
+    },
+  },
+})
+
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, hasUnresolvedHarvesterOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onDurableCancellationIntent, onDurableCancellationOutcome, onDurableStrategyMarketPaused, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -240,6 +257,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
     broker,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
     hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: getVolatilityDataOverride,
@@ -291,8 +309,35 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
   }
 }
 
+
+
+test("ignores manual external open orders under the default per-pair policy", async () => {
+  const harness = await createHarness({
+    hasUnownedOpenOrdersForSymbol: () => true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+  assert.equal(harness.orders.length, 1, "The default ignore policy must not defer the pair because of a manual order.")
+})
+
+test("keeps unresolved Harvester-owned orders blocked regardless of the external-order policy", async () => {
+  const harness = await createHarness({
+    hasUnresolvedHarvesterOpenOrdersForSymbol: () => true,
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
+  })
+  assert.equal(result.ok, true, "A safety deferral is not an execution failure.")
+  assert.equal(harness.orders.length, 0, "An unresolved prior-process Harvester order must block new submissions.")
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+})
+
 test("defers strategy activity only for the symbol with an unowned open order", async () => {
   const sameSymbolHarness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: ({ symbol }) => symbol === "DOGEUSDT",
   })
   await sameSymbolHarness.engine.processMarketPrice({
@@ -302,6 +347,7 @@ test("defers strategy activity only for the symbol with an unowned open order", 
   assert.equal(sameSymbolHarness.orders.length, 0)
 
   const unrelatedSymbolHarness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: ({ symbol }) => symbol === "BTCUSDT",
   })
   await unrelatedSymbolHarness.engine.processMarketPrice({
@@ -314,6 +360,7 @@ test("defers strategy activity only for the symbol with an unowned open order", 
 test("rechecks external-order ownership after the durable order intent and before broker submission", async () => {
   let hasExternalOrder = false
   const harness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
     eventPublisher: {
       publish: () => ({ ok: true }),
@@ -1614,9 +1661,9 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
   assert.equal(mismatchEvent.data.fillBrokerOrderId, "different-broker-order")
 })
 
-test("publishes unowned order updates with safe canonical identifiers", async () => {
+test("ignores unmatched manual order updates by default and publishes safe diagnostics", async () => {
   const events = []
-  const { engine } = await createHarness({
+  const { engine, pauses, accountedFills } = await createHarness({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   const externalOrder = new CanonicalOrder({
@@ -1634,10 +1681,12 @@ test("publishes unowned order updates with safe canonical identifiers", async ()
     updatedAt: 1,
   })
   const result = await engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
-  assert.equal(result.ok, false)
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
+  assert.equal(result.ok, true, "An unmatched manual order report must not fail Harvester user-data processing.")
+  assert.equal(result.data.ignored, true, "The engine must explicitly classify the report as ignored.")
+  assert.deepEqual(pauses, [], "A manual order report must not pause the Harvester strategy.")
+  assert.deepEqual(accountedFills, [], "A manual order report must never enter Harvester accounting.")
   const unowned = events.find(({ name }) => name === "execution.unowned_order")
-  assert.ok(unowned)
+  assert.ok(unowned, "The manual order must remain visible as a diagnostic event.")
   assert.equal(unowned.data.clientOrderId, "external-client-order")
   assert.equal(unowned.data.brokerOrderId, "external-broker-order")
   assert.equal(unowned.data.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")

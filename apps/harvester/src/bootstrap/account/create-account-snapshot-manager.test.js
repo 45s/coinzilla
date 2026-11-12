@@ -770,3 +770,40 @@ test("durably records a Binance NEW external order without treating its client I
   assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
   assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "An observed external client ID is evidence only and does not confer ownership.")
 })
+
+
+test("separates manual external orders from unresolved prior-process Harvester orders", async () => {
+  const fixture = createFixture({
+    openOrders: [
+      {
+        id: "manual-broker-order",
+        symbol: "DOGEUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        originalPrice: "100",
+        originalQuantity: "1",
+        executedQuantity: "0",
+        status: "NEW",
+        clientOrderId: "manual-order-1",
+      },
+      {
+        id: "prior-harvester-broker-order",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        originalPrice: "100",
+        originalQuantity: "1",
+        executedQuantity: "0",
+        status: "NEW",
+        clientOrderId: "h-0123456789abcdef012345-7",
+      },
+    ],
+  })
+
+  await fixture.manager.publishOpenOrdersSnapshot()
+
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true, "Manual orders must be exposed to the configured per-pair policy.")
+  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false, "Manual orders must not be mistaken for unresolved Harvester orders.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false, "A prior-process Harvester order must not be classified as manual.")
+  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true, "A prior-process Harvester order must remain a symbol-scoped blocker.")
+})
