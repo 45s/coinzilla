@@ -73,11 +73,11 @@ export async function prepareTelegramOperatorControl({
   return Object.freeze({
     enabled: true,
     durableFactsStore: durableFacts,
-    async start({ engine } = {}) {
+    async start({ engine, getRuntimeSnapshot } = {}) {
       if (adapter) {
         return Object.freeze({ started: true, alreadyStarted: true })
       }
-      const operator = createHarvesterOperator({ engine, durableFacts })
+      const operator = createHarvesterOperator({ engine, durableFacts, getRuntimeSnapshot })
       try {
         adapter = createAdapter({ botToken, allowedUserIds: telegramConfig.allowedUserIds, operator, fetchImpl, logger })
         if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {

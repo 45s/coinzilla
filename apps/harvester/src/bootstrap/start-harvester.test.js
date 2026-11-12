@@ -3923,7 +3923,8 @@ test("reuses the process-owned durable-facts store for Telegram operator pause f
       actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
     })
     assert.equal(status.ok, true, "The process-composed operator facade must expose an authorized read-only runtime status.")
-    assert.equal(status.data.connected, true, "The runtime status must reflect the already connected broker lifecycle.")
+    assert.equal(status.data.runtimeState, "RUNNING", "The runtime status must reflect the active Harvester process lifecycle.")
+    assert.equal(status.data.broker, "binance", "The runtime status must identify the configured broker without claiming a live socket state.")
     assert.equal(typeof status.data.userData.ready, "boolean", "The runtime status must expose the live user-data readiness gate.")
     const markets = await operator.getMarkets({
       actor: { id: "telegram-user:12345", roles: ["trading-operator"] },

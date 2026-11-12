@@ -61,6 +61,7 @@ export async function startHarvester({
   createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
   telegramOperatorFetchImpl,
 } = {}) {
+  const runtimeStartedAt = now()
   const {
     appConfig,
     settings,
@@ -266,6 +267,7 @@ export async function startHarvester({
     retryableRecoveryFailure: null,
     safetyHaltRequired: false,
     status: "NOT_SUBSCRIBED",
+    lastStatusEventAt: null,
     eventQueue: Promise.resolve(),
     eventSequence: 0,
     recoveryGeneration: 0,
@@ -275,6 +277,26 @@ export async function startHarvester({
     startupComplete: false,
     pendingRecovery: false,
     intakeStopped: false,
+  }
+  const getOperatorRuntimeSnapshot = () => {
+    const observedAt = now()
+    const lastEventAt = userDataState.lastStatusEventAt
+    return Object.freeze({
+      observedAt,
+      startedAt: runtimeStartedAt,
+      runtimeState: userDataState.stopped ? "STOPPING" : "RUNNING",
+      broker: brokerName,
+      tradingEnabled,
+      tradingMode,
+      strategyMode: "conservative",
+      stopping: userDataState.stopped,
+      userData: Object.freeze({
+        ready: userDataState.ready,
+        status: userDataState.status,
+        lastEventAt,
+        ageMs: lastEventAt === null ? null : Math.max(0, observedAt - lastEventAt),
+      }),
+    })
   }
   accountSnapshotManagerRef.current = createAccountSnapshotManager({
     broker,
@@ -346,7 +368,7 @@ export async function startHarvester({
     logger,
   })
 
-  const handleUserDataStatus = createUserDataStatusHandler({
+  const handleUserDataStatusTransition = createUserDataStatusHandler({
     state: userDataState,
     isStopped: () => userDataState.stopped,
     eventPublisher,
@@ -358,6 +380,10 @@ export async function startHarvester({
     resumeDeferredStrategyEvaluations,
     onUserDataStatus,
   })
+  const handleUserDataStatus = (status = {}) => {
+    userDataState.lastStatusEventAt = now()
+    return handleUserDataStatusTransition(status)
+  }
 
   const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
   const isMarketBookFresh = (marketBook) => isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
@@ -415,7 +441,10 @@ export async function startHarvester({
     // PREFLIGHT/RECOVERY/CLOSING account audits and targeted commission
     // baselines remain independent, mandatory account-integrity boundaries.
     activateTradingEngine()
-    await operatorControlLifecycle.start({ engine: tradingEngine })
+    await operatorControlLifecycle.start({
+      engine: tradingEngine,
+      getRuntimeSnapshot: getOperatorRuntimeSnapshot,
+    })
     portfolioWorkflow = createPortfolioWorkflow({
       evaluateStrategy,
       logger,
