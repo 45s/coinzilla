@@ -1,6 +1,6 @@
 # Harvester operator control
 
-> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Runtime wiring is implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067), but inbound control remains disabled by default and must be explicitly enabled by the operator. This document is not evidence that a deployment has enabled it or that operator pause state survives a process restart.
+> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Runtime configuration and lifecycle wiring are implemented in PR #1067; inbound Telegram remains optional and disabled by default. Operator pause state is not restored after a process restart.
 
 ## Goal
 
@@ -14,8 +14,8 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the ADR-0001 durable-facts append port.
 - The use cases pass the durable append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
-- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 composes it into runtime startup/shutdown; it remains disabled unless explicitly enabled in app config.
-- The ADR-0001 file store and integrity checks already exist. Runtime bootstrap verifies the explicitly initialized store before broker connection, then the application use cases append operator facts before applying in-memory state. Runtime never initializes or repairs the store. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration validation and Telegram lifecycle composition are implemented in PR #1067 independently of recovery Steps 7–9.
+- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, one-command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
+- The ADR-0001 file store and integrity checks are verified by the process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same ledger. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
 
@@ -35,10 +35,10 @@ apps/harvester/src/
       resume-market.js
   infrastructure/
     telegram/
-      telegram-operator-adapter.js       # Telegram Bot API boundary
+      telegram-operator-adapter.js       # implemented; runtime wiring remains gated
   bootstrap/
     operator-control/
-      prepare-telegram-operator-control.js # verifies store; composes adapter lifecycle
+      prepare-telegram-operator-control.js # runtime lifecycle composition
 ```
 
 The engine remains under `src/use-cases/conservative-trading-engine.js` because it coordinates existing application workflows and serialized broker/market transitions. Domain strategy policies remain transport- and persistence-independent.
@@ -105,35 +105,6 @@ sequenceDiagram
 
 If the durable append fails or is uncertain, the engine does not mutate operator state. If the process crashes after the fact is committed but before the in-memory update, the fact remains in the durable stream but is not replayed by this initial scope. A process restart starts without the operator pause; an operator who still wants the market paused must issue the command again.
 
-### Runtime startup and shutdown
-
-The bootstrap order prevents the command adapter from running without a verified durable append path and prevents strategy subscriptions from starting before Telegram identity verification succeeds:
-
-```mermaid
-sequenceDiagram
-  participant H as Harvester bootstrap
-  participant F as ADR-0001 file store
-  participant B as Binance broker
-  participant E as Conservative engine
-  participant T as Telegram adapter
-  H->>F: verify existing initialized store (enabled only)
-  alt store invalid or missing
-    F-->>H: verification failure
-    H-->>H: abort before broker connection
-  else store verified
-    H->>B: connect and load market metadata
-    H->>E: activate engine
-    H->>T: getMe and start serial polling
-    T-->>H: authenticated and polling
-    H->>B: subscribe user-data and enabled markets
-  end
-  Note over T,E: /pause calls the application facade; durable append precedes engine state
-  H->>T: stop polling
-  H->>B: existing graceful trading shutdown
-```
-
-Stopping inbound polling first prevents new operator commands from racing with the existing broker shutdown sequence. If polling cannot be confirmed stopped, the runtime reports shutdown failure so the outer process lifecycle retains its safety lock.
-
 ## Application contracts
 
 ### Actor and request
@@ -173,7 +144,7 @@ The application writes through the ADR-0001 durable-facts port. It does not use 
 
 The durable-facts adapter must return `durable: true` only after the record and committed head satisfy ADR-0001. Exact duplicate fact identity/payload is idempotent; reuse of a fact identity with different data is an integrity failure.
 
-The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the ADR-0001 file store to this operator facade. Bootstrap verifies the initialized store before broker connection; only a successful verification permits the Telegram adapter to start. The initial process-lifetime scope deliberately does not restore operator facts before the first strategy evaluation; this limitation is explicit and is not a dependency on full recovery.
+The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the same process-owned ADR-0001 store into the operator facade; the operator must not open an independent store instance. The initial process-lifetime scope deliberately does not restore operator facts at startup; this limitation is explicit and is not a dependency on full recovery.
 
 ## Application result shape
 
@@ -216,7 +187,7 @@ Resume removes only the operator-owned pause. The engine refuses to invoke the d
 
 ## First transport: Telegram
 
-The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime composition are implemented and tested offline. Runtime startup remains disabled unless the operator explicitly enables it in configuration. Before enabling, explicitly initialize the ADR-0001 store once with `node apps/harvester/scripts/initialize-durable-facts.js --confirm` after setting an absolute `DURABLE_FACTS_DIRECTORY`; runtime only verifies and appends.
+The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime lifecycle are implemented and tested offline. Runtime control remains disabled unless explicitly enabled in app configuration.
 
 - Configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
 - Inbound control defaults disabled. Enabling it requires a non-empty list of allowed Telegram user IDs.
@@ -241,7 +212,7 @@ The target configuration is intentionally separate from outbound notification po
 }
 ```
 
-When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime validates this configuration before broker connection. When enabled, it also requires `TELEGRAM_BOT_TOKEN`, an absolute `DURABLE_FACTS_DIRECTORY`, the current runtime-session identity, and a successfully verified initialized store. Runtime does not call the store initialization operation.
+When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime configuration validation and lifecycle wiring are implemented in PR #1067; the feature remains disabled by default.
 
 The first and only Telegram command in this milestone is:
 
@@ -263,9 +234,6 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 | Existing BUY fills after pause | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
-| Enabled configuration has no token, absolute store path, runtime identity or verified durable store | Fail startup before Binance broker connection; never initialize or repair the store automatically. |
-| Telegram `getMe` identity verification fails | Abort startup, stop the partially started adapter (retry once during outer startup rollback if the first stop is unconfirmed), and disconnect the broker before market/user-data subscriptions begin. |
-| Harvester shutdown begins | Stop inbound polling before the existing broker shutdown sequence; retain the process lock if adapter shutdown cannot be confirmed. |
 
 ## TDD and delivery sequence
 
@@ -274,8 +242,8 @@ No status, resume, start/stop, order-cancel, configuration-edit or arbitrary com
 3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
 4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
-6. **Configuration/bootstrap — implemented in PR #1067:** strict disabled-by-default config validation, environment-only token, absolute initialized-store verification before broker connection, adapter startup before trading subscriptions, and poller shutdown before broker shutdown. Startup fails closed when any required dependency or Telegram identity verification is unavailable.
-7. **Verification — required on the final PR head:** focused engine/application/adapter/bootstrap tests, exact-head workspace CI and documentation-link checks. No Binance/TESTNET/LIVE operations.
+6. **Configuration/bootstrap — implemented in PR #1067:** disabled-by-default `operatorControl.telegram` validation, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
+7. **Verification — completed for the initial process-lifetime rollout in PR #1067:** the runtime/config/lifecycle integration passed its exact-head required CI and merged. The read-only TESTNET integration was skipped; no exchange operations were performed.
 
 ## References
 

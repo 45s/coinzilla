@@ -5,7 +5,6 @@ import {
   INTERVAL_MS,
   createCandle,
   createHistory,
-  createHistoryFrom,
   createFixture,
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"

@@ -21,7 +21,7 @@ const operatorPause = (overrides = {}) => ({
   ...overrides,
 })
 const canonicalize = (value) => {
-  if (Array.isArray(value)) return value.map(canonicalize)
+  if (Array.isArray(value)) {return value.map(canonicalize)}
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]))
   }
@@ -29,7 +29,7 @@ const canonicalize = (value) => {
 }
 const canonicalStringify = (value) => JSON.stringify(canonicalize(value))
 const digestRecord = (record) => {
-  const { digest, ...body } = record
+  const body = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "digest"))
   return createHash("sha256").update(canonicalStringify(body), "utf8").digest("hex")
 }
 const readLines = async (filePath) => (await readFile(filePath, "utf8")).trimEnd().split("\n")
@@ -172,9 +172,27 @@ test("preserves exact decimal strings and canonical key ordering", async (t) => 
   const store = createStore(directory)
   await store.initialize()
   const appended = await store.append({
-    factId: "execution:binance:BTCUSDT:trade-1",
+    factId: "execution-fill-applied:binance:BTCUSDT:trade-1",
     factType: "EXECUTION_FILL_APPLIED",
-    data: { quantity: "0.0100", price: "67234.50", symbol: "BTCUSDT", side: "BUY" },
+    data: {
+      fillId: "binance:BTCUSDT:trade-1",
+      tradeId: "trade-1",
+      brokerOrderId: "broker-order-1",
+      clientOrderId: null,
+      marketId: "binance:BTCUSDT",
+      venue: "binance",
+      symbol: "BTCUSDT",
+      baseAssetId: "binance:BTC",
+      quoteAssetId: "binance:USDT",
+      side: "BUY",
+      quantity: "0.0100",
+      price: "67234.50",
+      quoteQuantity: "672.345000",
+      liquidityRole: "UNKNOWN",
+      executedAt: null,
+      commissionStatus: "UNKNOWN",
+      commissions: [],
+    },
   })
   assert.equal(appended.ok, true)
   const lines = await readLines(path.join(directory, "facts.jsonl"))
@@ -529,4 +547,20 @@ test("rejects malformed market-history coverage facts", async (t) => {
     })
     assert.equal(result.ok, false, invalid.factId)
   }
+})
+
+
+test("rejects a recovery-cycle NOT_COMPLETED fact without its complete cycle and terminal SELL evidence", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+
+  const result = await store.append({
+    factId: "recovery-cycle-not-completed:invalid",
+    factType: "RECOVERY_CYCLE_NOT_COMPLETED",
+    data: { outcome: "BLOCKED" },
+  })
+
+  assert.equal(result.ok, false, "NOT_COMPLETED facts must validate the full cycle boundary and exact terminal SELL identity.")
 })

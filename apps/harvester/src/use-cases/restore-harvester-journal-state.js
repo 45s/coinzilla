@@ -26,6 +26,18 @@ function requireMarket({ marketMetadata, symbol }) {
   return market
 }
 
+function configuredMarketSymbols({ marketMetadata }) {
+  const entries = marketMetadata instanceof Map
+    ? [...marketMetadata.values()]
+    : Array.isArray(marketMetadata)
+      ? marketMetadata
+      : []
+  return [...new Set(entries.map((entry) => {
+    const market = entry instanceof Market ? entry : entry?.market
+    return market instanceof Market ? market.symbol : entry?.symbol
+  }).filter((symbol) => typeof symbol === "string" && symbol.trim()))]
+}
+
 function restoreFill({ data, market }) {
   const commissions = data.commissions.map((item) => {
     const isThirdAsset = item.assetId !== market.baseAsset.id && item.assetId !== market.quoteAsset.id
@@ -117,7 +129,7 @@ function restoreOrder({ order, market }) {
 }
 
 /**
- * Rehydrate immutable domain values from a validated Journal projection.
+ * Rehydrate immutable domain values from a validated recovery projection.
  * This function is offline and performs no broker calls or exchange mutations.
  * Every non-rejected order is restored as UNKNOWN/CANCELED and still requires
  * canonical read-only exchange reconciliation before trading can resume.
@@ -129,14 +141,18 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     }
     const data = projection.data
     for (const field of ["orders", "fills", "recoveryCycles", "pausedMarkets"]) {
-      if (!Array.isArray(data[field])) throw new TypeError("Recovery projection " + field + " must be an array")
+      if (!Array.isArray(data[field])) { throw new TypeError("Recovery projection " + field + " must be an array") }
     }
     const stickySafetyBlockers = data.stickySafetyBlockers ?? []
     if (!Array.isArray(stickySafetyBlockers)) {
       throw new TypeError("Recovery projection stickySafetyBlockers must be an array")
     }
     for (const blocker of stickySafetyBlockers) {
-      if (!blocker || typeof blocker.symbol !== "string" || !blocker.symbol.trim()) {
+      const scope = blocker?.scope ?? "MARKET"
+      if (!blocker || typeof blocker.reason !== "string" || !blocker.reason.trim() ||
+          (scope === "ACCOUNT" && blocker.symbol !== null) ||
+          (scope === "MARKET" && (typeof blocker.symbol !== "string" || !blocker.symbol.trim())) ||
+          !["ACCOUNT", "MARKET"].includes(scope)) {
         throw new TypeError("Recovery projection contains an invalid sticky safety blocker")
       }
     }
@@ -185,10 +201,10 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         const fill = restoreFill({ data: item, market })
         const recoveryLedger = recoveryLedgers.get(market.id) ?? RecoveryLedger.empty({ market })
         const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
-        if (!result.ok) throw result.errors?.[0] ?? new Error("Unable to replay recovered fill " + fill.id)
+        if (!result.ok) { throw result.errors?.[0] ?? new Error("Unable to replay recovered fill " + fill.id) }
         portfolio = result.data.portfolio
         recoveryLedgers.set(market.id, result.data.recoveryLedger)
-        if (fill.side === "BUY") trailingBuySequenceBySymbol.set(item.symbol, event.sequence)
+        if (fill.side === "BUY") { trailingBuySequenceBySymbol.set(item.symbol, event.sequence) }
         continue
       }
 
@@ -249,14 +265,22 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
+    const accountScopedBlockers = stickySafetyBlockers.filter(({ scope }) => scope === "ACCOUNT")
+    const accountBlockedSymbols = accountScopedBlockers.length > 0
+      ? configuredMarketSymbols({ marketMetadata })
+      : []
+    if (accountScopedBlockers.length > 0 && accountBlockedSymbols.length === 0) {
+      throw new Error("Account-scoped safety blocker cannot be expanded without canonical configured market metadata")
+    }
     const durablePausedMarkets = new Set([
       ...data.pausedMarkets.map(({ symbol }) => symbol),
-      ...stickySafetyBlockers.map(({ symbol }) => symbol),
+      ...stickySafetyBlockers.filter(({ scope }) => scope !== "ACCOUNT").map(({ symbol }) => symbol),
+      ...accountBlockedSymbols,
       ...recoveryCycleEvaluations.filter(({ outcome }) => outcome === "BLOCKED").map(({ symbol }) => symbol),
     ])
     const pausedMarkets = new Set(durablePausedMarkets)
     for (const order of data.orders) {
-      if (order.submissionOutcome === "REJECTED") continue
+      if (order.submissionOutcome === "REJECTED") { continue }
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
       restoredOrders.push(restoreOrder({ order, market }))
       if (order.cancellationState === "NONE") {
@@ -329,6 +353,10 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         journalFills: Object.freeze([...data.fills]),
         stickySafetyBlockers: Object.freeze([...stickySafetyBlockers]),
         recoveryCycleEvaluations: Object.freeze([...recoveryCycleEvaluations]),
+        accountSnapshots: Object.freeze([...(data.accountSnapshots ?? [])]),
+        openOrderSnapshots: Object.freeze([...(data.openOrderSnapshots ?? [])]),
+        sessions: Object.freeze([...(data.sessions ?? [])]),
+        marketHistoryCoverage: Object.freeze([...(data.marketHistoryCoverage ?? [])]),
         pausedMarkets,
         durablePausedMarkets,
         recoveryManagedPausedMarkets,

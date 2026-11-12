@@ -1,10 +1,11 @@
 const MAX_FIELD_LENGTH = 320
 
 function text(value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH) {
-  if (typeof value !== "string" && typeof value !== "number") return fallback
-  if (typeof value === "number" && !Number.isFinite(value)) return fallback
+  if (typeof value !== "string" && typeof value !== "number") {return fallback}
+  if (typeof value === "number" && !Number.isFinite(value)) {return fallback}
 
   const normalized = String(value)
+    // eslint-disable-next-line no-control-regex -- remove untrusted control characters before Telegram formatting.
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -17,7 +18,7 @@ const QUOTE_ASSETS = ["FDUSD", "USDT", "USDC", "BUSD", "TUSD", "BTC", "ETH", "BN
 
 function symbol(value) {
   const normalized = text(value, "n/a", 64).toUpperCase()
-  if (normalized.includes("/")) return normalized
+  if (normalized.includes("/")) {return normalized}
 
   const quote = QUOTE_ASSETS.find((asset) => normalized.length > asset.length && normalized.endsWith(asset))
   const base = quote ? normalized.slice(0, -quote.length) : ""
@@ -98,7 +99,7 @@ export function formatHarvesterTelegramNotification(event) {
   if (typeof event.name !== "string") {
     throw new TypeError("event.name must be a string")
   }
-  if (!Object.hasOwn(formatters, event.name)) return null
+  if (!Object.hasOwn(formatters, event.name)) {return null}
 
   const data = event.data && typeof event.data === "object" && !Array.isArray(event.data)
     ? event.data

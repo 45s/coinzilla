@@ -65,7 +65,7 @@ function createBroker({
   let priceHandler
   return {
     connect: async () => {
-      if (connectError) throw connectError
+      if (connectError) {throw connectError}
     },
     disconnect: async () => {},
     placeOrder: async () => ({ ok: true }),
@@ -94,7 +94,7 @@ function createBroker({
     subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForUserData: async (input) => {
       handlers = input
-      if (userDataError) throw userDataError
+      if (userDataError) {throw userDataError}
       return userDataResult ?? {
         ok: true,
         data: {
@@ -116,7 +116,7 @@ function createBroker({
     subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice }) => {
       priceHandler = onPrice
-      if (priceError) throw priceError
+      if (priceError) {throw priceError}
       return priceResult ?? {
         ok: true,
         data: { unsubscribe: async () => {} },

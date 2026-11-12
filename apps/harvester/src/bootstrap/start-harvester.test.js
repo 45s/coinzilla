@@ -1,8 +1,15 @@
 import nodeTest from "node:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
+import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
+import { recordProcessStarted } from "../use-cases/record-process-started.js"
+import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
@@ -67,6 +74,22 @@ const appConfig = {
     },
   },
 }
+const withExternalOrdersPolicy = (symbol, externalOrdersPolicy) => ({
+  ...appConfig,
+  strategies: {
+    ...appConfig.strategies,
+    CG_coinGrabber: {
+      ...appConfig.strategies.CG_coinGrabber,
+      pairs: {
+        ...appConfig.strategies.CG_coinGrabber.pairs,
+        [symbol]: {
+          ...appConfig.strategies.CG_coinGrabber.pairs[symbol],
+          externalOrdersPolicy,
+        },
+      },
+    },
+  },
+})
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
   if (!quoteCode) {throw new Error("Unsupported test market quote asset for " + symbol)}
@@ -386,7 +409,20 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createDurableFactsStore: () => ({
+      runtimeSessionId: "test-runtime-session",
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      readAll: async () => ({
+        ok: true,
+        data: {
+          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          durableWriteSupported: true,
+          lastCommittedSequence: "0",
+          lastCommittedDigest: "a".repeat(64),
+        },
+      }),
+      append: async () => ({ ok: true, data: { durable: true } }),
+    }),
     createTelegramOperatorAdapter: () => ({
       start: async () => { throw new Error("Telegram getMe unauthorized") },
       stop: async () => {
@@ -455,8 +491,29 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
   broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
   const durableFacts = {
+    runtimeSessionId: "test-runtime-session",
     verify: async () => { calls.push("verify-durable-facts"); return { ok: true, data: { valid: true, durableWriteSupported: true } } },
-    append: async (fact) => { calls.push("append-operator-fact"); appendedFacts.push(fact); return { ok: true, data: { durable: true, duplicate: false } } },
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [
+          { sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } },
+          ...appendedFacts,
+        ],
+        durableWriteSupported: true,
+        lastCommittedSequence: String(appendedFacts.length),
+        lastCommittedDigest: "a".repeat(64),
+      },
+    }),
+    append: async (fact) => {
+      calls.push(fact.factType === "OPERATOR_MARKET_PAUSED" || fact.factType === "OPERATOR_MARKET_RESUMED" ? "append-operator-fact" : "append-process-fact")
+      appendedFacts.push({
+        ...fact,
+        sequence: String(appendedFacts.length + 1),
+        runtimeSessionId: "test-runtime-session",
+      })
+      return { ok: true, data: { durable: true, duplicate: false } }
+    },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
@@ -483,9 +540,9 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
     const pauseResult = await operator.pauseMarket({ actor: { id: "telegram-user:12345", roles: ["trading-operator"] }, requestId: "telegram:9001", symbol: "BTCUSDT" })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
-    assert.equal(appendedFacts.length, 1, "A successful operator pause must append exactly one durable fact.")
-    assert.equal(appendedFacts[0].factType, "OPERATOR_MARKET_PAUSED", "The operator facade must persist the existing ADR-0001 pause fact type.")
-    assert.equal(appendedFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
+    const operatorPauseFacts = appendedFacts.filter(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
+    assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one durable fact.")
+    assert.equal(operatorPauseFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
     assert.ok(calls.indexOf("append-operator-fact") > calls.indexOf("start-telegram-poller"), "A pause fact is appended only after the adapter is running and a request is received.")
     assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
     assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
@@ -501,7 +558,20 @@ test("stops Telegram and broker when Telegram identity verification fails during
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }), append: async () => ({ ok: true, data: { durable: true } }) }),
+    createDurableFactsStore: () => ({
+      runtimeSessionId: "test-runtime-session",
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      readAll: async () => ({
+        ok: true,
+        data: {
+          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          durableWriteSupported: true,
+          lastCommittedSequence: "0",
+          lastCommittedDigest: "a".repeat(64),
+        },
+      }),
+      append: async () => ({ ok: true, data: { durable: true } }),
+    }),
     createTelegramOperatorAdapter: () => ({ start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") }, stop: async () => calls.push("stop-telegram-poller") }),
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
@@ -2331,18 +2401,21 @@ test("stops broker intake before draining queued user-data and disconnects after
 })
 
 
-test("records unmatched manual order reports as diagnostics without closing user-data readiness", async () => {
+test("logs safe correlation details when an execution report is not owned", async () => {
   const broker = createBroker()
-  const events = []
+  const errors = []
   const result = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
-    brokerAdapterFactory: () => broker,
-    eventPublisher: {
-      publish: (event) => { events.push(event); return { ok: true } },
-      flush: async () => ({ ok: true, durable: true }),
+    loadConfig: async () => withExternalOrdersPolicy("BTCUSDT", "block"),
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
     },
-    logger: { info() {}, debug() {}, error() {} },
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      debug() {},
+      error: (entry) => errors.push(entry),
+    },
   })
   const metadata = createMarketMetadata("BTCUSDT")
   const externalOrder = new CanonicalOrder({
@@ -2368,15 +2441,36 @@ test("records unmatched manual order reports as diagnostics without closing user
   })
   await new Promise((resolve) => setImmediate(resolve))
 
-  const diagnostic = events.find((event) => event.name === "execution.unowned_order")
-  assert.ok(diagnostic, "The external order must remain visible in the diagnostic event stream.")
-  assert.equal(diagnostic.data.clientOrderId, "external-client-id")
-  assert.equal(diagnostic.data.brokerOrderId, "987654")
-  assert.equal(result.userDataReady, true, "A manual order report must not close Harvester's user-data readiness gate.")
-  assert.equal(result.userDataStatus, "READY")
+  const diagnostic = errors.find((entry) =>
+    entry.message === "rejected an unowned or invalid order event")
+  assert.ok(diagnostic)
+  assert.equal(diagnostic.symbol, "BTCUSDT")
+  assert.equal(diagnostic.brokerOrderId, "987654")
+  assert.equal(diagnostic.clientOrderId, "external-client-id")
+  assert.equal(diagnostic.side, "BUY")
+  assert.equal(diagnostic.executionType, "NEW")
+  assert.equal(diagnostic.orderStatus, "OPEN")
+  assert.equal(diagnostic.executionId, 123456)
+  assert.equal(diagnostic.registryMatchedByClientOrderId, false)
+  assert.equal(diagnostic.registryMatchedByBrokerOrderId, false)
+  assert.equal(diagnostic.clientIdMatchStatus, undefined)
+  assert.ok(Array.isArray(diagnostic.errors))
 
-  await result.stop()
+  await assert.rejects(
+    result.stop(),
+    (error) => {
+      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
+      assert.ok(
+        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
+        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
+      )
+      return true
+    },
+    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
+  )
 })
+
+
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
   const broker = createBroker()
   let acknowledgementCount = 0
@@ -3236,13 +3330,22 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
 })
 
 
-test("does not cancel Harvester BUY orders or close the accounting gate after a manual external fill", async () => {
+test("cancels acknowledged Harvester BUY orders across markets after an unowned external execution closes the global accounting gate", async () => {
   const calls = []
   const broker = createBroker(calls)
   const cancelledBrokerOrderIds = []
   let resolveOwnedBuyAcknowledged
   const ownedBuyAcknowledged = new Promise((resolve) => {
     resolveOwnedBuyAcknowledged = resolve
+  })
+  let resolveOwnedBuyCancellation
+  const ownedBuyCancellation = new Promise((resolve) => {
+    resolveOwnedBuyCancellation = resolve
+  })
+
+  broker.getPrices = async ({ symbol } = {}) => ({
+    ok: true,
+    data: { symbol, price: "6500" },
   })
   broker.placeOrder = async ({ order } = {}) => {
     const metadata = createMarketMetadata(order.symbol)
@@ -3270,13 +3373,11 @@ test("does not cancel Harvester BUY orders or close the accounting gate after a 
   const cancelOrder = broker.cancelOrder
   broker.cancelOrder = async ({ order } = {}) => {
     cancelledBrokerOrderIds.push(order.brokerOrderId)
-    return cancelOrder({ order })
+    const result = await cancelOrder({ order })
+    if (order.brokerOrderId === "owned-buy-1") {resolveOwnedBuyCancellation(order.brokerOrderId)}
+    return result
   }
 
-  broker.getPrices = async ({ symbol } = {}) => ({
-    ok: true,
-    data: { symbol, price: "6500" },
-  })
   makeVolatilityReadyBroker(broker, ["BTCUSDT", "ETHUSDT"])
   const appConfigWithRegularLimitBuys = {
     ...appConfig,
@@ -3286,6 +3387,10 @@ test("does not cancel Harvester BUY orders or close the accounting gate after a 
         ...appConfig.strategies.CG_coinGrabber,
         pairs: {
           ...appConfig.strategies.CG_coinGrabber.pairs,
+          ETHUSDT: {
+            ...appConfig.strategies.CG_coinGrabber.pairs.ETHUSDT,
+            externalOrdersPolicy: "block",
+          },
           BTCUSDT: {
             ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
             makerPercent: 0.1,
@@ -3295,13 +3400,19 @@ test("does not cancel Harvester BUY orders or close the accounting gate after a 
       },
     },
   }
-  const events = []
+  const journalEvents = []
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfigWithRegularLimitBuys,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
-      publish: (event) => { events.push(event); return { ok: true } },
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
       flush: async () => ({ ok: true, durable: true }),
     },
     onUserDataEvent: ({ event } = {}) => {
@@ -3312,19 +3423,28 @@ test("does not cancel Harvester BUY orders or close the accounting gate after a 
     logger: { info() {}, debug() {}, error() {} },
   })
 
+  // The initial REST ticker seed arrives before candle warm-up. Submit a fresh
+  // price after the market's volatility snapshot becomes ready to exercise the
+  // ownership-failure cancellation path rather than bypassing the safety gate.
   await broker.emitPrice("BTCUSDT", {
     symbol: "BTCUSDT",
     price: "65000",
     timestamp: Date.now(),
   })
+
   await waitForTestSignal(
     ownedBuyAcknowledged,
-    "acknowledged Harvester BUY before the manual external fill",
+    "acknowledged Harvester BUY before the ownership failure",
     () => ({ calls, userDataStatus: result.userDataStatus }),
     2_000,
   )
+  assert.deepEqual(
+    (await broker.getOpenOrders({})).data.map((order) => order.id),
+    ["owned-buy-1"],
+    "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
+  )
 
-  const metadata = createMarketMetadata("ZROUSDT")
+  const metadata = createMarketMetadata("ETHUSDT")
   const externalOrder = new CanonicalOrder({
     clientOrderId: "external-client-id",
     brokerOrderId: "987654",
@@ -3360,20 +3480,58 @@ test("does not cancel Harvester BUY orders or close the accounting gate after a 
     executedOrder: externalOrder,
     fill: externalFill,
   })
-  await new Promise((resolve) => setImmediate(resolve))
 
-  assert.deepEqual(cancelledBrokerOrderIds, [], "A manual external fill must not cancel a Harvester-owned BUY.")
-  assert.equal(result.userDataReady, true, "Manual external fills must not close the global user-data/accounting gate.")
-  assert.equal(result.userDataStatus, "READY")
-  assert.ok(events.some((event) => event.name === "execution.unowned_order"))
-  assert.deepEqual(
-    (await broker.getOpenOrders({})).data.map((order) => order.id),
-    ["owned-buy-1"],
-    "The Harvester-owned BUY must remain untouched while the manual order is ignored.",
+  await waitForTestSignal(
+    ownedBuyCancellation,
+    "safety cancellation of the acknowledged Harvester BUY",
+    () => ({
+      cancelledBrokerOrderIds,
+      userDataStatus: result.userDataStatus,
+      userDataReady: result.userDataReady,
+    }),
+    2_000,
   )
 
-  await result.stop()
+  assert.deepEqual(
+    cancelledBrokerOrderIds,
+    ["owned-buy-1"],
+    "an account-integrity failure must cancel the Harvester-owned BUY without ever canceling the unowned external order",
+  )
+  assert.equal(
+    result.userDataReady,
+    false,
+    "canceling resting BUY exposure must not reopen trading while execution ownership/accounting remains unsafe",
+  )
+  assert.equal(
+    result.userDataStatus,
+    "EXECUTION_ACCOUNTING_FAILED",
+    "the original execution-accounting failure must remain visible after safety cancellation",
+  )
+  assert.equal(
+    (await broker.getOpenOrders({})).data.length,
+    0,
+    "the owned BUY must reach a broker-confirmed terminal state before the safety halt is considered complete",
+  )
+  assert.ok(
+    journalEvents.some((event) => event.name === "order.cancel_requested"),
+    "the emergency BUY cancellation must preserve the durable cancellation-intent journal barrier",
+  )
+
+  await assert.rejects(
+    result.stop(),
+    (error) => {
+      assert.ok(error instanceof AggregateError, "shutdown must aggregate the unresolved account-integrity state instead of reporting success")
+      assert.ok(
+        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
+        "the closing audit must retain the original user-data/accounting reconciliation failure after BUY cancellation",
+      )
+      return true
+    },
+    "the runtime must remain fail-closed at shutdown even after all owned BUY exposure has been canceled",
+  )
 })
+
+
 test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
   const calls = []
   const broker = createBroker(calls)
@@ -3585,4 +3743,192 @@ test("identifies user-data events received during application recovery as recove
     releaseRecoverySnapshot()
     await runtime.stop()
   }
+})
+
+
+test("verifies an injected durable-fact ledger before connecting to the broker", async () => {
+  const calls = []
+  await assert.rejects(
+    () => startHarvesterForTest({
+      appConfig,
+      durableFactsStore: {
+        append: async () => ({ ok: true, data: { durable: true } }),
+        verify: async () => ({ ok: false, errors: [new Error("durable ledger integrity failed")] }),
+        readAll: async () => ({ ok: true, data: { records: [] } }),
+      },
+      brokerAdapterFactory: () => {
+        calls.push("broker-factory")
+        return createBroker(calls)
+      },
+    }),
+    /durable ledger integrity failed/,
+  )
+  assert.deepEqual(calls, [], "An unverified durable-fact ledger must block broker connection and subscriptions.")
+})
+
+
+test("records configuration and process boundaries before broker startup and after shutdown", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-boundaries-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const durableFactsStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "start-harvester-process-boundary-test",
+    now: () => new Date("2026-11-12T00:00:00.000Z"),
+  })
+  await durableFactsStore.initialize()
+
+  const harvester = await startHarvesterForTest({ appConfig, durableFactsStore })
+  const started = await durableFactsStore.readAll()
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+  const configuration = started.data.records.find(({ factType }) => factType === "CONFIGURATION_BASELINE")
+  const processStart = started.data.records.find(({ factType }) => factType === "PROCESS_STARTED")
+  assert.ok(configuration, "The sanitized strategy configuration fingerprint must be durable before broker startup.")
+  assert.ok(processStart, "The current process boundary must be durable before broker startup.")
+  assert.equal(configuration.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.equal(processStart.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.equal(processStart.data.configurationFingerprint, configuration.data.fingerprint)
+  assert.equal(processStart.data.tradingEnabled, true, "The durable process boundary must preserve whether this session could submit orders.")
+
+  await harvester.stop()
+
+  const stopped = await durableFactsStore.readAll()
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  const processStop = stopped.data.records.find(({ factType }) => factType === "PROCESS_STOPPED")
+  assert.ok(processStop, "A clean shutdown must durably close the process boundary.")
+  assert.equal(processStop.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.equal(processStop.data.clean, true)
+})
+
+
+test("blocks even a clean second process start until the restart-recovery gate is accepted", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const firstStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "first-process-session",
+  })
+  await firstStore.initialize()
+  const baseline = await recordConfigurationBaseline({ durableFactsStore: firstStore, appConfig })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const started = await recordProcessStarted({
+    durableFactsStore: firstStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+  const stopped = await recordProcessStopped({
+    durableFactsStore: firstStore,
+    reason: "CLEAN_TEST_SHUTDOWN",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+
+  const restartStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "second-process-session",
+  })
+  const brokerCalls = []
+  await assert.rejects(
+    () => startHarvesterForTest({
+      appConfig,
+      durableFactsStore: restartStore,
+      brokerAdapterFactory: () => {
+        brokerCalls.push("broker-factory")
+        return createBroker(brokerCalls)
+      },
+    }),
+    /Automatic Harvester process restart is disabled/,
+  )
+  assert.deepEqual(brokerCalls, [], "Even a clean prior process must not reconnect before Step 9 proves restart safety.")
+})
+
+
+test("blocks a second process start after an unclean prior session before broker connection", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const firstStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "crashed-process-session",
+  })
+  await firstStore.initialize()
+  const baseline = await recordConfigurationBaseline({ durableFactsStore: firstStore, appConfig })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const started = await recordProcessStarted({
+    durableFactsStore: firstStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+
+  const restartStore = createFileDurableFactsStore({
+    directory,
+    runtimeSessionId: "post-crash-process-session",
+  })
+  const brokerCalls = []
+  await assert.rejects(
+    () => startHarvesterForTest({
+      appConfig,
+      durableFactsStore: restartStore,
+      brokerAdapterFactory: () => {
+        brokerCalls.push("broker-factory")
+        return createBroker(brokerCalls)
+      },
+    }),
+    /Automatic Harvester process restart is disabled/,
+  )
+  assert.deepEqual(brokerCalls, [], "An unclean prior session must not reconnect before restart-recovery proof.")
+})
+
+
+test("reuses the process-owned durable-facts store for Telegram operator pause facts", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-shared-operator-facts-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const runtimeSessionId = "shared-process-operator-session"
+  const durableFactsStore = createFileDurableFactsStore({ directory, runtimeSessionId })
+  await durableFactsStore.initialize()
+  let operator
+  let secondaryStoreFactoryCalls = 0
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+  }
+  const runtime = await startHarvesterForTest({
+    appConfig: config,
+    durableFactsStore,
+    runtimeSessionId,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+    createDurableFactsStore: () => {
+      secondaryStoreFactoryCalls += 1
+      throw new Error("The process must not create a second writer for its durable-facts ledger.")
+    },
+    createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
+      operator = suppliedOperator
+      return { start: async () => ({ started: true }), stop: async () => ({ stopped: true }) }
+    },
+    logger: { info() {}, error() {} },
+  })
+
+  try {
+    const pause = await operator.pauseMarket({
+      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      requestId: "telegram:shared-store-test",
+      symbol: "BTCUSDT",
+    })
+    assert.equal(pause.ok, true, "An authorized operator pause must append through the process-owned store.")
+  } finally {
+    await runtime.stop()
+  }
+
+  const read = await durableFactsStore.readAll()
+  assert.equal(read.ok, true, read.errors?.[0]?.message)
+  assert.equal(secondaryStoreFactoryCalls, 0, "Telegram operator control must reuse the exact store that owns process/order/fill facts.")
+  const pauseFact = read.data.records.find(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
+  assert.ok(pauseFact, "The operator pause must be present in the process-owned durable stream.")
+  assert.equal(pauseFact.runtimeSessionId, runtimeSessionId, "Operator pause facts must share the exact process-session identity.")
+  assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STARTED").length, 1)
+  assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STOPPED").length, 1)
 })

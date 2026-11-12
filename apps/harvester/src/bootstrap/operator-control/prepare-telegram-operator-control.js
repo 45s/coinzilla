@@ -13,13 +13,14 @@ export class OperatorControlStartupError extends Error {
 
 const disabledLifecycle = Object.freeze({
   enabled: false,
+  durableFactsStore: undefined,
   async start() { return Object.freeze({ started: false, disabled: true }) },
   async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
 })
 
 /** Prepare optional Telegram control after verifying the pre-initialized ADR-0001 store. */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env, runtimeSessionId,
+  telegramConfig, env = process.env, runtimeSessionId, durableFactsStore: suppliedDurableFactsStore,
   createDurableFactsStore = createFileDurableFactsStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
@@ -31,17 +32,29 @@ export async function prepareTelegramOperatorControl({
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
   const directory = env.DURABLE_FACTS_DIRECTORY?.trim()
-  if (!directory || !path.isAbsolute(directory)) {
-    throw new OperatorControlStartupError("Telegram operator control requires an absolute DURABLE_FACTS_DIRECTORY containing an initialized ADR-0001 store", "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED")
-  }
-  if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
+  let durableFacts = suppliedDurableFactsStore
+  if (durableFacts === undefined) {
+    if (!directory || !path.isAbsolute(directory)) {
+      throw new OperatorControlStartupError("Telegram operator control requires an absolute DURABLE_FACTS_DIRECTORY containing an initialized ADR-0001 store", "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED")
+    }
+    if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
+      throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
+    }
+    try {
+      durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
+    } catch (cause) {
+      throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+    }
+  } else if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
     throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
   }
-  let durableFacts
-  try {
-    durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
-  } catch (cause) {
-    throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+  if (runtimeSessionId !== undefined &&
+      durableFacts?.runtimeSessionId !== undefined &&
+      durableFacts.runtimeSessionId !== runtimeSessionId) {
+    throw new OperatorControlStartupError(
+      "Telegram operator control must share the current Harvester process-session durable-facts store",
+      "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+    )
   }
   if (typeof durableFacts?.verify !== "function" || typeof durableFacts?.append !== "function") {
     throw new OperatorControlStartupError("Configured ADR-0001 durable-facts store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
@@ -59,6 +72,7 @@ export async function prepareTelegramOperatorControl({
   let adapter
   return Object.freeze({
     enabled: true,
+    durableFactsStore: durableFacts,
     async start({ engine } = {}) {
       if (adapter) {
         return Object.freeze({ started: true, alreadyStarted: true })
