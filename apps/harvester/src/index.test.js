@@ -30,9 +30,15 @@ const main = (options = {}) => {
     env: { TRADING_MODE: "testnet", ...env },
     createJournalService: (...args) => {
       const service = createJournalService(...args) ?? {}
-      if (!Object.hasOwn(service, "ready")) service.ready = Promise.resolve({ ok: true })
-      if (!Object.hasOwn(service, "flush")) service.flush = async () => ({ ok: true, durable: true })
-      if (!Object.hasOwn(service, "close")) service.close = async () => ({ ok: true, closed: true })
+      if (!Object.hasOwn(service, "ready")) {
+        service.ready = Promise.resolve({ ok: true })
+      }
+      if (!Object.hasOwn(service, "flush")) {
+        service.flush = async () => ({ ok: true, durable: true })
+      }
+      if (!Object.hasOwn(service, "close")) {
+        service.close = async () => ({ ok: true, closed: true })
+      }
       return service
     },
   })
@@ -83,16 +89,21 @@ test("passes the immutable process identity into Journal composition", async () 
     },
   }
   let observedIdentity
+  let observedRuntimeSessionId
   await runMain({
     processIdentity,
     createJournalService: (input) => {
       observedIdentity = input.processIdentity
       return disabledJournalService()
     },
-    start: async () => ({ connected: false }),
+    start: async ({ runtimeSessionId }) => {
+      observedRuntimeSessionId = runtimeSessionId
+      return { connected: false }
+    },
     logger: { info() {}, system() {}, error() {} },
   })
   assert.equal(observedIdentity, processIdentity)
+  assert.equal(observedRuntimeSessionId, processIdentity.runtimeSessionId, "The exact process session ID must reach bootstrap for durable operator-fact attribution.")
 })
 
 test("logs startup failures as one structured logger argument", async () => {
@@ -839,7 +850,9 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -891,7 +904,9 @@ test("acquires the process lock before starting Journal and releases it after cl
         }
       },
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -930,7 +945,9 @@ test("retains the process lock when runtime shutdown throws", async () => {
         stop: async () => { throw new Error("broker intake did not stop") },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGTERM") signalHandler = handler
+        if (signal === "SIGTERM") {
+          signalHandler = handler
+        }
       },
       logger: { info() {}, error() {}, debug() {} },
     })

@@ -20,6 +20,7 @@ import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
+import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
 
 export async function startHarvester({
   configSource,
@@ -41,6 +42,10 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
+  runtimeSessionId,
+  createDurableFactsStore,
+  createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
+  telegramOperatorFetchImpl,
 } = {}) {
   const {
     appConfig,
@@ -52,6 +57,15 @@ export async function startHarvester({
     tradingMode,
     tradingEnabled,
   } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
+  const operatorControlLifecycle = await prepareTelegramOperatorControl({
+    telegramConfig: appConfig.operatorControl?.telegram,
+    env,
+    runtimeSessionId,
+    createDurableFactsStore,
+    createAdapter: createTelegramOperatorAdapterFactory,
+    fetchImpl: telegramOperatorFetchImpl,
+    logger,
+  })
 
   const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
@@ -264,6 +278,7 @@ export async function startHarvester({
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     activateTradingEngine()
+    await operatorControlLifecycle.start({ engine: tradingEngine })
     portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset })
 
     userDataSubscription = await subscribeToUserData({
@@ -312,13 +327,12 @@ export async function startHarvester({
       errorStack: error?.stack,
     })
     await userDataState.eventQueue
-    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
+    const operatorCleanupErrors = []
+    try { await operatorControlLifecycle.stop() } catch (cleanupError) { operatorCleanupErrors.push(cleanupError) }
+    const brokerCleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
+    const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
     if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [error, ...cleanupErrors],
-        "Harvester market-data startup failed and cleanup was incomplete",
-        { cause: error },
-      )
+      throw new AggregateError([error, ...cleanupErrors], "Harvester startup failed and operator/broker cleanup was incomplete", { cause: error })
     }
     throw error
   }
@@ -326,7 +340,7 @@ export async function startHarvester({
   userDataState.startupComplete = true
   if (userDataState.pendingRecovery) {startUserDataRecovery()}
 
-  const stop = createShutdownHandler({
+  const stopTradingRuntime = createShutdownHandler({
     state: userDataState,
     logger,
     tradingEnabled,
@@ -340,6 +354,15 @@ export async function startHarvester({
     eventPublisher,
     publishAccountSnapshot,
   })
+  const stop = async () => {
+    let operatorStopError
+    try { await operatorControlLifecycle.stop() } catch (error) { operatorStopError = error }
+    const stopResult = await stopTradingRuntime()
+    if (operatorStopError) {
+      return { ok: false, errors: [operatorStopError] }
+    }
+    return stopResult
+  }
 
   return Object.freeze({
     appConfig,

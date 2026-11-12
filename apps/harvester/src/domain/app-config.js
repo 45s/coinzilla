@@ -67,7 +67,44 @@ function validateTelegramNotificationConfig(config) {
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 export function validateAppConfig(config) {
   requireRecord(config, "root")
+function validateTelegramOperatorControlConfig(config) {
+  if (config.operatorControl === undefined) {
+    return
+  }
+  const path = "operatorControl"
+  requireRecord(config.operatorControl, path)
+  for (const key of Object.keys(config.operatorControl)) {
+    if (key !== "telegram") {
+      fail(path + "." + key, "a supported operator-control configuration field")
+    }
+  }
+  const telegram = config.operatorControl.telegram
+  requireRecord(telegram, path + ".telegram")
+  for (const key of Object.keys(telegram)) {
+    if (key !== "enabled" && key !== "allowedUserIds") {
+      fail(path + ".telegram." + key, "a supported Telegram operator configuration field")
+    }
+  }
+  requireBoolean(telegram.enabled, path + ".telegram.enabled")
+  if (!Array.isArray(telegram.allowedUserIds)) {
+    fail(path + ".telegram.allowedUserIds", "an array of unique positive decimal Telegram user IDs")
+  }
+  const seenUserIds = new Set()
+  for (const userId of telegram.allowedUserIds) {
+    if (typeof userId !== "string" || !/^[1-9][0-9]*$/.test(userId) || !Number.isSafeInteger(Number(userId))) {
+      fail(path + ".telegram.allowedUserIds", "canonical positive decimal Telegram user ID strings")
+    }
+    if (seenUserIds.has(userId)) {
+      fail(path + ".telegram.allowedUserIds", "unique positive decimal Telegram user IDs")
+    }
+    seenUserIds.add(userId)
+  }
+  if (telegram.enabled && telegram.allowedUserIds.length === 0) {
+    fail(path + ".telegram.allowedUserIds", "a non-empty array of unique positive decimal Telegram user IDs")
+  }
+}
   validateTelegramNotificationConfig(config)
+  validateTelegramOperatorControlConfig(config)
   if (config.runtime !== undefined) {fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")}
   requireRecord(config.strategies, "strategies")
   requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")

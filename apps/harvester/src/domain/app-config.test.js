@@ -224,3 +224,66 @@ test("uses generic app config wording for validation errors", () => {
     "Configuration validation errors must identify the generic app config, not the application name or trading domain.",
   )
 })
+
+test("accepts omitted operator-control configuration as disabled", () => {
+  const config = createAppConfig()
+  assert.equal(validateAppConfig(config), config, "Existing configurations without inbound operator control must remain valid and disabled.")
+})
+
+test("accepts explicitly disabled Telegram operator control without an allowlist", () => {
+  const config = createAppConfig()
+  config.operatorControl = { telegram: { enabled: false, allowedUserIds: [] } }
+  assert.equal(validateAppConfig(config), config, "Disabled inbound control must not require credentials or trusted users.")
+})
+
+test("requires trusted Telegram user IDs before enabling operator control", () => {
+  const config = createAppConfig()
+  config.operatorControl = { telegram: { enabled: true, allowedUserIds: [] } }
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "operatorControl.telegram.allowedUserIds" &&
+      error.expected === "a non-empty array of unique positive decimal Telegram user IDs",
+    "Enabled inbound control must fail configuration validation when no trusted Telegram users are configured.",
+  )
+})
+
+test("rejects malformed or duplicate Telegram operator user IDs", () => {
+  for (const allowedUserIds of [["0"], ["01"], ["-1"], ["not-a-user"], [12345], ["12345", "12345"]]) {
+    const config = createAppConfig()
+    config.operatorControl = { telegram: { enabled: false, allowedUserIds } }
+    assert.throws(
+      () => validateAppConfig(config),
+      (error) => error instanceof ConfigValidationError &&
+        error.path === "operatorControl.telegram.allowedUserIds",
+      "Operator allowlists must contain unique canonical positive decimal string IDs: " + JSON.stringify(allowedUserIds),
+    )
+  }
+})
+
+test("accepts an enabled Telegram operator allowlist with canonical user IDs", () => {
+  const config = createAppConfig()
+  config.operatorControl = { telegram: { enabled: true, allowedUserIds: ["12345", "67890"] } }
+  assert.equal(validateAppConfig(config), config, "A valid explicit private-user allowlist must enable the inbound adapter.")
+})
+
+test("rejects malformed operator-control configuration and unknown Telegram fields", () => {
+  const invalidEnabled = createAppConfig()
+  invalidEnabled.operatorControl = { telegram: { enabled: "true", allowedUserIds: ["12345"] } }
+  assert.throws(
+    () => validateAppConfig(invalidEnabled),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "operatorControl.telegram.enabled",
+    "The inbound-control switch must be a boolean, never a truthy string.",
+  )
+
+  const unknownField = createAppConfig()
+  unknownField.operatorControl = { telegram: { enabled: false, allowedUserIds: [], chatId: "12345" } }
+  assert.throws(
+    () => validateAppConfig(unknownField),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "operatorControl.telegram.chatId",
+    "The inbound-control configuration must reject unsupported fields and keep Telegram identity policy explicit.",
+  )
+})
+
