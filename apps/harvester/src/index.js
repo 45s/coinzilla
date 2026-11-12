@@ -142,8 +142,19 @@ const describeError = (error) => {
 const resolveHostProcessLockDirectory = () =>
   path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
 
-const resolveHostDurableFactsDirectory = () =>
-  path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts")
+const resolveHostDurableFactsDirectory = ({ env = process.env } = {}) => {
+  const configuredDirectory = env?.DURABLE_FACTS_DIRECTORY
+  if (configuredDirectory === undefined) {
+    return path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts")
+  }
+  if (typeof configuredDirectory !== "string" ||
+      !configuredDirectory.trim() ||
+      configuredDirectory !== configuredDirectory.trim() ||
+      !path.isAbsolute(configuredDirectory)) {
+    throw new TypeError("DURABLE_FACTS_DIRECTORY must be a non-empty absolute local filesystem path")
+  }
+  return path.resolve(configuredDirectory)
+}
 
 export async function main({
   start = startHarvester,
@@ -197,7 +208,7 @@ export async function main({
     }
     processLock = lockResult
     const durableFactsStore = createDurableFactsStore({
-      directory: resolveHostDurableFactsDirectory(),
+      directory: resolveHostDurableFactsDirectory({ env }),
       runtimeSessionId: processIdentity.runtimeSessionId,
     })
     if (typeof durableFactsStore?.verify !== "function") {
