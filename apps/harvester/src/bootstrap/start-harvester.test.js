@@ -3294,7 +3294,7 @@ test("account snapshots include every configured pair asset, including disabled 
             makerPercent: 0, takerPercent: 0.1,
           },
           SOLFDUSD: {
-            enabled: false, investment: 100, orderQuantity: 1, keepQuantity: 0.01,
+            enabled: false, enableVolatilityProtection: true, investment: 100, orderQuantity: 1, keepQuantity: 0.01,
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
             makerPercent: 0, takerPercent: 0.1,
