@@ -27,12 +27,21 @@ function symbol(value) {
 
 function side(value) {
   const normalized = text(value, "UNKNOWN", 24).toUpperCase()
-  return { label: normalized, icon: normalized === "BUY" ? "🟢" : normalized === "SELL" ? "🔴" : "⚪" }
+  let icon = "⚪"
+  if (normalized === "BUY") {
+    icon = "🟢"
+  } else if (normalized === "SELL") {
+    icon = "🔴"
+  }
+  return { label: normalized, icon }
 }
 
 function fillIcon(value) {
   const normalized = text(value, "", 24).toUpperCase()
-  return normalized === "BUY" ? "✅" : normalized === "SELL" ? "💰" : "💰"
+  if (normalized === "BUY") {
+    return "✅"
+  }
+  return "💰"
 }
 
 function orderId(data) {
