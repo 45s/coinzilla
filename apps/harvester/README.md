@@ -62,6 +62,7 @@ Harvester uses one application-wide `config.json`. The root contains `strategies
 - `strategies.CG_coinGrabber.settings.conservative.enabled`: must remain `true`; Conservative is the first executable mode.
 - `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
 - `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, minimum profit, precision, and fee settings.
+- `strategies.CG_coinGrabber.pairs.<SYMBOL>.externalOrdersPolicy`: optional per-pair policy for manual/external Binance and CScalp orders. It defaults to `"ignore"`; set it to `"block"` to defer that pair while a manual/external order is open or reports an execution. External orders are never adopted or booked to Harvester accounting. Harvester-generated `h-` client IDs remain protected regardless of this setting.
 
 `minProfit` is required on every pair and must be at least `0.01` in that pair's quote asset. The former global `settings.minProfit` is rejected; migrate it explicitly to each pair rather than relying on an implicit default.
 

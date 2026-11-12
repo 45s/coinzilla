@@ -38,6 +38,8 @@ const createFixture = ({
   isMarketPriceFresh = () => true,
   isMarketBookFresh = () => true,
   hasUnownedOpenOrdersForSymbol = () => false,
+  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
+  externalOrdersPolicy,
   getVolatilityData,
   pausedMarkets = [],
 } = {}) => {
@@ -143,6 +145,7 @@ const createFixture = ({
       ZROUSDT: {
         enabled: true,
         enableVolatilityProtection: true,
+        ...(externalOrdersPolicy === undefined ? {} : { externalOrdersPolicy }),
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,
@@ -174,6 +177,7 @@ const createFixture = ({
     completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
@@ -412,18 +416,202 @@ test("reports the existing pre-evaluation skip for a safety-paused market", asyn
 })
 
 test("reports the existing pre-evaluation skip when unowned open orders exist", async () => {
-  const fixture = createFixture({ hasUnownedOpenOrdersForSymbol: () => true })
+  const fixture = createFixture({
+    externalOrdersPolicy: "block",
+    hasUnownedOpenOrdersForSymbol: () => true,
+  })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
 
-  assert.equal(result.data.skipped, true, "Unowned orders must stop strategy evaluation before submission.")
-  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDER", "The pre-evaluation result must retain the established unowned-order reason.")
-  assert.equal(fixture.submittedIntents.length, 0, "A symbol with unowned open orders must not create a broker order intent.")
+  assert.equal(result.data.skipped, true, "The explicit block policy must stop evaluation when a manual order is open.")
+  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDER", "The block policy must preserve the established external-order deferral reason.")
+  assert.equal(fixture.submittedIntents.length, 0, "A blocked pair must not create a Harvester order intent.")
 })
 
-test("PENDING orders remain explicitly uncancellable", () => {
+test("ignores manual external open orders by default", async () => {
+  const fixture = createFixture({
+    hasUnownedOpenOrdersForSymbol: () => true,
+    getVolatilityData: () => toResult({
+      data: { status: { isReady: true }, metrics: { volatilityRatio: "1" } },
+    }),
+  })
+  await fixture.engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.99",
+      bestBidQuantity: "10",
+      bestAskPrice: "1.01",
+      bestAskQuantity: "10",
+      timestamp: 1,
+    },
+  })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, "Manual external orders must not prevent the default strategy from evaluating.")
+  assert.notEqual(result.data?.reason, "UNOWNED_OPEN_ORDER", "The default ignore policy must not defer this pair because of a manual order.")
+
+})
+
+test("keeps unresolved prior-process Harvester orders blocked under the default policy", async () => {
+  const fixture = createFixture({ hasUnresolvedHarvesterOpenOrdersForSymbol: () => true })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.skipped, true, "An unresolved prior-process Harvester order must defer strategy evaluation.")
+  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDER", "The unresolved Harvester order must retain the safe deferral reason.")
+  assert.equal(fixture.submittedIntents.length, 0, "A prior-process Harvester order must not be mistaken for a manual order.")
+})
+
+test("ignores unmatched manual execution reports without mutating Harvester accounting", async () => {
+  const fixture = createFixture()
+  const portfolio = fixture.getPortfolio()
+  const recoveryLedger = fixture.getRecoveryLedger()
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-web-order-1",
+    brokerOrderId: "manual-web-broker-order-1",
+    market: fixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+
+  assert.equal(result.ok, true, "An unmatched manual order report must not fail Harvester user-data processing.")
+  assert.equal(result.data.ignored, true, "The engine must classify the report as ignored.")
+  assert.equal(result.data.externalOrder, true, "The ignored report must be identified as external.")
+  assert.equal(fixture.getPortfolio(), portfolio, "Manual execution reports must not mutate Harvester Portfolio.")
+  assert.equal(fixture.getRecoveryLedger(), recoveryLedger, "Manual execution reports must not mutate Harvester RecoveryLedger.")
+})
+
+test("keeps unmatched Harvester client IDs fail-closed under the default external-order policy", async () => {
+  const fixture = createFixture()
+  const harvesterOrder = new CanonicalOrder({
+    clientOrderId: "h-0123456789abcdef012345-7",
+    brokerOrderId: "prior-harvester-order",
+    market: fixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: harvesterOrder } })
+
+  assert.equal(result.ok, false, "An unmatched Harvester-generated ID must not be ignored as a manual order.")
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+    "An unresolved Harvester order must retain the ownership-integrity failure.")
+})
+
+test("retains fail-closed handling for manual external execution reports when policy is block", async () => {
+  const fixture = createFixture({ externalOrdersPolicy: "block" })
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-cscalp-order-1",
+    brokerOrderId: "manual-cscalp-broker-order-1",
+    market: fixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+
+  assert.equal(result.ok, false, "The explicit block policy must preserve fail-closed handling of manual order reports.")
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+    "The block policy must retain the established ownership-integrity failure.")
+})
+
+test("PENDING orders remain explicitly uncancellable", () => {test("ignores unmatched manual execution reports without mutating Harvester accounting", async () => {
+  const fixture = createFixture()
+  const portfolio = fixture.getPortfolio()
+  const recoveryLedger = fixture.getRecoveryLedger()
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-web-order-1",
+    brokerOrderId: "manual-web-broker-order-1",
+    market: fixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+  })
+
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.ignored, true)
+  assert.equal(result.data.externalOrder, true)
+  assert.equal(fixture.getPortfolio(), portfolio, "Manual execution reports must not mutate Harvester Portfolio.")
+  assert.equal(fixture.getRecoveryLedger(), recoveryLedger, "Manual execution reports must not mutate Harvester RecoveryLedger.")
+})
+
+test("keeps unmatched Harvester client IDs fail-closed under the default external-order policy", async () => {
+  const fixture = createFixture()
+  const harvesterOrder = new CanonicalOrder({
+    clientOrderId: "h-0123456789abcdef012345-7",
+    brokerOrderId: "prior-harvester-order",
+    market: fixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+  })
+
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: harvesterOrder } })
+
+  assert.equal(result.ok, false, "An unmatched Harvester-generated ID must not be ignored as a manual order.")
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
+})
+
+test("retains fail-closed handling for manual external execution reports when policy is block", async () => {
+  const fixture = createFixture({ externalOrdersPolicy: "block" })
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-cscalp-order-1",
+    brokerOrderId: "manual-cscalp-broker-order-1",
+    market: fixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+  })
+
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
+})
+
+
   const result = validateCancellationEligibility({
     order: { status: "PENDING", brokerOrderId: undefined },
   })

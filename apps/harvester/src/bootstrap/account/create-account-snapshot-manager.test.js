@@ -16,11 +16,11 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
   const manager = createAccountSnapshotManager({
     broker: {
       getAccountSnapshot: async () => {
-        if (accountSnapshotError) throw accountSnapshotError
+        if (accountSnapshotError) {throw accountSnapshotError}
         return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
       },
       getOpenOrders: async () => {
-        if (openOrdersError) throw openOrdersError
+        if (openOrdersError) {throw openOrdersError}
         return openOrdersResult ?? ({ ok: true, data: openOrders })
       },
     },
@@ -362,6 +362,7 @@ test("records unowned open orders as blocked and scopes the strategy gate to the
   assert.equal(orders.length, 1, "The account-wide audit must retain the observed external open order.")
   assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED", "An unowned open order must be recorded as blocked in the audit event.")
   assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true)
+  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false)
   assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "ZROUSDT" }), false)
   assert.deepEqual(fixture.manager.getAccountSnapshot(), undefined)
   assert.equal(fixture.getFlushCount(), 1)
@@ -373,7 +374,29 @@ test("records unowned open orders as blocked and scopes the strategy gate to the
   assert.equal(fixture.getFlushCount(), 2, "The reconnect snapshot must be durable before the symbol guard clears.")
 })
 
-test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
+test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {test("keeps an unmatched prior-process Harvester order separate from manual external orders", async () => {
+  const harvesterOrder = {
+    id: "prior-harvester-order",
+    symbol: "DOGEUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    originalPrice: "101",
+    originalQuantity: "1",
+    executedQuantity: "0",
+    status: "NEW",
+    clientOrderId: "h-0123456789abcdef012345-7",
+  }
+  const fixture = createFixture({ openOrders: [harvesterOrder] })
+
+  await fixture.manager.publishOpenOrdersSnapshot()
+
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false,
+    "A prior-process Harvester ID must not be classified as a manual/external order.")
+  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true,
+    "A prior-process Harvester order must remain a pair blocker until restart reconciliation is implemented.")
+})
+
+
   const market = createFixture().market
   const timeout = Object.assign(
     new Error("account.status request timed out"),

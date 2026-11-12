@@ -33,7 +33,25 @@ const createAppConfig = () => ({
   },
 })
 
-test("validates strategy-owned pairs without requiring exchange-mode configuration in JSON", () => {
+test("validates strategy-owned pairs without requiring exchange-mode configuration in JSON", () => {test("accepts only ignore or block for each pair's external-order policy", () => {
+  const config = createAppConfig()
+  const pair = config.strategies.CG_coinGrabber.pairs.ZROFDUSD
+
+  assert.equal(validateAppConfig(config), config, "Omitted policy must retain the default ignore behavior.")
+  pair.externalOrdersPolicy = "ignore"
+  assert.equal(validateAppConfig(config), config)
+  pair.externalOrdersPolicy = "block"
+  assert.equal(validateAppConfig(config), config)
+  pair.externalOrdersPolicy = "adopt"
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "strategies.CG_coinGrabber.pairs.ZROFDUSD.externalOrdersPolicy" &&
+      error.expected === "ignore or block",
+  )
+})
+
+
   const config = createAppConfig()
   assert.equal(validateAppConfig(config), config, "Strategy and pair settings must remain valid without a runtime profile block.")
   assert.equal(Object.hasOwn(config, "runtime"), false, "Exchange selection must not be stored in config.json.")

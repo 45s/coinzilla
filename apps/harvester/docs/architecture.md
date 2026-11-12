@@ -679,9 +679,13 @@ single-flight reconciliation and durable audit barriers before readiness can
     N --> O[Readiness may return]
 ```
 
-## External open-order strategy isolation
+## External order ownership and per-pair policy
 
-Unmatched account-wide open orders remain external/unowned. Their symbols enter the Conservative strategy exclusion set only after the corresponding open-orders audit passes its durable Journal flush. The engine defers evaluation for an affected symbol and checks again at the final broker-submission boundary. Unrelated enabled markets remain eligible. Each authoritative startup or same-process recovery snapshot replaces the set; a symbol is released only after a durable snapshot confirms the external order is gone. External orders are never adopted, canceled, modified, or registered as owned. This is not a global startup gate and does not enable process-restart recovery.
+Account-wide open-order audits always record every observed order and leave unmatched orders unowned and untouched. Manual/external orders are classified separately from Harvester-generated orders using Harvester's reserved `h-` client-order ID prefix. Each pair may set `externalOrdersPolicy` to `"ignore"` (default) or `"block"`. Under `"ignore"`, manual/external open orders do not defer that pair and unmatched external user-data reports are diagnostic-only; they never enter Portfolio or RecoveryLedger and do not pause Harvester. Under `"block"`, the existing same-symbol restriction remains in force. The policy is checked during strategy evaluation and again at the final broker-submission boundary.
+
+An unmatched `h-` order is never treated as a manual order: it may be an order left by a prior Harvester process. It remains a blocker for its symbol regardless of `externalOrdersPolicy` until durable restart restoration and exchange reconciliation are implemented. Unknown/malformed order identities remain fail-closed. Harvester never adopts, cancels, or modifies manual/external orders. This policy does not make process-restart recovery safe.
+
+Manual trading can still change exchange free balances or inventory; Harvester uses authoritative free balances and may receive normal exchange insufficient-balance rejections. Such manual activity is not attributed to Harvester strategy PnL.
 
 ## Operator control
 

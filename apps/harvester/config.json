@@ -22,6 +22,7 @@
         "LINKUSDT": {
           "enabled": false,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
@@ -35,6 +36,7 @@
         "LINKFDUSD": {
           "enabled": true,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 200,
           "orderQuantity": 2,
           "keepQuantity": 0.01,
@@ -48,6 +50,7 @@
         "DOGEUSDT": {
           "enabled": false,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 100,
           "orderQuantity": 400,
           "keepQuantity": 1,
@@ -61,6 +64,7 @@
         "SOLFDUSD": {
           "enabled": false,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 100,
           "orderQuantity": 1,
           "keepQuantity": 0.01,
@@ -74,6 +78,7 @@
         "ZROUSDT": {
           "enabled": false,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 100,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
@@ -87,6 +92,7 @@
         "ZROFDUSD": {
           "enabled": true,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 120,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
@@ -100,6 +106,7 @@
         "ADAFDUSD": {
           "enabled": false,
           "enableVolatilityProtection": true,
+          "externalOrdersPolicy": "ignore",
           "investment": 120,
           "orderQuantity": 30,
           "keepQuantity": 0.1,

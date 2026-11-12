@@ -24,6 +24,7 @@ import {
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import { isHarvesterClientOrderId } from "../application/orders/is-harvester-client-order-id.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
@@ -161,6 +162,7 @@ export function makeConservativeTradingEngine({
   broker, strategyPolicy, appConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
   hasUnownedOpenOrdersForSymbol = () => false,
+  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   getVolatilityData,
@@ -172,6 +174,9 @@ export function makeConservativeTradingEngine({
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
   const isVolatilityProtectionEnabledForSymbol = (symbol) =>
     volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
+  const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
+    hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
+    (pairs[symbol]?.externalOrdersPolicy === "block" && hasUnownedOpenOrdersForSymbol({ symbol }))
   if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
     throw new TypeError("getVolatilityData must be a function when provided")
   }
@@ -188,6 +193,9 @@ export function makeConservativeTradingEngine({
   if (typeof isMarketPriceFresh !== "function") {throw new TypeError("isMarketPriceFresh must be a function")}
   if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
+  }
+  if (typeof hasUnresolvedHarvesterOpenOrdersForSymbol !== "function") {
+    throw new TypeError("hasUnresolvedHarvesterOpenOrdersForSymbol must be a function")
   }
   if (typeof isMarketBookFresh !== "function") {throw new TypeError("isMarketBookFresh must be a function")}
   if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
@@ -607,7 +615,7 @@ export function makeConservativeTradingEngine({
       if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
         return defer("OPERATOR_MARKET_PAUSED")
       }
-      if (hasUnownedOpenOrdersForSymbol({ symbol })) {
+      if (hasBlockingOpenOrdersForSymbol({ symbol })) {
         return defer("UNOWNED_OPEN_ORDERS_PRESENT")
       }
       if (!canTrade({ symbol })) {return defer("TRADING_DISABLED")}
@@ -1155,7 +1163,7 @@ export function makeConservativeTradingEngine({
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
     }
-    if (hasUnownedOpenOrdersForSymbol({ symbol })) {
+    if (hasBlockingOpenOrdersForSymbol({ symbol })) {
       state.deferredEvaluations.add(symbol)
       return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
     }
@@ -1834,6 +1842,15 @@ export function makeConservativeTradingEngine({
           eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
           dataResult: mapExecutionUnownedOrderData({ order }),
         })
+        const hasHarvesterIdentity = [
+          order.clientOrderId,
+          event.clientOrderId,
+          event.originalClientOrderId,
+        ].some(isHarvesterClientOrderId)
+        const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? "ignore"
+        if (!hasHarvesterIdentity && externalOrdersPolicy === "ignore") {
+          return toResult({ data: { ignored: true, externalOrder: true } })
+        }
         await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
         return failureResult({
           error: new Error("Order update does not belong to a Harvester order"),
