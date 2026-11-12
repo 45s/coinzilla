@@ -32,6 +32,10 @@ export async function restoreHarvesterDurableFactsState({ durableFactsStore, mar
     return toResult({
       data: Object.freeze({
         ...restored.data,
+        recoveryCycles: projection.data.recoveryCycles,
+        recoveryCycleEvaluations: projection.data.recoveryCycleEvaluations,
+        orderSubmissionOutcomes: projection.data.orderSubmissionOutcomes,
+        orderCancellationOutcomes: projection.data.orderCancellationOutcomes,
         source: "DURABLE_FACTS",
         candidateOnly: true,
         restorationEnabled: false,
