@@ -105,7 +105,9 @@ export function formatHarvesterTelegramNotification(event) {
   if (typeof event.name !== "string") {
     throw new TypeError("event.name must be a string")
   }
-  if (!Object.hasOwn(formatters, event.name)) return null
+  if (!Object.hasOwn(formatters, event.name)) {
+    return null
+  }
 
   const data = event.data && typeof event.data === "object" && !Array.isArray(event.data)
     ? event.data
