@@ -958,3 +958,39 @@ test("rejects malformed callbacks and private-chat identity mismatches before ap
   assert.match(callbackAnswers[0].text, /Unknown or expired action/)
   assert.deepEqual(queryCalls, [], "A callback from a private chat that does not match its sender must be ignored.")
 })
+
+
+test("keeps authorized text commands available when Telegram command-menu registration is unavailable", async () => {
+  const update = makeUpdate({ updateId: 901, text: "/help" })
+  const sentMessages = []
+  const warnings = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: false, description: "Forbidden" }, 403) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [update] }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "sendMessage") { sentMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: { message_id: 901 } }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: { pauseMarket: async () => assert.fail("Help must not invoke an operator control.") },
+    logger: { warn: entry => warnings.push(entry) },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(warnings.length, 1, "A failed menu registration must be observable.")
+  assert.match(warnings[0].message, /command menu registration failed/)
+  assert.equal(sentMessages.length, 1, "The adapter must continue handling authorized text commands.")
+  assert.match(sentMessages[0].text, /Harvester Command Center/)
+})

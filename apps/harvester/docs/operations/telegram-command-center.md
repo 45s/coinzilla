@@ -40,4 +40,4 @@ The adapter processes updates serially and advances the Telegram update offset o
 
 ## Acceptance evidence
 
-The CC-4 regression matrix is maintained in `telegram-operator-adapter.test.js`. It covers command-menu registration, callback update polling, private-chat authorization and identity matching, confirmation-before-control, one-time callback handling, read-only navigation/refresh, malformed callback rejection, retry identity and graceful shutdown. Required GitHub Actions checks must pass on the exact PR head before this phase is marked complete.
+The CC-4 regression matrix is maintained in `telegram-operator-adapter.test.js`. It covers successful and failed command-menu registration, callback update polling, private-chat authorization and identity matching, confirmation-before-control, one-time callback handling, read-only navigation/refresh, malformed callback rejection, retry identity and graceful shutdown. Required GitHub Actions checks must pass on the exact PR head before this phase is marked complete.
