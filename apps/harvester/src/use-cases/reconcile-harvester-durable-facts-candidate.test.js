@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
 import { reconcileHarvesterDurableFactsCandidate } from "./reconcile-harvester-durable-facts-candidate.js"
@@ -20,7 +21,8 @@ const record = (sequence, factType, data, factId = factType + ":" + sequence) =>
   data,
 })
 
-const records = ({ includeCoverage = true } = {}) => [
+const records = ({ includeCoverage = true, blockerScope } = {}) => {
+  const result = [
   record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
   record(1, "CONFIGURATION_BASELINE", {
     schemaVersion: 1, strategyName: "conservative", markets: ["BTCUSDT"], fingerprint,
@@ -42,19 +44,50 @@ const records = ({ includeCoverage = true } = {}) => [
     evidenceDigest: "a".repeat(64),
     verifiedBy: "operator:trader",
   }, "market-history-coverage:BTCUSDT:1")] : []),
-]
+  ]
+  if (blockerScope) {
+    const symbol = blockerScope === "ACCOUNT" ? null : "BTCUSDT"
+    const reason = blockerScope === "ACCOUNT" ? "ACCOUNT_RECONCILIATION_FAILED" : "MARKET_RECONCILIATION_FAILED"
+    const evidenceDigest = "c".repeat(64)
+    const blockerId = createHash("sha256")
+      .update([blockerScope, symbol ?? "", reason, evidenceDigest].join("\0"))
+      .digest("hex")
+    result.push(record(result.length, "SAFETY_BLOCKER_RAISED", {
+      blockerId, scope: blockerScope, symbol, reason, evidenceDigest,
+    }, "safety-blocker-raised:" + blockerId))
+  }
+  return result
+}
 
-const makeStore = (recordsValue) => ({
-  readAll: async () => ({
-    ok: true,
-    data: {
-      records: recordsValue,
-      durableWriteSupported: true,
-      lastCommittedSequence: String(recordsValue.length - 1),
-      lastCommittedDigest: "b".repeat(64),
+const makeStore = (recordsValue) => {
+  const storedRecords = [...recordsValue]
+  return {
+    runtimeSessionId: "recovery-cli-session",
+    records: storedRecords,
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [...storedRecords],
+        durableWriteSupported: true,
+        lastCommittedSequence: String(storedRecords.length - 1),
+        lastCommittedDigest: "b".repeat(64),
+      },
+    }),
+    append: async (fact) => {
+      if (storedRecords.some(({ factId }) => factId === fact.factId)) {
+        return { ok: true, data: { durable: true, duplicate: true } }
+      }
+      storedRecords.push({
+        sequence: String(storedRecords.length),
+        factId: fact.factId,
+        factType: fact.factType,
+        runtimeSessionId: "recovery-cli-session",
+        data: fact.data,
+      })
+      return { ok: true, data: { durable: true, duplicate: false } }
     },
-  }),
-})
+  }
+}
 
 const makeDependencies = ({ auditTargetMarketBlocked = false } = {}) => {
   const calls = []
@@ -158,4 +191,61 @@ test("preserves a target-market blocker even when the other reconciliation evide
   assert.equal(result.data.targetMarketReady, false, "An unowned order or unexplained balance must block the affected market.")
   assert.equal(result.data.readiness, "BLOCKED")
   assert.equal(result.data.allMarketsReady, false)
+})
+
+
+test("resolves a market safety blocker only after its target-market audit is authoritative and READY", async () => {
+  const store = makeStore(records({ blockerScope: "MARKET" }))
+  const raised = store.records.find(({ factType }) => factType === "SAFETY_BLOCKER_RAISED")
+  const deps = makeDependencies()
+  const result = await reconcileHarvesterDurableFactsCandidate({
+    durableFactsStore: store,
+    marketMetadata: new Map([[market.symbol, { market }]]),
+    markets: [market],
+    targetMarket: market,
+    ...deps,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  const resolved = store.records.find(({ factType }) => factType === "SAFETY_BLOCKER_RESOLVED")
+  assert.ok(resolved, "A READY authoritative market audit must persist a separate blocker-resolution fact.")
+  assert.equal(resolved.data.blockerId, raised.data.blockerId)
+  assert.equal(resolved.data.resolution, "AUTHORITATIVE_RECONCILIATION")
+  assert.match(resolved.data.resolvedBy, /^reconciliation:/)
+  assert.notEqual(resolved.data.evidenceDigest, raised.data.evidenceDigest)
+  assert.deepEqual(result.data.resolvedSafetyBlockerIds, [raised.data.blockerId])
+  assert.equal(result.data.targetMarketReady, true)
+})
+
+test("does not resolve an account-scoped blocker from a one-market audit", async () => {
+  const store = makeStore(records({ blockerScope: "ACCOUNT" }))
+  const deps = makeDependencies()
+  const result = await reconcileHarvesterDurableFactsCandidate({
+    durableFactsStore: store,
+    marketMetadata: new Map([[market.symbol, { market }]]),
+    markets: [market],
+    targetMarket: market,
+    ...deps,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(store.records.some(({ factType }) => factType === "SAFETY_BLOCKER_RESOLVED"), false)
+  assert.equal(result.data.targetMarketReady, false, "An account-wide blocker must remain a gate for every market.")
+  assert.equal(result.data.unresolvedSafetyBlockers.length, 1)
+})
+
+test("does not resolve a market blocker when the target-market audit is blocked", async () => {
+  const store = makeStore(records({ blockerScope: "MARKET" }))
+  const deps = makeDependencies({ auditTargetMarketBlocked: true })
+  const result = await reconcileHarvesterDurableFactsCandidate({
+    durableFactsStore: store,
+    marketMetadata: new Map([[market.symbol, { market }]]),
+    markets: [market],
+    targetMarket: market,
+    ...deps,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(store.records.some(({ factType }) => factType === "SAFETY_BLOCKER_RESOLVED"), false)
+  assert.equal(result.data.targetMarketReady, false)
 })
