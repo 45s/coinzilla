@@ -5,8 +5,9 @@ const SNAPSHOT_EVENT = "account.snapshot_captured"
 const RECOVERY_CYCLE_EVENT = "recovery.cycle_completed"
 
 /**
- * Reconcile OPENING/CLOSING snapshot event pairs independently per JSONL
- * session. Missing or duplicate endpoints are incomplete audits, never zeroes.
+ * Reconcile PREFLIGHT/CLOSING snapshot event pairs independently per JSONL
+ * session. Accept legacy OPENING records for historical sessions. Missing or
+ * duplicate endpoints are incomplete audits, never zeroes.
  */
 export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
   try {
@@ -29,7 +30,7 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
         continue
       }
       const phase = event.data?.phase
-      if (phase === "OPENING") sessions.get(fileName).opening.push(event.data)
+      if (phase === "PREFLIGHT" || phase === "OPENING") sessions.get(fileName).opening.push(event.data)
       else if (phase === "CLOSING") sessions.get(fileName).closing.push(event.data)
       else throw new TypeError("Account snapshot Journal event has an invalid phase")
     }
@@ -38,7 +39,7 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
     const errors = []
     for (const [session, pair] of [...sessions.entries()].sort(([left], [right]) => left.localeCompare(right))) {
       const blockers = []
-      if (pair.opening.length !== 1) blockers.push("OPENING_SNAPSHOT_COUNT:" + pair.opening.length)
+      if (pair.opening.length !== 1) blockers.push("PREFLIGHT_SNAPSHOT_COUNT:" + pair.opening.length)
       if (pair.closing.length !== 1) blockers.push("CLOSING_SNAPSHOT_COUNT:" + pair.closing.length)
       const recoveryCycleProfits = pair.recoveryCycleProfits
       const recoverySummary = {
