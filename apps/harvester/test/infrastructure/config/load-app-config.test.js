@@ -79,6 +79,7 @@ function assertAppConfigStructure(config) {
 test("loads and validates the default named ESM app config export", async () => {
   const config = await loadAppConfig()
   assertAppConfigStructure(config)
+  assert.deepEqual(config.operatorControl?.telegram, { enabled: false, allowedUserIds: [] }, "The default ESM app config must explicitly keep inbound Telegram control disabled with an empty allowlist.")
 })
 
 test("loads a named appConfig export from a supplied JavaScript path", async (t) => {
