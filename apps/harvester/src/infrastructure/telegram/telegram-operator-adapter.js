@@ -51,11 +51,16 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
       (typeof botUsername !== "string" || targetUsername.toLowerCase() !== botUsername.toLowerCase())) {
     return Object.freeze({ type: "IGNORE" })
   }
-  if (command !== "/pause") {return Object.freeze({ type: "UNSUPPORTED" })}
-  if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
-    return Object.freeze({ type: "INVALID" })
+  if (command === "/start" || command === "/help") {
+    return argumentsList.length === 0
+      ? Object.freeze({ type: "HELP" })
+      : Object.freeze({ type: "INVALID" })
   }
-  return Object.freeze({ type: "PAUSE", symbol: argumentsList[0].toUpperCase() })
+  if (command !== "/pause" && command !== "/resume") {return Object.freeze({ type: "UNSUPPORTED" })}
+  if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
+    return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
+  }
+  return Object.freeze({ type: command === "/pause" ? "PAUSE" : "RESUME", symbol: argumentsList[0].toUpperCase() })
 }
 
 /**
@@ -68,7 +73,7 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
  * @param {object} options
  * @param {string} options.botToken - Telegram bot token from the process environment.
  * @param {string[]} options.allowedUserIds - Decimal Telegram user-ID allowlist.
- * @param {{pauseMarket: Function}} options.operator - Harvester application facade.
+ * @param {{pauseMarket: Function, resumeMarket?: Function}} options.operator - Harvester application facade.
  * @param {Function} [options.fetchImpl=globalThis.fetch] - Injectable fetch implementation.
  * @param {object} [options.logger] - Optional structured logger.
  * @param {number} [options.pollTimeoutSeconds=30] - Telegram long-poll timeout.
@@ -166,10 +171,27 @@ export function createTelegramOperatorAdapter({
       await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal })
       return
     }
+    if (parsed.type === "HELP") {
+      await sendMessage({
+        chatId: message.chat.id,
+        text: [
+          "Harvester Command Center",
+          "/status — runtime status (coming in CC-1)",
+          "/markets — configured market status (coming in CC-1)",
+          "/pause SYMBOL — block new strategy BUYs for one market",
+          "/resume SYMBOL — remove only the operator pause when safety permits",
+          "/help — show this help",
+          "",
+          "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
+        ].join("\\n"),
+        signal,
+      })
+      return
+    }
     if (parsed.type === "UNSUPPORTED") {
       await sendMessage({
         chatId: message.chat.id,
-        text: "Only /pause <SYMBOL> is available.",
+        text: "Unknown command. Use /help to see available commands.",
         signal,
       })
       return
@@ -177,16 +199,21 @@ export function createTelegramOperatorAdapter({
     if (parsed.type === "INVALID") {
       await sendMessage({
         chatId: message.chat.id,
-        text: "Usage: /pause <SYMBOL>",
+        text: "Usage: /" + (parsed.command === "RESUME" ? "resume" : "pause") + " <SYMBOL>. Use /help for commands.",
         signal,
       })
       return
     }
 
     const requestId = "telegram:" + update.update_id + ":" + (message.date ?? "0") + ":" + userId
+    if (parsed.type === "RESUME" && typeof operator.resumeMarket !== "function") {
+      await sendMessage({ chatId: message.chat.id, text: "Resume is not available in this operator adapter configuration.", signal })
+      return
+    }
+
     let result
     try {
-      result = await operator.pauseMarket({
+      result = await operator[parsed.type === "RESUME" ? "resumeMarket" : "pauseMarket"]({
         actor: {
           id: "telegram-user:" + userId,
           roles: ["trading-operator"],
@@ -207,14 +234,18 @@ export function createTelegramOperatorAdapter({
       const code = result?.errors?.[0]?.code
       const reply = code === "INVALID_OPERATOR_MARKET"
         ? "Unknown configured market: " + parsed.symbol + "."
-        : "Pause was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+        : code === "SAFETY_BLOCKER_ACTIVE"
+          ? "Cannot resume " + parsed.symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
+          : (parsed.type === "RESUME" ? "Resume" : "Pause") + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
       await sendMessage({ chatId: message.chat.id, text: reply, signal })
       return
     }
 
-    const reply = result.data?.alreadyPaused === true
-      ? "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
-      : "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+    const reply = parsed.type === "RESUME"
+      ? "Resumed " + parsed.symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
+      : result.data?.alreadyPaused === true
+        ? "Already paused " + parsed.symbol + ". New strategy BUYs remain blocked."
+        : "Paused " + parsed.symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
     await sendMessage({ chatId: message.chat.id, text: reply, signal })
   }
 
