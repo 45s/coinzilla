@@ -151,6 +151,7 @@ The regression tests in `apps/harvester/test/use-cases/conservative-trading-engi
 - Structured deferral reason/details propagation and zero broker calls across every stable gate-reason category.
 - A gate changing after PENDING registration, including local PENDING cleanup and zero broker calls.
 - Missing and stale book data, stale price data, unavailable volatility history, and active volatility protection.
+- Existing pre-evaluation skips for safety-paused markets and unowned open orders, kept distinct from submission deferrals.
 - A crossing `LIMIT_MAKER` intent remaining deferred with no broker call.
 - Preservation of earlier acknowledged orders when a later action in a multi-action decision is deferred.
 - Existing readiness skip/resume behavior.

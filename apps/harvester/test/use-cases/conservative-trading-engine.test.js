@@ -39,6 +39,7 @@ const createFixture = ({
   isMarketBookFresh = () => true,
   hasUnownedOpenOrdersForSymbol = () => false,
   getVolatilityData,
+  pausedMarkets = [],
 } = {}) => {
   const baseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
   const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
@@ -176,6 +177,7 @@ const createFixture = ({
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
+    initialState: { pausedMarkets },
     onPause: async () => {},
     isStopping: () => false,
   })
@@ -393,6 +395,32 @@ test("reports a structured reason when volatility protection is active", async (
   assert.equal(result.data.reason, "VOLATILITY_PROTECTION_ACTIVE", "The engine must identify the active volatility gate rather than reporting a generic readiness failure.")
   assert.equal(result.data.deferralDetails.volatilityRatio, "2", "The reason must preserve the exact volatility ratio used by the protection gate.")
   assert.equal(fixture.submittedIntents.length, 0, "Volatility protection must prevent broker submission for ordinary strategy actions.")
+})
+
+
+
+test("reports the existing pre-evaluation skip for a safety-paused market", async () => {
+  const fixture = createFixture({ pausedMarkets: ["ZROUSDT"] })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.skipped, true, "A safety-paused market must stop before strategy evaluation.")
+  assert.equal(result.data.reason, "PAIR_PAUSED", "The pre-evaluation result must retain the established pause reason.")
+  assert.equal(fixture.submittedIntents.length, 0, "A safety-paused market must not create a broker order intent.")
+})
+
+test("reports the existing pre-evaluation skip when unowned open orders exist", async () => {
+  const fixture = createFixture({ hasUnownedOpenOrdersForSymbol: () => true })
+  const result = await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+
+  assert.equal(result.data.skipped, true, "Unowned orders must stop strategy evaluation before submission.")
+  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDER", "The pre-evaluation result must retain the established unowned-order reason.")
+  assert.equal(fixture.submittedIntents.length, 0, "A symbol with unowned open orders must not create a broker order intent.")
 })
 
 test("PENDING orders remain explicitly uncancellable", () => {
