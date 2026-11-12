@@ -3835,3 +3835,52 @@ test("blocks a second process start after an unclean prior session before broker
   )
   assert.deepEqual(brokerCalls, [], "An unclean prior session must not reconnect before restart-recovery proof.")
 })
+
+
+test("reuses the process-owned durable-facts store for Telegram operator pause facts", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-shared-operator-facts-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const runtimeSessionId = "shared-process-operator-session"
+  const durableFactsStore = createFileDurableFactsStore({ directory, runtimeSessionId })
+  await durableFactsStore.initialize()
+  let operator
+  let secondaryStoreFactoryCalls = 0
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+  }
+  const runtime = await startHarvesterForTest({
+    appConfig: config,
+    durableFactsStore,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: directory },
+    createDurableFactsStore: () => {
+      secondaryStoreFactoryCalls += 1
+      throw new Error("The process must not create a second writer for its durable-facts ledger.")
+    },
+    createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
+      operator = suppliedOperator
+      return { start: async () => ({ started: true }), stop: async () => ({ stopped: true }) }
+    },
+    logger: { info() {}, error() {} },
+  })
+
+  try {
+    const pause = await operator.pauseMarket({
+      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      requestId: "telegram:shared-store-test",
+      symbol: "BTCUSDT",
+    })
+    assert.equal(pause.ok, true, "An authorized operator pause must append through the process-owned store.")
+  } finally {
+    await runtime.stop()
+  }
+
+  const read = await durableFactsStore.readAll()
+  assert.equal(read.ok, true, read.errors?.[0]?.message)
+  assert.equal(secondaryStoreFactoryCalls, 0, "Telegram operator control must reuse the exact store that owns process/order/fill facts.")
+  const pauseFact = read.data.records.find(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
+  assert.ok(pauseFact, "The operator pause must be present in the process-owned durable stream.")
+  assert.equal(pauseFact.runtimeSessionId, runtimeSessionId, "Operator pause facts must share the exact process-session identity.")
+  assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STARTED").length, 1)
+  assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STOPPED").length, 1)
+})
