@@ -378,7 +378,7 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
 })
 
 
-test("logs Portfolio Stats when recovery completion changes Portfolio accounting without changing total inventory", () => {
+test("logs Portfolio Stats when recovery completion changes Portfolio accounting without changing total inventory", async () => {
   const infoLogs = []
   const buyFill = createFill({ tradeId: "stats-cycle-buy", quantity: "2", quoteQuantity: "130000" })
   const sellFill = createFill({
