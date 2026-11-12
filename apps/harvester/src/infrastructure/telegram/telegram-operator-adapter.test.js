@@ -33,6 +33,13 @@ function makeUpdate({
   }
 }
 
+test("parses help, start, pause and resume commands", () => {
+  assert.deepEqual(parseTelegramOperatorCommand("/start"), { type: "HELP" })
+  assert.deepEqual(parseTelegramOperatorCommand("/help"), { type: "HELP" })
+  assert.deepEqual(parseTelegramOperatorCommand("/resume linkusdt"), { type: "RESUME", symbol: "LINKUSDT" })
+  assert.deepEqual(parseTelegramOperatorCommand("/resume"), { type: "INVALID", command: "RESUME" })
+})
+
 test("parses only the initial pause command and accepts a command addressed to this bot", () => {
   assert.deepEqual(parseTelegramOperatorCommand("/pause linkusdt", { botUsername: "coinzilla_bot" }), {
     type: "PAUSE",
@@ -53,11 +60,11 @@ test("ignores ordinary text and commands addressed to another bot", () => {
 })
 
 test("rejects malformed pause syntax and does not expose unimplemented commands", () => {
-  assert.deepEqual(parseTelegramOperatorCommand("/pause"), { type: "INVALID" })
-  assert.deepEqual(parseTelegramOperatorCommand("/pause LINKUSDT extra"), { type: "INVALID" })
-  assert.deepEqual(parseTelegramOperatorCommand("/pause LINK-USDT"), { type: "INVALID" })
-  assert.deepEqual(parseTelegramOperatorCommand("/pause@coinzilla_bot@another_bot LINKUSDT", { botUsername: "coinzilla_bot" }), { type: "INVALID" })
-  assert.deepEqual(parseTelegramOperatorCommand("/resume LINKUSDT"), { type: "UNSUPPORTED" })
+  assert.deepEqual(parseTelegramOperatorCommand("/pause"), { type: "INVALID", command: "PAUSE" })
+  assert.deepEqual(parseTelegramOperatorCommand("/pause LINKUSDT extra"), { type: "INVALID", command: "PAUSE" })
+  assert.deepEqual(parseTelegramOperatorCommand("/pause LINK-USDT"), { type: "INVALID", command: "PAUSE" })
+  assert.deepEqual(parseTelegramOperatorCommand("/pause@coinzilla_bot@another_bot LINKUSDT", { botUsername: "coinzilla_bot" }), { type: "INVALID", command: "PAUSE" })
+  assert.deepEqual(parseTelegramOperatorCommand("/cancel LINKUSDT"), { type: "UNSUPPORTED" })
 })
 
 test("polls serially, maps an allowlisted private sender to an actor, and acknowledges pause", async () => {
@@ -207,6 +214,89 @@ test("ignores group messages even when their sender ID is allowlisted", async ()
   await adapter.stop()
 
   assert.deepEqual(sentMessages, [], "Group chats must be ignored without sending operator responses.")
+})
+
+test("dispatches resume through the application facade and preserves safety blockers", async () => {
+  const update = makeUpdate({ updateId: 110, text: "/resume LINKUSDT" })
+  const calls = []
+  const sentMessages = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
+      finishSecondPoll()
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      })
+    }
+    if (method === "sendMessage") {
+      sentMessages.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: { message_id: 210 } })
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async () => assert.fail("Resume must not call pauseMarket."),
+      resumeMarket: async (request) => {
+        calls.push(request)
+        return { ok: false, data: undefined, errors: [{ code: "SAFETY_BLOCKER_ACTIVE" }] }
+      },
+    },
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].symbol, "LINKUSDT")
+  assert.match(sentMessages[0].text, /safety, recovery, or volatility blocker/)
+})
+
+test("answers /help without invoking trading use cases", async () => {
+  const update = makeUpdate({ updateId: 111, text: "/help" })
+  const sentMessages = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") {return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })}
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
+      finishSecondPoll()
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      })
+    }
+    if (method === "sendMessage") {
+      sentMessages.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: { message_id: 211 } })
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator: { pauseMarket: async () => assert.fail("Help must not invoke pauseMarket.") },
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  assert.equal(sentMessages.length, 1)
+  assert.match(sentMessages[0].text, /Harvester Command Center/)
+  assert.match(sentMessages[0].text, /resume SYMBOL/)
 })
 
 test("fails adapter startup when Telegram bot identity cannot be verified", async () => {
