@@ -430,14 +430,14 @@ P3 has introduced four cohesive use-case boundaries on the current branch:
   workflow's existing accounting transition. It owns no Portfolio/RecoveryLedger
   state and does not bypass the engine's durable fill barriers.
 
-The engine has reduced from 3,335 lines at the verified `develop` baseline to
-2,266 lines on this branch. The extraction is incremental, not a completed
+The engine was reduced from 3,335 lines at the verified pre-P3 `develop`
+baseline to 2,266 lines by the incremental extraction merged in [PR #1075](https://github.com/45s/coinzilla/pull/1075). This is not a completed
 lifecycle redesign. Strategy evaluation/commitment allocation, execution
 totals and recovery markers, owned-order cancellation/replacement, and the
 central submission gate remain coordinated by the engine. The engine still
 owns the serialized state transition queue; the extracted workflows do not
 create a second concurrency boundary. See the [Harvester roadmap](../ROADMAP.md)
-and [P3 issue #1073](https://github.com/45s/coinzilla/issues/1073).
+and the merged [P3 implementation PR #1075](https://github.com/45s/coinzilla/pull/1075).
 
 Only order updates matched to a registered Harvester client order ID may
 mutate the order registry or accounting. TRADE events must contain a canonical
