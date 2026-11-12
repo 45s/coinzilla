@@ -101,6 +101,15 @@ export function makeExecuteStrategyDecision({
     }
   }
 
+  const deferRegisteredSubmission = async ({ order, purpose, errors }) => {
+    try {
+      await onSubmissionDeferred({ order, purpose, registered: true })
+      return toResult({ errors })
+    } catch (error) {
+      return toResult({ errors: [...errors, error] })
+    }
+  }
+
   const executeStrategyDecision = async ({ decision, marketMetadata } = {}) => {
     try {
       if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
@@ -148,11 +157,17 @@ export function makeExecuteStrategyDecision({
           return toResult({ data: { deferred: true, submittedOrders } })
         }
         if (onDurableSubmissionIntent) {
-          const durableIntent = await onDurableSubmissionIntent({ order: pendingOrder, purpose })
+          let durableIntent
+          try {
+            durableIntent = await onDurableSubmissionIntent({ order: pendingOrder, purpose })
+          } catch (error) {
+            return deferRegisteredSubmission({ order: pendingOrder, purpose, errors: [error] })
+          }
           if (durableIntent?.ok !== true || durableIntent.data?.durable !== true) {
-            const error = durableIntent?.errors?.[0] ??
-              new Error("Durable order-submission intent was not acknowledged")
-            return toResult({ errors: durableIntent?.errors ?? [error] })
+            const errors = durableIntent?.errors?.length
+              ? durableIntent.errors
+              : [new Error("Durable order-submission intent was not acknowledged")]
+            return deferRegisteredSubmission({ order: pendingOrder, purpose, errors })
           }
         }
         let brokerResult
