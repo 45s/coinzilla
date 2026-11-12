@@ -404,7 +404,7 @@ P3 introduces two cohesive use-case boundaries on the current branch:
   `src/use-cases/collect-owned-order-snapshots.js` performs read-only REST
   evidence collection for registered orders: account-wide open-order reads per
   affected symbol, canonical order-history identity checks, complete paginated
-  fill-history retrieval, and parity checks against durable Journal fill facts.
+  fill-history retrieval, and parity checks against Journal fill evidence supplied in the engine's initial state.
   It returns validated snapshots and does not mutate the order registry or
   accounting. `applyOwnedOrderSnapshotsTransition` remains in the engine and
   applies those snapshots inside the serialized transition queue.
@@ -421,7 +421,7 @@ evaluation/commitment allocation, execution-fill application, terminal
 fill-history reconciliation, user-data order-event transitions, owned-order
 cancellation/replacement, and operator pause/resume orchestration remain in
 the engine for subsequent behavior-protected extraction. See the
-[Harvester roadmap](../ROADMAP.md#harvester-conservative-architecture-decomposition-and-documentation-reconciliation-p3)
+[Harvester roadmap](../ROADMAP.md)
 and [P3 issue #1073](https://github.com/45s/coinzilla/issues/1073).
 
 Only order updates matched to a registered Harvester client order ID may
