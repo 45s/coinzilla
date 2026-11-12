@@ -330,7 +330,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
               position,
               completion,
               minProfit,
-              inventoryDisposition: inventoryDisposition ?? null,
+              inventoryDisposition: completion.dust ?? null,
             })
             if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
               return toResult({

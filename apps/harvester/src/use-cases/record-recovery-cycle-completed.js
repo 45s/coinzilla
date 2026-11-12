@@ -10,7 +10,6 @@ export async function recordRecoveryCycleCompleted({
   position,
   completion,
   minProfit,
-  inventoryDisposition = null,
 } = {}) {
   try {
     if (typeof durableFactsStore?.append !== "function") throw new TypeError("recordRecoveryCycleCompleted requires a durable-fact append port")
@@ -27,12 +26,11 @@ export async function recordRecoveryCycleCompleted({
         compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) < 0) {
       throw new TypeError("Recovery-cycle completion profit must match the ledger and satisfy minProfit")
     }
-    if (compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0) {
-      throw new TypeError("Recovery-cycle active quantity must match the canonical Position")
+    if (compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0 ||
+        compareDecimal({ left: completion.minProfit, right: minProfit }) !== 0) {
+      throw new TypeError("Recovery-cycle quantities and minProfit must match the canonical completion input")
     }
-    if (typeof inventoryDisposition !== "string" && inventoryDisposition !== null) {
-      throw new TypeError("Recovery-cycle inventoryDisposition must be a string or null")
-    }
+    const inventoryDisposition = completion.dust ?? null
     const appliedFillIds = [...recoveryLedger.appliedFillIds]
     if (appliedFillIds.length === 0) throw new TypeError("Recovery-cycle completion requires at least one applied execution fill")
     const cycleIdentity = JSON.stringify([
@@ -41,6 +39,11 @@ export async function recordRecoveryCycleCompleted({
       recoveryLedger.buyCost,
       recoveryLedger.netSellProceeds,
       position.spent.amount,
+      completion.minProfit,
+      completion.activeQuantity,
+      completion.keepQuantity,
+      completion.freeQuantity,
+      inventoryDisposition,
     ])
     const cycleId = createHash("sha256").update(cycleIdentity).digest("hex")
     const result = await durableFactsStore.append({

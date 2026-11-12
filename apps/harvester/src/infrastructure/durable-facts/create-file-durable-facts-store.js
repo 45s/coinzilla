@@ -420,9 +420,34 @@ function validateFactData({ factType, data, factId }) {
         !isDecimalString(canonicalData.freeQuantity)) {
       throw new TypeError("Recovery-cycle completion accounting values must be exact canonical decimals")
     }
-    if (canonicalData.inventoryDisposition !== null &&
-        (typeof canonicalData.inventoryDisposition !== "string" || !canonicalData.inventoryDisposition.trim())) {
-      throw new TypeError("Recovery-cycle inventory disposition must be a non-empty string or null")
+    if (canonicalData.inventoryDisposition !== null) {
+      const dust = canonicalData.inventoryDisposition
+      const dustFields = new Set(["status", "quantity", "reason", "minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"])
+      if (!dust || typeof dust !== "object" || Array.isArray(dust) ||
+          Object.keys(dust).some((key) => !dustFields.has(key)) ||
+          dust.status !== "EXCHANGE_CONSTRAINED_DUST" ||
+          !["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason) ||
+          !isPositiveDecimalString(dust.quantity)) {
+        throw new TypeError("Recovery-cycle inventory disposition must be validated exchange-constrained dust")
+      }
+      for (const field of ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"]) {
+        if (dust[field] !== undefined && !isDecimalString(dust[field])) {
+          throw new TypeError("Recovery-cycle dust " + field + " must be an exact decimal string")
+        }
+      }
+      if (dust.reason === "MIN_QUANTITY" &&
+          (dust.minimumQuantity === undefined || dust.evaluatedQuantity === undefined)) {
+        throw new TypeError("MIN_QUANTITY dust requires its exchange minimum and evaluated quantity")
+      }
+      if (dust.reason === "MIN_NOTIONAL" &&
+          (dust.minimumQuantity === undefined || dust.minimumNotional === undefined ||
+           dust.evaluatedQuantity === undefined || dust.evaluatedNotional === undefined)) {
+        throw new TypeError("MIN_NOTIONAL dust requires exact quantity and notional evidence")
+      }
+      if (dust.reason === "QUANTITY_INCREMENT" &&
+          (dust.quantityStepSize === undefined || dust.evaluatedQuantity !== "0")) {
+        throw new TypeError("QUANTITY_INCREMENT dust requires exact step-size evidence and zero evaluated quantity")
+      }
     }
   }
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
