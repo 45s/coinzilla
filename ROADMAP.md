@@ -77,11 +77,14 @@
    - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
-10. **Domain-owned custom error classes and typed error handling ([#1028](https://github.com/45s/coinzilla/issues/1028)) — PLANNED.**
-   - **Why:** generic `Error` instances and message-based classification make failure handling and tests brittle; callers need reliable semantic categories at selected boundaries.
-   - **Plan:** audit concrete throw/catch sites; define package ownership and a minimal convention; introduce specific subclasses (for example `ConfigValidationError`) only where consumers need typed distinction; preserve `cause`, stack traces and structured diagnostic context; migrate incrementally with tests and documentation.
-   - **Safety:** no blanket conversion of all errors, no premature global error framework/shared package, and no message parsing when typed classification is available. Keep ordinary control flow out of exceptions.
-   - **Owner:** cross-workspace coordination with implementation and detailed migrations in the relevant package/app roadmaps.
+10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — PLANNED; gradual adoption.**
+   - **Why:** generic errors and inconsistent wrapping make it difficult to identify the failing component/operation and preserve the underlying cause.
+   - **Standard:** one shared `SystemCustomError` base; specific subclasses and stable domain-scoped codes owned by the package/application/feature that owns the failure. Preserve native `cause` and attach bounded, safe diagnostic context; classify retryability only where meaningful.
+   - **Plan:** (1) audit existing errors, consumers and dependency directions; select one shared base owner; (2) implement and test the minimal base contract; (3) add package-owned error types/codes at high-value boundaries; (4) adopt them in new features and bug fixes as relevant paths are touched; (5) standardize safe structured reporting; (6) add compatibility/regression tests and update affected local docs/AGENTS/roadmaps.
+   - **Adoption:** new functionality follows the standard immediately; bug fixes migrate the touched error path where relevant and safe. Migrate untouched legacy code only through focused tasks with a concrete diagnostic benefit.
+   - **Safety:** no duplicate base implementations, dependency cycles, message-based classification, blanket native-Error conversion or one-shot rewrite. Do not let logging/reporting failures mask the original failure.
+   - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
+   - **Owner:** cross-workspace engineering, with implementation owned by the relevant shared package or consuming application.
 
 11. **Workspace JavaScript linting — DONE ([PR #1058](https://github.com/45s/coinzilla/pull/1058)).**
    - ESLint 10 flat configuration, full-workspace inventory reporting, strict changed-JavaScript CI enforcement, and named-export-only enforcement for ESM modules (with the required ESLint config-loader exception).
@@ -133,22 +136,3 @@
 7. Run focused checks, repository agent-policy/link checks and applicable CI on the exact PR head. A skipped integration check is not a pass.
 8. Keep task branches short-lived and delete them after merge when repository permissions allow. Never bypass branch protection or release approval.
 
-
-## IMPORTANT — cross-workspace engineering foundations
-
-- **Structured, package-owned application errors — PLANNED; incremental adoption.**
-  - **Why:** generic errors and inconsistent wrapping make it difficult to identify which package, service, operation, or boundary failed. Losing the original cause makes diagnosis and safe recovery harder.
-  - **Standard:** introduce one shared `SystemCustomError` base. Each owning package/application/feature defines only the specific subclasses and stable, domain-scoped error codes it needs (for example, Journal read/write/validation, notification delivery, command operations, authentication, trading execution, configuration, and broker connection/order/market-data failures). Preserve native `cause`, attach bounded safe context, and classify retryability only where meaningful.
-  - **Ownership:** the base implementation must have one shared owner selected after dependency-direction and shared-utility review. Domain-specific subclasses remain with their owning component; do not build a central catalogue of every application's errors or introduce cross-domain dependency cycles.
-  - **Adoption policy:** new functionality follows the standard immediately. During bug fixes and maintenance, migrate the error paths being materially changed when relevant and safe. Refactor untouched legacy paths only through focused tasks with a concrete diagnostic benefit. No mass rename or one-shot repository-wide rewrite.
-  - **Implementation order:**
-    1. Audit existing error types, exports, package dependency directions, catch/wrap/log boundaries, and current consumers. Select the shared owner and define the minimal `SystemCustomError` contract.
-    2. Implement the base and focused unit tests: native `Error` behavior, subclass name, stable code, native `cause`, safe context, and optional retryability. Document public exports and compatibility.
-    3. Introduce package-owned error classes and codes when adding or changing functionality in shared infrastructure packages. Start with high-value boundaries where errors currently lose component or operation identity.
-    4. Adopt the standard in applications and services as features are developed and bug fixes touch the relevant paths. Wrap only at meaningful architectural boundaries; preserve lower-level causes and avoid duplicate logs.
-    5. Standardize structured logging/reporting fields and safe serialization where the relevant logger/telemetry contracts support them. Ensure reporter failures never mask the original operation failure.
-    6. Add targeted compatibility/regression tests and update each affected package's README, API docs, local AGENTS and roadmap when its public error contract changes. Keep the root standard and root roadmap synchronized.
-    7. Track remaining legacy migrations as evidence-based, owner-scoped tasks; do not treat repository-wide replacement of native `Error` as a completion criterion.
-  - **Acceptance criteria:** a single shared base with no duplicate implementations; stable and tested error codes; package-owned subclasses; preserved cause chains across meaningful boundaries; safe, actionable context; no secrets in logs or notifications; deterministic tests for important error paths; and a documented gradual migration process. Do not claim full adoption while legacy paths remain.
-  - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
-  - **Owner:** cross-workspace engineering; implementation ownership is assigned per shared package or consuming application during each focused task.
