@@ -9,26 +9,26 @@
 This document is the behavior and safety contract for Harvester's volatility protection. It does not change the authoritative [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md), recovery accounting, or existing order lifecycle rules.
 ## Per-pair configuration
 
-Every configured pair must explicitly declare its volatility-protection policy. Set the required boolean to `true` to retain protection or `false` to opt that pair out in `config.json`:
+Every configured pair must explicitly declare its volatility-protection policy. Set the required boolean to `true` to retain protection or `false` to opt that pair out in `config/index.js`:
 
-```json
-{
-  "strategies": {
-    "CG_coinGrabber": {
-      "pairs": {
-        "LINKFDUSD": {
-          "enabled": true,
-          "enableVolatilityProtection": false
-        }
-      }
-    }
-  }
-}
+```js
+export const appConfig = {
+  strategies: {
+    CG_coinGrabber: {
+      pairs: {
+        LINKFDUSD: {
+          enabled: true,
+          enableVolatilityProtection: false,
+        },
+      },
+    },
+  },
+};
 ```
 
 - `true`: retain the existing protection behavior, including startup warm-up, freshness checks, submission gating and owned-BUY cancellation. The key is mandatory; omission is a configuration error.
 - `false`: skip this pair's volatility state machine, Kline subscription/history warm-up, periodic refresh, volatility submission gate and volatility-triggered BUY cancellation.
-- The setting must be present and must be a JSON boolean. Missing keys, `null`, strings and numbers are rejected during config validation with a `ConfigValidationError` containing the offending pair path.
+- The setting must be present and must be a JavaScript boolean. Missing keys, `null`, strings and numbers are rejected during config validation with a `ConfigValidationError` containing the offending pair path.
 - The opt-out is strictly scoped to volatility protection. It does not disable market-price/order-book freshness, account-integrity checks, unowned-order blocking, durable intent requirements, exchange filters, shutdown BUY cancellation, or other safety controls.
 - Recovery/accounting behavior is unchanged. No recovery SELL exception is broadened; the normal Conservative recovery-purpose and accounting rules continue to apply.
 

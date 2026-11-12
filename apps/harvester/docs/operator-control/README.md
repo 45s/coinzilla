@@ -4,33 +4,9 @@ This is the entry point for Harvester's operator-control capability.
 
 ## Current status
 
-The engine boundary, transport-independent application use cases and offline-testable Telegram `/pause <SYMBOL>` adapter are implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045); production configuration and lifecycle wiring are delivered by [PR #1067](https://github.com/45s/coinzilla/pull/1067). The initial operator pause is **process-lifetime only**: it is durably appended before in-memory application, but it is not restored after a process restart. Full restart recovery (ADR-0001 / issue #654) is a separate workstream and is not a prerequisite.
+The engine boundary, transport-independent application use cases and offline-testable Telegram `/pause <SYMBOL>` adapter are implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Runtime configuration and lifecycle wiring remain pending. The initial operator pause is **process-lifetime only**: it is durably appended before in-memory application, but it is not restored after a process restart. Full restart recovery (ADR-0001 / issue #654) is a separate workstream and is not a prerequisite for this capability.
 
 Do not use Journal as the control-state store. Do not claim that a pause survives a restart; after restarting Harvester, issue `/pause <SYMBOL>` again if the market must remain paused.
-
-## Enablement
-
-Inbound control is disabled by default. To enable it, set `operatorControl.telegram.enabled` to `true` in `apps/harvester/config.json` and add only trusted Telegram user IDs to `allowedUserIds`. Keep the bot token and durable-store path in the process environment:
-
-- `TELEGRAM_BOT_TOKEN`: Telegram bot token; never put it in JSON or commit it.
-- `DURABLE_FACTS_DIRECTORY`: absolute path to an already initialized ADR-0001 durable-facts directory.
-
-Initialize the store once, explicitly, before enabling the adapter. From the repository root, set `DURABLE_FACTS_DIRECTORY` to the intended absolute directory and run `node apps/harvester/scripts/initialize-durable-facts.js --confirm`. Runtime startup only verifies and appends to this store; it never initializes, repairs or resets it. Missing credentials, an invalid path, an uninitialized/corrupt store, or failed Telegram `getMe` verification aborts startup before trading subscriptions are started.
-
-Example configuration:
-
-```json
-{
-  "operatorControl": {
-    "telegram": {
-      "enabled": false,
-      "allowedUserIds": []
-    }
-  }
-}
-```
-
-Keep this inbound control separate from `notifications.telegram`, which is outbound-only. After enabling, restart Harvester intentionally; a pause is not restored on the next process restart.
 
 ## Architecture
 
@@ -59,6 +35,6 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Actor authorization and durable-before-apply application use cases | Implemented in PR #1045; port-tested |
 | Telegram /pause SYMBOL parser, private-chat allowlist and serial polling | Implemented in PR #1045; mocked-transport tested |
 | Process-restart restoration of operator pause state | Explicitly out of scope; separate ADR-0001 / #654 workstream |
-| Disabled-by-default configuration, ADR-0001 store verification, Telegram startup/shutdown and fail-closed runtime wiring | Implemented in PR #1067; independent of full restart recovery |
+| Disabled-by-default runtime configuration and lifecycle wiring | Pending; independent of full restart recovery |
 
-PR #1045 is the engine/application/adapter foundation; PR #1067 wires the adapter into the runtime. Inbound control remains disabled until an operator explicitly configures the allowlist, token and initialized durable-facts directory. No TESTNET or LIVE operation is authorized by this engineering work.
+The PR #1045 foundation is not a production inbound-control release. The Telegram adapter is not instantiated or started by the Harvester runtime, and no environment variable or config flag enables it yet. Merge of this foundation does not authorize a TESTNET or LIVE session.
