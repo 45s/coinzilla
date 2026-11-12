@@ -398,7 +398,7 @@ The central final order-submission gate and serialized state application remain
 engine-owned; the engine is not a domain policy and does not parse raw Binance
 messages.
 
-P3 has introduced three cohesive use-case boundaries on the current branch:
+P3 has introduced four cohesive use-case boundaries on the current branch:
 
 - `makeCollectOwnedOrderSnapshots` in
   `src/use-cases/collect-owned-order-snapshots.js` performs read-only REST
@@ -415,21 +415,28 @@ P3 has introduced three cohesive use-case boundaries on the current branch:
   serialized transition, owned-BUY cancellation, and latest-evaluation
   callbacks. The central order gate still reads the protection state and
   prevents disallowed submissions.
+- `makeOrderEventWorkflow` in
+  `src/use-cases/order-event-workflow.js` coordinates normalized user-data
+  order events, external-order ownership policy, execution-fill application,
+  terminal order handling and recovery-cycle transitions. It receives the
+  engine's serialization, accounting, cancellation and strategy callbacks;
+  Portfolio/RecoveryLedger mutation remains owned by
+  `createPortfolioWorkflow`.
 - `makeReconcileTerminalOrderFills` in
   `src/use-cases/reconcile-terminal-order-fills.js` reads canonical REST fill
   history, unions it with already-processed and current stream fills, validates
   order identity and duplicate facts, proves cumulative executed-quantity and
-  terminal-status parity, then delegates each fill to the engine's existing
-  serialized accounting transition. It owns no Portfolio/RecoveryLedger state
-  and does not bypass the engine's durable fill barriers.
+  terminal-status parity, then delegates each fill to the order-event
+  workflow's existing accounting transition. It owns no Portfolio/RecoveryLedger
+  state and does not bypass the engine's durable fill barriers.
 
 The engine has reduced from 3,335 lines at the verified `develop` baseline to
-2,680 lines on this branch. The extraction is incremental, not a completed
-lifecycle redesign. Strategy evaluation/commitment allocation, per-fill
-accounting and state mutation, user-data order-event transitions, owned-order
-cancellation/replacement, and operator pause/resume orchestration remain in
-the engine for subsequent behavior-protected extraction. See the
-[Harvester roadmap](../ROADMAP.md)
+2,266 lines on this branch. The extraction is incremental, not a completed
+lifecycle redesign. Strategy evaluation/commitment allocation, execution
+totals and recovery markers, owned-order cancellation/replacement, and the
+central submission gate remain coordinated by the engine. The engine still
+owns the serialized state transition queue; the extracted workflows do not
+create a second concurrency boundary. See the [Harvester roadmap](../ROADMAP.md)
 and [P3 issue #1073](https://github.com/45s/coinzilla/issues/1073).
 
 Only order updates matched to a registered Harvester client order ID may
