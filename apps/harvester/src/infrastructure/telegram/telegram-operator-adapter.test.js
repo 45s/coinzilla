@@ -707,7 +707,7 @@ test("requires explicit confirmation before applying an inline pause control", a
   await secondPoll
   await adapter.stop()
   assert.deepEqual(operatorCalls, [], "Opening an inline control confirmation must not mutate operator state.")
-  assert.match(editedMessages[0].text, /Confirm PAUSE of LINKUSDT/)
+  assert.match(editedMessages[0].text, /Confirm pause of LINKUSDT/)
   assert.equal(editedMessages[0].reply_markup.inline_keyboard[0][0].callback_data.startsWith("cc:confirm:"), true)
   assert.equal(editedMessages[0].reply_markup.inline_keyboard[0][1].callback_data.startsWith("cc:cancel:"), true)
 })
@@ -879,4 +879,42 @@ test("treats Telegram's unchanged-message refresh response as successful and con
   await secondPoll
   await adapter.stop()
   assert.equal(pollCount, 2, "An unchanged Telegram message is a successful refresh outcome, not a permanently retried update.")
+})
+
+
+test("cancels an inline pause confirmation without invoking the operator", async () => {
+  const updates = [
+    makeCallbackUpdate({ updateId: 701, callbackId: "ask-701", messageId: 901, data: "cc:ask:PAUSE:LINKUSDT" }),
+    makeCallbackUpdate({ updateId: 702, callbackId: "cancel-702", messageId: 901, data: "cc:cancel:701" }),
+  ]
+  const operatorCalls = []
+  const edits = []
+  let pollCount = 0
+  let finishThirdPoll
+  const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: [updates[0]] }) }
+      if (pollCount === 2) { return makeResponse({ ok: true, result: [updates[1]] }) }
+      finishThirdPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
+    if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
+    if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token", allowedUserIds: ["12345"],
+    operator: { pauseMarket: async request => { operatorCalls.push(request); return { ok: true, data: { symbol: request.symbol } } } },
+    fetchImpl, retryDelayMs: 1,
+  })
+  await adapter.start()
+  await thirdPoll
+  await adapter.stop()
+  assert.deepEqual(operatorCalls, [], "Cancelling a pending confirmation must never reach the application control use case.")
+  assert.match(edits[1].text, /cancelled/i, "The inline message must clearly acknowledge cancellation.")
 })

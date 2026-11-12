@@ -33,7 +33,7 @@ The adapter processes updates serially and advances the Telegram update offset o
 - **Not authorized:** verify the sender's numeric Telegram user ID is present in `operatorControl.telegram.allowedUserIds`; do not use usernames or display names.
 - **Command menu missing:** use `/help`; Telegram menu registration is best-effort and may be retried on a later adapter startup.
 - **Snapshot unavailable:** treat the page as unavailable, not healthy. Check Harvester structured logs and source readiness.
-- **Confirmation expired or invalid:** issue the text command again and confirm the newly displayed action.
+- **Confirmation expired or invalid:** reopen the markets page and start a new inline control request; stale confirmation callbacks never execute.
 - **Pause/resume not acknowledged:** inspect the stable operator error code and durable-facts diagnostics. Do not assume the state changed.
 - **Telegram outage:** text commands and inline controls are unavailable while transport is down. Trading behavior does not depend on Telegram delivery.
 - **Shutdown failure:** Harvester must preserve its existing fail-closed shutdown/ownership behavior; do not force process termination to bypass an unconfirmed adapter stop.
