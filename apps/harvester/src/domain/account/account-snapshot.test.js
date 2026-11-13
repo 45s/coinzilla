@@ -51,6 +51,7 @@ test("accepts zero free balances and does not adopt wallet inventory into a Posi
 
 test("rejects invalid snapshots, duplicate assets, and negative balances", () => {
   assert.throws(() => new AccountSnapshot({ balances: [], sourceTime: -1 }), /sourceTime/)
+  assert.throws(() => new AccountSnapshot({ balances: [], sourceTime: -0 }), /sourceTime/)
   assert.throws(() => new AccountSnapshot({ balances: [null], sourceTime: 1 }), /canonical Balance/)
   assert.throws(() => new AccountSnapshot({
     balances: [balance({ asset: btc }), balance({ asset: btc })],
