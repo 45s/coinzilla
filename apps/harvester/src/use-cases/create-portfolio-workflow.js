@@ -85,7 +85,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         })
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
       }
-
+  
       const thirdAssetCommissions = new Map()
       for (const commission of fill.commissions ?? []) {
         const amount = commission.amount
@@ -109,7 +109,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         asset: amount?.asset?.code,
         assetId: amount?.asset?.id,
       }))
-
+  
       logger.debug?.({
         message: "Execution received",
         executionId: fill.id,
@@ -133,7 +133,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         previousPosition: createPositionLogSummary({ position: previousPosition }),
         previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
       })
-
+  
       const result = applyTradingAccounting({
         portfolio,
         recoveryLedger: currentLedger,
@@ -209,67 +209,67 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             portfolioActiveBase: subtractDecimal({
               left: nextPosition?.baseQuantity.amount ?? "0",
               right: previousPosition?.baseQuantity.amount ?? "0",
+          }),
+          portfolioFreeBase: subtractDecimal({
+            left: nextPosition?.freeBaseQuantity.amount ?? "0",
+            right: previousPosition?.freeBaseQuantity.amount ?? "0",
+          }),
+          portfolioQuoteCashFlow: subtractDecimal({
+            left: nextPosition?.quoteNetCashFlow.amount ?? "0",
+            right: previousPosition?.quoteNetCashFlow.amount ?? "0",
+          }),
+          positionSpent: subtractDecimal({
+            left: nextPosition?.spent.amount ?? "0",
+            right: previousPosition?.spent.amount ?? "0",
+          }),
+          netSellProceeds: subtractDecimal({
+            left: nextLedger.netSellProceeds,
+            right: currentLedger.netSellProceeds,
+          }),
+          outstandingRecoveryAmount: subtractDecimal({
+            left: maxDecimal({
+              left: "0",
+              right: subtractDecimal({
+                left: nextPosition?.spent.amount ?? "0",
+                right: nextLedger.netSellProceeds,
+              }),
             }),
-            portfolioFreeBase: subtractDecimal({
-              left: nextPosition?.freeBaseQuantity.amount ?? "0",
-              right: previousPosition?.freeBaseQuantity.amount ?? "0",
+            right: maxDecimal({
+              left: "0",
+              right: subtractDecimal({
+                left: previousPosition?.spent.amount ?? "0",
+                right: currentLedger.netSellProceeds,
+              }),
             }),
-            portfolioQuoteCashFlow: subtractDecimal({
-              left: nextPosition?.quoteNetCashFlow.amount ?? "0",
-              right: previousPosition?.quoteNetCashFlow.amount ?? "0",
+          }),
+          realizedNetProfit: subtractDecimal({
+            left: subtractDecimal({
+              left: nextLedger.netSellProceeds,
+              right: nextPosition?.spent.amount ?? "0",
             }),
-            positionSpent: subtractDecimal({
-              left: nextPosition?.spent.amount ?? "0",
+            right: subtractDecimal({
+              left: currentLedger.netSellProceeds,
               right: previousPosition?.spent.amount ?? "0",
             }),
-            netSellProceeds: subtractDecimal({
-              left: nextLedger.netSellProceeds,
-              right: currentLedger.netSellProceeds,
-            }),
-            outstandingRecoveryAmount: subtractDecimal({
-              left: maxDecimal({
-                left: "0",
-                right: subtractDecimal({
-                  left: nextPosition?.spent.amount ?? "0",
-                  right: nextLedger.netSellProceeds,
-                }),
-              }),
-              right: maxDecimal({
-                left: "0",
-                right: subtractDecimal({
-                  left: previousPosition?.spent.amount ?? "0",
-                  right: currentLedger.netSellProceeds,
-                }),
-              }),
-            }),
-            realizedNetProfit: subtractDecimal({
-              left: subtractDecimal({
-                left: nextLedger.netSellProceeds,
-                right: nextPosition?.spent.amount ?? "0",
-              }),
-              right: subtractDecimal({
-                left: currentLedger.netSellProceeds,
-                right: previousPosition?.spent.amount ?? "0",
-              }),
-            }),
-          },
-        })
-      } else {
-        logger.error?.({
-          message: "accounting execution rejected",
-          executionId: fill.id,
-          tradeId: fill.tradeId,
-          symbol: fill.market.symbol,
-          errors: (result.errors ?? []).map((error) => ({
-            name: error?.name,
-            message: error?.message ?? String(error),
-            stack: error?.stack,
-          })),
-          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId: fill.market.id }),
-          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
-        })
-      }
-      return result
+          }),
+        },
+      })
+    } else {
+      logger.error?.({
+        message: "accounting execution rejected",
+        executionId: fill.id,
+        tradeId: fill.tradeId,
+        symbol: fill.market.symbol,
+        errors: (result.errors ?? []).map((error) => ({
+          name: error?.name,
+          message: error?.message ?? String(error),
+          stack: error?.stack,
+        })),
+        unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId: fill.market.id }),
+        unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
+      })
+    }
+    return result
   })
 
   return {
