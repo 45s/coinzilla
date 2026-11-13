@@ -7042,3 +7042,21 @@ test("exposes a serialized immutable operator market snapshot with current price
   assert.equal(Object.isFrozen(snapshotResult.data.markets), true, "The market collection must be immutable to operator-query consumers.")
   assert.equal(Object.isFrozen(dogeMarket.blockers), true, "The market blocker collection must not expose mutable engine state.")
 })
+
+
+test("rejects a negative-zero market-book timestamp", () => {
+  assert.throws(
+    () => createMarketBook({
+      bookTicker: {
+        symbol: "DOGEUSDT",
+        bestBidPrice: "99.90",
+        bestBidQuantity: "1",
+        bestAskPrice: "100.00",
+        bestAskQuantity: "1",
+        timestamp: -0,
+      },
+    }),
+    /timestamp/,
+    "A market book must reject negative zero as a non-canonical exchange timestamp.",
+  )
+})
