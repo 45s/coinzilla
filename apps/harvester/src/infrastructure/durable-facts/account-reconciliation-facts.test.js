@@ -191,3 +191,52 @@ test("accepts an explicitly blocked open-order snapshot without treating it as a
   assert.equal(result.data.record.data.readiness, "BLOCKED", "The durable fact must preserve the blocked classification.")
   assert.equal(result.data.record.data.orders[0].clientOrderId, undefined, "An external order must not acquire a fabricated Harvester client identity.")
 })
+
+
+test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one asset", async (t) => {
+  const store = await createStore(t)
+  const baseline = (factId, balances) => ({
+    factId,
+    factType: "ACCOUNT_SNAPSHOT_CAPTURED",
+    data: {
+      phase: "COMMISSION_BASELINE",
+      auditStatus: "COMPLETE",
+      sourceTime: 1_700_000_000_000,
+      assetCount: balances.length,
+      balances,
+      auditReasons: [],
+    },
+  })
+  const valid = await store.append(baseline(
+    "account-snapshot:COMMISSION_BASELINE:single-asset",
+    [{ asset: "BNB", free: "1.0000", locked: "0.2500", total: "1.2500" }],
+  ))
+  assert.equal(
+    valid.ok,
+    true,
+    "A targeted commission baseline with the one required fee asset must be accepted.",
+  )
+
+  const empty = await store.append(baseline(
+    "account-snapshot:COMMISSION_BASELINE:empty",
+    [],
+  ))
+  assert.equal(
+    empty.ok,
+    false,
+    "A targeted commission baseline without its fee asset must be rejected.",
+  )
+
+  const multiple = await store.append(baseline(
+    "account-snapshot:COMMISSION_BASELINE:multiple-assets",
+    [
+      { asset: "BNB", free: "1.0000", locked: "0.2500", total: "1.2500" },
+      { asset: "XRP", free: "10", locked: "0", total: "10" },
+    ],
+  ))
+  assert.equal(
+    multiple.ok,
+    false,
+    "A targeted commission baseline must not broaden into an unrelated multi-asset wallet snapshot.",
+  )
+})
