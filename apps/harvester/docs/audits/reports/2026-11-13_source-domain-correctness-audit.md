@@ -158,10 +158,10 @@ Some intermediate test-only workflow attempts were canceled by later branch push
 
 ## 5. Verification and safety
 
-- Harvester unit suite: **1,511 passed, 0 failed**.
-- The Harvester suite passed **1,511/1,511**. The coverage workflow passed with **81.19% line, 81.03% branch, and 80.63% function coverage**. This report aggregates Harvester with imported workspace packages (brokers, entities, event-bus, journal, notifiers, and utils); it is not an isolated Harvester-only metric. The aggregate remains below the 90% branch target noted in project guidance, and Harvester has no package-specific percentage threshold. Isolating and enforcing a 90% Harvester-only branch gate requires a separate scoped coverage task; this PR does not modify other packages or weaken any threshold.
-- Changed-file JavaScript lint/syntax and documentation-link checks passed on the verified PR head.
-- All six required `develop` checks passed: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, and actionlint.
+- Harvester unit suite: **1,512 passed, 0 failed** on verification commit `af0f32f8494c0aa51b95472bdbc0d1ed832185e9`.
+- The coverage workflow passed with **81.45% line, 81.23% branch, and 80.63% function coverage**. This report aggregates Harvester with imported workspace packages (brokers, entities, event-bus, journal, notifiers, and utils); it is not an isolated Harvester-only metric. The aggregate remains below the 90% branch target noted in project guidance, and Harvester has no package-specific percentage threshold. Isolating and enforcing a 90% Harvester-only branch gate requires a separate scoped coverage task; this PR does not modify other packages or weaken any threshold.
+- Changed-file JavaScript lint/syntax and external documentation-link checks passed on verification commit `af0f32f8494c0aa51b95472bdbc0d1ed832185e9`.
+- All six required `develop` checks passed on that exact head: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, and actionlint.
 - The optional read-only Binance TESTNET integration workflow was skipped.
 - No Binance TESTNET/LIVE connection, account query, order placement, cancellation, or account mutation was performed.
 
@@ -171,3 +171,14 @@ Some intermediate test-only workflow attempts were canceled by later branch push
 - Workspace branch coverage remains below the 90% project target. The current coverage report includes shared workspace dependencies, so a separate Harvester-only coverage report and 90% branch gate are needed before a Harvester-specific target can be enforced.
 - This PR does not claim every one of the 312 JavaScript files was rewritten. The full inventory was enumerated; high-risk accounting, recovery, market-data, durable-facts, configuration, and operational-script boundaries received the deep review. Remaining style-only cleanup should be handled in small, behavior-preserving changes with tests where behavior is touched.
 - No strategy economics, trading configuration, shared package, other application, or exchange behavior was changed.
+
+## 7. Modularity and large-file review
+
+The following changed JavaScript files exceed the 500-line review threshold. They were inspected for responsibility boundaries; they were not mechanically split in this correctness audit because each extraction would touch critical state/durability contracts beyond the reproduced defects.
+
+- `src/use-cases/conservative-trading-engine.js` — 2,348 lines. It coordinates the Conservative engine's serialized state transitions across market data, volatility protection, order lifecycle, recovery, account reconciliation, and operator queries. Keep one engine transition/serialization boundary. Follow-up plan: extract MarketBook/POST-ONLY policy first; then isolate volatility protection, account reconciliation, and operator query projections behind existing engine ports; finally reduce the engine to orchestration. Move tests with each extraction and preserve ordering/cancellation semantics.
+- `src/infrastructure/durable-facts/create-file-durable-facts-store.js` — 1,287 lines. It combines durable-fact schema validation with the file adapter's append queue, locking, fsync, manifest/checkpoint protocol, readback, and uncertain-write handling. Follow-up plan: extract pure fact-data/record/checkpoint validators into a package-local schema module with direct tests, while leaving file ownership, serialization, append order, fsync, and recovery in the adapter.
+- `src/use-cases/conservative-trading-engine.test.js` — 7,063 lines. It contains the shared engine harness and broad state-machine integration matrix. Follow-up plan: split by market-data/POST-ONLY, order lifecycle/cancellation, volatility, recovery, account reconciliation, and operator-query behavior as the corresponding source responsibilities are extracted; move existing cases without weakening assertions.
+- `src/use-cases/create-portfolio-workflow.test.js` — 703 lines. It covers portfolio accounting, recovery completion, durable outcomes, and stats. Follow-up plan: move durable-cycle and durable-fill scenarios into the already established focused test files, then keep this file for the core workflow contract.
+
+Two additional files were reviewed near the 300-line trigger: `scripts/config-symbol/binance-client.js` (293 lines) and `scripts/config-symbol/configuration.js` (297 lines). Each has one cohesive responsibility and is not split. `src/use-cases/create-portfolio-workflow.js` (416 lines) and `src/use-cases/order-event-workflow.js` (462 lines) were also reviewed; both remain cohesive use-case orchestration boundaries, so no extraction was justified for this audit.
