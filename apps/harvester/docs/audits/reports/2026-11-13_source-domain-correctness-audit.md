@@ -84,7 +84,7 @@ The review mapped bootstrap/public entry points, engine and order-event consumer
 
 **Evidence and impact:** JavaScript treats `-0` as a safe integer equal to zero. Several timestamp validators therefore accepted a non-canonical representation even though durable-fact serialization rejects negative zero.
 
-**Correction:** Add the pure `isCanonicalNonNegativeSafeInteger` helper and use it at the domain and use-case boundaries. Zero remains valid; negative zero, negative, fractional, unsafe, and non-number timestamps are rejected before reconciliation or persistence.
+**Correction:** Add the pure `isCanonicalNonNegativeSafeInteger` helper and use it at domain and use-case boundaries, including MarketBook construction from bookTicker events. Zero remains valid; negative zero, negative, fractional, unsafe, and non-number timestamps are rejected before freshness decisions, reconciliation, or persistence.
 
 **Regression:** The helper has direct unit tests. MarketPrice, AccountSnapshot, VolatilityCandle, account reconciliation, market-history coverage, and account-fact tests exercise the boundary behavior.
 
@@ -143,6 +143,7 @@ Test-only commits were pushed before the corresponding production fixes. Confirm
 - `c27204d5730ed8e1f10c92274f996b4a99b2b77d`: targeted commission-baseline schema regressions failed against the prior store validator.
 - `a807f33640e3a877a5894352464555d89cf962cb`: recovery completion and dust-evidence regressions exposed missing terminal SELL proof and invalid evidence handling.
 - `33a59edf17c41bd0a0a4d35269060645ff02ddd6`: negative-zero timestamp regressions failed across the domain and recording boundaries before the shared guard was implemented.
+- `304750cbdf32420ab2a5adf31b2755a9283c94b7`: the market-book negative-zero timestamp regression failed with a missing expected exception before the shared guard was applied to `createMarketBook`.
 - The start-harvester integration regression failed with a recovery-completion evidence error while terminal-order forwarding was incomplete; the final end-to-end scenario passes with the canonical order forwarded.
 
 Some intermediate test-only workflow attempts were canceled by later branch pushes before producing a completed RED report; those are not represented as confirmed RED evidence. The final suite and required checks are verified on the final PR head.

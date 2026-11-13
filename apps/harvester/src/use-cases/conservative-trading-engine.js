@@ -1,6 +1,7 @@
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
+import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
@@ -39,8 +40,8 @@ export function createMarketBook({ bookTicker } = {}) {
   if (typeof symbol !== "string" || !/^[A-Z0-9]+$/.test(symbol)) {
     throw new TypeError("Market book symbol must be a non-empty uppercase symbol")
   }
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
-    throw new TypeError("Market book timestamp must be a non-negative safe integer")
+  if (!isCanonicalNonNegativeSafeInteger(timestamp)) {
+    throw new TypeError("Market book timestamp must be a non-negative safe integer other than negative zero")
   }
   const positive = (value, field) => {
     assertDecimalString({ value, field })
