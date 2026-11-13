@@ -75,3 +75,25 @@ test("calculateVolatilityMetrics validates every calculation input before calcul
     )
   }
 })
+
+
+test("rejects negative-zero candle timestamps", () => {
+  assert.throws(
+    () => validateCandle({
+      candle: { ...validCandle, openTime: -0 },
+      symbol: "BTCUSDT",
+      interval: "1m",
+      intervalMs: 60_000,
+    }),
+    /openTime must align/,
+  )
+  assert.throws(
+    () => validateCandle({
+      candle: { ...validCandle, interval: "1ms", closeTime: -0 },
+      symbol: "BTCUSDT",
+      interval: "1ms",
+      intervalMs: 1,
+    }),
+    /closeTime does not match/,
+  )
+})
