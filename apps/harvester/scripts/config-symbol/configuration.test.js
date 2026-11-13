@@ -246,3 +246,25 @@ test("refuses to overwrite an existing symbol", () => {
     "An existing pair must never be overwritten by the generator.",
   )
 })
+
+
+test("requires only the limit order type selected by the configured maker policy", () => {
+  const limitOnlyMetadata = { ...metadata, supportedOrderTypes: ["LIMIT"] }
+  const inputs = {
+    investment: "100",
+    orderQuantity: "20",
+    keepQuantity: "0.1",
+    makerPercent: "0.1",
+    takerPercent: "0.1",
+    minProfit: "0.01",
+    priceStepPercent: "0.05",
+  }
+  const pair = createPairConfig({ inputs, metadata: limitOnlyMetadata })
+
+  assert.equal(pair.makerPercent, 0.1, "A non-zero maker assumption requires LIMIT and must accept LIMIT-only symbols.")
+  assert.throws(
+    () => createPairConfig({ inputs: { ...inputs, makerPercent: "0" }, metadata: limitOnlyMetadata }),
+    /LIMIT_MAKER/i,
+    "A zero maker assumption still requires LIMIT_MAKER and must fail when that order type is unavailable.",
+  )
+})
