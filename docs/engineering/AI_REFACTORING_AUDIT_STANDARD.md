@@ -1,7 +1,7 @@
 # AI Refactoring and Code Audit Standard
 
-**Status:** Mandatory for every AI-assisted refactoring or code-audit task.  
-**Applies to:** All applications, packages, scripts, tests, and shared repository code.  
+**Status:** Mandatory for every AI-assisted refactoring or code-audit task.
+**Applies to:** All applications, packages, scripts, tests, and shared repository code.
 **Purpose:** Improve correctness, reliability, clarity, testability, and maintainability without destabilizing working behavior.
 
 This is the canonical repository-wide standard for refactoring and code audits. It supplements—not replaces—the [Engineering Standards](../../ENGINEERING_STANDARDS.md), [Modularity Standard](MODULARITY_STANDARD.md), [JavaScript and JSDoc Standard](JAVASCRIPT_JSDOC_STANDARD.md), [Structured Error Handling Standard](structured-error-handling.md), [AI-agent workflow](../../AI_AGENT_WORKFLOW.md), and the owning domain's instructions. Where a subject already has a canonical standard, follow that standard rather than creating a competing rule here.
