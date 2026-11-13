@@ -78,10 +78,10 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
   const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
 
   const updateTradingAccounting = ({ fill } = {}) => enqueueAccountingTransition(async () => {
-      if (!(fill instanceof Fill)) {
-        logger.error?.({
-          message: "accounting rejected non-canonical fill",
-          fillType: fill?.constructor?.name ?? typeof fill,
+    if (!(fill instanceof Fill)) {
+      logger.error?.({
+        message: "accounting rejected non-canonical fill",
+        fillType: fill?.constructor?.name ?? typeof fill,
         })
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
       }
@@ -280,137 +280,137 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
     completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition, sellOrder } = {}) =>
       enqueueAccountingTransition(async () => {
-      const recoveryLedger = recoveryLedgers.get(marketId)
-      const position = portfolio.getPosition({ marketId })
-      if (!recoveryLedger || !position) {
-        return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
-      }
-      try {
-        assertTerminalRecoverySellOrder({ sellOrder, marketId })
-        const completionInput = {
-          sellOrderFullyFilled: true,
-          spent: position.spent.amount,
-          netSellProceeds: recoveryLedger.netSellProceeds,
-          activeQuantity: position.baseQuantity.amount,
-          keepQuantity,
-          minProfit,
-          ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
+        const recoveryLedger = recoveryLedgers.get(marketId)
+        const position = portfolio.getPosition({ marketId })
+        if (!recoveryLedger || !position) {
+          return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
         }
-        logger.debug?.({
-          message: "recovery completion evaluation input",
-          marketId,
-          symbol: recoveryLedger.market.symbol,
-          completionInput,
-          position: createPositionLogSummary({ position }),
-          recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-        })
-        const evaluatedCompletion = evaluateRecoveryCompletion(completionInput)
-        const completion = Object.freeze({
-          ...evaluatedCompletion,
-          activeQuantity: completionInput.activeQuantity,
-          keepQuantity: completionInput.keepQuantity,
-          minProfit: completionInput.minProfit,
-        })
-        if (completion.eligible) {
-          const previousPortfolio = portfolio
-          const previousLedger = recoveryLedger
-
-          // Stage both immutable accounting projections before committing either reference.
-          let nextPortfolio = previousPortfolio
-          if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
-            nextPortfolio = nextPortfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+        try {
+          assertTerminalRecoverySellOrder({ sellOrder, marketId })
+          const completionInput = {
+            sellOrderFullyFilled: true,
+            spent: position.spent.amount,
+            netSellProceeds: recoveryLedger.netSellProceeds,
+            activeQuantity: position.baseQuantity.amount,
+            keepQuantity,
+            minProfit,
+            ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
           }
-          nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId })
-          const resetLedger = previousLedger.resetCycle({ minProfit, spent: position.spent })
-          const nextRecoveryLedgers = new Map(recoveryLedgers)
-          nextRecoveryLedgers.set(marketId, resetLedger)
-          const nextPosition = nextPortfolio.getPosition({ marketId })
-
-
-          if (onDurableRecoveryCycleCompleted) {
-            const durableResult = await onDurableRecoveryCycleCompleted({
-              marketId,
-              recoveryLedger: previousLedger,
-              position,
-              sellOrder,
-              completion,
-              minProfit,
-              inventoryDisposition: completion.dust ?? null,
-            })
-            if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
-              return toResult({
-                errors: durableResult?.errors?.length
-                  ? durableResult.errors
-                  : [new Error("Recovery-cycle completion fact did not confirm durable commitment")],
-              })
-            }
-          }
-
           logger.debug?.({
-            message: "Recovery cycle completed",
+            message: "recovery completion evaluation input",
             marketId,
             symbol: recoveryLedger.market.symbol,
-            completion,
-            previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
-            nextPosition: createPositionLogSummary({ position: nextPosition }),
-            previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
-            nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
+            completionInput,
+            position: createPositionLogSummary({ position }),
+            recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
           })
-
-          portfolio = nextPortfolio
-          recoveryLedgers = nextRecoveryLedgers
-
-          const portfolioStatsChanged = [
-            [position.baseQuantity.amount, nextPosition.baseQuantity.amount],
-            [position.freeBaseQuantity.amount, nextPosition.freeBaseQuantity.amount],
-            [position.totalBaseQuantity.amount, nextPosition.totalBaseQuantity.amount],
-            [position.spent.amount, nextPosition.spent.amount],
-            [position.quoteNetCashFlow.amount, nextPosition.quoteNetCashFlow.amount],
-          ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
-          if (portfolioStatsChanged) {
-            const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-            if (portfolioStats) { logger.info?.(portfolioStats) }
-          }
-        } else {
-          if (onDurableRecoveryCycleNotCompleted) {
-            const durableResult = await onDurableRecoveryCycleNotCompleted({
-              marketId,
-              recoveryLedger,
-              position,
-              sellOrder,
-              completion,
-              minProfit,
-            })
-            if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
-              return toResult({
-                errors: durableResult?.errors?.length
-                  ? durableResult.errors
-                  : [new Error("Recovery-cycle non-completion fact did not confirm durable commitment")],
-              })
+          const evaluatedCompletion = evaluateRecoveryCompletion(completionInput)
+          const completion = Object.freeze({
+            ...evaluatedCompletion,
+            activeQuantity: completionInput.activeQuantity,
+            keepQuantity: completionInput.keepQuantity,
+            minProfit: completionInput.minProfit,
+          })
+          if (completion.eligible) {
+            const previousPortfolio = portfolio
+            const previousLedger = recoveryLedger
+  
+            // Stage both immutable accounting projections before committing either reference.
+            let nextPortfolio = previousPortfolio
+            if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
+              nextPortfolio = nextPortfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
             }
+            nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId })
+            const resetLedger = previousLedger.resetCycle({ minProfit, spent: position.spent })
+            const nextRecoveryLedgers = new Map(recoveryLedgers)
+            nextRecoveryLedgers.set(marketId, resetLedger)
+            const nextPosition = nextPortfolio.getPosition({ marketId })
+  
+  
+            if (onDurableRecoveryCycleCompleted) {
+              const durableResult = await onDurableRecoveryCycleCompleted({
+                marketId,
+                recoveryLedger: previousLedger,
+                position,
+                sellOrder,
+                completion,
+                minProfit,
+                inventoryDisposition: completion.dust ?? null,
+              })
+              if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+                return toResult({
+                  errors: durableResult?.errors?.length
+                    ? durableResult.errors
+                    : [new Error("Recovery-cycle completion fact did not confirm durable commitment")],
+                })
+              }
+            }
+  
+            logger.debug?.({
+              message: "Recovery cycle completed",
+              marketId,
+              symbol: recoveryLedger.market.symbol,
+              completion,
+              previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
+              nextPosition: createPositionLogSummary({ position: nextPosition }),
+              previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
+              nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
+            })
+  
+            portfolio = nextPortfolio
+            recoveryLedgers = nextRecoveryLedgers
+  
+            const portfolioStatsChanged = [
+              [position.baseQuantity.amount, nextPosition.baseQuantity.amount],
+              [position.freeBaseQuantity.amount, nextPosition.freeBaseQuantity.amount],
+              [position.totalBaseQuantity.amount, nextPosition.totalBaseQuantity.amount],
+              [position.spent.amount, nextPosition.spent.amount],
+              [position.quoteNetCashFlow.amount, nextPosition.quoteNetCashFlow.amount],
+            ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
+            if (portfolioStatsChanged) {
+              const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
+              if (portfolioStats) { logger.info?.(portfolioStats) }
+            }
+          } else {
+            if (onDurableRecoveryCycleNotCompleted) {
+              const durableResult = await onDurableRecoveryCycleNotCompleted({
+                marketId,
+                recoveryLedger,
+                position,
+                sellOrder,
+                completion,
+                minProfit,
+              })
+              if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+                return toResult({
+                  errors: durableResult?.errors?.length
+                    ? durableResult.errors
+                    : [new Error("Recovery-cycle non-completion fact did not confirm durable commitment")],
+                })
+              }
+            }
+            logger.debug?.({
+              message: "recovery cycle not completed",
+              marketId,
+              symbol: recoveryLedger.market.symbol,
+              completion,
+              unchangedPosition: createPositionLogSummary({ position }),
+              unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+            })
           }
-          logger.debug?.({
-            message: "recovery cycle not completed",
+          return toResult({ data: completion })
+        } catch (error) {
+          logger.error?.({
+            message: "recovery completion evaluation failed",
             marketId,
-            symbol: recoveryLedger.market.symbol,
-            completion,
-            unchangedPosition: createPositionLogSummary({ position }),
+            errorName: error?.name,
+            errorMessage: error?.message ?? String(error),
+            errorStack: error?.stack,
+            unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
             unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
           })
+          return toResult({ error })
         }
-        return toResult({ data: completion })
-      } catch (error) {
-        logger.error?.({
-          message: "recovery completion evaluation failed",
-          marketId,
-          errorName: error?.name,
-          errorMessage: error?.message ?? String(error),
-          errorStack: error?.stack,
-          unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
-          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-        })
-        return toResult({ error })
-      }
       }),
   }
 }
