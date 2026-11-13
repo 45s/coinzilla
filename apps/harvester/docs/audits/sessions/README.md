@@ -9,3 +9,4 @@ Historical session-specific audit records. Sessions with the same date are not n
 See the [audit reports index](../reports/README.md) for findings and chronology. Do not infer missing events or merge sessions based on calendar date alone.
 
 - [2026-11-12/13 LIVE trading-session audit](AUDIT_SESSION_2026-11-12_19-27-13Z.md) — 8h28m session; includes shutdown-race, runtime-config drift and external-order findings.
+- [2026-11-13 LIVE trading-session audit](AUDIT_SESSION_2026-11-13_15-50-59Z.md) — separate 3h56m session; 60 applied fills, 21 completed recovery cycles, exact balance/retained-inventory reconciliation, notification and evidence gaps.
