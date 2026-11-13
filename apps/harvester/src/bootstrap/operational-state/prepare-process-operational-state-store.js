@@ -1,6 +1,6 @@
 import os from "node:os"
 import path from "node:path"
-import { createFileDurableFactsStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
+import { createFileDurableFactsStore } from "../../infrastructure/durable-facts/create-file-durable-facts-store.js"
 
 export class ProcessOperationalStateStartupError extends Error {
   constructor(message, code, cause) {
@@ -29,7 +29,9 @@ export async function prepareProcessOperationalStateStore({
 } = {}) {
   const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
   const operatorControlEnabled = appConfig?.operatorControl?.telegram?.enabled === true
-  if (!recoveryEnabled && !operatorControlEnabled) return undefined
+  if (!recoveryEnabled && !operatorControlEnabled) {
+    return undefined
+  }
   if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
     throw new ProcessOperationalStateStartupError(
       "Cannot prepare process operational-state store: runtimeSessionId is missing or invalid",
@@ -55,7 +57,7 @@ export async function prepareProcessOperationalStateStore({
   }
   if (store === null || typeof store !== "object") {
     throw new ProcessOperationalStateStartupError(
-      "Durable-facts factory returned an invalid store at " + directory,
+      "Operational-state store factory returned an invalid store at " + directory,
       "PROCESS_OPERATIONAL_STATE_STORE_INVALID",
     )
   }
@@ -71,7 +73,7 @@ export async function prepareProcessOperationalStateStore({
       verification = await store.verify()
     } catch (cause) {
       throw new ProcessOperationalStateStartupError(
-        "Unable to verify existing ADR-0001 ADR-0001 operational record ledger at " + directory,
+        "Unable to verify existing ADR-0001 operational record ledger at " + directory,
         "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED",
         cause,
       )
@@ -79,7 +81,7 @@ export async function prepareProcessOperationalStateStore({
     if (verification?.ok !== true || verification.data?.valid !== true || verification.data?.durableWriteSupported !== true) {
       const cause = verification?.errors?.[0] ?? new Error("Verification did not confirm a valid, durably writable ledger")
       throw new ProcessOperationalStateStartupError(
-        "Restart recovery requires an existing verified ADR-0001 ADR-0001 operational record ledger at " + directory,
+        "Restart recovery requires an existing verified ADR-0001 operational record ledger at " + directory,
         "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED",
         cause,
       )
