@@ -76,3 +76,42 @@ Each completed-cycle profit equals its SELL quote proceeds minus BUY quote cost 
 The four WLDFDUSD orders were later reported cancelled between 21:56:48.959Z and 21:57:06.590Z as unowned external events. The supplied files do not identify who cancelled them. The ZROFDUSD order had no cancellation event; 4.99 ZRO remained locked in the CLOSING balance snapshot.
 
 For the four external cancellations, Binance execution reports use a generated cancel-request clientOrderId (web_...) and retain the preflight order ID in originalClientOrderId (x-WEV...). The unowned-order projection records the generated ID; brokerOrderId is the stable join key used here.
+
+
+## Post-shutdown exchange executions — user-supplied Binance Trade History (2026-11-13)
+
+The user supplied a Binance Trade History screenshot filtered for 2026-11-12 through 2026-11-13 and explicitly confirmed that Harvester/bot created and placed the SELL orders (not manual user orders). Screenshot display times are UTC+02:00, consistent with the journal's UTC timestamps.
+
+| Broker order | Market | Side | Price | Executed | Gross quote | Screenshot time UTC+02 | UTC |
+|---|---|---|---:|---:|---:|---|---|
+| 341640866 | WLDFDUSD | SELL | 0.2978 | 219.9 WLD | 65.48622 FDUSD | 2026-11-13 08:31:58 | 06:31:58Z |
+| 780132095 | ADAFDUSD | SELL | 0.1720 | 359.9 ADA | 61.9028 FDUSD | 2026-11-13 09:01:25 | 07:01:25Z |
+| 616636435 | LINKFDUSD | SELL | 9.990 | 19.99 LINK | 199.7001 FDUSD | 2026-11-13 09:08:51 | 07:08:51Z |
+| 219411190 | ZROFDUSD | SELL | 1.617 | 4.99 ZRO | 8.06883 FDUSD | 2026-11-13 09:08:23 | 07:08:23Z |
+
+The first three are the exact recovery SELL orders last observed OPEN at shutdown. The screenshot now shows them executed. Their combined proceeds are 327.08912 FDUSD. The ZRO sale proceeds are 8.06883 FDUSD; that order was the pre-existing/unowned 4.99 ZRO SELL observed at PREFLIGHT. All four screenshot rows show Maker and 0 BNB fee.
+
+The screenshot also corroborates shutdown-racing BUYs:
+- 341640869: WLD BUY 20 @ 0.2885, 5.77 FDUSD, 05:51:24 local = 03:51:24Z.
+- 780132097: ADA BUY 30 @ 0.1680, 5.04 FDUSD, 05:51:24 local = 03:51:24Z.
+
+Other visible BUY rows in the cropped screenshot:
+- WLD order 341634932: 20 @ 0.2900, shown 05:50:52 local.
+- ADA order 780131753: 30 @ 0.1686, shown 05:23:17 local.
+- WLD order 341634236: 20 @ 0.2915, shown 05:23:17 local.
+- ADA order 780131684: 30 @ 0.1692, shown 05:22:08 local.
+
+### Later balances supplied by the user (capture time unspecified)
+
+| Asset | Quantity | Approx. USD value shown |
+|---|---:|---:|
+| FDUSD | 378.82931000 | $366.18 |
+| ADA | 0.60000000 | $5.31 |
+| WLD | 0.30000000 | $6.17 |
+| ZRO | 0.09000000 | $0.14540966 |
+| DOGE | 1.00000000 | $0.06609530 |
+
+Shown values total approximately $377.87. FDUSD is 8.77037 above the journal's opening FDUSD balance (370.05894). This is not total PNL: the later balance capture time is unspecified, the list may not include every asset, and there is no complete transfer/deposit/withdrawal or consistent-price valuation history. The original 0.11742 FDUSD remains verified PNL for the 10 completed cycles only; do not label it whole-session profit.
+
+Evidence is a user-provided screenshot and balance text, not an independently queried Binance API export. The shutdown-race finding remains valid even though the old SELL orders eventually filled after the process stopped.
+
