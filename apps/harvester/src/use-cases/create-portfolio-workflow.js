@@ -43,6 +43,11 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
   let portfolio = initialPortfolio ?? new Portfolio()
   let recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
   let updateQueue = Promise.resolve()
+  const enqueueAccountingTransition = (transition) => {
+    const task = updateQueue.then(transition)
+    updateQueue = task.then(() => undefined, () => undefined)
+    return task
+  }
 
   const tracedEvaluateStrategy = (input = {}) => {
     const marketId = input.marketMetadata?.market?.id
@@ -72,8 +77,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
   }
   const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
 
-  const updateTradingAccounting = ({ fill } = {}) => {
-    const task = updateQueue.then(async () => {
+  const updateTradingAccounting = ({ fill } = {}) => enqueueAccountingTransition(async () => {
       if (!(fill instanceof Fill)) {
         logger.error?.({
           message: "accounting rejected non-canonical fill",
@@ -266,10 +270,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         })
       }
       return result
-    })
-    updateQueue = task.then(() => undefined, () => undefined)
-    return task
-  }
+  })
 
   return {
     updatePortfolio: updateTradingAccounting,
@@ -277,7 +278,8 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: async ({ marketId, keepQuantity, minProfit, inventoryDisposition, sellOrder } = {}) => {
+    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition, sellOrder } = {}) =>
+      enqueueAccountingTransition(async () => {
       const recoveryLedger = recoveryLedgers.get(marketId)
       const position = portfolio.getPosition({ marketId })
       if (!recoveryLedger || !position) {
@@ -409,6 +411,6 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         })
         return toResult({ error })
       }
-    },
+      }),
   }
 }
