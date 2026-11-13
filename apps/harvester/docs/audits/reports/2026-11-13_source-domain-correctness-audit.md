@@ -1,7 +1,9 @@
 # Harvester source and domain-correctness audit — 2026-11-13
 
-**Status:** Implementation complete in [PR #1094](https://github.com/45s/coinzilla/pull/1094); merge pending.  
-**Target:** `develop`  
+**Status:** Implementation complete in [PR #1094](https://github.com/45s/coinzilla/pull/1094); merge pending.
+
+**Target:** `develop`
+
 **Scope:** `apps/harvester/**` and Harvester/project documentation only.
 
 ## 1. Baseline and review method
