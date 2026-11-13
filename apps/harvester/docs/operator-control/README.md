@@ -49,6 +49,7 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 
 - Runtime configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
 - Inbound control defaults disabled. Enabling it requires a non-empty allowlist of Telegram user IDs and `TELEGRAM_BOT_TOKEN`. Bootstrap adds the validated numeric `TELEGRAM_USER_ID` environment value to `allowedUserIds`, preserving configured IDs; this variable does not enable control by itself.
+- **Operational State Store** is the application-facing name for the ADR-0001 append-only ledger. The on-disk record format, initialization command and `DURABLE_FACTS_DIRECTORY` setting remain unchanged.
 - Harvester bootstrap composes the same Operational State Store backed by the ADR-0001 append-only ledger whenever either `recovery.enabled` or `operatorControl.telegram.enabled` is true. Enabling Telegram alone does not enable restart recovery. The store uses `DURABLE_FACTS_DIRECTORY` when configured, otherwise the documented `~/.coinzilla/harvester/recovery-facts` default.
 - The ledger must already be initialized; normal startup never creates or repairs it. When Telegram operator control alone requires the store, bootstrap verifies it before broker-capable runtime startup. See the [Harvester ledger setup](../../README.md#application-owned-recovery-facts-ledger-adr-0001-step-8).
 - The poller starts only after the Harvester engine is constructed and stops before broker shutdown.
