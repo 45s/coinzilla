@@ -91,7 +91,7 @@ GREEN evidence on PR head `ffb611507b14efc87338f64521766fbdff9434b3`: the full H
 
 ### High — assertion diagnostics are inconsistent
 
-Many existing domain tests omit the detailed assertion messages required by `ENGINEERING_STANDARDS.md`. New tests and every materially edited test case must include messages that explain the business invariant and scenario. Existing tests will be improved incrementally with their owning test-quality changes; this initiative will not perform a broad mechanical rewrite.
+Many pre-existing domain tests omit the detailed assertion messages required by `ENGINEERING_STANDARDS.md`. PR #1094 adds scenario-specific messages to every assertion in its newly added and materially edited regression cases, including durable commission-baseline ordering, recovery completion serialization/evidence, timestamp canonicality, and history-coverage validation. Remaining untouched legacy cases will be improved incrementally with their owning test-quality changes; this audit does not perform a broad mechanical rewrite.
 
 ### Medium — projection-level commission identity conflicts now protected
 
