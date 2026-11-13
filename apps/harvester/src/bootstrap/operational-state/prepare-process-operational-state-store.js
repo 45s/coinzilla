@@ -1,6 +1,6 @@
 import os from "node:os"
 import path from "node:path"
-import { createFileDurableFactsStore } from "../../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
 
 export class ProcessOperationalStateStartupError extends Error {
   constructor(message, code, cause) {
@@ -25,7 +25,7 @@ function resolveOperationalStateDirectory(env) {
 
 /** Compose the one process-owned ADR-0001 store shared by recovery and operator control. */
 export async function prepareProcessOperationalStateStore({
-  appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileDurableFactsStore,
+  appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileOperationalStateStore,
 } = {}) {
   const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
   const operatorControlEnabled = appConfig?.operatorControl?.telegram?.enabled === true
