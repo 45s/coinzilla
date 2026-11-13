@@ -246,3 +246,49 @@ test("refuses to overwrite an existing symbol", () => {
     "An existing pair must never be overwritten by the generator.",
   )
 })
+
+
+test("requires only the limit order type selected by the configured maker policy", () => {
+  const limitOnlyMetadata = { ...metadata, supportedOrderTypes: ["LIMIT"] }
+  const inputs = {
+    investment: "100",
+    orderQuantity: "20",
+    keepQuantity: "0.1",
+    makerPercent: "0.1",
+    takerPercent: "0.1",
+    minProfit: "0.01",
+    priceStepPercent: "0.05",
+  }
+  const pair = createPairConfig({ inputs, metadata: limitOnlyMetadata })
+
+  assert.equal(pair.makerPercent, 0.1, "A non-zero maker assumption requires LIMIT and must accept LIMIT-only symbols.")
+  assert.throws(
+    () => createPairConfig({ inputs: { ...inputs, makerPercent: "0" }, metadata: limitOnlyMetadata }),
+    /LIMIT_MAKER/i,
+    "A zero maker assumption still requires LIMIT_MAKER and must fail when that order type is unavailable.",
+  )
+})
+
+
+test("preserves small exchange-aligned quantities represented with JavaScript exponent notation", () => {
+  const pair = createPairConfig({
+    inputs: {
+      investment: "200",
+      orderQuantity: "1",
+      keepQuantity: "0.0000001",
+      makerPercent: "0.1",
+      takerPercent: "0.1",
+      minProfit: "0.01",
+      priceStepPercent: "0.05",
+    },
+    metadata: {
+      ...metadata,
+      price: "100",
+      stepSize: "0.0000001",
+      minQuantity: "0.0000001",
+    },
+  })
+
+  assert.equal(pair.keepQuantity, 0.0000001, "The numeric app-config contract must preserve small valid retained quantities.")
+  assert.equal(pair.quantityPrecision, 7, "Quantity precision must continue to come from the exact exchange step size.")
+})

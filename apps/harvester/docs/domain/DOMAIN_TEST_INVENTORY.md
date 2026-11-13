@@ -13,7 +13,7 @@ last_verified: 2026-11-13
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `55d39e8b2717b1c62d48cf7c513b34563e976a3b` (2026-11-13, after Harvester CC-4 and documentation closeout). The current domain tree contains 33 production JavaScript files and 29 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` (2026-11-13, after Harvester source-quality PR #1091 and repository refactoring-standard PR #1095). The current domain tree contains 33 production JavaScript files and 29 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -21,18 +21,35 @@ All test improvements in this initiative must remain deterministic and offline. 
 
 | Area | Existing test files | Behaviors already protected |
 | --- | --- | --- |
-| Account | `account/account-snapshot.test.js`, `account/calculate-account-snapshot-baselines.test.js`, `account/reconcile-account-snapshot-deltas.test.js` | Canonical balance snapshots, duplicate/missing/negative balances, quote cash-flow and total Portfolio base (active plus retained free)/BUY/SELL commitment baselines, shared-asset aggregation, post-snapshot partial BUY net-base credit and partial SELL delta reconciliation, unpriceable active BUY fail-closed behavior, market-asset coverage, exact per-asset delta reconciliation and invalid snapshot ordering |
+| Account | `account/account-snapshot.test.js`, `account/calculate-account-snapshot-baselines.test.js`, `account/reconcile-account-snapshot-deltas.test.js` | Canonical balance snapshots, duplicate/missing/negative balances, non-negative safe-integer source timestamps (including negative-zero rejection), quote cash-flow and total Portfolio base (active plus retained free)/BUY/SELL commitment baselines, shared-asset aggregation, post-snapshot partial BUY net-base credit and partial SELL delta reconciliation, unpriceable active BUY fail-closed behavior, market-asset coverage, exact per-asset delta reconciliation and invalid snapshot ordering |
 | Fill identity and fees | `fills/fill-fingerprint.test.js`, `portfolio/portfolio.test.js`, `strategies/conservative/recovery-ledger.test.js` | Stable fingerprints across commission ordering; Portfolio rejects same-ID changed commission amounts; RecoveryLedger rejects same-ID changed commission assets; both preserve the complete accepted projection; complete fee data, fee assets, quote valuation and aggregate commission bounds |
-| Market | `market-price.test.js`, `market/is-market-data-fresh.test.js`, `market/validate-market-trading-readiness.test.js`, `market/volatility-candle.test.js` | Positive exact-decimal prices, symbol/timestamp validation, inclusive freshness boundaries, exchange/order constraints, exact normalized candle fields and UTC alignment, contiguous candle history, ATR/NATR and previous-reference ratio inputs |
+| Market | `market-price.test.js`, `market/is-market-data-fresh.test.js`, `market/validate-market-trading-readiness.test.js`, `market/volatility-candle.test.js` | Positive exact-decimal prices, symbol/timestamp validation, inclusive freshness boundaries, exchange/order constraints, negative-zero timestamp rejection, exact normalized candle fields and UTC alignment, contiguous candle history, ATR/NATR and previous-reference ratio inputs |
+| Time | `time/is-canonical-non-negative-safe-integer.test.js` | Shared pure contract: zero and positive safe integers accepted; negative zero, negative, fractional, unsafe, and non-number values rejected |
 | Orders | `orders/allocate-order-commitments.test.js`, `orders/create-pending-canonical-order.test.js`, `orders/order-registry.test.js`, `orders/validate-cancellation-eligibility.test.js`, `orders/validate-order-against-trading-rules.test.js` | Sequential BUY allocation, aggregate SELL limits, pair-versus-account inventory/commitment consistency, post-snapshot net BUY base credit, shared base/quote commitments, PENDING construction, broker/client identity, duplicate and stale reports, partial/terminal/UNKNOWN transitions, cancellation eligibility and exchange filters |
 | Portfolio | `portfolio/portfolio.test.js`, `portfolio/position.test.js` | Immutable fill application, BUY/SELL accounting, base/quote/third-asset commissions, free inventory isolation, duplicate/conflicting fill identity, market isolation and recovery-basis reset |
-| Conservative policy | `strategies/conservative/helpers.test.js`, `initial-buy-price.test.js`, `recovery-completion.test.js`, `recovery-completion.dust.test.js`, `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `sell-fee-rate.test.js`, `strategy.test.js`, `trailing-buy-repricing.test.js` | BUY/SELL intents, duplicate suppression, recovery economics, fee reserves, exact tick/step rounding, actual fill accounting, dust/completion, residual sell-through and trailing price thresholds |
+| Conservative policy | `strategies/conservative/helpers.test.js`, `initial-buy-price.test.js`, `recovery-completion.test.js`, `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `sell-fee-rate.test.js`, `strategy.test.js`, `trailing-buy-repricing.test.js` | BUY/SELL intents, duplicate suppression, recovery economics, fee reserves, exact tick/step rounding, actual fill accounting, reason-specific dust evidence including residual-vs-step and positive evaluated notional, dust/completion, residual sell-through and trailing price thresholds |
 | Aggressive policy | `strategies/aggressive-strategy.test.js` | Current contract is explicitly non-executable: NO_ACTION blockers, active-position gating and exclusion of retained free inventory |
 | Configuration | `app-config.test.js` | Strategy/pair configuration validation and explicit TESTNET/LIVE mode selection |
 
-Historical PR #1021 source checkpoint: 31 domain production JavaScript files and 28 domain test files. The new `market/volatility-candle.js` owns normalized candle validation, contiguous-series invariants and Harvester's ATR/NATR metric composition; its focused test file is included in the Market row above.
+Historical PR #1021 source checkpoint: 31 domain production JavaScript files and 28 domain test files. Current PR #1094 head inventory: 35 domain production JavaScript files and 30 domain test files. The new `market/volatility-candle.js` owns normalized candle validation, contiguous-series invariants and Harvester's ATR/NATR metric composition; its focused test file is included in the Market row above.
 
 The domain suite is supplemented by application-level engine and use-case tests for serialized lifecycle ordering, multi-market composition, cancellation/fill races and broker interaction. Those tests are not substitutes for pure domain-policy tests, but they provide distinct integration protection.
+
+### 2026-11-13 application-boundary regression additions (PR #1094; supplemental)
+
+- `create-portfolio-workflow.durable-fills.test.js` asserts a third-asset `COMMISSION_BASELINE` callback completes before the durable `EXECUTION_FILL_APPLIED` callback, while both still precede the in-memory Portfolio commit.
+- `account-reconciliation-facts.test.js` proves a targeted `COMMISSION_BASELINE` fact is accepted only when its audit is complete and its balances array contains exactly one fee asset.
+- `create-portfolio-workflow.test.js` proves recovery completion requires a canonical fully filled terminal SELL and that completion is serialized behind an in-flight durable fill.
+- `create-portfolio-workflow.durable-cycles.test.js` retains the exact terminal SELL identity in durable completion outcomes.
+- `conservative-trading-engine.test.js` proves exchange-constrained dust completion forwards the exact reconciled terminal SELL and rejects negative-zero MarketBook timestamps.
+- `reconcile-account-snapshot-deltas.test.js` rejects negative and negative-zero source timestamps before producing reconciliation deltas.
+- `market-price.test.js`, `account-snapshot.test.js`, `market/volatility-candle.test.js`, and `conservative-trading-engine.test.js` reject negative-zero market, account-snapshot, candle, and book timestamps through the shared pure timestamp guard.
+- `confirm-market-history-coverage.test.js`, `record-market-history-coverage.test.js`, and `record-account-reconciliation-facts.test.js` reject negative-zero timestamps before reconciliation or durable append.
+- `order-event-workflow.test.js` proves the normal terminal SELL-fill path forwards the exact canonical order into recovery completion; the cancellation-race and dust paths retain their own forwarding regressions.
+- `confirm-market-history-coverage.test.js`, `read-market-history-coverage.test.js`, `record-market-history-coverage.test.js`, and `calculate-account-snapshot-baselines.test.js` now cover malformed ports, invalid inputs, incomplete/mismatched reconciliation, regressing evidence, failed append/readback, and invalid baseline inputs.
+- The symbol-configuration generator tests cover commission-selected order modes, invalid `TRADING_MODE` rejection, and small exchange-aligned quantities that stringify using JavaScript exponent notation.
+
+These regressions protect application orchestration and durable evidence ordering; they do not change the Conservative strategy specification. Exact final PR-head execution is recorded in the PR and the Harvester roadmap.
 
 ### Candle-history use-case coverage (supplemental)
 
@@ -44,7 +61,7 @@ The new `src/use-cases/create-candle-history-service.js` is covered by 32 determ
 
 This service collects data and exposes snapshots only. It does not activate volatility protection or authorize/cancel trading orders.
 
-## Application-level orchestration coverage (supplemental; not included in the 26 domain test files)
+## Application-level orchestration coverage (supplemental; not included in the 30 domain test files)
 
 `src/use-cases/conservative-trading-engine.test.js` contains **163 deterministic test declarations** at the reviewed baseline. The suite covers:
 
@@ -74,7 +91,7 @@ GREEN evidence on PR head `ffb611507b14efc87338f64521766fbdff9434b3`: the full H
 
 ### High — assertion diagnostics are inconsistent
 
-Many existing domain tests omit the detailed assertion messages required by `ENGINEERING_STANDARDS.md`. New tests and every materially edited test case must include messages that explain the business invariant and scenario. Existing tests will be improved incrementally with their owning test-quality changes; this initiative will not perform a broad mechanical rewrite.
+Many pre-existing domain tests omit the detailed assertion messages required by `ENGINEERING_STANDARDS.md`. PR #1094 adds scenario-specific messages to every assertion in its newly added and materially edited regression cases, including durable commission-baseline ordering, recovery completion serialization/evidence, timestamp canonicality, and history-coverage validation. Remaining untouched legacy cases will be improved incrementally with their owning test-quality changes; this audit does not perform a broad mechanical rewrite.
 
 ### Medium — projection-level commission identity conflicts now protected
 

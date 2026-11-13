@@ -1,6 +1,7 @@
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
+import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
@@ -39,8 +40,8 @@ export function createMarketBook({ bookTicker } = {}) {
   if (typeof symbol !== "string" || !/^[A-Z0-9]+$/.test(symbol)) {
     throw new TypeError("Market book symbol must be a non-empty uppercase symbol")
   }
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
-    throw new TypeError("Market book timestamp must be a non-negative safe integer")
+  if (!isCanonicalNonNegativeSafeInteger(timestamp)) {
+    throw new TypeError("Market book timestamp must be a non-negative safe integer other than negative zero")
   }
   const positive = (value, field) => {
     assertDecimalString({ value, field })
@@ -1267,9 +1268,13 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING" })
           return toResult({ error: new Error("Completed recovery SELL identity is unavailable for dust completion") })
         }
-        const completion = await completeRecoveryCycle({ marketId: metadata.market.id,
-          keepQuantity: String(pairs[symbol].keepQuantity), minProfit: String(pairs[symbol].minProfit),
-          inventoryDisposition: decision.inventoryDisposition })
+        const completion = await completeRecoveryCycle({
+          marketId: metadata.market.id,
+          keepQuantity: String(pairs[symbol].keepQuantity),
+          minProfit: String(pairs[symbol].minProfit),
+          inventoryDisposition: decision.inventoryDisposition,
+          sellOrder: completedSellOrder,
+        })
         if (!completion?.ok) {
           await pause({ symbol, reason: "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Dust recovery completion failed")] })

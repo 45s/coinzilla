@@ -1,5 +1,6 @@
 import { Balance } from "@coinzilla/entities"
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
+import { isCanonicalNonNegativeSafeInteger } from "../time/is-canonical-non-negative-safe-integer.js"
 
 function createBaselineMap({ records = [], field, allowNegative = false } = {}) {
   if (!Array.isArray(records) || records.some((item) =>
@@ -48,8 +49,8 @@ export class AccountSnapshot {
     if (!Array.isArray(balances) || balances.some((balance) => !(balance instanceof Balance))) {
       throw new TypeError("AccountSnapshot.balances must contain canonical Balance values")
     }
-    if (!Number.isSafeInteger(sourceTime) || sourceTime < 0) {
-      throw new TypeError("AccountSnapshot.sourceTime must be a non-negative safe integer")
+    if (!isCanonicalNonNegativeSafeInteger(sourceTime)) {
+      throw new TypeError("AccountSnapshot.sourceTime must be a non-negative safe integer other than negative zero")
     }
 
     const balancesByAssetId = new Map()
