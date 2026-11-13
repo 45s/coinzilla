@@ -195,16 +195,16 @@ test("accepts an explicitly blocked open-order snapshot without treating it as a
 
 test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one asset", async (t) => {
   const store = await createStore(t)
-  const baseline = (factId, balances) => ({
+  const baseline = (factId, balances, auditStatus = "COMPLETE", auditReasons = []) => ({
     factId,
     factType: "ACCOUNT_SNAPSHOT_CAPTURED",
     data: {
       phase: "COMMISSION_BASELINE",
-      auditStatus: "COMPLETE",
+      auditStatus,
       sourceTime: 1_700_000_000_000,
       assetCount: balances.length,
       balances,
-      auditReasons: [],
+      auditReasons,
     },
   })
   const valid = await store.append(baseline(
@@ -225,6 +225,18 @@ test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one as
     empty.ok,
     false,
     "A targeted commission baseline without its fee asset must be rejected.",
+  )
+
+  const incomplete = await store.append(baseline(
+    "account-snapshot:COMMISSION_BASELINE:incomplete",
+    [{ asset: "BNB", free: "1.0000", locked: "0.2500", total: "1.2500" }],
+    "INCOMPLETE",
+    ["COMMISSION_BASELINE_INCOMPLETE"],
+  ))
+  assert.equal(
+    incomplete.ok,
+    false,
+    "A targeted commission baseline must be a complete original-balance observation.",
   )
 
   const multiple = await store.append(baseline(
