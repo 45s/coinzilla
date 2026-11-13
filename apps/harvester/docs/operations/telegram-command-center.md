@@ -4,7 +4,7 @@
 
 The Harvester Telegram Command Center is an optional operator interface. Inbound control remains disabled by default and is enabled only through the reviewed `operatorControl.telegram` configuration and a private-chat user-ID allowlist. The bot token remains in `TELEGRAM_BOT_TOKEN`.
 
-The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. Operator pauses last only for the current process and are not restored after restart.
+The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. User-data disconnect/reconnect and reconciliation do not clear an active operator pause. Operator pauses last only for the current process and are not restored after restart.
 
 ## Enabling the Command Center
 

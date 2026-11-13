@@ -54,6 +54,7 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 - The poller starts only after the Harvester engine is constructed and stops before broker shutdown.
 - Operator pause facts use the exact same process-owned ADR-0001 durable-facts store as process, order, cancellation, fill and recovery-cycle facts. Do not create a second writer or an operator-specific ledger.
 - A successful durable append precedes the in-memory pause. If the append fails or is uncertain, the pause is not applied and success is not acknowledged.
+- User-data transport disconnect/reconnect and successful reconciliation do not clear the in-memory operator pause.
 - Operator pause facts are not replayed at startup. Today ADR-0001's process-start gate blocks every second process start until Step 8 reconciliation and Step 9 crash/restart proof are accepted. If restart restoration is eventually enabled, the operator must reissue `/pause <SYMBOL>` when required; operator pauses are not restored automatically.
 
 ## Implementation status

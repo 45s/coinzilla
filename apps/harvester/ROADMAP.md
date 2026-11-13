@@ -8,7 +8,7 @@
 
 **Current baseline:** Telegram remains optional/disabled by default. CC-1 through CC-3 are delivered in PRs #1079, #1081, #1086 and #1087. CC-4 is delivered in merged [PR #1088](https://github.com/45s/coinzilla/pull/1088): Telegram command menu, authorized inline navigation/refresh, confirmation-gated market pause/resume controls, callback authorization/idempotency/retry/shutdown hardening and the operator runbook. The operator pause remains process-lifetime only and is not restored after restart.
 
-**Production composition follow-up:** [~] [PR #1100](https://github.com/45s/coinzilla/pull/1100) supplies the shared ADR-0001 store when Telegram operator control is enabled independently of restart recovery, using the documented default directory unless overridden. This is a setup correction only; it does not reopen CC-1–CC-4 or change pause semantics.
+**Production composition follow-up:** [~] [PR #1100](https://github.com/45s/coinzilla/pull/1100) supplies the shared ADR-0001 store when Telegram operator control is enabled independently of restart recovery, using the documented default directory unless overridden. It also verifies that user-data reconnect/reconciliation does not clear an active operator pause. These are setup and regression-coverage corrections only; they do not reopen CC-1–CC-4 or change pause semantics.
 
 ### Delivery phases
 
