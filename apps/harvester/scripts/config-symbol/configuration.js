@@ -87,9 +87,28 @@ export function decimalPlaces(value) {
   return fraction.replace(/0+$/, "").length
 }
 
+function expandExponentNotation(value) {
+  const match = /^(-?)([0-9]+)(?:\\.([0-9]+))?[eE]([+-]?[0-9]+)$/.exec(value)
+  if (!match) {
+    return value
+  }
+
+  const [, sign, integerPart, fractionalPart = "", exponentText] = match
+  const digits = integerPart + fractionalPart
+  const decimalPosition = integerPart.length + Number(exponentText)
+  if (decimalPosition <= 0) {
+    return sign + "0." + "0".repeat(-decimalPosition) + digits
+  }
+  if (decimalPosition >= digits.length) {
+    return sign + digits + "0".repeat(decimalPosition - digits.length)
+  }
+  return sign + digits.slice(0, decimalPosition) + "." + digits.slice(decimalPosition)
+}
+
 function toConfigNumber(value, field) {
   const number = Number(value)
-  if (!Number.isFinite(number) || compareDecimal({ left: String(number), right: value }) !== 0) {
+  const decimalRepresentation = expandExponentNotation(String(number))
+  if (!Number.isFinite(number) || compareDecimal({ left: decimalRepresentation, right: value }) !== 0) {
     throw new RangeError(field + " cannot be represented exactly by the existing numeric app-config contract")
   }
   return number
