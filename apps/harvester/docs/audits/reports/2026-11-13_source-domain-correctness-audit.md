@@ -72,15 +72,15 @@ The review mapped bootstrap/public entry points, engine and order-event consumer
 
 **Location:** `src/domain/strategies/conservative/recovery-completion.js`.
 
-**Evidence and impact:** Negative evaluation values and invalid exchange-filter thresholds could be interpreted as exchange-constrained dust. That could authorize a retained-inventory allocation using invalid evidence.
+**Evidence and impact:** Negative evaluation values and invalid exchange-filter thresholds could be interpreted as exchange-constrained dust. Further review found two reason-specific gaps: `QUANTITY_INCREMENT` accepted a zero evaluated quantity even when the actual residual was at least one full step, and `MIN_NOTIONAL` accepted a zero evaluated notional despite a positive evaluated quantity. Either contradiction could authorize retained-inventory allocation and close a cycle with sellable inventory.
 
-**Correction:** Require positive exchange filter thresholds and reason-specific, non-negative evaluated quantity/notional evidence. Preserve the valid zero evaluated quantity case for `MIN_QUANTITY` when exchange-step rounding produces zero; rejecting that legitimate case would break existing strategy behavior.
+**Correction:** Require positive exchange filter thresholds and reason-specific evidence. `MIN_NOTIONAL` requires positive evaluated notional when evaluated quantity is positive. `QUANTITY_INCREMENT` accepts zero rounded quantity only when the actual residual is smaller than one full step. A legitimate zero evaluated quantity after `MIN_QUANTITY` rounding remains valid; negative or contradictory evidence fails closed.
 
-**Regression:** `recovery-completion.dust.test.js` covers malformed negative evidence and valid zero-rounded quantity. The test-first run also caught and corrected an overly strict intermediate check that rejected valid zero evaluations.
+**Regression:** `recovery-completion.test.js` covers malformed thresholds, negative evaluations, zero-notional evidence, residuals that are not below the quantity step, and valid zero-rounded dust. Test-only RED run `d88c8fcccc82c9dfe53e776461708b7588ae4bb0` reproduced both newly identified gaps.
 
 ### H-007 — P2: Timestamp boundaries accepted negative zero inconsistently
 
-**Location:** `src/domain/market-price.js`, `src/domain/account/account-snapshot.js`, `src/domain/market/volatility-candle.js`, `src/domain/account/reconcile-account-snapshot-deltas.js`, `src/use-cases/confirm-market-history-coverage.js`, `src/use-cases/record-market-history-coverage.js`, and `src/use-cases/record-account-reconciliation-facts.js`.
+**Location:** `src/domain/market-price.js`, `src/domain/account/account-snapshot.js`, `src/domain/market/volatility-candle.js`, `src/domain/account/reconcile-account-snapshot-deltas.js`, `src/use-cases/confirm-market-history-coverage.js`, `src/use-cases/record-market-history-coverage.js`, and `src/use-cases/record-account-reconciliation-facts.js`, and `src/use-cases/conservative-trading-engine.js` (MarketBook).
 
 **Evidence and impact:** JavaScript treats `-0` as a safe integer equal to zero. Several timestamp validators therefore accepted a non-canonical representation even though durable-fact serialization rejects negative zero.
 

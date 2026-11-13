@@ -57,7 +57,7 @@ const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQu
         inventoryDisposition.evaluatedQuantity === undefined ||
         inventoryDisposition.evaluatedNotional === undefined ||
         compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: "0" }) <= 0 ||
-        compareDecimal({ left: inventoryDisposition.evaluatedNotional, right: "0" }) < 0 ||
+        compareDecimal({ left: inventoryDisposition.evaluatedNotional, right: "0" }) <= 0 ||
         compareDecimal({
           left: inventoryDisposition.evaluatedQuantity,
           right: inventoryDisposition.minimumQuantity,
@@ -81,7 +81,8 @@ const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQu
 
   if (reason === "QUANTITY_INCREMENT") {
     if (inventoryDisposition.quantityStepSize === undefined ||
-        inventoryDisposition.evaluatedQuantity !== "0") {
+        inventoryDisposition.evaluatedQuantity !== "0" ||
+        compareDecimal({ left: quantity, right: inventoryDisposition.quantityStepSize }) >= 0) {
       return undefined
     }
     return Object.freeze({
