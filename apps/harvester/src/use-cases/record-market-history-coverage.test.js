@@ -84,3 +84,44 @@ test("does not initialize a missing durable-fact store", async (t) => {
 
   assert.equal(result.ok, false)
 })
+
+
+test("rejects malformed coverage evidence before calling the durable append port", async () => {
+  const appendCalls = []
+  const durableFactsStore = {
+    append: async (fact) => {
+      appendCalls.push(fact)
+      return { ok: true, data: { durable: true } }
+    },
+  }
+  const invalidCases = [
+    [{ symbol: "btcusdt" }, /canonical uppercase/],
+    [{ coveredFromTime: -1 }, /non-negative safe integers/],
+    [{ verifiedAt: evidence().coveredFromTime - 1 }, /verifiedAt >= coveredFromTime/],
+    [{ evidenceDigest: "not-a-digest" }, /SHA-256 digest/],
+    [{ verifiedBy: " operator" }, /canonical non-empty string/],
+  ]
+
+  for (const [overrides, message] of invalidCases) {
+    const result = await recordMarketHistoryCoverage({
+      durableFactsStore,
+      ...evidence(overrides),
+    })
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, message)
+  }
+  assert.equal(appendCalls.length, 0, "Invalid evidence must never reach the durable append boundary.")
+})
+
+test("returns durable append failures and converts thrown append errors into results", async () => {
+  const appendError = new Error("append unavailable")
+  const rejectedStore = { append: async () => ({ ok: false, errors: [appendError] }) }
+  const rejected = await recordMarketHistoryCoverage({ durableFactsStore: rejectedStore, ...evidence() })
+  assert.equal(rejected.ok, false)
+  assert.equal(rejected.errors[0], appendError)
+
+  const thrownStore = { append: async () => { throw appendError } }
+  const thrown = await recordMarketHistoryCoverage({ durableFactsStore: thrownStore, ...evidence() })
+  assert.equal(thrown.ok, false)
+  assert.equal(thrown.errors[0], appendError)
+})
