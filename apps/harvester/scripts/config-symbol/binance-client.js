@@ -43,16 +43,22 @@ const CANONICAL_UNVALIDATED_FILTER_TYPES = Object.freeze({
   MAX_ASSET: "ASSET_ORDER_LIMIT",
 })
 
+function resolveUnvalidatedFilterScope(filterType, defaultScope) {
+  if (filterType === "MAX_NUM_ORDERS" || filterType === "MAX_POSITION" || filterType === "MAX_ASSET") {
+    return "ACCOUNT"
+  }
+  if (filterType === "EXCHANGE_MAX_NUM_ORDERS") {
+    return "EXCHANGE"
+  }
+  return defaultScope
+}
+
 function collectUnvalidatedFilters(filters, defaultScope, knownFilters = KNOWN_SYMBOL_FILTERS) {
   return filters
     .filter((filter) => !knownFilters.has(filter.filterType) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(filter.filterType))
     .map((filter) => Object.freeze({
       type: CANONICAL_UNVALIDATED_FILTER_TYPES[filter.filterType] ?? "UNMODELED_EXCHANGE_CONSTRAINT",
-      scope: filter.filterType === "MAX_NUM_ORDERS" || filter.filterType === "MAX_POSITION" || filter.filterType === "MAX_ASSET"
-        ? "ACCOUNT"
-        : filter.filterType === "EXCHANGE_MAX_NUM_ORDERS"
-          ? "EXCHANGE"
-          : defaultScope,
+      scope: resolveUnvalidatedFilterScope(filter.filterType, defaultScope),
       sourceFilterType: filter.filterType,
     }))
 }
@@ -66,7 +72,9 @@ function readExactlyOneFilter(filters, filterType) {
 }
 
 function normalizeOptionalNonNegativeExchangeDecimal(value, field) {
-  if (value === undefined || value === null) return undefined
+  if (value === undefined || value === null) {
+    return undefined
+  }
   if (typeof value !== "string" || value.trim() !== value) {
     throw new TypeError("Binance " + field + " must be a decimal string")
   }
