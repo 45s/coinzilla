@@ -328,6 +328,7 @@ The ADR-0001 durable-facts boundary is split between deterministic serialization
 
 - `src/infrastructure/durable-facts/durable-facts-canonical.js` contains pure helpers for bounded canonical JSON cloning/serialization, SHA-256 record digests, canonical timestamp normalization, and canonical non-empty-string validation. Object keys are recursively sorted, array order is retained, economic decimals remain strings, and every numeric value must be a safe integer other than negative zero. Negative zero is rejected before JSON serialization can silently turn it into ordinary zero.
 - `src/infrastructure/durable-facts/create-file-durable-facts-store.js` owns the filesystem protocol and the versioned fact-type schema. It creates genesis only through explicit initialization, requires private directory/file permissions, serializes operations per resolved directory, appends and syncs the fact record before its matching committed-head checkpoint, verifies both streams before acknowledging durability, and poisons the current store instance after an uncertain write.
+- `src/domain/time/is-canonical-non-negative-safe-integer.js` is the shared pure timestamp guard used by MarketPrice, AccountSnapshot, VolatilityCandle, account reconciliation, and market-history coverage/fact recording. It accepts zero and positive safe integers, and rejects negative zero, negative, fractional, unsafe, and non-number values before they cross domain or persistence boundaries.
 - Genesis initialization and each new fact append capture the injected clock once. The store accepts either a `Date` or an already-canonical UTC ISO-8601 string, and an append uses that same captured timestamp for market-history future-time validation and the record envelope. The durable-facts projector validates operator pause facts as session-bound audit records but excludes them from the restart candidate; only durable strategy pauses and sticky safety blockers are projected. An idempotent duplicate returns the existing record without consuming a new clock value.
 - `src/infrastructure/durable-facts/project-harvester-durable-facts.js` validates the verified stream and projects facts into candidate recovery events; it does not make the Journal authoritative or enable runtime restart restoration.
 
@@ -608,6 +609,16 @@ The recovery event contains only the market identifier, allocated free
 quantity, and realized net profit. It does not expose the full ledger or
 account snapshot. Both events are best-effort and are not awaited by trading
 or user-data workflows.
+
+### Recovery-cycle completion entry points and evidence
+
+Recovery completion has three application entry paths, all of which must preserve the same terminal SELL identity:
+
+1. The normal user-data execution-report path in `src/use-cases/order-event-workflow.js` forwards the reconciled canonical order after its terminal SELL fill has been applied.
+2. The cancellation/reconciliation race path in `src/use-cases/conservative-trading-engine.js` forwards the broker-reconciled order when a cancellation query discovers that the SELL actually filled.
+3. The exchange-constrained dust path forwards the terminal SELL previously retained for that market; a dust disposition alone is not proof that the sell-through completed.
+
+All three converge on `createPortfolioWorkflow.completeRecoveryCycle`. The pure `assertTerminalRecoverySellOrder` guard requires a canonical `CanonicalOrder`, SELL side, FILLED status, broker identity, exact executed/original quantity equality, and the active market identity. The workflow shares its accounting queue with durable fill updates, waits for earlier accepted fills, persists the completion/not-completed fact, and only then commits the staged Portfolio and RecoveryLedger projections. Missing or inconsistent terminal evidence fails closed; it never authorizes a reset.
 
 ## In-process engine transition serialization
 
