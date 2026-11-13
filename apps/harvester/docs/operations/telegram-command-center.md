@@ -8,10 +8,11 @@ The Command Center is not an exchange kill switch. It cannot place, cancel, adop
 
 ## Enabling the Command Center
 
-1. Set `operatorControl.telegram.enabled: true` and configure the private-chat Telegram user-ID allowlist in `config/operator-control.js`.
-2. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
-3. Initialize the ADR-0001 ledger once while Harvester is stopped, following the [Harvester ledger setup](../../README.md#application-owned-recovery-facts-ledger-adr-0001-step-8). The initializer requires an absolute `DURABLE_FACTS_DIRECTORY`; the runtime uses that same override when present or defaults to `~/.coinzilla/harvester/recovery-facts`.
-4. Start only with a verified ledger that contains no prior `PROCESS_STARTED` fact. The current ADR-0001 gate blocks every second process start, even after clean shutdown, until Steps 8–9 are accepted. Do not delete or reinitialize an existing ledger to bypass this restriction.
+1. Set `operatorControl.telegram.enabled: true` in `config/operator-control.js`.
+2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. Bootstrap validates it and adds it to `operatorControl.telegram.allowedUserIds`, preserving configured IDs. Invalid values stop startup with a specific error. This variable does not enable operator control by itself.
+3. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
+4. Initialize the ADR-0001 ledger once while Harvester is stopped, following the [Harvester ledger setup](../../README.md#application-owned-recovery-facts-ledger-adr-0001-step-8). The initializer requires an absolute `DURABLE_FACTS_DIRECTORY`; the runtime uses that same override when present or defaults to `~/.coinzilla/harvester/recovery-facts`.
+5. Start only with a verified ledger that contains no prior `PROCESS_STARTED` fact. The current ADR-0001 gate blocks every second process start, even after clean shutdown, until Steps 8–9 are accepted. Do not delete or reinitialize an existing ledger to bypass this restriction.
 
 Telegram control can be enabled while `recovery.enabled` remains false. The production entry point still composes the shared ledger for operator facts; it does not enable restart restoration or create/repair ledger files.
 

@@ -1,7 +1,5 @@
 import { pathToFileURL } from "node:url"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
-import os from "node:os"
-import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
@@ -17,7 +15,7 @@ import { resolveRuntimeConfig } from "./domain/app-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
-import { createFileDurableFactsStore } from "./infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { prepareProcessDurableFactsStore } from "./bootstrap/durable-facts/prepare-process-durable-facts-store.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -154,20 +152,6 @@ const describeError = (error) => {
 const resolveHostProcessLockDirectory = () =>
   path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
 
-const resolveHostDurableFactsDirectory = ({ env = process.env } = {}) => {
-  const configuredDirectory = env?.DURABLE_FACTS_DIRECTORY
-  if (configuredDirectory === undefined) {
-    return path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts")
-  }
-  if (typeof configuredDirectory !== "string" ||
-      !configuredDirectory.trim() ||
-      configuredDirectory !== configuredDirectory.trim() ||
-      !path.isAbsolute(configuredDirectory)) {
-    throw new TypeError("DURABLE_FACTS_DIRECTORY must be a non-empty absolute local filesystem path")
-  }
-  return path.resolve(configuredDirectory)
-}
-
 export async function main({
   start = startHarvester,
   logger = defaultLogger,
@@ -219,30 +203,12 @@ export async function main({
       throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
     processLock = lockResult
-    const recoveryEnabled = appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-    const operatorControlEnabled = appConfig.operatorControl?.telegram?.enabled === true
-    const durableFactsRequired = recoveryEnabled || operatorControlEnabled
-    const durableFactsStore = durableFactsRequired
-      ? createDurableFactsStore({
-          directory: resolveHostDurableFactsDirectory({ env }),
-          runtimeSessionId: processIdentity.runtimeSessionId,
-        })
-      : undefined
-    if (recoveryEnabled) {
-      if (typeof durableFactsStore?.verify !== "function") {
-        throw new Error("Harvester recovery requires the application-owned durable recovery-facts store")
-      }
-      const durableFactsVerification = await durableFactsStore.verify()
-      if (durableFactsVerification?.ok !== true ||
-          durableFactsVerification.data?.valid !== true ||
-          durableFactsVerification.data?.durableWriteSupported !== true) {
-        const details = durableFactsVerification?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error(
-          "Harvester recovery requires an existing verified durable recovery-facts ledger" +
-          (details ? ": " + details : ""),
-        )
-      }
-    }
+    const durableFactsStore = await prepareProcessDurableFactsStore({
+      appConfig,
+      env,
+      runtimeSessionId: processIdentity.runtimeSessionId,
+      createDurableFactsStore,
+    })
     journalService = createJournalService({
       eventBus,
       logger,
