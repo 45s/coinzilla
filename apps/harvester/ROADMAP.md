@@ -41,31 +41,36 @@
 
 ## Harvester source, domain correctness and documentation audit — issue #1093
 
-**Status: IN PROGRESS in draft [PR #1094](https://github.com/45s/coinzilla/pull/1094).** The audit starts from develop commit cccc1879dc3fd12876b48fb6756665664eb5cefd, which contains 309 Harvester JavaScript files (162 production files and 147 test files). The audit is scoped to apps/harvester/** and project documentation; it does not change strategy economics, trading configuration, shared packages, other applications, or exchange behavior.
+**Status: IMPLEMENTATION COMPLETE; ready for review in [PR #1094](https://github.com/45s/coinzilla/pull/1094); merge pending.** The audit starts from current `develop` baseline `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` (309 Harvester JavaScript files: 162 production and 147 test files). The PR head inventory is 312 files (164 production and 148 test files), including two independently tested pure domain guards. The domain-only inventory is 35 production files and 30 test files. Scope is `apps/harvester/**` and Harvester/project documentation only; no shared package, other application, trading economics, or runtime trading configuration changed.
 
-### Confirmed defects corrected test-first in PR #1094
+### Confirmed defects corrected test-first
 
-1. **Third-asset baseline was recorded after the durable execution fill.** The live workflow previously appended EXECUTION_FILL_APPLIED before requesting COMMISSION_BASELINE, although account reconciliation requires the baseline sequence to precede the first fee-bearing fill. The workflow now persists all targeted baselines first, then the durable fill fact, then commits in-memory Portfolio/RecoveryLedger projections. A baseline persistence failure remains non-blocking for a valid fill; the later account audit still fails closed when required evidence is absent.
-2. **Targeted commission-baseline facts accepted invalid snapshots.** The durable-facts schema previously accepted empty, multi-asset, and incomplete COMMISSION_BASELINE snapshots. It now requires a complete audit and exactly one fee-asset balance.
-3. **Recovery completion could reset accounting without terminal SELL evidence.** createPortfolioWorkflow previously trusted the profitability calculation when no durable recorder was configured. It now requires a canonical FILLED SELL with broker identity, exact executed/original quantity equality, and matching market. The pure guard is shared with both durable recovery outcome recorders.
-4. **Exchange-constrained dust completion omitted the terminal SELL.** The engine's dust path now passes the exact reconciled terminal SELL to completion/non-completion persistence; the regression protects the order identity.
-5. **Malformed dust evidence could be accepted.** Recovery completion now rejects non-positive exchange filter thresholds, negative evaluation values, and other malformed dust evidence, failing closed instead of allocating it as free inventory.
-6. **Account snapshot reconciliation accepted negative timestamps.** PREFLIGHT/closing snapshot source times must now be non-negative safe integers; negative zero is explicitly rejected.
-7. **Fill accounting and cycle completion used separate serialization boundaries.** Both now use the same workflow queue, so a cycle cannot be durably completed from a stale accounting snapshot while an earlier fill append is pending.
+1. **Third-asset commission baseline ordering was reversed.** The workflow previously persisted `EXECUTION_FILL_APPLIED` before the targeted `COMMISSION_BASELINE`. It now records each required fee-asset baseline first, then the fill fact, then commits the in-memory Portfolio/RecoveryLedger projection. A baseline persistence failure does not discard a valid fill; the later account audit still fails closed when required evidence is absent.
+2. **Targeted commission-baseline facts accepted invalid snapshots.** The durable-facts schema now requires a complete audit and exactly one fee-asset balance; empty, multi-asset, and incomplete targeted baselines are rejected.
+3. **Normal user-data SELL fills did not forward terminal order evidence.** The normal `order-event-workflow` completion path now forwards the exact reconciled canonical SELL. The cancellation/reconciliation race and exchange-constrained dust paths also pass their canonical terminal SELL.
+4. **Recovery completion could be evaluated without a canonical terminal SELL.** A shared pure guard requires `CanonicalOrder`, SELL side, FILLED status, broker identity, exact executed/original quantity equality, and matching market. Both durable completion recorders use the same guard.
+5. **Dust evidence was insufficiently validated.** Exchange filter thresholds must be positive; evaluated quantities/notionals must be non-negative and satisfy the reason-specific filter contract. Valid zero evaluated quantity remains accepted for a rounded-down `MIN_QUANTITY` disposition; negative evidence fails closed.
+6. **Fill accounting and cycle completion could race.** Both transitions now share one queue. Completion waits for earlier durable fill updates, stages both immutable projections, persists the cycle outcome, and only then commits the paired in-memory reset.
+7. **Canonical timestamp validation was inconsistent.** A pure `isCanonicalNonNegativeSafeInteger` helper now rejects negative zero, negative, fractional, unsafe, and non-number timestamps. MarketPrice, AccountSnapshot, VolatilityCandle, account snapshot reconciliation, account fact recording, and market-history coverage use the same contract.
+8. **Symbol configuration generation was unnecessarily restrictive.** Binance metadata retrieval now preserves available order types and pair configuration validates only the mode selected by the configured maker policy: zero maker assumption requires `LIMIT_MAKER`; non-zero uses `LIMIT`.
+9. **Invalid `TRADING_MODE` silently selected TESTNET.** The symbol generator still defaults to TESTNET when unset, but rejects any explicitly configured value other than `testnet` or `live`.
+10. **Small exchange-aligned quantities could fail numeric conversion.** The generator now expands JavaScript exponent notation before exact decimal comparison, preserving small values without accepting precision loss.
+11. **Market-history and account-baseline use-case coverage was thin.** Regression tests now cover invalid ports/inputs, malformed record collections, regressing verification time, reconciliation failure/mismatch, incomplete audit evidence, non-durable append, failed/mismatched readback, and invalid baseline inputs.
 
-### Documentation corrections
+### Test-first and verification evidence
 
-- Broker-adapter readiness guidance now matches the implemented policy: unsupported dynamic/account/exchange constraints are retained as diagnostics and do not block readiness solely by their presence; required supported rules and authoritative metadata remain validated, and Binance remains authoritative at submission.
-- Architecture documentation now describes the shared accounting queue, terminal SELL proof, durable baseline-before-fill ordering, and exact targeted-baseline schema.
-- The accounting invariant matrix and domain test inventory are being updated with the new regression coverage and exact-head verification.
+- Test-only RED runs reproduced the targeted commission-baseline schema defects, missing terminal SELL evidence, malformed dust evidence, and negative-zero timestamp acceptance. The failing end-to-end start-up/trading test also exposed the missing normal user-data SELL order forwarding.
+- The Harvester suite passed **1,511/1,511** on the verified PR head. The Harvester coverage workflow and workspace coverage workflow passed; Harvester currently has no package-specific percentage threshold enforcement, so no threshold was changed.
+- Changed-file ESLint/syntax checks passed; no lint rules were weakened. The full workspace's existing style-only ESLint baseline is not bulk-rewritten here; behavior-preserving cleanup remains tracked separately in [issue #1092](https://github.com/45s/coinzilla/issues/1092).
+- All six required `develop` checks passed on the verified PR head: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, and actionlint. The advisory external documentation-link check passed. The optional read-only Binance TESTNET integration was skipped.
+- The PR updates the Conservative Domain Specification, architecture/recovery flow, accounting invariant matrix, domain test inventory, symbol-generator instructions, and a dated audit report. Documentation describes the implemented source behavior rather than planned behavior.
 
-### Remaining audit work
+### Scope and remaining work
 
-- Continue reviewing every Harvester JavaScript module and its tests against the repository JavaScript/JSDoc, modularity, purity, and assertion-diagnostic standards. Keep any additional behavior change behind a failing regression first.
-- Re-run the Harvester-wide ESLint inventory. The previous 359-finding baseline is tracked by [issue #1092](https://github.com/45s/coinzilla/issues/1092); only findings reviewed and safely corrected belong in this PR. Do not bulk-rewrite unrelated files or weaken rules.
-- Record exact final Harvester test/coverage, changed-file lint, all six required checks, and documentation-link results on the final PR head before marking this work complete.
+- The full Harvester JavaScript inventory was enumerated and checked for export/test structure; high-risk accounting, durable-facts, recovery, market-data, configuration, and operational-script boundaries received the detailed source review. The remaining style-only lint baseline is deliberately separated from these correctness fixes; do not mass-autofix unrelated modules or weaken strict rules.
+- No strategy economics, trading configuration, broker behavior, shared packages, or other applications changed.
+- No Binance TESTNET/LIVE connection, account query, order placement, cancellation, or account mutation was performed.
 
-No Binance TESTNET/LIVE exchange operation, account query, order placement, cancellation, or account mutation is part of this audit.
 
 ---
 
