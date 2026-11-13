@@ -187,6 +187,22 @@ test("fails closed when exchange-constrained dust evidence contains non-positive
       quantityStepSize: "0",
       evaluatedQuantity: "0",
     },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.01",
+      evaluatedQuantity: "0",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "0.05",
+      minimumNotional: "10",
+      evaluatedQuantity: "0.1",
+      evaluatedNotional: "0",
+    },
   ]
 
   for (const inventoryDisposition of invalidDispositions) {
