@@ -116,3 +116,27 @@ test("fails closed when an active MARKET BUY has no canonical quote commitment",
   assert.equal(result.ok, false, "An unresolved MARKET BUY without a limit price cannot be assigned a trustworthy quote reservation.")
   assert.match(result.errors[0].message, /without a canonical limit price/, "The baseline failure must explain why the account free-balance baseline cannot be trusted.")
 })
+
+
+test("rejects non-Portfolio and non-canonical active-order inputs", () => {
+  const invalidPortfolio = calculateAccountSnapshotBaselines({
+    portfolio: { positions: [] },
+    activeOrders: [],
+  })
+  assert.equal(invalidPortfolio.ok, false)
+  assert.match(invalidPortfolio.errors[0].message, /requires a Portfolio/)
+
+  const nonArrayOrders = calculateAccountSnapshotBaselines({
+    portfolio: new Portfolio(),
+    activeOrders: null,
+  })
+  assert.equal(nonArrayOrders.ok, false)
+  assert.match(nonArrayOrders.errors[0].message, /activeOrders must contain CanonicalOrder values/)
+
+  const nonCanonicalOrder = calculateAccountSnapshotBaselines({
+    portfolio: new Portfolio(),
+    activeOrders: [{}],
+  })
+  assert.equal(nonCanonicalOrder.ok, false)
+  assert.match(nonCanonicalOrder.errors[0].message, /activeOrders must contain CanonicalOrder values/)
+})
