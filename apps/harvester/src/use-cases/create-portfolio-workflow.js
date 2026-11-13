@@ -270,7 +270,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
       })
     }
     return result
-})
+  })
 
   return {
     updatePortfolio: updateTradingAccounting,
@@ -325,7 +325,6 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             const nextRecoveryLedgers = new Map(recoveryLedgers)
             nextRecoveryLedgers.set(marketId, resetLedger)
             const nextPosition = nextPortfolio.getPosition({ marketId })
-
 
             if (onDurableRecoveryCycleCompleted) {
               const durableResult = await onDurableRecoveryCycleCompleted({
