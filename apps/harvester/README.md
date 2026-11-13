@@ -59,7 +59,7 @@ Harvester bootstrap prepares the **Operational State Store**, backed by the ADR-
 
 Telegram operator control uses this same Operational State Store even when `recovery.enabled` is false. It records process, order, cancellation, fill, recovery and operator-control events. Operator-pause records are audit-only: the in-memory market pause set starts empty on each successful process start and is never restored from these records. Enabling operator control does not enable process-restart restoration. The store is never created or initialized automatically.
 
-For a new installation, initialize the ledger once while Harvester is stopped. Set `DURABLE_FACTS_DIRECTORY` to an absolute local-filesystem path; use the same value in the runtime environment. If the runtime variable is omitted, Harvester defaults to `~/.coinzilla/harvester/recovery-facts`.
+For a new installation, initialize the ledger once while Harvester is stopped. The initializer has no directory default: it requires `DURABLE_FACTS_DIRECTORY` to be set to an absolute local-filesystem path. Use that exact path for runtime as well. If `DURABLE_FACTS_DIRECTORY` is omitted at runtime, Harvester uses `~/.coinzilla/harvester/recovery-facts`; to initialize that default location, explicitly set the variable to `$HOME/.coinzilla/harvester/recovery-facts` for the initializer.
 
 ```sh
 export DURABLE_FACTS_DIRECTORY="$HOME/.coinzilla/harvester/recovery-facts"
