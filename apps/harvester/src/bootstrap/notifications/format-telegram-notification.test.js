@@ -42,14 +42,14 @@ test("formats execution fills and safely handles missing nested fill data", () =
       name: "fill.received",
       data: { symbol: "LINKFDUSD", side: "BUY", fill: { price: "10.2", quantity: "2", tradeId: "buy-fill" } },
     }),
-    "✅ FILL RECEIVED · LINK/FDUSD @ 10.2 × 2\n#buy-fill",
+    "✔️ FILL RECEIVED · LINK/FDUSD @ 10.2 × 2\n#buy-fill",
   )
   assert.equal(
     formatHarvesterTelegramNotification({
       name: "fill.received",
       data: { symbol: "LINKFDUSD", side: "SELL", fill: { price: "10.3", quantity: "1.99", tradeId: "sell-fill" } },
     }),
-    "💰 FILL RECEIVED · LINK/FDUSD @ 10.3 × 1.99\n#sell-fill",
+    "💸 FILL RECEIVED · LINK/FDUSD @ 10.3 × 1.99\n#sell-fill",
   )
   assert.match(formatHarvesterTelegramNotification({ name: "fill.received", data: {} }), /💰 FILL RECEIVED/)
   assert.match(
@@ -69,9 +69,9 @@ test("uses the approved compact icon and layout for each notification type", () 
     [{ name: "order.cancelled", data: { side: "BUY", symbol: "LINKFDUSD", executedQuantity: "0", orderId: "43" } }, "✖️ BUY LINK/FDUSD ORDER CANCELLED · Filled 0\n#43"],
     [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BROKER CONNECTED · BINANCE · TESTNET"],
     [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "🟥 BINANCE DISCONNECTED · success"],
-    [{ name: "bot.started", data: {} }, "▶️ BOT STARTED"],
+    [{ name: "bot.started", data: {} }, "🚀 BOT STARTED"],
     [{ name: "bot.stopped", data: { reason: "SIGINT" } }, "⏹️ BOT STOPPED · SIGINT"],
-    [{ name: "bot.stopped", data: {} }, "⏹️ BOT STOPPED"],
+    [{ name: "bot.stopped", data: {} }, "🔒 BOT STOPPED"],
     [{ name: "order.failed", data: { side: "BUY", symbol: "LINKUSDT", message: "insufficient balance" } }, "❌ BUY LINK/USDT FAILED · insufficient balance"],
     [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⏹️ LINK/USDT PAUSED · stale price"],
   ]
@@ -84,8 +84,8 @@ test("uses the approved compact icon and layout for each notification type", () 
 test("formats critical lifecycle and recovery events", () => {
   const examples = [
     ["bot.recovery_failed", { message: "reconciliation failed" }, /🚨 BOT RECOVERY FAILED · reconciliation failed/],
-    ["bot.recovery_completed", { summary: "synced" }, /📡 BOT RECOVERY COMPLETED · synced/],
-    ["bot.startup_failed", { stage: "broker-connect", message: "connection refused" }, /🛑 BOT STARTUP FAILED · broker-connect · connection refused/],
+    ["bot.recovery_completed", { summary: "synced" }, /💰 BOT RECOVERY COMPLETED · synced/],
+    ["bot.startup_failed", { stage: "broker-connect", message: "connection refused" }, /🛠️ BOT STARTUP FAILED · broker-connect · connection refused/],
     ["account.safety_alert", { symbol: "ZROFDUSD", category: "unowned-order", message: "manual order detected" }, /⚠️ ACCOUNT SAFETY · ZRO\/FDUSD · unowned-order · manual order detected/],
     ["account.safety_alert", { symbol: "ZROFDUSD", category: "account-open-orders-blocked", message: "audit blocked" }, /🚨 ACCOUNT SAFETY · ZRO\/FDUSD · account-open-orders-blocked · audit blocked/],
   ]
@@ -124,7 +124,7 @@ test("validates event envelopes and safely defaults malformed data", () => {
   assert.throws(() => formatHarvesterTelegramNotification(null), TypeError)
   assert.throws(() => formatHarvesterTelegramNotification([]), TypeError)
   assert.throws(() => formatHarvesterTelegramNotification({ name: 1 }), /event.name/)
-  assert.equal(formatHarvesterTelegramNotification({ name: "bot.started", data: [] }), "▶️ BOT STARTED")
+  assert.equal(formatHarvesterTelegramNotification({ name: "bot.started", data: [] }), "🚀 BOT STARTED")
 })
 
 test("omits unavailable broker mode and preserves failed shutdown details", () => {
@@ -135,7 +135,7 @@ test("omits unavailable broker mode and preserves failed shutdown details", () =
     name: "bot.stopped",
     data: { outcome: "failed", reason: "cleanup incomplete" },
   })
-  assert.equal(stopped, "⏹️ BOT STOPPED · cleanup incomplete")
+  assert.equal(stopped, "🔒 BOT STOPPED · cleanup incomplete")
 })
 
 
@@ -145,7 +145,59 @@ test("formats successful user-data readiness restoration without claiming more t
       name: "bot.user_data_ready",
       data: { broker: "binance", status: "READY" },
     }),
-    "🟢 USER-DATA READY · BINANCE",
+    "🔗 USER-DATA READY · BINANCE",
     "A confirmed application readiness transition must have a distinct success notification.",
   )
+})
+
+
+test("formats every selected active Telegram notification icon exactly", () => {
+  const examples = [
+    [{ name: "bot.started", data: {} }, "🚀 BOT STARTED"],
+    [{ name: "bot.stopped", data: {} }, "🔒 BOT STOPPED"],
+    [{ name: "bot.startup_failed", data: { stage: "broker-connect", message: "connection refused" } }, "🛠️ BOT STARTUP FAILED · broker-connect · connection refused"],
+    [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⏸️ LINK/USDT PAUSED · stale price"],
+    [{ name: "bot.user_data_ready", data: { broker: "binance" } }, "🔗 USER-DATA READY · BINANCE"],
+    [{ name: "broker.disconnected", data: { broker: "binance", reason: "socket closed" } }, "💤 BINANCE DISCONNECTED · socket closed"],
+    [{ name: "bot.recovery_completed", data: { message: "LINKUSDT recovery completed" } }, "💰 BOT RECOVERY COMPLETED · LINKUSDT recovery completed"],
+    [{ name: "order.failed", data: { operation: "submission", side: "BUY", symbol: "LINKUSDT", message: "rejected" } }, "❌ BUY LINK/USDT FAILED · rejected"],
+    [{ name: "order.failed", data: { operation: "submission", side: "SELL", symbol: "LINKUSDT", message: "rejected" } }, "❌ SELL LINK/USDT FAILED · rejected"],
+    [{ name: "order.failed", data: { operation: "cancellation", side: "BUY", symbol: "LINKUSDT", message: "cancel rejected" } }, "🚫 BUY LINK/USDT FAILED · cancel rejected"],
+    [{ name: "order.failed", data: { operation: "cancellation", side: "SELL", symbol: "LINKUSDT", message: "cancel rejected" } }, "⛔ SELL LINK/USDT FAILED · cancel rejected"],
+    [{ name: "fill.received", data: { symbol: "LINKUSDT", side: "BUY", fill: { price: "14.25", quantity: "2", tradeId: "buy-fill" } } }, "✔️ FILL RECEIVED · LINK/USDT @ 14.25 × 2\\n#buy-fill"],
+    [{ name: "fill.received", data: { symbol: "LINKUSDT", side: "SELL", fill: { price: "14.5", quantity: "1", tradeId: "sell-fill" } } }, "💸 FILL RECEIVED · LINK/USDT @ 14.5 × 1\\n#sell-fill"],
+    [{ name: "account.safety_alert", data: { category: "broker-subscription-failed", message: "subscription failed" } }, "🚨 ACCOUNT SAFETY · N/A · broker-subscription-failed · subscription failed"],
+    [{ name: "account.safety_alert", data: { category: "user-data-readiness-blocked", message: "readiness blocked" } }, "🚨 USER-DATA READINESS BLOCKED · readiness blocked"],
+    [{ name: "account.safety_alert", data: { category: "user-data-reconnected-reconciliation-pending", message: "reconciliation pending" } }, "🚨 ACCOUNT SAFETY · N/A · user-data-reconnected-reconciliation-pending · reconciliation pending"],
+    [{ name: "account.safety_alert", data: { category: "user-data-recovery-failed", message: "recovery failed" } }, "🚨 ACCOUNT SAFETY · N/A · user-data-recovery-failed · recovery failed"],
+    [{ name: "account.safety_alert", data: { category: "user-data-stream-terminated", message: "stream terminated" } }, "🚨 ACCOUNT SAFETY · N/A · user-data-stream-terminated · stream terminated"],
+    [{ name: "account.safety_alert", data: { category: "user-data-execution-normalization-failed", message: "normalization failed" } }, "🚨 ACCOUNT SAFETY · N/A · user-data-execution-normalization-failed · normalization failed"],
+    [{ name: "account.safety_alert", data: { category: "user-data-stream-error", message: "stream error" } }, "🚨 ACCOUNT SAFETY · N/A · user-data-stream-error · stream error"],
+  ]
+
+  for (const [event, expectedMessage] of examples) {
+    assert.equal(
+      formatHarvesterTelegramNotification(event),
+      expectedMessage,
+      `The active Telegram event ${event.name} must render the exact icon selected for its notification.`,
+    )
+  }
+})
+
+test("keeps the existing icons for five notifications left undecided", () => {
+  const examples = [
+    [{ name: "account.safety_alert", data: { category: "recovery-cycle-blocked", message: "blocked" } }, "🚨 ACCOUNT SAFETY · N/A · recovery-cycle-blocked · blocked"],
+    [{ name: "bot.recovery_failed", data: { message: "accounting failed" } }, "🚨 BOT RECOVERY FAILED · accounting failed"],
+    [{ name: "account.safety_alert", data: { category: "unowned-order", message: "unowned" } }, "⚠️ ACCOUNT SAFETY · N/A · unowned-order · unowned"],
+    [{ name: "account.safety_alert", data: { category: "invalid-fill", message: "invalid" } }, "⚠️ ACCOUNT SAFETY · N/A · invalid-fill · invalid"],
+    [{ name: "account.safety_alert", data: { category: "account-open-orders-blocked", message: "audit blocked" } }, "🚨 ACCOUNT SAFETY · N/A · account-open-orders-blocked · audit blocked"],
+  ]
+
+  for (const [event, expectedMessage] of examples) {
+    assert.equal(
+      formatHarvesterTelegramNotification(event),
+      expectedMessage,
+      `An undecided notification ${event.name} must retain its current icon until the user selects a replacement.`,
+    )
+  }
 })
