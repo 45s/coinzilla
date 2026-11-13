@@ -112,10 +112,8 @@ function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
     throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
   }
   const supportedOrderTypes = [...new Set(symbolInfo.orderTypes)]
-  for (const requiredOrderType of ["LIMIT", "LIMIT_MAKER"]) {
-    if (!supportedOrderTypes.includes(requiredOrderType)) {
-      throw new Error("Binance Spot symbol " + requestedSymbol + " does not support " + requiredOrderType + " orders")
-    }
+  if (supportedOrderTypes.some((orderType) => typeof orderType !== "string" || !orderType.trim())) {
+    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
   }
 
   const filters = symbolInfo.filters
