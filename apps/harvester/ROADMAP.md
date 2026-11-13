@@ -39,6 +39,36 @@
 
 ---
 
+## Harvester source, domain correctness and documentation audit — issue #1093
+
+**Status: IN PROGRESS in draft [PR #1094](https://github.com/45s/coinzilla/pull/1094).** The audit starts from develop commit cccc1879dc3fd12876b48fb6756665664eb5cefd, which contains 309 Harvester JavaScript files (162 production files and 147 test files). The audit is scoped to apps/harvester/** and project documentation; it does not change strategy economics, trading configuration, shared packages, other applications, or exchange behavior.
+
+### Confirmed defects corrected test-first in PR #1094
+
+1. **Third-asset baseline was recorded after the durable execution fill.** The live workflow previously appended EXECUTION_FILL_APPLIED before requesting COMMISSION_BASELINE, although account reconciliation requires the baseline sequence to precede the first fee-bearing fill. The workflow now persists all targeted baselines first, then the durable fill fact, then commits in-memory Portfolio/RecoveryLedger projections. A baseline persistence failure remains non-blocking for a valid fill; the later account audit still fails closed when required evidence is absent.
+2. **Targeted commission-baseline facts accepted invalid snapshots.** The durable-facts schema previously accepted empty, multi-asset, and incomplete COMMISSION_BASELINE snapshots. It now requires a complete audit and exactly one fee-asset balance.
+3. **Recovery completion could reset accounting without terminal SELL evidence.** createPortfolioWorkflow previously trusted the profitability calculation when no durable recorder was configured. It now requires a canonical FILLED SELL with broker identity, exact executed/original quantity equality, and matching market. The pure guard is shared with both durable recovery outcome recorders.
+4. **Exchange-constrained dust completion omitted the terminal SELL.** The engine's dust path now passes the exact reconciled terminal SELL to completion/non-completion persistence; the regression protects the order identity.
+5. **Malformed dust evidence could be accepted.** Recovery completion now rejects non-positive exchange filter thresholds, negative evaluation values, and other malformed dust evidence, failing closed instead of allocating it as free inventory.
+6. **Account snapshot reconciliation accepted negative timestamps.** PREFLIGHT/closing snapshot source times must now be non-negative safe integers; negative zero is explicitly rejected.
+7. **Fill accounting and cycle completion used separate serialization boundaries.** Both now use the same workflow queue, so a cycle cannot be durably completed from a stale accounting snapshot while an earlier fill append is pending.
+
+### Documentation corrections
+
+- Broker-adapter readiness guidance now matches the implemented policy: unsupported dynamic/account/exchange constraints are retained as diagnostics and do not block readiness solely by their presence; required supported rules and authoritative metadata remain validated, and Binance remains authoritative at submission.
+- Architecture documentation now describes the shared accounting queue, terminal SELL proof, durable baseline-before-fill ordering, and exact targeted-baseline schema.
+- The accounting invariant matrix and domain test inventory are being updated with the new regression coverage and exact-head verification.
+
+### Remaining audit work
+
+- Continue reviewing every Harvester JavaScript module and its tests against the repository JavaScript/JSDoc, modularity, purity, and assertion-diagnostic standards. Keep any additional behavior change behind a failing regression first.
+- Re-run the Harvester-wide ESLint inventory. The previous 359-finding baseline is tracked by [issue #1092](https://github.com/45s/coinzilla/issues/1092); only findings reviewed and safely corrected belong in this PR. Do not bulk-rewrite unrelated files or weaken rules.
+- Record exact final Harvester test/coverage, changed-file lint, all six required checks, and documentation-link results on the final PR head before marking this work complete.
+
+No Binance TESTNET/LIVE exchange operation, account query, order placement, cancellation, or account mutation is part of this audit.
+
+---
+
 ## Startup reliability — account PREFLIGHT Journal barrier
 
 **Status: [x] COMPLETE — fix merged in [PR #1084](https://github.com/45s/coinzilla/pull/1084) as `2238e3f8e64544be7952bd8bce5301336128279e`.** A broker-connected startup could fail after the account snapshot succeeded but while the mandatory account-wide open-orders audit was flushed. When Telegram notifications were enabled and the audit was BLOCKED across multiple symbols, the notification bridge emitted `symbol: undefined`; the Journal correctly rejected that derived event under its lossless JSONL contract. The same optional-field defect existed for user-data subscription-failure alerts, which have no market symbol. The merged fix omits unavailable optional symbols while preserving both safety alerts and the mandatory durable Journal barrier. Exact PR head `d61f7cce52bf5a46a89ad47019d18edf1b02805a` passed the Harvester suite (1,444/1,444), coverage, targeted tests and required workspace checks.
