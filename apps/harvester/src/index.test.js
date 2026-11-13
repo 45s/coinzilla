@@ -66,6 +66,60 @@ test("does not create or inject durable recovery facts while recovery is disable
   assert.equal(startupInput.durableFactsStore, undefined, "Disabled restart recovery must not inject a durable-facts store into runtime startup.")
 })
 
+test("injects the shared default durable-facts store when Telegram operator control is enabled without recovery", async () => {
+  const configuredApp = {
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+    strategies: {
+      CG_coinGrabber: {
+        settings: {
+          recovery: {
+            enabled: false,
+          },
+        },
+      },
+    },
+  }
+  const durableFactsStore = {
+    verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+    append: async () => ({ ok: true, data: { durable: true } }),
+    readAll: async () => ({ ok: true, data: { durableWriteSupported: true, records: [] } }),
+  }
+  let durableFactsStoreOptions
+  let startupInput
+
+  await runMain({
+    loadConfig: async () => configuredApp,
+    createDurableFactsStore: (options) => {
+      durableFactsStoreOptions = options
+      return durableFactsStore
+    },
+    start: async (input) => {
+      startupInput = input
+      return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
+    },
+    logger: { info() {}, system() {}, error() {} },
+  })
+
+  assert.deepEqual(
+    durableFactsStoreOptions,
+    {
+      directory: path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts"),
+      runtimeSessionId: startupInput.runtimeSessionId,
+    },
+    "Enabling Telegram operator control without restart recovery must select the documented default ADR-0001 directory and current process identity.",
+  )
+  assert.strictEqual(
+    startupInput.durableFactsStore,
+    durableFactsStore,
+    "The production composition must pass the exact shared durable-facts store to Harvester when Telegram operator control is enabled independently of recovery.",
+  )
+})
+
 test("uses the injected logger after Binance TESTNET startup", async () => {
   const calls = []
   const logger = {
