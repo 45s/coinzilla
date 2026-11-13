@@ -49,13 +49,13 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 
 - Runtime configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
 - Inbound control defaults disabled. Enabling it requires a non-empty allowlist of Telegram user IDs and `TELEGRAM_BOT_TOKEN`. Bootstrap adds the validated numeric `TELEGRAM_USER_ID` environment value to `allowedUserIds`, preserving configured IDs; this variable does not enable control by itself.
-- Harvester bootstrap composes the same ADR-0001 durable-facts store whenever either `recovery.enabled` or `operatorControl.telegram.enabled` is true. Enabling Telegram alone does not enable restart recovery. The store uses `DURABLE_FACTS_DIRECTORY` when configured, otherwise the documented `~/.coinzilla/harvester/recovery-facts` default.
+- Harvester bootstrap composes the same Operational State Store backed by the ADR-0001 append-only ledger whenever either `recovery.enabled` or `operatorControl.telegram.enabled` is true. Enabling Telegram alone does not enable restart recovery. The store uses `DURABLE_FACTS_DIRECTORY` when configured, otherwise the documented `~/.coinzilla/harvester/recovery-facts` default.
 - The ledger must already be initialized; normal startup never creates or repairs it. When Telegram operator control alone requires the store, bootstrap verifies it before broker-capable runtime startup. See the [Harvester ledger setup](../../README.md#application-owned-recovery-facts-ledger-adr-0001-step-8).
 - The poller starts only after the Harvester engine is constructed and stops before broker shutdown.
-- Operator pause facts use the exact same process-owned ADR-0001 durable-facts store as process, order, cancellation, fill and recovery-cycle facts. Do not create a second writer or an operator-specific ledger.
+- Operator pause records use the exact same process-owned Operational State Store backed by the ADR-0001 append-only ledger as process, order, cancellation, fill and recovery-cycle facts. Do not create a second writer or an operator-specific ledger.
 - A successful durable append precedes the in-memory pause. If the append fails or is uncertain, the pause is not applied and success is not acknowledged.
 - User-data transport disconnect/reconnect and successful reconciliation do not clear the in-memory operator pause.
-- Operator pause facts are not replayed at startup. Today ADR-0001's process-start gate blocks every second process start until Step 8 reconciliation and Step 9 crash/restart proof are accepted. If restart restoration is eventually enabled, the operator must reissue `/pause <SYMBOL>` when required; operator pauses are not restored automatically.
+- Operator pause records are not replayed at startup. Today ADR-0001's process-start gate blocks every second process start until Step 8 reconciliation and Step 9 crash/restart proof are accepted. If restart restoration is eventually enabled, the operator must reissue `/pause <SYMBOL>` when required; operator pauses are not restored automatically.
 
 ## Implementation status
 
