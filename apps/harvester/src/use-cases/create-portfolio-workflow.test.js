@@ -690,7 +690,7 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
   )
   assert.equal(
     completionResult.data.reason,
-    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
     "The newly committed active inventory must keep the recovery cycle open.",
   )
   assert.equal(completionCalls.length, 0, "A concurrent fill must prevent an outdated completed-cycle fact from being persisted.")
