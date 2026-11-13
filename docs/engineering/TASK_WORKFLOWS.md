@@ -32,6 +32,19 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 - Include the required **Documentation impact** note in the PR description, as specified by the canonical policy.
 - Run focused tests/coverage, workspace tests, syntax/policy checks, and applicable CI.
 
+## Refactoring or code audit
+
+- Read the canonical [AI Refactoring and Code Audit Standard](AI_REFACTORING_AUDIT_STANDARD.md) before inspecting or changing code.
+- Confirm the exact user-authorized folder/package scope and owning domain; do not expand scope silently.
+- Read applicable domain instructions, roadmap, specifications, contracts, implementation, consumers, tests, and configuration.
+- Establish existing public behavior and invariants before proposing structural changes.
+- Record findings with severity, exact location, evidence, impact, and a safe recommendation; distinguish confirmed defects from risks and suggestions.
+- For behavior changes, demonstrate RED → GREEN → REFACTOR; add a meaningful regression test for every bug fix.
+- Preserve public contracts unless an intentional, documented, tested behavior change is required.
+- Prefer cohesive modules and meaningful pure-function extraction; avoid speculative abstractions and mechanical churn.
+- Verify every changed file and relevant package/workspace checks; report exact results, skipped checks, and the final PR head.
+- Update affected living documentation and indexes; preserve historical evidence and include a Documentation impact note in the PR.
+
 ## Cross-domain or shared-infrastructure change
 
 - Identify every affected owner and link the cross-domain request(s).

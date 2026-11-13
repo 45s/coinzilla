@@ -20,6 +20,7 @@ This index is the entry point for maintained repository documentation. The repos
 - [ADR-0002: Explicit Binance trading environment](architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
+- [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)
 - [Contributing](contributing.md)
 - [Workspace package map](workspace-package-map.md)
