@@ -133,7 +133,7 @@ Test-only commits were pushed before the corresponding production fixes. Confirm
 - `c27204d5730ed8e1f10c92274f996b4a99b2b77d`: targeted commission-baseline schema regressions failed against the prior store validator.
 - `a807f33640e3a877a5894352464555d89cf962cb`: recovery completion and dust-evidence regressions exposed missing terminal SELL proof and invalid evidence handling.
 - `33a59edf17c41bd0a0a4d35269060645ff02ddd6`: negative-zero timestamp regressions failed across the domain and recording boundaries before the shared guard was implemented.
-- The start-harvester test run before `dd524f9a33d52c4168472fe94a6180f231bd1481` failed because the normal user-data SELL-fill path did not forward its terminal order.
+- The start-harvester integration regression failed with a recovery-completion evidence error while terminal-order forwarding was incomplete; the final end-to-end scenario passes with the canonical order forwarded.
 
 Some intermediate test-only workflow attempts were canceled by later branch pushes before producing a completed RED report; those are not represented as confirmed RED evidence. The final suite and required checks are verified on the final PR head.
 
