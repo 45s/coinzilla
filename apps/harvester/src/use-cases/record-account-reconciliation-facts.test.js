@@ -120,3 +120,27 @@ test("does not initialize a missing durable-fact store", async (t) => {
 
   assert.equal(result.ok, false, "A recorder must never create or initialize a missing production fact ledger.")
 })
+
+
+test("rejects negative-zero account snapshot and open-order timestamps before append", async () => {
+  const appendCalls = []
+  const durableFactsStore = {
+    append: async (fact) => {
+      appendCalls.push(fact)
+      return { ok: true, data: { durable: true } }
+    },
+  }
+
+  const snapshot = await recordAccountSnapshotCaptured({
+    durableFactsStore,
+    data: balances({ sourceTime: -0 }),
+  })
+  const openOrdersResult = await recordAccountOpenOrdersCaptured({
+    durableFactsStore,
+    data: openOrders({ observedAt: -0 }),
+  })
+
+  assert.equal(snapshot.ok, false)
+  assert.equal(openOrdersResult.ok, false)
+  assert.equal(appendCalls.length, 0, "Non-canonical timestamps must be rejected before reaching durable persistence.")
+})
