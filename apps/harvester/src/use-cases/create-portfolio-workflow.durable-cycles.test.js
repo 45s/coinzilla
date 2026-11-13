@@ -139,6 +139,7 @@ test("does not reset Portfolio or RecoveryLedger when the completed-cycle fact i
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder,
   })
 
   assert.equal(result.ok, false)
