@@ -554,3 +554,50 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(durableInput.sellOrder, sellOrder, "The completion fact must identify the exact terminal SELL.")
 })
+
+
+test("does not complete or reset a recovery cycle without a canonical fully filled terminal SELL", async () => {
+  const buyFill = createFill({
+    tradeId: "missing-terminal-sell-buy",
+    quantity: "2",
+    quoteQuantity: "130000",
+  })
+  const sellFill = createFill({
+    tradeId: "missing-terminal-sell-accounting-fill",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+  })
+
+  const result = await workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "1",
+    minProfit: "5",
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "Economic profitability alone must not authorize a recovery-cycle reset without terminal SELL evidence.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /canonical fully filled terminal SELL/,
+    "The failure must identify the missing terminal-order contract.",
+  )
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "Missing terminal SELL evidence must not reset Portfolio.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "Missing terminal SELL evidence must not reset RecoveryLedger.")
+})
