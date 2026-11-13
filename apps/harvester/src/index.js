@@ -17,7 +17,7 @@ import { resolveRuntimeConfig } from "./domain/app-config.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
-import { prepareProcessDurableFactsStore } from "./bootstrap/durable-facts/prepare-process-durable-facts-store.js"
+import { prepareProcessOperationalStateStore } from "./bootstrap/operational-state/prepare-process-operational-state-store.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -166,7 +166,7 @@ export async function main({
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
   closeLogger = async () => {},
   createTelegramNotifier = (options) => new TelegramNotifier(options),
-  createDurableFactsStore,
+  createOperationalStateStore,
   processIdentity = PROCESS_IDENTITY,
 } = {}) {
   const processStartedDataResult = mapHarvesterProcessStartedData(processIdentity)
@@ -209,7 +209,7 @@ export async function main({
       appConfig,
       env,
       runtimeSessionId: processIdentity.runtimeSessionId,
-      createDurableFactsStore,
+      createOperationalStateStore,
     })
     journalService = createJournalService({
       eventBus,
@@ -308,7 +308,7 @@ export async function main({
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, appConfig, env, runtimeSessionId: processIdentity.runtimeSessionId, durableFactsStore })
+    const runtime = await start({ eventPublisher, appConfig, env, runtimeSessionId: processIdentity.runtimeSessionId, durableFactsStore: operationalStateStore })
     const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
     const enabledMarkets = configuredPairs
       ? Object.entries(configuredPairs)
