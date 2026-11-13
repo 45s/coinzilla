@@ -56,7 +56,39 @@ Telegram is an optional outbound observer composed at the process boundary. The 
 
 Profiles are `minimal`, `trader`, `verbose`, and `custom`. Per-event overrides merge with the chosen profile; `markets: []` means all markets. Critical startup, broker-disconnect, order-failure, pair-pause, recovery-failure, account-safety, blocked user-data readiness, and confirmed readiness-restoration alerts cannot be disabled and bypass market filters. The stable Harvester lifecycle vocabulary includes `user_data.readiness_changed`; transitions are validated by the dedicated `user-data-readiness-event-dto.js` application event mapper before publication. A recovered user-data transport remains explicitly BLOCKED until authoritative application reconciliation and broker-wide acknowledgement complete. `recoveryFailed` and `executionNormalizationFailed` statuses alert even if the broker omits the recovery-required flag; `rpcError` and `terminated` alerts require an explicit recovery-required flag, while retry-progress and diagnostic-only RPC errors are suppressed. Blocked recovery-cycle outcomes alert; expected sell-through continuation does not. Telegram bot token and chat ID remain environment-only secrets.
 
-Harvester's directional notification icons are: BUY order submitted 🟢, SELL order submitted 🔴, BUY fill received ✅, and SELL fill received 💰. Bot start/stop use ▶️/⏹️. Pair pause uses ⏹️, recovery failure 🚨, recovery completion 📡, and startup failure 🛑. A blocked account-wide open-orders audit also uses 🚨; other account-safety alerts retain ⚠️. Fill direction is taken from the canonical applied-fill event and carried through the Telegram bridge; notification formatting does not affect trading or accounting.
+The table below is the canonical icon contract for **producer-backed outbound Telegram notifications**. It describes the message actually formatted after the Harvester event bridge maps a source event; it is not a list of every formatter key. Order-failure icons use the bridge's explicit `operation` and `side` fields. Account-safety icons use the mapped alert `category`, because several distinct source events share the `account.safety_alert` notification name.
+
+| Active Telegram notification | Producer-backed condition | Icon |
+| --- | --- | :---: |
+| Bot started | `bot.started` | 🚀 |
+| Bot stopped | `bot.stopped` | 🔒 |
+| Startup failed | `bot.startup_failed` | 🛠️ |
+| Market paused | `bot.pair_paused` | ⏸️ |
+| Broker disconnected | `broker.disconnected` | 💤 |
+| Broker subscription failed | `account.safety_alert` · `broker-subscription-failed` | 🚨 |
+| User-data stream ready | `bot.user_data_ready` | 🔗 |
+| User-data readiness blocked | `account.safety_alert` · `user-data-readiness-blocked` | 🚨 |
+| Reconnected; reconciliation pending | `account.safety_alert` · `user-data-reconnected-reconciliation-pending` | 🚨 |
+| User-data recovery failed | `account.safety_alert` · `user-data-recovery-failed` | 🚨 |
+| User-data stream terminated | `account.safety_alert` · `user-data-stream-terminated` | 🚨 |
+| Execution normalization failed | `account.safety_alert` · `user-data-execution-normalization-failed` | 🚨 |
+| User-data stream error | `account.safety_alert` · `user-data-stream-error` | 🚨 |
+| Order submission failed — BUY / SELL | `order.failed` · `operation=submission` | ❌ / ❌ |
+| Order cancellation failed — BUY / SELL | `order.failed` · `operation=cancellation` | 🚫 / ⛔ |
+| Fill received — BUY / SELL | `fill.received` | ✔️ / 💸 |
+| Recovery completed | `bot.recovery_completed` | 💰 |
+
+The user left five notifications without a replacement selection. They deliberately retain their previous formatter icons until a separate choice is made:
+
+| Notification | Existing icon retained |
+| --- | :---: |
+| Recovery cycle blocked | 🚨 |
+| Execution accounting failed (`bot.recovery_failed`) | 🚨 |
+| Unowned order detected | ⚠️ |
+| Invalid fill | ⚠️ |
+| Account-wide open orders blocked | 🚨 |
+
+Successful order submission, successful order cancellation, broker connected, and `order.filled` remain formatter/policy vocabulary only: the current Harvester Telegram bridge has no producer mapping that sends them. They are therefore not part of the active notification icon contract. Fill direction is taken from the canonical applied-fill event and carried through the Telegram bridge; notification formatting does not affect trading or accounting.
 
 Notification setup and delivery are best-effort. An explicit `enabled: false` or missing credentials disables notifications; malformed application configuration fails normal configuration validation rather than silently falling back. Transport/setup failures remain isolated from the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. Telegram delivery failures/overflow are observable through structured logs containing immutable process-local delivery counters, and a final summary is logged after shutdown drains and closes the subscriber; the notifier does not send recursive health alerts to itself. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority. Automatic retries remain disabled because an ambiguous timeout may duplicate a Telegram message.
 
