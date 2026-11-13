@@ -139,8 +139,8 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
       recoveryLedger: currentLedger,
       fill,
     })
-    // Journal is optional: a failed baseline write must not block a validated fill.
-    // The later account audit detects the missing baseline and fails closed.
+    // A targeted fee-asset baseline must precede EXECUTION_FILL_APPLIED in the
+    // durable sequence. Its failure remains non-blocking here; account audit fails closed.
     if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
       try {
         if (typeof onCommissionAsset !== "function") {
