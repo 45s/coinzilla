@@ -268,3 +268,27 @@ test("requires only the limit order type selected by the configured maker policy
     "A zero maker assumption still requires LIMIT_MAKER and must fail when that order type is unavailable.",
   )
 })
+
+
+test("preserves small exchange-aligned quantities represented with JavaScript exponent notation", () => {
+  const pair = createPairConfig({
+    inputs: {
+      investment: "200",
+      orderQuantity: "1",
+      keepQuantity: "0.0000001",
+      makerPercent: "0.1",
+      takerPercent: "0.1",
+      minProfit: "0.01",
+      priceStepPercent: "0.05",
+    },
+    metadata: {
+      ...metadata,
+      price: "100",
+      stepSize: "0.0000001",
+      minQuantity: "0.0000001",
+    },
+  })
+
+  assert.equal(pair.keepQuantity, 0.0000001, "The numeric app-config contract must preserve small valid retained quantities.")
+  assert.equal(pair.quantityPrecision, 7, "Quantity precision must continue to come from the exact exchange step size.")
+})
