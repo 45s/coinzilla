@@ -221,3 +221,31 @@ test("does not write configuration when Binance metadata lookup fails", async ()
   )
   assert.equal(writes, 0, "An exchange metadata failure must never create a pair configuration.")
 })
+
+
+test("rejects an invalid existing TRADING_MODE instead of silently selecting TESTNET", async () => {
+  const previousTradingMode = process.env.TRADING_MODE
+  process.env.TRADING_MODE = "paper"
+  let metadataCalls = 0
+  try {
+    await assert.rejects(
+      runConfigSymbol({
+        ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""]),
+        loadConfig: async () => createAppConfig(),
+        metadataFetcher: async () => {
+          metadataCalls += 1
+          return metadata
+        },
+      }),
+      /environment.*testnet or live/i,
+      "An invalid configured runtime mode must not silently generate TESTNET-derived pair settings.",
+    )
+    assert.equal(metadataCalls, 0, "Invalid TRADING_MODE must fail before any Binance metadata request.")
+  } finally {
+    if (previousTradingMode === undefined) {
+      delete process.env.TRADING_MODE
+    } else {
+      process.env.TRADING_MODE = previousTradingMode
+    }
+  }
+})
