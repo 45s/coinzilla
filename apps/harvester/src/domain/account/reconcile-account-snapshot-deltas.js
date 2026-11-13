@@ -13,8 +13,13 @@ const validateSnapshot = ({ snapshot, phase }) => {
   if (!["COMPLETE", "INCOMPLETE"].includes(snapshot.auditStatus)) {
     throw new TypeError(phase + " snapshot auditStatus is invalid")
   }
-  if (!Number.isSafeInteger(snapshot.sourceTime) || !Array.isArray(snapshot.balances)) {
-    throw new TypeError(phase + " snapshot requires sourceTime and balances")
+  if (!Number.isSafeInteger(snapshot.sourceTime) ||
+      snapshot.sourceTime < 0 ||
+      Object.is(snapshot.sourceTime, -0)) {
+    throw new TypeError(phase + " snapshot sourceTime must be a non-negative safe integer")
+  }
+  if (!Array.isArray(snapshot.balances)) {
+    throw new TypeError(phase + " snapshot balances must be an array")
   }
   if (!Array.isArray(snapshot.auditReasons) ||
       snapshot.auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
