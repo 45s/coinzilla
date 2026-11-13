@@ -205,7 +205,7 @@ export async function main({
       throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
     processLock = lockResult
-    const durableFactsStore = await prepareProcessDurableFactsStore({
+    const operationalStateStore = await prepareProcessOperationalStateStore({
       appConfig,
       env,
       runtimeSessionId: processIdentity.runtimeSessionId,
