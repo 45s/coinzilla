@@ -26,7 +26,7 @@ const main = (options = {}) => {
   const { createJournalService = disabledJournalService, env = {}, ...rest } = options
   return startMain({
     acquireProcessLock,
-    createDurableFactsStore: () => ({
+    createOperationalStateStore: () => ({
       verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
     }),
     ...rest,
@@ -52,9 +52,9 @@ test("does not create or inject durable recovery facts while recovery is disable
   let storeCreated = false
   let startupInput
   await runMain({
-    createDurableFactsStore: () => {
+    createOperationalStateStore: () => {
       storeCreated = true
-      throw new Error("disabled recovery must not construct a durable-facts store")
+      throw new Error("disabled recovery must not construct a Operational State Store")
     },
     start: async (input) => {
       startupInput = input
@@ -62,11 +62,11 @@ test("does not create or inject durable recovery facts while recovery is disable
     },
     logger: { info() {}, system() {}, error() {} },
   })
-  assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a durable-facts ledger.")
-  assert.equal(startupInput.durableFactsStore, undefined, "Disabled restart recovery must not inject a durable-facts store into runtime startup.")
+  assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
+  assert.equal(startupInput.durableFactsStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
 })
 
-test("injects the shared default durable-facts store when Telegram operator control is enabled without recovery", async () => {
+test("injects the shared default Operational State Store when Telegram operator control is enabled without recovery", async () => {
   const configuredApp = {
     operatorControl: {
       telegram: {
@@ -94,7 +94,7 @@ test("injects the shared default durable-facts store when Telegram operator cont
 
   await runMain({
     loadConfig: async () => configuredApp,
-    createDurableFactsStore: (options) => {
+    createOperationalStateStore: (options) => {
       durableFactsStoreOptions = options
       return durableFactsStore
     },
@@ -116,7 +116,7 @@ test("injects the shared default durable-facts store when Telegram operator cont
   assert.strictEqual(
     startupInput.durableFactsStore,
     durableFactsStore,
-    "The production composition must pass the exact shared durable-facts store to Harvester when Telegram operator control is enabled independently of recovery.",
+    "The production composition must pass the exact shared Operational State Store to Harvester when Telegram operator control is enabled independently of recovery.",
   )
 })
 
@@ -1725,7 +1725,7 @@ test("does not construct, verify, or inject durable facts even when a stale ledg
   let runtimeStarted = false
   await runMain({
     env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
-    createDurableFactsStore: () => {
+    createOperationalStateStore: () => {
       storeCreated = true
       throw new Error("restart recovery is disabled")
     },
@@ -1740,7 +1740,7 @@ test("does not construct, verify, or inject durable facts even when a stale ledg
     },
     logger: { info() {}, system() {}, error() {} },
   })
-  assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the durable-facts store.")
+  assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the Operational State Store.")
   assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })
