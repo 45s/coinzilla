@@ -19,6 +19,12 @@ Telegram control can be enabled while `recovery.enabled` remains false. The prod
 
 Use `/start` or `/help` to display the supported command vocabulary. Telegram's command menu mirrors the text commands. Inline navigation opens read-only status, markets, positions, orders and balances pages. Enabled markets expose a pause request when not operator-paused and a resume request when the operator pause is active; disabled markets expose no inline control. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
 
+## Status semantics
+
+`/status` reports the Harvester process lifecycle and readiness. The process remains `RUNNING` while one or more markets are operator-paused; this is not an application-wide `PAUSED` lifecycle state. Use `/markets` to see exactly which configured markets have `Operator pause: ACTIVE`.
+
+When the Harvester process is stopped, its Telegram poller is also stopped, so it cannot answer a live `/status` request. A missing Telegram reply is not proof that Harvester is stopped because Telegram transport failures can also prevent replies.
+
 Text commands remain available:
 
 - `/status`, `/markets`, `/positions`, `/orders`, and `/balances` are read-only.
