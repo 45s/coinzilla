@@ -74,3 +74,5 @@ Each completed-cycle profit equals its SELL quote proceeds minus BUY quote cost 
 | 219411190 | h-2daf4e425a5247d0af4f45-147 | ZROFDUSD | SELL | 1.617 | 4.99 | NEW |
 
 The four WLDFDUSD orders were later reported cancelled between 21:56:48.959Z and 21:57:06.590Z as unowned external events. The supplied files do not identify who cancelled them. The ZROFDUSD order had no cancellation event; 4.99 ZRO remained locked in the CLOSING balance snapshot.
+
+For the four external cancellations, Binance execution reports use a generated cancel-request clientOrderId (web_...) and retain the preflight order ID in originalClientOrderId (x-WEV...). The unowned-order projection records the generated ID; brokerOrderId is the stable join key used here.
