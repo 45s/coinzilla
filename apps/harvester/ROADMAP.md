@@ -8,6 +8,8 @@
 
 **Current baseline:** Telegram remains optional/disabled by default. CC-1 through CC-3 are delivered in PRs #1079, #1081, #1086 and #1087. CC-4 is delivered in merged [PR #1088](https://github.com/45s/coinzilla/pull/1088): Telegram command menu, authorized inline navigation/refresh, confirmation-gated market pause/resume controls, callback authorization/idempotency/retry/shutdown hardening and the operator runbook. The operator pause remains process-lifetime only and is not restored after restart.
 
+**Production composition follow-up:** [~] [PR #1100](https://github.com/45s/coinzilla/pull/1100) supplies the shared ADR-0001 store when Telegram operator control is enabled independently of restart recovery, using the documented default directory unless overridden. This is a setup correction only; it does not reopen CC-1–CC-4 or change pause semantics.
+
 ### Delivery phases
 
 1. [x] **CC-1 — Operator essentials:** delivered transport-neutral immutable read-only status/market queries and Telegram `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, and `/resume SYMBOL`. Runtime readiness and blockers, per-market price timestamps/freshness, pause ownership and volatility protection are visible. Resume clears only the operator-owned pause and retains all safety/recovery/volatility blockers. First command slice: [PR #1079](https://github.com/45s/coinzilla/pull/1079); read-only queries and status/markets: [PR #1081](https://github.com/45s/coinzilla/pull/1081).
@@ -27,12 +29,11 @@
 
 ## P1 — Outbound Telegram notification icons
 
-**Status: [~] IMPLEMENTATION IN PROGRESS in [PR #1099](https://github.com/45s/coinzilla/pull/1099).** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
+**Status: [x] COMPLETE — merged into `develop` in [PR #1099](https://github.com/45s/coinzilla/pull/1099) as `fc7cac7e28a67aa9284a88770d556aff843c81b5`; exact source head `bd856f66f888d99b00cdf0828e291ea126d4945b` passed all six required checks, Harvester targeted tests and external documentation-link validation.** The user's reviewed emoji choices are applied to producer-backed Harvester Telegram notifications. The formatter selects order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
 
-- Keep the five notifications without a replacement selection on their existing icons; do not invent choices.
-- Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
-- Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
-- [ ] Complete exact formatter and end-to-end Telegram assertions, documentation updates, and required exact-head CI; mark complete only after merge into `develop`.
+- [x] Preserve the five notifications without a replacement selection on their existing icons; no choices were invented.
+- [x] Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
+- [x] Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
 
 ---
 

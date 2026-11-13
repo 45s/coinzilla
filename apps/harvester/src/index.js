@@ -220,7 +220,9 @@ export async function main({
     }
     processLock = lockResult
     const recoveryEnabled = appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-    const durableFactsStore = recoveryEnabled
+    const operatorControlEnabled = appConfig.operatorControl?.telegram?.enabled === true
+    const durableFactsRequired = recoveryEnabled || operatorControlEnabled
+    const durableFactsStore = durableFactsRequired
       ? createDurableFactsStore({
           directory: resolveHostDurableFactsDirectory({ env }),
           runtimeSessionId: processIdentity.runtimeSessionId,

@@ -6,6 +6,15 @@ The Harvester Telegram Command Center is an optional operator interface. Inbound
 
 The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. Operator pauses last only for the current process and are not restored after restart.
 
+## Enabling the Command Center
+
+1. Set `operatorControl.telegram.enabled: true` and configure the private-chat Telegram user-ID allowlist in `config/operator-control.js`.
+2. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
+3. Initialize the ADR-0001 ledger once while Harvester is stopped, following the [Harvester ledger setup](../../README.md#application-owned-recovery-facts-ledger-adr-0001-step-8). The initializer requires an absolute `DURABLE_FACTS_DIRECTORY`; the runtime uses that same override when present or defaults to `~/.coinzilla/harvester/recovery-facts`.
+4. Start only with a verified ledger that contains no prior `PROCESS_STARTED` fact. The current ADR-0001 gate blocks every second process start, even after clean shutdown, until Steps 8–9 are accepted. Do not delete or reinitialize an existing ledger to bypass this restriction.
+
+Telegram control can be enabled while `recovery.enabled` remains false. The production entry point still composes the shared ledger for operator facts; it does not enable restart restoration or create/repair ledger files.
+
 ## Command menu and navigation
 
 Use `/start` or `/help` to display the supported command vocabulary. Telegram's command menu mirrors the text commands. Inline navigation opens read-only status, markets, positions, orders and balances pages. Enabled markets expose a pause request when not operator-paused and a resume request when the operator pause is active; disabled markets expose no inline control. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
