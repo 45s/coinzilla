@@ -35,7 +35,7 @@ const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQu
   if (reason === "MIN_QUANTITY") {
     if (inventoryDisposition.minimumQuantity === undefined ||
         inventoryDisposition.evaluatedQuantity === undefined ||
-        compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: "0" }) <= 0 ||
+        compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: "0" }) < 0 ||
         compareDecimal({
           left: inventoryDisposition.evaluatedQuantity,
           right: inventoryDisposition.minimumQuantity,
