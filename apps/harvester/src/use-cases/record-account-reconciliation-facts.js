@@ -1,3 +1,4 @@
+import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 
@@ -35,7 +36,7 @@ export async function recordAccountSnapshotCaptured({ durableFactsStore, data } 
   try {
     requireAppendPort({ durableFactsStore, operation: "recordAccountSnapshotCaptured" })
     if (!data || typeof data !== "object" || Array.isArray(data) ||
-        typeof data.phase !== "string" || !Number.isSafeInteger(data.sourceTime) ||
+        typeof data.phase !== "string" || !isCanonicalNonNegativeSafeInteger(data.sourceTime) ||
         !Array.isArray(data.balances)) {
       throw new TypeError("recordAccountSnapshotCaptured requires a mapped account snapshot DTO")
     }
@@ -73,7 +74,7 @@ export async function recordAccountOpenOrdersCaptured({ durableFactsStore, data 
   try {
     requireAppendPort({ durableFactsStore, operation: "recordAccountOpenOrdersCaptured" })
     if (!data || typeof data !== "object" || Array.isArray(data) ||
-        typeof data.phase !== "string" || !Number.isSafeInteger(data.observedAt)) {
+        typeof data.phase !== "string" || !isCanonicalNonNegativeSafeInteger(data.observedAt)) {
       throw new TypeError("recordAccountOpenOrdersCaptured requires a mapped account open-order DTO")
     }
     const result = await durableFactsStore.append({
