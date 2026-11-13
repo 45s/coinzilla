@@ -140,7 +140,7 @@ test("rejects negative-zero account snapshot and open-order timestamps before ap
     data: openOrders({ observedAt: -0 }),
   })
 
-  assert.equal(snapshot.ok, false)
-  assert.equal(openOrdersResult.ok, false)
+  assert.equal(snapshot.ok, false, "An account snapshot with negative-zero source time must be rejected before append.")
+  assert.equal(openOrdersResult.ok, false, "An account open-orders fact with negative-zero observation time must be rejected before append.")
   assert.equal(appendCalls.length, 0, "Non-canonical timestamps must be rejected before reaching durable persistence.")
 })

@@ -427,18 +427,18 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     sellOrder: createFilledSellOrder({ clientOrderId: "stats-completion-sell" }),
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.data.eligible, true)
+  assert.equal(result.ok, true, "A fully filled and profitable recovery SELL must complete its eligible recovery cycle.")
+  assert.equal(result.data.eligible, true, "The completion result must confirm that the cycle is eligible for reset.")
   assert.equal(infoLogs.length, 1, "Resetting Portfolio spent must emit stats even when total inventory stays unchanged.")
   assert.deepEqual(infoLogs[0].inventory, {
     activeBaseQuantity: "0 BTC",
     freeBaseQuantity: "1 BTC",
     totalBaseQuantity: "1 BTC",
-  })
+  }, "Completion stats must show the full retained inventory after active recovery quantity is cleared.")
   assert.deepEqual(infoLogs[0].accounting, {
     spent: "0 USDT",
     quoteNetCashFlow: "5 USDT",
-  })
+  }, "Completion stats must show the reset cost basis and preserved realized quote cash flow.")
 })
 
 
@@ -480,15 +480,15 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
     sellOrder,
   })
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(result.data.eligible, false)
-  assert.equal(result.data.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(result.ok, true, "A terminal SELL with residual sellable inventory must return a durable non-completion result.")
+  assert.equal(result.data.eligible, false, "Residual sellable inventory must keep the recovery cycle open.")
+  assert.equal(result.data.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "The cycle must identify the exact residual sell-through reason.")
   assert.equal(calls.length, 1, "Every fully filled SELL must durably record its explicit non-completion outcome.")
   assert.equal(calls[0].sellOrder, sellOrder, "The outcome must be tied to the exact terminal SELL order.")
-  assert.equal(calls[0].recoveryLedger, initialLedger)
-  assert.equal(calls[0].position, initialPortfolio.getPosition({ marketId: market.id }))
+  assert.equal(calls[0].recoveryLedger, initialLedger, "The durable non-completion fact must reference the unchanged RecoveryLedger.")
+  assert.equal(calls[0].position, initialPortfolio.getPosition({ marketId: market.id }), "The durable non-completion fact must reference the unchanged Position.")
   assert.equal(workflow.getPortfolio(), initialPortfolio, "A non-completed cycle must not allocate free inventory or reset basis.")
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "A non-completed recovery cycle must preserve its original RecoveryLedger.")
 })
 
 test("does not return a non-completed cycle when its durable outcome was not committed", async () => {
@@ -525,9 +525,9 @@ test("does not return a non-completed cycle when its durable outcome was not com
   })
 
   assert.equal(result.ok, false, "A missing durable non-completion outcome must block the next strategy action.")
-  assert.match(result.errors[0].message, /manifest was not committed/)
-  assert.equal(workflow.getPortfolio(), initialPortfolio)
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+  assert.match(result.errors[0].message, /manifest was not committed/, "The failure must preserve the durable manifest-commit error.")
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "A failed durable non-completion fact must not publish a Portfolio transition.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "A failed durable non-completion fact must not publish a RecoveryLedger transition.")
 })
 
 test("binds a durable completed-cycle outcome to the exact fully filled SELL order before committing the reset", async () => {
@@ -558,7 +558,7 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     onDurableRecoveryCycleCompleted: async (input) => {
       durableInput = input
       assert.equal(workflow.getPortfolio(), initialPortfolio, "The durable fact must commit before either accounting projection is reset.")
-      assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+      assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "The RecoveryLedger reset must remain unpublished until the completed-cycle fact is durable.")
       return { ok: true, data: { durable: true } }
     },
   })
@@ -570,7 +570,7 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     sellOrder,
   })
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.ok, true, "A canonical terminal SELL with eligible economics must commit the recovery-cycle outcome successfully.")
   assert.equal(durableInput.sellOrder, sellOrder, "The completion fact must identify the exact terminal SELL.")
 })
 
@@ -658,7 +658,7 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
     onDurableExecutionFill: async ({ fill: received }) => {
-      assert.equal(received, additionalBuyFill)
+      assert.equal(received, additionalBuyFill, "The serialization test must hold the durable barrier for the exact concurrent BUY fill.")
       markDurableFillStarted()
       await durableFillGate
       return { ok: true, data: { durable: true } }
@@ -681,8 +681,8 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
   releaseDurableFill()
   const [fillResult, completionResult] = await Promise.all([fillPromise, completionPromise])
 
-  assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
-  assert.equal(completionResult.ok, true, completionResult.errors?.[0]?.message)
+  assert.equal(fillResult.ok, true, "The concurrent BUY fill must finish its durable accounting transition successfully.")
+  assert.equal(completionResult.ok, true, "Recovery completion must finish after the queued BUY fill transition.")
   assert.equal(
     completionResult.data.eligible,
     false,
@@ -695,8 +695,8 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
   )
   assert.equal(completionCalls.length, 0, "A concurrent fill must prevent an outdated completed-cycle fact from being persisted.")
   const finalPosition = workflow.getPortfolio().getPosition({ marketId: market.id })
-  assert.equal(finalPosition.baseQuantity.amount, "1.5")
-  assert.equal(finalPosition.spent.amount, "195000")
-  assert.equal(finalPosition.freeBaseQuantity.amount, "0")
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "195000")
+  assert.equal(finalPosition.baseQuantity.amount, "1.5", "The concurrent BUY fill must remain in active Position quantity after completion is evaluated.")
+  assert.equal(finalPosition.spent.amount, "195000", "The concurrent BUY fill must remain included in the full recovery cost basis.")
+  assert.equal(finalPosition.freeBaseQuantity.amount, "0", "No retained inventory may be allocated from a cycle invalidated by the queued BUY fill.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "195000", "The RecoveryLedger cost must stay aligned with Portfolio after the serialized BUY fill.")
 })

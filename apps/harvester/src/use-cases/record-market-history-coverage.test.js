@@ -109,8 +109,8 @@ test("rejects malformed coverage evidence before calling the durable append port
       durableFactsStore,
       ...evidence(overrides),
     })
-    assert.equal(result.ok, false)
-    assert.match(result.errors[0].message, message)
+    assert.equal(result.ok, false, "Malformed market-history coverage evidence must be rejected before the durable append port is called.")
+    assert.match(result.errors[0].message, message, "The validation error must identify the malformed coverage field.")
   }
   assert.equal(appendCalls.length, 0, "Invalid evidence must never reach the durable append boundary.")
 })
@@ -119,11 +119,11 @@ test("returns durable append failures and converts thrown append errors into res
   const appendError = new Error("append unavailable")
   const rejectedStore = { append: async () => ({ ok: false, errors: [appendError] }) }
   const rejected = await recordMarketHistoryCoverage({ durableFactsStore: rejectedStore, ...evidence() })
-  assert.equal(rejected.ok, false)
-  assert.equal(rejected.errors[0], appendError)
+  assert.equal(rejected.ok, false, "A rejected durable append result must remain a failed coverage-recording outcome.")
+  assert.equal(rejected.errors[0], appendError, "The recorder must preserve the original durable append error identity.")
 
   const thrownStore = { append: async () => { throw appendError } }
   const thrown = await recordMarketHistoryCoverage({ durableFactsStore: thrownStore, ...evidence() })
-  assert.equal(thrown.ok, false)
-  assert.equal(thrown.errors[0], appendError)
+  assert.equal(thrown.ok, false, "A thrown durable append error must be normalized into a failed result.")
+  assert.equal(thrown.errors[0], appendError, "The recorder must preserve the original thrown append error identity.")
 })

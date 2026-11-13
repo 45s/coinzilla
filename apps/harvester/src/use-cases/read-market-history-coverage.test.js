@@ -118,22 +118,22 @@ test("rejects a durable history-coverage sequence that narrows prior verified co
 
 test("rejects invalid read ports, symbols, and malformed record collections", async () => {
   const missingPort = await readMarketHistoryCoverage({ durableFactsStore: {}, symbol: "BTCUSDT" })
-  assert.equal(missingPort.ok, false)
-  assert.match(missingPort.errors[0].message, /durable-fact read port/)
+  assert.equal(missingPort.ok, false, "A missing durable-fact read port must be rejected before history coverage is returned.")
+  assert.match(missingPort.errors[0].message, /durable-fact read port/, "The error must identify the required durable-fact read capability.")
 
   const invalidSymbol = await readMarketHistoryCoverage({
     durableFactsStore: { readAll: async () => ({ ok: true, data: { records: [] } }) },
     symbol: "btcusdt",
   })
-  assert.equal(invalidSymbol.ok, false)
-  assert.match(invalidSymbol.errors[0].message, /canonical uppercase/)
+  assert.equal(invalidSymbol.ok, false, "A non-canonical market symbol must not be used to read durable coverage.")
+  assert.match(invalidSymbol.errors[0].message, /canonical uppercase/, "The error must identify the canonical market-symbol requirement.")
 
   const malformedRecords = await readMarketHistoryCoverage({
     durableFactsStore: { readAll: async () => ({ ok: true, data: { records: null } }) },
     symbol: "BTCUSDT",
   })
-  assert.equal(malformedRecords.ok, false)
-  assert.match(malformedRecords.errors[0].message, /records array/)
+  assert.equal(malformedRecords.ok, false, "A malformed durable record collection must fail the coverage read.")
+  assert.match(malformedRecords.errors[0].message, /records array/, "The error must identify the required records array in the durable read result.")
 })
 
 test("rejects a durable history-coverage sequence with a regressing verification timestamp", async () => {
@@ -170,6 +170,6 @@ test("rejects a durable history-coverage sequence with a regressing verification
   }
   const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /verification timestamp regresses/)
+  assert.equal(result.ok, false, "A durable coverage history with a regressing verification time must be rejected.")
+  assert.match(result.errors[0].message, /verification timestamp regresses/, "The failure must identify the non-monotonic verification timestamp.")
 })
