@@ -17,6 +17,8 @@ Before **any** task or state-changing action, every agent MUST complete the docu
 
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
+For any refactoring or code-audit task, use the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) together with the applicable checklist in [Task Workflows](docs/engineering/TASK_WORKFLOWS.md). Treat its scope, evidence, test-first, compatibility, verification, and reporting requirements as mandatory.
+
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
