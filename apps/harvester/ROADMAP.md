@@ -60,12 +60,17 @@
 ### Test-first and verification evidence
 
 - Test-only RED runs reproduced the targeted commission-baseline schema defects, missing terminal SELL evidence, malformed dust evidence, and negative-zero timestamp acceptance. The start-harvester integration regression also failed while terminal-order forwarding was incomplete and now passes with the canonical order evidence preserved.
-- The Harvester suite passed **1,511/1,511** on the verified PR head. The workspace coverage workflow passed at **81.44% line, 81.21% branch, and 80.63% function coverage**. This is a workspace-wide aggregate and remains below the 90% branch target noted in project guidance; Harvester has no package-specific threshold. Raising workspace coverage requires changes outside this PR's explicit apps/harvester/** scope and is deferred; no threshold was weakened or changed.
+- The Harvester suite passed **1,511/1,511** on the verified PR head. The coverage workflow passed at **81.19% line, 81.03% branch, and 80.63% function coverage**. This report aggregates Harvester with imported workspace packages (brokers, entities, event-bus, journal, notifiers, and utils); it is not an isolated Harvester-only metric. The aggregate remains below the 90% branch target noted in project guidance; Harvester has no package-specific threshold. Isolating and enforcing a 90% Harvester-only branch gate is a separate scoped task; no threshold was weakened or changed.
 - Changed-file ESLint/syntax checks passed; no lint rules were weakened. The full workspace's existing style-only ESLint baseline is not bulk-rewritten here; behavior-preserving cleanup remains tracked separately in [issue #1092](https://github.com/45s/coinzilla/issues/1092).
 - All six required `develop` checks passed on the verified PR head: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, and actionlint. The advisory external documentation-link check passed. The optional read-only Binance TESTNET integration was skipped.
 - The PR updates the Conservative Domain Specification, architecture/recovery flow, broker port/adapter contract, accounting invariant matrix, domain test inventory, symbol-generator instructions, and a dated audit report. Documentation describes the implemented source behavior rather than planned behavior.
 
 ### Scope and remaining work
+
+### Follow-up — isolated Harvester coverage gate
+
+The current coverage workflow includes shared workspace dependencies, so it cannot report a clean Harvester-only branch percentage. Add an app-local coverage report and enforce the 90% branch target for Harvester in a separate focused task. Start with uncovered branches in the account snapshot manager, conservative engine/workflow, broker metadata adapter, and operational recovery scripts; keep each change behavior-preserving and test-first. This PR intentionally does not modify shared packages to raise the workspace aggregate.
+
 
 - The full Harvester JavaScript inventory was enumerated; named-export scanning, test inventory, and lint results were used to map structural/style debt. High-risk accounting, durable-facts, recovery, market-data, configuration, and operational-script boundaries received the detailed source review. The remaining style-only lint baseline is deliberately separated from these correctness fixes; do not mass-autofix unrelated modules or weaken strict rules.
 - No strategy economics, trading configuration, broker behavior, shared packages, or other applications changed.
