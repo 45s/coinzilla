@@ -32,7 +32,7 @@ test("rejects malformed symbols, non-positive prices, and invalid timestamps", (
     { ...valid, timestamp: -0 },
     { ...valid, timestamp: 1.5 },
   ]) {
-    assert.throws(() => createMarketPrice({ priceEvent }))
+    assert.throws(() => createMarketPrice({ priceEvent }), undefined, `Invalid market-price input ${JSON.stringify(priceEvent)} must be rejected, including non-canonical timestamps.`)
   }
 })
 

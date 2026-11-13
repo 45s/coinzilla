@@ -223,8 +223,8 @@ test("rejects malformed confirmation evidence before reading the durable ledger"
   for (const [overrides, message] of invalidCases) {
     const { store, options } = createOptions()
     const result = await confirmMarketHistoryCoverage({ ...options, ...overrides })
-    assert.equal(result.ok, false)
-    assert.match(result.errors[0].message, message)
+    assert.equal(result.ok, false, "Malformed coverage confirmation evidence must be rejected before a durable operation.")
+    assert.match(result.errors[0].message, message, "The validation error must identify the invalid coverage field or dependency.")
     assert.equal(store.calls.length, 0, "Invalid confirmation evidence must fail before durable reads or writes.")
   }
 })
@@ -234,8 +234,8 @@ test("does not append when reconciliation fails or identifies another market", a
     reconcileMarketState: async () => ({ ok: false, errors: [new Error("reconciliation failed")] }),
   })
   const failed = await confirmMarketHistoryCoverage(failedReconciliation.options)
-  assert.equal(failed.ok, false)
-  assert.equal(failedReconciliation.store.records.length, 0)
+  assert.equal(failed.ok, false, "A failed one-market reconciliation must not confirm history coverage.")
+  assert.equal(failedReconciliation.store.records.length, 0, "A failed reconciliation must not append a coverage fact.")
 
   const mismatchedMarket = createOptions({
     reconcileMarketState: async () => ({
@@ -244,9 +244,9 @@ test("does not append when reconciliation fails or identifies another market", a
     }),
   })
   const mismatched = await confirmMarketHistoryCoverage(mismatchedMarket.options)
-  assert.equal(mismatched.ok, false)
-  assert.match(mismatched.errors[0].message, /different market/)
-  assert.equal(mismatchedMarket.store.records.length, 0)
+  assert.equal(mismatched.ok, false, "Reconciliation evidence for another market must be rejected.")
+  assert.match(mismatched.errors[0].message, /different market/, "The failure must identify the market-identity mismatch.")
+  assert.equal(mismatchedMarket.store.records.length, 0, "A market-identity mismatch must not append a coverage fact.")
 })
 
 test("does not append when the history audit is incomplete or references different coverage", async () => {
@@ -261,9 +261,9 @@ test("does not append when the history audit is incomplete or references differe
       }),
     })
     const result = await confirmMarketHistoryCoverage(options)
-    assert.equal(result.ok, true)
-    assert.equal(result.data.confirmed, false)
-    assert.equal(store.records.length, 0)
+    assert.equal(result.ok, true, "An incomplete or mismatched history audit must return a handled non-confirmation result.")
+    assert.equal(result.data.confirmed, false, "Incomplete or mismatched history evidence must not be marked confirmed.")
+    assert.equal(store.records.length, 0, "Incomplete or mismatched history evidence must not append a coverage fact.")
   }
 })
 
@@ -278,8 +278,8 @@ test("fails closed when the committed coverage readback is unavailable or mismat
     return { ok: false, errors: [new Error("readback unavailable")] }
   }
   const unavailableResult = await confirmMarketHistoryCoverage(unavailable.options)
-  assert.equal(unavailableResult.ok, false)
-  assert.match(unavailableResult.errors[0].message, /readback unavailable/)
+  assert.equal(unavailableResult.ok, false, "A failed durable readback must prevent confirmation from being reported as successful.")
+  assert.match(unavailableResult.errors[0].message, /readback unavailable/, "The readback failure must remain visible to the operator.")
 
   const mismatched = createOptions()
   let mismatchedReads = 0
@@ -300,6 +300,6 @@ test("fails closed when the committed coverage readback is unavailable or mismat
     }
   }
   const mismatchedResult = await confirmMarketHistoryCoverage(mismatched.options)
-  assert.equal(mismatchedResult.ok, false)
-  assert.match(mismatchedResult.errors[0].message, /does not match the reviewed evidence/)
+  assert.equal(mismatchedResult.ok, false, "A committed fact that differs from reviewed evidence must fail confirmation.")
+  assert.match(mismatchedResult.errors[0].message, /does not match the reviewed evidence/, "The readback mismatch must identify the evidence-integrity failure.")
 })

@@ -123,20 +123,20 @@ test("rejects non-Portfolio and non-canonical active-order inputs", () => {
     portfolio: { positions: [] },
     activeOrders: [],
   })
-  assert.equal(invalidPortfolio.ok, false)
-  assert.match(invalidPortfolio.errors[0].message, /requires a Portfolio/)
+  assert.equal(invalidPortfolio.ok, false, "A plain object must not be accepted as the canonical Portfolio accounting projection.")
+  assert.match(invalidPortfolio.errors[0].message, /requires a Portfolio/, "The validation error must identify the required Portfolio domain value.")
 
   const nonArrayOrders = calculateAccountSnapshotBaselines({
     portfolio: new Portfolio(),
     activeOrders: null,
   })
-  assert.equal(nonArrayOrders.ok, false)
-  assert.match(nonArrayOrders.errors[0].message, /activeOrders must contain CanonicalOrder values/)
+  assert.equal(nonArrayOrders.ok, false, "A missing active-order collection must be rejected before account baselines are calculated.")
+  assert.match(nonArrayOrders.errors[0].message, /activeOrders must contain CanonicalOrder values/, "The validation error must identify the canonical active-order collection contract.")
 
   const nonCanonicalOrder = calculateAccountSnapshotBaselines({
     portfolio: new Portfolio(),
     activeOrders: [{}],
   })
-  assert.equal(nonCanonicalOrder.ok, false)
-  assert.match(nonCanonicalOrder.errors[0].message, /activeOrders must contain CanonicalOrder values/)
+  assert.equal(nonCanonicalOrder.ok, false, "Plain order-shaped objects must not be trusted as canonical active exchange orders.")
+  assert.match(nonCanonicalOrder.errors[0].message, /activeOrders must contain CanonicalOrder values/, "The validation error must identify the canonical active-order collection contract.")
 })
