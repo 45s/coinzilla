@@ -68,12 +68,12 @@ test("uses the approved compact icon and layout for each notification type", () 
     [{ name: "order.submitted", data: { side: "SELL", symbol: "LINKFDUSD", price: "14.5", quantity: "1" } }, "🔴 SELL LINK/FDUSD ORDER SUBMITTED @ 14.5 × 1"],
     [{ name: "order.cancelled", data: { side: "BUY", symbol: "LINKFDUSD", executedQuantity: "0", orderId: "43" } }, "✖️ BUY LINK/FDUSD ORDER CANCELLED · Filled 0\n#43"],
     [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BROKER CONNECTED · BINANCE · TESTNET"],
-    [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "🟥 BINANCE DISCONNECTED · success"],
+    [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "💤 BINANCE DISCONNECTED · success"],
     [{ name: "bot.started", data: {} }, "🚀 BOT STARTED"],
     [{ name: "bot.stopped", data: { reason: "SIGINT" } }, "⏹️ BOT STOPPED · SIGINT"],
     [{ name: "bot.stopped", data: {} }, "🔒 BOT STOPPED"],
     [{ name: "order.failed", data: { side: "BUY", symbol: "LINKUSDT", message: "insufficient balance" } }, "❌ BUY LINK/USDT FAILED · insufficient balance"],
-    [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⏹️ LINK/USDT PAUSED · stale price"],
+    [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⏸️ LINK/USDT PAUSED · stale price"],
   ]
 
   for (const [event, expected] of examples) {
@@ -164,8 +164,8 @@ test("formats every selected active Telegram notification icon exactly", () => {
     [{ name: "order.failed", data: { operation: "submission", side: "SELL", symbol: "LINKUSDT", message: "rejected" } }, "❌ SELL LINK/USDT FAILED · rejected"],
     [{ name: "order.failed", data: { operation: "cancellation", side: "BUY", symbol: "LINKUSDT", message: "cancel rejected" } }, "🚫 BUY LINK/USDT FAILED · cancel rejected"],
     [{ name: "order.failed", data: { operation: "cancellation", side: "SELL", symbol: "LINKUSDT", message: "cancel rejected" } }, "⛔ SELL LINK/USDT FAILED · cancel rejected"],
-    [{ name: "fill.received", data: { symbol: "LINKUSDT", side: "BUY", fill: { price: "14.25", quantity: "2", tradeId: "buy-fill" } } }, "✔️ FILL RECEIVED · LINK/USDT @ 14.25 × 2\\n#buy-fill"],
-    [{ name: "fill.received", data: { symbol: "LINKUSDT", side: "SELL", fill: { price: "14.5", quantity: "1", tradeId: "sell-fill" } } }, "💸 FILL RECEIVED · LINK/USDT @ 14.5 × 1\\n#sell-fill"],
+    [{ name: "fill.received", data: { symbol: "LINKUSDT", side: "BUY", fill: { price: "14.25", quantity: "2", tradeId: "buy-fill" } } }, "✔️ FILL RECEIVED · LINK/USDT @ 14.25 × 2\n#buy-fill"],
+    [{ name: "fill.received", data: { symbol: "LINKUSDT", side: "SELL", fill: { price: "14.5", quantity: "1", tradeId: "sell-fill" } } }, "💸 FILL RECEIVED · LINK/USDT @ 14.5 × 1\n#sell-fill"],
     [{ name: "account.safety_alert", data: { category: "broker-subscription-failed", message: "subscription failed" } }, "🚨 ACCOUNT SAFETY · N/A · broker-subscription-failed · subscription failed"],
     [{ name: "account.safety_alert", data: { category: "user-data-readiness-blocked", message: "readiness blocked" } }, "🚨 USER-DATA READINESS BLOCKED · readiness blocked"],
     [{ name: "account.safety_alert", data: { category: "user-data-reconnected-reconciliation-pending", message: "reconciliation pending" } }, "🚨 ACCOUNT SAFETY · N/A · user-data-reconnected-reconciliation-pending · reconciliation pending"],
