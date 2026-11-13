@@ -456,6 +456,8 @@ test("delivers startup, broker, order, and execution safety failures in custom m
         ["broker.connection_failed", { broker: "binance", error: { message: "socket unavailable" } }],
         ["broker.subscription_failed", { broker: "binance", stream: "market", market: "ETHUSDT", error: { message: "subscription rejected" } }],
         ["order.submission_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "REJECTED", error: { message: "insufficient balance" } }],
+        ["order.submission_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "REJECTED", error: { message: "sell submission rejected" } }],
+        ["order.cancel_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "FAILED", error: { message: "buy cancel rejected" } }],
         ["order.cancel_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "FAILED", error: { message: "cancel rejected" } }],
         ["execution.unowned_order", { symbol: "ETHUSDT", reason: "external order" }],
         ["execution.invalid_fill", { symbol: "ETHUSDT", reason: "invalid quantity", error: { message: "fill quantity mismatch" } }],
@@ -480,7 +482,7 @@ test("delivers startup, broker, order, and execution safety failures in custom m
 
   assert.equal(
     sentMessages.length,
-    7,
+    9,
     "Custom mode must deliver every critical startup, broker, order, and execution failure even when each related override is false and the symbol is outside the market filter.",
   )
   for (const [fragment, description] of [
@@ -501,6 +503,8 @@ test("delivers startup, broker, order, and execution safety failures in custom m
   assert.ok(sentMessages.some((message) => message.startsWith("💤 BINANCE DISCONNECTED")), "Broker disconnection must use the selected sleep icon in the delivered Telegram message.")
   assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("broker-subscription-failed")), "Broker subscription failure must use the selected siren icon.")
   assert.ok(sentMessages.some((message) => message.startsWith("❌ BUY ETH/USDT FAILED")), "BUY submission failure must use the selected cross icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("❌ SELL ETH/USDT FAILED")), "SELL submission failure must use the selected cross icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚫 BUY ETH/USDT FAILED")), "BUY cancellation failure must use the selected prohibited icon.")
   assert.ok(sentMessages.some((message) => message.startsWith("⛔ SELL ETH/USDT FAILED")), "SELL cancellation failure must use the selected no-entry icon.")
   assert.ok(sentMessages.some((message) => message.startsWith("⚠️ ACCOUNT SAFETY") && message.includes("unowned-order")), "The undecided unowned-order alert must retain its existing warning icon.")
   assert.ok(sentMessages.some((message) => message.startsWith("⚠️ ACCOUNT SAFETY") && message.includes("invalid-fill")), "The undecided invalid-fill alert must retain its existing warning icon.")
