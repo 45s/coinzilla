@@ -1010,3 +1010,44 @@ The runtime validated and traded ADAFDUSD. The tracked strategy config at the ru
 **Status:** OBSERVED current-policy/roadmap gap; no external fill or accounting mismatch proven. **Severity: MEDIUM.** See [2026-11-12/13 LIVE session audit](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and roadmap P0.1.
 
 PREFLIGHT found four unowned WLDFDUSD BUY orders. The runtime pair policy was IGNORE, so Harvester left them untouched but still submitted and filled WLDFDUSD strategy orders while they remained open. The four external orders were later reported cancelled as unowned events. This matches the configured IGNORE policy but demonstrates that the planned same-symbol external-order gate remains incomplete. Keep external orders unowned and untouched; block only the affected symbol when the P0.1 acceptance rule is implemented.
+
+## 2026-11-13 LIVE session findings addendum
+
+The following findings are derived from a separate supplied session. Full evidence and the exact order/fill ledger are in [the 2026-11-13 session audit](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md) and [ledger](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md). Do not merge this session with the distinct 2026-11-12/13 incident session.
+
+### F-048 — Separate session did not reproduce the shutdown recovery SELL race
+
+**Status:** NOT REPRODUCED in this session; prior F-045 / #1097 remains CONFIRMED and OPEN. **Severity:** Informational.
+
+No new `execution.fill_applied` event occurred after shutdown began at 19:42:26.967Z; the last new applied fill was at 19:03:52.940Z. During shutdown reconciliation, 180 prior fill notifications were recorded as duplicates and the accounting traces show `applied: false`, `duplicate: true`, and zero accounting delta. The final active strategy quantity and outstanding recovery amount were zero. This is positive session evidence, not a source fix, test of the stopping-flag race, or closure of #1097.
+
+### F-049 — Telegram fill-notification delivery failures
+
+**Status:** CONFIRMED. **Severity:** Medium (operational observability). **Tracking:** [#1103](https://github.com/45s/coinzilla/issues/1103).
+
+Two Telegram delivery attempts for `fill.received` failed with `fetch failed` at 16:12:19.530Z and 16:15:35.126Z. Final counters were 254 accepted, 252 delivered, 2 failed, 0 overflow and 0 pending. The underlying transport failure is confirmed; its network/API root cause is UNKNOWN. No trading/accounting failure is evidenced.
+
+### F-050 — Local stale-book submission deferral lacks an explicit Journal outcome
+
+**Status:** CONFIRMED evidence gap. **Severity:** Medium. **Tracking:** [#1104](https://github.com/45s/coinzilla/issues/1104).
+
+LINKFDUSD SELL client `h-fa576fd67e08430298f142-24` has a durable `order.submission_requested` at 16:12:15.928Z. Evaluation 116 later returned `deferred: true`, `deferralReason: MARKET_BOOK_STALE`, and no submitted orders. A later evaluation created client `...-26`, which was acknowledged as broker order `616704528`. This is a local pre-submission deferral, not an ambiguous exchange outcome. The Journal lacks an explicit terminal deferral event for the original request.
+
+### F-051 — Shutdown phase timing gap
+
+**Status:** UNVERIFIED. **Severity:** Low / investigation. **Tracking:** [#1105](https://github.com/45s/coinzilla/issues/1105).
+
+The application log records shutdown started at 19:42:26.967Z; the first visible shutdown-reconciliation execution processing appears at 19:44:35.014Z, a 128.047-second interval. Available evidence does not identify the cause. Do not attribute it to a broker request, lock, queue or timer without further instrumentation.
+
+### F-052 — Effective configuration evidence absent with dirty runtime provenance
+
+**Status:** CONFIRMED evidence gap; no enabled-market mismatch proven in this session. **Severity:** High (configuration integrity). **Tracking:** [#1101](https://github.com/45s/coinzilla/issues/1101).
+
+Runtime provenance reports `workingTree: dirty`. Enabled markets and effective pair settings are visible in logs, but no sanitized effective-config snapshot or deterministic digest is recorded. The historical cause of the earlier ADAFDUSD configuration mismatch remains UNKNOWN; this session does not prove a new mismatch. A dirty working-tree flag alone cannot distinguish local modifications, environment overrides or configuration composition.
+
+### F-053 — Same-symbol external-order policy remains unexercised
+
+**Status:** UNVERIFIED collision behavior in this session; configured policy CONFIRMED. **Severity:** Medium. **Tracking:** [#1102](https://github.com/45s/coinzilla/issues/1102).
+
+All four enabled pair configurations record `externalOrdersPolicy: ignore`. PREFLIGHT found zero account-wide open orders, so no external-order collision occurred in this session. This does not close prior F-047: four unowned WLDFDUSD BUY orders coexisted with Harvester WLD strategy activity in the separate 2026-11-12/13 audit. Manual orders must remain unowned and untouched; the same-symbol blocking policy remains separate work.
+
