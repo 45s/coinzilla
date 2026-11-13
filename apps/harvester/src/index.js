@@ -1,5 +1,7 @@
 import { pathToFileURL } from "node:url"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
+import os from "node:os"
+import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
@@ -164,7 +166,7 @@ export async function main({
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
   closeLogger = async () => {},
   createTelegramNotifier = (options) => new TelegramNotifier(options),
-  createDurableFactsStore = createFileDurableFactsStore,
+  createDurableFactsStore,
   processIdentity = PROCESS_IDENTITY,
 } = {}) {
   const processStartedDataResult = mapHarvesterProcessStartedData(processIdentity)
