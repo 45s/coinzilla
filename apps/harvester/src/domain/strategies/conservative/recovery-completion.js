@@ -7,17 +7,27 @@ const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQu
   assertDecimalString({ value: quantity, field: "inventoryDisposition.quantity" })
   const expectedQuantity = subtractDecimal({ left: activeQuantity, right: keepQuantity })
   if (compareDecimal({ left: quantity, right: "0" }) <= 0 || compareDecimal({ left: quantity, right: expectedQuantity }) !== 0) return undefined
-  for (const field of ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"]) {
-    if (inventoryDisposition[field] !== undefined) assertDecimalString({ value: inventoryDisposition[field], field: "inventoryDisposition." + field })
+  const positiveFields = ["minimumQuantity", "minimumNotional", "quantityStepSize"]
+  const nonNegativeFields = ["evaluatedQuantity", "evaluatedNotional"]
+  for (const field of [...positiveFields, ...nonNegativeFields]) {
+    const value = inventoryDisposition[field]
+    if (value === undefined) continue
+    assertDecimalString({ value, field: "inventoryDisposition." + field })
+    const comparison = compareDecimal({ left: value, right: "0" })
+    if (positiveFields.includes(field) && comparison <= 0) return undefined
+    if (nonNegativeFields.includes(field) && comparison < 0) return undefined
   }
   if (reason === "MIN_QUANTITY") {
     if (inventoryDisposition.minimumQuantity === undefined || inventoryDisposition.evaluatedQuantity === undefined ||
+        compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: "0" }) <= 0 ||
         compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: inventoryDisposition.minimumQuantity }) >= 0) return undefined
     return Object.freeze({ status: "EXCHANGE_CONSTRAINED_DUST", quantity, reason, minimumQuantity: inventoryDisposition.minimumQuantity, evaluatedQuantity: inventoryDisposition.evaluatedQuantity })
   }
   if (reason === "MIN_NOTIONAL") {
     if (inventoryDisposition.minimumQuantity === undefined || inventoryDisposition.minimumNotional === undefined ||
         inventoryDisposition.evaluatedQuantity === undefined || inventoryDisposition.evaluatedNotional === undefined ||
+        compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: "0" }) <= 0 ||
+        compareDecimal({ left: inventoryDisposition.evaluatedNotional, right: "0" }) <= 0 ||
         compareDecimal({ left: inventoryDisposition.evaluatedQuantity, right: inventoryDisposition.minimumQuantity }) < 0 ||
         compareDecimal({ left: inventoryDisposition.evaluatedNotional, right: inventoryDisposition.minimumNotional }) >= 0) return undefined
     return Object.freeze({ status: "EXCHANGE_CONSTRAINED_DUST", quantity, reason, minimumQuantity: inventoryDisposition.minimumQuantity, minimumNotional: inventoryDisposition.minimumNotional, evaluatedQuantity: inventoryDisposition.evaluatedQuantity, evaluatedNotional: inventoryDisposition.evaluatedNotional })
