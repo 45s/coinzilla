@@ -19,12 +19,16 @@ function createStore(initialRecords = [], { readError, appendError } = {}) {
     calls,
     readAll: async () => {
       calls.push("readAll")
-      if (readError) return { ok: false, errors: [readError] }
+      if (readError) {
+        return { ok: false, errors: [readError] }
+      }
       return { ok: true, data: { records: [...records] } }
     },
     append: async (fact) => {
       calls.push(["append", fact])
-      if (appendError) return { ok: false, errors: [appendError] }
+      if (appendError) {
+        return { ok: false, errors: [appendError] }
+      }
       const existing = records.find((item) => item.factId === fact.factId)
       if (existing) {
         if (JSON.stringify(existing) !== JSON.stringify(fact)) {
@@ -268,7 +272,9 @@ test("fails closed when the committed coverage readback is unavailable or mismat
   let unavailableReads = 0
   unavailable.store.readAll = async () => {
     unavailableReads += 1
-    if (unavailableReads === 1) return { ok: true, data: { records: [] } }
+    if (unavailableReads === 1) {
+      return { ok: true, data: { records: [] } }
+    }
     return { ok: false, errors: [new Error("readback unavailable")] }
   }
   const unavailableResult = await confirmMarketHistoryCoverage(unavailable.options)
@@ -279,7 +285,9 @@ test("fails closed when the committed coverage readback is unavailable or mismat
   let mismatchedReads = 0
   mismatched.store.readAll = async () => {
     mismatchedReads += 1
-    if (mismatchedReads === 1) return { ok: true, data: { records: [] } }
+    if (mismatchedReads === 1) {
+      return { ok: true, data: { records: [] } }
+    }
     return {
       ok: true,
       data: {
