@@ -34,9 +34,9 @@ test("commits the durable fill before publishing the new Portfolio and RecoveryL
 
   const result = await workflow.updateTradingAccounting({ fill })
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.ok, true, "The durable third-asset baseline and execution fact must allow the canonical fill to commit.")
   assert.deepEqual(order, ["durable"])
-  assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "100")
+  assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "100", "The committed fill must update Portfolio quantity only after both durable facts succeed.")
 })
 
 test("does not mutate Portfolio or RecoveryLedger when the durable fill append fails", async () => {

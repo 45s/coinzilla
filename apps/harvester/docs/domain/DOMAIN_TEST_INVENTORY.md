@@ -41,9 +41,9 @@ The domain suite is supplemented by application-level engine and use-case tests 
 - `account-reconciliation-facts.test.js` proves a targeted `COMMISSION_BASELINE` fact is accepted only when its audit is complete and its balances array contains exactly one fee asset.
 - `create-portfolio-workflow.test.js` proves recovery completion requires a canonical fully filled terminal SELL and that completion is serialized behind an in-flight durable fill.
 - `create-portfolio-workflow.durable-cycles.test.js` retains the exact terminal SELL identity in durable completion outcomes.
-- `conservative-trading-engine.test.js` proves exchange-constrained dust completion forwards the exact reconciled terminal SELL to the completion workflow.
+- `conservative-trading-engine.test.js` proves exchange-constrained dust completion forwards the exact reconciled terminal SELL and rejects negative-zero MarketBook timestamps.
 - `reconcile-account-snapshot-deltas.test.js` rejects negative and negative-zero source timestamps before producing reconciliation deltas.
-- `market-price.test.js`, `account-snapshot.test.js`, and `market/volatility-candle.test.js` reject negative-zero market, account-snapshot, and candle timestamps through the shared pure timestamp guard.
+- `market-price.test.js`, `account-snapshot.test.js`, `market/volatility-candle.test.js`, and `conservative-trading-engine.test.js` reject negative-zero market, account-snapshot, candle, and book timestamps through the shared pure timestamp guard.
 - `confirm-market-history-coverage.test.js`, `record-market-history-coverage.test.js`, and `record-account-reconciliation-facts.test.js` reject negative-zero timestamps before reconciliation or durable append.
 - `order-event-workflow.test.js` proves the normal terminal SELL-fill path forwards the exact canonical order into recovery completion; the cancellation-race and dust paths retain their own forwarding regressions.
 - `confirm-market-history-coverage.test.js`, `read-market-history-coverage.test.js`, `record-market-history-coverage.test.js`, and `calculate-account-snapshot-baselines.test.js` now cover malformed ports, invalid inputs, incomplete/mismatched reconciliation, regressing evidence, failed append/readback, and invalid baseline inputs.
