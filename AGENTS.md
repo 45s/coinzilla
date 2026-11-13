@@ -7,6 +7,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Concern | Single source of truth |
 | --- | --- |
 | Engineering design, testing, security, reliability, documentation impact | [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) |
+| AI-assisted refactoring and code audits | [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) |
 | Structured errors, error ownership, wrapping, diagnostics and gradual migration | [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) |
 | Branches, PRs, synchronization, merge/release lifecycle, agent communication | [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md) |
 | Binance exchange environment selection | [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md) |
@@ -56,6 +57,7 @@ All agents must follow the canonical [visual documentation and workflow schemas 
 ## Repository-specific entry requirements
 
 - Select the smallest applicable checklist from `docs/engineering/TASK_WORKFLOWS.md`.
+- For every refactoring or code-audit task, read and follow the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md); the applicable task checklist links to it.
 - Identify the owning domain and its roadmap before editing. Local instructions may add domain-specific constraints but must not redefine repository-wide policy.
 - For a new generic helper or cross-cutting capability, follow the shared-utility policy before implementing it.
 - Follow the [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) whenever adding or materially changing errors; adopt it incrementally in new functionality and bug fixes.
