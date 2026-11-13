@@ -70,7 +70,7 @@ test("uses the approved compact icon and layout for each notification type", () 
     [{ name: "broker.connected", data: { broker: "binance", tradingMode: "testnet" } }, "🟩 BROKER CONNECTED · BINANCE · TESTNET"],
     [{ name: "broker.disconnected", data: { broker: "binance", outcome: "success" } }, "💤 BINANCE DISCONNECTED · success"],
     [{ name: "bot.started", data: {} }, "🚀 BOT STARTED"],
-    [{ name: "bot.stopped", data: { reason: "SIGINT" } }, "⏹️ BOT STOPPED · SIGINT"],
+    [{ name: "bot.stopped", data: { reason: "SIGINT" } }, "🔒 BOT STOPPED · SIGINT"],
     [{ name: "bot.stopped", data: {} }, "🔒 BOT STOPPED"],
     [{ name: "order.failed", data: { side: "BUY", symbol: "LINKUSDT", message: "insufficient balance" } }, "❌ BUY LINK/USDT FAILED · insufficient balance"],
     [{ name: "bot.pair_paused", data: { symbol: "LINKUSDT", reason: "stale price" } }, "⏸️ LINK/USDT PAUSED · stale price"],
