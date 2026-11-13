@@ -1000,3 +1000,11 @@ Persist safety-halt scope, reason, generation and required operator/reconciliati
 Test graceful restart and abrupt termination after each pause cause, including accounting failure, unknown order outcome, user-data liveness failure and reconciliation conflict. Assert that no market-price event can cause a new order before the prior halt is restored and resolved.
 
 **Related:** F-031 / #654, F-028, F-023, F-024 / #773, #769 and #774.
+
+## 2026-11-13 — LIVE trading-session audit addendum
+
+A separate audit of the supplied 2026-11-12/13 LIVE journal, Harvester log and trace log is recorded in [the session report](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md), with the [critical order/fill ledger](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z_ORDER_FILL_LEDGER.md).
+
+This is a session-behaviour audit, not a source-file inventory and not a replacement for the earlier 2026-11-06 audit. The 10 completed cycles and all traded-asset balance deltas reconcile exactly. However, two BUY fills arrived after shutdown started; the stopping path skipped recovery-SELL recalculation, and CLOSING still reported COMPLETE while the ADA and WLD recovery SELLs were undersized against the final active positions. Track the confirmed shutdown lifecycle gap in [#1097](https://github.com/45s/coinzilla/issues/1097).
+
+The session also shows ADAFDUSD enabled at runtime even though it was disabled in the tracked configuration at the reported commit; the runtime working tree was dirty. Four unowned WLDFDUSD BUY orders were present at PREFLIGHT while the strategy traded that same symbol under IGNORE policy. These findings are recorded as F-046 and F-047 in the findings register. No exchange query or order operation was performed during the audit.

@@ -992,3 +992,21 @@ EventBus events receive random UUIDs and timestamps, not a monotonic per-session
 **Status:** CONFIRMED DTO/projector compatibility defect. **Severity: HIGH.** See the [2026-11-10 restart-recovery audit](2026-11-10_18-44-49_restart-recovery-audit.md).
 
 The account-snapshot and account-open-orders DTO mappers both accept phase RECOVERY. The same-process recovery handler publishes both snapshot types with that phase during normal broker recovery. However, the recovery projector accepts only PREFLIGHT/OPENING/CLOSING for account snapshots and only OPENING/PREFLIGHT for open-order snapshots. A normal reconnect session therefore fails restart projection with an invalid phase. Add an offline Journal projection test containing PREFLIGHT, RECOVERY account snapshot, RECOVERY open-order snapshot and CLOSING records. Explicitly support RECOVERY and define its chronology/ownership semantics; do not skip the records.
+
+## F-045 — Shutdown can finish with stale recovery SELL coverage
+
+**Status:** CONFIRMED shutdown lifecycle gap. **Severity: HIGH.** **Tracking:** [#1097](https://github.com/45s/coinzilla/issues/1097). See [2026-11-12/13 LIVE session audit](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
+
+Shutdown began at 03:51:04.844Z. A 20 WLD BUY and a 30 ADA BUY filled after the stopped flag was set. The order-event workflow returns at its isStopping guard before recovery-SELL cancellation/recalculation. The shutdown handler reconciles before selecting still-active BUYs for cancellation; a BUY that becomes FILLED in that window is no longer cancellable. The existing recovery SELLs remained last-observed OPEN at 219.9 WLD and 359.9 ADA, while the final active positions required 239.9 WLD and 389.9 ADA after keepQuantity. The CLOSING snapshot still reported COMPLETE with no audit reasons. The CLOSING audit allows open SELLs but does not verify that their quantity/proceeds cover the final Position and RecoveryLedger. Add a deterministic offline shutdown-race regression and make the close policy explicit: reconcile/replan the SELL or fail CLOSING with an actionable unresolved-recovery reason.
+
+## F-046 — ADAFDUSD was enabled at runtime while disabled in the tracked config
+
+**Status:** CONFIRMED runtime/config provenance mismatch; exact override source UNKNOWN. **Severity: HIGH.** See [2026-11-12/13 LIVE session audit](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
+
+The runtime validated and traded ADAFDUSD. The tracked strategy config at the runtime commit 2238e3f8 has ADAFDUSD disabled. The process metadata reports a dirty working tree, but no working-tree diff or full effective-config snapshot was supplied. An uncommitted local edit or external override may explain the difference; the supplied evidence cannot distinguish them. Before another LIVE run, identify the actual change and persist an effective-config snapshot/digest in the run evidence.
+
+## F-047 — Same-symbol external WLDFDUSD orders coexisted with strategy orders
+
+**Status:** OBSERVED current-policy/roadmap gap; no external fill or accounting mismatch proven. **Severity: MEDIUM.** See [2026-11-12/13 LIVE session audit](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and roadmap P0.1.
+
+PREFLIGHT found four unowned WLDFDUSD BUY orders. The runtime pair policy was IGNORE, so Harvester left them untouched but still submitted and filled WLDFDUSD strategy orders while they remained open. The four external orders were later reported cancelled as unowned events. This matches the configured IGNORE policy but demonstrates that the planned same-symbol external-order gate remains incomplete. Keep external orders unowned and untouched; block only the affected symbol when the P0.1 acceptance rule is implemented.
