@@ -16,6 +16,10 @@ export function resolveTelegramOperatorConfig({ appConfig, env = process.env } =
       "TELEGRAM_OPERATOR_CONFIG_INVALID",
     )
   }
+  const environmentUserId = env?.TELEGRAM_USER_ID
+  if (appConfig.operatorControl === undefined && (environmentUserId === undefined || environmentUserId === "")) {
+    return appConfig
+  }
   const operatorControl = appConfig.operatorControl ?? {}
   const telegram = operatorControl.telegram ?? { enabled: false, allowedUserIds: [] }
   const configuredIds = telegram.allowedUserIds
@@ -39,7 +43,6 @@ export function resolveTelegramOperatorConfig({ appConfig, env = process.env } =
       "TELEGRAM_OPERATOR_ALLOWLIST_DUPLICATE",
     )
   }
-  const environmentUserId = env?.TELEGRAM_USER_ID
   if (environmentUserId !== undefined && environmentUserId !== "" && !isCanonicalTelegramUserId(environmentUserId)) {
     throw new TelegramUserIdConfigurationError(
       "Invalid TELEGRAM_USER_ID: expected a canonical positive decimal Telegram sender user ID (digits only, no spaces or leading zeroes, within the safe integer range)",

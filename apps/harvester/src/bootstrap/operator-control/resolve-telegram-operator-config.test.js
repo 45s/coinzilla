@@ -4,6 +4,11 @@ import { resolveTelegramOperatorConfig, TelegramUserIdConfigurationError } from 
 
 const config = (ids = [], enabled = true) => ({ operatorControl: { telegram: { enabled, allowedUserIds: ids } } })
 
+test("preserves config identity when operator control and TELEGRAM_USER_ID are both absent", () => {
+  const input = { strategies: {} }
+  assert.strictEqual(resolveTelegramOperatorConfig({ appConfig: input, env: {} }), input)
+})
+
 test("adds TELEGRAM_USER_ID to allowedUserIds and preserves configured IDs without mutation", () => {
   const input = config(["11111"])
   const result = resolveTelegramOperatorConfig({ appConfig: input, env: { TELEGRAM_USER_ID: "123456789" } })
