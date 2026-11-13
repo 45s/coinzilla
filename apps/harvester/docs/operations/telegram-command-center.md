@@ -34,15 +34,15 @@ Text commands remain available:
 
 ## Confirming a control
 
-An inline pause or resume request first displays the exact action and market. No operator use case or durable-fact append occurs at this stage. Confirm executes the existing application pause/resume use case; cancel dismisses the pending request. Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit commands and execute the existing application use case directly. Confirmation callbacks are bound to the originating allowlisted private-chat user and message, are one-time and short-lived, and are rejected when stale, replayed, malformed or issued by another user.
+An inline pause or resume request first displays the exact action and market. No operator use case or operational-state record commit occurs at this stage. Confirm executes the existing application pause/resume use case; cancel dismisses the pending request. Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit commands and execute the existing application use case directly. Confirmation callbacks are bound to the originating allowlisted private-chat user and message, are one-time and short-lived, and are rejected when stale, replayed, malformed or issued by another user.
 
-A confirmed pause is acknowledged only after the application reports a successful durable-before-memory transition. A confirmed resume can remove only the operator-owned pause; any safety, recovery or volatility blocker remains authoritative. A failed or uncertain durable append is never presented as success.
+A confirmed pause is acknowledged only after the application reports a successful commit-before-memory transition. A confirmed resume can remove only the operator-owned pause; any safety, recovery or volatility blocker remains authoritative. A failed or uncertain durable append is never presented as success.
 
 ## Authorization and delivery
 
 Only a non-bot sender in a private chat whose Telegram user ID matches the private chat ID and the configured allowlist may use the Command Center. Application actor authorization remains mandatory. Callback data is not an identity credential.
 
-The adapter processes updates serially and advances the Telegram update offset only after handling an update. The application request ID is stable across retries so the durable-facts boundary can deduplicate repeated control delivery. Menu registration is best-effort; a menu-registration failure is logged and does not grant access or disable text commands. Polling and callback transport failures are retried with bounded backoff. Shutdown aborts long polling and waits for the poller to finish before returning.
+The adapter processes updates serially and advances the Telegram update offset only after handling an update. The application request ID is stable across retries so the operational-state record boundary can deduplicate repeated control delivery. Menu registration is best-effort; a menu-registration failure is logged and does not grant access or disable text commands. Polling and callback transport failures are retried with bounded backoff. Shutdown aborts long polling and waits for the poller to finish before returning.
 
 ## Troubleshooting
 
@@ -50,7 +50,7 @@ The adapter processes updates serially and advances the Telegram update offset o
 - **Command menu missing:** use `/help`; Telegram menu registration is best-effort and may be retried on a later adapter startup.
 - **Snapshot unavailable:** treat the page as unavailable, not healthy. Check Harvester structured logs and source readiness.
 - **Confirmation expired or invalid:** reopen the markets page and start a new inline control request; stale confirmation callbacks never execute.
-- **Pause/resume not acknowledged:** inspect the stable operator error code and durable-facts diagnostics. Do not assume the state changed.
+- **Pause/resume not acknowledged:** inspect the stable operator error code and operational-state diagnostics. Do not assume the state changed.
 - **Telegram outage:** text commands and inline controls are unavailable while transport is down. Trading behavior does not depend on Telegram delivery.
 - **Shutdown failure:** Harvester must preserve its existing fail-closed shutdown/ownership behavior; do not force process termination to bypass an unconfirmed adapter stop.
 
