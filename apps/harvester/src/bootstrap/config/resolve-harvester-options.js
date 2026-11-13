@@ -19,7 +19,9 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
   }
   const { settings, pairs } = strategyConfig
   const enabledSymbols = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled).map(([symbol]) => symbol)
-  if (enabledSymbols.length === 0) throw new Error("Conservative trading requires at least one enabled pair")
+  if (enabledSymbols.length === 0) {
+    throw new Error("Conservative trading requires at least one enabled pair")
+  }
   const runtime = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
   const { environment, brokerName, tradingMode, tradingEnabled } = runtime
   publishLifecycleEvent({
