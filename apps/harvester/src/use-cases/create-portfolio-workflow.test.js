@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
@@ -34,6 +34,25 @@ const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY", price = "6
 const createWorkflow = () => createPortfolioWorkflow({
   evaluateStrategy: () => ({ action: "NO_ACTION" }),
   logger: {},
+})
+
+const createFilledSellOrder = ({
+  clientOrderId = "completed-recovery-sell",
+  brokerOrderId = "broker-completed-recovery-sell",
+} = {}) => new CanonicalOrder({
+  clientOrderId,
+  brokerOrderId,
+  market,
+  side: "SELL",
+  type: "LIMIT",
+  limitPrice: new Money({ amount: "130005", asset: market.quoteAsset }),
+  originalQuantity: new Quantity({ amount: "1", asset: market.baseAsset }),
+  executedQuantity: new Quantity({ amount: "1", asset: market.baseAsset }),
+  status: "FILLED",
+  createdAt: 1,
+  acknowledgedAt: 1,
+  updatedAt: 2,
+  completedAt: 2,
 })
 
 const test = (name, ...args) => nodeTest("[create-portfolio-workflow.test.js] " + name, ...args)
@@ -304,6 +323,7 @@ test("leaves both accounting projections unchanged when recovery ledger reset fa
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder: createFilledSellOrder({ clientOrderId: "reset-failure-sell" }),
   })
 
   assert.equal(result.ok, false, "A failed RecoveryLedger reset must reject recovery-cycle completion.")
@@ -404,6 +424,7 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder: createFilledSellOrder({ clientOrderId: "stats-completion-sell" }),
   })
 
   assert.equal(result.ok, true)
@@ -436,10 +457,9 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
   const initialLedger = RecoveryLedger.empty({ market })
     .applyFill({ fill: buyFill }).ledger
     .applyFill({ fill: sellFill }).ledger
-  const sellOrder = Object.freeze({
+  const sellOrder = createFilledSellOrder({
     clientOrderId: "harvester-sell-not-completed",
     brokerOrderId: "broker-sell-not-completed",
-    market,
   })
   const calls = []
   const workflow = createPortfolioWorkflow({
@@ -501,7 +521,7 @@ test("does not return a non-completed cycle when its durable outcome was not com
     marketId: market.id,
     keepQuantity: "0.5",
     minProfit: "5",
-    sellOrder: { clientOrderId: "sell-failed", brokerOrderId: "broker-failed", market },
+    sellOrder: createFilledSellOrder({ clientOrderId: "sell-failed", brokerOrderId: "broker-failed" }),
   })
 
   assert.equal(result.ok, false, "A missing durable non-completion outcome must block the next strategy action.")
@@ -525,10 +545,9 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
   const initialLedger = RecoveryLedger.empty({ market })
     .applyFill({ fill: buyFill }).ledger
     .applyFill({ fill: sellFill }).ledger
-  const sellOrder = Object.freeze({
+  const sellOrder = createFilledSellOrder({
     clientOrderId: "harvester-sell-completed",
     brokerOrderId: "broker-sell-completed",
-    market,
   })
   let durableInput
   const workflow = createPortfolioWorkflow({
