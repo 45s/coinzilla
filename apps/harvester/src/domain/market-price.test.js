@@ -29,6 +29,7 @@ test("rejects malformed symbols, non-positive prices, and invalid timestamps", (
     { ...valid, price: "-1" },
     { ...valid, price: 1.25 },
     { ...valid, timestamp: -1 },
+    { ...valid, timestamp: -0 },
     { ...valid, timestamp: 1.5 },
   ]) {
     assert.throws(() => createMarketPrice({ priceEvent }))
