@@ -71,7 +71,6 @@
 - No strategy economics, trading configuration, broker behavior, shared packages, or other applications changed.
 - No Binance TESTNET/LIVE connection, account query, order placement, cancellation, or account mutation was performed.
 
-
 ---
 
 ## Startup reliability — account PREFLIGHT Journal barrier
