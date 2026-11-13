@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto"
-import { CanonicalOrder } from "@coinzilla/entities"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { Position } from "../domain/portfolio/position.js"
+import { assertTerminalRecoverySellOrder } from "../domain/orders/assert-terminal-recovery-sell-order.js"
 
 const CONTINUE_REASONS = new Set([
   "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
@@ -25,11 +25,7 @@ export async function recordRecoveryCycleNotCompleted({
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
       throw new TypeError("recordRecoveryCycleNotCompleted requires canonical RecoveryLedger and Position values")
     }
-    if (!(sellOrder instanceof CanonicalOrder) || sellOrder.side !== "SELL" || sellOrder.status !== "FILLED" ||
-        !sellOrder.brokerOrderId ||
-        compareDecimal({ left: sellOrder.executedQuantity.amount, right: sellOrder.originalQuantity.amount }) !== 0) {
-      throw new TypeError("Recovery-cycle non-completion requires the canonical fully filled terminal SELL order")
-    }
+    assertTerminalRecoverySellOrder({ sellOrder })
     if (completion?.eligible !== false || typeof completion.pause !== "boolean" ||
         typeof completion.reason !== "string" || completion.reason.trim() === "") {
       throw new TypeError("Recovery-cycle non-completion requires a complete ineligible evaluation")

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
-import { CanonicalOrder } from "@coinzilla/entities"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { Position } from "../domain/portfolio/position.js"
+import { assertTerminalRecoverySellOrder } from "../domain/orders/assert-terminal-recovery-sell-order.js"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 
 /** Persist an eligible recovery-cycle boundary before Portfolio/RecoveryLedger reset is committed. */
@@ -18,11 +18,7 @@ export async function recordRecoveryCycleCompleted({
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
       throw new TypeError("recordRecoveryCycleCompleted requires canonical RecoveryLedger and Position values")
     }
-    if (!(sellOrder instanceof CanonicalOrder) || sellOrder.side !== "SELL" || sellOrder.status !== "FILLED" ||
-        !sellOrder.brokerOrderId ||
-        compareDecimal({ left: sellOrder.executedQuantity.amount, right: sellOrder.originalQuantity.amount }) !== 0) {
-      throw new TypeError("Recovery-cycle completion requires the canonical fully filled terminal SELL order")
-    }
+    assertTerminalRecoverySellOrder({ sellOrder })
     if (completion?.eligible !== true) { throw new TypeError("Only an eligible recovery cycle can be durably completed") }
     const market = recoveryLedger.market
     if (position.market.id !== market.id || sellOrder.market.id !== market.id) {

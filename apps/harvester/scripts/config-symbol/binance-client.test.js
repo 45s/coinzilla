@@ -127,14 +127,20 @@ test("rejects symbols that are not actively tradable on Spot", async () => {
   }
 })
 
-test("rejects symbols without the order types required by the configured commission policy", async () => {
-  await assert.rejects(
-    fetchBinanceSpotMetadata({
-      symbol: "ADAFDUSD",
-      fetchImpl: async () => createResponse(createExchangeInfo({ orderTypes: ["LIMIT"] })),
-    }),
-    /LIMIT_MAKER/i,
-    "The symbol must support both supported Harvester limit order modes.",
+test("returns the available order types for pair-level commission-policy validation", async () => {
+  const responses = [
+    createResponse(createExchangeInfo({ orderTypes: ["LIMIT"] })),
+    createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+  ]
+  const metadata = await fetchBinanceSpotMetadata({
+    symbol: "ADAFDUSD",
+    fetchImpl: async () => responses.shift(),
+  })
+
+  assert.deepEqual(
+    metadata.supportedOrderTypes,
+    ["LIMIT"],
+    "Metadata retrieval must not require LIMIT_MAKER when the generated pair may use LIMIT only.",
   )
 })
 

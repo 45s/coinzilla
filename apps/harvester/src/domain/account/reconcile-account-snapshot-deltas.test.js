@@ -145,3 +145,31 @@ test("returns the exact failure and leaves both snapshots unchanged for invalid 
     )
   }
 })
+
+
+test("rejects negative and negative-zero exchange snapshot timestamps", () => {
+  for (const sourceTime of [-1, -0]) {
+    const result = reconcileAccountSnapshotDeltas({
+      openingSnapshot: snapshot({
+        phase: "PREFLIGHT",
+        sourceTime,
+        balances: [balance("DOGE", "10", "0", "10")],
+      }),
+      closingSnapshot: snapshot({
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [balance("DOGE", "11", "0", "11")],
+      }),
+    })
+
+    assert.equal(
+      result.ok,
+      false,
+      "Negative and negative-zero exchange timestamps must not become accepted reconciliation evidence.",
+    )
+    assert.match(
+      result.errors[0].message,
+      /PREFLIGHT snapshot sourceTime must be a non-negative safe integer/,
+    )
+  }
+})

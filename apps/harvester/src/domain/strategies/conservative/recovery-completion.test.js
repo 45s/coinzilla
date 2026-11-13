@@ -144,3 +144,88 @@ test("does not complete the actual ZRO recovery while the 0.04 residual remains 
     realizedNetProfit: "0.01136454",
   })
 })
+
+
+test("fails closed when exchange-constrained dust evidence contains non-positive filter values or negative evaluations", () => {
+  const invalidDispositions = [
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_QUANTITY",
+      minimumQuantity: "0.2",
+      evaluatedQuantity: "-0.1",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_QUANTITY",
+      minimumQuantity: "-0.2",
+      evaluatedQuantity: "0.1",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "0.05",
+      minimumNotional: "10",
+      evaluatedQuantity: "0.1",
+      evaluatedNotional: "-1",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "0.05",
+      minimumNotional: "-10",
+      evaluatedQuantity: "0.1",
+      evaluatedNotional: "1",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0",
+      evaluatedQuantity: "0",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.01",
+      evaluatedQuantity: "0",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "0.05",
+      minimumNotional: "10",
+      evaluatedQuantity: "0.1",
+      evaluatedNotional: "0",
+    },
+  ]
+
+  for (const inventoryDisposition of invalidDispositions) {
+    const result = evaluateRecoveryCompletion({
+      ...baseInput,
+      activeQuantity: "1.1",
+      inventoryDisposition,
+    })
+
+    assert.equal(
+      result.eligible,
+      false,
+      "Malformed exchange-filter evidence must never authorize recovery completion.",
+    )
+    assert.equal(
+      result.pause,
+      true,
+      "Invalid exchange-filter evidence must fail closed with a market pause.",
+    )
+    assert.equal(
+      result.reason,
+      "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE",
+      "The failure must identify invalid dust evidence rather than silently accepting it.",
+    )
+  }
+})

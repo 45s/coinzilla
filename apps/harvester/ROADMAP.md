@@ -25,6 +25,15 @@
 - No TESTNET/LIVE exchange operation is authorized or needed for CC.
 - ADR-0001 Steps 8–9 are deferred; the current operator-pause process-lifetime limitation remains explicit until a separate proven restoration change is completed.
 
+## P1 — Outbound Telegram notification icons
+
+**Status: [~] IMPLEMENTATION IN PROGRESS in [PR #1099](https://github.com/45s/coinzilla/pull/1099).** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
+
+- Keep the five notifications without a replacement selection on their existing icons; do not invent choices.
+- Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
+- Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
+- [ ] Complete exact formatter and end-to-end Telegram assertions, documentation updates, and required exact-head CI; mark complete only after merge into `develop`.
+
 ---
 
 ## Harvester source quality and domain-logic audit — issue #1090
@@ -36,6 +45,45 @@
 - **RED/GREEN evidence:** GitHub Actions reproduced the injected-clock and negative-zero regressions on test-only commit `af111b10147b1f9cceda818c5cb001fd6fcdd7c4`. A third test-only regression demonstrated operator pauses incorrectly entering restart candidates before the projector correction. Harvester tests passed 1,489/1,489 on the pre-lint-fix head; final exact-head verification is recorded by PR #1091.
 - **Lint inventory:** the initial Harvester-wide ESLint run found 359 findings across 73 files: 295 `curly`, 38 `no-nested-ternary`, 7 `no-unused-vars`, 5 `prefer-const`, 4 `no-useless-escape`, 7 `no-control-regex`, 2 `no-empty-pattern`, and 1 `preserve-caught-error`. The 295 brace findings were identified as safe autofix candidates; the other 64 require deliberate review. They are intentionally not bulk-rewritten as part of this correctness audit. Track that separate, behavior-preserving cleanup in [issue #1092](https://github.com/45s/coinzilla/issues/1092). The temporary diagnostic probe was removed after collecting the inventory; it is not a permanent lint gate.
 - **Scope and safety:** the Conservative Domain Specification remains authoritative. No strategy economics, exchange configuration, shared packages or other applications changed. Tests remain offline and credential-free; no TESTNET/LIVE connection, order placement, cancellation or account mutation was performed.
+
+---
+
+## Harvester source, domain correctness and documentation audit — issue #1093
+
+**Status: IMPLEMENTATION COMPLETE; ready for review in [PR #1094](https://github.com/45s/coinzilla/pull/1094); merge pending.** The audit starts from current `develop` baseline `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` (309 Harvester JavaScript files: 162 production and 147 test files). The PR head inventory is 312 files (164 production and 148 test files), including two independently tested pure domain guards. The domain-only inventory is 35 production files and 30 test files. Scope is `apps/harvester/**` and Harvester/project documentation only; no shared package, other application, trading economics, or runtime trading configuration changed.
+
+### Confirmed defects corrected test-first
+
+1. **Third-asset commission baseline ordering was reversed.** The workflow previously persisted `EXECUTION_FILL_APPLIED` before the targeted `COMMISSION_BASELINE`. It now records each required fee-asset baseline first, then the fill fact, then commits the in-memory Portfolio/RecoveryLedger projection. A baseline persistence failure does not discard a valid fill; the later account audit still fails closed when required evidence is absent.
+2. **Targeted commission-baseline facts accepted invalid snapshots.** The durable-facts schema now requires a complete audit and exactly one fee-asset balance; empty, multi-asset, and incomplete targeted baselines are rejected.
+3. **Normal user-data SELL fills did not forward terminal order evidence.** The normal `order-event-workflow` completion path now forwards the exact reconciled canonical SELL. The cancellation/reconciliation race and exchange-constrained dust paths also pass their canonical terminal SELL.
+4. **Recovery completion could be evaluated without a canonical terminal SELL.** A shared pure guard requires `CanonicalOrder`, SELL side, FILLED status, broker identity, exact executed/original quantity equality, and matching market. Both durable completion recorders use the same guard.
+5. **Dust evidence was insufficiently validated.** Exchange filter thresholds must be positive and evaluated values must satisfy the reason-specific contract. `MIN_NOTIONAL` requires a positive evaluated notional when evaluated quantity is positive; `QUANTITY_INCREMENT` accepts a zero rounded quantity only when the actual residual is smaller than one full step. Valid zero evaluation for a `MIN_QUANTITY`-limited residual remains supported; contradictory evidence fails closed.
+6. **Fill accounting and cycle completion could race.** Both transitions now share one queue. Completion waits for earlier durable fill updates, stages both immutable projections, persists the cycle outcome, and only then commits the paired in-memory reset.
+7. **Canonical timestamp validation was inconsistent.** A pure `isCanonicalNonNegativeSafeInteger` helper now rejects negative zero, negative, fractional, unsafe, and non-number timestamps. MarketPrice, MarketBook, AccountSnapshot, VolatilityCandle, account snapshot reconciliation, account fact recording, and market-history coverage use the same contract.
+8. **Symbol configuration generation was unnecessarily restrictive.** Binance metadata retrieval now preserves available order types and pair configuration validates only the mode selected by the configured maker policy: zero maker assumption requires `LIMIT_MAKER`; non-zero uses `LIMIT`.
+9. **Invalid `TRADING_MODE` silently selected TESTNET.** The symbol generator still defaults to TESTNET when unset, but rejects any explicitly configured value other than `testnet` or `live`.
+10. **Small exchange-aligned quantities could fail numeric conversion.** The generator now expands JavaScript exponent notation before exact decimal comparison, preserving small values without accepting precision loss.
+11. **Market-history and account-baseline use-case coverage was thin.** Regression tests now cover invalid ports/inputs, malformed record collections, regressing verification time, reconciliation failure/mismatch, incomplete audit evidence, non-durable append, failed/mismatched readback, and invalid baseline inputs.
+
+### Test-first and verification evidence
+
+- Test-only RED runs reproduced the targeted commission-baseline schema defects, missing terminal SELL evidence, contradictory dust evidence, negative-zero MarketPrice/MarketBook timestamps, and the start-harvester terminal-order forwarding regression.
+- The Harvester suite passed **1,512/1,512** on verification commit `af0f32f8494c0aa51b95472bdbc0d1ed832185e9`. The coverage workflow passed at **81.45% line, 81.23% branch, and 80.63% function coverage**. This report aggregates Harvester with imported workspace packages (brokers, entities, event-bus, journal, notifiers, and utils); it is not an isolated Harvester-only metric. The aggregate remains below the 90% branch target noted in project guidance; Harvester has no package-specific threshold. Isolating and enforcing a 90% Harvester-only branch gate is a separate scoped task; no threshold was weakened or changed.
+- Changed-file ESLint/syntax checks passed; no lint rules were weakened. The full workspace's existing style-only ESLint baseline is not bulk-rewritten here; behavior-preserving cleanup remains tracked separately in [issue #1092](https://github.com/45s/coinzilla/issues/1092).
+- All six required `develop` checks and the advisory external documentation-link check passed on exact verification head `af0f32f8494c0aa51b95472bdbc0d1ed832185e9`: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, actionlint, and Check external documentation links. The optional read-only Binance TESTNET integration was skipped.
+- The PR updates the Conservative Domain Specification, architecture/recovery flow, broker port/adapter contract, accounting invariant matrix, domain test inventory, symbol-generator instructions, and a dated audit report. Documentation describes the implemented source behavior rather than planned behavior.
+- Large-file modularity review and staged extraction plans are recorded in Section 7 of the audit report; no broad state-machine or durable-store rewrite was bundled into this correctness PR.
+
+### Scope and remaining work
+
+### Follow-up — isolated Harvester coverage gate
+
+The current coverage workflow includes shared workspace dependencies, so it cannot report a clean Harvester-only branch percentage. Add an app-local coverage report and enforce the 90% branch target for Harvester in a separate focused task. Start with uncovered branches in the account snapshot manager, conservative engine/workflow, broker metadata adapter, and operational recovery scripts; keep each change behavior-preserving and test-first. This PR intentionally does not modify shared packages to raise the workspace aggregate.
+
+- The full Harvester JavaScript inventory was enumerated; named-export scanning, test inventory, and lint results were used to map structural/style debt. High-risk accounting, durable-facts, recovery, market-data, configuration, and operational-script boundaries received the detailed source review. The remaining style-only lint baseline is deliberately separated from these correctness fixes; do not mass-autofix unrelated modules or weaken strict rules.
+- No strategy economics, trading configuration, broker behavior, shared packages, or other applications changed.
+- No Binance TESTNET/LIVE connection, account query, order placement, cancellation, or account mutation was performed.
 
 ---
 

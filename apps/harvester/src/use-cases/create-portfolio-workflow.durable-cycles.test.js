@@ -139,10 +139,11 @@ test("does not reset Portfolio or RecoveryLedger when the completed-cycle fact i
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder,
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /cycle fact fsync failed/)
-  assert.equal(workflow.getPortfolio(), initialPortfolio)
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+  assert.equal(result.ok, false, "A failed durable cycle fact must prevent recovery completion from being published.")
+  assert.match(result.errors[0].message, /cycle fact fsync failed/, "The durable write failure must remain visible to the caller.")
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "The Portfolio must remain unchanged when the completed-cycle fact is not durable.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "The RecoveryLedger must remain unchanged when the completed-cycle fact is not durable.")
 })

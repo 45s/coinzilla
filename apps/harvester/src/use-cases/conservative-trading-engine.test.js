@@ -4047,6 +4047,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
   const events = []
+  const completionInputs = []
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -4066,7 +4067,9 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
         },
       }
     },
-    completeRecoveryCycle: async ({ marketId, inventoryDisposition }) => {
+    completeRecoveryCycle: async (input) => {
+      completionInputs.push(input)
+      const { marketId, inventoryDisposition } = input
       const position = currentPortfolio.getPosition({ marketId })
       const completion = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
@@ -4148,6 +4151,19 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     quantityStepSize: dust.quantityStepSize,
     evaluatedQuantity: "0",
   })
+  const dustCompletionInput = completionInputs.find(({ inventoryDisposition }) => inventoryDisposition !== undefined)
+  assert.ok(dustCompletionInput, "The exchange-constrained residual must reach the recovery completion workflow.")
+  assert.equal(
+    dustCompletionInput.sellOrder.clientOrderId,
+    recoverySell.clientOrderId,
+    "Dust completion must retain the reconciled terminal SELL client identity.",
+  )
+  assert.equal(
+    dustCompletionInput.sellOrder.brokerOrderId,
+    recoverySell.brokerOrderId,
+    "Dust completion must retain the reconciled terminal SELL broker identity.",
+  )
+  assert.equal(dustCompletionInput.sellOrder.status, "FILLED", "Dust completion must be supported by the canonical terminal FILLED SELL order.")
   assert.deepEqual(harness.pauses, [])
 })
 
@@ -7025,4 +7041,22 @@ test("exposes a serialized immutable operator market snapshot with current price
   assert.equal(dogeMarket.blockers.includes("OPERATOR_PAUSED"), true, "The operator-owned pause must be visible as a market blocker.")
   assert.equal(Object.isFrozen(snapshotResult.data.markets), true, "The market collection must be immutable to operator-query consumers.")
   assert.equal(Object.isFrozen(dogeMarket.blockers), true, "The market blocker collection must not expose mutable engine state.")
+})
+
+
+test("rejects a negative-zero market-book timestamp", () => {
+  assert.throws(
+    () => createMarketBook({
+      bookTicker: {
+        symbol: "DOGEUSDT",
+        bestBidPrice: "99.90",
+        bestBidQuantity: "1",
+        bestAskPrice: "100.00",
+        bestAskQuantity: "1",
+        timestamp: -0,
+      },
+    }),
+    /timestamp/,
+    "A market book must reject negative zero as a non-canonical exchange timestamp.",
+  )
 })

@@ -232,7 +232,8 @@ test("reconciles a terminal SELL before durably completing its recovery cycle", 
     marketId: market.id,
     keepQuantity: "0",
     minProfit: "0.01",
-  }], "Recovery-cycle completion must run only after terminal fill reconciliation.")
+    sellOrder: order,
+  }], "Recovery-cycle completion must receive the exact canonical terminal SELL after fill reconciliation.")
   assert.equal(calls.sellFills.length, 1, "The terminal REST fill must be applied exactly once.")
   assert.equal(state.trailingBuy.get(market.symbol), true, "A completed recovery cycle must re-enable trailing BUY.")
   assert.equal(state.sellExecutionTotals.has(order.brokerOrderId), false, "Completed SELL execution totals must be reset.")

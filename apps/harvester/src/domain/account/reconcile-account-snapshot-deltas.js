@@ -5,6 +5,7 @@ import {
   subtractDecimal,
   toResult,
 } from "@coinzilla/utils"
+import { isCanonicalNonNegativeSafeInteger } from "../time/is-canonical-non-negative-safe-integer.js"
 
 const validateSnapshot = ({ snapshot, phase }) => {
   if (!snapshot || snapshot.phase !== phase) {
@@ -13,8 +14,11 @@ const validateSnapshot = ({ snapshot, phase }) => {
   if (!["COMPLETE", "INCOMPLETE"].includes(snapshot.auditStatus)) {
     throw new TypeError(phase + " snapshot auditStatus is invalid")
   }
-  if (!Number.isSafeInteger(snapshot.sourceTime) || !Array.isArray(snapshot.balances)) {
-    throw new TypeError(phase + " snapshot requires sourceTime and balances")
+  if (!isCanonicalNonNegativeSafeInteger(snapshot.sourceTime)) {
+    throw new TypeError(phase + " snapshot sourceTime must be a non-negative safe integer")
+  }
+  if (!Array.isArray(snapshot.balances)) {
+    throw new TypeError(phase + " snapshot balances must be an array")
   }
   if (!Array.isArray(snapshot.auditReasons) ||
       snapshot.auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {

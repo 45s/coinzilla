@@ -625,6 +625,10 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
         canonicalData.assetCount !== canonicalData.balances.length) {
       throw new TypeError("Account snapshot assetCount must match its complete balances array")
     }
+    if (canonicalData.phase === "COMMISSION_BASELINE" &&
+        (canonicalData.auditStatus !== "COMPLETE" || canonicalData.balances.length !== 1)) {
+      throw new TypeError("COMMISSION_BASELINE account snapshot must be complete and contain exactly one fee-asset balance")
+    }
     if (!Array.isArray(canonicalData.auditReasons) ||
         canonicalData.auditReasons.some((reason) => typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim())) {
       throw new TypeError("Account snapshot auditReasons must contain canonical non-empty strings")
