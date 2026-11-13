@@ -81,7 +81,7 @@ test("persists a third-asset commission baseline before its durable execution fi
     logger: {},
     onCommissionAsset: async ({ assetId, assetCode }) => {
       order.push("baseline")
-      assert.deepEqual({ assetId, assetCode }, { assetId: feeAsset.id, assetCode: feeAsset.code })
+      assert.deepEqual({ assetId, assetCode }, { assetId: feeAsset.id, assetCode: feeAsset.code }, "The targeted baseline must identify the exact third-asset commission charged by the fill.")
       assert.equal(
         workflow.getPortfolio().positions.length,
         0,
@@ -91,7 +91,7 @@ test("persists a third-asset commission baseline before its durable execution fi
     },
     onDurableExecutionFill: async ({ fill: received }) => {
       order.push("fill")
-      assert.equal(received, feeFill)
+      assert.equal(received, feeFill, "The durable execution fact must receive the exact canonical Fill whose fee baseline was persisted.")
       assert.equal(
         workflow.getPortfolio().positions.length,
         0,

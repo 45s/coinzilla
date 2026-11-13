@@ -86,6 +86,7 @@ test("rejects negative-zero candle timestamps", () => {
       intervalMs: 60_000,
     }),
     /openTime must align/,
+    "A negative-zero candle open time must be rejected as a non-canonical timestamp.",
   )
   assert.throws(
     () => validateCandle({
@@ -95,5 +96,6 @@ test("rejects negative-zero candle timestamps", () => {
       intervalMs: 1,
     }),
     /closeTime does not match/,
+    "A negative-zero candle close time must be rejected as a non-canonical timestamp.",
   )
 })

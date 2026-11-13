@@ -4163,7 +4163,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     recoverySell.brokerOrderId,
     "Dust completion must retain the reconciled terminal SELL broker identity.",
   )
-  assert.equal(dustCompletionInput.sellOrder.status, "FILLED")
+  assert.equal(dustCompletionInput.sellOrder.status, "FILLED", "Dust completion must be supported by the canonical terminal FILLED SELL order.")
   assert.deepEqual(harness.pauses, [])
 })
 
