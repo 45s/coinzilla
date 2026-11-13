@@ -71,7 +71,6 @@
 
 The current coverage workflow includes shared workspace dependencies, so it cannot report a clean Harvester-only branch percentage. Add an app-local coverage report and enforce the 90% branch target for Harvester in a separate focused task. Start with uncovered branches in the account snapshot manager, conservative engine/workflow, broker metadata adapter, and operational recovery scripts; keep each change behavior-preserving and test-first. This PR intentionally does not modify shared packages to raise the workspace aggregate.
 
-
 - The full Harvester JavaScript inventory was enumerated; named-export scanning, test inventory, and lint results were used to map structural/style debt. High-risk accounting, durable-facts, recovery, market-data, configuration, and operational-script boundaries received the detailed source review. The remaining style-only lint baseline is deliberately separated from these correctness fixes; do not mass-autofix unrelated modules or weaken strict rules.
 - No strategy economics, trading configuration, broker behavior, shared packages, or other applications changed.
 - No Binance TESTNET/LIVE connection, account query, order placement, cancellation, or account mutation was performed.
