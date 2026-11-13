@@ -1011,7 +1011,6 @@ The runtime validated and traded ADAFDUSD. The tracked strategy config at the ru
 
 PREFLIGHT found four unowned WLDFDUSD BUY orders. The runtime pair policy was IGNORE, so Harvester left them untouched but still submitted and filled WLDFDUSD strategy orders while they remained open. The four external orders were later reported cancelled as unowned events. This matches the configured IGNORE policy but demonstrates that the planned same-symbol external-order gate remains incomplete. Keep external orders unowned and untouched; block only the affected symbol when the P0.1 acceptance rule is implemented.
 
-
 ## 2026-11-13 LIVE session findings addendum
 
 The following findings are derived from a separate supplied session. Full evidence and the exact order/fill ledger are in [the 2026-11-13 session audit](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md) and [ledger](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md). Do not merge this session with the distinct 2026-11-12/13 incident session.
