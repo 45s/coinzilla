@@ -55,7 +55,7 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 ## Application-owned recovery-facts ledger (ADR-0001 Step 8)
 
-The production entry point constructs the application-owned recovery-facts store whenever either restart recovery or Telegram operator control is enabled. When recovery is enabled, the entry point verifies the ledger before Journal composition. When Telegram operator control alone requires the store, Harvester bootstrap verifies it before broker-capable runtime startup. Normal startup never creates a missing ledger, repairs a corrupt chain, or treats missing history as empty.
+Harvester bootstrap constructs the application-owned recovery-facts store whenever either restart recovery or Telegram operator control is enabled. When recovery is enabled, the entry point verifies the ledger before Journal composition. When Telegram operator control alone requires the store, Harvester bootstrap verifies it before broker-capable runtime startup. Normal startup never creates a missing ledger, repairs a corrupt chain, or treats missing history as empty.
 
 Telegram operator control uses this same ledger even when `recovery.enabled` is false. Enabling operator control does not enable process-restart restoration. The store is still required for durable operator-pause facts and is never created or initialized automatically.
 
