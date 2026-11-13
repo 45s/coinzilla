@@ -126,6 +126,16 @@ The review mapped bootstrap/public entry points, engine and order-event consumer
 
 **Correction:** Add table-driven and focused tests for those failure paths without changing the established use-case behavior.
 
+
+
+### D-001 — P2: Broker adapter documentation contradicted current trading-rule behavior
+
+**Location:** docs/infrastructure/broker-port-and-adapter.md.
+
+**Evidence and impact:** The document said every unvalidated exchange constraint blocked market readiness. Current code validates the supported required rules locally, retains other dynamic/account/exchange-wide/unknown constraints as explicit diagnostics, and lets Binance remain authoritative for those constraints. The old text therefore described a stricter runtime gate than the implementation actually provides.
+
+**Correction:** Update the adapter contract to describe the supported-rule gate, diagnostic unvalidatedConstraints, and definite exchange-filter rejection behavior accurately. No broker behavior was changed.
+
 ## 3. TDD evidence
 
 Test-only commits were pushed before the corresponding production fixes. Confirmed RED runs included:
@@ -140,7 +150,7 @@ Some intermediate test-only workflow attempts were canceled by later branch push
 ## 4. Documentation updated
 
 - Conservative Domain Specification: terminal SELL evidence and serialized completion contract.
-- Architecture: the three recovery completion entry paths, shared accounting queue, durable baseline ordering, and shared canonical timestamp helper.
+- Architecture and broker port/adapter contract: the three recovery completion entry paths, shared accounting queue, durable baseline ordering, canonical timestamp helper, and current supported/unvalidated exchange-rule behavior.
 - Accounting invariants and domain test inventory: baseline shape/order, terminal SELL identity, timestamp canonicality, and new regression coverage.
 - Harvester README: symbol-generator environment selection and commission-selected order mode.
 - Harvester roadmap: source inventory, findings, tests, scope, and remaining style-only work.
@@ -148,7 +158,7 @@ Some intermediate test-only workflow attempts were canceled by later branch push
 ## 5. Verification and safety
 
 - Harvester unit suite: **1,511 passed, 0 failed**.
-- Harvester coverage and workspace coverage workflows passed. The Harvester package does not currently enforce a package-specific percentage threshold; no coverage threshold was weakened or changed.
+- The Harvester suite passed **1,511/1,511**. The workspace coverage workflow passed with **81.44% line, 81.21% branch, and 80.63% function coverage**; this is a workspace-wide aggregate, below the 90% branch target noted in project guidance. Harvester has no package-specific percentage threshold. Raising workspace-wide coverage requires changes outside this PR's explicit apps/harvester/** scope and is therefore deferred; no threshold was weakened or changed.
 - Changed-file JavaScript lint/syntax and documentation-link checks passed on the verified PR head.
 - All six required `develop` checks passed: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, and actionlint.
 - The optional read-only Binance TESTNET integration workflow was skipped.
