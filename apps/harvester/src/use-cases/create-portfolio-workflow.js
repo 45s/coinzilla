@@ -2,6 +2,7 @@ import { Fill } from "@coinzilla/entities"
 import { compareDecimal, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { assertTerminalRecoverySellOrder } from "../domain/orders/assert-terminal-recovery-sell-order.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeProcessMarketPrice } from "./process-market-price.js"
 import { updateTradingAccounting as applyTradingAccounting } from "./update-trading-accounting.js"
@@ -283,6 +284,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
       }
       try {
+        assertTerminalRecoverySellOrder({ sellOrder, marketId })
         const completionInput = {
           sellOrderFullyFilled: true,
           spent: position.spent.amount,
