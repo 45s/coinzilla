@@ -390,6 +390,8 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Acceptance:** no conflicting same-symbol order can be submitted while an unowned order is open; external orders stay untouched/unowned; unrelated symbols remain independent; inability to establish current open-order state fails closed for that decision.
 
+**Session evidence (2026-11-12/13):** PREFLIGHT found four unowned WLDFDUSD BUY orders. The LIVE strategy still submitted and filled WLDFDUSD orders while those external orders remained open; all four were later reported cancelled as unowned events. This is consistent with the runtime IGNORE policy but confirms P0.1 is not yet implemented. No external fills or balance mismatch were observed. See [session audit F-047](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
+
 ---
 
 ### P0.2 — Preserve exact commission facts and quote valuation through fill accounting
@@ -425,7 +427,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Problem:** order status is not proof of financial recovery. Submitted, acknowledged, partial, canceled or UNKNOWN SELLs cannot complete a cycle. Cancellation can race with fills. A full SELL whose durable cycle outcome is missing can leave replay with stale cost basis or incorrect retained-inventory allocation. Preserve existing serialized transitions, fill reconciliation, minimum-profit checks, dust evidence and atomic Portfolio/RecoveryLedger completion; extend rather than replace them.
 
-**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), finding F-041. Check the current [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) before adding duplicate tests.
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), finding F-041; [#1097](https://github.com/45s/coinzilla/issues/1097) tracks the confirmed shutdown-race evidence from the 2026-11-12/13 LIVE session. Check the current [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) before adding duplicate tests.
 
 **Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); [recovery-completion.js](./src/domain/strategies/conservative/recovery-completion.js); [recovery-ledger.js](./src/domain/strategies/conservative/recovery-ledger.js); [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [position-accounting.js](./src/domain/portfolio/position-accounting.js); recovery projector/Journal replay paths under #654.
 
@@ -443,6 +445,8 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 10. [ ] **Atomicity regression:** Portfolio and RecoveryLedger either both complete the cycle or neither changes.
 
 **Acceptance:** completion requires reconciled canonical fills, sufficient net recovery/profit and exact active/free/dust allocation. Unresolved orders or missing cycle outcome block the next cycle. Retained inventory cannot be sold accidentally.
+
+**Session evidence (2026-11-12/13):** shutdown began at 03:51:04.844Z; 20 WLD and 30 ADA BUYs filled after the stopped flag was set. The stopping path skipped recovery-SELL recalculation, leaving the last-observed SELLs short by 20 WLD and 30 ADA. CLOSING still reported COMPLETE because open SELLs are allowed without checking their coverage against the final Position/RecoveryLedger. Add a deterministic offline regression for a BUY fill during shutdown's pre-cancellation reconciliation window, and require either a reconciled recovery SELL or an INCOMPLETE CLOSING audit. See [session audit F-045](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
 
 ---
 
