@@ -2,13 +2,32 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Current safety priorities — LIVE-session audit findings
+
+The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026-11-12/13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and [2026-11-13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md). These findings are current safety priorities; historical reports remain immutable evidence.
+
+### P0 — Shutdown recovery coverage integrity
+
+- [ ] **Prevent COMPLETE shutdown with stale recovery SELL coverage** — [#1097](https://github.com/45s/coinzilla/issues/1097). The earlier LIVE session confirmed late BUY fills after stopping began; the stopping guard skipped SELL recalculation and CLOSING still reported COMPLETE. Acceptance: account for each fill exactly once; reconcile/replan owned recovery SELLs against final Position and RecoveryLedger; validate remaining SELL quantity and expected proceeds; otherwise close INCOMPLETE/BLOCKED with actionable reasons. No ownership bypass or blind retry. The separate 2026-11-13 session did not reproduce this race; see its [audit finding F-048](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md#findings-and-dispositions). Do not mark complete until offline regressions, Harvester suite and exact-head CI pass.
+
+### P1 — Runtime configuration and order isolation
+
+- [ ] **Effective runtime configuration integrity** — [#1101](https://github.com/45s/coinzilla/issues/1101), related historical finding [F-046](./docs/audits/reports/AUDIT_FINDINGS.md#f-046--adafdusd-was-enabled-at-runtime-while-disabled-in-the-tracked-config). Record a sanitized effective-config snapshot or deterministic digest, audit enabled-market selection against it, and fail closed or explicitly block unexpected markets when integrity is unknown. Historical override cause remains unresolved.
+- [ ] **Same-symbol external-order isolation** — [#1102](https://github.com/45s/coinzilla/issues/1102), related historical finding [F-047](./docs/audits/reports/AUDIT_FINDINGS.md#f-047--same-symbol-external-wldfdusd-orders-coexisted-with-strategy-orders). Keep manual orders unowned and untouched; block only affected symbols when policy requires; preserve unaffected-symbol operation; re-evaluate only from authoritative snapshots and established durability/reconciliation. The 2026-11-13 session had zero PREFLIGHT open orders and did not reproduce the collision.
+
+### P2 — Session evidence and operational observability
+
+- [ ] **Record local order-submission deferral outcomes** — [#1104](https://github.com/45s/coinzilla/issues/1104). Close the durable request lifecycle when broker I/O is not attempted; distinguish local deferral from rejection and ambiguous broker outcome.
+- [ ] **Surface Telegram delivery failures** — [#1103](https://github.com/45s/coinzilla/issues/1103). Preserve non-blocking delivery and expose accurate accepted/delivered/failed/overflow evidence.
+- [ ] **Explain shutdown phase latency** — [#1105](https://github.com/45s/coinzilla/issues/1105). Investigate the 128.047-second interval between shutdown-start and first visible reconciliation activity without assuming a cause.
+
+All items remain open. A documentation PR or a clean offline audit does not establish runtime safety or authorize another unrestricted LIVE session.
+
 ## P0 — Telegram Command Center (CC) — delivered
 
 **Status: [x] COMPLETE — CC-4 merged into `develop` in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; CC-1 through CC-3 were previously merged in PRs #1079, #1081, #1086 and #1087. Required exact-head CI and external documentation links passed.** The initial engine/application foundation remains in [PR #1045](https://github.com/45s/coinzilla/pull/1045), disabled-by-default runtime wiring in [PR #1067](https://github.com/45s/coinzilla/pull/1067), and process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065). ADR-0001 process-restart recovery Steps 8–9 remain explicitly deferred and are not implied by CC completion.
 
 **Current baseline:** Telegram remains optional/disabled by default. CC-1 through CC-3 are delivered in PRs #1079, #1081, #1086 and #1087. CC-4 is delivered in merged [PR #1088](https://github.com/45s/coinzilla/pull/1088): Telegram command menu, authorized inline navigation/refresh, confirmation-gated market pause/resume controls, callback authorization/idempotency/retry/shutdown hardening and the operator runbook. The operator pause remains process-lifetime only and is not restored after restart.
-
-**Production composition follow-up:** [~] [PR #1100](https://github.com/45s/coinzilla/pull/1100) supplies the shared ADR-0001 store when Telegram operator control is enabled independently of restart recovery, using the documented default directory unless overridden. It also verifies that user-data reconnect/reconciliation does not clear an active operator pause. These are setup and regression-coverage corrections only; they do not reopen CC-1–CC-4 or change pause semantics.
 
 ### Delivery phases
 
@@ -29,11 +48,12 @@
 
 ## P1 — Outbound Telegram notification icons
 
-**Status: [x] COMPLETE — merged into `develop` in [PR #1099](https://github.com/45s/coinzilla/pull/1099) as `fc7cac7e28a67aa9284a88770d556aff843c81b5`; exact source head `bd856f66f888d99b00cdf0828e291ea126d4945b` passed all six required checks, Harvester targeted tests and external documentation-link validation.** The user's reviewed emoji choices are applied to producer-backed Harvester Telegram notifications. The formatter selects order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
+**Status: [~] IMPLEMENTATION IN PROGRESS in [PR #1099](https://github.com/45s/coinzilla/pull/1099).** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
 
-- [x] Preserve the five notifications without a replacement selection on their existing icons; no choices were invented.
-- [x] Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
-- [x] Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
+- Keep the five notifications without a replacement selection on their existing icons; do not invent choices.
+- Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
+- Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
+- [ ] Complete exact formatter and end-to-end Telegram assertions, documentation updates, and required exact-head CI; mark complete only after merge into `develop`.
 
 ---
 
