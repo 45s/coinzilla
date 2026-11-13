@@ -25,6 +25,15 @@
 - No TESTNET/LIVE exchange operation is authorized or needed for CC.
 - ADR-0001 Steps 8–9 are deferred; the current operator-pause process-lifetime limitation remains explicit until a separate proven restoration change is completed.
 
+## P1 — Outbound Telegram notification icons
+
+**Status: [~] IMPLEMENTATION IN PROGRESS in [PR #1099](https://github.com/45s/coinzilla/pull/1099).** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
+
+- Keep the five notifications without a replacement selection on their existing icons; do not invent choices.
+- Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
+- Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
+- [ ] Complete exact formatter and end-to-end Telegram assertions, documentation updates, and required exact-head CI; mark complete only after merge into `develop`.
+
 ---
 
 ## Harvester source quality and domain-logic audit — issue #1090

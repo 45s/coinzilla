@@ -16,6 +16,32 @@ function text(value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH) {
 
 const QUOTE_ASSETS = ["FDUSD", "USDT", "USDC", "BUSD", "TUSD", "BTC", "ETH", "BNB", "EUR", "TRY"]
 
+const NOTIFICATION_ICONS = Object.freeze({
+  botStarted: "🚀",
+  botStopped: "🔒",
+  startupFailed: "🛠️",
+  marketPaused: "⏸️",
+  brokerDisconnected: "💤",
+  userDataReady: "🔗",
+  recoveryCompleted: "💰",
+  orderSubmissionFailed: "❌",
+  orderCancellationFailed: Object.freeze({ BUY: "🚫", SELL: "⛔" }),
+  fillReceived: Object.freeze({ BUY: "✔️", SELL: "💸" }),
+  accountSafety: Object.freeze({
+    "broker-subscription-failed": "🚨",
+    "user-data-readiness-blocked": "🚨",
+    "user-data-reconnected-reconciliation-pending": "🚨",
+    "user-data-recovery-failed": "🚨",
+    "user-data-stream-terminated": "🚨",
+    "user-data-execution-normalization-failed": "🚨",
+    "user-data-stream-error": "🚨",
+    "recovery-cycle-blocked": "🚨",
+    "unowned-order": "⚠️",
+    "invalid-fill": "⚠️",
+    "account-open-orders-blocked": "🚨",
+  }),
+})
+
 function symbol(value) {
   const normalized = text(value, "n/a", 64).toUpperCase()
   if (normalized.includes("/")) {return normalized}
@@ -36,12 +62,35 @@ function side(value) {
   return { label: normalized, icon }
 }
 
-function fillIcon(value) {
+function legacyFilledOrderIcon(value) {
   const normalized = text(value, "", 24).toUpperCase()
   if (normalized === "BUY") {
     return "✅"
   }
   return "💰"
+}
+
+function fillIcon(value) {
+  const normalized = text(value, "", 24).toUpperCase()
+  return Object.hasOwn(NOTIFICATION_ICONS.fillReceived, normalized)
+    ? NOTIFICATION_ICONS.fillReceived[normalized]
+    : "💰"
+}
+
+function orderFailureIcon(data) {
+  if (data.operation === "cancellation") {
+    const normalizedSide = side(data.side).label
+    return Object.hasOwn(NOTIFICATION_ICONS.orderCancellationFailed, normalizedSide)
+      ? NOTIFICATION_ICONS.orderCancellationFailed[normalizedSide]
+      : NOTIFICATION_ICONS.orderSubmissionFailed
+  }
+  return NOTIFICATION_ICONS.orderSubmissionFailed
+}
+
+function accountSafetyIcon(category) {
+  return Object.hasOwn(NOTIFICATION_ICONS.accountSafety, category)
+    ? NOTIFICATION_ICONS.accountSafety[category]
+    : "⚠️"
 }
 
 function orderId(data) {
@@ -59,7 +108,7 @@ function compactOrder(data, icon, status = "") {
 }
 
 const formatters = Object.freeze({
-  "order.filled": ({ data }) => compactOrder(data, fillIcon(data.side), "ORDER FILLED"),
+  "order.filled": ({ data }) => compactOrder(data, legacyFilledOrderIcon(data.side), "ORDER FILLED"),
   "fill.received": ({ data }) => {
     const fill = data.fill && typeof data.fill === "object" && !Array.isArray(data.fill) ? data.fill : {}
     const price = text(fill.price, "n/a", 96)
@@ -70,31 +119,35 @@ const formatters = Object.freeze({
       trade === undefined || trade === null ? null : `#${text(trade, "n/a", 96)}`,
     ].filter(Boolean).join("\n")
   },
-  "bot.pair_paused": ({ data }) => `⏹️ ${symbol(data.symbol)} PAUSED · ${text(data.message ?? data.reason)}`,
-  "bot.user_data_ready": ({ data }) => `🟢 USER-DATA READY · ${text(data.broker, "UNKNOWN", 64).toUpperCase()}`,
+  "bot.pair_paused": ({ data }) => `${NOTIFICATION_ICONS.marketPaused} ${symbol(data.symbol)} PAUSED · ${text(data.message ?? data.reason)}`,
+  "bot.user_data_ready": ({ data }) => `${NOTIFICATION_ICONS.userDataReady} USER-DATA READY · ${text(data.broker, "UNKNOWN", 64).toUpperCase()}`,
   "bot.recovery_failed": ({ data }) => `🚨 BOT RECOVERY FAILED · ${text(data.message ?? data.reason)}`,
-  "bot.recovery_completed": ({ data }) => `📡 BOT RECOVERY COMPLETED · ${text(data.message ?? data.summary, "Recovery completed")}`,
-  "bot.startup_failed": ({ data }) => `🛑 BOT STARTUP FAILED · ${text(data.stage, "n/a", 64)} · ${text(data.error?.message ?? data.message)}`,
+  "bot.recovery_completed": ({ data }) => `${NOTIFICATION_ICONS.recoveryCompleted} BOT RECOVERY COMPLETED · ${text(data.message ?? data.summary, "Recovery completed")}`,
+  "bot.startup_failed": ({ data }) => `${NOTIFICATION_ICONS.startupFailed} BOT STARTUP FAILED · ${text(data.stage, "n/a", 64)} · ${text(data.error?.message ?? data.message)}`,
   "broker.connected": ({ data }) => [
     `🟩 BROKER CONNECTED · ${text(data.broker, "UNKNOWN", 64).toUpperCase()}`,
     ...(data.tradingMode === undefined ? [] : [text(data.tradingMode, "n/a", 24).toUpperCase()]),
   ].join(" · "),
-  "broker.disconnected": ({ data }) => `🟥 ${text(data.broker, "BROKER", 64).toUpperCase()} DISCONNECTED · ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
+  "broker.disconnected": ({ data }) => `${NOTIFICATION_ICONS.brokerDisconnected} ${text(data.broker, "BROKER", 64).toUpperCase()} DISCONNECTED · ${text(data.error?.message ?? data.reason ?? data.outcome)}`,
   "order.submitted": ({ data }) => compactOrder(data, null, "ORDER SUBMITTED"),
   "order.cancelled": ({ data }) => [
     `✖️ ${side(data.side).label} ${symbol(data.symbol)} ORDER CANCELLED · Filled ${text(data.executedQuantity, "0", 96)}`,
     orderId(data),
   ].filter(Boolean).join("\n"),
-  "order.failed": ({ data }) => `❌ ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
-  "account.safety_alert": ({ data }) => data.category === "user-data-readiness-blocked"
-    ? `🚨 USER-DATA READINESS BLOCKED · ${text(data.message ?? data.reason)}`
-    : `${data.category === "account-open-orders-blocked" || data.category === "recovery-cycle-blocked" ? "🚨" : "⚠️"} ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`,
-  "bot.started": () => "▶️ BOT STARTED",
+  "order.failed": ({ data }) => `${orderFailureIcon(data)} ${side(data.side).label} ${symbol(data.symbol)} FAILED · ${text(data.error?.message ?? data.message ?? data.reason)}`,
+  "account.safety_alert": ({ data }) => {
+    const icon = accountSafetyIcon(data.category)
+    if (data.category === "user-data-readiness-blocked") {
+      return `${icon} USER-DATA READINESS BLOCKED · ${text(data.message ?? data.reason)}`
+    }
+    return `${icon} ACCOUNT SAFETY · ${symbol(data.symbol)} · ${text(data.category, "safety", 64)} · ${text(data.message ?? data.reason)}`
+  },
+  "bot.started": () => `${NOTIFICATION_ICONS.botStarted} BOT STARTED`,
   "bot.stopped": ({ data }) => {
     const reason = data.reason ?? data.message
     const outcome = data.outcome && data.outcome !== "completed" ? data.outcome : null
     const detail = reason ?? outcome
-    return detail ? `⏹️ BOT STOPPED · ${text(detail, "completed", 96)}` : "⏹️ BOT STOPPED"
+    return detail ? `${NOTIFICATION_ICONS.botStopped} BOT STOPPED · ${text(detail, "completed", 96)}` : `${NOTIFICATION_ICONS.botStopped} BOT STOPPED`
   },
 })
 

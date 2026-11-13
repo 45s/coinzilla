@@ -95,13 +95,12 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
   await signalHandlers.get("SIGTERM")()
 
   assert.equal(sentMessages.length, 6, "Telegram must receive startup, pause, canonical fill, recovery completion, and shutdown notifications")
-  assert.ok(sentMessages.includes("▶️ BOT STARTED"), "A successful Harvester startup must use the selected start icon")
-  assert.ok(sentMessages.some((message) => message.includes("PAUSED") && message.includes("DOGE/USDT")), "A paused market must produce a Telegram safety notification with its symbol")
-  assert.ok(sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("trade-123")), "An applied canonical fill must produce a Telegram execution notification")
-  assert.ok(sentMessages.includes("✅ FILL RECEIVED · DOGE/USDT @ 0.075 × 400\n#trade-123"), "A canonical BUY fill must retain its side through the event bridge and use the selected BUY icon")
-  assert.ok(sentMessages.includes("💰 FILL RECEIVED · DOGE/USDT @ 0.076 × 399\n#trade-124"), "A canonical SELL fill must retain its side through the event bridge and use the selected SELL icon")
-  assert.ok(sentMessages.some((message) => message.includes("BOT RECOVERY COMPLETED") && message.includes("0.25")), "A completed recovery cycle must produce a Telegram completion notification")
-  assert.ok(sentMessages.some((message) => message.startsWith("⏹️ BOT STOPPED")), "A completed Harvester shutdown must use the selected stop icon")
+  assert.ok(sentMessages.includes("🚀 BOT STARTED"), "A successful Harvester startup must use the selected start icon")
+  assert.ok(sentMessages.includes("⏸️ DOGE/USDT PAUSED · accounting safety halt"), "A market pause must render the exact selected pause icon and preserve its reason")
+  assert.ok(sentMessages.includes("✔️ FILL RECEIVED · DOGE/USDT @ 0.075 × 400\n#trade-123"), "A canonical BUY fill must retain its side and render the selected BUY-fill icon")
+  assert.ok(sentMessages.includes("💸 FILL RECEIVED · DOGE/USDT @ 0.076 × 399\n#trade-124"), "A canonical SELL fill must retain its side and render the selected SELL-fill icon")
+  assert.ok(sentMessages.includes("💰 BOT RECOVERY COMPLETED · DOGEUSDT recovery completed; net profit 0.25; retained quantity 1"), "A completed recovery cycle must render the selected money-bag icon")
+  assert.ok(sentMessages.some((message) => message.startsWith("🔒 BOT STOPPED")), "A confirmed Harvester shutdown must render the selected lock icon")
   assert.deepEqual(loggerErrors, [], "Successful optional Telegram delivery must not create application error diagnostics")
 })
 
@@ -457,6 +456,8 @@ test("delivers startup, broker, order, and execution safety failures in custom m
         ["broker.connection_failed", { broker: "binance", error: { message: "socket unavailable" } }],
         ["broker.subscription_failed", { broker: "binance", stream: "market", market: "ETHUSDT", error: { message: "subscription rejected" } }],
         ["order.submission_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "REJECTED", error: { message: "insufficient balance" } }],
+        ["order.submission_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "REJECTED", error: { message: "sell submission rejected" } }],
+        ["order.cancel_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "FAILED", error: { message: "buy cancel rejected" } }],
         ["order.cancel_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "FAILED", error: { message: "cancel rejected" } }],
         ["execution.unowned_order", { symbol: "ETHUSDT", reason: "external order" }],
         ["execution.invalid_fill", { symbol: "ETHUSDT", reason: "invalid quantity", error: { message: "fill quantity mismatch" } }],
@@ -481,7 +482,7 @@ test("delivers startup, broker, order, and execution safety failures in custom m
 
   assert.equal(
     sentMessages.length,
-    7,
+    9,
     "Custom mode must deliver every critical startup, broker, order, and execution failure even when each related override is false and the symbol is outside the market filter.",
   )
   for (const [fragment, description] of [
@@ -497,6 +498,16 @@ test("delivers startup, broker, order, and execution safety failures in custom m
       `The non-disableable safety policy must retain the ${description} notification.`,
     )
   }
+
+  assert.ok(sentMessages.some((message) => message.startsWith("🛠️ BOT STARTUP FAILED")), "Startup failure must use the selected tools icon in the delivered Telegram message.")
+  assert.ok(sentMessages.some((message) => message.startsWith("💤 BINANCE DISCONNECTED")), "Broker disconnection must use the selected sleep icon in the delivered Telegram message.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("broker-subscription-failed")), "Broker subscription failure must use the selected siren icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("❌ BUY ETH/USDT FAILED")), "BUY submission failure must use the selected cross icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("❌ SELL ETH/USDT FAILED")), "SELL submission failure must use the selected cross icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚫 BUY ETH/USDT FAILED")), "BUY cancellation failure must use the selected prohibited icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("⛔ SELL ETH/USDT FAILED")), "SELL cancellation failure must use the selected no-entry icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("⚠️ ACCOUNT SAFETY") && message.includes("unowned-order")), "The undecided unowned-order alert must retain its existing warning icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("⚠️ ACCOUNT SAFETY") && message.includes("invalid-fill")), "The undecided invalid-fill alert must retain its existing warning icon.")
 })
 
 
@@ -516,6 +527,9 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
         ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true }],
         ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recoveryFailed", recoveryRequired: false, error: { message: "REST snapshot failed" } }],
         ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovering", recoveryRequired: true }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "terminated", recoveryRequired: true, error: { message: "stream closed" } }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "executionNormalizationFailed", recoveryRequired: false, error: { message: "invalid execution payload" } }],
+        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "rpcError", recoveryRequired: true, error: { message: "user-data RPC failed" } }],
         ["broker.status_changed", { broker: "binance", stream: "market-price", status: "recoveryFailed", recoveryRequired: true }],
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-1", sellOrderBrokerOrderId: "123", outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT", realizedNetProfit: "-0.02", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01" }],
         ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-2", sellOrderBrokerOrderId: "124", outcome: "CONTINUE_SELL_THROUGH", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", realizedNetProfit: "0", activeQuantity: "0.02", keepQuantity: "0.01", minProfit: "0.01" }],
@@ -531,12 +545,15 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
 
   await signalHandlers.get("SIGTERM")()
 
-  assert.equal(sentMessages.length, 5, "CC-3 must deliver two readiness transitions, reconnect/recovery-failure warnings, and a blocked recovery alert only.")
-  assert.ok(sentMessages.some((message) => message.includes("USER-DATA READINESS BLOCKED") && message.includes("connectionClosed")), "A readiness loss must explain its triggering stream status.")
-  assert.ok(sentMessages.some((message) => message === "🟢 USER-DATA READY · BINANCE"), "A confirmed readiness restoration must be reported.")
-  assert.ok(sentMessages.some((message) => message.includes("RECONNECTED") && message.includes("reconciliation")), "A recovered transport must not be reported as trading-ready before application reconciliation.")
-  assert.ok(sentMessages.some((message) => message.includes("user-data-recovery-failed") && message.includes("REST snapshot failed")), "A failed authoritative user-data recovery must be visible.")
+  assert.equal(sentMessages.length, 8, "Telegram must deliver readiness, reconnect, recovery, stream termination, normalization, RPC, and blocked-cycle alerts while suppressing routine progress.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 USER-DATA READINESS BLOCKED") && message.includes("connectionClosed")), "A readiness loss must use the selected siren icon and explain its triggering stream status.")
+  assert.ok(sentMessages.some((message) => message === "🔗 USER-DATA READY · BINANCE"), "A confirmed readiness restoration must use the selected link icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("user-data-reconnected-reconciliation-pending")), "A recovered transport awaiting reconciliation must use the selected siren icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("user-data-recovery-failed") && message.includes("REST snapshot failed")), "A failed authoritative user-data recovery must use the selected siren icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("user-data-stream-terminated")), "A terminated user-data stream must use the selected siren icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("user-data-execution-normalization-failed")), "An execution-normalization failure must use the selected siren icon.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("user-data-stream-error")), "A user-data RPC stream error must use the selected siren icon.")
   assert.equal(sentMessages.some((message) => message.includes("recovering") || message.includes("market-price")), false, "Retry progress and non-user-data status events must not create notification noise.")
-  assert.ok(sentMessages.some((message) => message.includes("recovery-cycle-blocked") && message.includes("RECOVERY_SELL_FAILED_MIN_PROFIT")), "A blocked recovery cycle must be a non-disableable safety alert.")
+  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("recovery-cycle-blocked") && message.includes("RECOVERY_SELL_FAILED_MIN_PROFIT")), "The undecided blocked recovery alert must retain its existing siren icon.")
   assert.equal(sentMessages.some((message) => message.includes("CONTINUE_SELL_THROUGH")), false, "Expected residual sell-through must not generate a false safety alarm.")
 })
