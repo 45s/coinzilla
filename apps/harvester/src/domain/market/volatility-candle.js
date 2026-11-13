@@ -1,3 +1,4 @@
+import { isCanonicalNonNegativeSafeInteger } from "../time/is-canonical-non-negative-safe-integer.js"
 import {
   addDecimal,
   assertDecimalString,
@@ -28,14 +29,13 @@ export function validateCandle({ candle, symbol, interval, intervalMs } = {}) {
     throw new RangeError("candle market or interval does not match its subscription")
   }
   if (
-    !Number.isSafeInteger(candle.openTime) ||
-    candle.openTime < 0 ||
+    !isCanonicalNonNegativeSafeInteger(candle.openTime) ||
     candle.openTime % intervalMs !== 0
   ) {
     throw new RangeError("candle openTime must align to its UTC interval")
   }
   if (
-    !Number.isSafeInteger(candle.closeTime) ||
+    !isCanonicalNonNegativeSafeInteger(candle.closeTime) ||
     candle.closeTime !== candle.openTime + intervalMs - 1
   ) {
     throw new RangeError("candle closeTime does not match its interval")
