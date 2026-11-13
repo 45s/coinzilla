@@ -15,16 +15,23 @@ import { compareDecimal } from "@coinzilla/utils"
  * @throws {TypeError} When the order is missing, non-canonical, not a filled SELL, or belongs to another market.
  */
 export function assertTerminalRecoverySellOrder({ sellOrder, marketId } = {}) {
-  if (!(sellOrder instanceof CanonicalOrder) ||
-      sellOrder.side !== "SELL" ||
-      sellOrder.status !== "FILLED" ||
-      typeof sellOrder.brokerOrderId !== "string" ||
-      !sellOrder.brokerOrderId.trim() ||
-      compareDecimal({
-        left: sellOrder.executedQuantity.amount,
-        right: sellOrder.originalQuantity.amount,
-      }) !== 0) {
-    throw new TypeError("Recovery-cycle transition requires the canonical fully filled terminal SELL order")
+  if (!(sellOrder instanceof CanonicalOrder)) {
+    throw new TypeError("Recovery-cycle transition requires a canonical fully filled terminal SELL order")
+  }
+  if (sellOrder.side !== "SELL") {
+    throw new TypeError("Recovery-cycle transition requires a canonical fully filled terminal SELL order with side SELL")
+  }
+  if (sellOrder.status !== "FILLED") {
+    throw new TypeError("Recovery-cycle transition requires a canonical fully filled terminal SELL order with status FILLED")
+  }
+  if (typeof sellOrder.brokerOrderId !== "string" || !sellOrder.brokerOrderId.trim()) {
+    throw new TypeError("Recovery-cycle transition requires a canonical fully filled terminal SELL order with broker identity")
+  }
+  if (compareDecimal({
+    left: sellOrder.executedQuantity.amount,
+    right: sellOrder.originalQuantity.amount,
+  }) !== 0) {
+    throw new TypeError("Recovery-cycle transition requires a canonical fully filled terminal SELL order with exact executed quantity")
   }
 
   if (marketId !== undefined && sellOrder.market.id !== marketId) {
