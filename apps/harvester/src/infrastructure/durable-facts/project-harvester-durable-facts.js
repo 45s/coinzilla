@@ -442,8 +442,11 @@ export function projectHarvesterDurableFacts({ records } = {}) {
       session.facts.push(record)
     }
 
-    const sessionList = [...sessions.values()].sort((left, right) =>
-      left.startedSequence < right.startedSequence ? -1 : left.startedSequence > right.startedSequence ? 1 : 0)
+    const sessionList = [...sessions.values()].sort((left, right) => {
+      if (left.startedSequence < right.startedSequence) {return -1}
+      if (left.startedSequence > right.startedSequence) {return 1}
+      return 0
+    })
     const latestSession = sessionList[sessionList.length - 1]
     // Strategy pauses are durable recovery state; operator pauses are not
     // replayed after restart and were intentionally excluded above.
