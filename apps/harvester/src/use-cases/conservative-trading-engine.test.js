@@ -4047,6 +4047,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
   const events = []
+  const completionInputs = []
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -4066,7 +4067,9 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
         },
       }
     },
-    completeRecoveryCycle: async ({ marketId, inventoryDisposition }) => {
+    completeRecoveryCycle: async (input) => {
+      completionInputs.push(input)
+      const { marketId, inventoryDisposition } = input
       const position = currentPortfolio.getPosition({ marketId })
       const completion = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
@@ -4148,6 +4151,13 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     quantityStepSize: dust.quantityStepSize,
     evaluatedQuantity: "0",
   })
+  const dustCompletionInput = completionInputs.find(({ inventoryDisposition }) => inventoryDisposition !== undefined)
+  assert.ok(dustCompletionInput, "The exchange-constrained residual must reach the recovery completion workflow.")
+  assert.equal(
+    dustCompletionInput.sellOrder,
+    recoverySell,
+    "Dust completion must retain the exact reconciled terminal SELL identity for its durable completion fact.",
+  )
   assert.deepEqual(harness.pauses, [])
 })
 
