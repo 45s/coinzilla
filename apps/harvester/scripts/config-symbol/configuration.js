@@ -88,7 +88,7 @@ export function decimalPlaces(value) {
 }
 
 function expandExponentNotation(value) {
-  const match = /^(-?)([0-9]+)(?:\\.([0-9]+))?[eE]([+-]?[0-9]+)$/.exec(value)
+  const match = /^(-?)([0-9]+)(?:[.]([0-9]+))?[eE]([+-]?[0-9]+)$/.exec(value)
   if (!match) {
     return value
   }
