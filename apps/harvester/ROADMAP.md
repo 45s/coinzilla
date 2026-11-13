@@ -67,7 +67,7 @@
 
 ### Scope and remaining work
 
-- The full Harvester JavaScript inventory was enumerated and checked for export/test structure; high-risk accounting, durable-facts, recovery, market-data, configuration, and operational-script boundaries received the detailed source review. The remaining style-only lint baseline is deliberately separated from these correctness fixes; do not mass-autofix unrelated modules or weaken strict rules.
+- The full Harvester JavaScript inventory was enumerated; named-export scanning, test inventory, and lint results were used to map structural/style debt. High-risk accounting, durable-facts, recovery, market-data, configuration, and operational-script boundaries received the detailed source review. The remaining style-only lint baseline is deliberately separated from these correctness fixes; do not mass-autofix unrelated modules or weaken strict rules.
 - No strategy economics, trading configuration, broker behavior, shared packages, or other applications changed.
 - No Binance TESTNET/LIVE connection, account query, order placement, cancellation, or account mutation was performed.
 
