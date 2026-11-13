@@ -238,3 +238,177 @@ The supplied JSONL and two structured logs were parsed as supplemental evidence:
 - [Accounting Invariants](../../domain/ACCOUNTING_INVARIANTS.md)
 - [Domain Test Inventory](../../domain/DOMAIN_TEST_INVENTORY.md)
 - [AI Refactoring and Code Audit Standard](../../../../../docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md)
+
+
+## Appendix A — production file path inventory
+
+The following is the exact production JavaScript path inventory at the audit baseline. Test files are intentionally counted separately in the inventory and test-pairing section above.
+
+### Application source (124 files)
+
+- apps/harvester/src/application/events/event-names.js
+- apps/harvester/src/application/events/event-publisher.js
+- apps/harvester/src/application/events/lifecycle-event-dtos.js
+- apps/harvester/src/application/events/publish-lifecycle-event.js
+- apps/harvester/src/application/events/user-data-readiness-event-dto.js
+- apps/harvester/src/application/logging/trading-state-log-summary.js
+- apps/harvester/src/application/operator/authorize-operator-actor.js
+- apps/harvester/src/application/operator/create-harvester-operator.js
+- apps/harvester/src/application/orders/is-harvester-client-order-id.js
+- apps/harvester/src/application/ports/broker.port.js
+- apps/harvester/src/application/ports/durable-facts.port.js
+- apps/harvester/src/bootstrap/account/create-account-snapshot-manager.js
+- apps/harvester/src/bootstrap/broker/cleanup-broker.js
+- apps/harvester/src/bootstrap/broker/connect-broker.js
+- apps/harvester/src/bootstrap/config/resolve-harvester-options.js
+- apps/harvester/src/bootstrap/market/load-market-metadata.js
+- apps/harvester/src/bootstrap/notifications/format-telegram-notification.js
+- apps/harvester/src/bootstrap/notifications/resolve-telegram-notification-policy.js
+- apps/harvester/src/bootstrap/notifications/subscribe-harvester-telegram-notifications.js
+- apps/harvester/src/bootstrap/operator-control/prepare-telegram-operator-control.js
+- apps/harvester/src/bootstrap/shutdown/create-shutdown-handler.js
+- apps/harvester/src/bootstrap/start-harvester.js
+- apps/harvester/src/bootstrap/subscriptions/subscribe-to-market-data.js
+- apps/harvester/src/bootstrap/user-data/create-user-data-event-handler.js
+- apps/harvester/src/bootstrap/user-data/create-user-data-recovery-handler.js
+- apps/harvester/src/bootstrap/user-data/create-user-data-status-handler.js
+- apps/harvester/src/bootstrap/user-data/subscribe-to-user-data.js
+- apps/harvester/src/domain/account/account-snapshot.js
+- apps/harvester/src/domain/account/assert-account-snapshot-covers-markets.js
+- apps/harvester/src/domain/account/calculate-account-snapshot-baselines.js
+- apps/harvester/src/domain/account/reconcile-account-snapshot-deltas.js
+- apps/harvester/src/domain/app-config.js
+- apps/harvester/src/domain/external-orders-policy.js
+- apps/harvester/src/domain/fills/fill-fingerprint.js
+- apps/harvester/src/domain/fills/validate-fill-commissions.js
+- apps/harvester/src/domain/market-price.js
+- apps/harvester/src/domain/market/errors/unvalidated-market-exchange-constraints-error.js
+- apps/harvester/src/domain/market/is-market-data-fresh.js
+- apps/harvester/src/domain/market/validate-market-trading-readiness.js
+- apps/harvester/src/domain/market/volatility-candle.js
+- apps/harvester/src/domain/market/volatility-protection-state.js
+- apps/harvester/src/domain/orders/allocate-order-commitments.js
+- apps/harvester/src/domain/orders/create-pending-canonical-order.js
+- apps/harvester/src/domain/orders/order-registry.js
+- apps/harvester/src/domain/orders/validate-cancellation-eligibility.js
+- apps/harvester/src/domain/orders/validate-order-against-trading-rules.js
+- apps/harvester/src/domain/portfolio/portfolio.js
+- apps/harvester/src/domain/portfolio/position-accounting.js
+- apps/harvester/src/domain/portfolio/position.js
+- apps/harvester/src/domain/strategies/aggressive-strategy.js
+- apps/harvester/src/domain/strategies/conservative/helpers.js
+- apps/harvester/src/domain/strategies/conservative/initial-buy-price.js
+- apps/harvester/src/domain/strategies/conservative/recovery-completion.js
+- apps/harvester/src/domain/strategies/conservative/recovery-fill-accounting.js
+- apps/harvester/src/domain/strategies/conservative/recovery-ledger.js
+- apps/harvester/src/domain/strategies/conservative/recovery-sell-plan.js
+- apps/harvester/src/domain/strategies/conservative/sell-fee-rate.js
+- apps/harvester/src/domain/strategies/conservative/strategy-policy.js
+- apps/harvester/src/domain/strategies/conservative/strategy.js
+- apps/harvester/src/domain/strategies/conservative/trailing-buy-repricing.js
+- apps/harvester/src/index.js
+- apps/harvester/src/infrastructure/brokers/binance-broker-adapter.js
+- apps/harvester/src/infrastructure/brokers/binance-market-metadata.js
+- apps/harvester/src/infrastructure/config/load-app-config.js
+- apps/harvester/src/infrastructure/durable-facts/create-file-durable-facts-store.js
+- apps/harvester/src/infrastructure/durable-facts/durable-facts-canonical.js
+- apps/harvester/src/infrastructure/durable-facts/project-harvester-durable-facts.js
+- apps/harvester/src/infrastructure/journal/prepare-optional-journal.js
+- apps/harvester/src/infrastructure/journal/project-harvester-journal-recovery.js
+- apps/harvester/src/infrastructure/journal/read-harvester-journal-history.js
+- apps/harvester/src/infrastructure/journal/summarize-harvester-journal-history.js
+- apps/harvester/src/infrastructure/logging/configure-harvester-logging.js
+- apps/harvester/src/infrastructure/logging/create-harvester-log-session-paths.js
+- apps/harvester/src/infrastructure/logging/create-log-command-interface.js
+- apps/harvester/src/infrastructure/process-lock/acquire-harvester-process-lock.js
+- apps/harvester/src/infrastructure/process-lock/acquire-harvester-process-locks.js
+- apps/harvester/src/infrastructure/process/create-harvester-process-identity.js
+- apps/harvester/src/infrastructure/telegram/format-telegram-operator-response.js
+- apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js
+- apps/harvester/src/use-cases/audit-recovered-account-state.js
+- apps/harvester/src/use-cases/audit-recovered-trade-history.js
+- apps/harvester/src/use-cases/collect-owned-order-snapshots.js
+- apps/harvester/src/use-cases/confirm-market-history-coverage.js
+- apps/harvester/src/use-cases/conservative-trading-engine.js
+- apps/harvester/src/use-cases/create-account-integrity-safety-halt.js
+- apps/harvester/src/use-cases/create-candle-history-service.js
+- apps/harvester/src/use-cases/create-portfolio-workflow.js
+- apps/harvester/src/use-cases/evaluate-read-only-conservative-strategy.js
+- apps/harvester/src/use-cases/execute-strategy-decision.js
+- apps/harvester/src/use-cases/fetch-account-trade-history.js
+- apps/harvester/src/use-cases/initialize-durable-facts-ledger-cli.js
+- apps/harvester/src/use-cases/initialize-durable-facts-ledger.js
+- apps/harvester/src/use-cases/operator-control/errors/operator-query-error.js
+- apps/harvester/src/use-cases/operator-control/pause-market.js
+- apps/harvester/src/use-cases/operator-control/read-operator-state.js
+- apps/harvester/src/use-cases/operator-control/read-operator-trading-state.js
+- apps/harvester/src/use-cases/operator-control/resume-market.js
+- apps/harvester/src/use-cases/order-event-workflow.js
+- apps/harvester/src/use-cases/place-order.js
+- apps/harvester/src/use-cases/process-market-price.js
+- apps/harvester/src/use-cases/read-market-history-coverage.js
+- apps/harvester/src/use-cases/reconcile-harvester-durable-facts-candidate.js
+- apps/harvester/src/use-cases/reconcile-recovered-market-state.js
+- apps/harvester/src/use-cases/reconcile-terminal-order-fills.js
+- apps/harvester/src/use-cases/record-account-reconciliation-facts.js
+- apps/harvester/src/use-cases/record-configuration-baseline.js
+- apps/harvester/src/use-cases/record-execution-fill.js
+- apps/harvester/src/use-cases/record-market-history-coverage.js
+- apps/harvester/src/use-cases/record-order-cancellation-intent.js
+- apps/harvester/src/use-cases/record-order-cancellation-outcome.js
+- apps/harvester/src/use-cases/record-order-submission-intent.js
+- apps/harvester/src/use-cases/record-order-submission-outcome.js
+- apps/harvester/src/use-cases/record-process-started.js
+- apps/harvester/src/use-cases/record-process-stopped.js
+- apps/harvester/src/use-cases/record-recovery-cycle-completed.js
+- apps/harvester/src/use-cases/record-recovery-cycle-not-completed.js
+- apps/harvester/src/use-cases/record-safety-control-facts.js
+- apps/harvester/src/use-cases/recovery-failure.js
+- apps/harvester/src/use-cases/restore-harvester-durable-facts-state.js
+- apps/harvester/src/use-cases/restore-harvester-journal-state.js
+- apps/harvester/src/use-cases/update-order-registry.js
+- apps/harvester/src/use-cases/update-portfolio.js
+- apps/harvester/src/use-cases/update-trading-accounting.js
+- apps/harvester/src/use-cases/volatility-protection-workflow.js
+
+### Operator and maintenance scripts (31 files)
+
+- apps/harvester/scripts/account-snapshot-journal-utils.js
+- apps/harvester/scripts/audit-testnet-account.js
+- apps/harvester/scripts/binance-testnet-api.js
+- apps/harvester/scripts/calibrate-volatility-thresholds.js
+- apps/harvester/scripts/cancel-testnet-open-orders-workflow.js
+- apps/harvester/scripts/cancel-testnet-open-orders.js
+- apps/harvester/scripts/config-symbol.js
+- apps/harvester/scripts/config-symbol/binance-client.js
+- apps/harvester/scripts/config-symbol/config-source.js
+- apps/harvester/scripts/config-symbol/configuration.js
+- apps/harvester/scripts/config-symbol/write-config.js
+- apps/harvester/scripts/forward-child-output.js
+- apps/harvester/scripts/initialize-durable-facts-ledger.js
+- apps/harvester/scripts/initialize-durable-facts.js
+- apps/harvester/scripts/list-testnet-balances.js
+- apps/harvester/scripts/list-testnet-open-orders.js
+- apps/harvester/scripts/list-testnet-order-history.js
+- apps/harvester/scripts/list-testnet-trades.js
+- apps/harvester/scripts/reconcile-journal-account-balances.js
+- apps/harvester/scripts/recovery-market-context.js
+- apps/harvester/scripts/recovery-market-evidence.js
+- apps/harvester/scripts/recovery-market.js
+- apps/harvester/scripts/run-dev-with-log.js
+- apps/harvester/scripts/run-targeted-tests.js
+- apps/harvester/scripts/sell-testnet-zro.js
+- apps/harvester/scripts/testnet-balance-utils.js
+- apps/harvester/scripts/testnet-menu-utils.js
+- apps/harvester/scripts/testnet-menu.js
+- apps/harvester/scripts/testnet-order-history-utils.js
+- apps/harvester/scripts/testnet-sell-utils.js
+- apps/harvester/scripts/testnet-trade-history-utils.js
+
+### Runtime configuration (4 files)
+
+- apps/harvester/config/index.js
+- apps/harvester/config/notifications-tg-profiles.js
+- apps/harvester/config/operator-control.js
+- apps/harvester/config/strategies/cg-coin-grabber.js
+
