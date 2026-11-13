@@ -1,3 +1,4 @@
+import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
 import { toResult } from "@coinzilla/utils"
 
 /**
@@ -33,9 +34,10 @@ export async function recordMarketHistoryCoverage({
     if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
     }
-    if (!Number.isSafeInteger(coveredFromTime) || coveredFromTime < 0 ||
-        !Number.isSafeInteger(verifiedAt) || verifiedAt < coveredFromTime) {
-      throw new TypeError("Market-history coverage timestamps must be non-negative safe integers with verifiedAt >= coveredFromTime")
+    if (!isCanonicalNonNegativeSafeInteger(coveredFromTime) ||
+        !isCanonicalNonNegativeSafeInteger(verifiedAt) ||
+        verifiedAt < coveredFromTime) {
+      throw new TypeError("Market-history coverage timestamps must be non-negative safe integers other than negative zero with verifiedAt >= coveredFromTime")
     }
     if (typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
       throw new TypeError("Market-history coverage evidenceDigest must be a SHA-256 digest")
