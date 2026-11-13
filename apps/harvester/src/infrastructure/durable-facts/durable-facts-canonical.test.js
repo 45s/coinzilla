@@ -129,3 +129,37 @@ test("requires canonical bounded non-empty strings", () => {
     "Values exceeding the caller's explicit bound must be rejected.",
   )
 })
+
+test("rejects negative zero and oversized values at every canonical JSON depth", () => {
+  assert.throws(
+    () => canonicalizeDurableFactValue({ nested: [{ amount: -0 }] }),
+    /negative zero/i,
+    "Negative zero must be rejected recursively before serialization can erase its sign.",
+  )
+  assert.throws(
+    () => canonicalizeDurableFactValue({ nested: { value: "x".repeat(8193) } }),
+    RangeError,
+    "The maximum string length must apply recursively.",
+  )
+  assert.throws(
+    () => canonicalizeDurableFactValue({ nested: new Array(1025).fill(0) }),
+    RangeError,
+    "The maximum array length must apply recursively.",
+  )
+  assert.throws(
+    () => canonicalizeDurableFactValue(Object.fromEntries(
+      Array.from({ length: 129 }, (_, index) => ["key" + index, index]),
+    )),
+    RangeError,
+    "The maximum object-key count must be enforced.",
+  )
+  let deeplyNested = null
+  for (let depth = 0; depth < 13; depth += 1) {
+    deeplyNested = { value: deeplyNested }
+  }
+  assert.throws(
+    () => canonicalizeDurableFactValue(deeplyNested),
+    RangeError,
+    "The maximum nesting depth must be enforced.",
+  )
+})
