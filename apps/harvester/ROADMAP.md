@@ -37,6 +37,8 @@
 - **Lint inventory:** the initial Harvester-wide ESLint run found 359 findings across 73 files: 295 `curly`, 38 `no-nested-ternary`, 7 `no-unused-vars`, 5 `prefer-const`, 4 `no-useless-escape`, 7 `no-control-regex`, 2 `no-empty-pattern`, and 1 `preserve-caught-error`. The 295 brace findings were identified as safe autofix candidates; the other 64 require deliberate review. They are intentionally not bulk-rewritten as part of this correctness audit. Track that separate, behavior-preserving cleanup in [issue #1092](https://github.com/45s/coinzilla/issues/1092). The temporary diagnostic probe was removed after collecting the inventory; it is not a permanent lint gate.
 - **Scope and safety:** the Conservative Domain Specification remains authoritative. No strategy economics, exchange configuration, shared packages or other applications changed. Tests remain offline and credential-free; no TESTNET/LIVE connection, order placement, cancellation or account mutation was performed.
 
+- **Current file-level follow-up — 2026-11-13:** [Harvester source-file audit](./docs/audits/reports/2026-11-13_source-file-audit.md) records the 380-file inventory at develop `9989fea9`, verifies the current source/test map, and documents the conditional ADR-0001 restart fence plus stale enabled-market summaries. It is a dated audit snapshot; the PR makes documentation corrections only. The separate ESLint cleanup remains open in [#1092](https://github.com/45s/coinzilla/issues/1092).
+
 ---
 
 ## Startup reliability — account PREFLIGHT Journal barrier

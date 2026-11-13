@@ -16,6 +16,7 @@ This index is for Harvester-specific historical evidence. The [Harvester documen
 
 ## Main audit records
 
+- [Current source-file audit — 2026-11-13](reports/2026-11-13_source-file-audit.md) — source inventory and current findings on develop baseline 9989fea9.
 - [Audit reports index](reports/README.md) — primary audit narrative, findings register and execution chronology.
 - [DDD and Clean Architecture audit](../DDD_CLEAN_ARCHITECTURE_AUDIT.md) — historical architecture assessment, not current architecture authority.
 

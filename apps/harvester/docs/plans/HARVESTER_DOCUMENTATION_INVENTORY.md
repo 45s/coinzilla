@@ -129,3 +129,20 @@ PR #1021 updates existing Harvester README, roadmap, Volatility Protection, arch
 ## Source-verified documentation updates — PR #1041
 
 Merged PR #1041 implements and wires the per-market protection state machine, central order-submission gate, explicit recovery-SELL purpose, owned-BUY cancellation/reconciliation and freshness monitoring. The regression matrix and all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`. The initial warning/protection/recovery thresholds remain provisional pending representative offline historical market-data validation. No TESTNET/LIVE exchange operation was performed or authorized.
+
+
+## Current source-verified checkpoint — 2026-11-13
+
+The earlier 61-file checkpoint above is historical. A fresh recursive tree review of develop at `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` found 68 tracked Harvester Markdown files before the current source-file audit was added. This PR adds one report, bringing the current tracked Markdown count to **69**. The following seven living documents were already present in the tree but were not recorded in the prior 61-file checkpoint:
+
+| Document | Purpose |
+| --- | --- |
+| `docs/architecture/OPERATOR_CONTROL_DESIGN.md` | Operator-control design details |
+| `docs/architecture/decisions/0002-transport-independent-operator-control.md` | Accepted operator-control boundary |
+| `docs/architecture/decisions/0003-process-lifetime-operator-pause.md` | Process-lifetime pause contract |
+| `docs/operations/submission-deferrals.md` | Submission deferral diagnostics |
+| `docs/operations/telegram-command-center.md` | Telegram operator runbook |
+| `docs/operator-control/README.md` | Operator-control documentation entry point |
+| `docs/recovery/README.md` | ADR-0001 Step 7 recovery operator guide |
+
+The new `docs/audits/reports/2026-11-13_source-file-audit.md` is the eighth addition to the previous checkpoint. It is linked from the Harvester documentation and audit indexes. Keep the 61-file table as a dated historical checkpoint; use the current Git tree and this section for the latest count.

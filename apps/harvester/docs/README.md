@@ -33,7 +33,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 - [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
 
-- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD and ZROFDUSD default config. Reconcile scope before any future session.
+- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD, ZROFDUSD and WLDFDUSD default config. Reconcile scope before any future session.
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Error vocabulary](error-vocabulary.md) — stable operator-facing diagnostic identifiers and recovery procedures.
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)
@@ -46,6 +46,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Audit process
 
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
+- [Current source-file audit — 2026-11-13](audits/reports/2026-11-13_source-file-audit.md) — current file inventory, source review, findings and evidence boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.
 
 ## Historical records and evidence
