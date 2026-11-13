@@ -97,6 +97,8 @@ test("rejects malformed coverage evidence before calling the durable append port
   const invalidCases = [
     [{ symbol: "btcusdt" }, /canonical uppercase/],
     [{ coveredFromTime: -1 }, /non-negative safe integers/],
+    [{ coveredFromTime: -0 }, /non-negative safe integers/],
+    [{ verifiedAt: -0 }, /non-negative safe integers/],
     [{ verifiedAt: evidence().coveredFromTime - 1 }, /verifiedAt >= coveredFromTime/],
     [{ evidenceDigest: "not-a-digest" }, /SHA-256 digest/],
     [{ verifiedBy: " operator" }, /canonical non-empty string/],
