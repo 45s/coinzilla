@@ -201,3 +201,95 @@ test("does not report success when the durable append fails", async () => {
   assert.equal(result.ok, false, "A failed durable append must fail the confirmation workflow.")
   assert.equal(store.records.length, 0, "A failed append must not create an in-memory confirmation record.")
 })
+
+
+test("rejects malformed confirmation evidence before reading the durable ledger", async () => {
+  const invalidCases = [
+    [{ durableFactsStore: {} }, /read\/append port/],
+    [{ symbol: "linkusdt" }, /canonical uppercase/],
+    [{ coveredFromTime: -1 }, /non-negative safe integers/],
+    [{ verifiedAt: 99 }, /verifiedAt >= coveredFromTime/],
+    [{ evidenceDigest: "not-a-digest" }, /SHA-256 digest/],
+    [{ verifiedBy: " operator" }, /canonical non-empty string/],
+    [{ reconcileMarketState: undefined }, /one-market reconciliation callback/],
+  ]
+
+  for (const [overrides, message] of invalidCases) {
+    const { store, options } = createOptions()
+    const result = await confirmMarketHistoryCoverage({ ...options, ...overrides })
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, message)
+    assert.equal(store.calls.length, 0, "Invalid confirmation evidence must fail before durable reads or writes.")
+  }
+})
+
+test("does not append when reconciliation fails or identifies another market", async () => {
+  const failedReconciliation = createOptions({
+    reconcileMarketState: async () => ({ ok: false, errors: [new Error("reconciliation failed")] }),
+  })
+  const failed = await confirmMarketHistoryCoverage(failedReconciliation.options)
+  assert.equal(failed.ok, false)
+  assert.equal(failedReconciliation.store.records.length, 0)
+
+  const mismatchedMarket = createOptions({
+    reconcileMarketState: async () => ({
+      ok: true,
+      data: { symbol: "ETHUSDT", ready: true, audit: {} },
+    }),
+  })
+  const mismatched = await confirmMarketHistoryCoverage(mismatchedMarket.options)
+  assert.equal(mismatched.ok, false)
+  assert.match(mismatched.errors[0].message, /different market/)
+  assert.equal(mismatchedMarket.store.records.length, 0)
+})
+
+test("does not append when the history audit is incomplete or references different coverage", async () => {
+  for (const audit of [
+    { targetMarketBlocked: false, tradeHistory: { complete: false, historyRetentionBaselineFactId: evidence.factId } },
+    { targetMarketBlocked: false, tradeHistory: { complete: true, historyRetentionBaselineFactId: "other-baseline" } },
+  ]) {
+    const { store, options } = createOptions({
+      reconcileMarketState: async () => ({
+        ok: true,
+        data: { symbol: evidence.symbol, ready: true, status: "READY", audit },
+      }),
+    })
+    const result = await confirmMarketHistoryCoverage(options)
+    assert.equal(result.ok, true)
+    assert.equal(result.data.confirmed, false)
+    assert.equal(store.records.length, 0)
+  }
+})
+
+test("fails closed when the committed coverage readback is unavailable or mismatched", async () => {
+  const unavailable = createOptions()
+  let unavailableReads = 0
+  unavailable.store.readAll = async () => {
+    unavailableReads += 1
+    if (unavailableReads === 1) return { ok: true, data: { records: [] } }
+    return { ok: false, errors: [new Error("readback unavailable")] }
+  }
+  const unavailableResult = await confirmMarketHistoryCoverage(unavailable.options)
+  assert.equal(unavailableResult.ok, false)
+  assert.match(unavailableResult.errors[0].message, /readback unavailable/)
+
+  const mismatched = createOptions()
+  let mismatchedReads = 0
+  mismatched.store.readAll = async () => {
+    mismatchedReads += 1
+    if (mismatchedReads === 1) return { ok: true, data: { records: [] } }
+    return {
+      ok: true,
+      data: {
+        records: [{
+          factId: evidence.factId,
+          factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+          data: { ...evidence, evidenceDigest: "b".repeat(64) },
+        }],
+      },
+    }
+  }
+  const mismatchedResult = await confirmMarketHistoryCoverage(mismatched.options)
+  assert.equal(mismatchedResult.ok, false)
+  assert.match(mismatchedResult.errors[0].message, /does not match the reviewed evidence/)
+})
