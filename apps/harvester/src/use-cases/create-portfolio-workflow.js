@@ -135,21 +135,6 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedger: currentLedger,
         fill,
       })
-      if (result.ok && result.data.applied === true && onDurableExecutionFill) {
-        let durableResult
-        try {
-          durableResult = await onDurableExecutionFill({ fill })
-        } catch (error) {
-          return toResult({ error })
-        }
-        if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
-          return toResult({
-            errors: durableResult?.errors?.length
-              ? durableResult.errors
-              : [new Error("Execution-fill fact append did not confirm durable commitment")],
-          })
-        }
-      }
       // Journal is optional: a failed baseline write must not block a validated fill.
       // The later account audit detects the missing baseline and fails closed.
       if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
@@ -170,6 +155,21 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             tradeId: fill.tradeId,
             symbol: fill.market.symbol,
             errors: [{ name: error?.name, message: error?.message ?? String(error) }],
+          })
+        }
+      }
+      if (result.ok && result.data.applied === true && onDurableExecutionFill) {
+        let durableResult
+        try {
+          durableResult = await onDurableExecutionFill({ fill })
+        } catch (error) {
+          return toResult({ error })
+        }
+        if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+          return toResult({
+            errors: durableResult?.errors?.length
+              ? durableResult.errors
+              : [new Error("Execution-fill fact append did not confirm durable commitment")],
           })
         }
       }
