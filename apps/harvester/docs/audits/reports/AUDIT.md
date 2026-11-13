@@ -1009,7 +1009,6 @@ This is a session-behaviour audit, not a source-file inventory and not a replace
 
 The session also shows ADAFDUSD enabled at runtime even though it was disabled in the tracked configuration at the reported commit; the runtime working tree was dirty. Four unowned WLDFDUSD BUY orders were present at PREFLIGHT while the strategy traded that same symbol under IGNORE policy. These findings are recorded as F-046 and F-047 in the findings register. No exchange query or order operation was performed during the audit.
 
-
 ## 2026-11-13 — separate LIVE session audit
 
 A separate 2026-11-13 Binance production LIVE session is documented in [the session audit](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md) and [order/fill ledger](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md). Its 60 applied fills, 21 recovery cycles, 0.30015 FDUSD net profit and per-cycle retained inventory reconcile exactly to the supplied PREFLIGHT/CLOSING balances. It did not reproduce the shutdown race in F-045/#1097. New evidence gaps and follow-ups are registered as F-048–F-053 and tracked in #1101–#1105. This separate session must not be merged with the earlier shutdown/configuration/external-order incident evidence.
