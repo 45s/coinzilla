@@ -1267,9 +1267,13 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING" })
           return toResult({ error: new Error("Completed recovery SELL identity is unavailable for dust completion") })
         }
-        const completion = await completeRecoveryCycle({ marketId: metadata.market.id,
-          keepQuantity: String(pairs[symbol].keepQuantity), minProfit: String(pairs[symbol].minProfit),
-          inventoryDisposition: decision.inventoryDisposition })
+        const completion = await completeRecoveryCycle({
+          marketId: metadata.market.id,
+          keepQuantity: String(pairs[symbol].keepQuantity),
+          minProfit: String(pairs[symbol].minProfit),
+          inventoryDisposition: decision.inventoryDisposition,
+          sellOrder: completedSellOrder,
+        })
         if (!completion?.ok) {
           await pause({ symbol, reason: "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Dust recovery completion failed")] })
