@@ -72,19 +72,25 @@ function legacyFilledOrderIcon(value) {
 
 function fillIcon(value) {
   const normalized = text(value, "", 24).toUpperCase()
-  return NOTIFICATION_ICONS.fillReceived[normalized] ?? "💰"
+  return Object.hasOwn(NOTIFICATION_ICONS.fillReceived, normalized)
+    ? NOTIFICATION_ICONS.fillReceived[normalized]
+    : "💰"
 }
 
 function orderFailureIcon(data) {
   if (data.operation === "cancellation") {
     const normalizedSide = side(data.side).label
-    return NOTIFICATION_ICONS.orderCancellationFailed[normalizedSide] ?? NOTIFICATION_ICONS.orderSubmissionFailed
+    return Object.hasOwn(NOTIFICATION_ICONS.orderCancellationFailed, normalizedSide)
+      ? NOTIFICATION_ICONS.orderCancellationFailed[normalizedSide]
+      : NOTIFICATION_ICONS.orderSubmissionFailed
   }
   return NOTIFICATION_ICONS.orderSubmissionFailed
 }
 
 function accountSafetyIcon(category) {
-  return NOTIFICATION_ICONS.accountSafety[category] ?? "⚠️"
+  return Object.hasOwn(NOTIFICATION_ICONS.accountSafety, category)
+    ? NOTIFICATION_ICONS.accountSafety[category]
+    : "⚠️"
 }
 
 function orderId(data) {
