@@ -208,6 +208,8 @@ test("rejects malformed confirmation evidence before reading the durable ledger"
     [{ durableFactsStore: {} }, /read\/append port/],
     [{ symbol: "linkusdt" }, /canonical uppercase/],
     [{ coveredFromTime: -1 }, /non-negative safe integers/],
+    [{ coveredFromTime: -0 }, /non-negative safe integers/],
+    [{ verifiedAt: -0 }, /non-negative safe integers/],
     [{ verifiedAt: 99 }, /verifiedAt >= coveredFromTime/],
     [{ evidenceDigest: "not-a-digest" }, /SHA-256 digest/],
     [{ verifiedBy: " operator" }, /canonical non-empty string/],
