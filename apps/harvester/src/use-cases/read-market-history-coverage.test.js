@@ -114,3 +114,62 @@ test("rejects a durable history-coverage sequence that narrows prior verified co
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /narrows the verified history window/)
 })
+
+
+test("rejects invalid read ports, symbols, and malformed record collections", async () => {
+  const missingPort = await readMarketHistoryCoverage({ durableFactsStore: {}, symbol: "BTCUSDT" })
+  assert.equal(missingPort.ok, false)
+  assert.match(missingPort.errors[0].message, /durable-fact read port/)
+
+  const invalidSymbol = await readMarketHistoryCoverage({
+    durableFactsStore: { readAll: async () => ({ ok: true, data: { records: [] } }) },
+    symbol: "btcusdt",
+  })
+  assert.equal(invalidSymbol.ok, false)
+  assert.match(invalidSymbol.errors[0].message, /canonical uppercase/)
+
+  const malformedRecords = await readMarketHistoryCoverage({
+    durableFactsStore: { readAll: async () => ({ ok: true, data: { records: null } }) },
+    symbol: "BTCUSDT",
+  })
+  assert.equal(malformedRecords.ok, false)
+  assert.match(malformedRecords.errors[0].message, /records array/)
+})
+
+test("rejects a durable history-coverage sequence with a regressing verification timestamp", async () => {
+  const durableFactsStore = {
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [
+          {
+            factId: "coverage:btc:1",
+            factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+            data: {
+              symbol: "BTCUSDT",
+              coveredFromTime: 100,
+              verifiedAt: 200,
+              evidenceDigest: "a".repeat(64),
+              verifiedBy: "operator:trader",
+            },
+          },
+          {
+            factId: "coverage:btc:2",
+            factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+            data: {
+              symbol: "BTCUSDT",
+              coveredFromTime: 100,
+              verifiedAt: 150,
+              evidenceDigest: "b".repeat(64),
+              verifiedBy: "operator:trader",
+            },
+          },
+        ],
+      },
+    }),
+  }
+  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /verification timestamp regresses/)
+})
