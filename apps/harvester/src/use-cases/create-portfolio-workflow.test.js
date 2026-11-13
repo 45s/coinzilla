@@ -620,3 +620,83 @@ test("does not complete or reset a recovery cycle without a canonical fully fill
   assert.equal(workflow.getPortfolio(), initialPortfolio, "Missing terminal SELL evidence must not reset Portfolio.")
   assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "Missing terminal SELL evidence must not reset RecoveryLedger.")
 })
+
+
+test("serializes recovery completion behind an in-flight durable fill", async () => {
+  const buyFill = createFill({
+    tradeId: "serialized-cycle-buy",
+    quantity: "2",
+    quoteQuantity: "130000",
+  })
+  const sellFill = createFill({
+    tradeId: "serialized-cycle-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const additionalBuyFill = createFill({
+    tradeId: "serialized-cycle-additional-buy",
+    quantity: "0.5",
+    quoteQuantity: "65000",
+    price: "130000",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill }).portfolio
+    .applyFill({ fill: sellFill }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill }).ledger
+    .applyFill({ fill: sellFill }).ledger
+  let releaseDurableFill
+  let markDurableFillStarted
+  const durableFillStarted = new Promise((resolve) => { markDurableFillStarted = resolve })
+  const durableFillGate = new Promise((resolve) => { releaseDurableFill = resolve })
+  const completionCalls = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+    onDurableExecutionFill: async ({ fill: received }) => {
+      assert.equal(received, additionalBuyFill)
+      markDurableFillStarted()
+      await durableFillGate
+      return { ok: true, data: { durable: true } }
+    },
+    onDurableRecoveryCycleCompleted: async (input) => {
+      completionCalls.push(input)
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  const fillPromise = workflow.updateTradingAccounting({ fill: additionalBuyFill })
+  await durableFillStarted
+  const completionPromise = workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "1",
+    minProfit: "5",
+    sellOrder: createFilledSellOrder({ clientOrderId: "serialized-cycle-terminal-sell" }),
+  })
+
+  releaseDurableFill()
+  const [fillResult, completionResult] = await Promise.all([fillPromise, completionPromise])
+
+  assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
+  assert.equal(completionResult.ok, true, completionResult.errors?.[0]?.message)
+  assert.equal(
+    completionResult.data.eligible,
+    false,
+    "Completion must evaluate the state after the in-flight BUY fill has committed.",
+  )
+  assert.equal(
+    completionResult.data.reason,
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "The newly committed active inventory must keep the recovery cycle open.",
+  )
+  assert.equal(completionCalls.length, 0, "A concurrent fill must prevent an outdated completed-cycle fact from being persisted.")
+  const finalPosition = workflow.getPortfolio().getPosition({ marketId: market.id })
+  assert.equal(finalPosition.baseQuantity.amount, "1.5")
+  assert.equal(finalPosition.spent.amount, "195000")
+  assert.equal(finalPosition.freeBaseQuantity.amount, "0")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "195000")
+})
