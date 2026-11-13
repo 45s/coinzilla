@@ -4154,10 +4154,16 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   const dustCompletionInput = completionInputs.find(({ inventoryDisposition }) => inventoryDisposition !== undefined)
   assert.ok(dustCompletionInput, "The exchange-constrained residual must reach the recovery completion workflow.")
   assert.equal(
-    dustCompletionInput.sellOrder,
-    recoverySell,
-    "Dust completion must retain the exact reconciled terminal SELL identity for its durable completion fact.",
+    dustCompletionInput.sellOrder.clientOrderId,
+    recoverySell.clientOrderId,
+    "Dust completion must retain the reconciled terminal SELL client identity.",
   )
+  assert.equal(
+    dustCompletionInput.sellOrder.brokerOrderId,
+    recoverySell.brokerOrderId,
+    "Dust completion must retain the reconciled terminal SELL broker identity.",
+  )
+  assert.equal(dustCompletionInput.sellOrder.status, "FILLED")
   assert.deepEqual(harness.pauses, [])
 })
 
