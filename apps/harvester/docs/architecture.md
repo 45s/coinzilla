@@ -322,6 +322,17 @@ The Binance adapter owns the translation from the shared order request to exchan
 
 `src/bootstrap/start-harvester.js` composes the application runtime: it resolves enabled markets and exchange settings, prepares optional Telegram operator control, verifies/projects existing durable facts (and refuses a second process session while restart restoration is disabled), records the configuration/process-start facts, connects the Binance adapter, and creates the Portfolio workflow, account-snapshot manager, Conservative engine, user-data event/status/recovery handlers, market-data subscriptions, candle-history service, and shutdown handler. The sequence is source-defined: load exchange market metadata; activate the engine; start the optional operator adapter; establish user-data subscription and pass the durable PREFLIGHT account/open-order audit; then subscribe to market data and start candle history. Same-process transport recovery repeats the RECOVERY account/open-order audits before broker recovery acknowledgement. Shutdown stops operator polling, delegates order/user-data cleanup to the shutdown handler, writes the trading-enabled CLOSING account audit, disconnects, and only then records the durable process-stop fact.
 
+### Durable-facts canonicalization and storage
+
+The ADR-0001 durable-facts boundary is split between deterministic serialization and the filesystem adapter:
+
+- `src/infrastructure/durable-facts/durable-facts-canonical.js` contains pure helpers for bounded canonical JSON cloning/serialization, SHA-256 record digests, canonical timestamp normalization, and canonical non-empty-string validation. Object keys are recursively sorted, array order is retained, economic decimals remain strings, and every numeric value must be a safe integer other than negative zero. Negative zero is rejected before JSON serialization can silently turn it into ordinary zero.
+- `src/infrastructure/durable-facts/create-file-durable-facts-store.js` owns the filesystem protocol and the versioned fact-type schema. It creates genesis only through explicit initialization, requires private directory/file permissions, serializes operations per resolved directory, appends and syncs the fact record before its matching committed-head checkpoint, verifies both streams before acknowledging durability, and poisons the current store instance after an uncertain write.
+- Genesis initialization and each new fact append capture the injected clock once. The store accepts either a `Date` or an already-canonical UTC ISO-8601 string, and an append uses that same captured timestamp for market-history future-time validation and the record envelope. The durable-facts projector validates operator pause facts as session-bound audit records but excludes them from the restart candidate; only durable strategy pauses and sticky safety blockers are projected. An idempotent duplicate returns the existing record without consuming a new clock value.
+- `src/infrastructure/durable-facts/project-harvester-durable-facts.js` validates the verified stream and projects facts into candidate recovery events; it does not make the Journal authoritative or enable runtime restart restoration.
+
+These boundaries are covered by the durable-facts store regression suite and the independent pure-helper tests in `durable-facts-canonical.test.js`. The canonical JSON helper is application/domain-specific: do not move it to `@coinzilla/utils` because its bounds and secret-key rejection are part of the ADR-0001 durable evidence contract.
+
 Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`. Account balance/open-order capture and mandatory durable-fact plus Journal audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; it owns broker reads and lifecycle barriers, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its WebSocket API/stream sequence plus durable RECOVERY audit barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial Binance WebSocket API `ticker.price` request/response seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket Streams-before-WebSocket API request/response ordering.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
@@ -430,14 +441,14 @@ P3 has introduced four cohesive use-case boundaries on the current branch:
   workflow's existing accounting transition. It owns no Portfolio/RecoveryLedger
   state and does not bypass the engine's durable fill barriers.
 
-The engine has reduced from 3,335 lines at the verified `develop` baseline to
-2,266 lines on this branch. The extraction is incremental, not a completed
+The engine was reduced from 3,335 lines at the verified pre-P3 `develop`
+baseline to 2,266 lines by the incremental extraction merged in [PR #1075](https://github.com/45s/coinzilla/pull/1075). This is not a completed
 lifecycle redesign. Strategy evaluation/commitment allocation, execution
 totals and recovery markers, owned-order cancellation/replacement, and the
 central submission gate remain coordinated by the engine. The engine still
 owns the serialized state transition queue; the extracted workflows do not
 create a second concurrency boundary. See the [Harvester roadmap](../ROADMAP.md)
-and [P3 issue #1073](https://github.com/45s/coinzilla/issues/1073).
+and the merged [P3 implementation PR #1075](https://github.com/45s/coinzilla/pull/1075).
 
 Only order updates matched to a registered Harvester client order ID may
 mutate the order registry or accounting. TRADE events must contain a canonical

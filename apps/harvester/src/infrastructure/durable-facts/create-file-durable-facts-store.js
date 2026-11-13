@@ -1,6 +1,13 @@
-import { createHash } from "node:crypto"
 import * as nodeFileSystem from "node:fs/promises"
 import path from "node:path"
+import {
+  canonicalizeDurableFactValue,
+  canonicalStringifyDurableFactValue,
+  digestDurableFactRecord,
+  normalizeDurableFactRecordedAt,
+  requireNonEmptyString,
+  sha256DurableFactValue,
+} from "./durable-facts-canonical.js"
 import { addDecimal, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 
 const FORMAT_VERSION = 1
@@ -9,13 +16,8 @@ const MAX_FACT_ID_LENGTH = 256
 const MAX_RUNTIME_SESSION_ID_LENGTH = 256
 const MAX_FACT_DATA_BYTES = 64 * 1024
 const MAX_RECORD_BYTES = 128 * 1024
-const MAX_JSON_DEPTH = 12
-const MAX_ARRAY_LENGTH = 1024
-const MAX_OBJECT_KEYS = 128
-const MAX_STRING_LENGTH = 8192
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const SEQUENCE_PATTERN = /^(0|[1-9][0-9]*)$/
-const SECRET_KEY_PATTERN = /(?:api.?key|secret|password|token|authorization|credential)/i
 
 const FACT_TYPES = new Set([
   "LEDGER_INITIALIZED",
@@ -51,90 +53,6 @@ function createError(message, code) {
   return error
 }
 
-function requireNonEmptyString({ value, field, maxLength = MAX_STRING_LENGTH }) {
-  if (typeof value !== "string" || value.trim() === "" || value !== value.trim() || value.length > maxLength) {
-    throw new TypeError(field + " must be a canonical non-empty string of at most " + maxLength + " characters")
-  }
-  return value
-}
-
-function canonicalize(value, depth = 0) {
-  if (depth > MAX_JSON_DEPTH) {throw new RangeError("Durable fact JSON exceeds the maximum nesting depth")}
-  if (value === null || typeof value === "boolean") {return value}
-  if (typeof value === "string") {
-    if (value.length > MAX_STRING_LENGTH) {throw new RangeError("Durable fact string exceeds the maximum length")}
-    return value
-  }
-  if (typeof value === "number") {
-    if (!Number.isSafeInteger(value)) {
-      throw new TypeError("Durable fact numbers must be safe integers; economic decimals must remain strings")
-    }
-    return value
-  }
-  if (Array.isArray(value)) {
-    if (value.length > MAX_ARRAY_LENGTH) {throw new RangeError("Durable fact array exceeds the maximum length")}
-    const arrayKeys = Reflect.ownKeys(value)
-    if (Object.keys(value).length !== value.length || arrayKeys.length !== value.length + 1 ||
-        arrayKeys.some((key) => typeof key !== "string")) {
-      throw new TypeError("Durable fact arrays must not contain holes, symbols or custom properties")
-    }
-    for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) {throw new TypeError("Durable fact arrays must not contain sparse entries")}
-    }
-    return value.map((item) => canonicalize(item, depth + 1))
-  }
-  if (typeof value === "object") {
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError("Durable fact payloads must contain only plain JSON objects")
-    }
-    const ownKeys = Reflect.ownKeys(value)
-    const keys = Object.keys(value).sort()
-    if (ownKeys.length !== keys.length) {throw new TypeError("Durable fact objects must not contain symbols or non-enumerable properties")}
-    if (keys.length > MAX_OBJECT_KEYS) {throw new RangeError("Durable fact object exceeds the maximum key count")}
-    const result = {}
-    for (const key of keys) {
-      if (key === "__proto__" || key === "prototype" || key === "constructor") {
-        throw new TypeError("Durable fact payload contains a forbidden object key")
-      }
-      if (SECRET_KEY_PATTERN.test(key)) {
-        throw new TypeError("Durable fact payload must not contain credentials or secrets")
-      }
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)
-      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
-        throw new TypeError("Durable fact payload must not contain accessor properties")
-      }
-      if (descriptor.value === undefined) {throw new TypeError("Durable fact payload must not contain undefined values")}
-      result[key] = canonicalize(descriptor.value, depth + 1)
-    }
-    return result
-  }
-  throw new TypeError("Durable fact payload contains a non-JSON value")
-}
-
-function canonicalStringify(value) {
-  return JSON.stringify(canonicalize(value))
-}
-
-function sha256(value) {
-  return createHash("sha256").update(value, "utf8").digest("hex")
-}
-
-function digestRecord(record) {
-  const body = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "digest"))
-  return sha256(canonicalStringify(body))
-}
-
-function normalizeRecordedAt(now) {
-  const value = now()
-  const recordedAt = value instanceof Date ? value.toISOString() : String(value)
-  const parsed = new Date(recordedAt)
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== recordedAt) {
-    throw new TypeError("Durable fact recorded-at timestamp must be canonical ISO-8601")
-  }
-  return recordedAt
-}
-
 function factIdForOrderIntent(clientOrderId) {
   return "order-submission-intent:" + clientOrderId
 }
@@ -163,7 +81,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new TypeError("Durable fact data must be a plain object")
   }
-  const canonicalData = canonicalize(data)
+  const canonicalData = canonicalizeDurableFactValue(data)
   const byteLength = Buffer.byteLength(JSON.stringify(canonicalData), "utf8")
   if (byteLength > MAX_FACT_DATA_BYTES) {
     throw new RangeError("Durable fact data exceeds the " + MAX_FACT_DATA_BYTES + " byte limit")
@@ -218,7 +136,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
     if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
       throw new TypeError("Safety-blocker evidenceDigest must be a SHA-256 digest")
     }
-    const expectedBlockerId = sha256([
+    const expectedBlockerId = sha256DurableFactValue([
       canonicalData.scope,
       canonicalData.symbol ?? "",
       reason,
@@ -605,7 +523,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       canonicalData.freeQuantity,
       canonicalData.inventoryDisposition,
     ])
-    if (sha256(cycleIdentity) !== cycleId) {
+    if (sha256DurableFactValue(cycleIdentity) !== cycleId) {
       throw new TypeError("Recovery-cycle ID must be derived from the exact fill, accounting, inventory, and terminal SELL identity")
     }
   }
@@ -685,7 +603,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       canonicalData.outcome,
       reason,
     ])
-    if (sha256(evaluationIdentity) !== evaluationId) {
+    if (sha256DurableFactValue(evaluationIdentity) !== evaluationId) {
       throw new TypeError("Recovery-cycle evaluation ID must be derived from its exact fill, accounting, and terminal SELL identity")
     }
   }
@@ -874,7 +792,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
     "data", "digest", "factId", "factType", "formatVersion", "previousDigest",
     "recordedAt", "runtimeSessionId", "schemaVersion", "sequence",
   ]
-  if (canonicalStringify(Object.keys(record).sort()) !== canonicalStringify(expectedKeys)) {
+  if (canonicalStringifyDurableFactValue(Object.keys(record).sort()) !== canonicalStringifyDurableFactValue(expectedKeys)) {
     throw new Error("Durable fact record contains missing or unknown envelope fields")
   }
   if (record.formatVersion !== FORMAT_VERSION || record.schemaVersion !== schemaVersion) {
@@ -902,7 +820,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
   if (index === 0) {
     if (record.sequence !== "0" || record.factId !== "durable-facts:genesis" ||
         record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null ||
-        canonicalStringify(record.data) !== canonicalStringify({ schemaVersion })) {
+        canonicalStringifyDurableFactValue(record.data) !== canonicalStringifyDurableFactValue({ schemaVersion })) {
       throw new Error("Durable fact stream must begin with its explicit genesis record")
     }
   } else {
@@ -917,7 +835,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
     throw new Error("Durable fact genesis schema version does not match the stream schema")
   }
-  if (digestRecord(record) !== record.digest) {throw new Error("Durable fact digest mismatch at sequence " + record.sequence)}
+  if (digestDurableFactRecord(record) !== record.digest) {throw new Error("Durable fact digest mismatch at sequence " + record.sequence)}
 }
 
 function createManifestCheckpoint({ schemaVersion, record, previousManifestDigest }) {
@@ -929,7 +847,7 @@ function createManifestCheckpoint({ schemaVersion, record, previousManifestDiges
     recordCount: (BigInt(record.sequence) + 1n).toString(),
     previousManifestDigest,
   }
-  return { ...body, digest: digestRecord(body) }
+  return { ...body, digest: digestDurableFactRecord(body) }
 }
 
 function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, expectedSequence, previousManifestDigest, index }) {
@@ -940,7 +858,7 @@ function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, exp
   if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint)) {
     throw new TypeError("Committed-head manifest checkpoint must be an object")
   }
-  if (canonicalStringify(Object.keys(checkpoint).sort()) !== canonicalStringify(expectedKeys)) {
+  if (canonicalStringifyDurableFactValue(Object.keys(checkpoint).sort()) !== canonicalStringifyDurableFactValue(expectedKeys)) {
     throw new Error("Committed-head manifest contains missing or unknown fields")
   }
   if (checkpoint.formatVersion !== FORMAT_VERSION || checkpoint.schemaVersion !== schemaVersion) {
@@ -962,7 +880,7 @@ function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, exp
   if (checkpoint.previousManifestDigest !== null && !SHA256_PATTERN.test(checkpoint.previousManifestDigest)) {
     throw new TypeError("Committed-head manifest previous digest is malformed")
   }
-  if (!SHA256_PATTERN.test(checkpoint.digest ?? "") || digestRecord(checkpoint) !== checkpoint.digest) {
+  if (!SHA256_PATTERN.test(checkpoint.digest ?? "") || digestDurableFactRecord(checkpoint) !== checkpoint.digest) {
     throw new Error("Committed-head manifest digest mismatch at sequence " + checkpoint.sequence)
   }
 }
@@ -977,7 +895,7 @@ function parseJsonLines({ source, label }) {
   }
   return lines.map((line, index) => {
     const parsed = JSON.parse(line)
-    if (canonicalStringify(parsed) !== line) {
+    if (canonicalStringifyDurableFactValue(parsed) !== line) {
       throw new Error(label + " is not canonical JSON at line " + (index + 1))
     }
     return parsed
@@ -1142,6 +1060,7 @@ export function createFileDurableFactsStore({
       const entries = await fileSystem.readdir(absoluteDirectory)
       if (entries.length > 0) {throw new Error("Durable-fact initialization refuses to overwrite an existing directory")}
       if (supportsPosixModeBits) {await fileSystem.chmod(absoluteDirectory, 0o700)}
+      const recordedAt = normalizeDurableFactRecordedAt(now())
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
@@ -1149,15 +1068,15 @@ export function createFileDurableFactsStore({
         factId: "durable-facts:genesis",
         factType: "LEDGER_INITIALIZED",
         runtimeSessionId: resolvedRuntimeSessionId,
-        recordedAt: normalizeRecordedAt(now),
+        recordedAt,
         previousDigest: null,
         data: { schemaVersion },
       }
-      const genesisRecord = { ...genesisBody, digest: digestRecord(genesisBody) }
+      const genesisRecord = { ...genesisBody, digest: digestDurableFactRecord(genesisBody) }
       const logHandle = await fileSystem.open(logPath, "wx", 0o600)
       try {
         factWriteStarted = true
-        await logHandle.writeFile(canonicalStringify(genesisRecord) + "\n", "utf8")
+        await logHandle.writeFile(canonicalStringifyDurableFactValue(genesisRecord) + "\n", "utf8")
         await logHandle.sync()
       } finally {
         await logHandle.close()
@@ -1170,7 +1089,7 @@ export function createFileDurableFactsStore({
       const manifestHandle = await fileSystem.open(manifestPath, "wx", 0o600)
       try {
         manifestWriteStarted = true
-        await manifestHandle.writeFile(canonicalStringify(genesisCheckpointBody) + "\n", "utf8")
+        await manifestHandle.writeFile(canonicalStringifyDurableFactValue(genesisCheckpointBody) + "\n", "utf8")
         await manifestHandle.sync()
       } finally {
         await manifestHandle.close()
@@ -1219,13 +1138,14 @@ export function createFileDurableFactsStore({
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
       const existing = state.records.find((record) => record.factId === input.factId)
       if (existing) {
-        if (existing.factType !== input.factType || canonicalStringify(existing.data) !== canonicalStringify(input.data)) {
+        if (existing.factType !== input.factType || canonicalStringifyDurableFactValue(existing.data) !== canonicalStringifyDurableFactValue(input.data)) {
           throw createError("Durable factId was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
         }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
+      const recordedAt = normalizeDurableFactRecordedAt(now())
       if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
-        const nowTime = now().getTime()
+        const nowTime = new Date(recordedAt).getTime()
         if (!Number.isSafeInteger(nowTime) || input.data.verifiedAt > nowTime) {
           throw new Error("Market-history coverage verification timestamp cannot be in the future")
         }
@@ -1258,12 +1178,12 @@ export function createFileDurableFactsStore({
         factId: input.factId,
         factType: input.factType,
         runtimeSessionId: input.runtimeSessionId,
-        recordedAt: normalizeRecordedAt(now),
+        recordedAt,
         previousDigest: state.lastRecord.digest,
         data: input.data,
       }
-      const record = { ...body, digest: digestRecord(body) }
-      const line = canonicalStringify(record)
+      const record = { ...body, digest: digestDurableFactRecord(body) }
+      const line = canonicalStringifyDurableFactValue(record)
       if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
         throw new RangeError("Durable fact record exceeds the " + MAX_RECORD_BYTES + " byte limit")
       }
@@ -1280,7 +1200,7 @@ export function createFileDurableFactsStore({
         record,
         previousManifestDigest: state.manifest.digest,
       })
-      const manifestLine = canonicalStringify(checkpoint)
+      const manifestLine = canonicalStringifyDurableFactValue(checkpoint)
       if (Buffer.byteLength(manifestLine, "utf8") > MAX_RECORD_BYTES) {
         throw new RangeError("Committed-head manifest checkpoint exceeds the " + MAX_RECORD_BYTES + " byte limit")
       }

@@ -463,6 +463,83 @@ test("accepts a verified market-history coverage fact with exact durable evidenc
   assert.equal(appended.data.record.data.coveredFromTime, 1_700_000_000_000)
 })
 
+test("accepts canonical ISO timestamp strings from the injected clock for market-history coverage", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  let clockCalls = 0
+  const recordedAt = "2026-11-13T00:00:00.000Z"
+  const store = createStore(directory, {
+    now: () => {
+      clockCalls += 1
+      return recordedAt
+    },
+  })
+
+  const initialized = await store.initialize()
+  assert.equal(initialized.ok, true, "The durable-facts store must initialize before testing its injected clock.")
+  clockCalls = 0
+
+  const appended = await store.append({
+    factId: "market-history-coverage:BTCUSDT:string-clock",
+    factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+    data: {
+      symbol: "BTCUSDT",
+      coveredFromTime: 1_700_000_000_000,
+      verifiedAt: 1_700_000_100_000,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
+    },
+  })
+
+  assert.equal(
+    appended.ok,
+    true,
+    "A canonical ISO timestamp string is a supported injected clock value for coverage facts.",
+  )
+  assert.equal(clockCalls, 1, "One append must capture the injected clock exactly once.")
+  assert.equal(
+    appended.data.record.recordedAt,
+    recordedAt,
+    "The committed fact must use the same canonical timestamp that passed future-time validation.",
+  )
+})
+
+test("rejects negative zero in durable-fact numeric fields before JSON can normalize it to zero", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+
+  const appended = await store.append({
+    factId: "market-history-coverage:BTCUSDT:negative-zero",
+    factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+    data: {
+      symbol: "BTCUSDT",
+      coveredFromTime: -0,
+      verifiedAt: 200,
+      evidenceDigest: "a".repeat(64),
+      verifiedBy: "operator:trader",
+    },
+  })
+
+  assert.equal(
+    appended.ok,
+    false,
+    "Negative zero must be rejected rather than persisted as the indistinguishable JSON number zero.",
+  )
+  assert.match(
+    appended.errors[0].message,
+    /negative zero/i,
+    "The validation error must identify the lossy negative-zero input.",
+  )
+  const records = await store.readAll()
+  assert.equal(
+    records.data.records.length,
+    1,
+    "Rejecting negative zero must leave only the initialized genesis record in the ledger.",
+  )
+})
+
 test("rejects malformed market-history coverage facts", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))

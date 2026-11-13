@@ -144,7 +144,7 @@ The application writes through the ADR-0001 durable-facts port. It does not use 
 
 The durable-facts adapter must return `durable: true` only after the record and committed head satisfy ADR-0001. Exact duplicate fact identity/payload is idempotent; reuse of a fact identity with different data is an integrity failure.
 
-The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the same process-owned ADR-0001 store into the operator facade; the operator must not open an independent store instance. The initial process-lifetime scope deliberately does not restore operator facts at startup; this limitation is explicit and is not a dependency on full recovery.
+The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the same process-owned ADR-0001 store into the operator facade; the operator must not open an independent store instance. The initial process-lifetime scope deliberately does not restore operator facts at startup; the durable-facts candidate projection excludes them while continuing to project durable strategy pauses and sticky safety blockers. This limitation is explicit and is not a dependency on full recovery.
 
 ## Read-only query contract
 

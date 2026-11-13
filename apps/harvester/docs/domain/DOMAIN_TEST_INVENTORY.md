@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-11
+last_verified: 2026-11-13
 ---
 
 # Harvester domain logic test inventory
@@ -13,7 +13,7 @@ last_verified: 2026-11-11
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (2026-11-10, after PR #968). The domain tree contains 29 production JavaScript files and 27 domain test files. PR #917 is the first Harvester domain-source change after the PR #909 baseline; it corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `55d39e8b2717b1c62d48cf7c513b34563e976a3b` (2026-11-13, after Harvester CC-4 and documentation closeout). The current domain tree contains 33 production JavaScript files and 29 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -30,7 +30,7 @@ All test improvements in this initiative must remain deterministic and offline. 
 | Aggressive policy | `strategies/aggressive-strategy.test.js` | Current contract is explicitly non-executable: NO_ACTION blockers, active-position gating and exclusion of retained free inventory |
 | Configuration | `app-config.test.js` | Strategy/pair configuration validation and explicit TESTNET/LIVE mode selection |
 
-The current PR #1021 source checkpoint contains 31 domain production JavaScript files and 28 domain test files. The new `market/volatility-candle.js` owns normalized candle validation, contiguous-series invariants and Harvester's ATR/NATR metric composition; its focused test file is included in the Market row above.
+Historical PR #1021 source checkpoint: 31 domain production JavaScript files and 28 domain test files. The new `market/volatility-candle.js` owns normalized candle validation, contiguous-series invariants and Harvester's ATR/NATR metric composition; its focused test file is included in the Market row above.
 
 The domain suite is supplemented by application-level engine and use-case tests for serialized lifecycle ordering, multi-market composition, cancellation/fill races and broker interaction. Those tests are not substitutes for pure domain-policy tests, but they provide distinct integration protection.
 
