@@ -8,7 +8,7 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 ### P0 — Shutdown recovery coverage integrity
 
-- [ ] **Prevent COMPLETE shutdown with stale recovery SELL coverage** — [#1097](https://github.com/45s/coinzilla/issues/1097). The earlier LIVE session confirmed late BUY fills after stopping began; the stopping guard skipped SELL recalculation and CLOSING still reported COMPLETE. Acceptance: account for each fill exactly once; reconcile/replan owned recovery SELLs against final Position and RecoveryLedger; validate remaining SELL quantity and expected proceeds; otherwise close INCOMPLETE/BLOCKED with actionable reasons. No ownership bypass or blind retry. The separate 2026-11-13 session did not reproduce this race; see its [audit finding F-048](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md#findings-and-dispositions). Do not mark complete until offline regressions, Harvester suite and exact-head CI pass.
+- [~] **Prevent COMPLETE shutdown with stale recovery SELL coverage** — [#1097](https://github.com/45s/coinzilla/issues/1097), implementation in draft [PR #1120](https://github.com/45s/coinzilla/pull/1120). Shutdown now defers recovery SELL replanning until BUY fills and accepted user-data events have drained, then validates owned SELL quantity and minimum proceeds against final Position/RecoveryLedger accounting. Replacement is SELL-only and cancellation must be confirmed first; unresolved outcomes remain incomplete. Deterministic regressions cover BUY fills across shutdown race windows, multiple/duplicate fills, replacement ordering, and unresolved lifecycle outcomes. The separate 2026-11-13 session did not reproduce this race; see [audit finding F-048](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md#findings-and-dispositions). Keep open until exact-head CI and review pass.
 
 ### P1 — Runtime configuration and order isolation
 
@@ -19,7 +19,7 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 - [ ] **Record local order-submission deferral outcomes** — [#1104](https://github.com/45s/coinzilla/issues/1104). Close the durable request lifecycle when broker I/O is not attempted; distinguish local deferral from rejection and ambiguous broker outcome.
 - [ ] **Surface Telegram delivery failures** — [#1103](https://github.com/45s/coinzilla/issues/1103). Preserve non-blocking delivery and expose accurate accepted/delivered/failed/overflow evidence.
-- [ ] **Explain shutdown phase latency** — [#1105](https://github.com/45s/coinzilla/issues/1105). Investigate the 128.047-second interval between shutdown-start and first visible reconciliation activity without assuming a cause.
+- [~] **Explain shutdown phase latency** — [#1105](https://github.com/45s/coinzilla/issues/1105), instrumentation in draft [PR #1120](https://github.com/45s/coinzilla/pull/1120). Structured monotonic phase timings now cover request/stop-state, operator-control cleanup, market-work drain, reconciliation, BUY cancellation, user-data drain, recovery SELL repair, CLOSING audit, Journal barrier, disconnect and process-stop durability. The historical 128.047-second interval remains UNKNOWN: the repository preserves the report, source hashes and derived timeline, but not the original raw log/trace/Journal artifacts. No historical cause is assigned. Keep open until exact-head CI and review pass.
 
 All items remain open. A documentation PR or a clean offline audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
