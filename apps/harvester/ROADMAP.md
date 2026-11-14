@@ -31,19 +31,22 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ## Proposed strategy — Recovery Seller (RS)
 
-**Status: [~] INITIALIZATION DOCUMENTED; awaiting owner review.** The initial product concept is recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy). RS is a proposed, non-executable strategy; this roadmap entry does not authorize runtime configuration, strategy registration, or exchange activity.
+**Status: [~] INITIALIZATION DOCUMENTED; awaiting owner review.** The concept and proposed pair configuration are recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy). RS remains proposed and non-executable; the example config is documentation only and is not wired into runtime configuration or strategy registration.
 
-- **Goal:** progressively reduce an existing spot position through repeated recovery cycles, using newly acquired inventory together with a controlled portion of the pre-existing inventory when a cycle can be closed under the eventual profitability rules.
-- **Relationship:** separate strategy policy; do not change Coin Grabber or the canonical Conservative specification. Reuse Harvester's existing Portfolio, fill, broker, order-lifecycle, reconciliation and safety boundaries.
-- **Current scope:** concept initialization and owner review only. No formulas, code, tests, runtime configuration, strategy registration or exchange operations are included.
+- **Goal:** progressively reduce an existing spot position through repeated recovery cycles: acquire a new tranche, then sell that tranche together with a configured quantity of legacy inventory when the combined cycle satisfies the approved profitability rule.
+- **Per-pair configuration proposal:** mirror the CG pair configuration convention, using sellQuantity instead of CG's keepQuantity. It represents the legacy base-asset quantity included in each successful cycle's SELL, in addition to the newly acquired tranche. Examples: 400 DOGE + 1 DOGE = 401 DOGE; 10 ZRO + 0.01 ZRO = 10.01 ZRO; 2 LINK + 0.01 LINK = 2.01 LINK.
+- **Profitability:** no separate fixed 1% market-rise wait is implied just to sell the configured legacy quantity. The combined cycle must satisfy the eventual fee-aware profitability rule. **SELL ONLY IN PROFIT** remains mandatory. No formula or exact price calculation is defined in this proposal.
+- **Relationship:** independent strategy policy; do not change Coin Grabber or the canonical Conservative specification. Reuse Harvester's Portfolio, canonical fills, broker, order-lifecycle, reconciliation and safety boundaries.
+- **Current scope:** documentation and illustrative configuration shape only. No formulas, code, tests, runtime configuration, strategy registration or exchange operations are included.
 - **Next phases after review:**
-  1. Define and approve the RS domain language, inventory ownership/attribution, profitability meaning, cycle lifecycle and risk boundaries.
-  2. Write the canonical RS domain specification and explicit accounting/order invariants.
-  3. Implement pure strategy decisions test-first, with deterministic offline domain and application tests.
-  4. Integrate RS as an independently selected strategy without changing Coin Grabber behavior; verify shared-position and order-ownership safety.
-  5. Complete offline lifecycle/reconciliation coverage before any separately authorized TESTNET validation.
-- **Not decided:** what exactly qualifies as profit for the cycle versus the historical cost basis of liquidated inventory; liquidation quantity per cycle; additional-BUY policy and exposure limits; inventory attribution; cycle termination; configuration and strategy coexistence.
-- **Safety:** RS remains unavailable for trading until its specification, implementation, tests, configuration and operator controls are reviewed and accepted. Existing strategy defaults and runtime behavior remain unchanged.
+  1. Approve the meaning and semantics of sellQuantity, including final residual handling and legacy-inventory authorization.
+  2. Define and approve the RS domain language, profitability basis, inventory attribution, cycle lifecycle and risk boundaries.
+  3. Write the canonical RS domain specification and explicit accounting/order invariants.
+  4. Implement pure strategy decisions test-first, with deterministic offline domain and application tests.
+  5. Integrate RS independently without changing Coin Grabber; prove shared-position and order-ownership safety.
+  6. Complete offline lifecycle/reconciliation coverage before any separately authorized TESTNET validation.
+- **Not decided:** exact profitability basis and formula; whether sellQuantity is a target or maximum per cycle; additional-BUY policy and exposure limits; legacy-inventory attribution; final residual handling; cycle termination; shared versus RS-specific pair settings; strategy coexistence.
+- **Safety:** RS remains unavailable for trading until its specification, implementation, tests, runtime configuration and operator controls are reviewed and accepted. Existing strategy defaults and runtime behavior remain unchanged.
 
 ## P0 — Telegram Command Center (CC) — delivered
 
