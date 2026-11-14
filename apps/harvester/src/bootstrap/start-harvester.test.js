@@ -3625,24 +3625,36 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   assert.equal(calls.includes("disconnect"), true)
 })
 
-test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const events = []
-  const btcMarket = createMarketMetadata("BTCUSDT").market
+
+function blockSymbolOpenOrderQuery({ broker }) {
   let releaseOpenOrders
   let signalOpenOrdersStarted
-  const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
-  const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
+  const openOrdersGate = new Promise((resolve) => {
+    releaseOpenOrders = resolve
+  })
+  const openOrdersStarted = new Promise((resolve) => {
+    signalOpenOrdersStarted = resolve
+  })
   broker.getOpenOrders = async ({ symbol } = {}) => {
-    if (symbol === undefined) {return {
-      ok: true,
-      data: []
-    }}
+    if (symbol === undefined) {
+      return {
+        ok: true,
+        data: [],
+      }
+    }
     signalOpenOrdersStarted()
     await openOrdersGate
-    return { ok: true }
+    return {
+      ok: true,
+    }
   }
+  return {
+    openOrdersStarted,
+    releaseOpenOrders,
+  }
+}
+
+function configureOwnedBuyBroker({ broker, calls, market }) {
   broker.placeOrder = async ({ order }) => {
     calls.push("placeOrder:" + order.side)
     return {
@@ -3650,20 +3662,20 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: "broker-" + order.clientOrderId,
-        market: btcMarket,
+        market,
         side: order.side,
         type: order.type,
         limitPrice: new Money({
           amount: order.price,
-          asset: btcMarket.quoteAsset
+          asset: market.quoteAsset,
         }),
         originalQuantity: new Quantity({
           amount: order.quantity,
-          asset: btcMarket.baseAsset
+          asset: market.baseAsset,
         }),
         executedQuantity: new Quantity({
           amount: "0",
-          asset: btcMarket.baseAsset
+          asset: market.baseAsset,
         }),
         status: "OPEN",
         createdAt: 1,
@@ -3673,7 +3685,10 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
     }
   }
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
-  const config = {
+}
+
+function createHigherInvestmentConfig() {
+  return {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
@@ -3689,26 +3704,67 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
       },
     },
   }
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
+}
+
+async function startOwnedOrderReconciliationFailureRuntime({ broker, events }) {
+  return startHarvesterForTest({
+    loadConfig: async () => createHigherInvestmentConfig(),
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
-      publish: (event) => { events.push(event); return { ok: true } },
+      publish: (event) => {
+        events.push(event)
+        return {
+          ok: true,
+        }
+      },
       flush: async () => ({
         ok: true,
-        durable: true
+        durable: true,
       }),
     },
     now: () => 1000,
     logger: {
       info() {},
       error() {},
-      debug() {}
+      debug() {},
     },
+  })
+}
+
+async function assertIncompleteClosingReconciliation({ snapshots, calls }) {
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
+  assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
+  assert.equal(
+    snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"),
+    false,
+    "the cancellation pass must resolve the BUY order even though the earlier REST reconciliation failure keeps the CLOSING audit incomplete",
+  )
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+}
+
+
+test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  const market = createMarketMetadata("BTCUSDT").market
+  const blockedQuery = blockSymbolOpenOrderQuery({
+    broker,
+  })
+  configureOwnedBuyBroker({
+    broker,
+    calls,
+    market,
+  })
+  const runtime = await startOwnedOrderReconciliationFailureRuntime({
+    broker,
+    events,
   })
 
   await broker.emitBookTicker("BTCUSDT", {
@@ -3724,26 +3780,20 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
     price: "65000",
     timestamp: 1000,
   })
-  assert.ok(calls.includes("placeOrder:BUY"), "the fixture must create an acknowledged strategy-owned BUY before graceful shutdown begins")
+  assert.ok(calls.includes("placeOrder:BUY"))
 
   const stopPromise = runtime.stop()
-  await openOrdersStarted
+  await blockedQuery.openOrdersStarted
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
   assert.equal(calls.includes("disconnect"), false)
-  releaseOpenOrders()
-  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/, "shutdown must reject when owned-order REST reconciliation remains unresolved after the pending query completes")
+  blockedQuery.releaseOpenOrders()
+  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(snapshots.length, 2)
-  assert.equal(snapshots[1].data.phase, "CLOSING")
-  assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
-  assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
-  assert.equal(
-    snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"),
-    false,
-    "the cancellation pass must resolve the BUY order even though the earlier REST reconciliation failure keeps the CLOSING audit incomplete",
-  )
-  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+  await assertIncompleteClosingReconciliation({
+    snapshots,
+    calls,
+  })
 })
 
 test("journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect", async () => {
