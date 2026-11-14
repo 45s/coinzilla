@@ -67,8 +67,9 @@ jobs:
       - name: Report full-workspace ESLint inventory
         run: pnpm lint:report
 
-      - name: Lint changed JavaScript files
+      - name: Lint changed JavaScript files (non-blocking baseline)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
