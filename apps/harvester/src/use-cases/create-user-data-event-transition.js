@@ -36,7 +36,7 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     }
     return { result: toResult({ data: { ignored: true } }) }
   }
-  const symbol = order.market.symbol
+  const { market: { symbol } } = order
   const update = state.registry.applyUpdate({ order })
   if (update.unknown) {
     publishLifecycleEvent({
