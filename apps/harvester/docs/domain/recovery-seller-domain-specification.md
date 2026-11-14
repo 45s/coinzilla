@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Domain Specification
 
-**Status: DRAFT — owner decisions in §12 block executable implementation.**
+**Status: DRAFT — first-implementation owner decisions are recorded; remaining work is implementation and verification.**
 
 **Authority:** Canonical RS contract only after the owner decisions below are resolved and this document is accepted. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and unresolved decisions. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
@@ -247,9 +247,9 @@ Concurrency must preserve multiple independently owned Positions per market and 
 
 The engine must provide deterministic behavior when CG and RS both emit eligible intents for the same market during one evaluation window. Each intent is first checked against its own strategy's remaining investment budget; no strategy may borrow another strategy's unused allocation. The shared allocator then serializes submission and checks actual account-wide quote/base availability and reservations. A deferred/rejected intent retains its strategy identity and an actionable reason. No cross-strategy investment-budget priority or fairness policy is required; shared physical-resource safety remains mandatory.
 
-## 12. Owner decisions required before executable implementation
+## 12. Agreed decisions and remaining implementation requirements
 
-These decisions are intentionally not guessed. They block implementation, not documentation of the agreed safety invariants.
+The first-implementation product decisions below are recorded. Items marked as implementation requirements are engineering work, not questions for the owner. Advanced lifecycle behavior and separate final-residual liquidation are explicitly deferred under FITDIB; do not expand the first implementation to include them.
 
 | Decision | Required owner choice | Why it blocks implementation |
 |---|---|---|
@@ -288,7 +288,7 @@ Use exact decimal strings and meaningful assertion messages. Follow repository T
 
 ## 14. Conceptual workflow and safety gates
 
-This is the minimum evidence flow, not a finalized order algorithm. The owner decisions above must be resolved before the decision boxes become executable strategy rules.
+This is the minimum evidence flow, not a finalized order algorithm. The agreed contract and implementation requirements above govern the eventual executable policy.
 
 ~~~mermaid
 flowchart TD
