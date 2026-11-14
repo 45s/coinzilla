@@ -50,7 +50,10 @@ function inventoryWithoutMarketMetadata({
 function sumRemainingSellQuantity({ orders } = {}) {
   let total = "0"
   for (const order of orders) {
-    total = addDecimal({ left: total, right: order.remainingQuantity.amount })
+    total = addDecimal({
+      left: total,
+      right: order.remainingQuantity.amount,
+    })
   }
   return total
 }
