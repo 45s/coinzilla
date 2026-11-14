@@ -5407,19 +5407,8 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
 })
 
 
-// eslint-disable-next-line max-lines-per-function -- this regression exercises the full recovery/engine handoff as one scenario.
-test("defers a recovered BUY fill evaluation until application recovery is acknowledged", async () => {
-  const initialPosition = new Position({
-    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
-    strategyId: StrategyId.COIN_GRABBER,
-    market,
-    baseQuantity: new Quantity({ amount: "2", asset: baseAsset }),
-    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    quoteNetCashFlow: new Money({ amount: "-100", asset: quoteAsset }),
-  })
-  const initialPortfolio = new Portfolio({ positions: [initialPosition] })
-  const initialRecoveryLedger = new RecoveryLedger({ market, buyCost: "100" })
-  const recoverySellOrder = new CanonicalOrder({
+function createRecoverySellDuringReconnectOrder() {
+  return new CanonicalOrder({
     clientOrderId: "recovery-sell-during-reconnect",
     brokerOrderId: "broker-recovery-sell-during-reconnect",
     market,
@@ -5433,7 +5422,10 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  const standingBuyOrder = new CanonicalOrder({
+}
+
+function createStandingBuyDuringReconnectOrder() {
+  return new CanonicalOrder({
     clientOrderId: "standing-buy-during-reconnect",
     brokerOrderId: "broker-standing-buy-during-reconnect",
     market,
@@ -5447,15 +5439,10 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  const harness = await createHarness({
-    initialPortfolio,
-    initialRecoveryLedger,
-    accountingApplied: true,
-    initialState: {
-      orderRegistry: new OrderRegistry({ orders: [recoverySellOrder, standingBuyOrder] }),
-    },
-  })
-  const filledStandingBuyOrder = new CanonicalOrder({
+}
+
+function createFilledStandingBuyDuringReconnectOrder({ standingBuyOrder }) {
+  return new CanonicalOrder({
     clientOrderId: standingBuyOrder.clientOrderId,
     brokerOrderId: standingBuyOrder.brokerOrderId,
     market,
@@ -5470,7 +5457,10 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     updatedAt: 2,
     completedAt: 2,
   })
-  const recoveredBuyFill = new Fill({
+}
+
+function createRecoveredBuyDuringReconnectFill({ standingBuyOrder }) {
+  return new Fill({
     tradeId: "recovery-mode-buy-fill",
     brokerOrderId: standingBuyOrder.brokerOrderId,
     clientOrderId: standingBuyOrder.clientOrderId,
@@ -5482,13 +5472,37 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+}
 
+test("defers a recovered BUY fill evaluation until application recovery is acknowledged", async () => {
+  const initialPosition = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    strategyId: StrategyId.COIN_GRABBER,
+    market,
+    baseQuantity: new Quantity({ amount: "2", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-100", asset: quoteAsset }),
+  })
+  const standingBuyOrder = createStandingBuyDuringReconnectOrder()
+  const harness = await createHarness({
+    initialPortfolio: new Portfolio({ positions: [initialPosition] }),
+    initialRecoveryLedger: new RecoveryLedger({ market, buyCost: "100" }),
+    accountingApplied: true,
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [
+          createRecoverySellDuringReconnectOrder(),
+          standingBuyOrder,
+        ],
+      }),
+    },
+  })
   const result = await harness.engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
       executionType: "TRADE",
-      executedOrder: filledStandingBuyOrder,
-      fill: recoveredBuyFill,
+      executedOrder: createFilledStandingBuyDuringReconnectOrder({ standingBuyOrder }),
+      fill: createRecoveredBuyDuringReconnectFill({ standingBuyOrder }),
     },
     recoveryMode: true,
   })
@@ -5508,6 +5522,7 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     ["DOGEUSDT"],
     "the affected market must retain a deferred strategy evaluation so the BUY fill is not lost when the recovery gate closes",
   )
+})
 })
 
 
