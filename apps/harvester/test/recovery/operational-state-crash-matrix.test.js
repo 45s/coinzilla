@@ -1,3 +1,4 @@
+import { StrategyId } from "../../src/domain/strategies/strategy-ids.js"
 import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
@@ -224,11 +225,11 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   await applyFill({ store, fill: sellFill })
 
   const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
@@ -318,11 +319,11 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
   await applyFill({ store, fill: sellFill })
 
   const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,

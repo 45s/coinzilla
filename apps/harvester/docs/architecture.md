@@ -205,7 +205,7 @@ Bootstrap dynamically imports the named `appConfig` export from `config/index.js
 
 For TESTNET trading, bootstrap establishes the aggregate-trade subscription first, then requests the current Binance `ticker.price` snapshot through the existing broker `getPrices()` operation. If no fresh WebSocket event has already arrived, the snapshot is validated and immediately seeds Conservative evaluation; if neither source provides a usable price, startup fails and cleans up. Binance `ticker.price` is a request/response WebSocket API operation (not an HTTP REST call) and does not include a source timestamp, so Harvester stamps it at receipt. Aggregate-trade timestamps are checked against a 5-second maximum age and 1-second future-clock tolerance before evaluation. Cached prices are checked again before later order decisions, including decisions resumed by order/fill events. Stale events are ignored without canceling existing standing orders; a fresh price is required before another strategy decision. The engine enforces cached-price freshness at both order-submission gates, including after PENDING registration and before each action in a multi-order decision. If the price expires, the pending local record is removed and broker I/O is deferred until a fresh event. This does not add timers or persistence.
 
-Bootstrap composes the plain pure function `evaluateAggressiveStrategy`, an in-memory immutable Portfolio, and the `updatePortfolio` application workflow. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
+Bootstrap composes the plain pure function `evaluateAggressiveStrategy`, an in-memory immutable Portfolio, and the `updatePortfolio` application workflow. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); the current runtime workflow is CG-owned and resolves its stable CG Position identity internally. a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
 
 The Portfolio is updated only from canonical Fill facts. The current broker user-data stream is not yet normalized into canonical Fill events, so live broker executions are not automatically wired into this use case.
 
@@ -238,12 +238,12 @@ This is a conceptual direction, not a request to create every directory immediat
 
 ## Shared engine, separate policies
 
-Both initial strategy modes use the same Trading Engine and Portfolio, but they do not control a pair simultaneously:
+Conservative and Aggressive are the two CG strategy modes. They use the same Trading Engine and CG-owned Position, but do not control a pair simultaneously:
 
 - **Conservative:** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
 - **Aggressive:** may maintain multiple active BUY and multiple active SELL orders while it controls the pair. Its exact order planning and risk rules remain partly undecided.
 
-There is exactly one Position per trading pair, shared by both strategies. The Trading Engine grants operational control to only one strategy at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). It switches from Aggressive to Conservative when actual executed BUY investment exceeds that percentage of the pair's planned total quote budget; open/unfilled BUY orders and their reserved quote commitment are excluded. Conservative retains control until the entire position is sold and the invested quote capital has been recovered. If the position is losing money, the strategy must stop creating new BUY orders while keeping existing SELL orders active; it must never force a sale at a loss merely to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. During a handover, the outgoing strategy stops issuing new orders and the engine reconciles/cancels its outstanding orders before the incoming strategy acts. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved. See [Trading Strategies](./trading-strategies.md) for the behavior contract.
+Conservative and Aggressive share one CG-owned Position per trading pair; they are modes within CG, and the Trading Engine grants control to only one CG mode at a time. RS may own independent Position(s) for the same market in the shared Portfolio; it does not receive a duplicate wallet or custody balance. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). It switches from Aggressive to Conservative when actual executed BUY investment exceeds that percentage of the pair's planned total quote budget; open/unfilled BUY orders and their reserved quote commitment are excluded. Conservative retains control until the entire position is sold and the invested quote capital has been recovered. If the position is losing money, the strategy must stop creating new BUY orders while keeping existing SELL orders active; it must never force a sale at a loss merely to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. During a handover, the outgoing strategy stops issuing new orders and the engine reconciles/cancels its outstanding orders before the incoming strategy acts. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved. See [Trading Strategies](./trading-strategies.md) for the behavior contract.
 
 ### Planned Recovery Seller and Conservative concurrency
 
@@ -251,7 +251,7 @@ The current Conservative/Aggressive handover above describes those two existing 
 
 For that integration:
 
-- Keep one actual Portfolio Position per market and separate RS/CG policy state and attribution.
+- Keep one shared Portfolio aggregate that may contain multiple independent strategy-owned Positions per market; keep RS/CG policy state and Position attribution separate.
 - Preserve originating-strategy identity on every order and canonical fill.
 - Serialize order submission and Portfolio/strategy-attribution commits through the shared Trading Engine.
 - Aggregate quote and base reservations across both strategies before accepting any new intent.
@@ -345,8 +345,8 @@ The Binance adapter owns the translation from the shared order request to exchan
 `update-portfolio` is a different use case with a different trigger and invariant:
 
 1. An adapter/event boundary normalizes an exchange execution into the shared Fill contract.
-2. The `updatePortfolio({ portfolio, fill })` workflow receives that normalized fill; it does not parse a raw Binance event.
-3. The use case locates/loads the relevant Portfolio or Position through its injected dependency, then delegates the state transition to the domain.
+2. The `updatePortfolio({ portfolio, fill, positionId, strategyId })` workflow receives that normalized fill and its resolved owner; it does not parse a raw Binance event.
+3. The use case supplies the originating stable `positionId` and `strategyId` from order ownership; Portfolio applies the fill to exactly that Position and records the attribution with its global fill identity.
 4. It persists or publishes the resulting state only through explicit ports, according to the implemented persistence contract.
 5. Duplicate fills, partial fills, invalid quantities, and third-asset commissions must follow the canonical domain rules—not be silently discarded. A third-asset commission requires reliable quote-currency valuation; otherwise the affected accounting transition fails closed. See [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 

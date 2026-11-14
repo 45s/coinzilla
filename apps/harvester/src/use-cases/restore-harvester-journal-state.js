@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import {
   Asset,
   CanonicalOrder,
@@ -212,7 +213,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         throw new Error("Recovery-cycle market identity conflicts with canonical exchange metadata for " + item.symbol)
       }
       const recoveryLedger = recoveryLedgers.get(market.id)
-      const position = portfolio.getPosition({ marketId: market.id })
+      const position = portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
       if (!recoveryLedger || !position) {
         throw new Error("Recovery-cycle completion has no replayed Position and RecoveryLedger for " + item.symbol)
       }
@@ -235,11 +236,11 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       let nextPortfolio = portfolio
       if (compareDecimal({ left: item.freeQuantity, right: "0" }) > 0) {
         nextPortfolio = nextPortfolio.allocateFreeQuantity({
-          marketId: market.id,
+          marketId: market.id, strategyId: StrategyId.COIN_GRABBER,
           quantity: item.freeQuantity,
         })
       }
-      nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id })
+      nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
       const resetLedger = recoveryLedger.resetCycle({
         minProfit: item.minProfit,
         spent: position.spent,

@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
@@ -1074,7 +1075,7 @@ function logTrailingBuyActivePosition({ context, symbol, metadata, position, act
 }
 
 function getTrailingBuyActivePositionSkip({ context, symbol, metadata }) {
-  const position = context.getPortfolio().getPosition({
+  const position = context.getPortfolio().getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: metadata.market.id,
   })
   const activePositionQuantity = position?.baseQuantity.amount ?? "0"
@@ -2187,7 +2188,7 @@ export function makeConservativeTradingEngine({
   logger,
   initialState = {},
 } = {}) {
-  const strategyConfig = appConfig.strategies.CG_coinGrabber
+  const strategyConfig = appConfig.strategies[StrategyId.COIN_GRABBER]
   const {
     settings,
     pairs
@@ -2488,7 +2489,7 @@ export function makeConservativeTradingEngine({
     if (!data) {return}
     const marketId = order.market.id
     const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
-    const position = portfolio?.getPosition({ marketId })
+    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId, strategyId: StrategyId.COIN_GRABBER })
     const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
     const realizedNetProfit = data.realizedNetProfit ??
       (position && recoveryLedger
@@ -3135,7 +3136,7 @@ export function makeConservativeTradingEngine({
       }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) {throw new Error("Current account snapshot is unavailable")}
-      const position = portfolioBefore.getPosition({ marketId: metadata.market.id })
+      const position = portfolioBefore.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: metadata.market.id, strategyId: StrategyId.COIN_GRABBER })
       const allPositions = portfolioBefore.positions
       const portfolioQuoteCashFlow = allPositions
         .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)
@@ -3421,7 +3422,7 @@ export function makeConservativeTradingEngine({
       order.market.symbol === symbol &&
       ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
     const activeSellsForSymbol = activeOrdersForSymbol.filter((order) => order.side === "SELL")
-    const positionBySymbol = portfolio.getPosition({ symbol })
+    const positionBySymbol = portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER, symbol })
     if (!metadata?.market) {
       return {
         symbol,
@@ -3435,7 +3436,7 @@ export function makeConservativeTradingEngine({
         noRecoveryRequired: !positionBySymbol && activeSellsForSymbol.length === 0 && pairs[symbol]?.enabled !== true,
       }
     }
-    const position = portfolio.getPosition({ marketId: metadata.market.id }) ?? positionBySymbol
+    const position = portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: metadata.market.id }) ?? positionBySymbol
     const recoveryLedger = getRecoveryLedger({ marketId: metadata.market.id })
     const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .filter((order) => order.side === "SELL")

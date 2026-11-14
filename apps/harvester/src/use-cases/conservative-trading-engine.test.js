@@ -1,3 +1,5 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createPositionId, Position } from "../domain/portfolio/position.js"
 import nodeTest from "node:test"
 const test = (name, ...args) => nodeTest(`[conservative-trading-engine.test.js] ${name}`, ...args)
 import assert from "node:assert/strict"
@@ -13,7 +15,6 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
-import { Position } from "../domain/portfolio/position.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
@@ -83,7 +84,7 @@ const marketMetadata = {
 }
 const appConfig = {
   strategies: {
-    CG_coinGrabber: {
+    [StrategyId.COIN_GRABBER]: {
       enabled: true,
       settings: {
         conservative: { enabled: true },
@@ -109,12 +110,12 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
   ...appConfig,
   strategies: {
     ...appConfig.strategies,
-    CG_coinGrabber: {
-      ...appConfig.strategies.CG_coinGrabber,
+    [StrategyId.COIN_GRABBER]: {
+      ...appConfig.strategies[StrategyId.COIN_GRABBER],
       pairs: {
-        ...appConfig.strategies.CG_coinGrabber.pairs,
+        ...appConfig.strategies[StrategyId.COIN_GRABBER].pairs,
         DOGEUSDT: {
-          ...appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
+          ...appConfig.strategies[StrategyId.COIN_GRABBER].pairs.DOGEUSDT,
           externalOrdersPolicy,
         },
       },
@@ -664,7 +665,7 @@ test("subtracts only shared BUY commitments created after the account snapshot",
 })
 
 test("does not double-count historical quote cash flow already reflected in a refreshed account snapshot", async () => {
-  const position = new Position({
+  const position = new Position({ positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }), strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "0",
@@ -701,7 +702,7 @@ test("does not double-count historical quote cash flow already reflected in a re
 })
 
 test("adds only quote cash flow accrued after the latest account snapshot baseline", async () => {
-  const position = new Position({
+  const position = new Position({ positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }), strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "0",
@@ -1771,8 +1772,8 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     commissionStatus: "COMPLETE",
   })
   return {
-    portfolio: new Portfolio().applyFill({ fill }).portfolio,
-    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ fill }).ledger,
+    portfolio: new Portfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER, fill }).portfolio,
+    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ strategyId: StrategyId.COIN_GRABBER, fill }).ledger,
   }
 }
 
@@ -2500,7 +2501,7 @@ test("publishes the market-specific profit threshold after recovery completion s
   const events = []
   const completionInputs = []
   const configuredAppConfig = structuredClone(appConfig)
-  configuredAppConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT.minProfit = 0.1
+  configuredAppConfig.strategies[StrategyId.COIN_GRABBER].pairs.DOGEUSDT.minProfit = 0.1
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     appConfig: configuredAppConfig,
@@ -2747,8 +2748,8 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER, fill })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER, fill })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return {
@@ -3034,12 +3035,12 @@ function createZeroFeeCycleConfig({ keepQuantity }) {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
-      CG_coinGrabber: {
-        ...appConfig.strategies.CG_coinGrabber,
+      [StrategyId.COIN_GRABBER]: {
+        ...appConfig.strategies[StrategyId.COIN_GRABBER],
         pairs: {
-          ...appConfig.strategies.CG_coinGrabber.pairs,
+          ...appConfig.strategies[StrategyId.COIN_GRABBER].pairs,
           DOGEUSDT: {
-            ...appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
+            ...appConfig.strategies[StrategyId.COIN_GRABBER].pairs.DOGEUSDT,
             keepQuantity,
             makerPercent: 0,
             takerPercent: 0,
@@ -3052,10 +3053,10 @@ function createZeroFeeCycleConfig({ keepQuantity }) {
 
 async function updateCompleteCycleAccounting({ scenario, fill }) {
   try {
-    const portfolioResult = scenario.currentPortfolio.applyFill({
+    const portfolioResult = scenario.currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
       fill,
     })
-    const ledgerResult = scenario.currentRecoveryLedger.applyFill({
+    const ledgerResult = scenario.currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
       fill,
     })
     if (portfolioResult.applied !== ledgerResult.applied ||
@@ -3081,7 +3082,7 @@ async function updateCompleteCycleAccounting({ scenario, fill }) {
 
 async function completeCycleRecovery({ scenario, marketId, keepQuantity, minProfit }) {
   scenario.completionCalls.push(marketId)
-  const position = scenario.currentPortfolio.getPosition({
+  const position = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId,
   })
   const result = evaluateRecoveryCompletion({
@@ -3103,13 +3104,13 @@ async function completeCycleRecovery({ scenario, marketId, keepQuantity, minProf
       left: result.freeQuantity,
       right: "0",
     }) > 0) {
-      scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({
+      scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({ strategyId: StrategyId.COIN_GRABBER,
         marketId,
         quantity: result.freeQuantity,
       })
       scenario.allocationCount += 1
     }
-    scenario.currentPortfolio = scenario.currentPortfolio.resetRecoveryBasis({
+    scenario.currentPortfolio = scenario.currentPortfolio.resetRecoveryBasis({ strategyId: StrategyId.COIN_GRABBER,
       marketId,
     })
     scenario.currentRecoveryLedger = scenario.currentRecoveryLedger.resetCycle({
@@ -3428,7 +3429,7 @@ async function applyRecoverySellFinalFill({ scenario, recoverySell }) {
 }
 
 async function assertCompletedCycleAccounting({ scenario, keepQuantity }) {
-  const position = scenario.currentPortfolio.getPosition({
+  const position = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   })
   assert.equal(position.freeBaseQuantity.amount, keepQuantity)
@@ -3473,7 +3474,7 @@ async function replayCompletedSellFill({ scenario, recoverySell, finalFill, befo
   assert.equal(scenario.resetCount, 1)
   assert.equal(scenario.events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
   assert.equal(scenario.harness.orders.length, beforeReplay.orderCount)
-  const afterPosition = scenario.currentPortfolio.getPosition({
+  const afterPosition = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   })
   assert.equal(afterPosition.baseQuantity.amount, beforeReplay.activeQuantity)
@@ -3951,10 +3952,10 @@ async function createShutdownBuyRaceHarness({ seeded, scenario }) {
       }
       scenario.appliedFillIds.add(fill.id)
       scenario.appliedFills.push(fill)
-      scenario.portfolioRef.current = scenario.portfolioRef.current.applyFill({
+      scenario.portfolioRef.current = scenario.portfolioRef.current.applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).portfolio
-      scenario.ledgerRef.current = scenario.ledgerRef.current.applyFill({
+      scenario.ledgerRef.current = scenario.ledgerRef.current.applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).ledger
       return {
@@ -4047,11 +4048,11 @@ function assertShutdownBuyRaceAccounting({ scenario, seeded }) {
   assert.equal(scenario.portfolioRef.current.appliedFillIds.length, 3)
   assert.equal(scenario.ledgerRef.current.appliedFillIds.length, 3)
   assert.equal(
-    scenario.portfolioRef.current.getPosition({
+    scenario.portfolioRef.current.getPosition({ strategyId: StrategyId.COIN_GRABBER,
       marketId: market.id,
     }).baseQuantity.amount,
     addDecimal({
-      left: seeded.portfolio.getPosition({
+      left: seeded.portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
         marketId: market.id,
       }).baseQuantity.amount,
       right: scenario.buyOrder.originalQuantity.amount,
@@ -4086,8 +4087,8 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
       price: "100",
       timestamp: 1,
     },
-    pairConfig: appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
-    settings: appConfig.strategies.CG_coinGrabber.settings,
+    pairConfig: appConfig.strategies[StrategyId.COIN_GRABBER].pairs.DOGEUSDT,
+    settings: appConfig.strategies[StrategyId.COIN_GRABBER].settings,
     portfolio: scenario.portfolioRef.current,
     recoveryLedger: scenario.ledgerRef.current,
     marketMetadata,
@@ -4201,10 +4202,10 @@ async function createShutdownRecoveryFailureHarness({ scenario, seeded, state })
           },
         }
       }
-      state.portfolio = state.portfolio.applyFill({
+      state.portfolio = state.portfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).portfolio
-      state.ledger = state.ledger.applyFill({
+      state.ledger = state.ledger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).ledger
       return {
@@ -4546,10 +4547,10 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
     getRecoveryLedger: () => currentRecoveryLedger,
     getTerminalFills: ({ orderId }) => sellFill?.brokerOrderId === orderId ? [sellFill] : [],
     updateTradingAccounting: async ({ fill }) => {
-      currentPortfolio = currentPortfolio.applyFill({
+      currentPortfolio = currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).portfolio
-      currentRecoveryLedger = currentRecoveryLedger.applyFill({
+      currentRecoveryLedger = currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).ledger
       accountedFills.push(fill)
@@ -4712,8 +4713,8 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
         })] : []
       },
       updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
+        currentPortfolio = currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER, fill }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER, fill }).ledger
         return {
           ok: true,
           data: {
@@ -5412,7 +5413,7 @@ function createPartialBuyExecution({ buy }) {
 function assertPartialBuyBlocksTrailingRepricing({ harness, repricingEvaluations }) {
   assert.equal(repricingEvaluations, 0)
   assert.deepEqual(harness.cancellationIds, [])
-  assert.equal(harness.getCurrentPortfolio().getPosition({
+  assert.equal(harness.getCurrentPortfolio().getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   }).baseQuantity.amount, "0.1")
 }
@@ -5428,10 +5429,10 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   const harness = await createHarness({
     strategyPolicy,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
@@ -5540,7 +5541,7 @@ function assertPartialRecoverySellBlocksTrailingRepricing({ harness, repricingEv
   assert.equal(unchangedSell.limitPrice.amount, sell.limitPrice.amount)
   assert.equal(unchangedSell.originalQuantity.amount, sell.originalQuantity.amount)
   assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
-  assert.equal(harness.getCurrentPortfolio().getPosition({
+  assert.equal(harness.getCurrentPortfolio().getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   }).baseQuantity.amount, "0.9")
 }
@@ -5559,10 +5560,10 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
         fill,
       })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
@@ -5706,7 +5707,7 @@ test("reprices an active BUY normally when no Position exists", async () => {
 
 test("allows trailing BUY repricing when only retained free inventory exists", async () => {
   const portfolio = new Portfolio({
-    positions: [new Position({
+    positions: [new Position({ positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }), strategyId: StrategyId.COIN_GRABBER,
       market,
       baseQuantity: new Quantity({
         amount: "0",
@@ -6192,10 +6193,10 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
 
 
 async function applyResidualRecoveryFill({ scenario, fill }) {
-  const portfolioUpdate = scenario.currentPortfolio.applyFill({
+  const portfolioUpdate = scenario.currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
     fill,
   })
-  const ledgerUpdate = scenario.currentRecoveryLedger.applyFill({
+  const ledgerUpdate = scenario.currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
     fill,
   })
   scenario.currentPortfolio = portfolioUpdate.portfolio
@@ -6211,7 +6212,7 @@ async function applyResidualRecoveryFill({ scenario, fill }) {
 
 async function completeResidualRecoveryCycle({ scenario, input }) {
   scenario.completionInputs.push(input)
-  const position = scenario.currentPortfolio.getPosition({
+  const position = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: input.marketId,
   })
   const completion = evaluateRecoveryCompletion({
@@ -6226,7 +6227,7 @@ async function completeResidualRecoveryCycle({ scenario, input }) {
     }),
   })
   if (completion.eligible) {
-    scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({
+    scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({ strategyId: StrategyId.COIN_GRABBER,
       marketId: input.marketId,
       quantity: completion.freeQuantity,
     })
@@ -6333,7 +6334,7 @@ function assertResidualRecoverySellAccounting({ scenario }) {
   assert.equal(scenario.currentRecoveryLedger.outstandingRecoveryAmount, "0")
   assert.equal(scenario.currentRecoveryLedger.buyCost, "105")
   assert.ok(Number(scenario.currentRecoveryLedger.netSellProceeds) > 105.01)
-  const position = scenario.currentPortfolio.getPosition({
+  const position = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   })
   assert.equal(position.freeBaseQuantity.amount, "0")
@@ -6351,7 +6352,7 @@ async function assertResidualRecoverySellDust({ scenario }) {
   const dust = nextEvaluation.data.decision.inventoryDisposition
   assert.equal(dust.status, "EXCHANGE_CONSTRAINED_DUST")
   assert.equal(dust.reason, "QUANTITY_INCREMENT")
-  const completedPosition = scenario.currentPortfolio.getPosition({
+  const completedPosition = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   })
   assert.equal(
@@ -8198,7 +8199,7 @@ function createRecoveryModeOrder({ clientOrderId, brokerOrderId, side, price, qu
 }
 
 function createRecoveryModeBuyFillFixture() {
-  const initialPosition = new Position({
+  const initialPosition = new Position({ positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }), strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "2",
@@ -9976,7 +9977,7 @@ test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs",
   }
   }
   const config = structuredClone(appConfig)
-  config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
+  config.strategies[StrategyId.COIN_GRABBER].pairs.DOGEUSDT.enableVolatilityProtection = false
   const harness = await createHarness({
     appConfig: config,
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
@@ -10008,7 +10009,7 @@ test("per-pair opt-out bypasses the volatility submission gate while retaining n
   }
   }
   const config = structuredClone(appConfig)
-  config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
+  config.strategies[StrategyId.COIN_GRABBER].pairs.DOGEUSDT.enableVolatilityProtection = false
   const harness = await createHarness({
     appConfig: config,
     getVolatilityData: () => unavailable
@@ -10173,7 +10174,7 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
 })
 
 test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
-  const position = new Position({
+  const position = new Position({ positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }), strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "100",
@@ -10230,7 +10231,7 @@ test("explicit recovery SELL intent may submit while volatility protection block
 
 
 test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
-  const position = new Position({
+  const position = new Position({ positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }), strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "100",
