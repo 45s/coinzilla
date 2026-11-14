@@ -24,20 +24,9 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
 
-const baseAsset = new Asset({
-  id: "doge",
-  code: "DOGE"
-})
-const quoteAsset = new Asset({
-  id: "usdt",
-  code: "USDT"
-})
-const market = new Market({
-  venue: "binance",
-  symbol: "DOGEUSDT",
-  baseAsset,
-  quoteAsset
-})
+const baseAsset = new Asset({ id: "doge", code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
 const marketMetadata = {
   market,
   orderType: "LIMIT_MAKER",
@@ -46,38 +35,10 @@ const marketMetadata = {
   tradingRules: new TradingRules({
     market,
     constraints: [
-      {
-        type: "PRICE_INCREMENT",
-        status: "SUPPORTED",
-        value: new Money({
-        amount: "0.01",
-        asset: quoteAsset
-      })
-      },
-      {
-        type: "QUANTITY_INCREMENT",
-        status: "SUPPORTED",
-        value: new Quantity({
-        amount: "0.1",
-        asset: baseAsset
-      })
-      },
-      {
-        type: "MIN_QUANTITY",
-        status: "SUPPORTED",
-        value: new Quantity({
-        amount: "0.1",
-        asset: baseAsset
-      })
-      },
-      {
-        type: "MIN_NOTIONAL",
-        status: "SUPPORTED",
-        value: new Money({
-        amount: "5",
-        asset: quoteAsset
-      })
-      },
+      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
+      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
+      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
     ],
   }),
 }
@@ -85,10 +46,7 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: {
-        conservative: { enabled: true },
-        aggressive: { enabled: false }
-      },
+      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
     DOGEUSDT: {
       enabled: true,
@@ -123,68 +81,7 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
 })
 
 // eslint-disable-next-line complexity, max-lines-per-function -- test harness centralizes independent fake-broker outcomes for deterministic coverage.
-async function createHarness({
-  strategyPolicy,
-  hasUnownedOpenOrdersForSymbol = () => false,
-  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
-  appConfig: suppliedAppConfig,
-  isMarketPriceFresh = () => true,
-  isMarketBookFresh = () => true,
-  initialBook = true,
-  marketMetadata: suppliedMarketMetadata,
-  getMarketMetadata: getMarketMetadataOverride,
-  getSymbolFilters: getSymbolFiltersOverride,
-  placeOrderFailureAfterFirst = false,
-  placeOrderFailureAfterCount,
-  placeOrderFailureError,
-  placeOrderFailureCount = 0,
-  cancelWithFill = false,
-  cancelExecutedQuantity = cancelWithFill ? "0.1" : "0",
-  cancelOrderStatus = "CANCELED",
-  cancelOrderGate,
-  onCancelOrderStarted,
-  eventPublisher,
-  placeOrderFailure = false,
-  placeOrderThrow = false,
-  cancelFailure = false,
-  cancelThrow = false,
-  cancelNotSent = false,
-  cancelNotSentOnSuccess = false,
-  onPlaceOrder,
-  placeOrderGate,
-  deferOrderSide = "SELL",
-  onPlaceOrderStarted,
-  initialPortfolio,
-  initialRecoveryLedger,
-  getPortfolio: getPortfolioOverride,
-  getRecoveryLedger: getRecoveryLedgerOverride,
-  updateTradingAccounting: updateTradingAccountingOverride,
-  completeRecoveryCycle: completeRecoveryCycleOverride,
-  baseFreeBalance = "0",
-  quoteFreeBalance = "1000",
-  quoteCashFlowBaseline = "0",
-  portfolioBaseQuantityBaseline = "0",
-  committedQuoteBalanceBaseline = "0",
-  committedBaseBalanceBaseline = "0",
-  accountingApplied = false,
-  accountingFailure = false,
-  immediateFilledAcknowledgement = false,
-  getAcknowledgedFills = () => [],
-  acknowledgedFillsGate,
-  getTerminalFills = () => [],
-  recoveryCompletion = {
-  eligible: true,
-  freeQuantity: "0.1",
-  realizedNetProfit: "1.5"
-},
-  getVolatilityData: getVolatilityDataOverride,
-  onOperationalStateCancellationIntent,
-  onOperationalStateCancellationOutcome,
-  onOperationalStateStrategyMarketPaused,
-  canTrade: canTradeOverride = () => true,
-  isStopping: isStoppingOverride = () => false,
-  initialState
-} = {}) {
+async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, hasUnresolvedHarvesterOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureAfterCount, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onOperationalStateCancellationIntent, onOperationalStateCancellationOutcome, onOperationalStateStrategyMarketPaused, canTrade: canTradeOverride = () => true, isStopping: isStoppingOverride = () => false, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -212,23 +109,14 @@ async function createHarness({
       if (placeOrderGate && order.side === deferOrderSide) {await placeOrderGate.promise}
       if (placeOrderThrow) {throw new Error("socket closed")}
       if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount > placeOrderFailureAfterCount) {
-        return {
-          ok: false,
-          errors: [placeOrderFailureError ?? new Error("replacement rejected")]
-        }
+        return { ok: false, errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
       }
       if (placeOrderFailureAfterFirst && placeOrderCallCount > 1) {
-        return {
-          ok: false,
-          errors: [placeOrderFailureError ?? new Error("replacement rejected")]
-        }
+        return { ok: false, errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
       }
       if (remainingPlaceOrderFailures > 0) {
         if (Number.isFinite(remainingPlaceOrderFailures)) {remainingPlaceOrderFailures -= 1}
-        return {
-          ok: false,
-          errors: [placeOrderFailureError ?? new Error("broker rejected order")]
-        }
+        return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
       }
       const acknowledgedOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -236,14 +124,8 @@ async function createHarness({
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({
-          amount: order.price,
-          asset: quoteAsset
-        }),
-        originalQuantity: new Quantity({
-          amount: order.quantity,
-          asset: baseAsset
-        }),
+        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
         executedQuantity: new Quantity({
           amount: immediateFilledAcknowledgement ? order.quantity : "0",
           asset: baseAsset,
@@ -261,30 +143,16 @@ async function createHarness({
           getAcknowledgedFills({ order: acknowledgedOrder }),
         )
       }
-      return {
-        ok: true,
-        data: acknowledgedOrder
-      }
+      return { ok: true, data: acknowledgedOrder }
     },
     cancelOrder: async ({ order }) => {
       cancellationIds.push(order.brokerOrderId)
       onCancelOrderStarted?.({ order })
       if (cancelOrderGate) {await cancelOrderGate.promise}
       if (cancelThrow) {throw new Error("cancel socket closed")}
-      if (cancelNotSent) {return {
-        ok: false,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("user-data stream unavailable")]
-      }}
-      if (cancelNotSentOnSuccess) {return {
-        ok: true,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("contradictory cancellation result")]
-      }}
-      if (cancelFailure) {return {
-        ok: false,
-        errors: [new Error("cancel denied")]
-      }}
+      if (cancelNotSent) {return { ok: false, cancellationOutcome: "NOT_SENT", errors: [new Error("user-data stream unavailable")] }}
+      if (cancelNotSentOnSuccess) {return { ok: true, cancellationOutcome: "NOT_SENT", errors: [new Error("contradictory cancellation result")] }}
+      if (cancelFailure) {return { ok: false, errors: [new Error("cancel denied")] }}
       canceledOrders.set(order.brokerOrderId, order)
       const executedQuantity = typeof cancelExecutedQuantity === "function"
         ? cancelExecutedQuantity({ order })
@@ -318,10 +186,7 @@ async function createHarness({
       if (acknowledgedFillsByOrder.has(orderId)) {
         if (acknowledgedFillsGate) {await acknowledgedFillsGate.promise}
         const fills = acknowledgedFillsByOrder.get(orderId)
-        return {
-          ok: true,
-          data: typeof fills === "function" ? fills() : fills
-        }
+        return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
       const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
@@ -335,15 +200,9 @@ async function createHarness({
             market,
             side: canceledOrder.side,
             price: canceledOrder.limitPrice,
-            quantity: new Quantity({
-              amount: executedQuantity,
-              asset: baseAsset
-            }),
+            quantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
             quoteQuantity: new Money({
-              amount: multiplyDecimal({
-                left: canceledOrder.limitPrice.amount,
-                right: executedQuantity
-              }),
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: executedQuantity }),
               asset: quoteAsset,
             }),
             commissions: [],
@@ -362,19 +221,10 @@ async function createHarness({
     getCanonicalOrder: async ({ clientOrderId }) => {
       const order = canonicalOrdersByClientId.get(clientOrderId)
       return order
-        ? {
-          ok: true,
-          data: order
-        }
-        : {
-          ok: false,
-          errors: [new Error("order not found by client order ID")]
-        }
+        ? { ok: true, data: order }
+        : { ok: false, errors: [new Error("order not found by client order ID")] }
     },
-    getOpenOrders: async () => ({
-      ok: true,
-      data: []
-    }),
+    getOpenOrders: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async ({ orderId }) => ({
       ok: true,
       data: acknowledgedOrdersById.has(orderId) ? [acknowledgedOrdersById.get(orderId)] : [],
@@ -382,14 +232,8 @@ async function createHarness({
   }
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
-      ? new Quantity({
-        amount: quoteFreeBalance,
-        asset: quoteAsset
-      })
-      : new Quantity({
-        amount: baseFreeBalance,
-        asset: baseAsset
-      }),
+      ? new Quantity({ amount: quoteFreeBalance, asset: quoteAsset })
+      : new Quantity({ amount: baseFreeBalance, asset: baseAsset }),
     getQuoteCashFlowBaseline: ({ assetId }) => assetId === quoteAsset.id
       ? quoteCashFlowBaseline
       : "0",
@@ -404,10 +248,7 @@ async function createHarness({
         ...eventPublisher,
         flush: typeof eventPublisher.flush === "function"
           ? eventPublisher.flush
-          : async () => ({
-            ok: true,
-            durable: true
-          }),
+          : async () => ({ ok: true, durable: true }),
       }
     : undefined
   // The synthetic seeded portfolio below is built from a completed BUY fill at 100.
@@ -416,10 +257,7 @@ async function createHarness({
   const defaultStrategyPolicy = initialPortfolio
     ? {
         ...conservativeStrategyPolicy,
-        evaluate: (input) => conservativeStrategyPolicy.evaluate({
-          ...input,
-          lastBuyPrice: "100"
-        }),
+        evaluate: (input) => conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" }),
       }
     : conservativeStrategyPolicy
   const engine = makeConservativeTradingEngine({
@@ -442,73 +280,36 @@ async function createHarness({
     updateTradingAccounting: updateTradingAccountingOverride ?? (async ({ fill }) => {
       if (accountingFailure) {
         accountedFills.push(fill)
-        return {
-          ok: false,
-          errors: [new Error("unsupported commission asset")]
-        }
+        return { ok: false, errors: [new Error("unsupported commission asset")] }
       }
       if (accountedFillIds.has(fill.id)) {
-        return {
-          ok: true,
-          data: {
-          applied: false,
-          duplicate: true
-        }
-        }
+        return { ok: true, data: { applied: false, duplicate: true } }
       }
       accountedFillIds.add(fill.id)
       accountedFills.push(fill)
-      return {
-        ok: true,
-        data: {
-        applied: accountingApplied,
-        duplicate: !accountingApplied
-      }
-      }
+      return { ok: true, data: { applied: accountingApplied, duplicate: !accountingApplied } }
     }),
     completeRecoveryCycle: completeRecoveryCycleOverride ?? (async ({ marketId }) => {
       completedCycles.push(marketId)
-      return {
-        ok: true,
-        data: recoveryCompletion
-      }
+      return { ok: true, data: recoveryCompletion }
     }),
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
     onPause: async ({ reason }) => pauses.push(reason),
     initialState,
   })
-  if (initialBook) {await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: initialBook === true ? {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "0.01",
-    bestBidQuantity: "1",
-    bestAskPrice: "1000",
-    bestAskQuantity: "1",
-    timestamp: 1,
-  } : initialBook
-  })}
+  if (initialBook) {await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
+    symbol: "DOGEUSDT", bestBidPrice: "0.01", bestBidQuantity: "1",
+    bestAskPrice: "1000", bestAskQuantity: "1", timestamp: 1,
+  } : initialBook })}
   return {
-    engine,
-    broker,
-    orders,
-    pauses,
-    accountedFills,
-    completedCycles,
-    cancellationIds,
+    engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds,
     getCurrentPortfolio: () => currentPortfolio,
     getCurrentRecoveryLedger: () => currentRecoveryLedger,
     setCurrentPortfolio: (next) => { currentPortfolio = next },
     setCurrentRecoveryLedger: (next) => { currentRecoveryLedger = next },
-    setCanonicalOrderLookup: ({
-      order,
-      clientOrderId = order.clientOrderId
-    }) => canonicalOrdersByClientId.set(clientOrderId, order),
-    setAcknowledgedOrder: ({
-      order,
-      fills = []
-    }) => {
+    setCanonicalOrderLookup: ({ order, clientOrderId = order.clientOrderId }) => canonicalOrdersByClientId.set(clientOrderId, order),
+    setAcknowledgedOrder: ({ order, fills = [] }) => {
       acknowledgedOrdersById.set(order.brokerOrderId, order)
       acknowledgedFillsByOrder.set(order.brokerOrderId, fills)
     },
@@ -523,11 +324,7 @@ test("ignores manual external open orders under the default per-pair policy", as
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
   assert.equal(harness.orders.length, 1, "The default ignore policy must not defer the pair because of a manual order.")
 })
@@ -538,11 +335,7 @@ test("keeps unresolved Harvester-owned orders blocked regardless of the external
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
   assert.equal(result.ok, true, "A safety deferral is not an execution failure.")
   assert.equal(harness.orders.length, 0, "An unresolved prior-process Harvester order must block new submissions.")
@@ -556,11 +349,7 @@ test("defers strategy activity only for the symbol with an unowned open order", 
   })
   await sameSymbolHarness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
   assert.equal(sameSymbolHarness.orders.length, 0)
 
@@ -570,11 +359,7 @@ test("defers strategy activity only for the symbol with an unowned open order", 
   })
   await unrelatedSymbolHarness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
   assert.equal(unrelatedSymbolHarness.orders.length, 1)
 })
@@ -588,21 +373,14 @@ test("rechecks external-order ownership after the durable order intent and befor
       publish: () => ({ ok: true }),
       flush: async () => {
         hasExternalOrder = true
-        return {
-          ok: true,
-          durable: true
-        }
+        return { ok: true, durable: true }
       },
     },
   })
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true)
@@ -612,34 +390,17 @@ test("rechecks external-order ownership after the durable order intent and befor
 })
 
 test("subtracts only shared BUY commitments created after the account snapshot", async () => {
-  const ethAsset = new Asset({
-    id: "eth",
-    code: "ETH"
-  })
-  const ethMarket = new Market({
-    venue: "binance",
-    symbol: "ETHUSDT",
-    baseAsset: ethAsset,
-    quoteAsset
-  })
+  const ethAsset = new Asset({ id: "eth", code: "ETH" })
+  const ethMarket = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset: ethAsset, quoteAsset })
   const otherMarketBuy = new CanonicalOrder({
     clientOrderId: "eth-shared-quote-buy",
     brokerOrderId: "broker-eth-shared-quote-buy",
     market: ethMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "50",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "3",
-      asset: ethAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: ethAsset
-    }),
+    limitPrice: new Money({ amount: "50", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "3", asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: ethAsset }),
     status: "PARTIALLY_FILLED",
   })
   assert.equal(otherMarketBuy.remainingQuantity.amount, "2", "The partially filled ETHUSDT BUY must expose the exact two-unit remaining commitment (three original units minus one executed unit), which is the quantity used by account-wide quote reservation.")
@@ -651,11 +412,7 @@ test("subtracts only shared BUY commitments created after the account snapshot",
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true, "A BUY on DOGEUSDT must remain fundable when the shared USDT snapshot already excludes a partially filled ETHUSDT BUY lock.")
@@ -666,18 +423,9 @@ test("subtracts only shared BUY commitments created after the account snapshot",
 test("does not double-count historical quote cash flow already reflected in a refreshed account snapshot", async () => {
   const position = new Position({
     market,
-    baseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
+    baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "100", asset: quoteAsset }),
   })
   const harness = await createHarness({
     initialPortfolio: new Portfolio({ positions: [position] }),
@@ -687,11 +435,7 @@ test("does not double-count historical quote cash flow already reflected in a re
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -703,18 +447,9 @@ test("does not double-count historical quote cash flow already reflected in a re
 test("adds only quote cash flow accrued after the latest account snapshot baseline", async () => {
   const position = new Position({
     market,
-    baseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "120",
-      asset: quoteAsset
-    }),
+    baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "120", asset: quoteAsset }),
   })
   const harness = await createHarness({
     initialPortfolio: new Portfolio({ positions: [position] }),
@@ -724,11 +459,7 @@ test("adds only quote cash flow accrued after the latest account snapshot baseli
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -746,10 +477,7 @@ test("durably journals the submission intent before calling the broker", async (
       },
       flush: async () => {
         sequence.push("flush")
-        return {
-          ok: true,
-          durable: true
-        }
+        return { ok: true, durable: true }
       },
     },
     onPlaceOrderStarted: () => sequence.push("broker:place"),
@@ -757,11 +485,7 @@ test("durably journals the submission intent before calling the broker", async (
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true)
@@ -774,20 +498,13 @@ test("does not submit an order when its durable intent flush fails", async () =>
   const harness = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({
-        ok: false,
-        errors: [new Error("journal sync failed")]
-      }),
+      flush: async () => ({ ok: false, errors: [new Error("journal sync failed")] }),
     },
   })
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -815,10 +532,7 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
         quantity: "1",
       }],
     }),
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
   const harness = await createHarness({
     strategyPolicy,
@@ -849,20 +563,12 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
 
   const firstPrice = harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await fillsStarted
   const secondPrice = harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "101",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "101", timestamp: 2 },
   })
 
   assert.equal(harness.orders.length, 1)
@@ -885,11 +591,7 @@ test("pauses an immediately FILLED acknowledged order when execution history is 
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -921,11 +623,7 @@ test("pauses when FILLED acknowledgement history repeats a fill ID with conflict
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -951,28 +649,17 @@ test("pauses after an invalid strategy order and does not reevaluate it on later
         }],
       }
     },
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
   const harness = await createHarness({ strategyPolicy })
 
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const second = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "101",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "101", timestamp: 2 },
   })
 
   assert.equal(first.ok, false)
@@ -984,29 +671,17 @@ test("pauses after an invalid strategy order and does not reevaluate it on later
 })
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
-  const {
-    engine,
-    orders,
-    pauses
-  } = await createHarness()
+  const { engine, orders, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(orders.length, 1)
   assert.equal(orders[0].price, "99.95")
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   assert.equal(orders.length, 2)
   assert.equal(orders[1].price, "100")
@@ -1014,48 +689,27 @@ test("trails an initial BUY upward only after one full step and replaces it belo
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.11",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.11", timestamp: 3 },
   })
   assert.equal(orders.length, 2)
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.11003",
-      timestamp: 4
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.11003", timestamp: 4 },
   })
   assert.equal(orders.length, 3)
   assert.equal(orders[2].price, "100.05")
 })
 
 test("reconciles and pauses when a BUY fills during trailing cancellation", async () => {
-  const {
-    engine,
-    orders,
-    pauses,
-    accountedFills
-  } = await createHarness({ cancelWithFill: true })
+  const { engine, orders, pauses, accountedFills } = await createHarness({ cancelWithFill: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   assert.equal(result.ok, false)
   assert.equal(orders.length, 1)
@@ -1084,11 +738,7 @@ test("publishes actionable decisions and order submission facts around broker I/
   const orders = harness.orders
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(orders.length, 1)
@@ -1125,20 +775,12 @@ test("publishes actionable decisions and order submission facts around broker I/
 })
 
 test("order intent publication failure prevents a broker order", async () => {
-  const {
-    engine,
-    orders,
-    pauses
-  } = await createHarness({
+  const { engine, orders, pauses } = await createHarness({
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -1154,11 +796,7 @@ test("does not publish repeated NO_ACTION evaluations", async () => {
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const countAfterSubmission = events.length
   const result = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
@@ -1170,20 +808,13 @@ test("does not publish repeated NO_ACTION evaluations", async () => {
 
 test("publishes rejected submission outcome without blocking pair pause", async () => {
   const events = []
-  const {
-    engine,
-    pauses
-  } = await createHarness({
+  const { engine, pauses } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -1202,19 +833,12 @@ test("publishes rejected submission outcome without blocking pair pause", async 
 test("does not await a pending EventBus publisher promise", async () => {
   let resolvePublisher
   const publisherPromise = new Promise((resolve) => { resolvePublisher = resolve })
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     eventPublisher: { publish: () => publisherPromise },
   })
   const processing = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   let timeout
   const result = await Promise.race([
@@ -1237,11 +861,7 @@ test("publishes unknown submission outcome after a transport exception", async (
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, false)
   const failed = events.find(({ name }) => name === "order.submission_failed")
@@ -1259,11 +879,7 @@ test("publishes one pause transition even when the pair encounters repeated paus
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const externalOrder = new CanonicalOrder({
     clientOrderId: "external-order",
@@ -1271,18 +887,9 @@ test("publishes one pause transition even when the pair encounters repeated paus
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "99",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -1309,19 +916,11 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   const cancelled = events.find(({ name }) => name === "order.cancelled")
@@ -1334,52 +933,30 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
 test("durably brackets a trailing BUY cancellation before broker and registry transitions", async () => {
   const sequence = []
   const harness = await createHarness({
-    onOperationalStateCancellationIntent: async ({
-      order,
-      reason
-    }) => {
+    onOperationalStateCancellationIntent: async ({ order, reason }) => {
       sequence.push("intent")
       assert.equal(reason, "TRAILING_BUY_REPRICE")
       assert.equal(order.status, "OPEN")
       assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The order registry must remain unchanged before broker cancellation.")
-      return {
-        ok: true,
-        data: { durable: true }
-      }
+      return { ok: true, data: { durable: true } }
     },
-    onOperationalStateCancellationOutcome: async ({
-      order,
-      canceledOrder,
-      reason,
-      outcome
-    }) => {
+    onOperationalStateCancellationOutcome: async ({ order, canceledOrder, reason, outcome }) => {
       sequence.push("outcome")
       assert.equal(reason, "TRAILING_BUY_REPRICE")
       assert.equal(order.status, "OPEN")
       assert.equal(canceledOrder.status, "CANCELED")
       assert.equal(outcome, "CANCELED")
       assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The order registry must not advance before the cancellation outcome is durable.")
-      return {
-        ok: true,
-        data: { durable: true }
-      }
+      return { ok: true, data: { durable: true } }
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -1391,19 +968,11 @@ test("treats decimal-formatted zero as no execution in trailing BUY cancellation
   const harness = await createHarness({ cancelExecutedQuantity: "0.0" })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -1422,11 +991,7 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -1464,12 +1029,7 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
     completedAt: 3,
   })
   const result = await harness.engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: filledOrder,
-      fill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: filledOrder, fill },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -1482,11 +1042,7 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
   const harness = await createHarness()
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const order = harness.engine.getOrders()[0]
   const fillQuantity = "0.1"
@@ -1497,15 +1053,9 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
     market,
     side: "BUY",
     price: order.limitPrice,
-    quantity: new Quantity({
-      amount: fillQuantity,
-      asset: baseAsset
-    }),
+    quantity: new Quantity({ amount: fillQuantity, asset: baseAsset }),
     quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: order.limitPrice.amount,
-        right: fillQuantity
-      }),
+      amount: multiplyDecimal({ left: order.limitPrice.amount, right: fillQuantity }),
       asset: quoteAsset,
     }),
     commissions: [],
@@ -1520,30 +1070,18 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: fillQuantity,
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: fillQuantity, asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
     updatedAt: 2,
   })
   const result = await harness.engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: partialOrder,
-      fill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: partialOrder, fill },
   })
 
   assert.equal(result.ok, false)
-  assert.deepEqual(result.failure, {
-    category: "OWNERSHIP_INTEGRITY",
-    stage: "FILL_ORDER_IDENTITY",
-    retryable: false
-  })
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "FILL_ORDER_IDENTITY", retryable: false })
   assert.equal(harness.accountedFills.length, 0)
   assert.ok(harness.pauses.includes("EXECUTION_FILL_ORDER_IDENTITY_MISMATCH"))
 })
@@ -1552,11 +1090,7 @@ test("treats decimal-formatted zero as no execution in terminal CANCELED order e
   const harness = await createHarness()
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const order = harness.engine.getOrders()[0]
   const canceledOrder = new CanonicalOrder({
@@ -1567,10 +1101,7 @@ test("treats decimal-formatted zero as no execution in terminal CANCELED order e
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0.0",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "0.0", asset: baseAsset }),
     status: "CANCELED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
@@ -1578,11 +1109,7 @@ test("treats decimal-formatted zero as no execution in terminal CANCELED order e
     completedAt: 2,
   })
   const result = await harness.engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "CANCELED",
-      executedOrder: canceledOrder
-    },
+    event: { eventType: "executionReport", executionType: "CANCELED", executedOrder: canceledOrder },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -1591,28 +1118,17 @@ test("treats decimal-formatted zero as no execution in terminal CANCELED order e
 
 test("publishes an unconfirmed cancellation and pause without changing the order flow", async () => {
   const events = []
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     cancelFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false)
@@ -1633,19 +1149,11 @@ test("publishes thrown cancellation outcomes as UNKNOWN and pauses the pair", as
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   assert.equal(result.ok, false)
   assert.equal(events.at(-1).name, "strategy.paused")
@@ -1659,10 +1167,7 @@ test("publishes thrown cancellation outcomes as UNKNOWN and pauses the pair", as
 
 test("cancellation intent publication failure prevents broker cancellation and pauses the pair", async () => {
   let cancelCalls = 0
-  const {
-    engine,
-    pauses
-  } = await createHarness({
+  const { engine, pauses } = await createHarness({
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
       publish: (event) => {
@@ -1673,19 +1178,11 @@ test("cancellation intent publication failure prevents broker cancellation and p
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   assert.equal(result.ok, false)
   assert.equal(cancelCalls, 0)
@@ -1695,21 +1192,13 @@ test("cancellation intent publication failure prevents broker cancellation and p
 
 
 test("order intent publication failure pauses the pair without calling the broker", async () => {
-  const {
-    engine,
-    pauses,
-    orders
-  } = await createHarness({
+  const { engine, pauses, orders } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, false)
   assert.equal(orders.length, 0)
@@ -1723,21 +1212,9 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     brokerOrderId: "seed-recovery-order",
     market,
     side: "BUY",
-    price: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: quantity,
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-      left: "100",
-      right: quantity
-    }),
-      asset: quoteAsset
-    }),
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: multiplyDecimal({ left: "100", right: quantity }), asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -1763,13 +1240,7 @@ const makeFilledOrder = ({ order }) => new CanonicalOrder({
   completedAt: 3,
 })
 
-function makeSellFill({
-  order,
-  tradeId,
-  quantity = order.originalQuantity.amount,
-  quoteQuantity = "100",
-  commissionAmount = "0"
-}) {
+function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount, quoteQuantity = "100", commissionAmount = "0" }) {
   return new Fill({
     tradeId,
     brokerOrderId: order.brokerOrderId,
@@ -1777,54 +1248,25 @@ function makeSellFill({
     market,
     side: "SELL",
     price: order.limitPrice,
-    quantity: new Quantity({
-      amount: quantity,
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: quoteQuantity,
-      asset: quoteAsset
-    }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
     commissions: commissionAmount === "0" ? [] : [
-      new Commission({ amount: new Money({
-        amount: commissionAmount,
-        asset: quoteAsset
-      }) }),
+      new Commission({ amount: new Money({ amount: commissionAmount, asset: quoteAsset }) }),
     ],
     commissionStatus: "COMPLETE",
   })
 }
 
-function makeBuyFill({
-  order,
-  tradeId,
-  price,
-  quantity,
-  quoteQuantity,
-  executedAt,
-  clientOrderId = order.clientOrderId,
-  brokerOrderId = order.brokerOrderId,
-  market: fillMarket = market,
-  side = "BUY"
-}) {
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt, clientOrderId = order.clientOrderId, brokerOrderId = order.brokerOrderId, market: fillMarket = market, side = "BUY" }) {
   return new Fill({
     tradeId,
     brokerOrderId,
     ...(clientOrderId === undefined ? {} : { clientOrderId }),
     market: fillMarket,
     side,
-    price: new Money({
-      amount: price,
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: quantity,
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: quoteQuantity,
-      asset: quoteAsset
-    }),
+    price: new Money({ amount: price, asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
     ...(executedAt === undefined ? {} : { executedAt }),
     commissions: [],
     commissionStatus: "COMPLETE",
@@ -1852,20 +1294,13 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
       },
       flush: async () => {
         sequence.push("flush")
-        return {
-          ok: true,
-          durable: true
-        }
+        return { ok: true, durable: true }
       },
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
@@ -1876,13 +1311,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "completed-buy-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "completed-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
     },
   })
   assert.equal(result.ok, true)
@@ -1913,25 +1342,15 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
       flush: async () => {
         flushCount += 1
         return flushCount === 3
-          ? {
-            ok: false,
-            errors: [new Error("journal sync failed")]
-          }
-          : {
-            ok: true,
-            durable: true
-          }
+          ? { ok: false, errors: [new Error("journal sync failed")] }
+          : { ok: true, durable: true }
       },
     },
   })
 
   const started = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(started.ok, true)
   assert.equal(flushCount, 2)
@@ -1962,27 +1381,16 @@ test("uses the volume-weighted actual execution price for the next standing BUY 
   const { engine } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const firstFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "buy-fill-1",
-    price: "99.90",
-    quantity: "0.4",
-    quoteQuantity: "39.96",
+    order: buyOrder, tradeId: "buy-fill-1", price: "99.90", quantity: "0.4", quoteQuantity: "39.96",
   })
   const first = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: buyOrder,
-        executedQuantity: "0.4"
-      }),
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.4" }),
       fill: firstFill,
     },
   })
@@ -1990,11 +1398,7 @@ test("uses the volume-weighted actual execution price for the next standing BUY 
   assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), undefined)
 
   const secondFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "buy-fill-2",
-    price: "99.80",
-    quantity: "0.6",
-    quoteQuantity: "59.88",
+    order: buyOrder, tradeId: "buy-fill-2", price: "99.80", quantity: "0.6", quoteQuantity: "59.88",
   })
   const completed = await engine.processUserDataEvent({
     event: {
@@ -2008,17 +1412,10 @@ test("uses the volume-weighted actual execution price for the next standing BUY 
 })
 
 test("pauses instead of advancing when a filled BUY has incomplete execution-price history", async () => {
-  const {
-    engine,
-    pauses
-  } = await createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const result = await engine.processUserDataEvent({
@@ -2041,32 +1438,18 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const result = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "completed-buy-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "completed-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
     },
   })
   assert.equal(result.ok, false)
-  assert.deepEqual(result.failure, {
-    category: "ORDER_TRANSITION",
-    stage: "RECOVERY_SELL_CANCELLATION",
-    retryable: true
-  })
+  assert.deepEqual(result.failure, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })
   const failed = events.find((event) =>
     event.name === "order.cancel_failed" && event.data.side === "SELL")
   assert.ok(failed)
@@ -2087,24 +1470,14 @@ test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", asyn
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const result = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "completed-buy-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "completed-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
     },
   })
   assert.equal(result.ok, false)
@@ -2127,14 +1500,8 @@ function makePartialFill({ order }) {
     market,
     side: order.side,
     price: order.limitPrice,
-    quantity: new Quantity({
-      amount: "0.5",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "49.975",
-      asset: quoteAsset
-    }),
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 2,
     commissions: [],
@@ -2142,11 +1509,7 @@ function makePartialFill({ order }) {
   })
 }
 
-function makePartiallyFilledOrder({
-  order,
-  updatedAt = 2,
-  executedQuantity = "0.5"
-}) {
+function makePartiallyFilledOrder({ order, updatedAt = 2, executedQuantity = "0.5" }) {
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -2155,10 +1518,7 @@ function makePartiallyFilledOrder({
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: executedQuantity,
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
@@ -2179,17 +1539,10 @@ test("publishes a Fill only after the accounting workflow commits it", async () 
       return { ok: true }
     } },
   })
-  const {
-    engine,
-    accountedFills
-  } = harness
+  const { engine, accountedFills } = harness
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const order = engine.getOrders()[0]
   fillRef.current = makePartialFill({ order })
@@ -2231,11 +1584,7 @@ test("does not publish a Fill when accounting reports an idempotent duplicate", 
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const order = engine.getOrders()[0]
   const result = await engine.processUserDataEvent({
@@ -2253,10 +1602,7 @@ test("does not publish a Fill when accounting reports an idempotent duplicate", 
 })
 
 test("Fill event publication failure cannot interrupt successful accounting", async () => {
-  const {
-    engine,
-    accountedFills
-  } = await createHarness({
+  const { engine, accountedFills } = await createHarness({
     accountingApplied: true,
     eventPublisher: { publish: (event) => {
       if (event.name === "execution.fill_applied") {throw new Error("journal unavailable")}
@@ -2265,11 +1611,7 @@ test("Fill event publication failure cannot interrupt successful accounting", as
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const order = engine.getOrders()[0]
   const fill = makePartialFill({ order })
@@ -2290,22 +1632,11 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
   const { engine } = await createHarness({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   const order = engine.getOrders()[0]
   const executedOrder = makePartiallyFilledOrder({ order })
   const missing = await engine.processUserDataEvent({
-    event: {
-      executedOrder,
-      executionType: "TRADE",
-      rawExchangeMessage: { apiKey: "private" }
-    },
+    event: { executedOrder, executionType: "TRADE", rawExchangeMessage: { apiKey: "private" } },
   })
   assert.equal(missing.ok, false)
   const missingEvent = events.find(({ name }) => name === "execution.invalid_fill")
@@ -2320,28 +1651,15 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
     market,
     side: order.side,
     price: order.limitPrice,
-    quantity: new Quantity({
-      amount: "0.5",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "49.975",
-      asset: quoteAsset
-    }),
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 3,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
   const mismatch = await engine.processUserDataEvent({
-    event: {
-      executedOrder: makePartiallyFilledOrder({
-      order,
-      updatedAt: 3
-    }),
-      executionType: "TRADE",
-      fill: wrongFill
-    },
+    event: { executedOrder: makePartiallyFilledOrder({ order, updatedAt: 3 }), executionType: "TRADE", fill: wrongFill },
   })
   assert.equal(mismatch.ok, false)
   const mismatchEvent = events.find((event) =>
@@ -2352,11 +1670,7 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
 
 test("ignores unmatched manual order updates by default and publishes safe diagnostics", async () => {
   const events = []
-  const {
-    engine,
-    pauses,
-    accountedFills
-  } = await createHarness({
+  const { engine, pauses, accountedFills } = await createHarness({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   const externalOrder = new CanonicalOrder({
@@ -2365,18 +1679,9 @@ test("ignores unmatched manual order updates by default and publishes safe diagn
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "99",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -2396,21 +1701,11 @@ test("ignores unmatched manual order updates by default and publishes safe diagn
 
 test("publishes accounting failures and preserves pair pause behavior", async () => {
   const events = []
-  const {
-    engine,
-    pauses
-  } = await createHarness({
+  const { engine, pauses } = await createHarness({
     accountingFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   const order = engine.getOrders()[0]
   const result = await engine.processUserDataEvent({
     event: {
@@ -2420,11 +1715,7 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
     },
   })
   assert.equal(result.ok, false)
-  assert.deepEqual(result.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "FILL_ACCOUNTING",
-    retryable: false
-  })
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "FILL_ACCOUNTING", retryable: false })
   const failed = events.find(({ name }) => name === "execution.accounting_failed")
   assert.ok(failed)
   assert.equal(failed.data.error.message, "unsupported commission asset")
@@ -2432,10 +1723,7 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
 })
 
 test("EventBus failure cannot interrupt accounting failure pause handling", async () => {
-  const {
-    engine,
-    pauses
-  } = await createHarness({
+  const { engine, pauses } = await createHarness({
     accountingFailure: true,
     eventPublisher: {
       publish: (event) => {
@@ -2446,14 +1734,7 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
       },
     },
   })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   const order = engine.getOrders()[0]
   const result = await engine.processUserDataEvent({
     event: {
@@ -2480,14 +1761,7 @@ test("publishes the market-specific profit threshold after recovery completion s
     baseFreeBalance: "1",
     completeRecoveryCycle: async (input) => {
       completionInputs.push(input)
-      return {
-        ok: true,
-        data: {
-        eligible: true,
-        freeQuantity: "0.1",
-        realizedNetProfit: "1.5"
-      }
-      }
+      return { ok: true, data: { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } }
     },
     eventPublisher: { publish: (event) => {
       events.push(event)
@@ -2497,17 +1771,10 @@ test("publishes the market-specific profit threshold after recovery completion s
       return { ok: true }
     } },
   })
-  const {
-    engine,
-    completedCycles
-  } = harness
+  const { engine, completedCycles } = harness
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(sellOrder)
@@ -2515,10 +1782,7 @@ test("publishes the market-specific profit threshold after recovery completion s
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "completed-recovery-sell"
-      }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "completed-recovery-sell" }),
     },
   })
 
@@ -2541,22 +1805,14 @@ test("publishes the market-specific profit threshold after recovery completion s
 
 test("does not complete recovery when a FILLED SELL has no reconciled execution fills", async () => {
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    completedCycles,
-    pauses
-  } = await createHarness({
+  const { engine, completedCycles, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   const result = await engine.processUserDataEvent({
@@ -2570,11 +1826,7 @@ test("does not complete recovery when a FILLED SELL has no reconciled execution 
 
 test("does not complete recovery when SELL fills do not equal the original order quantity", async () => {
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    completedCycles,
-    pauses
-  } = await createHarness({
+  const { engine, completedCycles, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -2582,22 +1834,14 @@ test("does not complete recovery when SELL fills do not equal the original order
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   const result = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "short-recovery-sell",
-        quantity: "0.7"
-      }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "short-recovery-sell", quantity: "0.7" }),
     },
   })
 
@@ -2607,17 +1851,10 @@ test("does not complete recovery when SELL fills do not equal the original order
 })
 
 test("rejects a late PARTIALLY_FILLED trade update after terminal cancellation", async () => {
-  const {
-    engine,
-    accountedFills
-  } = await createHarness({ accountingApplied: true })
+  const { engine, accountedFills } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const canceled = await engine.processUserDataEvent({
@@ -2661,18 +1898,10 @@ test("rejects a late PARTIALLY_FILLED trade update after terminal cancellation",
 })
 
 test("ignores an out-of-order OPEN update after the BUY has already filled", async () => {
-  const {
-    engine,
-    accountedFills,
-    pauses
-  } = await createHarness({ accountingApplied: true })
+  const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const fill = makeBuyFill({
@@ -2722,22 +1951,12 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
       const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
+      return { ok: true, data: { applied: true, duplicate: false } }
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const originalSell = harness.engine.getOrders().find((order) => order.side === "SELL")
@@ -2747,11 +1966,7 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
   const result = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: buyOrder,
-        executedQuantity: "0.2",
-        updatedAt: 2
-      }),
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.2", updatedAt: 2 }),
       fill: makeBuyFill({
         order: buyOrder,
         tradeId: "partial-buy-recalculates-recovery-sell",
@@ -2775,18 +1990,10 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
 })
 
 test("reconciles streamed BUY partial fills cumulatively before advancing the strategy", async () => {
-  const {
-    engine,
-    accountedFills,
-    pauses
-  } = await createHarness({ accountingApplied: true })
+  const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   assert.ok(buyOrder)
@@ -2794,11 +2001,7 @@ test("reconciles streamed BUY partial fills cumulatively before advancing the st
   const first = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: buyOrder,
-        executedQuantity: "0.4",
-        updatedAt: 2
-      }),
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.4", updatedAt: 2 }),
       fill: makeBuyFill({
         order: buyOrder,
         tradeId: "streamed-buy-part-1",
@@ -2812,11 +2015,7 @@ test("reconciles streamed BUY partial fills cumulatively before advancing the st
   const second = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: buyOrder,
-        executedQuantity: "0.7",
-        updatedAt: 3
-      }),
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.7", updatedAt: 3 }),
       fill: makeBuyFill({
         order: buyOrder,
         tradeId: "streamed-buy-part-2",
@@ -2859,11 +2058,7 @@ test("reconciles streamed BUY partial fills cumulatively before advancing the st
 
 test("reconciles multiple actual SELL fills before completing recovery", async () => {
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    completedCycles,
-    pauses
-  } = await createHarness({
+  const { engine, completedCycles, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -2871,25 +2066,14 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   const partial = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: sellOrder,
-        executedQuantity: "0.4"
-      }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "recovery-sell-part-1",
-        quantity: "0.4"
-      }),
+      executedOrder: makePartiallyFilledOrder({ order: sellOrder, executedQuantity: "0.4" }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "recovery-sell-part-1", quantity: "0.4" }),
     },
   })
   assert.equal(partial.ok, true)
@@ -2899,11 +2083,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "recovery-sell-part-2",
-        quantity: "0.5"
-      }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "recovery-sell-part-2", quantity: "0.5" }),
     },
   })
 
@@ -2947,23 +2127,11 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
       clientOrderId: order.clientOrderId,
       market,
       side: order.side,
-      price: new Money({
-        amount: order.limitPrice.amount,
-        asset: quoteAsset
-      }),
-      quantity: new Quantity({
-        amount: quantity,
-        asset: baseAsset
-      }),
-      quoteQuantity: new Money({
-        amount: quoteQuantity,
-        asset: quoteAsset
-      }),
+      price: new Money({ amount: order.limitPrice.amount, asset: quoteAsset }),
+      quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+      quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
       commissions: commissionAmount === "0" ? [] : [
-        new Commission({ amount: new Money({
-          amount: commissionAmount,
-          asset
-        }) }),
+        new Commission({ amount: new Money({ amount: commissionAmount, asset }) }),
       ],
       commissionStatus: "COMPLETE",
       ...(executedAt === undefined ? {} : { executedAt }),
@@ -3013,17 +2181,10 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
           },
         }
       } catch (error) {
-        return {
-          ok: false,
-          errors: [error]
-        }
+        return { ok: false, errors: [error] }
       }
     },
-    completeRecoveryCycle: async ({
-      marketId,
-      keepQuantity: requestedKeepQuantity,
-      minProfit
-    }) => {
+    completeRecoveryCycle: async ({ marketId, keepQuantity: requestedKeepQuantity, minProfit }) => {
       completionCalls.push(marketId)
       const position = currentPortfolio.getPosition({ marketId })
       const result = evaluateRecoveryCompletion({
@@ -3041,10 +2202,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         realizedNetProfit: result.realizedNetProfit,
       }
       if (result.eligible) {
-        if (compareDecimal({
-          left: result.freeQuantity,
-          right: "0"
-        }) > 0) {
+        if (compareDecimal({ left: result.freeQuantity, right: "0" }) > 0) {
           currentPortfolio = currentPortfolio.allocateFreeQuantity({
             marketId,
             quantity: result.freeQuantity,
@@ -3052,16 +2210,10 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
           allocationCount += 1
         }
         currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle({
-          minProfit,
-          spent: position.spent
-        })
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit, spent: position.spent })
         resetCount += 1
       }
-      return {
-        ok: true,
-        data: result
-      }
+      return { ok: true, data: result }
     },
     onPlaceOrder: ({ order }) => {
       if (order.side !== "BUY" || !harness.engine) {return}
@@ -3081,10 +2233,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         }
         return { ok: true }
       },
-      flush: async () => ({
-        ok: true,
-        durable: true
-      }),
+      flush: async () => ({ ok: true, durable: true }),
     },
   })
 
@@ -3110,11 +2259,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
 
   const started = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
   const firstBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -3279,18 +2424,9 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
   assert.equal(resetCount, 1)
   assert.ok(completionSnapshot)
-  assert.ok(compareDecimal({
-    left: completionSnapshot.spent,
-    right: "0"
-  }) > 0)
-  assert.ok(compareDecimal({
-    left: completionSnapshot.netSellProceeds,
-    right: "0"
-  }) > 0)
-  assert.ok(compareDecimal({
-    left: completionSnapshot.realizedNetProfit,
-    right: "0.01"
-  }) >= 0)
+  assert.ok(compareDecimal({ left: completionSnapshot.spent, right: "0" }) > 0)
+  assert.ok(compareDecimal({ left: completionSnapshot.netSellProceeds, right: "0" }) > 0)
+  assert.ok(compareDecimal({ left: completionSnapshot.realizedNetProfit, right: "0.01" }) >= 0)
 
   const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
   assert.equal(completedPosition.freeBaseQuantity.amount, keepQuantity)
@@ -3356,29 +2492,19 @@ test("does not publish recovery completion when the cycle is ineligible", async 
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    recoveryCompletion: {
-      eligible: false,
-      reason: "RECOVERY_SELL_NOT_FULLY_FILLED"
-    },
+    recoveryCompletion: { eligible: false, reason: "RECOVERY_SELL_NOT_FULLY_FILLED" },
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   const result = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "completed-recovery-sell"
-      }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "completed-recovery-sell" }),
     },
   })
   assert.equal(result.ok, false)
@@ -3405,21 +2531,14 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const result = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "completed-recovery-sell"
-      }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "completed-recovery-sell" }),
     },
   })
   assert.equal(result.ok, true)
@@ -3433,12 +2552,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   let signalSellSubmission
   const sellSubmissionStarted = new Promise((resolve) => { signalSellSubmission = resolve })
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    orders,
-    cancellationIds,
-    accountedFills
-  } = await createHarness({
+  const { engine, orders, cancellationIds, accountedFills } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -3447,11 +2561,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   })
   const initialDecision = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await sellSubmissionStarted
   const pendingSell = engine.getOrders().find((order) => order.side === "SELL")
@@ -3467,10 +2577,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     type: pendingSell.type,
     limitPrice: pendingSell.limitPrice,
     originalQuantity: pendingSell.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: pendingSell.createdAt,
     acknowledgedAt: 1,
@@ -3478,11 +2585,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   })
   const concurrentMarketTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.02",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 2 },
   })
   const userDataTransition = engine.processUserDataEvent({
     event: { executedOrder: acknowledgedSell },
@@ -3514,32 +2617,20 @@ test("serializes concurrent market updates while a trailing BUY cancellation is 
   const cancelOrderGate = { promise: new Promise((resolve) => { resolveCancellation = resolve }) }
   let signalCancellationStarted
   const cancellationStarted = new Promise((resolve) => { signalCancellationStarted = resolve })
-  const {
-    engine,
-    orders,
-    cancellationIds
-  } = await createHarness({
+  const { engine, orders, cancellationIds } = await createHarness({
     cancelOrderGate,
     onCancelOrderStarted: () => signalCancellationStarted(),
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const initialBuy = engine.getOrders().find((order) => order.side === "BUY")
   assert.ok(initialBuy)
 
   const trailingTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   await cancellationStarted
   assert.deepEqual(cancellationIds, [initialBuy.brokerOrderId])
@@ -3547,11 +2638,7 @@ test("serializes concurrent market updates while a trailing BUY cancellation is 
 
   const concurrentTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
   })
   assert.equal(orders.length, 1)
 
@@ -3576,10 +2663,7 @@ test("serializes concurrent market updates while an initial BUY acknowledgement 
   const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
   let signalBuySubmission
   const buySubmissionStarted = new Promise((resolve) => { signalBuySubmission = resolve })
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     placeOrderGate,
     deferOrderSide: "BUY",
     onPlaceOrderStarted: ({ order }) => {
@@ -3589,11 +2673,7 @@ test("serializes concurrent market updates while an initial BUY acknowledgement 
 
   const initial = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await buySubmissionStarted
   const pendingBuy = engine.getOrders().find((order) => order.side === "BUY")
@@ -3603,19 +2683,11 @@ test("serializes concurrent market updates while an initial BUY acknowledgement 
   const concurrentUpdates = [
     engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100.01",
-        timestamp: 2
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
     }),
     engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100.02",
-        timestamp: 3
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 3 },
     }),
   ]
   assert.equal(orders.length, 1)
@@ -3634,12 +2706,7 @@ test("serializes concurrent market updates while an initial BUY acknowledgement 
 
 test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    orders,
-    cancellationIds,
-    pauses
-  } = await createHarness({
+  const { engine, orders, cancellationIds, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -3647,11 +2714,7 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const previousSell = engine.getOrders().find((order) => order.side === "SELL")
   const completedBuy = engine.getOrders().find((order) => order.side === "BUY")
@@ -3714,24 +2777,12 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     getPortfolio: () => portfolioRef.current,
     getRecoveryLedger: () => ledgerRef.current,
     updateTradingAccounting: async ({ fill }) => {
-      if (appliedFillIds.has(fill.id)) {return {
-        ok: true,
-        data: {
-        applied: false,
-        duplicate: true
-      }
-      }}
+      if (appliedFillIds.has(fill.id)) {return { ok: true, data: { applied: false, duplicate: true }}}
       appliedFillIds.add(fill.id)
       appliedFills.push(fill)
       portfolioRef.current = portfolioRef.current.applyFill({ fill }).portfolio
       ledgerRef.current = ledgerRef.current.applyFill({ fill }).ledger
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
+      return { ok: true, data: { applied: true, duplicate: false } }
     },
     getTerminalFills: ({ orderId }) => orderId === buyOrderRef.current?.brokerOrderId ? buyFills : [],
     cancelOrderGate,
@@ -3746,11 +2797,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
 
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const originalRecoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -3759,41 +2806,19 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   assert.ok(buyOrder)
 
   const firstQuantity = "0.5"
-  const secondQuantity = subtractDecimal({
-    left: buyOrder.originalQuantity.amount,
-    right: firstQuantity
-  })
-  const firstQuote = multiplyDecimal({
-    left: buyOrder.limitPrice.amount,
-    right: firstQuantity
-  })
-  const secondQuote = multiplyDecimal({
-    left: buyOrder.limitPrice.amount,
-    right: secondQuantity
-  })
-  const makeCommissionedBuyFill = ({
-    tradeId,
-    quantity,
-    quoteQuantity
-  }) => new Fill({
+  const secondQuantity = subtractDecimal({ left: buyOrder.originalQuantity.amount, right: firstQuantity })
+  const firstQuote = multiplyDecimal({ left: buyOrder.limitPrice.amount, right: firstQuantity })
+  const secondQuote = multiplyDecimal({ left: buyOrder.limitPrice.amount, right: secondQuantity })
+  const makeCommissionedBuyFill = ({ tradeId, quantity, quoteQuantity }) => new Fill({
     tradeId,
     brokerOrderId: buyOrder.brokerOrderId,
     clientOrderId: buyOrder.clientOrderId,
     market,
     side: "BUY",
     price: buyOrder.limitPrice,
-    quantity: new Quantity({
-      amount: quantity,
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: quoteQuantity,
-      asset: quoteAsset
-    }),
-    commissions: [new Commission({ amount: new Money({
-      amount: "0.01",
-      asset: quoteAsset
-    }) })],
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    commissions: [new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) })],
     commissionStatus: "COMPLETE",
   })
   const firstFill = makeCommissionedBuyFill({
@@ -3846,10 +2871,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   assert.equal(ledgerRef.current.appliedFillIds.length, 3)
   assert.equal(
     portfolioRef.current.getPosition({ marketId: market.id }).baseQuantity.amount,
-    addDecimal({
-      left: seeded.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount,
-      right: buyOrder.originalQuantity.amount
-    }),
+    addDecimal({ left: seeded.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, right: buyOrder.originalQuantity.amount }),
   )
 
   const staleCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
@@ -3872,11 +2894,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   assert.deepEqual(sequence.slice(-2), ["cancel:SELL", "submit:SELL"])
 
   const expectedDecision = conservativeStrategyPolicy.evaluate({
-    marketPrice: {
-      symbol: market.symbol,
-      price: "100",
-      timestamp: 1
-    },
+    marketPrice: { symbol: market.symbol, price: "100", timestamp: 1 },
     pairConfig: appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
     settings: appConfig.strategies.CG_coinGrabber.settings,
     portfolio: portfolioRef.current,
@@ -3887,10 +2905,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   })
   const expectedSell = expectedDecision.actions.find((action) => action.side === "SELL")
   assert.equal(replacementSell.originalQuantity.amount, expectedSell.quantity)
-  assert.ok(compareDecimal({
-    left: replacementSell.limitPrice.amount,
-    right: expectedSell.price
-  }) >= 0)
+  assert.ok(compareDecimal({ left: replacementSell.limitPrice.amount, right: expectedSell.price }) >= 0)
 })
 
 test("fails shutdown recovery closed when the legacy ledger cost mirror diverges from Position.spent", async () => {
@@ -3914,11 +2929,7 @@ test("fails shutdown recovery closed when the legacy ledger cost mirror diverges
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   stopping.value = true
 
@@ -3933,14 +2944,8 @@ test("fails shutdown recovery closed when the legacy ledger cost mirror diverges
 
 test("fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved", async () => {
   for (const scenario of [
-    {
-      name: "cancel",
-      cancelFailure: true
-    },
-    {
-      name: "replacement-submit",
-      placeOrderFailureAfterCount: 2
-    },
+    { name: "cancel", cancelFailure: true },
+    { name: "replacement-submit", placeOrderFailureAfterCount: 2 },
   ]) {
     const seeded = makeSeededRecoveryState()
     const stopping = { value: false }
@@ -3956,34 +2961,18 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
       getRecoveryLedger: () => ledgerRef.current,
       updateTradingAccounting: async ({ fill }) => {
         if (portfolioRef.current.appliedFillIds.includes(fill.id)) {
-          return {
-            ok: true,
-            data: {
-            applied: false,
-            duplicate: true
-          }
-          }
+          return { ok: true, data: { applied: false, duplicate: true } }
         }
         portfolioRef.current = portfolioRef.current.applyFill({ fill }).portfolio
         ledgerRef.current = ledgerRef.current.applyFill({ fill }).ledger
-        return {
-          ok: true,
-          data: {
-          applied: true,
-          duplicate: false
-        }
-        }
+        return { ok: true, data: { applied: true, duplicate: false } }
       },
       cancelFailure: scenario.cancelFailure ?? false,
       placeOrderFailureAfterCount: scenario.placeOrderFailureAfterCount,
     })
     await harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
     const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
     assert.ok(buyOrder)
@@ -4023,11 +3012,7 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
 
 test("does not submit the next standing BUY when recovery SELL submission fails", async () => {
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    orders,
-    pauses
-  } = await createHarness({
+  const { engine, orders, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -4036,11 +3021,7 @@ test("does not submit the next standing BUY when recovery SELL submission fails"
 
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -4049,13 +3030,7 @@ test("does not submit the next standing BUY when recovery SELL submission fails"
 })
 
 
-function makeOrderStatusUpdate({
-  order,
-  brokerOrderId = order.brokerOrderId,
-  status,
-  executedQuantity = "0",
-  updatedAt = 2
-}) {
+function makeOrderStatusUpdate({ order, brokerOrderId = order.brokerOrderId, status, executedQuantity = "0", updatedAt = 2 }) {
   const terminal = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(status)
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
@@ -4065,10 +3040,7 @@ function makeOrderStatusUpdate({
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: executedQuantity,
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
     status,
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
@@ -4078,23 +3050,13 @@ function makeOrderStatusUpdate({
 }
 
 test("keeps UNKNOWN exchange order states active and waits for authoritative resolution", async () => {
-  const {
-    engine,
-    pauses
-  } = await createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const unknown = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "UNKNOWN"
-  })
+  const unknown = makeOrderStatusUpdate({ order: buyOrder, status: "UNKNOWN" })
   const result = await engine.processUserDataEvent({ event: { executedOrder: unknown } })
 
   assert.equal(result.ok, true)
@@ -4104,26 +3066,16 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
 })
 
 test("accepts a matching Binance NEW report after a lost order acknowledgement", async () => {
-  const {
-    engine,
-    cancellationIds
-  } = await createHarness({
+  const { engine, cancellationIds } = await createHarness({
     placeOrderThrow: true,
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({
-        ok: true,
-        durable: true
-      }),
+      flush: async () => ({ ok: true, durable: true }),
     },
   })
   const submission = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(submission.ok, false)
   const unknownOrder = engine.getOrders().find((order) => order.side === "BUY")
@@ -4137,11 +3089,7 @@ test("accepts a matching Binance NEW report after a lost order acknowledgement",
     updatedAt: 1,
   })
   const result = await engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "NEW",
-      executedOrder: exchangeNew
-    },
+    event: { eventType: "executionReport", executionType: "NEW", executedOrder: exchangeNew },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -4158,23 +3106,13 @@ test("accepts a matching Binance NEW report after a lost order acknowledgement",
 
 test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
   for (const status of ["CANCELED", "EXPIRED"]) {
-    const {
-      engine,
-      pauses
-    } = await createHarness()
+    const { engine, pauses } = await createHarness()
     await engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
     const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-    const terminal = makeOrderStatusUpdate({
-      order: buyOrder,
-      status
-    })
+    const terminal = makeOrderStatusUpdate({ order: buyOrder, status })
     const result = await engine.processUserDataEvent({ event: { executedOrder: terminal } })
 
     assert.equal(result.ok, true, status)
@@ -4184,17 +3122,10 @@ test("reevaluates after unfilled CANCELED and EXPIRED order states", async () =>
 })
 
 test("pauses when an EXPIRED order reports execution without reconciled fills", async () => {
-  const {
-    engine,
-    pauses
-  } = await createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const expired = makeOrderStatusUpdate({
@@ -4209,23 +3140,13 @@ test("pauses when an EXPIRED order reports execution without reconciled fills", 
 })
 
 test("pauses on an exchange REJECTED order update", async () => {
-  const {
-    engine,
-    pauses
-  } = await createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const rejected = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "REJECTED"
-  })
+  const rejected = makeOrderStatusUpdate({ order: buyOrder, status: "REJECTED" })
   const result = await engine.processUserDataEvent({ event: { executedOrder: rejected } })
 
   assert.equal(result.ok, true)
@@ -4251,28 +3172,15 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
         currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
         currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
         accountedFills.push(fill)
-        return {
-          ok: true,
-          data: {
-          applied: true,
-          duplicate: false
-        }
-        }
+        return { ok: true, data: { applied: true, duplicate: false } }
       },
     })
     await harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
     const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
-    const quoteQuantity = multiplyDecimal({
-      left: sellOrder.limitPrice.amount,
-      right: "0.2"
-    })
+    const quoteQuantity = multiplyDecimal({ left: sellOrder.limitPrice.amount, right: "0.2" })
     const sellFill = makeSellFill({
       order: sellOrder,
       tradeId: `terminal-recovery-sell-${status.toLowerCase()}`,
@@ -4298,19 +3206,13 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     assert.equal(
       currentPortfolio.positions[0].quoteNetCashFlow.amount,
       subtractDecimal({
-        left: subtractDecimal({
-          left: quoteQuantity,
-          right: "0.01"
-        }),
+        left: subtractDecimal({ left: quoteQuantity, right: "0.01" }),
         right: "100",
       }),
     )
     assert.equal(
       currentRecoveryLedger.netSellProceeds,
-      subtractDecimal({
-        left: quoteQuantity,
-        right: "0.01"
-      }),
+      subtractDecimal({ left: quoteQuantity, right: "0.01" }),
     )
     assert.equal(accountedFills.length, 1)
     assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
@@ -4326,21 +3228,13 @@ test("classifies terminal fill-history REST timeouts as retryable reconciliation
     baseFreeBalance: "1",
     getTerminalFills: () => {
       throw Object.assign(new Error("terminal fill history timed out"), {
-        recoveryFailure: {
-          category: "REST_RECONCILIATION",
-          stage: "TERMINAL_FILL_HISTORY",
-          retryable: true
-        },
+        recoveryFailure: { category: "REST_RECONCILIATION", stage: "TERMINAL_FILL_HISTORY", retryable: true },
       })
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const result = await harness.engine.processUserDataEvent({
@@ -4372,11 +3266,7 @@ test("treats unclassified thrown terminal fill-history adapter errors as termina
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const result = await harness.engine.processUserDataEvent({
@@ -4421,22 +3311,12 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
       updateTradingAccounting: async ({ fill }) => {
         currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
         currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
-        return {
-          ok: true,
-          data: {
-          applied: true,
-          duplicate: false
-        }
-        }
+        return { ok: true, data: { applied: true, duplicate: false } }
       },
     })
     await harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
     const sellOrderRef = harness.engine.getOrders().find((order) => order.side === "SELL")
     const sellOrder = sellOrderRef
@@ -4475,12 +3355,7 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
   const cancelOrderGate = { promise: new Promise((resolve) => { releaseCancel = resolve }) }
   const cancelStarted = new Promise((resolve) => { signalCancelStarted = resolve })
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    accountedFills,
-    pauses,
-    cancellationIds
-  } = await createHarness({
+  const { engine, accountedFills, pauses, cancellationIds } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -4492,11 +3367,7 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
@@ -4522,10 +3393,7 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
     order: sellOrder,
     tradeId: "recovery-cancel-fill-sell",
     quantity: "0.1",
-    quoteQuantity: multiplyDecimal({
-      left: sellOrder.limitPrice.amount,
-      right: "0.1"
-    }),
+    quoteQuantity: multiplyDecimal({ left: sellOrder.limitPrice.amount, right: "0.1" }),
   })
   const lateSellEvent = engine.processUserDataEvent({
     event: {
@@ -4557,12 +3425,7 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
 })
 
 
-function makeOpenOrder({
-  order,
-  brokerOrderId = order.brokerOrderId,
-  clientOrderId = order.clientOrderId,
-  executedQuantity = "0"
-} = {}) {
+function makeOpenOrder({ order, brokerOrderId = order.brokerOrderId, clientOrderId = order.clientOrderId, executedQuantity = "0" } = {}) {
   const openOrder = new Order({
     symbol: order.market.symbol,
     type: order.type,
@@ -4579,19 +3442,10 @@ function makeOpenOrder({
 }
 
 test("reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const firstFill = makeBuyFill({
@@ -4624,33 +3478,15 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
   const calls = []
   broker.getOpenOrders = async ({ symbol }) => {
     calls.push(["getOpenOrders", symbol])
-    return {
-      ok: true,
-      data: [externalOrder, makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.00000000"
-    })]
-    }
+    return { ok: true, data: [externalOrder, makeOpenOrder({ order: buyOrder, executedQuantity: "0.00000000" })] }
   }
-  broker.getCanonicalOrderHistory = async ({
-    symbol,
-    orderId
-  }) => {
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(["getCanonicalOrderHistory", symbol, orderId])
-    return {
-      ok: true,
-      data: [historyOrder]
-    }
+    return { ok: true, data: [historyOrder] }
   }
-  broker.getFills = async ({
-    symbol,
-    orderId
-  }) => {
+  broker.getFills = async ({ symbol, orderId }) => {
     calls.push(["getFills", symbol, orderId])
-    return {
-      ok: true,
-      data: [secondFill, firstFill]
-    }
+    return { ok: true, data: [secondFill, firstFill] }
   }
 
   const reconciled = await engine.reconcileOwnedOrders()
@@ -4669,16 +3505,12 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
   ])
 
   const overlappingStreamEvent = await engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makeOrderStatusUpdate({
+    event: { executionType: "TRADE", executedOrder: makeOrderStatusUpdate({
       order: buyOrder,
       status: "PARTIALLY_FILLED",
       executedQuantity: "0.2",
       updatedAt: 2,
-    }),
-      fill: firstFill
-    },
+    }), fill: firstFill },
   })
   assert.equal(overlappingStreamEvent.ok, true)
   assert.equal(accountedFills.length, 2)
@@ -4687,19 +3519,10 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
 
 
 test("accounts missing earlier REST fills without replaying cumulative order quantity backwards", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness({ accountingApplied: true })
+  const { engine, broker, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const earlierFill = makeBuyFill({
@@ -4743,19 +3566,10 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
   })
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.5"
-    })],
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.5" })],
   })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [laterStreamFill, earlierFill]
-  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => ({ ok: true, data: [laterStreamFill, earlierFill] })
 
   const reconciled = await engine.reconcileOwnedOrders()
 
@@ -4771,19 +3585,10 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
 })
 
 test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const partialFill = makeBuyFill({
@@ -4800,21 +3605,9 @@ test("fails closed without applying partial REST fills when cumulative history i
     executedQuantity: "0.4",
     updatedAt: 3,
   })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-    order: buyOrder,
-    executedQuantity: "0.4"
-  })]
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [partialFill]
-  })
+  broker.getOpenOrders = async () => ({ ok: true, data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })] })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => ({ ok: true, data: [partialFill] })
 
   const result = await engine.reconcileOwnedOrders()
 
@@ -4826,19 +3619,10 @@ test("fails closed without applying partial REST fills when cumulative history i
 
 
 test("fails closed when REST fill IDs conflict with executions already processed from the stream", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const streamFill = makeBuyFill({
@@ -4864,31 +3648,14 @@ test("fails closed when REST fill IDs conflict with executions already processed
     updatedAt: 2,
   })
   const streamResult = await engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: partialOrder,
-      fill: streamFill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: partialOrder, fill: streamFill },
   })
   assert.equal(streamResult.ok, true)
   assert.equal(accountedFills.length, 1)
 
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-    order: buyOrder,
-    executedQuantity: "0.2"
-  })]
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [partialOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [restFillWithDifferentId]
-  })
+  broker.getOpenOrders = async () => ({ ok: true, data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })] })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getFills = async () => ({ ok: true, data: [restFillWithDifferentId] })
 
   const result = await engine.reconcileOwnedOrders()
 
@@ -4900,19 +3667,10 @@ test("fails closed when REST fill IDs conflict with executions already processed
 
 
 test("rejects REST order history that is behind an already processed stream fill", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness({ accountingApplied: true })
+  const { engine, broker, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const streamFill = makeBuyFill({
@@ -4930,12 +3688,7 @@ test("rejects REST order history that is behind an already processed stream fill
     updatedAt: 3,
   })
   const streamResult = await engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: streamOrder,
-      fill: streamFill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: streamOrder, fill: streamFill },
   })
   assert.equal(streamResult.ok, true)
   assert.equal(accountedFills.length, 1)
@@ -4950,10 +3703,7 @@ test("rejects REST order history that is behind an already processed stream fill
   })
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.4"
-    })],
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })],
   })
   broker.getCanonicalOrderHistory = async () => ({
     ok: true,
@@ -4964,10 +3714,7 @@ test("rejects REST order history that is behind an already processed stream fill
       updatedAt: 4,
     })],
   })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [staleRestFill]
-  })
+  broker.getFills = async () => ({ ok: true, data: [staleRestFill] })
 
   const result = await engine.reconcileOwnedOrders()
 
@@ -4987,19 +3734,10 @@ test("processes stream fills received during REST reads before applying the REST
   let signalFillsStarted
   const fillsGate = { promise: new Promise((resolve) => { releaseFills = resolve }) }
   const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const recoveredFill = makeBuyFill({
@@ -5018,22 +3756,13 @@ test("processes stream fills received during REST reads before applying the REST
   })
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0"
-    })],
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0" })],
   })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [partialOrder]
-  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
   broker.getFills = async () => {
     signalFillsStarted()
     await fillsGate.promise
-    return {
-      ok: true,
-      data: [recoveredFill]
-    }
+    return { ok: true, data: [recoveredFill] }
   }
 
   const reconciliation = engine.reconcileOwnedOrders()
@@ -5074,23 +3803,13 @@ test("uses the injected strategy policy instead of a hard-coded Conservative eva
         reason: "TEST_POLICY_NO_ACTION",
       })
     },
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
-  const {
-    engine,
-    orders
-  } = await createHarness({ strategyPolicy })
+  const { engine, orders } = await createHarness({ strategyPolicy })
 
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true)
@@ -5115,23 +3834,13 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
       const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
+      return { ok: true, data: { applied: true, duplicate: false } }
     },
   })
 
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buy = harness.engine.getOrders().find((order) => order.side === "BUY")
   assert.ok(buy)
@@ -5143,10 +3852,7 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
     type: buy.type,
     limitPrice: buy.limitPrice,
     originalQuantity: buy.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0.1",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "0.1", asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: buy.createdAt,
     acknowledgedAt: buy.acknowledgedAt,
@@ -5157,28 +3863,17 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
     tradeId: "trailing-partial-buy-fill",
     price: buy.limitPrice.amount,
     quantity: "0.1",
-    quoteQuantity: multiplyDecimal({
-      left: buy.limitPrice.amount,
-      right: "0.1"
-    }),
+    quoteQuantity: multiplyDecimal({ left: buy.limitPrice.amount, right: "0.1" }),
   })
   const applied = await harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: partialOrder,
-      fill
-    },
+    event: { executionType: "TRADE", executedOrder: partialOrder, fill },
   })
   assert.equal(applied.ok, true, applied.errors?.[0]?.message)
   assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.1")
 
   const update = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
   })
   assert.equal(update.ok, true, update.errors?.[0]?.message)
   assert.equal(repricingEvaluations, 0)
@@ -5190,10 +3885,7 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
   let repricingEvaluations = 0
   const strategyPolicy = {
     ...conservativeStrategyPolicy,
-    evaluate: (input) => conservativeStrategyPolicy.evaluate({
-      ...input,
-      lastBuyPrice: "100"
-    }),
+    evaluate: (input) => conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" }),
     evaluateTrailingBuyRepricing: (input) => {
       repricingEvaluations += 1
       return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
@@ -5208,23 +3900,13 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
       const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
+      return { ok: true, data: { applied: true, duplicate: false } }
     },
   })
 
   const initial = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(initial.ok, true, initial.errors?.[0]?.message)
   const buy = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -5240,10 +3922,7 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     type: sell.type,
     limitPrice: sell.limitPrice,
     originalQuantity: sell.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0.1",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "0.1", asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: sell.createdAt,
     acknowledgedAt: sell.acknowledgedAt,
@@ -5253,28 +3932,17 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     order: sell,
     tradeId: "trailing-partial-recovery-sell-fill",
     quantity: "0.1",
-    quoteQuantity: multiplyDecimal({
-      left: sell.limitPrice.amount,
-      right: "0.1"
-    }),
+    quoteQuantity: multiplyDecimal({ left: sell.limitPrice.amount, right: "0.1" }),
   })
   const applied = await harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: partialSell,
-      fill
-    },
+    event: { executionType: "TRADE", executedOrder: partialSell, fill },
   })
   assert.equal(applied.ok, true, applied.errors?.[0]?.message)
   assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.9")
 
   const update = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
   })
   assert.equal(update.ok, true, update.errors?.[0]?.message)
   assert.equal(repricingEvaluations, 0)
@@ -5291,10 +3959,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
   let repricingEvaluations = 0
   const strategyPolicy = {
     ...conservativeStrategyPolicy,
-    evaluate: (input) => conservativeStrategyPolicy.evaluate({
-      ...input,
-      lastBuyPrice: "100"
-    }),
+    evaluate: (input) => conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" }),
     evaluateTrailingBuyRepricing: (input) => {
       repricingEvaluations += 1
       return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
@@ -5308,11 +3973,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
 
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(first.ok, true, first.errors?.[0]?.message)
   const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -5320,20 +3981,12 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
 
   const upward = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   assert.equal(upward.ok, true, upward.errors?.[0]?.message)
   const downward = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "99.90",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "99.90", timestamp: 3 },
   })
   assert.equal(downward.ok, true, downward.errors?.[0]?.message)
 
@@ -5348,11 +4001,7 @@ test("reprices an active BUY normally when no Position exists", async () => {
 
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(first.ok, true, first.errors?.[0]?.message)
   const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -5360,11 +4009,7 @@ test("reprices an active BUY normally when no Position exists", async () => {
 
   const repriced = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(repriced.ok, true, repriced.errors?.[0]?.message)
@@ -5380,29 +4025,16 @@ test("allows trailing BUY repricing when only retained free inventory exists", a
   const portfolio = new Portfolio({
     positions: [new Position({
       market,
-      baseQuantity: new Quantity({
-        amount: "0",
-        asset: baseAsset
-      }),
-      freeBaseQuantity: new Quantity({
-        amount: "1",
-        asset: baseAsset
-      }),
-      quoteNetCashFlow: new Money({
-        amount: "0",
-        asset: quoteAsset
-      }),
+      baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      freeBaseQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      quoteNetCashFlow: new Money({ amount: "0", asset: quoteAsset }),
     })],
   })
   const harness = await createHarness({ initialPortfolio: portfolio })
 
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(first.ok, true, first.errors?.[0]?.message)
 
@@ -5410,11 +4042,7 @@ test("allows trailing BUY repricing when only retained free inventory exists", a
   assert.ok(initialBuy)
   const repriced = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(repriced.ok, true, repriced.errors?.[0]?.message)
@@ -5432,32 +4060,18 @@ test("uses the injected trailing repricing policy", async () => {
     ...conservativeStrategyPolicy,
     evaluateTrailingBuyRepricing: () => {
       repricingEvaluations += 1
-      return {
-        shouldReplace: false,
-        adjustmentThreshold: "100.05"
-      }
+      return { shouldReplace: false, adjustmentThreshold: "100.05" }
     },
   }
-  const {
-    engine,
-    orders
-  } = await createHarness({ strategyPolicy })
+  const { engine, orders } = await createHarness({ strategyPolicy })
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(repricingEvaluations, 1)
@@ -5466,17 +4080,10 @@ test("uses the injected trailing repricing policy", async () => {
 
 
 test("does not evaluate or submit from a stale market price", async () => {
-  const {
-    engine,
-    orders
-  } = await createHarness({ isMarketPriceFresh: () => false })
+  const { engine, orders } = await createHarness({ isMarketPriceFresh: () => false })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.skipped, true)
@@ -5487,17 +4094,10 @@ test("does not evaluate or submit from a stale market price", async () => {
 
 test("does not reuse a cached market price after it becomes stale", async () => {
   let isFresh = true
-  const {
-    engine,
-    orders
-  } = await createHarness({ isMarketPriceFresh: () => isFresh })
+  const { engine, orders } = await createHarness({ isMarketPriceFresh: () => isFresh })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(orders.length, 1)
   isFresh = false
@@ -5520,21 +4120,14 @@ test("defers submission when the market price becomes stale during pending-order
       }
     },
   }
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     isMarketPriceFresh: () => isFresh,
     eventPublisher,
   })
 
   const first = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(first.ok, true)
@@ -5544,11 +4137,7 @@ test("defers submission when the market price becomes stale during pending-order
   isFresh = true
   const next = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.01",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
   })
 
   assert.equal(next.ok, true)
@@ -5558,122 +4147,52 @@ test("defers submission when the market price becomes stale during pending-order
 
 test("validates exact-decimal books and detects BUY/SELL POST-ONLY crossing at equality", () => {
   const book = createMarketBook({ bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 10,
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 10,
   } })
   const order = (side, amount) => ({
-    type: "LIMIT_MAKER",
-    side,
-    market: { symbol: "DOGEUSDT" },
-    limitPrice: { amount },
+    type: "LIMIT_MAKER", side, market: { symbol: "DOGEUSDT" }, limitPrice: { amount },
   })
-  assert.equal(isPostOnlyOrderCrossing({
-    order: order("BUY", "99.99"),
-    marketBook: book
-  }), false)
-  assert.equal(isPostOnlyOrderCrossing({
-    order: order("BUY", "100.00"),
-    marketBook: book
-  }), true)
-  assert.equal(isPostOnlyOrderCrossing({
-    order: order("SELL", "99.91"),
-    marketBook: book
-  }), false)
-  assert.equal(isPostOnlyOrderCrossing({
-    order: order("SELL", "99.90"),
-    marketBook: book
-  }), true)
-  assert.throws(() => createMarketBook({ bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "100",
-    bestBidQuantity: "1",
-    bestAskPrice: "100",
-    bestAskQuantity: "1",
-    timestamp: 10
-  } }), /best bid must be below best ask/)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("BUY", "99.99"), marketBook: book }), false)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("BUY", "100.00"), marketBook: book }), true)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("SELL", "99.91"), marketBook: book }), false)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("SELL", "99.90"), marketBook: book }), true)
+  assert.throws(() => createMarketBook({ bookTicker: { symbol: "DOGEUSDT", bestBidPrice: "100", bestBidQuantity: "1", bestAskPrice: "100", bestAskQuantity: "1", timestamp: 10 } }), /best bid must be below best ask/)
 })
 
 test("defers a crossing POST-ONLY BUY and resumes on a fresh non-crossing book", async () => {
-  const {
-    engine,
-    orders
-  } = await createHarness({ initialBook: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "99.95",
-    bestAskQuantity: "1",
-    timestamp: 1,
+  const { engine, orders } = await createHarness({ initialBook: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "99.95", bestAskQuantity: "1", timestamp: 1,
   } })
-  const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   assert.equal(result.data.deferred, true)
   assert.equal(orders.length, 0)
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 2,
-  }
-  })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
   assert.equal(orders.length, 1)
 })
 
 test("fails closed without a fresh book and resumes after a fresh book update", async () => {
   let fresh = false
-  const {
-    engine,
-    orders
-  } = await createHarness({
-    initialBook: false,
-    isMarketBookFresh: () => fresh
-  })
-  const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  const { engine, orders } = await createHarness({ initialBook: false, isMarketBookFresh: () => fresh })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   assert.equal(result.data.deferred, true)
   assert.equal(orders.length, 0)
   fresh = true
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 2,
-  }
-  })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
   assert.equal(orders.length, 1)
 })
 
 test("rechecks book freshness after PENDING registration before broker I/O", async () => {
   let fresh = true
   let staleOnce = true
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     isMarketBookFresh: () => fresh,
     eventPublisher: { publish: ({ name }) => {
       if (name === "order.submission_requested" && staleOnce) {
@@ -5682,120 +4201,59 @@ test("rechecks book freshness after PENDING registration before broker I/O", asy
       }
     } },
   })
-  const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   assert.equal(result.data.deferred, true)
   assert.equal(orders.length, 0)
   assert.equal(engine.getOrders().length, 0)
   fresh = true
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 2,
-  }
-  })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
   assert.equal(orders.length, 1)
 })
 
 test("definite POST-ONLY rejection removes PENDING and waits for a fresh book without pausing", async () => {
   const events = []
   const rejection = Object.assign(new Error("known post-only rejection"), { code: "POST_ONLY_WOULD_TAKE" })
-  const {
-    engine,
-    orders,
-    pauses
-  } = await createHarness({
+  const { engine, orders, pauses } = await createHarness({
     placeOrderFailureCount: 1,
     placeOrderFailureError: rejection,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
-  const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   assert.equal(result.ok, false)
   assert.equal(orders.length, 1)
   assert.deepEqual(pauses, [])
   assert.equal(engine.getOrders().length, 0)
   assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED")
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "99.94",
-    bestAskQuantity: "1",
-    timestamp: 2,
-  }
-  })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "99.94", bestAskQuantity: "1", timestamp: 2,
+  } })
   assert.equal(orders.length, 1)
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 3,
-  }
-  })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 3,
+  } })
   assert.equal(orders.length, 2)
   assert.deepEqual(pauses, [])
 })
 
 
 test("invalid book updates invalidate the cached book and fail closed", async () => {
-  const {
-    engine,
-    orders
-  } = await createHarness({ initialBook: false })
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "99.90",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 1,
-  }
-  })
-  const invalid = await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "100.00",
-    bestBidQuantity: "1",
-    bestAskPrice: "100.00",
-    bestAskQuantity: "1",
-    timestamp: 2,
-  }
-  })
+  const { engine, orders } = await createHarness({ initialBook: false })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 1,
+  } })
+  const invalid = await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "100.00", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
   assert.equal(invalid.ok, false)
   const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 2
-    },
+    symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
   })
   assert.equal(result.data.deferred, true)
   assert.equal(orders.length, 0)
@@ -5809,17 +4267,10 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
       observedReferences.push(input.lastBuyPrice ?? null)
       return evaluateConservativeStrategy({
         ...input,
-        pairConfig: {
-          ...input.pairConfig,
-          orderQuantity: 0.1,
-          keepQuantity: 1
-        },
+        pairConfig: { ...input.pairConfig, orderQuantity: 0.1, keepQuantity: 1 },
       })
     },
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
   const harness = await createHarness({
     strategyPolicy,
@@ -5840,11 +4291,7 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
   for (let index = 0; index < 12; index += 1) {
     const result = await harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: index + 1
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: index + 1 },
     })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
   }
@@ -5888,10 +4335,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     },
     completeRecoveryCycle: async (input) => {
       completionInputs.push(input)
-      const {
-        marketId,
-        inventoryDisposition
-      } = input
+      const { marketId, inventoryDisposition } = input
       const position = currentPortfolio.getPosition({ marketId })
       const completion = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
@@ -5907,26 +4351,16 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
           marketId,
           quantity: completion.freeQuantity,
         })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle({
-          minProfit: "0.01",
-          spent: position.spent
-        })
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit: "0.01", spent: position.spent })
       }
-      return {
-        ok: true,
-        data: completion
-      }
+      return { ok: true, data: completion }
     },
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
 
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
   })
   const recoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(recoverySell)
@@ -5936,10 +4370,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     order: recoverySell,
     tradeId: "post-recovery-residual-sell",
     quantity,
-    quoteQuantity: multiplyDecimal({
-      left: price,
-      right: quantity
-    }),
+    quoteQuantity: multiplyDecimal({ left: price, right: quantity }),
   })
   const result = await harness.engine.processUserDataEvent({
     event: {
@@ -6011,27 +4442,15 @@ test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it
       return {
         strategy: "TEST_POLICY",
         symbol: "DOGEUSDT",
-        actions: [{
-          side: "BUY",
-          type: "LIMIT_MAKER",
-          price: "0.01",
-          quantity: "0.1"
-        }],
+        actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "0.01", quantity: "0.1" }],
       }
     },
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
   const harness = await createHarness({ strategyPolicy })
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
   })
   assert.equal(first.ok, false)
   assert.match(first.errors?.[0]?.message ?? "", /MIN_NOTIONAL/)
@@ -6041,11 +4460,7 @@ test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it
 
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 3 },
   })
   assert.equal(evaluationCount, 1)
   assert.equal(harness.orders.length, 0)
@@ -6054,11 +4469,7 @@ test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it
 
 
 test("reconciles a FILLED acknowledgement from Binance myTrades without a clientOrderId", async () => {
-  const {
-    engine,
-    accountedFills,
-    pauses
-  } = await createHarness({
+  const { engine, accountedFills, pauses } = await createHarness({
     immediateFilledAcknowledgement: true,
     accountingApplied: true,
     getAcknowledgedFills: ({ order }) => [makeBuyFill({
@@ -6076,11 +4487,7 @@ test("reconciles a FILLED acknowledgement from Binance myTrades without a client
 
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -6090,12 +4497,7 @@ test("reconciles a FILLED acknowledgement from Binance myTrades without a client
 })
 
 test("retains acknowledged broker identity after conflicting REST fill metadata and reconciles a later stream fill without resuming", async () => {
-  const {
-    engine,
-    orders,
-    accountedFills,
-    pauses
-  } = await createHarness({
+  const { engine, orders, accountedFills, pauses } = await createHarness({
     immediateFilledAcknowledgement: true,
     accountingApplied: true,
     getAcknowledgedFills: ({ order }) => [makeBuyFill({
@@ -6113,11 +4515,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
 
   const failed = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(failed.ok, false)
   const tracked = engine.getOrders()[0]
@@ -6138,12 +4536,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
   })
   const filledOrder = makeFilledOrder({ order: tracked })
   const streamed = await engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: filledOrder,
-      fill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: filledOrder, fill },
   })
   assert.equal(streamed.ok, true, streamed.errors?.[0]?.message)
   assert.equal(accountedFills.length, 1)
@@ -6151,11 +4544,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
 
   const nextPrice = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.1",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.1", timestamp: 3 },
   })
   assert.equal(nextPrice.ok, true)
   assert.equal(orders.length, 1)
@@ -6195,11 +4584,7 @@ test("publishes one durable fill-applied event per reconciled execution and no d
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, true, result.errors?.[0]?.message)
 
@@ -6260,11 +4645,7 @@ test("rejects acknowledged REST fills with conflicting broker, market, or side o
 
     const result = await harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
 
     assert.equal(result.ok, false)
@@ -6296,11 +4677,7 @@ test("recovers an acknowledged fill when Binance trade history becomes visible l
 
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(first.ok, false)
   assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
@@ -6329,37 +4706,17 @@ test("limits a batch of BUY intents to the remaining quote balance and pair inve
       symbol: "DOGEUSDT",
       action: "PLACE_ORDERS",
       actions: [
-        {
-          side: "BUY",
-          type: "LIMIT_MAKER",
-          price: "60",
-          quantity: "10"
-        },
-        {
-          side: "BUY",
-          type: "LIMIT_MAKER",
-          price: "60",
-          quantity: "10"
-        },
+        { side: "BUY", type: "LIMIT_MAKER", price: "60", quantity: "10" },
+        { side: "BUY", type: "LIMIT_MAKER", price: "60", quantity: "10" },
       ],
     }),
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
-  const harness = await createHarness({
-    strategyPolicy,
-    quoteFreeBalance: "1000"
-  })
+  const harness = await createHarness({ strategyPolicy, quoteFreeBalance: "1000" })
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -6379,24 +4736,11 @@ test("rejects an overcommitted batch of SELL intents before submitting any order
       symbol: "DOGEUSDT",
       action: "PLACE_ORDERS",
       actions: [
-        {
-          side: "SELL",
-          type: "LIMIT_MAKER",
-          price: "100",
-          quantity: "0.6"
-        },
-        {
-          side: "SELL",
-          type: "LIMIT_MAKER",
-          price: "100",
-          quantity: "0.6"
-        },
+        { side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "0.6" },
+        { side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "0.6" },
       ],
     }),
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
   const harness = await createHarness({
     strategyPolicy,
@@ -6407,11 +4751,7 @@ test("rejects an overcommitted batch of SELL intents before submitting any order
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false)
@@ -6424,31 +4764,15 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
       strategy: "TEST_POLICY",
       symbol: "DOGEUSDT",
       action: lastBuyPrice ? "NO_ACTION" : "PLACE_ORDERS",
-      actions: lastBuyPrice ? [] : [{
-        side: "BUY",
-        type: "LIMIT_MAKER",
-        price: "99.95",
-        quantity: "1"
-      }],
+      actions: lastBuyPrice ? [] : [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
     }),
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
-  const harness = await createHarness({
-    strategyPolicy,
-    placeOrderThrow: true,
-    accountingApplied: true
-  })
+  const harness = await createHarness({ strategyPolicy, placeOrderThrow: true, accountingApplied: true })
 
   const submission = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(submission.ok, false)
@@ -6464,10 +4788,7 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
     type: pendingOrder.type,
     limitPrice: pendingOrder.limitPrice,
     originalQuantity: pendingOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -6483,10 +4804,7 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
     executedAt: 2,
   })
   harness.setCanonicalOrderLookup({ order: acknowledgedOrder })
-  harness.setAcknowledgedOrder({
-    order: acknowledgedOrder,
-    fills: [fill]
-  })
+  harness.setAcknowledgedOrder({ order: acknowledgedOrder, fills: [fill] })
 
   const reconciliation = await harness.engine.reconcileOwnedOrders()
 
@@ -6503,11 +4821,7 @@ test("keeps a pending submission UNKNOWN when client-order-ID lookup cannot reso
   const harness = await createHarness({ placeOrderThrow: true })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   const result = await harness.engine.reconcileOwnedOrders()
@@ -6523,11 +4837,7 @@ test("does not adopt a client-order lookup response with a mismatched client ID"
   const harness = await createHarness({ placeOrderThrow: true })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const pendingOrder = harness.engine.getOrders()[0]
   const foreignOrder = new CanonicalOrder({
@@ -6538,19 +4848,13 @@ test("does not adopt a client-order lookup response with a mismatched client ID"
     type: pendingOrder.type,
     limitPrice: pendingOrder.limitPrice,
     originalQuantity: pendingOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  harness.setCanonicalOrderLookup({
-    clientOrderId: pendingOrder.clientOrderId,
-    order: foreignOrder
-  })
+  harness.setCanonicalOrderLookup({ clientOrderId: pendingOrder.clientOrderId, order: foreignOrder })
 
   const result = await harness.engine.reconcileOwnedOrders()
 
@@ -6564,11 +4868,7 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
   const harness = await createHarness({ placeOrderThrow: true })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const pendingOrder = harness.engine.getOrders()[0]
   const conflictingOrder = new CanonicalOrder({
@@ -6579,10 +4879,7 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
     type: pendingOrder.type,
     limitPrice: pendingOrder.limitPrice,
     originalQuantity: pendingOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -6600,31 +4897,16 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
 
 
 test("reconciles recovered orders without canceling or replacing any exchange order", async () => {
-  const makeRecoveredOrder = ({
-    clientOrderId,
-    brokerOrderId,
-    side,
-    status,
-    executedQuantity = "0"
-  }) =>
+  const makeRecoveredOrder = ({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0" }) =>
     new CanonicalOrder({
       clientOrderId,
       brokerOrderId,
       market,
       side,
       type: "LIMIT",
-      limitPrice: new Money({
-        amount: "100",
-        asset: quoteAsset
-      }),
-      originalQuantity: new Quantity({
-        amount: "1",
-        asset: baseAsset
-      }),
-      executedQuantity: new Quantity({
-        amount: executedQuantity,
-        asset: baseAsset
-      }),
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
       status,
       createdAt: 1,
       acknowledgedAt: 1,
@@ -6661,18 +4943,9 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     clientOrderId: buyOwnedOrder.clientOrderId,
     market,
     side: "BUY",
-    price: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -6687,10 +4960,7 @@ test("reconciles recovered orders without canceling or replacing any exchange or
   })
   harness.broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({
-      order: sellHistory,
-      executedQuantity: "0"
-    })],
+    data: [makeOpenOrder({ order: sellHistory, executedQuantity: "0" })],
   })
   harness.broker.getCanonicalOrderHistory = async ({ orderId }) => ({
     ok: true,
@@ -6719,18 +4989,9 @@ test("clears a recovered replacement intent only after canonical history confirm
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -6748,18 +5009,9 @@ test("clears a recovered replacement intent only after canonical history confirm
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [canceledHistory]
-  })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: []
-  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [canceledHistory] })
+  harness.broker.getFills = async () => ({ ok: true, data: [] })
 
   const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
@@ -6775,58 +5027,31 @@ test("clears a recovered replacement intent only after canonical history confirm
 
 test("paginates complete REST fill history beyond Binance's 1000-trade page limit", async () => {
   const originalQuantity = "1001"
-  const makeOrder = ({
-    status,
-    executedQuantity
-  }) => new CanonicalOrder({
+  const makeOrder = ({ status, executedQuantity }) => new CanonicalOrder({
     clientOrderId: "recovered-many-fills",
     brokerOrderId: "broker-many-fills",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "1",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: originalQuantity,
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: executedQuantity,
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: originalQuantity, asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  const ownedOrder = makeOrder({
-    status: "UNKNOWN",
-    executedQuantity: "0"
-  })
-  const historyOrder = makeOrder({
-    status: "FILLED",
-    executedQuantity: originalQuantity
-  })
+  const ownedOrder = makeOrder({ status: "UNKNOWN", executedQuantity: "0" })
+  const historyOrder = makeOrder({ status: "FILLED", executedQuantity: originalQuantity })
   const makeFill = ({ tradeId }) => new Fill({
     tradeId: String(tradeId),
     brokerOrderId: ownedOrder.brokerOrderId,
     clientOrderId: ownedOrder.clientOrderId,
     market,
     side: "BUY",
-    price: new Money({
-      amount: "1",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "1",
-      asset: quoteAsset
-    }),
+    price: new Money({ amount: "1", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "1", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -6837,24 +5062,12 @@ test("paginates complete REST fill history beyond Binance's 1000-trade page limi
     initialBook: false,
     initialState: { orderRegistry: new OrderRegistry({ orders: [ownedOrder] }) },
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  harness.broker.getFills = async ({
-    fromId,
-    limit
-  }) => {
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  harness.broker.getFills = async ({ fromId, limit }) => {
     fillCursors.push(fromId)
     assert.equal(limit, 1000)
-    return {
-      ok: true,
-      data: fromId === undefined ? firstPage : secondPage
-    }
+    return { ok: true, data: fromId === undefined ? firstPage : secondPage }
   }
 
   const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
@@ -6873,18 +5086,9 @@ test("does not clear an independently durable strategy pause when a recovery can
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -6901,18 +5105,9 @@ test("does not clear an independently durable strategy pause when a recovery can
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [makeOrder({ status: "CANCELED" })]
-  })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: []
-  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [makeOrder({ status: "CANCELED" })] })
+  harness.broker.getFills = async () => ({ ok: true, data: [] })
 
   const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
@@ -6929,18 +5124,9 @@ test("processes recovery-time user-data cancellation facts without broker cancel
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -6972,44 +5158,23 @@ test("processes recovery-time user-data cancellation facts without broker cancel
 
 
 test("keeps a recovery pause until every same-market cancel/replace order is canonically resolved", async () => {
-  const makeOrder = ({
-    clientOrderId,
-    brokerOrderId,
-    status
-  }) => new CanonicalOrder({
+  const makeOrder = ({ clientOrderId, brokerOrderId, status }) => new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
   const ownedOrders = [
-    makeOrder({
-      clientOrderId: "recovered-sell-one",
-      brokerOrderId: "broker-sell-one",
-      status: "UNKNOWN"
-    }),
-    makeOrder({
-      clientOrderId: "recovered-sell-two",
-      brokerOrderId: "broker-sell-two",
-      status: "UNKNOWN"
-    }),
+    makeOrder({ clientOrderId: "recovered-sell-one", brokerOrderId: "broker-sell-one", status: "UNKNOWN" }),
+    makeOrder({ clientOrderId: "recovered-sell-two", brokerOrderId: "broker-sell-two", status: "UNKNOWN" }),
   ]
   const canceledOrders = ownedOrders.map((order) => makeOrder({
     clientOrderId: order.clientOrderId,
@@ -7026,18 +5191,12 @@ test("keeps a recovery pause until every same-market cancel/replace order is can
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
   harness.broker.getCanonicalOrderHistory = async ({ orderId }) => ({
     ok: true,
     data: [canceledOrders.find((order) => order.brokerOrderId === orderId)],
   })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: []
-  })
+  harness.broker.getFills = async () => ({ ok: true, data: [] })
 
   const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
@@ -7055,18 +5214,9 @@ test("rejects canonical REST fill facts that contradict the durable Journal exec
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
     status: "UNKNOWN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7092,18 +5242,9 @@ test("rejects canonical REST fill facts that contradict the durable Journal exec
     clientOrderId: ownedOrder.clientOrderId,
     market,
     side: "BUY",
-    price: new Money({
-      amount: "101",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "101",
-      asset: quoteAsset
-    }),
+    price: new Money({ amount: "101", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "101", asset: quoteAsset }),
     liquidityRole: "MAKER",
     commissions: [],
     commissionStatus: "COMPLETE",
@@ -7128,18 +5269,9 @@ test("rejects canonical REST fill facts that contradict the durable Journal exec
       }],
     },
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: [exchangeFill]
-  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  harness.broker.getFills = async () => ({ ok: true, data: [exchangeFill] })
 
   const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
@@ -7157,18 +5289,9 @@ test("rejects REST history that omits a durable Journal fill despite matching cu
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
     status: "UNKNOWN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7194,18 +5317,9 @@ test("rejects REST history that omits a durable Journal fill despite matching cu
     clientOrderId: ownedOrder.clientOrderId,
     market,
     side: "BUY",
-    price: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
     liquidityRole: "MAKER",
     commissions: [],
     commissionStatus: "COMPLETE",
@@ -7230,18 +5344,9 @@ test("rejects REST history that omits a durable Journal fill despite matching cu
       }],
     },
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: [exchangeFill]
-  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  harness.broker.getFills = async () => ({ ok: true, data: [exchangeFill] })
 
   const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
@@ -7259,18 +5364,9 @@ test("pauses a recovered order canceled without a durable Harvester cancellation
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7300,83 +5396,41 @@ test("journals broker execution reports and applied canonical order transitions"
   const events = []
   const strategyPolicy = {
     evaluate: () => ({
-      strategy: "CONSERVATIVE",
-      symbol: "DOGEUSDT",
-      action: "PLACE_ORDERS",
+      strategy: "CONSERVATIVE", symbol: "DOGEUSDT", action: "PLACE_ORDERS",
       reason: "INITIAL_BUY",
-      actions: [{
-        side: "BUY",
-        type: "LIMIT_MAKER",
-        price: "99.95",
-        quantity: "1",
-        reason: "INITIAL_BUY"
-      }],
+      actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1", reason: "INITIAL_BUY" }],
     }),
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
   const harness = await createHarness({
     strategyPolicy,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   const submitted = await harness.engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(submitted.ok, true)
   const current = harness.engine.getOrders().find((order) => order.side === "BUY")
   assert.ok(current)
   const canceled = new CanonicalOrder({
-    clientOrderId: current.clientOrderId,
-    brokerOrderId: current.brokerOrderId,
-    market,
-    side: current.side,
-    type: current.type,
-    limitPrice: current.limitPrice,
+    clientOrderId: current.clientOrderId, brokerOrderId: current.brokerOrderId,
+    market, side: current.side, type: current.type, limitPrice: current.limitPrice,
     originalQuantity: current.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    status: "CANCELED",
-    updatedAt: 2,
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "CANCELED", updatedAt: 2,
   })
   const brokerEvidence = {
-    schemaVersion: 1,
-    source: "binance.spot.userData.executionReport",
-    eventTime: 2,
-    transactionTime: 2,
-    symbol: "DOGEUSDT",
-    clientOrderId: current.clientOrderId,
-    originalClientOrderId: current.clientOrderId,
-    side: "BUY",
-    orderType: "LIMIT_MAKER",
-    orderQuantity: "1",
-    orderPrice: "99.95",
-    executionType: "CANCELED",
-    orderStatus: "CANCELED",
-    orderId: current.brokerOrderId,
-    lastExecutedQuantity: "0",
-    cumulativeExecutedQuantity: "0",
-    cumulativeQuoteQuantity: "0",
-    commissionAmount: "0",
-    commissionAsset: null,
-    tradeId: "-1",
-    isMaker: false,
+    schemaVersion: 1, source: "binance.spot.userData.executionReport",
+    eventTime: 2, transactionTime: 2, symbol: "DOGEUSDT",
+    clientOrderId: current.clientOrderId, originalClientOrderId: current.clientOrderId,
+    side: "BUY", orderType: "LIMIT_MAKER", orderQuantity: "1", orderPrice: "99.95",
+    executionType: "CANCELED", orderStatus: "CANCELED", orderId: current.brokerOrderId,
+    lastExecutedQuantity: "0", cumulativeExecutedQuantity: "0",
+    cumulativeQuoteQuantity: "0", commissionAmount: "0", commissionAsset: null,
+    tradeId: "-1", isMaker: false,
   }
   const result = await harness.engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "CANCELED",
-      executedOrder: canceled,
-      brokerEvidence
-    },
+    event: { eventType: "executionReport", executionType: "CANCELED", executedOrder: canceled, brokerEvidence },
   })
   assert.equal(result.ok, true)
   assert.ok(events.some((event) => event.name === "broker.execution_report" && event.data.cumulativeQuoteQuantity === "0"))
@@ -7397,41 +5451,22 @@ test("best-effort strategy evidence failure does not block order submission", as
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, true)
   assert.equal(harness.orders.length, 1)
 })
 
-function makeShutdownOrder({
-  side,
-  clientOrderId,
-  brokerOrderId,
-  status = "OPEN",
-  executedQuantity = "0"
-}) {
+function makeShutdownOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", executedQuantity = "0" }) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
     market,
     side,
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: executedQuantity,
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7460,14 +5495,8 @@ test("account-integrity safety halt reconciles a filled BUY without cancelling i
     status: "FILLED",
     executedQuantity: "1",
   })
-  const activeBuyHistory = makeOrderStatusUpdate({
-    order: activeBuy,
-    status: "OPEN"
-  })
-  const recoverySellHistory = makeOrderStatusUpdate({
-    order: recoverySell,
-    status: "OPEN"
-  })
+  const activeBuyHistory = makeOrderStatusUpdate({ order: activeBuy, status: "OPEN" })
+  const recoverySellHistory = makeOrderStatusUpdate({ order: recoverySell, status: "OPEN" })
   const buyFill = makeBuyFill({
     order: recoveredFilledBuy,
     tradeId: "safety-halt-filled-buy-trade",
@@ -7490,10 +5519,7 @@ test("account-integrity safety halt reconciles a filled BUY without cancelling i
       makeOpenOrder({ order: recoverySell }),
     ],
   })
-  harness.setAcknowledgedOrder({
-    order: filledBuyHistory,
-    fills: [buyFill]
-  })
+  harness.setAcknowledgedOrder({ order: filledBuyHistory, fills: [buyFill] })
   harness.setAcknowledgedOrder({ order: activeBuyHistory })
   harness.setAcknowledgedOrder({ order: recoverySellHistory })
   const safetyHalt = createAccountIntegritySafetyHalt({
@@ -7540,10 +5566,7 @@ test("shutdown cancellation cancels only strategy-owned BUY orders and preserves
     clientOrderId: "shutdown-sell",
     brokerOrderId: "broker-shutdown-sell",
   })
-  const {
-    engine,
-    cancellationIds
-  } = await createHarness({
+  const { engine, cancellationIds } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder, secondBuyOrder, sellOrder] }) },
     eventPublisher: { publish: () => ({ ok: true }) },
   })
@@ -7568,10 +5591,7 @@ test("account-integrity safety halt cancels only owned BUY orders and preserves 
     clientOrderId: "safety-halt-sell",
     brokerOrderId: "broker-safety-halt-sell",
   })
-  const {
-    engine,
-    cancellationIds
-  } = await createHarness({
+  const { engine, cancellationIds } = await createHarness({
     initialState: {
       orderRegistry: new OrderRegistry({ orders: [initialOwnedBuyOrder, existingRecoverySellOrder] }),
     },
@@ -7608,11 +5628,7 @@ test("shutdown cancellation applies partial BUY fills before confirming cancella
     clientOrderId: "shutdown-partial-buy",
     brokerOrderId: "broker-shutdown-partial-buy",
   })
-  const {
-    engine,
-    accountedFills,
-    pauses
-  } = await createHarness({
+  const { engine, accountedFills, pauses } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
     eventPublisher: { publish: () => ({ ok: true }) },
     cancelWithFill: true,
@@ -7636,10 +5652,7 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
     clientOrderId: "shutdown-unknown-buy",
     brokerOrderId: "broker-shutdown-unknown-buy",
   })
-  const {
-    engine,
-    cancellationIds
-  } = await createHarness({
+  const { engine, cancellationIds } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
     eventPublisher: { publish: () => ({ ok: true }) },
     cancelFailure: true,
@@ -7656,42 +5669,21 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
 test("defers a recovered BUY fill evaluation until application recovery is acknowledged", async () => {
   const initialPosition = new Position({
     market,
-    baseQuantity: new Quantity({
-      amount: "2",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-100",
-      asset: quoteAsset
-    }),
+    baseQuantity: new Quantity({ amount: "2", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-100", asset: quoteAsset }),
   })
   const initialPortfolio = new Portfolio({ positions: [initialPosition] })
-  const initialRecoveryLedger = new RecoveryLedger({
-    market,
-    buyCost: "100"
-  })
+  const initialRecoveryLedger = new RecoveryLedger({ market, buyCost: "100" })
   const recoverySellOrder = new CanonicalOrder({
     clientOrderId: "recovery-sell-during-reconnect",
     brokerOrderId: "broker-recovery-sell-during-reconnect",
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: "110",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1.9",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "110", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1.9", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7703,18 +5695,9 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: "90",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "90", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7736,10 +5719,7 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     type: "LIMIT_MAKER",
     limitPrice: standingBuyOrder.limitPrice,
     originalQuantity: standingBuyOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7753,14 +5733,8 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     market,
     side: "BUY",
     price: standingBuyOrder.limitPrice,
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "90",
-      asset: quoteAsset
-    }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "90", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -7794,19 +5768,10 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
 
 
 test("does not apply partial REST reconciliation after a fill-history timeout and permits a later retry", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const fill = makeBuyFill({
@@ -7825,34 +5790,19 @@ test("does not apply partial REST reconciliation after a fill-history timeout an
   })
   const timeout = Object.assign(
     new Error("REST fill history request timed out"),
-    {
-      name: "RpcTimeoutError",
-      code: "RPC_TIMEOUT"
-    },
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
   )
   let fillHistoryReads = 0
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.2"
-    })],
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })],
   })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
   broker.getFills = async () => {
     fillHistoryReads += 1
     return fillHistoryReads === 1
-      ? {
-        ok: false,
-        errors: [timeout]
-      }
-      : {
-        ok: true,
-        data: [fill]
-      }
+      ? { ok: false, errors: [timeout] }
+      : { ok: true, data: [fill] }
   }
 
   const failedAttempt = await engine.reconcileOwnedOrders({ recoveryMode: true })
@@ -7879,15 +5829,9 @@ test("does not apply partial REST reconciliation after a fill-history timeout an
 
 
 async function createMalformedRestEnvelopeFixture({
-  openOrdersResult = {
-    ok: true,
-    data: []
-  },
+  openOrdersResult = { ok: true, data: [] },
   canonicalOrderHistoryResult,
-  fillsResult = {
-    ok: true,
-    data: []
-  },
+  fillsResult = { ok: true, data: [] },
 } = {}) {
   const makeCanonicalOrder = ({ status }) => new CanonicalOrder({
     clientOrderId: "malformed-rest-envelope-owned-order",
@@ -7895,18 +5839,9 @@ async function createMalformedRestEnvelopeFixture({
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7933,10 +5868,7 @@ async function createMalformedRestEnvelopeFixture({
   harness.broker.getCanonicalOrderHistory = async () => {
     brokerReadCounts.canonicalOrderHistory += 1
     return canonicalOrderHistoryResult === undefined
-      ? {
-        ok: true,
-        data: [canonicalHistoryOrder]
-      }
+      ? { ok: true, data: [canonicalHistoryOrder] }
       : canonicalOrderHistoryResult
   }
   harness.broker.getFills = async () => {
@@ -7944,11 +5876,7 @@ async function createMalformedRestEnvelopeFixture({
     return fillsResult
   }
 
-  return {
-    harness,
-    ownedOrder,
-    brokerReadCounts
-  }
+  return { harness, ownedOrder, brokerReadCounts }
 }
 
 function assertMalformedRestEnvelopeFailsClosed({
@@ -7959,11 +5887,7 @@ function assertMalformedRestEnvelopeFailsClosed({
   expectedCanonicalOrderHistoryReads,
   expectedFillHistoryReads,
 }) {
-  const {
-    harness,
-    ownedOrder,
-    brokerReadCounts
-  } = fixture
+  const { harness, ownedOrder, brokerReadCounts } = fixture
   assert.equal(
     result.ok,
     false,
@@ -8029,18 +5953,11 @@ const createUnknownSubmissionHarness = async () => {
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const pendingOrder = harness.engine.getOrders().find((order) => !order.brokerOrderId)
   assert.ok(pendingOrder, "The failed submission must remain registered for clientOrderId reconciliation.")
-  return {
-    harness,
-    pendingOrder
-  }
+  return { harness, pendingOrder }
 }
 
 test("keeps explicit pending-order REST lookup failures retryable", async () => {
@@ -8069,10 +5986,7 @@ test("treats a pending-order lookup response without an explicit success flag as
 })
 
 test("treats a pending-order lookup CanonicalOrder without brokerOrderId as terminal shape failure", async () => {
-  const {
-    harness,
-    pendingOrder
-  } = await createUnknownSubmissionHarness()
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
   harness.broker.getCanonicalOrder = async () => ({
     ok: true,
     data: new CanonicalOrder({
@@ -8080,18 +5994,9 @@ test("treats a pending-order lookup CanonicalOrder without brokerOrderId as term
       market,
       side: pendingOrder.side,
       type: pendingOrder.type,
-      limitPrice: new Money({
-        amount: "100",
-        asset: quoteAsset
-      }),
-      originalQuantity: new Quantity({
-        amount: "1",
-        asset: baseAsset
-      }),
-      executedQuantity: new Quantity({
-        amount: "0",
-        asset: baseAsset
-      }),
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
       status: "UNKNOWN",
     }),
   })
@@ -8104,10 +6009,7 @@ test("treats a pending-order lookup CanonicalOrder without brokerOrderId as term
 })
 
 test("treats pending-order lookup quantity and price conflicts as terminal accounting failures", async () => {
-  const {
-    harness,
-    pendingOrder
-  } = await createUnknownSubmissionHarness()
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
   const wrongQuantity = pendingOrder.originalQuantity.amount === "999999" ? "888888" : "999999"
   const wrongPrice = pendingOrder.limitPrice.amount === "999999" ? "888888" : "999999"
   harness.broker.getCanonicalOrder = async () => ({
@@ -8118,18 +6020,9 @@ test("treats pending-order lookup quantity and price conflicts as terminal accou
       market,
       side: pendingOrder.side,
       type: pendingOrder.type,
-      limitPrice: new Money({
-        amount: wrongPrice,
-        asset: quoteAsset
-      }),
-      originalQuantity: new Quantity({
-        amount: wrongQuantity,
-        asset: baseAsset
-      }),
-      executedQuantity: new Quantity({
-        amount: "0",
-        asset: baseAsset
-      }),
+      limitPrice: new Money({ amount: wrongPrice, asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: wrongQuantity, asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
       status: "OPEN",
       createdAt: 1,
       acknowledgedAt: 1,
@@ -8145,10 +6038,7 @@ test("treats pending-order lookup quantity and price conflicts as terminal accou
 })
 
 test("classifies a pending-order clientOrderId mismatch as terminal ownership failure", async () => {
-  const {
-    harness,
-    pendingOrder
-  } = await createUnknownSubmissionHarness()
+  const { harness, pendingOrder } = await createUnknownSubmissionHarness()
   harness.broker.getCanonicalOrder = async () => ({
     ok: true,
     data: new CanonicalOrder({
@@ -8157,18 +6047,9 @@ test("classifies a pending-order clientOrderId mismatch as terminal ownership fa
       market,
       side: pendingOrder.side,
       type: pendingOrder.type,
-      limitPrice: new Money({
-        amount: "100",
-        asset: quoteAsset
-      }),
-      originalQuantity: new Quantity({
-        amount: "1",
-        asset: baseAsset
-      }),
-      executedQuantity: new Quantity({
-        amount: "0",
-        asset: baseAsset
-      }),
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
       status: "OPEN",
       createdAt: 1,
       acknowledgedAt: 1,
@@ -8198,70 +6079,39 @@ test("treats unclassified thrown owned-order REST adapter errors as terminal", a
   const openOrdersFixture = await createMalformedRestEnvelopeFixture()
   openOrdersFixture.harness.broker.getOpenOrders = async () => { throw new Error("unexpected open-orders adapter exception") }
   const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(openOrdersResult.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_OPEN_ORDERS_READ_EXCEPTION",
-    retryable: false
-  })
+  assert.deepEqual(openOrdersResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDERS_READ_EXCEPTION", retryable: false })
 
   const historyFixture = await createMalformedRestEnvelopeFixture()
   historyFixture.harness.broker.getCanonicalOrderHistory = async () => { throw new Error("unexpected history adapter exception") }
   const historyResult = await historyFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(historyResult.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_ORDER_HISTORY_READ_EXCEPTION",
-    retryable: false
-  })
+  assert.deepEqual(historyResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_HISTORY_READ_EXCEPTION", retryable: false })
 
   const fillsFixture = await createMalformedRestEnvelopeFixture()
   fillsFixture.harness.broker.getFills = async () => { throw new Error("unexpected fills adapter exception") }
   const fillsResult = await fillsFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(fillsResult.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_ORDER_FILL_HISTORY_READ_EXCEPTION",
-    retryable: false
-  })
+  assert.deepEqual(fillsResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_READ_EXCEPTION", retryable: false })
 })
 
 test("treats REST response envelopes without explicit success flags as terminal integrity failures", async () => {
   const openOrdersFixture = await createMalformedRestEnvelopeFixture({ openOrdersResult: { data: [] } })
   const openOrdersResult = await openOrdersFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(openOrdersResult.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_OPEN_ORDERS_RESPONSE",
-    retryable: false
-  })
+  assert.deepEqual(openOrdersResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDERS_RESPONSE", retryable: false })
 
   const historyFixture = await createMalformedRestEnvelopeFixture({ canonicalOrderHistoryResult: { data: [] } })
   const historyResult = await historyFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(historyResult.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_ORDER_HISTORY_RESPONSE",
-    retryable: false
-  })
+  assert.deepEqual(historyResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_HISTORY_RESPONSE", retryable: false })
 
   const fillsFixture = await createMalformedRestEnvelopeFixture({ fillsResult: { data: [] } })
   const fillsResult = await fillsFixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(fillsResult.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_ORDER_FILL_HISTORY_RESPONSE",
-    retryable: false
-  })
+  assert.deepEqual(fillsResult.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_RESPONSE", retryable: false })
 })
 
 test("fails closed when owned-order open-orders REST data is not an array", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    openOrdersResult: {
-      ok: true,
-      data: { orders: [] }
-    },
+    openOrdersResult: { ok: true, data: { orders: [] } },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(result.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_OPEN_ORDER_SNAPSHOT",
-    retryable: false
-  }, "A successful but malformed open-order payload must be terminal integrity failure, not a retryable REST outage.")
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_OPEN_ORDER_SNAPSHOT", retryable: false }, "A successful but malformed open-order payload must be terminal integrity failure, not a retryable REST outage.")
   assertMalformedRestEnvelopeFailsClosed({
     fixture,
     result,
@@ -8274,13 +6124,7 @@ test("fails closed when owned-order open-orders REST data is not an array", asyn
 
 test("fails closed when owned-order open-orders REST data contains a non-Order record", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    openOrdersResult: {
-      ok: true,
-      data: [{
-      id: "forged-order",
-      status: "NEW"
-    }]
-    },
+    openOrdersResult: { ok: true, data: [{ id: "forged-order", status: "NEW" }] },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
   assertMalformedRestEnvelopeFailsClosed({
@@ -8295,10 +6139,7 @@ test("fails closed when owned-order open-orders REST data contains a non-Order r
 
 test("fails closed when owned-order canonical REST history contains no order", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    canonicalOrderHistoryResult: {
-      ok: true,
-      data: []
-    },
+    canonicalOrderHistoryResult: { ok: true, data: [] },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
   assertMalformedRestEnvelopeFailsClosed({
@@ -8318,28 +6159,16 @@ test("classifies canonical REST order identity conflicts as terminal ownership f
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "CANCELED",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
   const fixture = await createMalformedRestEnvelopeFixture({
-    canonicalOrderHistoryResult: {
-      ok: true,
-      data: [foreignHistoryOrder]
-    },
+    canonicalOrderHistoryResult: { ok: true, data: [foreignHistoryOrder] },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
@@ -8358,28 +6187,16 @@ test("fails closed when owned-order canonical REST history contains multiple ord
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "CANCELED",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
   const fixture = await createMalformedRestEnvelopeFixture({
-    canonicalOrderHistoryResult: {
-      ok: true,
-      data: [makeHistoryOrder(), makeHistoryOrder()]
-    },
+    canonicalOrderHistoryResult: { ok: true, data: [makeHistoryOrder(), makeHistoryOrder()] },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
   assertMalformedRestEnvelopeFailsClosed({
@@ -8394,10 +6211,7 @@ test("fails closed when owned-order canonical REST history contains multiple ord
 
 test("fails closed when owned-order canonical REST history contains a non-CanonicalOrder record", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    canonicalOrderHistoryResult: {
-      ok: true,
-      data: [{ brokerOrderId: "broker-malformed-rest-envelope-owned-order" }]
-    },
+    canonicalOrderHistoryResult: { ok: true, data: [{ brokerOrderId: "broker-malformed-rest-envelope-owned-order" }] },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
   assertMalformedRestEnvelopeFailsClosed({
@@ -8412,17 +6226,10 @@ test("fails closed when owned-order canonical REST history contains a non-Canoni
 
 test("fails closed when owned-order REST fill history is not an array", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    fillsResult: {
-      ok: true,
-      data: { fills: [] }
-    },
+    fillsResult: { ok: true, data: { fills: [] } },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-  assert.deepEqual(result.failure, {
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "OWNED_ORDER_FILL_HISTORY_SHAPE",
-    retryable: false
-  }, "A successful but malformed fill-history payload must fail closed as accounting integrity, not retry indefinitely.")
+  assert.deepEqual(result.failure, { category: "ACCOUNTING_INTEGRITY", stage: "OWNED_ORDER_FILL_HISTORY_SHAPE", retryable: false }, "A successful but malformed fill-history payload must fail closed as accounting integrity, not retry indefinitely.")
   assertMalformedRestEnvelopeFailsClosed({
     fixture,
     result,
@@ -8435,10 +6242,7 @@ test("fails closed when owned-order REST fill history is not an array", async ()
 
 test("fails closed when owned-order REST fill history contains a non-Fill record", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    fillsResult: {
-      ok: true,
-      data: [{ tradeId: "forged-fill" }]
-    },
+    fillsResult: { ok: true, data: [{ tradeId: "forged-fill" }] },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
   assertMalformedRestEnvelopeFailsClosed({
@@ -8453,10 +6257,7 @@ test("fails closed when owned-order REST fill history contains a non-Fill record
 
 test("fails closed when owned-order REST fill history exceeds the supported page size", async () => {
   const fixture = await createMalformedRestEnvelopeFixture({
-    fillsResult: {
-      ok: true,
-      data: Array.from({ length: 1001 }, () => ({}))
-    },
+    fillsResult: { ok: true, data: Array.from({ length: 1001 }, () => ({})) },
   })
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
   assertMalformedRestEnvelopeFailsClosed({
@@ -8470,12 +6271,7 @@ test("fails closed when owned-order REST fill history exceeds the supported page
 })
 
 
-function assertBrokerRestFailurePreservesOriginalCause({
-  result,
-  timeout,
-  scenario,
-  expectedMessage
-}) {
+function assertBrokerRestFailurePreservesOriginalCause({ result, timeout, scenario, expectedMessage }) {
   assert.equal(
     result.ok,
     false,
@@ -8506,25 +6302,15 @@ function assertBrokerRestFailurePreservesOriginalCause({
 test("preserves the original broker error as cause when owned-order open-orders REST retrieval fails", async () => {
   const timeout = Object.assign(
     new Error("owned-order open-orders RPC timed out"),
-    {
-      name: "RpcTimeoutError",
-      code: "RPC_TIMEOUT"
-    },
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
   )
   const fixture = await createMalformedRestEnvelopeFixture({
-    openOrdersResult: {
-      ok: false,
-      errors: [timeout]
-    },
+    openOrdersResult: { ok: false, errors: [timeout] },
   })
 
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
 
-  assert.deepEqual(result.failure, {
-    category: "REST_RECONCILIATION",
-    stage: "OWNED_OPEN_ORDERS_READ",
-    retryable: true
-  }, "A broker-declared open-orders read failure may retry only after a new authoritative recovery attempt.")
+  assert.deepEqual(result.failure, { category: "REST_RECONCILIATION", stage: "OWNED_OPEN_ORDERS_READ", retryable: true }, "A broker-declared open-orders read failure may retry only after a new authoritative recovery attempt.")
   assertBrokerRestFailurePreservesOriginalCause({
     result,
     timeout,
@@ -8536,16 +6322,10 @@ test("preserves the original broker error as cause when owned-order open-orders 
 test("preserves the original broker error as cause when canonical order-history REST retrieval fails", async () => {
   const timeout = Object.assign(
     new Error("canonical order-history RPC timed out"),
-    {
-      name: "RpcTimeoutError",
-      code: "RPC_TIMEOUT"
-    },
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
   )
   const fixture = await createMalformedRestEnvelopeFixture({
-    canonicalOrderHistoryResult: {
-      ok: false,
-      errors: [timeout]
-    },
+    canonicalOrderHistoryResult: { ok: false, errors: [timeout] },
   })
 
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
@@ -8561,16 +6341,10 @@ test("preserves the original broker error as cause when canonical order-history 
 test("preserves the original broker error as cause when REST fill-history retrieval fails", async () => {
   const timeout = Object.assign(
     new Error("owned-order fill-history RPC timed out"),
-    {
-      name: "RpcTimeoutError",
-      code: "RPC_TIMEOUT"
-    },
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
   )
   const fixture = await createMalformedRestEnvelopeFixture({
-    fillsResult: {
-      ok: false,
-      errors: [timeout]
-    },
+    fillsResult: { ok: false, errors: [timeout] },
   })
 
   const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
@@ -8584,16 +6358,10 @@ test("preserves the original broker error as cause when REST fill-history retrie
 })
 
 
-const makeTrailingReplacementPolicy = ({
-  replacementPrice = "100",
-  replacementQuantity = "1"
-} = {}) => {
+const makeTrailingReplacementPolicy = ({ replacementPrice = "100", replacementQuantity = "1" } = {}) => {
   let trailingRepricingEvaluations = 0
   return {
-    evaluate: ({
-      marketPrice,
-      activeOrders
-    }) => ({
+    evaluate: ({ marketPrice, activeOrders }) => ({
       strategy: "TEST_POLICY",
       symbol: "DOGEUSDT",
       action: activeOrders.length > 0 ? "NO_ACTION" : "PLACE_ORDERS",
@@ -8613,26 +6381,15 @@ const makeTrailingReplacementPolicy = ({
 
 test("keeps the standing BUY open when the proposed trailing replacement violates MIN_NOTIONAL", async () => {
   const harness = await createHarness({
-    strategyPolicy: makeTrailingReplacementPolicy({
-      replacementPrice: "49.99",
-      replacementQuantity: "0.1"
-    }),
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "49.99", replacementQuantity: "0.1" }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "A below-minimum-notional replacement must be rejected during preflight")
@@ -8645,26 +6402,15 @@ test("keeps the standing BUY open when the proposed trailing replacement violate
 
 test("keeps the standing BUY open when the proposed replacement violates quantity increments", async () => {
   const harness = await createHarness({
-    strategyPolicy: makeTrailingReplacementPolicy({
-      replacementPrice: "100",
-      replacementQuantity: "1.05"
-    }),
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "100", replacementQuantity: "1.05" }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the proposed replacement violates quantity increments")
@@ -8676,26 +6422,15 @@ test("keeps the standing BUY open when the proposed replacement violates quantit
 
 test("keeps the standing BUY open when the proposed replacement violates price increments", async () => {
   const harness = await createHarness({
-    strategyPolicy: makeTrailingReplacementPolicy({
-      replacementPrice: "99.951",
-      replacementQuantity: "1"
-    }),
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "99.951", replacementQuantity: "1" }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the proposed replacement violates price increments")
@@ -8712,19 +6447,11 @@ test("keeps the standing BUY open when the replacement market price is stale", a
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, true, "Regression assertion: keeps the standing BUY open when the replacement market price is stale")
@@ -8742,23 +6469,12 @@ test("keeps the standing BUY open when the replacement trading rules become unav
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  currentMetadata = {
-    ...marketMetadata,
-    tradingRules: undefined
-  }
+  currentMetadata = { ...marketMetadata, tradingRules: undefined }
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
@@ -8775,19 +6491,11 @@ test("does not submit a replacement when cancellation fails", async () => {
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "Regression assertion: does not submit a replacement when cancellation fails")
@@ -8804,19 +6512,11 @@ test("retains an explicitly unknown replacement after cancellation succeeds but 
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
@@ -8827,11 +6527,7 @@ test("retains an explicitly unknown replacement after cancellation succeeds but 
   assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
   const repeated = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.12",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.12", timestamp: 3 },
   })
   assert.equal(repeated.ok, true, "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
   assert.equal(harness.orders.length, 2, "A paused market must not create duplicate replacement submissions")
@@ -8841,27 +6537,15 @@ test("repeated market-price events cannot submit duplicate replacements after a 
   const harness = await createHarness({ strategyPolicy: makeTrailingReplacementPolicy() })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const firstReplacement = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
   const repeated = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 3
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
   })
 
   assert.equal(firstReplacement.ok, true, "Regression assertion: repeated market-price events cannot submit duplicate replacements after a valid replacement")
@@ -8880,20 +6564,12 @@ test("keeps the standing BUY open when the post-only market book becomes stale",
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   marketBookFresh = false
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, true, "Regression assertion: keeps the standing BUY open when the post-only market book becomes stale")
@@ -8911,11 +6587,7 @@ test("keeps the standing BUY open when a required exchange trading rule is missi
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   currentMetadata = {
     ...marketMetadata,
@@ -8928,11 +6600,7 @@ test("keeps the standing BUY open when a required exchange trading rule is missi
   }
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
@@ -8950,47 +6618,27 @@ test("uses freshly fetched exchange trading rules instead of the startup snapsho
       market,
       constraints: marketMetadata.tradingRules.constraints.map((constraint) =>
         constraint.type === "MIN_NOTIONAL"
-          ? {
-            ...constraint,
-            value: new Money({
-            amount: "10",
-            asset: quoteAsset
-          })
-          }
+          ? { ...constraint, value: new Money({ amount: "10", asset: quoteAsset }) }
           : constraint,
       ),
     }),
   }
   let refreshedRuleReads = 0
   const harness = await createHarness({
-    strategyPolicy: makeTrailingReplacementPolicy({
-      replacementPrice: "60",
-      replacementQuantity: "0.1"
-    }),
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "60", replacementQuantity: "0.1" }),
     getMarketMetadata: () => marketMetadata,
     getSymbolFilters: async () => {
       refreshedRuleReads += 1
-      return {
-        ok: true,
-        data: refreshedMetadata
-      }
+      return { ok: true, data: refreshedMetadata }
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "A candidate valid under startup rules must be rejected under the refreshed exchange rules")
@@ -9011,19 +6659,11 @@ test("keeps the standing BUY open when fetching current exchange trading rules f
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "A failed current-rule request must block replacement")
@@ -9047,11 +6687,7 @@ test("preserves an OPEN recovery SELL after a locally blocked NOT_SENT cancellat
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const recoverySellOrder = engine.getOrders().find((order) => order.side === "SELL")
@@ -9059,13 +6695,7 @@ test("preserves an OPEN recovery SELL after a locally blocked NOT_SENT cancellat
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "not-sent-recovery-buy-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "not-sent-recovery-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
     },
   })
 
@@ -9088,28 +6718,17 @@ test("preserves an OPEN recovery SELL after a locally blocked NOT_SENT cancellat
 
 test("preserves an OPEN trailing BUY after a locally blocked NOT_SENT replacement cancellation", async () => {
   const events = []
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     cancelNotSent: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "A trailing BUY replacement must stop when the broker proves cancellation was not sent")
@@ -9132,10 +6751,7 @@ test("preserves an OPEN owned BUY after a locally blocked NOT_SENT shutdown canc
     clientOrderId: "shutdown-not-sent-buy",
     brokerOrderId: "broker-shutdown-not-sent-buy",
   })
-  const {
-    engine,
-    cancellationIds
-  } = await createHarness({
+  const { engine, cancellationIds } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [ownedBuyOrder] }) },
     cancelNotSent: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
@@ -9163,28 +6779,17 @@ test("preserves an OPEN owned BUY after a locally blocked NOT_SENT shutdown canc
 
 test("does not trust NOT_SENT metadata on a successful noncanonical cancellation result", async () => {
   const events = []
-  const {
-    engine,
-    orders
-  } = await createHarness({
+  const { engine, orders } = await createHarness({
     cancelNotSentOnSuccess: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, false, "A malformed success-shaped cancellation result must not authorize replacement")
@@ -9204,11 +6809,7 @@ test("allows trailing BUY replacement when refreshed metadata contains unsupport
   const refreshedMetadata = {
     ...marketMetadata,
     unvalidatedConstraints: [
-      {
-        type: "DYNAMIC_PRICE_BAND",
-        scope: "SYMBOL",
-        sourceFilterType: "PERCENT_PRICE_BY_SIDE"
-      },
+      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
     ],
   }
   let refreshedRuleReads = 0
@@ -9217,27 +6818,16 @@ test("allows trailing BUY replacement when refreshed metadata contains unsupport
     getMarketMetadata: () => marketMetadata,
     getSymbolFilters: async () => {
       refreshedRuleReads += 1
-      return {
-        ok: true,
-        data: refreshedMetadata
-      }
+      return { ok: true, data: refreshedMetadata }
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
   assert.equal(result.ok, true, "A refreshed unsupported filter must not block a replacement that passes all supported static checks.")
@@ -9252,11 +6842,7 @@ test("allows trailing BUY replacement when refreshed metadata contains unsupport
 test("definite Binance filter rejection removes PENDING without marking the order UNKNOWN", async () => {
   const events = []
   const rejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: "DEFINITE_EXCHANGE_FILTER_REJECTED" })
-  const {
-    engine,
-    orders,
-    pauses
-  } = await createHarness({
+  const { engine, orders, pauses } = await createHarness({
     placeOrderFailureCount: 1,
     placeOrderFailureError: rejection,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
@@ -9264,11 +6850,7 @@ test("definite Binance filter rejection removes PENDING without marking the orde
 
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
   assert.equal(result.ok, false, "A definite exchange filter rejection must be reported to the caller.")
@@ -9281,38 +6863,23 @@ test("definite Binance filter rejection removes PENDING without marking the orde
 test("publishes a CONTINUE_SELL_THROUGH outcome for a fully filled SELL below the profit target", async () => {
   const events = []
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    pauses
-  } = await createHarness({
+  const { engine, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    recoveryCompletion: {
-      eligible: false,
-      pause: false,
-      reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-      realizedNetProfit: "-0.1"
-    },
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   const result = await engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({
-        order: sellOrder,
-        tradeId: "continue-sell-through"
-      }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "continue-sell-through" }),
     },
   })
   assert.equal(result.ok, true)
@@ -9328,31 +6895,19 @@ test("publishes a CONTINUE_SELL_THROUGH outcome for a fully filled SELL below th
 test("publishes an explicit cycle outcome when the recovery SELL fills during cancellation", async () => {
   const events = []
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    pauses
-  } = await createHarness({
+  const { engine, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     cancelWithFill: true,
     cancelExecutedQuantity: ({ order }) => order.originalQuantity.amount,
     cancelOrderStatus: "FILLED",
-    recoveryCompletion: {
-      eligible: false,
-      pause: false,
-      reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-      realizedNetProfit: "-0.1"
-    },
+    recoveryCompletion: { eligible: false, pause: false, reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", realizedNetProfit: "-0.1" },
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
@@ -9360,13 +6915,7 @@ test("publishes an explicit cycle outcome when the recovery SELL fills during ca
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "cancel-race-buy",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "cancel-race-buy", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
     },
   })
   assert.equal(result.ok, true)
@@ -9382,23 +6931,13 @@ test("publishes an explicit cycle outcome when the recovery SELL fills during ca
 test("volatility data unavailable blocks new strategy orders without using the global strategy pause", async () => {
   const unavailable = {
     ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "INSUFFICIENT_HISTORY"
-    },
-      metrics: null
-    },
+    data: { status: { isReady: false, reason: "INSUFFICIENT_HISTORY" }, metrics: null },
   }
   const harness = await createHarness({ getVolatilityData: () => unavailable })
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
 
   assert.equal(result.ok, true)
@@ -9407,41 +6946,12 @@ test("volatility data unavailable blocks new strategy orders without using the g
 })
 
 test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs", async () => {
-  const buyOrder = makeShutdownOrder({
-    side: "BUY",
-    clientOrderId: "volatility-disabled-owned-buy",
-    brokerOrderId: "broker-volatility-disabled-owned-buy"
-  })
-  const highVolatility = {
-    ok: true,
-    data: {
-    status: {
-    isReady: true,
-    isFresh: true,
-    reason: null,
-    lastClosedCandleOpenTime: 60_000
-  },
-    metrics: {
-    openTime: 60_000,
-    atr: "1",
-    natr: "2",
-    referenceNatr: "1",
-    volatilityRatio: "2"
-  }
-  }
-  }
+  const buyOrder = makeShutdownOrder({ side: "BUY", clientOrderId: "volatility-disabled-owned-buy", brokerOrderId: "broker-volatility-disabled-owned-buy" })
+  const highVolatility = { ok: true, data: { status: { isReady: true, isFresh: true, reason: null, lastClosedCandleOpenTime: 60_000 }, metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" } } }
   const config = structuredClone(appConfig)
   config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
-  const harness = await createHarness({
-    appConfig: config,
-    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
-    eventPublisher: { publish: () => ({ ok: true }) },
-    getVolatilityData: () => highVolatility
-  })
-  const result = await harness.engine.processVolatilitySnapshot({
-    symbol: "DOGEUSDT",
-    snapshot: highVolatility
-  })
+  const harness = await createHarness({ appConfig: config, initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) }, eventPublisher: { publish: () => ({ ok: true }) }, getVolatilityData: () => highVolatility })
+  const result = await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: highVolatility })
   assert.equal(result.ok, true)
   assert.equal(result.data.skipped, true, "A disabled pair must not enter the volatility state machine.")
   assert.equal(result.data.reason, "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR")
@@ -9452,29 +6962,13 @@ test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs",
 })
 
 test("per-pair opt-out bypasses the volatility submission gate while retaining normal strategy execution", async () => {
-  const unavailable = {
-    ok: true,
-    data: {
-    status: {
-    isReady: false,
-    reason: "INSUFFICIENT_HISTORY"
-  },
-    metrics: null
-  }
-  }
+  const unavailable = { ok: true, data: { status: { isReady: false, reason: "INSUFFICIENT_HISTORY" }, metrics: null } }
   const config = structuredClone(appConfig)
   config.strategies.CG_coinGrabber.pairs.DOGEUSDT.enableVolatilityProtection = false
-  const harness = await createHarness({
-    appConfig: config,
-    getVolatilityData: () => unavailable
-  })
+  const harness = await createHarness({ appConfig: config, getVolatilityData: () => unavailable })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
   assert.equal(result.ok, true)
   assert.ok(harness.orders.length > 0, "The disabled pair must not be held behind volatility-history readiness; ordinary strategy gates still decide whether an order can be sent.")
@@ -9490,18 +6984,8 @@ test("high volatility cancels only acknowledged owned BUYs and keeps the market 
   const highVolatility = {
     ok: true,
     data: {
-      status: {
-        isReady: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2"
-      },
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
     },
   }
   const harness = await createHarness({
@@ -9537,18 +7021,8 @@ test("high-volatility BUY cancellation preserves an existing recovery SELL order
   const highVolatility = {
     ok: true,
     data: {
-      status: {
-        isReady: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2"
-      },
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
     },
   }
   const harness = await createHarness({
@@ -9595,18 +7069,8 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
   const highVolatility = {
     ok: true,
     data: {
-      status: {
-        isReady: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2"
-      },
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
     },
   }
   const harness = await createHarness({
@@ -9630,37 +7094,16 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
 test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
   const position = new Position({
     market,
-    baseQuantity: new Quantity({
-      amount: "100",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-10",
-      asset: quoteAsset
-    }),
-    spent: new Money({
-      amount: "10",
-      asset: quoteAsset
-    }),
+    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
+    spent: new Money({ amount: "10", asset: quoteAsset }),
   })
   const portfolio = new Portfolio({ positions: [position] })
-  const ledger = new RecoveryLedger({
-    market,
-    buyCost: "10"
-  })
+  const ledger = new RecoveryLedger({ market, buyCost: "10" })
   const unavailable = {
     ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "STALE_STREAM"
-    },
-      metrics: null
-    },
+    data: { status: { isReady: false, reason: "STALE_STREAM" }, metrics: null },
   }
   const harness = await createHarness({
     initialPortfolio: portfolio,
@@ -9671,11 +7114,7 @@ test("explicit recovery SELL intent may submit while volatility protection block
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
 
   assert.equal(result.ok, true)
@@ -9687,39 +7126,18 @@ test("explicit recovery SELL intent may submit while volatility protection block
 test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
   const position = new Position({
     market,
-    baseQuantity: new Quantity({
-      amount: "100",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-10",
-      asset: quoteAsset
-    }),
-    spent: new Money({
-      amount: "10",
-      asset: quoteAsset
-    }),
+    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
+    spent: new Money({ amount: "10", asset: quoteAsset }),
   })
   const unavailable = {
     ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "STALE_STREAM"
-    },
-      metrics: null
-    },
+    data: { status: { isReady: false, reason: "STALE_STREAM" }, metrics: null },
   }
   const harness = await createHarness({
     initialPortfolio: new Portfolio({ positions: [position] }),
-    initialRecoveryLedger: new RecoveryLedger({
-      market,
-      buyCost: "10"
-    }),
+    initialRecoveryLedger: new RecoveryLedger({ market, buyCost: "10" }),
     baseFreeBalance: "100",
     getVolatilityData: () => unavailable,
     strategyPolicy: {
@@ -9727,12 +7145,7 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
       evaluate: () => ({
         strategy: "UNTRUSTED_SELL_TEST",
         action: "PLACE_ORDERS",
-        actions: [{
-          side: "SELL",
-          type: "LIMIT_MAKER",
-          price: "100",
-          quantity: "1"
-        }],
+        actions: [{ side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "1" }],
         reason: "SELL_WITHOUT_RECOVERY_PURPOSE",
       }),
       evaluateTrailingBuyRepricing: () => ({ actions: [] }),
@@ -9741,11 +7154,7 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: Date.now()
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: Date.now() },
   })
 
   assert.equal(result.ok, true)
@@ -9754,16 +7163,8 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
 
 
 test("volatility cancellation is isolated to the affected trading pair", async () => {
-  const zroBaseAsset = new Asset({
-    id: "asset-zro",
-    code: "ZRO"
-  })
-  const zroMarket = new Market({
-    venue: "binance",
-    symbol: "ZROUSDT",
-    baseAsset: zroBaseAsset,
-    quoteAsset
-  })
+  const zroBaseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
+  const zroMarket = new Market({ venue: "binance", symbol: "ZROUSDT", baseAsset: zroBaseAsset, quoteAsset })
   const dogeBuy = makeShutdownOrder({
     side: "BUY",
     clientOrderId: "doge-volatility-buy",
@@ -9775,18 +7176,9 @@ test("volatility cancellation is isolated to the affected trading pair", async (
     market: zroMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "1",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: zroBaseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: zroBaseAsset
-    }),
+    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: zroBaseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: zroBaseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -9795,18 +7187,8 @@ test("volatility cancellation is isolated to the affected trading pair", async (
   const highVolatility = {
     ok: true,
     data: {
-      status: {
-        isReady: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2"
-      },
+      status: { isReady: true, reason: null, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
     },
   }
   const harness = await createHarness({
@@ -9836,20 +7218,8 @@ test("retries a volatility BUY cancellation only after a known NOT_SENT outcome 
   const makeSnapshot = (observedAt) => ({
     ok: true,
     data: {
-      status: {
-        isReady: true,
-        isFresh: true,
-        reason: null,
-        observedAt,
-        lastClosedCandleOpenTime: 60_000
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2"
-      },
+      status: { isReady: true, isFresh: true, reason: null, observedAt, lastClosedCandleOpenTime: 60_000 },
+      metrics: { openTime: 60_000, atr: "1", natr: "2", referenceNatr: "1", volatilityRatio: "2" },
     },
   })
   const harness = await createHarness({
@@ -9859,17 +7229,11 @@ test("retries a volatility BUY cancellation only after a known NOT_SENT outcome 
     getVolatilityData: () => makeSnapshot(0),
   })
 
-  await harness.engine.processVolatilitySnapshot({
-    symbol: "DOGEUSDT",
-    snapshot: makeSnapshot(0)
-  })
+  await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: makeSnapshot(0) })
   assert.deepEqual(harness.cancellationIds, ["broker-volatility-not-sent-buy"])
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "volatility-not-sent-buy").status, "OPEN")
 
-  await harness.engine.processVolatilitySnapshot({
-    symbol: "DOGEUSDT",
-    snapshot: makeSnapshot(5_000)
-  })
+  await harness.engine.processVolatilitySnapshot({ symbol: "DOGEUSDT", snapshot: makeSnapshot(5_000) })
   assert.deepEqual(
     harness.cancellationIds,
     ["broker-volatility-not-sent-buy", "broker-volatility-not-sent-buy"],
@@ -9883,17 +7247,11 @@ test("commits a strategy pause fact before publishing the Journal pause event", 
   const sequence = []
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
-    onOperationalStateStrategyMarketPaused: async ({
-      symbol,
-      reason
-    }) => {
+    onOperationalStateStrategyMarketPaused: async ({ symbol, reason }) => {
       sequence.push("operational-state-record")
       assert.equal(symbol, "DOGEUSDT", "The Operational State Store pause must retain the exact affected market.")
       assert.equal(reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "The Operational State Store pause must retain its canonical cause.")
-      return {
-        ok: true,
-        data: { durable: true }
-      }
+      return { ok: true, data: { durable: true } }
     },
     eventPublisher: {
       publish: (event) => {
@@ -9908,18 +7266,9 @@ test("commits a strategy pause fact before publishing the Journal pause event", 
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "99",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -9940,11 +7289,7 @@ test("exposes a serialized immutable operator market snapshot with current price
 
   const priceResult = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "0.12",
-      timestamp: 1
-    },
+    priceEvent: { symbol: "DOGEUSDT", price: "0.12", timestamp: 1 },
   })
   assert.equal(priceResult.ok, true, "A valid market price must be accepted before the operator snapshot is inspected.")
 
