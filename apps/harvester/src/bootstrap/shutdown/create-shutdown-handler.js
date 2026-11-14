@@ -236,7 +236,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     now,
     shutdownRequestedAt,
     shutdownCorrelationId,
-    shutdownStartedFromStatus: state.status,
+    shutdownStartedFromStatus: stopOptions.shutdownStartedFromStatus ?? state.status,
     preShutdownErrors: stopOptions.preShutdownErrors ?? [],
     auditReasons: (stopOptions.preShutdownErrors ?? []).length > 0
       ? ["OPERATOR_CONTROL_SHUTDOWN_FAILED"]
