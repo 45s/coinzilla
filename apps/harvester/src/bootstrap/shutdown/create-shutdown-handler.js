@@ -57,8 +57,8 @@ export function createShutdownHandler({
 } = {}) {
   let shutdownPromise
   return function stop({ requestedAt, requestLogged = false, stopStateEstablishedLogged = false, preShutdownErrors = [] } = {}) {
-    if (shutdownPromise) return shutdownPromise
-    if (state.stopped) return Promise.resolve()
+    if (shutdownPromise) {return shutdownPromise}
+    if (state.stopped) {return Promise.resolve()}
 
     const shutdownRequestedAt = requestedAt ?? now()
     const shutdownCorrelationId = runtimeSessionId ?? null
@@ -76,15 +76,22 @@ export function createShutdownHandler({
     const runPhase = async (phase, operation, isFailure = (result) =>
       result?.ok === false || (Array.isArray(result) && result.length > 0)) => {
       const startedAt = now()
-      logPhase({ phase, status: "STARTED", startedAt })
+      logPhase({ phase, status: "STARTED" })
       try {
         const result = await operation()
         const durationMs = Math.max(0, now() - startedAt)
+        const failed = isFailure(result)
+        const phaseFailureReason = result?.failure?.stage ??
+          result?.data?.findings?.[0]?.reason ??
+          result?.errors?.[0]?.recoveryFailure?.stage ??
+          result?.errors?.[0]?.code ??
+          result?.errors?.[0]?.name ??
+          (failed ? "PHASE_RESULT_FAILED" : null)
         logPhase({
           phase,
-          status: isFailure(result) ? "FAILED" : "COMPLETED",
+          status: failed ? "FAILED" : "COMPLETED",
           durationMs,
-          ...(isFailure(result) ? { failureReason: "PHASE_RESULT_FAILED" } : {}),
+          ...(failed ? { failureReason: phaseFailureReason } : {}),
         })
         return result
       } catch (error) {
@@ -92,7 +99,6 @@ export function createShutdownHandler({
         logPhase({
           phase,
           status: "FAILED",
-          startedAt,
           durationMs,
           failureReason: getSafeFailureReason(error),
         })
@@ -143,18 +149,15 @@ export function createShutdownHandler({
           : null
         const errorDetails = errors.map((entry) => ({
           name: entry?.name ?? "Error",
-          message: entry?.message ?? String(entry),
+          code: typeof entry?.code === "string" ? entry.code : null,
+          failureStage: entry?.recoveryFailure?.stage ?? null,
         }))
         stageFailures.push({ stage: stage ?? "UNKNOWN", failure: failureMetadata, errors: errorDetails })
         logger.error?.({
           message,
           stage,
           failure: failureMetadata,
-          errors: errors.map((entry) => ({
-            name: entry?.name,
-            message: entry?.message ?? String(entry),
-            stack: entry?.stack,
-          })),
+          errors: errorDetails,
           shutdownCorrelationId,
         })
       }
@@ -338,7 +341,11 @@ export function createShutdownHandler({
       } catch (error) {
         snapshotError = error
         auditReasons.push("CLOSING_ACCOUNT_SNAPSHOT_FAILED")
-        logger.error?.({ message: "closing account snapshot failed", error, shutdownCorrelationId })
+        logger.error?.({
+          message: "closing account snapshot failed",
+          failureReason: getSafeFailureReason(error),
+          shutdownCorrelationId,
+        })
       }
 
       const disconnectErrors = await runPhase("BROKER_DISCONNECT", () =>
@@ -379,7 +386,8 @@ export function createShutdownHandler({
         }))),
         cleanupFailures: Object.freeze(cleanupErrors.map((error) => Object.freeze({
           name: error?.name ?? "Error",
-          message: error?.message ?? String(error),
+          code: typeof error?.code === "string" ? error.code : null,
+          failureStage: error?.recoveryFailure?.stage ?? null,
         }))),
         userData: Object.freeze({
           accountingFailed: state.accountingFailed === true,
