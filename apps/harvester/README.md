@@ -67,7 +67,7 @@ For a new installation, stop Harvester and run the one-time initializer without 
 pnpm --filter @coinzilla/harvester operational-state:init -- --confirm-initialize
 ```
 
-To select another absolute local-filesystem directory, set `OPERATIONAL_STATE_DIRECTORY` for both the initializer and runtime. The old `DURABLE_FACTS_DIRECTORY` variable remains accepted as a legacy compatibility alias; if both are set, they must resolve to the same directory. Existing installations that still have records under the former `~/.coinzilla/harvester/recovery-facts` default can continue using that location by setting `OPERATIONAL_STATE_DIRECTORY` to its absolute path. No data is moved or deleted automatically.
+To select another absolute local-filesystem directory, set `OPERATIONAL_STATE_DIRECTORY` for both the initializer and runtime. The default remains `apps/harvester/recovery-facts/` when the variable is absent. The former home-directory recovery-data location is not a supported default or automatic fallback. Existing runtime data is never moved, deleted, initialized, overwritten, or repaired by this path cleanup.
 
 The command requires exactly `--confirm-initialize`, rejects unknown arguments and invalid directory overrides, acquires the same broker-wide and Journal process locks as Harvester, creates the selected private directory (0700) and its record/manifest files (0600), and refuses to overwrite any existing store. The runtime resolves the same directory; do not initialize one directory and run against another. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
 
