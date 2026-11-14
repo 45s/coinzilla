@@ -838,6 +838,37 @@ function publishTrailingBuyCancellationOutcome({ context, canceledOrder }) {
   })
 }
 
+function applyTrailingBuyCancellationToRegistry({ context, symbol, order, canceledOrder }) {
+  const update = context.state.registry.applyUpdate({
+    order: canceledOrder,
+  })
+  if (update.unknown) {
+    const error = new Error("Canceled trailing BUY is not registered by Harvester")
+    context.publishOrderCancelFailed({
+      order,
+      outcome: "NOT_REGISTERED",
+      error,
+    })
+    void context.pause({
+      symbol,
+      reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED",
+    })
+    return toResult({
+      error,
+    })
+  }
+  context.state.registry = update.registry
+  publishTrailingBuyCancellationOutcome({
+    context,
+    canceledOrder,
+  })
+  return toResult({
+    data: {
+      canceledOrder,
+    },
+  })
+}
+
 async function cancelTrailingBuyOrder({ context, symbol, order }) {
   const eligibility = await context.ensureCancellationEligible({
     symbol,
@@ -890,34 +921,11 @@ async function cancelTrailingBuyOrder({ context, symbol, order }) {
       cancellationOutcome: result?.cancellationOutcome,
     })
   }
-  const canceledOrder = result.data
-  const update = context.state.registry.applyUpdate({
-    order: canceledOrder,
-  })
-  if (update.unknown) {
-    const error = new Error("Canceled trailing BUY is not registered by Harvester")
-    context.publishOrderCancelFailed({
-      order,
-      outcome: "NOT_REGISTERED",
-      error,
-    })
-    await context.pause({
-      symbol,
-      reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED",
-    })
-    return toResult({
-      error,
-    })
-  }
-  context.state.registry = update.registry
-  publishTrailingBuyCancellationOutcome({
+  return applyTrailingBuyCancellationToRegistry({
     context,
-    canceledOrder,
-  })
-  return toResult({
-    data: {
-      canceledOrder,
-    },
+    symbol,
+    order,
+    canceledOrder: result.data,
   })
 }
 
