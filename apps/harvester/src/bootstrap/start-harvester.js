@@ -147,6 +147,21 @@ function startPendingUserDataRecovery({ userDataState, startUserDataRecovery } =
 }
 
 
+function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}) {
+  return createOperationalStateCallbacks({
+    operationalStateStore,
+    recordExecutionFill,
+    recordRecoveryCycleCompleted,
+    recordRecoveryCycleNotCompleted,
+    recordOrderSubmissionIntent,
+    recordOrderSubmissionOutcome,
+    recordOrderCancellationIntent,
+    recordStrategyMarketControl,
+    recordSafetyBlockerRaised,
+    recordOrderCancellationOutcome,
+  })
+}
+
 async function createHarvesterStartupContext({ options } = {}) {
   const {
     configSource,
@@ -191,18 +206,7 @@ async function createHarvesterStartupContext({ options } = {}) {
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
   await verifyOperationalStateStore({ operationalStateStore })
   await persistHarvesterProcessStart({ operationalStateStore, appConfig: resolved.appConfig, tradingEnabled: resolved.tradingEnabled })
-  const operationalStateCallbacks = createOperationalStateCallbacks({
-    operationalStateStore,
-    recordExecutionFill,
-    recordRecoveryCycleCompleted,
-    recordRecoveryCycleNotCompleted,
-    recordOrderSubmissionIntent,
-    recordOrderSubmissionOutcome,
-    recordOrderCancellationIntent,
-    recordStrategyMarketControl,
-    recordSafetyBlockerRaised,
-    recordOrderCancellationOutcome,
-  })
+  const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
   const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {
     if (!accountSnapshotManagerRef.current) {
@@ -302,7 +306,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
 }
 
 function createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources } = {}) {
-  const userDataState = resources.userDataState
+  const { userDataState } = resources
   const getOperatorRuntimeSnapshot = () => getHarvesterOperatorRuntimeSnapshot({
     now: startup.now,
     runtimeStartedAt: startup.runtimeStartedAt,
@@ -351,7 +355,7 @@ function createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources }
 }
 
 function createHarvesterUserDataEventRuntime({ startup, portfolio, resources, accountSnapshots } = {}) {
-  const userDataState = resources.userDataState
+  const { userDataState } = resources
   const handleUserDataEvent = createUserDataEventHandler({
     state: userDataState,
     getTradingEngine: () => resources.tradingEngine,
@@ -374,7 +378,7 @@ function createHarvesterUserDataEventRuntime({ startup, portfolio, resources, ac
 }
 
 function createHarvesterUserDataRecoveryRuntime({ startup, resources, accountSnapshots, userDataEvents } = {}) {
-  const userDataState = resources.userDataState
+  const { userDataState } = resources
   const startUserDataRecovery = createUserDataRecoveryHandler({
     state: userDataState,
     isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
