@@ -6,6 +6,7 @@ const test = (name, ...args) => nodeTest("[create-shutdown-handler.test.js] " + 
 
 const createState = (overrides = {}) => ({
   stopped: false,
+  shutdownRequested: false,
   ready: true,
   status: "READY",
   eventQueue: Promise.resolve(),
@@ -16,13 +17,24 @@ const createState = (overrides = {}) => ({
 })
 
 const createShutdown = ({ state = createState(), tradingEnabled = false, engine, disconnectBroker, stopMarketIntake, stopUserDataIntake, publishAccountSnapshot, subscriptions = [], bookSubscriptions = [], marketPriceIntake = new Map(), userDataSubscription = {}, calls = [], logger = {}, now, runtimeSessionId } = {}) => {
+  const effectiveEngine = engine ? {
+    reconcileRecoverySellsForShutdown: async () => {
+      calls.push("reconcile-recovery-sells")
+      return { ok: true, data: { reconciledSymbols: [] } }
+    },
+    auditShutdownRecoverySellCoverage: async () => {
+      calls.push("audit-recovery-sell-coverage")
+      return { ok: true, data: { covered: true, findings: [] } }
+    },
+    ...engine,
+  } : engine
   const stop = createShutdownHandler({
     state,
     logger,
     now,
     runtimeSessionId,
     tradingEnabled,
-    getTradingEngine: () => engine,
+    getTradingEngine: () => effectiveEngine,
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
@@ -89,9 +101,12 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     "market-task-drained",
     "reconcile",
     "cancel-owned-buys",
-    "reconcile",
     "user-data-intake-stop",
     "user-data-disconnect",
+    "reconcile",
+    "reconcile-recovery-sells",
+    "reconcile",
+    "audit-recovery-sell-coverage",
     "account-audit:CLOSING",
     "audit-status:COMPLETE",
     "broker-disconnect",
