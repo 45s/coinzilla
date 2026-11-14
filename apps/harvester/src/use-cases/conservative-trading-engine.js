@@ -3481,11 +3481,13 @@ export function makeConservativeTradingEngine({
         right: recoveryLedger?.netSellProceeds ?? "0",
       }),
     })
-    const committedQuantity = activeSells.reduce((total, order) =>
-      addDecimal({
+    const committedQuantity = activeSells.reduce((...args) => {
+      const [total, order] = args
+      return addDecimal({
         left: total,
-        right: order.remainingQuantity.amount
-      }), "0")
+        right: order.remainingQuantity.amount,
+      })
+    }, "0")
     const common = {
       symbol,
       activeQuantity,
