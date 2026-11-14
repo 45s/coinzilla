@@ -41,7 +41,7 @@ The shared Portfolio is actual-accounting truth; per-strategy attribution is not
 
 ## RS-1 — Conservative source audit and reuse map
 
-<badge>Audit complete</badge>
+**Status: COMPLETE — audit only; no source code changed.**
 
 **Deliverable:** source-verified inventory and extraction proposal. This audit was performed against the PR's `develop` base (`336c2dd078744b8dd2e2c3f471f04b796c2e63a2`). No source code was moved or changed.
 
