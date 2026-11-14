@@ -291,3 +291,18 @@ Every AI agent and coding assistant MUST execute clear user requests to implemen
 - This execution-first rule does not override security, privacy, domain ownership, financial/production safeguards, required tests, branch protection, or explicit approval gates for destructive actions and releases.
 
 **Expected behavior: act first, deliver the working change, and keep discussion limited to essential decisions and material blockers.**
+
+## 15. Pull-request draft and ready-for-review lifecycle — mandatory
+
+A pull request's GitHub lifecycle state and its draft/ready-for-review state are different. GitHub reports an unmerged draft PR as `state: open` with `draft: true`. In this policy, **READY/OPEN** means explicitly marked ready for review (`draft: false`); **DRAFT/WIP** means work is still in progress (`draft: true`).
+
+- Create every task PR as a **draft**. Keep it draft throughout implementation, investigation, conflict resolution, and verification.
+- Never mark a PR ready for review merely because a PR exists, a branch is mergeable, or some checks have passed.
+- A PR may be marked **ready for review (OPEN)** only when the task is genuinely complete: all agreed acceptance criteria and implementation are finished; tests and required documentation are included; the complete diff has been reviewed; there are no known unresolved blockers or requested changes; and every required CI check has passed on the exact current PR head SHA.
+- **Branch freshness is an absolute precondition to marking a PR ready.** Immediately before the transition, fetch the latest target branch and PR head, compare them, and verify the latest target tip is an ancestor of the exact PR head (`behind_by = 0`). If behind or diverged, keep the PR draft, synchronize safely, inspect the complete diff, and rerun affected checks. Do not mark ready while stale, conflicted, or while required checks are pending or failing.
+- After marking ready, immediately fetch and compare the refs again and verify that the PR is still current. If the target advanced during the transition, or any completion gate is no longer satisfied, convert the PR back to draft, synchronize, and repeat verification.
+- If implementation resumes, a new commit is pushed, a required check fails, a new blocker is found, or requested changes remain unresolved after a PR was marked ready, convert it back to draft immediately. It stays draft until every completion gate is satisfied again.
+- Agents must report the PR's actual draft flag, mergeability, ahead/behind counts, and exact-head CI result. Never describe a draft PR as ready/open for review, and never describe a merely open GitHub state as proof that work is complete.
+- A PR being ready for review is not the same as being merged. Follow the separate merge gates and ownership rules in this workflow; never merge solely because the PR was marked ready.
+
+This rule applies to every AI agent, coding assistant, human contributor and automation. Draft is the default working state; ready-for-review is an explicit completion signal, not a progress indicator.
