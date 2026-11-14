@@ -6355,7 +6355,11 @@ async function assertResidualRecoverySellDust({ scenario }) {
   const completedPosition = scenario.currentPortfolio.getPosition({
     marketId: market.id,
   })
-  assert.equal(completedPosition.baseQuantity.amount, "0.15")
+  assert.equal(
+    completedPosition.baseQuantity.amount,
+    "0",
+    "A completed recovery cycle must move the retained quantity and verified dust out of active strategy inventory.",
+  )
   assert.equal(dust.quantity, "0.05")
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15")
   assert.equal(scenario.currentRecoveryLedger.buyCost, "0")
