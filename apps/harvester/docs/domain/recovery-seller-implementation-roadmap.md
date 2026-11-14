@@ -9,7 +9,7 @@ created: 2026-11-14
 # Recovery Seller (RS) — Implementation Roadmap
 
 **Status:** Planned; implementation has not started.
-**Tracking:** [PR #1110](https://github.com/45s/coinzilla/pull/1110).
+**Tracking:** [PR #1115](https://github.com/45s/coinzilla/pull/1115).
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
