@@ -265,6 +265,18 @@ export function makeOrderEventWorkflow({
         return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
       }
       if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
+          isStopping?.()) {
+        state.shutdownRecoveryReplanSymbols.add(symbol)
+        return toResult({
+          data: {
+            order,
+            waitingForFullFill: true,
+            shutdown: true,
+            recoverySellReplanPending: true,
+          },
+        })
+      }
+      if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
           state.registry.getActiveOrders({ marketId: order.market.id }).some((active) => active.side === "SELL")) {
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
@@ -292,6 +304,7 @@ export function makeOrderEventWorkflow({
       if (order.side === "BUY" &&
           ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0) {
+        if (isStopping?.()) {state.shutdownRecoveryReplanSymbols.add(symbol)}
         await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
         return failureResult({
           error: new Error("Partially filled order canceled; pair paused for review"),
@@ -305,7 +318,32 @@ export function makeOrderEventWorkflow({
       }
       if (order.status === "FILLED" && order.side === "BUY") {
         if (recoveryMode) {resolveRecoveryManagedCancellation({ order })}
-        if (isStopping?.()) {return toResult({ data: { order, shutdown: true } })}
+        if (isStopping?.()) {
+          state.shutdownRecoveryReplanSymbols.add(symbol)
+          let executionPrice
+          try {
+            executionPrice = getReconciledBuyExecutionPrice({ order })
+          } catch (error) {
+            await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
+            return failureResult({
+              error,
+              category: "ACCOUNTING_INTEGRITY",
+              stage: "BUY_EXECUTION_PRICE",
+              retryable: false,
+            })
+          }
+          state.trailingBuy.set(symbol, false)
+          state.buyReferenceOverrides.delete(symbol)
+          state.lastBuyPrices.set(symbol, executionPrice)
+          state.buyExecutionTotals.delete(order.brokerOrderId)
+          return toResult({
+            data: {
+              order,
+              shutdown: true,
+              recoverySellReplanPending: true,
+            },
+          })
+        }
         let executionPrice
         try {
           executionPrice = getReconciledBuyExecutionPrice({ order })

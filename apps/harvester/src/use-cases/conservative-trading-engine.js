@@ -195,6 +195,7 @@ export function makeConservativeTradingEngine({
     completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     completedRecoverySellSymbols: new Set(),
     completedRecoverySellOrdersBySymbol: new Map(),
+    shutdownRecoveryReplanSymbols: new Set(),
     reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
     volatilityProtection: new Map(Object.entries(pairs)
@@ -629,6 +630,7 @@ export function makeConservativeTradingEngine({
     return cancelResult
   }
 
+  let shutdownRecoverySubmissionAllowed = false
   const submit = makeExecuteStrategyDecision({
     broker,
     onOperationalStateSubmissionIntent,
@@ -641,14 +643,18 @@ export function makeConservativeTradingEngine({
         details: { symbol, ...details },
       })
       const marketPrice = state.prices.get(symbol)
-      if (state.paused.has(symbol)) {return defer("MARKET_PAUSED")}
+      const shutdownRecoverySubmission = shutdownRecoverySubmissionAllowed &&
+        isStopping?.() === true &&
+        order.side === "SELL" &&
+        purpose === "RECOVERY_SELL"
+      if (state.paused.has(symbol) && !shutdownRecoverySubmission) {return defer("MARKET_PAUSED")}
       if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
         return defer("OPERATOR_MARKET_PAUSED")
       }
       if (hasBlockingOpenOrdersForSymbol({ symbol })) {
         return defer("UNOWNED_OPEN_ORDERS_PRESENT")
       }
-      if (!canTrade({ symbol })) {return defer("TRADING_DISABLED")}
+      if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {return defer("TRADING_DISABLED")}
       if (!marketPrice) {return defer("MARKET_PRICE_UNAVAILABLE")}
       if (!isMarketPriceFresh(marketPrice)) {
         return defer("MARKET_PRICE_STALE", { priceTimestamp: marketPrice.timestamp })
@@ -1190,6 +1196,7 @@ export function makeConservativeTradingEngine({
     preflightOnly = false,
     excludedActiveOrderClientId,
     referencePriceOverride,
+    shutdownRecoveryOnly = false,
   } = {}) => {
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
@@ -1198,7 +1205,10 @@ export function makeConservativeTradingEngine({
       state.deferredEvaluations.add(symbol)
       return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
     }
-    if (!canTrade({ symbol })) {
+    if (shutdownRecoveryOnly && isStopping?.() !== true) {
+      return toResult({ error: new Error("Shutdown recovery SELL evaluation requires the stopping state") })
+    }
+    if (!canTrade({ symbol }) && !shutdownRecoveryOnly) {
       state.deferredEvaluations.add(symbol)
       return toResult({ data: { skipped: true, reason: "TRADING_NOT_READY" } })
     }
@@ -1215,7 +1225,9 @@ export function makeConservativeTradingEngine({
       const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
       const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
         .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
-      const lastBuyPrice = referencePriceOverride ?? state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
+      const lastBuyPrice = shutdownRecoveryOnly
+        ? (state.lastBuyPrices.get(symbol) ?? marketPrice.price)
+        : referencePriceOverride ?? state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
       const evaluationInput = {
         marketPrice,
         pairConfig: pairs[symbol],
@@ -1242,10 +1254,10 @@ export function makeConservativeTradingEngine({
       })
       const decision = strategyPolicy.evaluate(evaluationInput)
       const operatorPaused = state.operatorPausedMarkets.has(symbol)
-      const operatorSuppressedActions = operatorPaused
+      const operatorSuppressedActions = shutdownRecoveryOnly || operatorPaused
         ? decision.actions.filter((action) => action.side === "BUY")
         : []
-      const effectiveActions = operatorPaused
+      const effectiveActions = shutdownRecoveryOnly || operatorPaused
         ? decision.actions.filter((action) => action.side === "SELL")
         : decision.actions
       logger?.debug?.({
@@ -1490,7 +1502,13 @@ export function makeConservativeTradingEngine({
         committedBaseBalance,
         portfolioBaseBalance,
       })
-      const result = await submit({ decision: executableDecision, marketMetadata: metadata })
+      let result
+      shutdownRecoverySubmissionAllowed = shutdownRecoveryOnly
+      try {
+        result = await submit({ decision: executableDecision, marketMetadata: metadata })
+      } finally {
+        shutdownRecoverySubmissionAllowed = false
+      }
       logger?.debug?.({
         message: "Harvester Conservative submission result",
         evaluationId,
@@ -1533,6 +1551,228 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
   }
+
+  const assessShutdownRecoverySellCoverage = ({ symbol } = {}) => {
+    const metadata = getCurrentMarketMetadata({ symbol })
+    if (!metadata?.market) {
+      return { covered: false, symbol, reason: "MARKET_METADATA_UNAVAILABLE" }
+    }
+    const portfolio = getPortfolio()
+    const position = portfolio.getPosition({ marketId: metadata.market.id })
+    const recoveryLedger = getRecoveryLedger({ marketId: metadata.market.id })
+    const activeQuantity = position?.quantity.amount ?? "0"
+    const keepQuantity = String(pairs[symbol].keepQuantity)
+    const sellableQuantity = maxDecimal({
+      left: "0",
+      right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
+    })
+    // Position.spent and RecoveryLedger.netSellProceeds include the actual
+    // commissions from applied fills; the policy reserves fees on future SELLs.
+    const outstandingRecoveryAmount = maxDecimal({
+      left: "0",
+      right: subtractDecimal({
+        left: position?.spent.amount ?? "0",
+        right: recoveryLedger?.netSellProceeds ?? "0",
+      }),
+    })
+    const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      .filter((order) => order.side === "SELL")
+    const committedQuantity = activeSells.reduce((total, order) =>
+      addDecimal({ left: total, right: order.remainingQuantity.amount }), "0")
+    const common = {
+      symbol,
+      activeQuantity,
+      keepQuantity,
+      sellableQuantity,
+      outstandingRecoveryAmount,
+      activeSellCount: activeSells.length,
+      committedQuantity,
+    }
+    if (compareDecimal({ left: sellableQuantity, right: "0" }) <= 0 &&
+        compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) <= 0) {
+      return activeSells.length === 0
+        ? { covered: true, ...common }
+        : { covered: false, ...common, reason: "RECOVERY_SELL_UNNECESSARY" }
+    }
+    const marketPrice = state.prices.get(symbol)
+    if (!marketPrice) {
+      return { covered: false, ...common, reason: "MARKET_PRICE_UNAVAILABLE" }
+    }
+    let decision
+    try {
+      decision = strategyPolicy.evaluate({
+        marketPrice,
+        pairConfig: pairs[symbol],
+        settings,
+        portfolio,
+        recoveryLedger,
+        marketMetadata: metadata,
+        activeOrders: [],
+        // This value only feeds the BUY intent, which shutdown filters out.
+        lastBuyPrice: state.lastBuyPrices.get(symbol) ?? marketPrice.price,
+      })
+    } catch (error) {
+      return { covered: false, ...common, reason: "RECOVERY_SELL_PLAN_UNAVAILABLE", error }
+    }
+    const plannedSell = decision.actions.find((action) => action.side === "SELL")
+    if (!plannedSell) {
+      return {
+        covered: false,
+        ...common,
+        reason: "RECOVERY_SELL_UNAVAILABLE",
+        inventoryDisposition: decision.inventoryDisposition?.status ?? null,
+      }
+    }
+    if (activeSells.length === 0) {
+      return {
+        covered: false,
+        ...common,
+        reason: "RECOVERY_SELL_MISSING",
+        requiredQuantity: plannedSell.quantity,
+        requiredPrice: plannedSell.price,
+      }
+    }
+    if (activeSells.length !== 1) {
+      return {
+        covered: false,
+        ...common,
+        reason: "MULTIPLE_ACTIVE_RECOVERY_SELLS",
+        requiredQuantity: plannedSell.quantity,
+        requiredPrice: plannedSell.price,
+      }
+    }
+    const order = activeSells[0]
+    if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) ||
+        typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+      return {
+        covered: false,
+        ...common,
+        reason: "RECOVERY_SELL_STATE_UNRESOLVED",
+        requiredQuantity: plannedSell.quantity,
+        requiredPrice: plannedSell.price,
+      }
+    }
+    const quantityComparison = compareDecimal({
+      left: order.remainingQuantity.amount,
+      right: plannedSell.quantity,
+    })
+    const quantityMatches = quantityComparison === 0
+    const priceSufficient = compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) === 0
+      ? compareDecimal({ left: order.limitPrice?.amount ?? "0", right: "0" }) > 0
+      : compareDecimal({
+        left: order.limitPrice?.amount ?? "0",
+        right: plannedSell.price,
+      }) >= 0
+    const reason = !quantityMatches
+      ? quantityComparison < 0 ? "RECOVERY_SELL_UNDERSIZED" : "RECOVERY_SELL_OVERCOMMITTED"
+      : !priceSufficient
+        ? "RECOVERY_SELL_FINANCIALLY_INSUFFICIENT"
+        : null
+    return {
+      covered: reason === null,
+      ...common,
+      requiredQuantity: plannedSell.quantity,
+      requiredPrice: plannedSell.price,
+      committedPrice: order.limitPrice?.amount ?? null,
+      reason,
+    }
+  }
+
+  const reconcileRecoverySellsForShutdown = () => runTransition({
+    task: async () => {
+      if (isStopping?.() !== true) {
+        return toResult({ error: new Error("Shutdown recovery SELL reconciliation requires the stopping state") })
+      }
+      const reconciledSymbols = []
+      const failures = []
+      for (const symbol of Object.keys(pairs)) {
+        let assessment = assessShutdownRecoverySellCoverage({ symbol })
+        if (assessment.covered) {
+          state.shutdownRecoveryReplanSymbols.delete(symbol)
+          continue
+        }
+        if (assessment.reason === "MARKET_PRICE_UNAVAILABLE" ||
+            assessment.reason === "MARKET_METADATA_UNAVAILABLE" ||
+            assessment.reason === "RECOVERY_SELL_PLAN_UNAVAILABLE") {
+          failures.push(new Error("Shutdown recovery SELL cannot be safely evaluated for " + symbol + ": " + assessment.reason))
+          continue
+        }
+        const metadata = getCurrentMarketMetadata({ symbol })
+        const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
+          .filter((order) => order.side === "SELL")
+        if (activeSells.length > 0) {
+          const cancellation = await cancelAndReconcileRecoverySells({
+            symbol,
+            marketId: metadata.market.id,
+          })
+          if (!cancellation?.ok || cancellation.data?.deferred === true) {
+            failures.push(cancellation?.errors?.[0] ??
+              new Error("Shutdown recovery SELL cancellation is unresolved for " + symbol))
+            continue
+          }
+        }
+        if (state.paused.has(symbol) || hasBlockingOpenOrdersForSymbol({ symbol })) {
+          failures.push(new Error("Shutdown recovery SELL replacement is blocked for " + symbol))
+          continue
+        }
+        const replacement = await evaluateLatestTransition({
+          symbol,
+          shutdownRecoveryOnly: true,
+        })
+        const submittedSell = replacement?.data?.submittedOrders?.some((order) => order.side === "SELL") === true
+        if (!replacement?.ok || replacement.data?.deferred === true ||
+            replacement.data?.skipped === true || !submittedSell) {
+          failures.push(replacement?.errors?.[0] ??
+            new Error("Shutdown recovery SELL replacement was not confirmed for " + symbol))
+          continue
+        }
+        assessment = assessShutdownRecoverySellCoverage({ symbol })
+        if (!assessment.covered) {
+          failures.push(new Error("Shutdown recovery SELL coverage remains incomplete for " +
+            symbol + ": " + assessment.reason))
+          continue
+        }
+        state.shutdownRecoveryReplanSymbols.delete(symbol)
+        reconciledSymbols.push(symbol)
+      }
+      if (failures.length > 0) {
+        return failureResult({
+          errors: failures,
+          category: "ORDER_TRANSITION",
+          stage: "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
+          retryable: true,
+        })
+      }
+      return toResult({ data: { reconciledSymbols } })
+    },
+  })
+
+  const auditShutdownRecoverySellCoverage = () => runTransition({
+    task: async () => {
+      const findings = []
+      for (const symbol of Object.keys(pairs)) {
+        const assessment = assessShutdownRecoverySellCoverage({ symbol })
+        if (!assessment.covered) {
+          findings.push(Object.freeze({
+            symbol,
+            reason: assessment.reason ?? "RECOVERY_SELL_COVERAGE_INVALID",
+            requiredQuantity: assessment.requiredQuantity ?? null,
+            committedQuantity: assessment.committedQuantity ?? null,
+            requiredPrice: assessment.requiredPrice ?? null,
+            committedPrice: assessment.committedPrice ?? null,
+            outstandingRecoveryAmount: assessment.outstandingRecoveryAmount ?? null,
+            activeSellCount: assessment.activeSellCount ?? 0,
+          }))
+        }
+      }
+      return toResult({
+        data: Object.freeze({
+          covered: findings.length === 0,
+          findings: Object.freeze(findings),
+        }),
+      })
+    },
+  })
 
   const processMarketBookTransition = async ({ symbol, bookTicker } = {}) => {
     try {
@@ -2322,6 +2562,8 @@ export function makeConservativeTradingEngine({
     processBookTicker,
     processUserDataEvent,
     reconcileOwnedOrders,
+    reconcileRecoverySellsForShutdown,
+    auditShutdownRecoverySellCoverage,
     cancelOwnedBuyOrdersForShutdown,
     cancelOwnedBuyOrdersForSafetyHalt,
     processVolatilitySnapshot,
