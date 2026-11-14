@@ -284,6 +284,128 @@ async function handleHarvesterStartupFailure({
   throw error
 }
 
+async function initializeHarvesterAccountAndUserData({
+  broker,
+  pairs,
+  marketMetadata,
+  eventPublisher,
+  logger,
+  activateTradingEngine,
+  operatorControlLifecycle,
+  getTradingEngine,
+  getOperatorRuntimeSnapshot,
+  getPortfolio,
+  getRecoveryLedger,
+  getAccountSnapshot,
+  setPortfolioWorkflow,
+  evaluateStrategy,
+  onCommissionAsset,
+  onOperationalStateExecutionFill,
+  onOperationalStateRecoveryCycleCompleted,
+  onOperationalStateRecoveryCycleNotCompleted,
+  userDataState,
+  brokerName,
+  tradingMode,
+  tradingEnabled,
+  enabledSymbols,
+  handleUserDataEvent,
+  handleUserDataStatus,
+  publishAccountSnapshot,
+  publishOpenOrdersSnapshot,
+  resumeDeferredStrategyEvaluations,
+  setUserDataSubscription,
+} = {}) {
+  await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
+  activateTradingEngine()
+  await operatorControlLifecycle.start({
+    engine: getTradingEngine(),
+    getRuntimeSnapshot: getOperatorRuntimeSnapshot,
+    getPortfolio,
+    getRecoveryLedger,
+    getAccountSnapshot,
+    getOpenOrders: () => broker.getOpenOrders(),
+  })
+  setPortfolioWorkflow(createPortfolioWorkflow({
+    evaluateStrategy,
+    logger,
+    onCommissionAsset,
+    onOperationalStateExecutionFill,
+    onOperationalStateRecoveryCycleCompleted,
+    onOperationalStateRecoveryCycleNotCompleted,
+  }))
+  return subscribeToUserData({
+    broker,
+    brokerName,
+    eventPublisher,
+    logger,
+    state: userDataState,
+    tradingMode,
+    tradingEnabled,
+    enabledSymbols,
+    onEvent: handleUserDataEvent,
+    onStatus: handleUserDataStatus,
+    onSubscriptionEstablished: setUserDataSubscription,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    getAccountSnapshot,
+    resumeDeferredStrategyEvaluations,
+  })
+}
+
+async function subscribeHarvesterMarketStreams({
+  broker,
+  brokerName,
+  eventPublisher,
+  logger,
+  tradingEnabled,
+  pairs,
+  settings,
+  accountSnapshotManagerRef,
+  processMarketPrice,
+  processMarketBook,
+  isMarketPriceFresh,
+  now,
+  isStopped,
+  onMarketPriceError,
+  subscriptions,
+  bookSubscriptions,
+  marketPriceIntake,
+  candleHistoryService,
+} = {}) {
+  const marketDataPairs = resolveStrategyMarketDataPairs({
+    pairs,
+    strategyPolicy: conservativeStrategyPolicy,
+    hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+    logger,
+  })
+  await subscribeToMarketData({
+    broker,
+    brokerName,
+    eventPublisher,
+    logger,
+    tradingEnabled,
+    pairs: marketDataPairs,
+    settings,
+    processMarketPrice,
+    processMarketBook,
+    isMarketPriceFresh,
+    now,
+    isStopped,
+    onMarketPriceError,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+  })
+  await candleHistoryService.start({
+    pairs: resolveStrategyMarketDataPairs({
+      pairs,
+      strategyPolicy: conservativeStrategyPolicy,
+      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+    }),
+    subscriptions,
+  })
+}
+
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -568,55 +690,37 @@ tore,
     processMarketBook = tradingEngine.processBookTicker
   }
   try {
-    await loadMarketMetadata({
+    userDataSubscription = await initializeHarvesterAccountAndUserData({
       broker,
       pairs,
       marketMetadata,
       eventPublisher,
-      logger
-    })
-    // Journal replay and runtime state restoration are intentionally disabled.
-    // ADR-0001 Operational State Store records are verified separately and prior process sessions
-    // fail closed until restart recovery is accepted.
-    // PREFLIGHT/RECOVERY/CLOSING account audits and targeted commission
-    // baselines remain independent, mandatory account-integrity boundaries.
-    activateTradingEngine()
-    await operatorControlLifecycle.start({
-      engine: tradingEngine,
-      getRuntimeSnapshot: getOperatorRuntimeSnapshot,
+      logger,
+      activateTradingEngine,
+      operatorControlLifecycle,
+      getTradingEngine: () => tradingEngine,
+      getOperatorRuntimeSnapshot,
       getPortfolio,
       getRecoveryLedger,
       getAccountSnapshot,
-      getOpenOrders: () => broker.getOpenOrders(),
-    })
-    portfolioWorkflow = createPortfolioWorkflow({
+      setPortfolioWorkflow: (workflow) => { portfolioWorkflow = workflow },
       evaluateStrategy,
-      logger,
       onCommissionAsset,
       onOperationalStateExecutionFill,
       onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted,
-    })
-
-    userDataSubscription = await subscribeToUserData({
-      broker,
+      userDataState,
       brokerName,
-      eventPublisher,
-      logger,
-      state: userDataState,
       tradingMode,
       tradingEnabled,
       enabledSymbols,
-      onEvent: handleUserDataEvent,
-      onStatus: handleUserDataStatus,
-      onSubscriptionEstablished: (subscription) => { userDataSubscription = subscription },
+      handleUserDataEvent,
+      handleUserDataStatus,
       publishAccountSnapshot,
       publishOpenOrdersSnapshot,
-      getAccountSnapshot,
       resumeDeferredStrategyEvaluations,
+      setUserDataSubscription: (subscription) => { userDataSubscription = subscription },
     })
-    // The initial PREFLIGHT/user-data gate is reported after its authoritative
-    // snapshots pass. Later reconnect/reconciliation transitions use the same event.
     lastReportedUserDataReady = userDataState.ready
     publishInitialUserDataReadiness({
       lastReportedUserDataReady,
@@ -624,38 +728,25 @@ tore,
       brokerName,
       userDataState,
     })
-
-    await subscribeToMarketData({
+    await subscribeHarvesterMarketStreams({
       broker,
       brokerName,
       eventPublisher,
       logger,
       tradingEnabled,
-      pairs: resolveStrategyMarketDataPairs({
-        pairs,
-        strategyPolicy: conservativeStrategyPolicy,
-        hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-        logger
-      }),
+      pairs,
       settings,
+      accountSnapshotManagerRef,
       processMarketPrice,
       processMarketBook,
       isMarketPriceFresh,
       now,
-      isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
+      isStopped,
       onMarketPriceError,
       subscriptions,
       bookSubscriptions,
       marketPriceIntake,
-    })
-
-    await candleHistoryService.start({
-      pairs: resolveStrategyMarketDataPairs({
-      pairs,
-      strategyPolicy: conservativeStrategyPolicy,
-      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol
-    }),
-      subscriptions
+      candleHistoryService,
     })
   } catch (error) {
     await handleHarvesterStartupFailure({
