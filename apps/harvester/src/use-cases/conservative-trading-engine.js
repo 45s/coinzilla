@@ -815,6 +815,208 @@ async function cancelRecoverySells({ context, symbol, marketId }) {
   })
 }
 
+
+async function cancelTrailingBuyOrder({ context, symbol, order }) {
+  const eligibility = await context.ensureCancellationEligible({
+    symbol,
+    order,
+    reason: "TRAILING_BUY_CANCELLATION_INELIGIBLE",
+  })
+  if (!eligibility.ok) {
+    return eligibility
+  }
+  const intent = await context.publishDurableIntent({
+    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
+    dataResult: mapOrderCancellationRequestedData({
+      order,
+      reason: "TRAILING_BUY_REPRICE",
+    }),
+  })
+  if (!intent.ok) {
+    const error = intent.errors?.[0] ?? new Error("Trailing BUY cancellation intent was not durably journaled")
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_CANCEL_INTENT_NOT_DURABLE",
+      error,
+    })
+    return toResult({
+      errors: intent.errors ?? [error],
+    })
+  }
+  let result
+  try {
+    result = await context.cancelOrderWithOperationalState({
+      order,
+      reason: "TRAILING_BUY_REPRICE",
+    })
+  } catch (error) {
+    return context.markCancellationUnknown({
+      symbol,
+      order,
+      reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
+      error,
+    })
+  }
+  if (!result?.ok || !(result.data instanceof CanonicalOrder)) {
+    const errors = result?.errors ?? [new Error("Broker did not confirm a canonical BUY cancellation")]
+    return context.markCancellationFailure({
+      symbol,
+      order,
+      reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
+      error: errors[0],
+      cancellationResultOk: result?.ok,
+      cancellationOutcome: result?.cancellationOutcome,
+    })
+  }
+  const canceledOrder = result.data
+  const update = context.state.registry.applyUpdate({
+    order: canceledOrder,
+  })
+  if (update.unknown) {
+    const error = new Error("Canceled trailing BUY is not registered by Harvester")
+    context.publishOrderCancelFailed({
+      order,
+      outcome: "NOT_REGISTERED",
+      error,
+    })
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED",
+    })
+    return toResult({
+      error,
+    })
+  }
+  context.state.registry = update.registry
+  if (canceledOrder.status === "CANCELED") {
+    context.publishOrderCancelled({
+      order: canceledOrder,
+    })
+  } else {
+    context.publishOrderCancelFailed({
+      order: canceledOrder,
+      outcome: "NOT_CANCELED",
+      error: new Error("Trailing BUY completed instead of being canceled"),
+    })
+  }
+  return toResult({
+    data: {
+      canceledOrder,
+    },
+  })
+}
+
+async function reconcileTrailingBuyFills({ context, symbol, order, canceledOrder }) {
+  const fillsResult = await context.broker.getFills({
+    symbol,
+    orderId: order.brokerOrderId,
+  })
+  if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+    const errors = fillsResult?.errors ?? [new Error("Unable to reconcile trailing BUY fills after cancellation")]
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_FILL_RECONCILIATION_FAILED",
+      error: errors[0],
+    })
+    return toResult({
+      errors,
+    })
+  }
+  let reconciledQuantity = "0"
+  const seenFillIds = new Set()
+  for (const fill of fillsResult.data) {
+    const identityMatches = fill instanceof Fill &&
+      fill.market.id === order.market.id &&
+      fill.side === "BUY" &&
+      fill.brokerOrderId === order.brokerOrderId &&
+      (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+    if (!identityMatches) {
+      await context.pause({
+        symbol,
+        reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH",
+      })
+      return toResult({
+        error: new Error("Recovered BUY fill does not match the canceled order"),
+      })
+    }
+    const accounting = await context.updateTradingAccounting({
+      fill,
+    })
+    if (!accounting?.ok) {
+      await context.pause({
+        symbol,
+        reason: "TRAILING_BUY_FILL_ACCOUNTING_FAILED",
+        error: accounting?.errors?.[0],
+      })
+      return toResult({
+        errors: accounting?.errors ?? [new Error("Recovered BUY fill accounting failed")],
+      })
+    }
+    if (!seenFillIds.has(fill.id)) {
+      reconciledQuantity = addDecimal({
+        left: reconciledQuantity,
+        right: fill.quantity.amount,
+      })
+      seenFillIds.add(fill.id)
+    }
+  }
+  if (compareDecimal({
+    left: reconciledQuantity,
+    right: canceledOrder.executedQuantity.amount,
+  }) !== 0) {
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_EXECUTED_QUANTITY_MISMATCH",
+    })
+    return toResult({
+      error: new Error("Canceled BUY cumulative execution does not match reconciled fills"),
+    })
+  }
+  return toResult({
+    data: {
+      reconciledQuantity,
+    },
+  })
+}
+
+async function cancelAndReconcileTrailingBuyTransition({ context, symbol, order }) {
+  const cancellation = await cancelTrailingBuyOrder({
+    context,
+    symbol,
+    order,
+  })
+  if (!cancellation.ok) {
+    return cancellation
+  }
+  const canceledOrder = cancellation.data.canceledOrder
+  const fills = await reconcileTrailingBuyFills({
+    context,
+    symbol,
+    order,
+    canceledOrder,
+  })
+  if (!fills.ok) {
+    return fills
+  }
+  if (canceledOrder.status !== "CANCELED" || compareDecimal({
+    left: fills.data.reconciledQuantity,
+    right: "0",
+  }) !== 0) {
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_FILLED_DURING_CANCEL",
+    })
+    return toResult({
+      error: new Error("Trailing BUY filled during cancellation; pair paused after fill reconciliation"),
+    })
+  }
+  return toResult({
+    data: {
+      canceledOrder,
+    },
+  })
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -1581,147 +1783,22 @@ export function makeConservativeTradingEngine({
     ...options,
   })
 
-  const cancelAndReconcileTrailingBuy = async ({
-    symbol,
-    order
-  } = {}) => {
-    const eligibility = await ensureCancellationEligible({
-      symbol,
-      order,
-      reason: "TRAILING_BUY_CANCELLATION_INELIGIBLE",
-    })
-    if (!eligibility.ok) {return eligibility}
-    const cancelIntent = await publishDurableIntent({
-      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
-      dataResult: mapOrderCancellationRequestedData({
-        order,
-        reason: "TRAILING_BUY_REPRICE",
-      }),
-    })
-    if (!cancelIntent.ok) {
-      const error = cancelIntent.errors?.[0] ?? new Error("Trailing BUY cancellation intent was not durably journaled")
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_CANCEL_INTENT_NOT_DURABLE",
-        error
-      })
-      return toResult({ errors: cancelIntent.errors ?? [error] })
-    }
-    let cancelResult
-    try {
-      cancelResult = await cancelOrderWithOperationalState({
-        order,
-        reason: "TRAILING_BUY_REPRICE"
-      })
-    } catch (error) {
-      return markCancellationUnknown({
-        symbol,
-        order,
-        reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
-        error,
-      })
-    }
-    if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
-      const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical BUY cancellation")]
-      return markCancellationFailure({
-        symbol,
-        order,
-        reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
-        error: errors[0],
-        cancellationResultOk: cancelResult?.ok,
-            cancellationOutcome: cancelResult?.cancellationOutcome,
-      })
-    }
-    const canceledOrder = cancelResult.data
-    const update = state.registry.applyUpdate({ order: canceledOrder })
-    if (update.unknown) {
-      const error = new Error("Canceled trailing BUY is not registered by Harvester")
-      publishOrderCancelFailed({
-        order,
-        outcome: "NOT_REGISTERED",
-        error
-      })
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED"
-      })
-      return toResult({ error })
-    }
-    state.registry = update.registry
-    if (canceledOrder.status === "CANCELED") {
-      publishOrderCancelled({ order: canceledOrder })
-    } else {
-      publishOrderCancelFailed({
-        order: canceledOrder,
-        outcome: "NOT_CANCELED",
-        error: new Error("Trailing BUY completed instead of being canceled"),
-      })
-    }
-
-    const fillsResult = await broker.getFills({
-      symbol,
-      orderId: order.brokerOrderId
-    })
-    if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
-      const errors = fillsResult?.errors ?? [new Error("Unable to reconcile trailing BUY fills after cancellation")]
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_FILL_RECONCILIATION_FAILED",
-        error: errors[0]
-      })
-      return toResult({ errors })
-    }
-    let reconciledQuantity = "0"
-    const seenFillIds = new Set()
-    for (const fill of fillsResult.data) {
-      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
-          fill.side !== "BUY" || fill.brokerOrderId !== order.brokerOrderId ||
-          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
-        await pause({
-          symbol,
-          reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH"
-        })
-        return toResult({ error: new Error("Recovered BUY fill does not match the canceled order") })
-      }
-      const accounting = await updateTradingAccounting({ fill })
-      if (!accounting?.ok) {
-        await pause({
-          symbol,
-          reason: "TRAILING_BUY_FILL_ACCOUNTING_FAILED",
-          error: accounting?.errors?.[0]
-        })
-        return toResult({ errors: accounting?.errors ?? [new Error("Recovered BUY fill accounting failed")] })
-      }
-      if (!seenFillIds.has(fill.id)) {
-        reconciledQuantity = addDecimal({
-          left: reconciledQuantity,
-          right: fill.quantity.amount
-        })
-        seenFillIds.add(fill.id)
-      }
-    }
-    if (compareDecimal({
-      left: reconciledQuantity,
-      right: canceledOrder.executedQuantity.amount
-    }) !== 0) {
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_EXECUTED_QUANTITY_MISMATCH"
-      })
-      return toResult({ error: new Error("Canceled BUY cumulative execution does not match reconciled fills") })
-    }
-    if (canceledOrder.status !== "CANCELED" || compareDecimal({
-      left: reconciledQuantity,
-      right: "0"
-    }) !== 0) {
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_FILLED_DURING_CANCEL"
-      })
-      return toResult({ error: new Error("Trailing BUY filled during cancellation; pair paused after fill reconciliation") })
-    }
-    return toResult({ data: { canceledOrder } })
-  }
+  const cancelAndReconcileTrailingBuy = (options = {}) => cancelAndReconcileTrailingBuyTransition({
+    context: {
+      ensureCancellationEligible,
+      publishDurableIntent,
+      cancelOrderWithOperationalState,
+      markCancellationUnknown,
+      markCancellationFailure,
+      publishOrderCancelFailed,
+      publishOrderCancelled,
+      state,
+      broker,
+      updateTradingAccounting,
+      pause,
+    },
+    ...options,
+  })
 
   const maybeReplaceTrailingBuy = async ({
     symbol,
