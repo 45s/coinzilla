@@ -436,6 +436,379 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
   return cancelResult
 }
 
+
+function recoverySellFailure({ error, category = "ORDER_TRANSITION", stage = "RECOVERY_SELL_CANCELLATION", retryable = true }) {
+  return failureResult({
+    error,
+    category,
+    stage,
+    retryable,
+  })
+}
+
+async function prepareRecoverySellCancellation({ context, order, symbol }) {
+  const eligibility = await context.ensureCancellationEligible({
+    symbol,
+    order,
+    reason: "RECOVERY_SELL_CANCELLATION_INELIGIBLE",
+  })
+  if (!eligibility.ok) {
+    return withFailure(eligibility, {
+      category: "ORDER_TRANSITION",
+      stage: "RECOVERY_SELL_CANCELLATION",
+      retryable: true,
+    })
+  }
+  const intent = await context.publishDurableIntent({
+    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
+    dataResult: mapOrderCancellationRequestedData({
+      order,
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    }),
+  })
+  if (intent.ok) {
+    return undefined
+  }
+  const error = intent.errors?.[0] ?? new Error("Recovery SELL cancellation intent was not durably journaled")
+  await context.pause({
+    symbol,
+    reason: "RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE",
+    error,
+  })
+  return recoverySellFailure({
+    error,
+    errors: intent.errors ?? [error],
+    category: "DURABILITY",
+    stage: "RECOVERY_SELL_CANCEL_INTENT",
+  })
+}
+
+async function executeRecoverySellCancellation({ context, order, symbol }) {
+  let result
+  try {
+    result = await context.cancelOrderWithOperationalState({
+      order,
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    })
+  } catch (error) {
+    const failed = await context.markCancellationUnknown({
+      symbol,
+      order,
+      reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+      error,
+    })
+    return withFailure(failed, {
+      category: "ORDER_TRANSITION",
+      stage: "RECOVERY_SELL_CANCELLATION",
+      retryable: true,
+    })
+  }
+  if (!result?.ok || !(result.data instanceof CanonicalOrder)) {
+    const errors = result?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
+    const failed = await context.markCancellationFailure({
+      symbol,
+      order,
+      reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+      error: errors[0],
+      cancellationResultOk: result?.ok,
+      cancellationOutcome: result?.cancellationOutcome,
+    })
+    return withFailure(failed, {
+      category: "ORDER_TRANSITION",
+      stage: "RECOVERY_SELL_CANCELLATION",
+      retryable: true,
+    })
+  }
+  return {
+    ok: true,
+    data: result.data,
+  }
+}
+
+async function requestRecoverySellCancellation({ context, order, symbol }) {
+  const preparation = await prepareRecoverySellCancellation({
+    context,
+    order,
+    symbol,
+  })
+  if (preparation) {
+    return preparation
+  }
+  return executeRecoverySellCancellation({
+    context,
+    order,
+    symbol,
+  })
+}
+
+async function completeFilledRecoverySellCycle({ context, order, symbol }) {
+  const completion = await context.completeRecoveryCycle({
+    marketId: order.market.id,
+    keepQuantity: String(context.pairs[symbol].keepQuantity),
+    minProfit: String(context.pairs[symbol].minProfit),
+    sellOrder: order,
+  })
+  if (!completion?.ok) {
+    await context.pause({
+      symbol,
+      reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED",
+      error: completion?.errors?.[0],
+    })
+    return toResult({
+      errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")],
+    })
+  }
+  if (!completion.data?.eligible) {
+    context.publishRecoveryCycleNotCompleted({
+      order,
+      completion,
+    })
+  }
+  const allowedContinuationReasons = [
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ]
+  if (!completion.data?.eligible && !allowedContinuationReasons.includes(completion.data?.reason)) {
+    await context.pause({
+      symbol,
+      reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+    })
+    return toResult({
+      error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation"),
+    })
+  }
+  return {
+    ok: true,
+    data: completion.data,
+  }
+}
+
+function publishCompletedRecoverySellCycle({ context, order, symbol, completion }) {
+  if (!completion.eligible) {
+    return
+  }
+  publishLifecycleEvent({
+    eventPublisher: context.eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+    dataResult: mapRecoveryCycleCompletedData({
+      symbol,
+      marketId: order.market.id,
+      freeQuantity: completion.freeQuantity,
+      keepQuantity: String(context.pairs[symbol].keepQuantity),
+      minProfit: String(context.pairs[symbol].minProfit),
+      realizedNetProfit: completion.realizedNetProfit,
+      ...(completion.dust === undefined ? {} : { dust: completion.dust }),
+    }),
+  })
+  context.state.completedRecoverySellSymbols.delete(symbol)
+  context.state.completedRecoverySellOrdersBySymbol.delete(symbol)
+  context.state.trailingBuy.set(symbol, true)
+}
+
+async function finishFilledRecoverySell({ context, order, symbol }) {
+  if (compareDecimal({
+    left: order.executedQuantity.amount,
+    right: order.originalQuantity.amount,
+  }) !== 0) {
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_FILLED_QUANTITY_MISMATCH",
+    })
+    return toResult({
+      error: new Error("FILLED recovery SELL does not reconcile to its original quantity"),
+    })
+  }
+  try {
+    context.assertReconciledSellExecution({
+      order,
+    })
+  } catch (error) {
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED",
+      error,
+    })
+    return toResult({
+      error,
+    })
+  }
+  const result = await completeFilledRecoverySellCycle({
+    context,
+    order,
+    symbol,
+  })
+  if (!result.ok) {
+    return result
+  }
+  publishCompletedRecoverySellCycle({
+    context,
+    order,
+    symbol,
+    completion: result.data,
+  })
+  context.state.replacementIntents.delete(symbol)
+  context.state.sellExecutionTotals.delete(order.brokerOrderId)
+  return toResult({
+    data: {
+      completed: result.data.eligible === true,
+    },
+  })
+}
+
+async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
+  const update = context.state.registry.applyUpdate({
+    order: canceledOrder,
+  })
+  if (update.unknown) {
+    const error = new Error("Canceled recovery SELL is not registered by Harvester")
+    context.publishOrderCancelFailed({
+      order,
+      outcome: "NOT_REGISTERED",
+      error,
+    })
+    await context.pause({
+      symbol,
+      reason: "CANCELED_ORDER_NOT_REGISTERED",
+    })
+    return recoverySellFailure({
+      error,
+      category: "OWNERSHIP_INTEGRITY",
+      stage: "CANCELED_ORDER_REGISTRY_MATCH",
+      retryable: false,
+    })
+  }
+  context.state.registry = update.registry
+  const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+  if (!terminalStatuses.has(canceledOrder.status)) {
+    context.publishOrderCancelFailed({
+      order: canceledOrder,
+      outcome: "CANCELLATION_UNCONFIRMED",
+      error: new Error("Recovery SELL did not reach an authoritative terminal state"),
+    })
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+    })
+    return recoverySellFailure({
+      error: new Error("Recovery SELL cancellation did not reach a terminal state"),
+    })
+  }
+  if (canceledOrder.status === "CANCELED") {
+    context.publishOrderCancelled({
+      order: canceledOrder,
+    })
+  } else {
+    context.publishOrderCancelFailed({
+      order: canceledOrder,
+      outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
+      error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
+    })
+  }
+  const terminalReconciliation = await context.reconcileTerminalOrderFills({
+    order: canceledOrder,
+  })
+  if (!terminalReconciliation?.ok) {
+    return terminalReconciliation
+  }
+  context.state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
+  if (canceledOrder.status === "FILLED") {
+    context.state.completedOrderTransitions.add(canceledOrder.clientOrderId)
+    context.state.completedRecoverySellSymbols.add(symbol)
+    context.state.completedRecoverySellOrdersBySymbol.set(symbol, canceledOrder)
+    return finishFilledRecoverySell({
+      context,
+      order: canceledOrder,
+      symbol,
+    })
+  }
+  if (compareDecimal({
+    left: canceledOrder.executedQuantity.amount,
+    right: canceledOrder.originalQuantity.amount,
+  }) === 0) {
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_TERMINAL_STATUS_QUANTITY_MISMATCH",
+    })
+    return toResult({
+      error: new Error("Non-FILLED terminal recovery SELL reports its full original quantity as executed"),
+    })
+  }
+  return toResult({
+    data: {
+      canceled: true,
+    },
+  })
+}
+
+async function processRecoverySellCancellation({ context, order, symbol }) {
+  if (order.status === "PENDING") {
+    context.state.replacementIntents.add(symbol)
+    return toResult({
+      data: {
+        deferred: true,
+        reason: "RECOVERY_SELL_PENDING_ACKNOWLEDGEMENT",
+      },
+    })
+  }
+  if (order.status === "UNKNOWN") {
+    const error = new Error("Cannot safely cancel a recovery SELL with unknown status")
+    context.publishOrderCancelFailed({
+      order,
+      outcome: "ORDER_STATE_UNKNOWN",
+      error,
+    })
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN",
+    })
+    return recoverySellFailure({
+      error,
+    })
+  }
+  const result = await requestRecoverySellCancellation({
+    context,
+    order,
+    symbol,
+  })
+  if (!result?.ok) {
+    return result
+  }
+  return applyRecoverySellCancellation({
+    context,
+    order,
+    canceledOrder: result.data,
+    symbol,
+  })
+}
+
+async function cancelRecoverySells({ context, symbol, marketId }) {
+  const activeSells = context.state.registry.getActiveOrders({
+    marketId,
+  }).filter((order) => order.side === "SELL")
+  for (const order of activeSells) {
+    context.logger?.info?.({
+      message: "Harvester recovery SELL cancellation requested",
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      symbol,
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+    })
+    const result = await processRecoverySellCancellation({
+      context,
+      order,
+      symbol,
+    })
+    if (!result?.ok || result.data?.deferred === true) {
+      return result
+    }
+  }
+  return toResult({
+    data: {
+      canceled: activeSells.length,
+    },
+  })
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -1180,253 +1553,27 @@ export function makeConservativeTradingEngine({
     },
   })
 
-  const cancelAndReconcileRecoverySells = async ({
-    symbol,
-    marketId
-  } = {}) => {
-    const activeSells = state.registry.getActiveOrders({ marketId }).filter((order) => order.side === "SELL")
-    for (const order of activeSells) {
-      logger?.info?.({
-        message: "Harvester recovery SELL cancellation requested",
-        reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
-        symbol,
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-      })
-      if (order.status === "PENDING") {
-        state.replacementIntents.add(symbol)
-        return toResult({ data: {
-          deferred: true,
-          reason: "RECOVERY_SELL_PENDING_ACKNOWLEDGEMENT"
-        } })
-      }
-      if (order.status === "UNKNOWN") {
-        const error = new Error("Cannot safely cancel a recovery SELL with unknown status")
-        publishOrderCancelFailed({
-          order,
-          outcome: "ORDER_STATE_UNKNOWN",
-          error
-        })
-        await pause({
-          symbol,
-          reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN"
-        })
-        return failureResult({
-          error,
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_CANCELLATION",
-          retryable: true,
-        })
-      }
-      const eligibility = await ensureCancellationEligible({
-        symbol,
-        order,
-        reason: "RECOVERY_SELL_CANCELLATION_INELIGIBLE",
-      })
-      if (!eligibility.ok) {
-        return withFailure(eligibility, {
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_CANCELLATION",
-          retryable: true,
-        })
-      }
-      const cancelIntent = await publishDurableIntent({
-        eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
-        dataResult: mapOrderCancellationRequestedData({
-          order,
-          reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
-        }),
-      })
-      if (!cancelIntent.ok) {
-        const error = cancelIntent.errors?.[0] ?? new Error("Recovery SELL cancellation intent was not durably journaled")
-        await pause({
-          symbol,
-          reason: "RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE",
-          error
-        })
-        return failureResult({
-          errors: cancelIntent.errors ?? [error],
-          category: "DURABILITY",
-          stage: "RECOVERY_SELL_CANCEL_INTENT",
-          retryable: true,
-        })
-      }
-      let cancelResult
-      try {
-        cancelResult = await cancelOrderWithOperationalState({
-          order,
-          reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
-        })
-      } catch (error) {
-        return withFailure(
-          await markCancellationUnknown({
-            symbol,
-            order,
-            reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
-            error,
-          }),
-          {
-            category: "ORDER_TRANSITION",
-            stage: "RECOVERY_SELL_CANCELLATION",
-            retryable: true,
-          },
-        )
-      }
-      if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
-        const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
-        return withFailure(
-          await markCancellationFailure({
-            symbol,
-            order,
-            reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
-            error: errors[0],
-            cancellationResultOk: cancelResult?.ok,
-            cancellationOutcome: cancelResult?.cancellationOutcome,
-          }),
-          {
-            category: "ORDER_TRANSITION",
-            stage: "RECOVERY_SELL_CANCELLATION",
-            retryable: true,
-          },
-        )
-      }
-      const canceledOrder = cancelResult.data
-      const update = state.registry.applyUpdate({ order: canceledOrder })
-      if (update.unknown) {
-        const error = new Error("Canceled recovery SELL is not registered by Harvester")
-        publishOrderCancelFailed({
-          order,
-          outcome: "NOT_REGISTERED",
-          error
-        })
-        await pause({
-          symbol,
-          reason: "CANCELED_ORDER_NOT_REGISTERED"
-        })
-        return failureResult({
-          error,
-          category: "OWNERSHIP_INTEGRITY",
-          stage: "CANCELED_ORDER_REGISTRY_MATCH",
-          retryable: false,
-        })
-      }
-      state.registry = update.registry
-      const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
-      if (!terminalStatuses.has(canceledOrder.status)) {
-        publishOrderCancelFailed({
-          order: canceledOrder,
-          outcome: "CANCELLATION_UNCONFIRMED",
-          error: new Error("Recovery SELL did not reach an authoritative terminal state"),
-        })
-        await pause({
-          symbol,
-          reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED"
-        })
-        return failureResult({
-          error: new Error("Recovery SELL cancellation did not reach a terminal state"),
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_CANCELLATION",
-          retryable: true,
-        })
-      }
-      if (canceledOrder.status === "CANCELED") {
-        publishOrderCancelled({ order: canceledOrder })
-      } else {
-        publishOrderCancelFailed({
-          order: canceledOrder,
-          outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
-          error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
-        })
-      }
-
-      const terminalReconciliation = await reconcileTerminalOrderFills({ order: canceledOrder })
-      if (!terminalReconciliation?.ok) {return terminalReconciliation}
-      state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
-      if (canceledOrder.status === "FILLED") {
-        state.completedOrderTransitions.add(canceledOrder.clientOrderId)
-        state.completedRecoverySellSymbols.add(symbol)
-        state.completedRecoverySellOrdersBySymbol.set(symbol, canceledOrder)
-        if (compareDecimal({
-          left: canceledOrder.executedQuantity.amount,
-          right: canceledOrder.originalQuantity.amount,
-        }) !== 0) {
-          await pause({
-            symbol,
-            reason: "RECOVERY_SELL_FILLED_QUANTITY_MISMATCH"
-          })
-          return toResult({ error: new Error("FILLED recovery SELL does not reconcile to its original quantity") })
-        }
-        try {
-          assertReconciledSellExecution({ order: canceledOrder })
-        } catch (error) {
-          await pause({
-            symbol,
-            reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED",
-            error
-          })
-          return toResult({ error })
-        }
-        const completion = await completeRecoveryCycle({
-          marketId: canceledOrder.market.id,
-          keepQuantity: String(pairs[symbol].keepQuantity),
-          minProfit: String(pairs[symbol].minProfit),
-          sellOrder: canceledOrder,
-        })
-        if (!completion?.ok) {
-          await pause({
-            symbol,
-            reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED",
-            error: completion?.errors?.[0]
-          })
-          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
-        }
-        if (!completion.data?.eligible) {publishRecoveryCycleNotCompleted({
-          order: canceledOrder,
-          completion
-        })}
-        if (!completion.data?.eligible &&
-            !["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason)) {
-          await pause({
-            symbol,
-            reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED"
-          })
-          return toResult({ error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation") })
-        }
-        if (completion.data?.eligible) {
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
-            dataResult: mapRecoveryCycleCompletedData({
-              symbol,
-              marketId: canceledOrder.market.id,
-              freeQuantity: completion.data.freeQuantity,
-              keepQuantity: String(pairs[symbol].keepQuantity),
-              minProfit: String(pairs[symbol].minProfit),
-              realizedNetProfit: completion.data.realizedNetProfit,
-              ...(completion.data.dust === undefined ? {} : { dust: completion.data.dust }),
-            }),
-          })
-          state.completedRecoverySellSymbols.delete(symbol)
-          state.completedRecoverySellOrdersBySymbol.delete(symbol)
-          state.trailingBuy.set(symbol, true)
-        }
-        state.replacementIntents.delete(symbol)
-        state.sellExecutionTotals.delete(order.brokerOrderId)
-      } else if (
-        compareDecimal({
-          left: canceledOrder.executedQuantity.amount,
-          right: canceledOrder.originalQuantity.amount,
-        }) === 0
-      ) {
-        await pause({
-          symbol,
-          reason: "RECOVERY_SELL_TERMINAL_STATUS_QUANTITY_MISMATCH"
-        })
-        return toResult({ error: new Error("Non-FILLED terminal recovery SELL reports its full original quantity as executed") })
-      }
-    }
-    return toResult({ data: { canceled: activeSells.length } })
-  }
+  const cancelAndReconcileRecoverySells = (options = {}) => cancelRecoverySells({
+    context: {
+      state,
+      logger,
+      ensureCancellationEligible,
+      publishDurableIntent,
+      cancelOrderWithOperationalState,
+      markCancellationUnknown,
+      markCancellationFailure,
+      publishOrderCancelFailed,
+      publishOrderCancelled,
+      reconcileTerminalOrderFills,
+      assertReconciledSellExecution,
+      completeRecoveryCycle,
+      publishRecoveryCycleNotCompleted,
+      pause,
+      pairs,
+      eventPublisher,
+    },
+    ...options,
+  })
 
   const cancelAndReconcileTrailingBuy = async ({
     symbol,
