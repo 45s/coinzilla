@@ -7899,7 +7899,8 @@ function makeShutdownOrder({
 }
 
 
-async function createSafetyHaltOrderFixture() {
+
+function createSafetyHaltOrders() {
   const recoveredFilledBuy = makeShutdownOrder({
     side: "BUY",
     clientOrderId: "safety-halt-filled-buy",
@@ -7915,31 +7916,39 @@ async function createSafetyHaltOrderFixture() {
     clientOrderId: "safety-halt-recovery-sell",
     brokerOrderId: "broker-safety-halt-recovery-sell",
   })
-  const filledBuyHistory = makeOrderStatusUpdate({
-    order: recoveredFilledBuy,
-    status: "FILLED",
-    executedQuantity: "1",
-  })
-  const activeBuyHistory = makeOrderStatusUpdate({
-    order: activeBuy,
-    status: "OPEN",
-  })
-  const recoverySellHistory = makeOrderStatusUpdate({
-    order: recoverySell,
-    status: "OPEN",
-  })
-  const buyFill = makeBuyFill({
-    order: recoveredFilledBuy,
-    tradeId: "safety-halt-filled-buy-trade",
-    price: "100",
-    quantity: "1",
-    quoteQuantity: "100",
-    executedAt: 2,
-  })
+  return {
+    recoveredFilledBuy,
+    activeBuy,
+    recoverySell,
+    filledBuyHistory: makeOrderStatusUpdate({
+      order: recoveredFilledBuy,
+      status: "FILLED",
+      executedQuantity: "1",
+    }),
+    activeBuyHistory: makeOrderStatusUpdate({
+      order: activeBuy,
+      status: "OPEN",
+    }),
+    recoverySellHistory: makeOrderStatusUpdate({
+      order: recoverySell,
+      status: "OPEN",
+    }),
+    buyFill: makeBuyFill({
+      order: recoveredFilledBuy,
+      tradeId: "safety-halt-filled-buy-trade",
+      price: "100",
+      quantity: "1",
+      quoteQuantity: "100",
+      executedAt: 2,
+    }),
+  }
+}
+
+async function createSafetyHaltHarness({ orders }) {
   const harness = await createHarness({
     initialState: {
       orderRegistry: new OrderRegistry({
-        orders: [recoveredFilledBuy, activeBuy, recoverySell],
+        orders: [orders.recoveredFilledBuy, orders.activeBuy, orders.recoverySell],
       }),
       replacementIntents: new Set(["DOGEUSDT"]),
     },
@@ -7953,22 +7962,30 @@ async function createSafetyHaltOrderFixture() {
     ok: true,
     data: [
       makeOpenOrder({
-        order: activeBuy,
+        order: orders.activeBuy,
       }),
       makeOpenOrder({
-        order: recoverySell,
+        order: orders.recoverySell,
       }),
     ],
   })
   harness.setAcknowledgedOrder({
-    order: filledBuyHistory,
-    fills: [buyFill],
+    order: orders.filledBuyHistory,
+    fills: [orders.buyFill],
   })
   harness.setAcknowledgedOrder({
-    order: activeBuyHistory,
+    order: orders.activeBuyHistory,
   })
   harness.setAcknowledgedOrder({
-    order: recoverySellHistory,
+    order: orders.recoverySellHistory,
+  })
+  return harness
+}
+
+async function createSafetyHaltOrderFixture() {
+  const orders = createSafetyHaltOrders()
+  const harness = await createSafetyHaltHarness({
+    orders,
   })
   const safetyHalt = createAccountIntegritySafetyHalt({
     getTradingEngine: () => harness.engine,
@@ -7977,9 +7994,9 @@ async function createSafetyHaltOrderFixture() {
   return {
     harness,
     safetyHalt,
-    recoveredFilledBuy,
-    activeBuy,
-    recoverySell,
+    recoveredFilledBuy: orders.recoveredFilledBuy,
+    activeBuy: orders.activeBuy,
+    recoverySell: orders.recoverySell,
   }
 }
 
