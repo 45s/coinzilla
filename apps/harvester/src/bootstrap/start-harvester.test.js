@@ -703,7 +703,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
         return { stopped: true }
       },
     }),
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -860,7 +860,7 @@ test("verifies Operational State Store records before broker connect and starts/
         stop: async () => calls.push("stop-telegram-poller")
       }
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -939,7 +939,7 @@ test("stops Telegram and broker when Telegram identity verification fails during
       start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") },
       stop: async () => calls.push("stop-telegram-poller")
     }),
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -956,7 +956,7 @@ test("subscribes only enabled pairs for Binance trading", async () => {
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -1020,7 +1020,7 @@ test("keeps external open orders audit-blocked but does not block startup or can
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
       info: (entry) => logs.push(entry),
@@ -1165,7 +1165,7 @@ test("subscribes every enabled market before waiting for the first market's REST
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {},
@@ -1241,7 +1241,7 @@ test("disconnects when a market price subscription fails", async () => {
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -1297,7 +1297,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
     startHarvesterForTest({
       loadConfig: async () => config,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -1368,7 +1368,7 @@ test("disconnects after a failed broker connection", async () => {
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
     }),
     /connection failed/,
   )
@@ -1381,7 +1381,7 @@ test("does not adopt unowned execution events into strategy accounting", async (
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -1422,7 +1422,7 @@ test("does not clear a genuine startup stream-recovery gate with only the initia
         ...binanceEnv,
         NODE_ENV: "development",
       },
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -1454,7 +1454,7 @@ test("does not adopt an external order report received before the ownership regi
         ...binanceEnv,
         NODE_ENV: "development",
       },
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -1534,7 +1534,7 @@ test("starts application reconciliation on transport recovery and acknowledges o
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: recovery.eventPublisher,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
@@ -1627,7 +1627,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -1659,7 +1659,7 @@ test("logs stack and cause details when a user-data RPC error has an empty messa
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error: (entry) => diagnostics.push(entry),
@@ -1719,7 +1719,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
       info() {},
@@ -1785,7 +1785,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
       info() {},
@@ -1836,7 +1836,7 @@ test("fails startup when user-data recovery is required during subscription setu
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -1851,7 +1851,7 @@ test("marks trading ready only after the mandatory account preflight audit", asy
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -1873,7 +1873,7 @@ test("blocks trading after execution accounting failure", async () => {
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     onUserDataEvent: async () => {},
     logger: {
       info() {},
@@ -1905,7 +1905,7 @@ test("fails startup closed when user-data subscription cannot be established", a
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -1921,7 +1921,7 @@ test("does not expose a broker port that could bypass the trading engine", async
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -1939,7 +1939,7 @@ test("fails closed on malformed external TRADE reports", async () => {
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -1985,7 +1985,7 @@ test("fails startup before opening streams when required minimum notional is una
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -2014,7 +2014,7 @@ test("fails startup when the configured post-only order type is unsupported", as
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -2040,7 +2040,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -2095,7 +2095,7 @@ test("fails startup when the exchange snapshot omits a configured market asset",
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {}
@@ -2120,7 +2120,7 @@ test("does not clear the ownership gate after stream recovery acknowledgement", 
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     logger: {
       info() {},
       error() {}
@@ -3331,7 +3331,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({
       action: "NO_ACTION",
     }),
@@ -3564,7 +3564,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
       flush: async () => {
@@ -3688,7 +3688,7 @@ async function startOwnedOrderReconciliationFailureRuntime({ broker, events }) {
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
         events.push(event)
@@ -3802,7 +3802,7 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: {
       info() {},
@@ -3853,7 +3853,7 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => ({
@@ -3926,7 +3926,7 @@ test("journals pre-existing account-wide orders and allows trading startup witho
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: {
       info() {},
@@ -3966,7 +3966,7 @@ test("fails closed before market subscriptions when the account-wide open-order 
       ...binanceEnv,
       NODE_ENV: "development"
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
       flush: async () => ({
@@ -4124,7 +4124,7 @@ test("records pre-existing account-wide orders without adopting or changing them
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
       flush: async () => ({
@@ -4169,7 +4169,7 @@ test("blocks trading startup when either account audit query fails", async () =>
     await assert.rejects(startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       logger: {
         info() {},
         error() {},
@@ -4205,7 +4205,7 @@ test("blocks trading startup when either PREFLIGHT audit event cannot be durably
     await assert.rejects(startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       eventPublisher: {
         publish: (event) => { events.push(event); return { ok: true } },
         flush: async () => {
@@ -4251,7 +4251,7 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
     await assert.rejects(startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
-      brokerAdapterFactory: () => this.broker,
+      brokerAdapterFactory: () => broker,
       eventPublisher: {
         publish: (event) => {
           events.push(event)
@@ -4320,7 +4320,7 @@ test("starts from fresh in-memory state without replaying historical Journal rec
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     // Historical records are deliberately ignored; restart recovery is disabled.
     journalRecoveryRecords: [{
       id: "malformed-historical-record",
@@ -4475,7 +4475,7 @@ async function startShutdownBuyCancellationRuntime({ broker, observedEvents, gat
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     now: () => 1000,
     onUserDataEvent: async ({ event }) => {
       observedEvents.push(event)
@@ -4721,7 +4721,7 @@ async function startOwnedBuySafetyCancellationRuntime({ broker, gates, journalEv
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
         journalEvents.push(event)
@@ -4969,7 +4969,7 @@ test("account snapshots include every configured pair asset, including disabled 
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
         events.push(event)
@@ -5123,7 +5123,7 @@ test("identifies user-data events received during application recovery as recove
       ...binanceEnv,
       NODE_ENV: "development",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     onUserDataEvent: fixture.observeUserDataEvent,
     logger: {
       info() {},
@@ -5363,7 +5363,7 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
       ...binanceEnv,
       TELEGRAM_BOT_TOKEN: "test-telegram-token",
     },
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     createOperationalStateStore: () => {
       secondaryStoreFactoryCalls += 1
       throw new Error("The process must not create a second writer for its Operational State Store.")
@@ -5598,7 +5598,7 @@ test("does not subscribe to a market blocked by this strategy's external-order p
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env: binanceEnv,
-    brokerAdapterFactory: () => this.broker,
+    brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({
       action: "NO_ACTION",
     }),
