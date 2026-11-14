@@ -437,9 +437,15 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
 }
 
 
-function recoverySellFailure({ error, category = "ORDER_TRANSITION", stage = "RECOVERY_SELL_CANCELLATION", retryable = true }) {
+function recoverySellFailure({
+  error,
+  errors,
+  category = "ORDER_TRANSITION",
+  stage = "RECOVERY_SELL_CANCELLATION",
+  retryable = true,
+}) {
   return failureResult({
-    error,
+    ...(errors === undefined ? { error } : { errors }),
     category,
     stage,
     retryable,
