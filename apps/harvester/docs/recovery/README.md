@@ -150,7 +150,7 @@ This fixture represents a trading-enabled Journal session with a complete PREFLI
 - An unowned order in another market remains a symbol-scoped blocker; it does not automatically invalidate the selected market.
 - Missing assets/market metadata, incomplete history pagination, a history start later than the reviewed boundary, an account-balance mismatch, mismatched retention evidence, a skipped audit or an unreadable Operational State Store cannot create a coverage fact.
 - The baseline fact identity is deterministic per symbol. An identical retry is idempotent; a conflicting baseline is rejected rather than silently replacing or narrowing existing coverage.
-- The Journal remains an operational evidence observer. The coverage fact is written only to the ADR-0001 durable-facts stream.
+- The Journal remains an operational evidence observer. The coverage fact is written only to the Operational State Store.
 
 ## Current implementation status
 
