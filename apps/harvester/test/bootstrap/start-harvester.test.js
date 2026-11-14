@@ -144,208 +144,181 @@ test('loads the default validated strategy and pair configuration', async () => 
 });
 
 
-test('ordinary TRADE fills update owned accounting after the startup account audit', async () => {
-  const baseAsset = new Asset({
-    id: 'asset-zro',
-    code: 'ZRO'
-  });
-  const quoteAsset = new Asset({
-    id: 'asset-usdt',
-    code: 'USDT'
-  });
+function createOrdinaryTradeMarket() {
+  const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' })
+  const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' })
   const market = new Market({
     venue: 'binance',
     symbol: 'ZROUSDT',
     baseAsset,
     quoteAsset,
-  });
+  })
   const tradingRules = new TradingRules({
     market,
     constraints: [
       {
         type: 'PRICE_INCREMENT',
         status: 'SUPPORTED',
-        value: new Money({
-        amount: '0.001',
-        asset: quoteAsset
-      })
+        value: new Money({ amount: '0.001', asset: quoteAsset }),
       },
       {
         type: 'QUANTITY_INCREMENT',
         status: 'SUPPORTED',
-        value: new Quantity({
-        amount: '0.01',
-        asset: baseAsset
-      })
+        value: new Quantity({ amount: '0.01', asset: baseAsset }),
       },
       {
         type: 'MIN_QUANTITY',
         status: 'SUPPORTED',
-        value: new Quantity({
-        amount: '0.01',
-        asset: baseAsset
-      })
+        value: new Quantity({ amount: '0.01', asset: baseAsset }),
       },
       {
         type: 'MIN_NOTIONAL',
         status: 'SUPPORTED',
-        value: new Money({
-        amount: '1',
-        asset: quoteAsset
-      })
+        value: new Money({ amount: '1', asset: quoteAsset }),
       },
     ],
-  });
-  const marketMetadata = {
+  })
+  return {
+    baseAsset,
+    quoteAsset,
     market,
-    tradingRules,
-    supportedOrderTypes: ['LIMIT_MAKER'],
-    unvalidatedConstraints: [],
-  };
-  const balances = [
-    new Balance({
-      free: new Quantity({
-        amount: '25',
-        asset: baseAsset
-      }),
-      locked: new Quantity({
-        amount: '2',
-        asset: baseAsset
-      }),
-    }),
-    new Balance({
-      free: new Quantity({
-        amount: '1000',
-        asset: quoteAsset
-      }),
-      locked: new Quantity({
-        amount: '0',
-        asset: quoteAsset
-      }),
-    }),
-  ];
-  const appConfig = {
-    strategies: { CG_coinGrabber: {
-      enabled: true,
-      settings: {
-      conservative: { enabled: true },
-      aggressive: { enabled: false }
+    marketMetadata: {
+      market,
+      tradingRules,
+      supportedOrderTypes: ['LIMIT_MAKER'],
+      unvalidatedConstraints: [],
     },
-      pairs: {
-      ZROUSDT: {
+  }
+}
+
+function createOrdinaryTradeBalances({ baseAsset, quoteAsset } = {}) {
+  return [
+    new Balance({
+      free: new Quantity({ amount: '25', asset: baseAsset }),
+      locked: new Quantity({ amount: '2', asset: baseAsset }),
+    }),
+    new Balance({
+      free: new Quantity({ amount: '1000', asset: quoteAsset }),
+      locked: new Quantity({ amount: '0', asset: quoteAsset }),
+    }),
+  ]
+}
+
+function createOrdinaryTradeConfig() {
+  return {
+    strategies: {
+      CG_coinGrabber: {
         enabled: true,
-          tradingEnvironment: "both",
-        priceStepPercent: 0.5,
-        orderQuantity: 10,
-        keepQuantity: 1,
-        minProfit: 0.01,
-        makerPercent: 0,
-        takerPercent: 0,
-        investment: 1000,
+        settings: {
+          conservative: { enabled: true },
+          aggressive: { enabled: false },
+        },
+        pairs: {
+          ZROUSDT: {
+            enabled: true,
+            tradingEnvironment: 'both',
+            priceStepPercent: 0.5,
+            orderQuantity: 10,
+            keepQuantity: 1,
+            minProfit: 0.01,
+            makerPercent: 0,
+            takerPercent: 0,
+            investment: 1000,
+          },
+        },
       },
-    }
-    } },
-  };
-  let accountSnapshotCalls = 0;
-  let openOrderSnapshotCalls = 0;
-  const userDataErrors = [];
-  let orderSequence = 0;
-  let lastOrder;
-  const canonicalOrders = new Map();
-  const fillsByOrderId = new Map();
-  let onPrice;
-  let onUserDataEvent;
-  let observedTrade;
-  const tradeObserved = new Promise((resolve) => { observedTrade = resolve; });
-  const broker = {
-    connect: async () => {},
-    disconnect: async () => {},
+    },
+  }
+}
+
+function createOrdinaryTradeState() {
+  let resolveTradeObserved
+  const tradeObserved = new Promise((resolve) => { resolveTradeObserved = resolve })
+  return {
+    accountSnapshotCalls: 0,
+    openOrderSnapshotCalls: 0,
+    userDataErrors: [],
+    orderSequence: 0,
+    lastOrder: undefined,
+    canonicalOrders: new Map(),
+    fillsByOrderId: new Map(),
+    onPrice: undefined,
+    onUserDataEvent: undefined,
+    tradeObserved,
+    resolveTradeObserved,
+  }
+}
+
+function createOrdinaryTradeOrderPorts({ market, baseAsset, quoteAsset, state } = {}) {
+  return {
     placeOrder: async ({ order } = {}) => {
-      lastOrder = order;
+      state.lastOrder = order
       const submitted = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
-        brokerOrderId: String(++orderSequence),
+        brokerOrderId: String(++state.orderSequence),
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({
-          amount: order.price,
-          asset: quoteAsset
-        }),
-        originalQuantity: new Quantity({
-          amount: order.quantity,
-          asset: baseAsset
-        }),
-        executedQuantity: new Quantity({
-          amount: '0',
-          asset: baseAsset
-        }),
+        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
         status: 'OPEN',
-      });
-      canonicalOrders.set(submitted.brokerOrderId, submitted);
-      return toResult({ data: submitted });
+      })
+      state.canonicalOrders.set(submitted.brokerOrderId, submitted)
+      return toResult({ data: submitted })
     },
-    get lastOrder() { return lastOrder; },
     cancelOrder: async () => toResult({ error: new Error('Unexpected cancellation') }),
     getOpenOrders: async () => {
-      openOrderSnapshotCalls += 1;
+      state.openOrderSnapshotCalls += 1
       return toResult({
-        data: [...canonicalOrders.values()]
+        data: [...state.canonicalOrders.values()]
           .filter((order) => ['OPEN', 'PARTIALLY_FILLED'].includes(order.status))
           .map((order) => createOpenOrderSnapshot({ order })),
-      });
+      })
     },
-    getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrderId.get(String(orderId)) ?? [] }),
-    getCanonicalOrderHistory: async ({
-      orderId,
-      symbol
-    } = {}) => toResult({
-      data: [...canonicalOrders.values()].filter((order) =>
+    getFills: async ({ orderId } = {}) =>
+      toResult({ data: state.fillsByOrderId.get(String(orderId)) ?? [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
+      data: [...state.canonicalOrders.values()].filter((order) =>
         (!orderId || order.brokerOrderId === String(orderId)) &&
         (!symbol || order.market.symbol === symbol)),
     }),
-    getCanonicalOrder: async () => toResult({ error: new Error("order not found") }),
+    getCanonicalOrder: async () => toResult({ error: new Error('order not found') }),
+  }
+}
+
+function createOrdinaryTradeAccountPorts({ market, marketMetadata, balances, state } = {}) {
+  return {
     getAccountSnapshot: async () => {
-      accountSnapshotCalls += 1;
-      return toResult({ data: {
-        balances,
-        sourceTime: accountSnapshotCalls
-      } });
+      state.accountSnapshotCalls += 1
+      return toResult({
+        data: {
+          balances,
+          sourceTime: state.accountSnapshotCalls,
+        },
+      })
     },
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
-    getPrices: async () => toResult({ data: {
-      symbol: 'ZROUSDT',
-      price: '1'
-    } }),
+    getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
+  }
+}
+
+function createOrdinaryTradeMarketDataPorts({ state } = {}) {
+  return {
     getCandles: async ({ symbol } = {}) => toResult({
       data: Array.from({ length: 100 }, (_, index) =>
-        createTestCandle({
-          symbol,
-          openTime: index * 60_000
-        })),
+        createTestCandle({ symbol, openTime: index * 60_000 })),
     }),
-    subscribeForCandles: async ({
-      symbol,
-      onCandle
-    } = {}) => {
-      await onCandle(createTestCandle({
-        symbol,
-        openTime: 100 * 60_000
-      }))
-      await onCandle(createTestCandle({
-        symbol,
-        openTime: 101 * 60_000
-      }))
-      await onCandle(createTestCandle({
-        symbol,
-        openTime: 102 * 60_000
-      }))
+    subscribeForCandles: async ({ symbol, onCandle } = {}) => {
+      for (const index of [100, 101, 102]) {
+        await onCandle(createTestCandle({ symbol, openTime: index * 60_000 }))
+      }
       return toResult({ data: { unsubscribe: async () => {} } })
     },
-    subscribeForPrices: async ({ onPrice: callback } = {}) => {
-      onPrice = callback;
-      return toResult({ data: { unsubscribe: async () => {} } });
+    subscribeForPrices: async ({ onPrice } = {}) => {
+      state.onPrice = onPrice
+      return toResult({ data: { unsubscribe: async () => {} } })
     },
     subscribeForBookTicker: async ({ onBookTicker } = {}) => {
       await onBookTicker({
@@ -355,23 +328,45 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
         bestAskPrice: '1.1',
         bestAskQuantity: '1',
         timestamp: 10,
-      });
-      return toResult({ data: { unsubscribe: async () => {} } });
+      })
+      return toResult({ data: { unsubscribe: async () => {} } })
     },
-    subscribeForUserData: async ({ onEvent: callback } = {}) => {
-      onUserDataEvent = (message) => {
-        const event = message?.event;
+  }
+}
+
+function createOrdinaryTradeUserDataPort({ state } = {}) {
+  return {
+    subscribeForUserData: async ({ onEvent } = {}) => {
+      state.onUserDataEvent = (message) => {
+        const event = message?.event
         if (event?.executionType === 'TRADE' && event.executedOrder?.brokerOrderId) {
-          const orderId = String(event.executedOrder.brokerOrderId);
-          canonicalOrders.set(orderId, event.executedOrder);
-          fillsByOrderId.set(orderId, [event.fill]);
+          const orderId = String(event.executedOrder.brokerOrderId)
+          state.canonicalOrders.set(orderId, event.executedOrder)
+          state.fillsByOrderId.set(orderId, [event.fill])
         }
-        return callback(message);
-      };
-      return toResult({ data: { disconnect: async () => {} } });
+        return onEvent(message)
+      }
+      return toResult({ data: { disconnect: async () => {} } })
     },
-  };
-  const context = await startHarvesterForTest({
+  }
+}
+
+function createOrdinaryTradeBroker({ market, baseAsset, quoteAsset, marketMetadata, balances, state } = {}) {
+  return {
+    connect: async () => {},
+    disconnect: async () => {},
+    ...createOrdinaryTradeOrderPorts({ market, baseAsset, quoteAsset, state }),
+    ...createOrdinaryTradeAccountPorts({ market, marketMetadata, balances, state }),
+    ...createOrdinaryTradeMarketDataPorts({ state }),
+    ...createOrdinaryTradeUserDataPort({ state }),
+    get lastOrder() {
+      return state.lastOrder
+    },
+  }
+}
+
+function createOrdinaryTradeStartOptions({ appConfig, broker, state } = {}) {
+  return {
     loadConfig: async () => appConfig,
     brokerAdapterFactory: () => broker,
     env: {
@@ -384,54 +379,27 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     logger: {
       debug() {},
       info() {},
-      warn(...args) { userDataErrors.push(args) },
-      error(...args) { userDataErrors.push(args) },
+      warn(...args) { state.userDataErrors.push(args) },
+      error(...args) { state.userDataErrors.push(args) },
     },
     onUserDataEvent: async ({ event } = {}) => {
-      if (event?.executionType === 'TRADE') {observedTrade();}
+      if (event?.executionType === 'TRADE') { state.resolveTradeObserved() }
     },
-  });
+  }
+}
 
-  assert.equal(context.userDataReady, true);
-  const volatility = context.getVolatilityData({ symbol: 'ZROUSDT' });
-  assert.equal(volatility.ok, true);
-  assert.equal(volatility.data.status.isReady, true, JSON.stringify({
-    status: volatility.data.status,
-    logs: userDataErrors.map(([entry]) => ({
-      ...entry,
-      error: entry.error?.message,
-      stack: entry.error?.stack
-    })),
-  }));
-  // The startup REST ticker seed is deferred until candle warm-up reaches NORMAL.
-  assert.ok(broker.lastOrder, 'the startup ticker seed should be evaluated after volatility history becomes ready');
-  assert.equal(accountSnapshotCalls, 1);
-  assert.equal(openOrderSnapshotCalls, 1);
-  assert.equal(typeof onPrice, 'function');
-  assert.equal(typeof onUserDataEvent, 'function');
-
-  const buyIntent = broker.lastOrder;
-  assert.ok(buyIntent);
+function createOrdinaryTradeFill({ market, baseAsset, quoteAsset, buyIntent } = {}) {
   const submittedOrder = new CanonicalOrder({
     clientOrderId: buyIntent?.clientOrderId ?? 'unused',
     brokerOrderId: '1',
     market,
     side: 'BUY',
     type: 'LIMIT_MAKER',
-    limitPrice: new Money({
-      amount: buyIntent.price,
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: buyIntent.quantity,
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: '0',
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: buyIntent.price, asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: buyIntent.quantity, asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
     status: 'OPEN',
-  });
+  })
   const fill = new Fill({
     tradeId: 'trade-1',
     brokerOrderId: submittedOrder.brokerOrderId,
@@ -439,18 +407,15 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     market,
     side: 'BUY',
     price: submittedOrder.limitPrice,
-    quantity: new Quantity({
-      amount: '10',
-      asset: baseAsset
-    }),
+    quantity: new Quantity({ amount: '10', asset: baseAsset }),
     quoteQuantity: new Money({
       amount: String(Number(buyIntent.price) * Number(buyIntent.quantity)),
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     liquidityRole: 'MAKER',
     commissionStatus: 'COMPLETE',
     executedAt: 11,
-  });
+  })
   const filledOrder = new CanonicalOrder({
     clientOrderId: submittedOrder.clientOrderId,
     brokerOrderId: submittedOrder.brokerOrderId,
@@ -459,40 +424,88 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     type: 'LIMIT_MAKER',
     limitPrice: submittedOrder.limitPrice,
     originalQuantity: submittedOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: '10',
-      asset: baseAsset
-    }),
+    executedQuantity: new Quantity({ amount: '10', asset: baseAsset }),
     status: 'FILLED',
-  });
+  })
+  return { fill, filledOrder }
+}
 
-  onUserDataEvent({
+function assertOrdinaryTradeStartup({ context, broker, state, market } = {}) {
+  assert.equal(context.userDataReady, true)
+  const volatility = context.getVolatilityData({ symbol: market.symbol })
+  assert.equal(volatility.ok, true)
+  assert.equal(volatility.data.status.isReady, true, JSON.stringify({
+    status: volatility.data.status,
+    logs: state.userDataErrors.map(([entry]) => ({
+      ...entry,
+      error: entry.error?.message,
+      stack: entry.error?.stack,
+    })),
+  }))
+  assert.ok(broker.lastOrder, 'the startup ticker seed should be evaluated after volatility history becomes ready')
+  assert.equal(state.accountSnapshotCalls, 1)
+  assert.equal(state.openOrderSnapshotCalls, 1)
+  assert.equal(typeof state.onPrice, 'function')
+  assert.equal(typeof state.onUserDataEvent, 'function')
+}
+
+function assertOrdinaryTradeShutdown({ context, state, market } = {}) {
+  assert.equal(
+    state.accountSnapshotCalls,
+    2,
+    "the ordinary TRADE scenario must capture the PREFLIGHT and final CLOSING account snapshots; this test's TRADE does not trigger stream recovery",
+  )
+  assert.equal(
+    state.openOrderSnapshotCalls,
+    4,
+    "the ordinary TRADE scenario must audit open orders at startup, reconcile before BUY cancellation, reconcile after user-data draining, and verify after recovery SELL replanning",
+  )
+  assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10')
+}
+
+test('ordinary TRADE fills update owned accounting after the startup account audit', async () => {
+  const marketContext = createOrdinaryTradeMarket()
+  const balances = createOrdinaryTradeBalances(marketContext)
+  const state = createOrdinaryTradeState()
+  const broker = createOrdinaryTradeBroker({
+    ...marketContext,
+    balances,
+    state,
+  })
+  const context = await startHarvesterForTest(createOrdinaryTradeStartOptions({
+    appConfig: createOrdinaryTradeConfig(),
+    broker,
+    state,
+  }))
+  assertOrdinaryTradeStartup({ context, broker, state, market: marketContext.market })
+  const { fill, filledOrder } = createOrdinaryTradeFill({
+    ...marketContext,
+    buyIntent: broker.lastOrder,
+  })
+  state.onUserDataEvent({
     event: {
       eventType: 'executionReport',
       executionType: 'TRADE',
       executedOrder: filledOrder,
       fill,
     },
-  });
+  })
   await waitForTestSignal(
-    tradeObserved,
+    state.tradeObserved,
     'trade execution observer',
     () => ({
       userDataReady: context.userDataReady,
       userDataStatus: context.userDataStatus,
-      accountedBaseQuantity: context.portfolio.getPosition({ marketId: market.id })?.baseQuantity.amount ?? '0',
-      errors: userDataErrors.map(([entry]) => entry?.message ?? String(entry)),
+      accountedBaseQuantity: context.portfolio.getPosition({
+        marketId: marketContext.market.id,
+      })?.baseQuantity.amount ?? '0',
+      errors: state.userDataErrors.map(([entry]) => entry?.message ?? String(entry)),
     }),
     2000,
-  );
-  await context.stop();
-
-  assert.equal(accountSnapshotCalls, 2, "the ordinary TRADE scenario must capture the PREFLIGHT and final CLOSING account snapshots; this test's TRADE does not trigger stream recovery");
-  assert.equal(openOrderSnapshotCalls, 4, "the ordinary TRADE scenario must audit open orders at startup, reconcile before BUY cancellation, reconcile after user-data draining, and verify after recovery SELL replanning");
-  assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
-});
-
-
+  )
+  await context.stop()
+  assertOrdinaryTradeShutdown({ context, state, market: marketContext.market })
+})
 
 function createVolatilityTestMetadata({ symbol, baseCode } = {}) {
   const baseAsset = new Asset({

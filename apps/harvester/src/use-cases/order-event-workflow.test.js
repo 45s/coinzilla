@@ -94,29 +94,8 @@ function makeFill({
   })
 }
 
-function makeWorkflow({
-  updateResult = {
-    applied: true,
-    duplicate: false,
-    stale: false
-  },
-  accountingResult = toResult({ data: {
-    applied: true,
-    duplicate: false
-  } }),
-  terminalFills = [],
-  completeResult = toResult({
-    data: {
-      eligible: true,
-      freeQuantity: "0",
-      realizedNetProfit: "1"
-    },
-  }),
-  externalOrdersPolicy = "ignore",
-  isStopping = () => false,
-  activeOrders = [],
-} = {}) {
-  const calls = {
+function createWorkflowCalls() {
+  return {
     published: [],
     pauses: [],
     accounting: [],
@@ -129,12 +108,15 @@ function makeWorkflow({
     evaluations: [],
     buyExecutionPriceReads: [],
   }
+}
+
+function createWorkflowState({ updateResult, activeOrders } = {}) {
   const state = {
     registry: {
       orders: [],
       applyUpdate: () => ({
         ...updateResult,
-        registry: state.registry
+        registry: state.registry,
       }),
       getActiveOrders: () => activeOrders,
     },
@@ -153,14 +135,48 @@ function makeWorkflow({
     sellExecutionTotals: new Map(),
     processedFillsByOrder: new Map(),
   }
-  const accountedFillIds = new Set()
-  const eventPublisher = {
+  return state
+}
+
+function createWorkflowEventPublisher({ calls } = {}) {
+  return {
     publish: (event) => {
       calls.published.push(event)
       return toResult({ data: { accepted: true } })
     },
   }
-  const workflow = makeOrderEventWorkflow({
+}
+
+function createWorkflowAccountingRecorder({ calls, accountedFillIds, accountingResult } = {}) {
+  return async ({ fill }) => {
+    calls.accounting.push(fill)
+    if (accountedFillIds.has(fill.id)) {
+      calls.duplicateAccounting.push(fill)
+      return toResult({ data: { applied: false, duplicate: true } })
+    }
+    const result = accountingResult
+    if (result?.ok === true && result.data?.applied === true) {
+      accountedFillIds.add(fill.id)
+      calls.appliedAccounting.push(fill)
+    } else if (result?.ok === true && result.data?.duplicate === true) {
+      accountedFillIds.add(fill.id)
+      calls.duplicateAccounting.push(fill)
+    }
+    return result
+  }
+}
+
+function createWorkflowDependencies({
+  state,
+  calls,
+  terminalFills,
+  completeResult,
+  externalOrdersPolicy,
+  isStopping,
+  accountingResult,
+} = {}) {
+  const accountedFillIds = new Set()
+  return {
     state,
     broker: {
       getFills: async () => toResult({ data: terminalFills }),
@@ -172,26 +188,12 @@ function makeWorkflow({
         externalOrdersPolicy,
       },
     },
-    eventPublisher,
-    updateTradingAccounting: async ({ fill }) => {
-      calls.accounting.push(fill)
-      if (accountedFillIds.has(fill.id)) {
-        calls.duplicateAccounting.push(fill)
-        return toResult({ data: {
-          applied: false,
-          duplicate: true
-        } })
-      }
-      const result = accountingResult
-      if (result?.ok === true && result.data?.applied === true) {
-        accountedFillIds.add(fill.id)
-        calls.appliedAccounting.push(fill)
-      } else if (result?.ok === true && result.data?.duplicate === true) {
-        accountedFillIds.add(fill.id)
-        calls.duplicateAccounting.push(fill)
-      }
-      return result
-    },
+    eventPublisher: createWorkflowEventPublisher({ calls }),
+    updateTradingAccounting: createWorkflowAccountingRecorder({
+      calls,
+      accountedFillIds,
+      accountingResult,
+    }),
     recordBuyExecutionFill: ({ fill }) => calls.buyFills.push(fill),
     recordSellExecutionFill: ({ fill }) => calls.sellFills.push(fill),
     pause: async (input) => calls.pauses.push(input),
@@ -215,12 +217,37 @@ function makeWorkflow({
       return completeResult
     },
     publishRecoveryCycleNotCompleted: () => {},
-  })
-  return {
-    workflow,
-    state,
-    calls
   }
+}
+
+function makeWorkflow({
+  updateResult = { applied: true, duplicate: false, stale: false },
+  accountingResult = toResult({ data: { applied: true, duplicate: false } }),
+  terminalFills = [],
+  completeResult = toResult({
+    data: {
+      eligible: true,
+      freeQuantity: "0",
+      realizedNetProfit: "1",
+    },
+  }),
+  externalOrdersPolicy = "ignore",
+  isStopping = () => false,
+  activeOrders = [],
+} = {}) {
+  const calls = createWorkflowCalls()
+  const state = createWorkflowState({ updateResult, activeOrders })
+  const dependencies = createWorkflowDependencies({
+    state,
+    calls,
+    terminalFills,
+    completeResult,
+    externalOrdersPolicy,
+    isStopping,
+    accountingResult,
+  })
+  const workflow = makeOrderEventWorkflow(dependencies)
+  return { workflow, state, calls }
 }
 
 test("ignores unmatched manual orders under the default external-order policy", async () => {

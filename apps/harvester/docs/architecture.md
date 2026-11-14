@@ -865,3 +865,6 @@ The shutdown-recovery inventory, conservative evaluation stages and operational-
 
 
 The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
+
+
+The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
