@@ -21,7 +21,7 @@ test("uses the package-local default when no canonical override is configured", 
 
 test("ignores the removed legacy environment variable instead of selecting its path", () => {
   assert.equal(
-    resolveOperationalStateDirectory({ env: { DURABLE_FACTS_DIRECTORY: "/home/operator/.coinzilla/harvester/recovery-facts" } }),
+    resolveOperationalStateDirectory({ env: { DURABLE_FACTS_DIRECTORY: "/tmp/legacy-recovery-facts" } }),
     expectedPackageDirectory,
   )
 })
