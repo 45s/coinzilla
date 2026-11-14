@@ -805,8 +805,7 @@ export function makeConservativeTradingEngine({
   })
 
   // This existing single-market state transition intentionally keeps its ordered gates together.
-  let evaluateLatestTransition
-  evaluateLatestTransition = createLatestTransitionEvaluator({
+  const evaluateLatestTransition = createLatestTransitionEvaluator({
     state,
     hasBlockingOpenOrdersForSymbol,
     isStopping,
