@@ -47,7 +47,7 @@ export function createMarketSpecification({ metadata } = {}) {
   if (!isAssetCode(baseAsset) || !isAssetCode(quoteAsset)) {
     throw new TypeError("metadata must contain normalized baseAsset and quoteAsset codes")
   }
-  if (symbol !== baseAsset + quoteAsset) {
+  if (symbol !== `${baseAsset}${quoteAsset}`) {
     throw new Error(`Binance market symbol ${symbol} does not match baseAsset + quoteAsset`)
   }
 
@@ -84,7 +84,7 @@ export function validateTokenSpecifications(tokenSpecifications) {
       if (!isMarketSymbol(symbol) || !isRecord(market) || !isAssetCode(market.quoteAsset)) {
         throw new TypeError(`Token specification ${baseAsset} contains malformed market metadata: ${symbol}`)
       }
-      if (symbol !== baseAsset + market.quoteAsset) {
+      if (symbol !== `${baseAsset}${market.quoteAsset}`) {
         throw new Error(`Token specification market ${symbol} does not match base asset ${baseAsset} and quote asset ${market.quoteAsset}`)
       }
       requirePrecision({ value: market.pricePrecision, field: `${baseAsset}.${symbol}.pricePrecision` })
@@ -153,7 +153,7 @@ export function resolvePairSpecifications({ pairs, tokenSpecifications } = {}) {
   const resolvedPairs = {}
   for (const [symbol, pair] of Object.entries(pairs)) {
     if (!isRecord(pair)) {
-      throw new TypeError("Strategy pair " + symbol + " must be an object")
+      throw new TypeError(`Strategy pair ${symbol} must be an object`)
     }
     if (Object.hasOwn(pair, "pricePrecision") || Object.hasOwn(pair, "quantityPrecision")) {
       throw new Error(`Strategy pair ${symbol} must not define pricePrecision or quantityPrecision; use token-specification.json`)
