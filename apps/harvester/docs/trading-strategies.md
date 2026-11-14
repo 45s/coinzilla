@@ -24,6 +24,14 @@ This page intentionally does not restate Conservative BUY/SELL rules, accounting
 
 Implementation code is under src/domain/strategies/conservative/ and src/use-cases/conservative-trading-engine.js. Its behavior is implementation evidence, not an alternate rule source. Current blockers and verification status are tracked in [ROADMAP](../ROADMAP.md).
 
+### Recovery Seller (RS) — proposed strategy
+
+**Status: proposed and non-executable.** RS is a separate strategy intended to progressively reduce explicitly authorized legacy Spot inventory through repeated recovery cycles. The agreed input direction is per-pair `sellQuantity` plus `legacyPosition.invested` and `legacyPosition.quantity`; RS calculates average historical cost itself. For example, 100 USDT / 50 ZRO = 2 USDT per ZRO. `sellQuantity` is legacy quantity added to the recovery tranche SELL, not the total SELL amount and not a retained quantity.
+
+**RS and CG must be able to run concurrently**, including on the same market when both are enabled. They retain independent policies, cycle attribution and order ownership while sharing one actual Portfolio Position per market. The shared Trading Engine coordinates serialized submissions and fill accounting, and centrally reserves quote/base commitments across both strategies. A fill changes Portfolio exactly once and is attributed to its originating strategy. Simultaneous intents must never double-spend quote, reserve/sell the same base quantity, or attribute one fill twice. Pausing/disabling one strategy does not implicitly pause/disable the other.
+
+This is a future RS integration requirement, not a description of current runtime capability. RS is not registered or configurable today. The detailed draft contract and remaining implementation decisions are in the [Recovery Seller Domain Specification](./domain/recovery-seller-domain-specification.md); the six-phase delivery sequence is in the [Recovery Seller Implementation Roadmap](./domain/recovery-seller-implementation-roadmap.md).
+
 ### Shared commission and order-type policy — Conservative and Aggressive
 
 For Conservative, the canonical specification is authoritative. This section does not define or override Conservative fee reserves or order selection. Aggressive is not currently executable; any future Aggressive fee policy requires its own approved specification before implementation.
