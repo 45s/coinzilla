@@ -7422,209 +7422,178 @@ test("keeps a recovery pause until every same-market cancel/replace order is can
 })
 
 
+
+function createJournalParityOrder({ clientOrderId, brokerOrderId, status }) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function createJournalParityFill({ ownedOrder, tradeId, price }) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: ownedOrder.brokerOrderId,
+    clientOrderId: ownedOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: price,
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: price,
+      asset: quoteAsset,
+    }),
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createJournalExecutionFact({ ownedOrder, fillId, tradeId, price }) {
+  return {
+    fillId,
+    tradeId,
+    brokerOrderId: ownedOrder.brokerOrderId,
+    clientOrderId: ownedOrder.clientOrderId,
+    symbol: market.symbol,
+    side: "BUY",
+    price,
+    quantity: "1",
+    quoteQuantity: price,
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  }
+}
+
+async function createJournalParityHarness({ ownedOrder, historyOrder, exchangeFill, journalFill }) {
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [ownedOrder],
+      }),
+      journalFills: [journalFill],
+    },
+  })
+  harness.broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [],
+  })
+  harness.broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [historyOrder],
+  })
+  harness.broker.getFills = async () => ({
+    ok: true,
+    data: [exchangeFill],
+  })
+  return harness
+}
+
+async function assertJournalParityRejected({ harness, expectedMessage }) {
+  const result = await harness.engine.reconcileOwnedOrders({
+    recoveryMode: true,
+  })
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, expectedMessage)
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.deepEqual(harness.orders, [])
+}
+
+
 test("rejects canonical REST fill facts that contradict the durable Journal execution", async () => {
-  const ownedOrder = new CanonicalOrder({
+  const ownedOrder = createJournalParityOrder({
     clientOrderId: "recovered-journal-fill",
     brokerOrderId: "broker-journal-fill",
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
     status: "UNKNOWN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
   })
-  const historyOrder = new CanonicalOrder({
+  const historyOrder = createJournalParityOrder({
     clientOrderId: ownedOrder.clientOrderId,
     brokerOrderId: ownedOrder.brokerOrderId,
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: ownedOrder.limitPrice,
-    originalQuantity: ownedOrder.originalQuantity,
-    executedQuantity: ownedOrder.executedQuantity,
     status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
   })
-  const exchangeFill = new Fill({
+  const exchangeFill = createJournalParityFill({
+    ownedOrder,
     tradeId: "journal-parity-trade",
-    brokerOrderId: ownedOrder.brokerOrderId,
-    clientOrderId: ownedOrder.clientOrderId,
-    market,
-    side: "BUY",
-    price: new Money({
-      amount: "101",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "101",
-      asset: quoteAsset
-    }),
-    liquidityRole: "MAKER",
-    commissions: [],
-    commissionStatus: "COMPLETE",
+    price: "101",
   })
-  const harness = await createHarness({
-    initialBook: false,
-    initialState: {
-      orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
-      journalFills: [{
-        fillId: exchangeFill.id,
-        tradeId: exchangeFill.tradeId,
-        brokerOrderId: ownedOrder.brokerOrderId,
-        clientOrderId: ownedOrder.clientOrderId,
-        symbol: market.symbol,
-        side: "BUY",
-        price: "100",
-        quantity: "1",
-        quoteQuantity: "100",
-        liquidityRole: "MAKER",
-        commissions: [],
-        commissionStatus: "COMPLETE",
-      }],
-    },
+  const journalFill = createJournalExecutionFact({
+    ownedOrder,
+    fillId: exchangeFill.id,
+    tradeId: exchangeFill.tradeId,
+    price: "100",
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
+  const harness = await createJournalParityHarness({
+    ownedOrder,
+    historyOrder,
+    exchangeFill,
+    journalFill,
   })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
+  await assertJournalParityRejected({
+    harness,
+    expectedMessage: /conflicts with durable Journal price/,
   })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: [exchangeFill]
-  })
-
-  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /conflicts with durable Journal price/)
-  assert.deepEqual(harness.cancellationIds, [])
-  assert.deepEqual(harness.orders, [])
 })
-
 
 test("rejects REST history that omits a durable Journal fill despite matching cumulative quantity", async () => {
-  const ownedOrder = new CanonicalOrder({
+  const ownedOrder = createJournalParityOrder({
     clientOrderId: "recovered-missing-journal-fill",
     brokerOrderId: "broker-missing-journal-fill",
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
     status: "UNKNOWN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
   })
-  const historyOrder = new CanonicalOrder({
+  const historyOrder = createJournalParityOrder({
     clientOrderId: ownedOrder.clientOrderId,
     brokerOrderId: ownedOrder.brokerOrderId,
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: ownedOrder.limitPrice,
-    originalQuantity: ownedOrder.originalQuantity,
-    executedQuantity: ownedOrder.executedQuantity,
     status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
   })
-  const exchangeFill = new Fill({
+  const exchangeFill = createJournalParityFill({
+    ownedOrder,
     tradeId: "replacement-trade-id",
-    brokerOrderId: ownedOrder.brokerOrderId,
-    clientOrderId: ownedOrder.clientOrderId,
-    market,
-    side: "BUY",
-    price: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    liquidityRole: "MAKER",
-    commissions: [],
-    commissionStatus: "COMPLETE",
+    price: "100",
   })
-  const harness = await createHarness({
-    initialBook: false,
-    initialState: {
-      orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
-      journalFills: [{
-        fillId: "binance:BTCUSDT:expected-trade-id",
-        tradeId: "expected-trade-id",
-        brokerOrderId: ownedOrder.brokerOrderId,
-        clientOrderId: ownedOrder.clientOrderId,
-        symbol: market.symbol,
-        side: "BUY",
-        price: "100",
-        quantity: "1",
-        quoteQuantity: "100",
-        liquidityRole: "MAKER",
-        commissions: [],
-        commissionStatus: "COMPLETE",
-      }],
-    },
+  const journalFill = createJournalExecutionFact({
+    ownedOrder,
+    fillId: "binance:BTCUSDT:expected-trade-id",
+    tradeId: "expected-trade-id",
+    price: "100",
   })
-  harness.broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
+  const harness = await createJournalParityHarness({
+    ownedOrder,
+    historyOrder,
+    exchangeFill,
+    journalFill,
   })
-  harness.broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
+  await assertJournalParityRejected({
+    harness,
+    expectedMessage: /missing durable Journal execution ID/,
   })
-  harness.broker.getFills = async () => ({
-    ok: true,
-    data: [exchangeFill]
-  })
-
-  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /missing durable Journal execution ID/)
-  assert.deepEqual(harness.cancellationIds, [])
-  assert.deepEqual(harness.orders, [])
 })
-
 
 test("pauses a recovered order canceled without a durable Harvester cancellation intent", async () => {
   const makeOrder = ({ status }) => new CanonicalOrder({
