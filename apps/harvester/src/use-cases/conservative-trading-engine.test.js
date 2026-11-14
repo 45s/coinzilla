@@ -2767,6 +2767,8 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
+    appConfig: withExternalOrdersPolicy("IGNORE"),
+    hasUnownedOpenOrdersForSymbol: () => true,
     canTrade: () => !stopping.value,
     isStopping: () => stopping.value,
     getPortfolio: () => portfolioRef.current,
