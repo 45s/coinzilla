@@ -142,6 +142,7 @@ legacyPosition: {
 For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
 
 Required test families:
+
 - Valid/invalid average-cost inputs, exact decimal precision and division behavior.
 - Partial legacy disposal and remaining-basis calculation.
 - Spot/EARN custody separation, transfers and insufficient Spot quantity.
@@ -186,7 +187,7 @@ Reuse the existing Trading Engine, broker port/adapter, canonical order/fill ide
 Preserve manual/external order ownership. EARN/off-Spot quantity is never available for Spot SELL planning. Unknown outcomes retain original order ownership and reservations and require reconciliation; never blindly retry. Add runtime config/registration only after contracts and validation are specified.
 
 **Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle, pause/disable isolation and broker safety remain correct. No parallel execution engine or strategy-specific broker.
- 
+
 ## RS-6 — Offline lifecycle verification and delivery
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
