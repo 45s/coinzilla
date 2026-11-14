@@ -71,6 +71,7 @@ export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
 }
 
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
+// eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
   broker, strategyPolicy, appConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
@@ -1200,7 +1201,7 @@ export function makeConservativeTradingEngine({
     excludedActiveOrderClientId,
     referencePriceOverride,
     shutdownRecoveryOnly = false,
-  } = {}) => { // eslint-disable-line complexity -- ordered strategy gates are the trading safety contract.
+  } = {}) => { // eslint-disable-line complexity, max-lines-per-function, max-statements -- ordered strategy gates are the trading safety contract.
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
     }
@@ -1557,7 +1558,7 @@ export function makeConservativeTradingEngine({
 
   const shutdownRecoveryError = (code, message) => Object.assign(new Error(message), { code })
 
-  const getShutdownRecoveryInventory = ({ symbol } = {}) => { // eslint-disable-line complexity -- inventory assessment keeps fail-closed checks together.
+  const getShutdownRecoveryInventory = ({ symbol } = {}) => { // eslint-disable-line complexity, max-lines-per-function -- inventory assessment keeps fail-closed checks together.
     let metadata
     try {
       metadata = getCurrentMarketMetadata({ symbol })
@@ -1996,7 +1997,7 @@ export function makeConservativeTradingEngine({
   })
 
   const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols, recoveryMode = false } = {}) => {
-    let affectedSymbol = symbols[0]
+    let [affectedSymbol] = symbols
     try {
       // Validate the collected REST snapshot against stream facts processed
       // while REST was being read. Do this for every order before applying
