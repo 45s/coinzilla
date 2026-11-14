@@ -16,38 +16,15 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createShutdown = ({
-  state = createState(),
-  tradingEnabled = false,
-  engine,
-  disconnectBroker,
-  stopMarketIntake,
-  stopUserDataIntake,
-  publishAccountSnapshot,
-  subscriptions = [],
-  bookSubscriptions = [],
-  marketPriceIntake = new Map(),
-  userDataSubscription = {},
-  calls = [],
-  logger = {},
-  now,
-  runtimeSessionId
-} = {}) => {
+const createShutdown = ({ state = createState(), tradingEnabled = false, engine, disconnectBroker, stopMarketIntake, stopUserDataIntake, publishAccountSnapshot, subscriptions = [], bookSubscriptions = [], marketPriceIntake = new Map(), userDataSubscription = {}, calls = [], logger = {}, now, runtimeSessionId } = {}) => {
   const effectiveEngine = engine ? {
     reconcileRecoverySellsForShutdown: async () => {
       calls.push("reconcile-recovery-sells")
-      return {
-        ok: true,
-        data: { reconciledSymbols: [] }
-      }
+      return { ok: true, data: { reconciledSymbols: [] } }
     },
     auditShutdownRecoverySellCoverage: async () => {
       calls.push("audit-recovery-sell-coverage")
-      return {
-        ok: true,
-        data: { covered: true, findings: [] }
-      }findings: []
-      } }
+      return { ok: true, data: { covered: true, findings: [] } }
     },
     ...engine,
   } : engine
@@ -84,11 +61,7 @@ const createShutdown = ({
       return disconnectBroker ? disconnectBroker(calls) : []
     },
   })
-  return {
-    stop,
-    state,
-    calls
-  }
+  return { stop, state, calls }
 }
 
 test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, then disconnects", async () => {
@@ -97,10 +70,7 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
   const engine = {
     reconcileOwnedOrders: async () => { calls.push("reconcile"); return { ok: true } },
     cancelOwnedBuyOrdersForShutdown: async () => { calls.push("cancel-owned-buys"); return { ok: true } },
-    getOrders: () => [{
-      side: "SELL",
-      status: "OPEN"
-    }],
+    getOrders: () => [{ side: "SELL", status: "OPEN" }],
   }
   const state = createState()
   const stop = createShutdown({
@@ -183,17 +153,11 @@ test("drains BUY fills arriving during initial reconciliation, BUY cancellation,
     reconcileRecoverySellsForShutdown: async () => {
       calls.push("recovery-sell-reconciliation")
       assert.equal(appliedBuyFills, 3, "All fills from all shutdown race windows must be drained before SELL replanning.")
-      return {
-        ok: true,
-        data: { reconciledSymbols: ["DOGEUSDT"] }
-      }
+      return { ok: true, data: { reconciledSymbols: ["DOGEUSDT"] } }
     },
     auditShutdownRecoverySellCoverage: async () => ({
       ok: true,
-      data: {
-        covered: true,
-        findings: []
-      },
+      data: { covered: true, findings: [] },
     }),
     getOrders: () => [],
   }
@@ -465,11 +429,7 @@ test("emits deterministic monotonic timings for shutdown phases and failures", a
       reconcileOwnedOrders: async () => ({ ok: true }),
       cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
       reconcileRecoverySellsForShutdown: async () => ({ ok: true }),
-      auditShutdownRecoverySellCoverage: async () => ({
-        ok: true,
-        data: { covered: true, findings: [] }
-      }findings: []
-      } }),
+      auditShutdownRecoverySellCoverage: async () => ({ ok: true, data: { covered: true, findings: [] } }),
       getOrders: () => [],
     },
   })
