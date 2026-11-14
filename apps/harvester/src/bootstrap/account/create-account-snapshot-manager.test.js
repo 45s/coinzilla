@@ -537,30 +537,12 @@ test("records unowned open orders as blocked and scopes the strategy gate to the
   assert.equal(fixture.getFlushCount(), 2, "The reconnect snapshot must be durable before the symbol guard clears.")
 })
 
-test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
-  const market = createFixture().market
-  const timeout = Object.assign(
-    new Error("account.status request timed out"),
-    {
-      name: "RpcTimeoutError",
-      code: "RPC_TIMEOUT"
-    },
-  )
-  const fixture = createFixture({
-    accountSnapshots: [
-      {
-        ok: false,
-        errors: [timeout]
-      },
-      createAccountSnapshot({
-        market,
-        sourceTime: 100
-      }),
-    ],
-  })
 
+async function assertAccountSnapshotTimeout({ fixture, timeout }) {
   await assert.rejects(
-    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    fixture.manager.publishAccountSnapshot({
+      phase: "RECOVERY",
+    }),
     (error) => {
       assert.deepEqual(error.recoveryFailure, {
         category: "REST_RECONCILIATION",
@@ -586,52 +568,59 @@ test("retries an account snapshot after a REST timeout without publishing a prem
     },
     "A failed broker account snapshot result must fail the recovery audit with its actionable timeout message and original cause.",
   )
+}
 
-  assert.equal(
-    fixture.manager.getAccountSnapshot(),
-    undefined,
-    "A timed-out account snapshot must not become the accepted account view.",
-  )
-  assert.equal(
-    fixture.publishedEvents.length,
-    0,
-    "A failed account REST read must not publish a durable recovery audit.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    0,
-    "A failed account REST read must not flush an audit that contains no authoritative snapshot.",
-  )
+function assertFailedAccountSnapshotWasNotPublished({ fixture }) {
+  assert.equal(fixture.manager.getAccountSnapshot(), undefined)
+  assert.equal(fixture.publishedEvents.length, 0)
+  assert.equal(fixture.getFlushCount(), 0)
+}
 
-  const recoveredSnapshot = await fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" })
+async function assertAccountSnapshotRetrySucceeded({ fixture }) {
+  const recoveredSnapshot = await fixture.manager.publishAccountSnapshot({
+    phase: "RECOVERY",
+  })
+  assert.equal(recoveredSnapshot.sourceTime, 100)
+  assert.equal(fixture.manager.getAccountSnapshot().sourceTime, 100)
+  assert.equal(fixture.publishedEvents.length, 1)
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY")
+  assert.equal(fixture.getFlushCount(), 1)
+}
 
-  assert.equal(
-    recoveredSnapshot.sourceTime,
-    100,
-    "A later successful REST read must be accepted after the transient timeout.",
+
+test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
+  const market = createFixture().market
+  const timeout = Object.assign(
+    new Error("account.status request timed out"),
+    {
+      name: "RpcTimeoutError",
+      code: "RPC_TIMEOUT",
+    },
   )
-  assert.equal(
-    fixture.manager.getAccountSnapshot().sourceTime,
-    100,
-    "The successful retry must become the current account snapshot.",
-  )
-  assert.equal(
-    fixture.publishedEvents.length,
-    1,
-    "Only the successful retry may publish the recovery account audit.",
-  )
-  assert.equal(
-    fixture.publishedEvents[0].data.phase,
-    "RECOVERY",
-    "The successful retry must retain the recovery audit phase.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    1,
-    "The successful retry must durably flush exactly one recovery account audit.",
-  )
+  const fixture = createFixture({
+    accountSnapshots: [
+      {
+        ok: false,
+        errors: [timeout],
+      },
+      createAccountSnapshot({
+        market,
+        sourceTime: 100,
+      }),
+    ],
+  })
+
+  await assertAccountSnapshotTimeout({
+    fixture,
+    timeout,
+  })
+  assertFailedAccountSnapshotWasNotPublished({
+    fixture,
+  })
+  await assertAccountSnapshotRetrySucceeded({
+    fixture,
+  })
 })
-
 
 test("preserves the original broker error as cause when the account-wide open-orders snapshot fails", async () => {
   const timeout = Object.assign(
