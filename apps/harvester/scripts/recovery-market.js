@@ -17,7 +17,7 @@ Options:
 
 The command never connects to Binance, starts Harvester, places/cancels orders,
 or initializes the Operational State Store. --confirm requires an existing store at
-OPERATIONAL_STATE_DIRECTORY (or the legacy DURABLE_FACTS_DIRECTORY override) and a runtimeSessionId in the evidence bundle.
+OPERATIONAL_STATE_DIRECTORY and a runtimeSessionId in the evidence bundle.
 `
 
 export function parseRecoveryMarketArguments(args = []) {
@@ -88,7 +88,7 @@ export async function runRecoveryMarketCommand({
       try {
         directory = resolveOperationalStateDirectory({ env })
       } catch (cause) {
-        throw new Error("--confirm requires a valid OPERATIONAL_STATE_DIRECTORY (or legacy DURABLE_FACTS_DIRECTORY) directory", { cause })
+        throw new Error("--confirm requires a valid OPERATIONAL_STATE_DIRECTORY", { cause })
       }
       if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
         throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
