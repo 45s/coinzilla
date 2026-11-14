@@ -124,6 +124,78 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
   },
 })
 
+function createHarnessEventPublisher({ eventPublisher } = {}) {
+  if (!eventPublisher) {
+    return undefined
+  }
+  return {
+    ...eventPublisher,
+    flush: typeof eventPublisher.flush === "function"
+      ? eventPublisher.flush
+      : async () => ({ ok: true, durable: true }),
+  }
+}
+
+function createHarnessStrategyPolicy({ initialPortfolio } = {}) {
+  if (!initialPortfolio) {
+    return conservativeStrategyPolicy
+  }
+  return {
+    ...conservativeStrategyPolicy,
+    evaluate: (input) => conservativeStrategyPolicy.evaluate({
+      ...input,
+      lastBuyPrice: "100",
+    }),
+  }
+}
+
+function createHarnessTradingAccounting({
+  accountingFailure,
+  accountedFills,
+  accountedFillIds,
+  accountingApplied,
+} = {}) {
+  return async ({ fill }) => {
+    if (accountingFailure) {
+      accountedFills.push(fill)
+      return { ok: false, errors: [new Error("unsupported commission asset")] }
+    }
+    if (accountedFillIds.has(fill.id)) {
+      return { ok: true, data: { applied: false, duplicate: true } }
+    }
+    accountedFillIds.add(fill.id)
+    accountedFills.push(fill)
+    return {
+      ok: true,
+      data: { applied: accountingApplied, duplicate: !accountingApplied },
+    }
+  }
+}
+
+function createHarnessRecoveryCycleCompletion({ completedCycles, recoveryCompletion } = {}) {
+  return async ({ marketId }) => {
+    completedCycles.push(marketId)
+    return { ok: true, data: recoveryCompletion }
+  }
+}
+
+async function processHarnessInitialBook({ engine, initialBook } = {}) {
+  if (!initialBook) {
+    return
+  }
+  const bookTicker = initialBook === true
+    ? {
+        symbol: "DOGEUSDT",
+        bestBidPrice: "0.01",
+        bestBidQuantity: "1",
+        bestAskPrice: "1000",
+        bestAskQuantity: "1",
+        timestamp: 1,
+      }
+    : initialBook
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker })
+}
+
 async function createHarness({
   strategyPolicy,
   hasUnownedOpenOrdersForSymbol = () => false,
@@ -238,29 +310,11 @@ async function createHarness({
   })
   let currentPortfolio = initialPortfolio ?? new Portfolio()
   let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
-  const effectiveEventPublisher = eventPublisher
-    ? {
-        ...eventPublisher,
-        flush: typeof eventPublisher.flush === "function"
-          ? eventPublisher.flush
-          : async () => ({
-            ok: true,
-            durable: true
-          }),
-      }
-    : undefined
+  const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
   // The synthetic seeded portfolio below is built from a completed BUY fill at 100.
   // The engine intentionally does not infer a reconciled VWAP from portfolio totals,
   // so expose that known fixture evidence to the policy in seeded-position tests.
-  const defaultStrategyPolicy = initialPortfolio
-    ? {
-        ...conservativeStrategyPolicy,
-        evaluate: (input) => conservativeStrategyPolicy.evaluate({
-          ...input,
-          lastBuyPrice: "100"
-        }),
-      }
-    : conservativeStrategyPolicy
+  const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio })
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
@@ -278,56 +332,22 @@ async function createHarness({
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
     getMarketMetadata: () => getMarketMetadataOverride ? getMarketMetadataOverride() : (suppliedMarketMetadata ?? marketMetadata),
     getAccountSnapshot: () => accountSnapshot,
-    updateTradingAccounting: updateTradingAccountingOverride ?? (async ({ fill }) => {
-      if (accountingFailure) {
-        accountedFills.push(fill)
-        return {
-          ok: false,
-          errors: [new Error("unsupported commission asset")]
-        }
-      }
-      if (accountedFillIds.has(fill.id)) {
-        return {
-          ok: true,
-          data: {
-          applied: false,
-          duplicate: true
-        }
-        }
-      }
-      accountedFillIds.add(fill.id)
-      accountedFills.push(fill)
-      return {
-        ok: true,
-        data: {
-        applied: accountingApplied,
-        duplicate: !accountingApplied
-      }
-      }
+    updateTradingAccounting: updateTradingAccountingOverride ?? createHarnessTradingAccounting({
+      accountingFailure,
+      accountedFills,
+      accountedFillIds,
+      accountingApplied,
     }),
-    completeRecoveryCycle: completeRecoveryCycleOverride ?? (async ({ marketId }) => {
-      completedCycles.push(marketId)
-      return {
-        ok: true,
-        data: recoveryCompletion
-      }
+    completeRecoveryCycle: completeRecoveryCycleOverride ?? createHarnessRecoveryCycleCompletion({
+      completedCycles,
+      recoveryCompletion,
     }),
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
     onPause: async ({ reason }) => pauses.push(reason),
     initialState,
   })
-  if (initialBook) {await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: initialBook === true ? {
-    symbol: "DOGEUSDT",
-    bestBidPrice: "0.01",
-    bestBidQuantity: "1",
-    bestAskPrice: "1000",
-    bestAskQuantity: "1",
-    timestamp: 1,
-  } : initialBook
-  })}
+  await processHarnessInitialBook({ engine, initialBook })
   return {
     engine,
     broker,
