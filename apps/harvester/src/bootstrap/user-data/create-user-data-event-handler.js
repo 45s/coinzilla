@@ -142,7 +142,7 @@ async function persistStickySafetyBlocker({ failure, event, identity, onSafetyBl
 }
 
 function logRejectedOrderEvent({ processed, failure, retryable, event, identity, logger }) {
-  const rejectedOrder = identity.rejectedOrder
+  const { rejectedOrder } = identity
   logger.error?.({
     message: getUserDataFailureMessage(failure),
     failureCategory: failure.category,
