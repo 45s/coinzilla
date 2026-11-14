@@ -245,9 +245,7 @@ Concurrency must preserve multiple independently owned Positions per market and 
 - Manual trades/external orders may change exchange free/locked balances. This does not make their inventory or executions RS-owned; authoritative available balance and all reservations must be reconciled without attributing external PnL to RS.
 - Shared account quote/base commitments remain the Trading Engine's responsibility. RS risk limits are additional constraints and must account for commitments from concurrently active strategies.
 
-The engine must provide deterministic behavior when CG and RS both emit eligible intents for the same market during one evaluation window. Central reservation allocation and serialized submission decide which intents can proceed; a rejected/deferred intent must retain its strategy identity and an actionable reason. The policy must not rely on execution order or race timing to avoid overselling.
-
-**Owner decisions required:** define deterministic priority/fairness when simultaneous CG and RS intents compete for the same scarce quote/base resources; confirm which shared account-level limits apply across strategies; define how strategy-owned orders are attributed during restart/reconciliation. These decisions do not reinstate mutual exclusion.
+The engine must provide deterministic behavior when CG and RS both emit eligible intents for the same market during one evaluation window. Each intent is first checked against its own strategy's remaining investment budget; no strategy may borrow another strategy's unused allocation. The shared allocator then serializes submission and checks actual account-wide quote/base availability and reservations. A deferred/rejected intent retains its strategy identity and an actionable reason. No cross-strategy investment-budget priority or fairness policy is required; shared physical-resource safety remains mandatory.
 
 ## 12. Owner decisions required before executable implementation
 
@@ -265,7 +263,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 | Risk policy | **Agreed:** use Conservative's configured investment-limit logic. At the limit, stop new BUYs; keep any active recovery SELL alive and unchanged until filled/terminal. | Prevents additional investment without disrupting an existing recovery SELL |
 | Residual/dust | **Agreed:** only exact exchange-filter-constrained residual after fully reconciled successful cycle is retained as bonus dust and excluded permanently from future RS calculations, matching Conservative's constrained-dust principle. Ordinary sellable residual is not dust. Final residual/no-new-BUY liquidation remains open. | Prevents guessed disposal, repeated counting, or hidden sellable inventory |
 | Lifecycle | **Agreed:** repeat cycles until operator stop; legacy exhaustion switches to recovery-only cycles. Investment-limit/safety/readiness/reconciliation blocks prevent new BUYs while existing SELLs remain live and reconciled. Advanced pause/disable/abandon/resume/restart behavior and separate final-residual liquidation are deferred under FITDIB. | Keeps the first implementation safe and focused |
-| Concurrent strategies | Shared Portfolio, independent attribution, centralized reservations and deterministic intent allocation across CG/RS/Aggressive | Prevents double-spend, duplicate attribution and overselling without mutual exclusion |
+| Concurrent strategies and budgets | Independent configured investment budgets and used/committed investment per strategy; no cross-strategy budget borrowing. Shared Portfolio, independent attribution, centralized account reservations and serialized intent allocation remain mandatory. | Prevents one strategy consuming another's allocation, double-spend, duplicate attribution and overselling without mutual exclusion |
 | Fee valuation | Third-asset valuation failure and proceeds allocation | Prevents fees being treated as zero |
 
 ## 13. Required test contract before implementation
@@ -283,7 +281,7 @@ No executable RS tests are added in this documentation-only phase. Future implem
 - active/in-flight SELL reservation conservation, partial fills, cancellation races, unknown outcomes, and reconciliation;
 - exact decimal precision and exchange-filter boundaries;
 - risk-limit equality/exceedance and pause/disable/resume/abandon transitions;
-- CG and RS running concurrently on different markets and the same market, with independent order attribution and centralized reservations; prove no double-spend, duplicate fill attribution or oversell.
+- CG and RS running concurrently on different markets and the same market, with independent order attribution and investment budgets; prove one strategy cannot consume the other's unused budget, shared reservations prevent double-spend, and no fill is duplicated or inventory oversold.
 - External/manual order isolation while multiple strategies are active.
 
 Use exact decimal strings and meaningful assertion messages. Follow repository TDD: observe each behavior test RED before implementation and GREEN afterward. Never weaken existing Portfolio, Conservative, broker, or safety coverage.
