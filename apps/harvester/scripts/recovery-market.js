@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { defaultLogger } from "@coinzilla/utils"
-import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-operational-state-store.js"
+import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-operational-state-directory.js"
 import { runOfflineMarketRecovery } from "./recovery-market-context.js"
 
 const HELP = `Usage:
@@ -83,14 +84,16 @@ export async function runRecoveryMarketCommand({
     const context = JSON.parse(raw)
     let durableFactsStore
     if (parsed.confirm) {
-      const directory = env.DURABLE_FACTS_DIRECTORY
-      if (typeof directory !== "string" || !path.isAbsolute(directory)) {
-        throw new Error("--confirm requires an absolute DURABLE_FACTS_DIRECTORY for an existing ADR-0001 ledger")
+      let directory
+      try {
+        directory = resolveOperationalStateDirectory({ env })
+      } catch (cause) {
+        throw new Error("--confirm requires a valid Operational State Store directory", { cause })
       }
       if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
         throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
       }
-      durableFactsStore = createFileDurableFactsStore({
+      durableFactsStore = createFileOperationalStateStore({
         directory,
         runtimeSessionId: context.runtimeSessionId,
       })
