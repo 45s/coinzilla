@@ -2679,15 +2679,15 @@ class TestnetTradingRecoveryScenario {
       side: "BUY",
       type: "LIMIT_MAKER",
       limitPrice: new Money({
-        amount: submitted.price,
+        amount: this.submitted.price,
         asset: this.marketMetadata.market.quoteAsset
       }),
       originalQuantity: new Quantity({
-        amount: submitted.quantity,
+        amount: this.submitted.quantity,
         asset: this.marketMetadata.market.baseAsset
       }),
       executedQuantity: new Quantity({
-        amount: submitted.quantity,
+        amount: this.submitted.quantity,
         asset: this.marketMetadata.market.baseAsset
       }),
       status: "FILLED",
@@ -2704,11 +2704,11 @@ class TestnetTradingRecoveryScenario {
       market: this.marketMetadata.market,
       side: "BUY",
       price: new Money({
-        amount: submitted.price,
+        amount: this.submitted.price,
         asset: this.marketMetadata.market.quoteAsset
       }),
       quantity: new Quantity({
-        amount: submitted.quantity,
+        amount: this.submitted.quantity,
         asset: this.marketMetadata.market.baseAsset
       }),
       quoteQuantity: new Money({
@@ -2746,7 +2746,7 @@ class TestnetTradingRecoveryScenario {
     )
   
   
-    const recoveryReminderCount = 254
+    this.recoveryReminderCount = 254
   
     for (let reminderNumber = 0; reminderNumber < recoveryReminderCount; reminderNumber += 1) {
       this.userDataHandlers.onStatus({
@@ -2850,7 +2850,7 @@ class TestnetTradingRecoveryScenario {
   
   
     assert.equal(
-      recoveryReminderCount,
+      this.recoveryReminderCount,
       254,
       "The regression must reproduce the 254 recovered reminders recorded in the incident Journal.",
     )
@@ -2900,7 +2900,7 @@ class TestnetTradingRecoveryScenario {
     )
   
     assert.equal(
-      recoveryFillAppliedEvents.length,
+      this.recoveryFillAppliedEvents.length,
       1,
       "The stream fill and matching REST fill history must update accounting exactly once.",
     )
@@ -3071,29 +3071,29 @@ class TestnetTradingRecoveryScenario {
     }))
   
   
-    const replacementSell = this.submittedOrders.filter((order) => order.side === "SELL").at(-1)
+    this.replacementSell = this.submittedOrders.filter((order) => order.side === "SELL").at(-1)
   
-    assert.equal(replacementSell.side, "SELL")
+    assert.equal(this.replacementSell.side, "SELL")
   
   }
 
   async runStep12() {
     this.canonicalSell = new CanonicalOrder({
-      clientOrderId: replacementSell.clientOrderId,
-      brokerOrderId: "broker-" + replacementSell.clientOrderId,
+      clientOrderId: this.replacementSell.clientOrderId,
+      brokerOrderId: "broker-" + this.replacementSell.clientOrderId,
       market: this.marketMetadata.market,
       side: "SELL",
       type: "LIMIT_MAKER",
       limitPrice: new Money({
-        amount: replacementSell.price,
+        amount: this.replacementSell.price,
         asset: this.marketMetadata.market.quoteAsset
       }),
       originalQuantity: new Quantity({
-        amount: replacementSell.quantity,
+        amount: this.replacementSell.quantity,
         asset: this.marketMetadata.market.baseAsset
       }),
       executedQuantity: new Quantity({
-        amount: replacementSell.quantity,
+        amount: this.replacementSell.quantity,
         asset: this.marketMetadata.market.baseAsset
       }),
       status: "FILLED",
@@ -3110,17 +3110,17 @@ class TestnetTradingRecoveryScenario {
       market: this.marketMetadata.market,
       side: "SELL",
       price: new Money({
-        amount: replacementSell.price,
+        amount: this.replacementSell.price,
         asset: this.marketMetadata.market.quoteAsset
       }),
       quantity: new Quantity({
-        amount: replacementSell.quantity,
+        amount: this.replacementSell.quantity,
         asset: this.marketMetadata.market.baseAsset
       }),
       quoteQuantity: new Money({
         amount: multiplyDecimal({
-          left: replacementSell.price,
-          right: replacementSell.quantity
+          left: this.replacementSell.price,
+          right: this.replacementSell.quantity
         }),
         asset: this.marketMetadata.market.quoteAsset,
       }),
