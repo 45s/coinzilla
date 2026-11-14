@@ -8,7 +8,7 @@ function validateStrategyPolicy({ strategyPolicy } = {}) {
 function validateRequiredCallbacks({ callbacks } = {}) {
   for (const [name, callback] of Object.entries(callbacks)) {
     if (typeof callback !== "function") {
-      throw new TypeError(name + " must be a function")
+      throw new TypeError(`${name} must be a function`)
     }
   }
 }
