@@ -3128,15 +3128,15 @@ test("retains an explicitly injected application event publisher in TESTNET runt
 })
 
 
-test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
+
+function createShutdownIntakeDrainFixture({ broker, calls }) {
   let resolveBookUnsubscribe
-  const bookUnsubscribed = new Promise((resolve) => { resolveBookUnsubscribe = resolve })
-  const originalSubscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
+  const bookUnsubscribed = new Promise((resolve) => {
+    resolveBookUnsubscribe = resolve
+  })
+  const subscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
   broker.subscribeForBookTicker = async (input) => {
-    const result = await originalSubscribeForBookTicker(input)
+    const result = await subscribeForBookTicker(input)
     return {
       ...result,
       data: {
@@ -3150,9 +3150,12 @@ test("stops broker intake before draining queued user-data and disconnects after
     }
   }
   let resolveMarketUnsubscribe
-  const marketUnsubscribed = new Promise((resolve) => { resolveMarketUnsubscribe = resolve })
+  const marketUnsubscribed = new Promise((resolve) => {
+    resolveMarketUnsubscribe = resolve
+  })
+  const subscribeForPrices = broker.subscribeForPrices.bind(broker)
   broker.subscribeForPrices = async (input) => {
-    const result = await originalSubscribeForPrices(input)
+    const result = await subscribeForPrices(input)
     return {
       ...result,
       data: {
@@ -3165,9 +3168,9 @@ test("stops broker intake before draining queued user-data and disconnects after
       },
     }
   }
-  const originalSubscribeForUserData = broker.subscribeForUserData.bind(broker)
+  const subscribeForUserData = broker.subscribeForUserData.bind(broker)
   broker.subscribeForUserData = async (handlers) => {
-    const result = await originalSubscribeForUserData(handlers)
+    const result = await subscribeForUserData(handlers)
     return {
       ...result,
       data: {
@@ -3179,20 +3182,26 @@ test("stops broker intake before draining queued user-data and disconnects after
       },
     }
   }
+  return {
+    bookUnsubscribed,
+    marketUnsubscribed,
+  }
+}
 
+function createBlockedUserDataQueue({ calls }) {
   let resolveQueue
-  const queueGate = new Promise((resolve) => { resolveQueue = resolve })
+  const queueGate = new Promise((resolve) => {
+    resolveQueue = resolve
+  })
   let signalQueueStarted
-  const queueStarted = new Promise((resolve) => { signalQueueStarted = resolve })
+  const queueStarted = new Promise((resolve) => {
+    signalQueueStarted = resolve
+  })
   let queuedEvents = 0
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development"
-    },
-    brokerAdapterFactory: () => broker,
-    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+  return {
+    queueStarted,
+    release: resolveQueue,
+    getQueuedEvents: () => queuedEvents,
     onUserDataEvent: async () => {
       queuedEvents += 1
       calls.push("queue:start")
@@ -3200,31 +3209,72 @@ test("stops broker intake before draining queued user-data and disconnects after
       await queueGate
       calls.push("queue:done")
     },
-  })
+  }
+}
 
-  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
-  await queueStarted
-  const stopPromise = runtime.stop()
-  await Promise.all([bookUnsubscribed, marketUnsubscribed])
-
+function assertShutdownIntakeRemainsOrdered({ calls, queuedEvents }) {
   assert.ok(calls.includes("unsubscribe:book:BTCUSDT"), "shutdown must stop book-ticker intake before draining accepted user-data work")
   assert.ok(calls.includes("unsubscribe:BTCUSDT"), "shutdown must stop market-price intake before draining accepted user-data work")
   assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain active until already accepted user-data work has drained")
   assert.equal(calls.includes("queue:done"), false, "shutdown must wait for the deliberately blocked user-data callback before continuing cleanup")
   assert.equal(calls.includes("disconnect"), false, "the broker must remain connected while accepted user-data work is still running")
-
-  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
-  await Promise.resolve()
   assert.equal(queuedEvents, 1, "a second event must not enter the serialized queue while its first callback is still running")
+}
 
-  resolveQueue()
+function assertShutdownCleanupOrder({ calls }) {
+  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"))
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"))
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"))
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
+}
+
+
+test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const intake = createShutdownIntakeDrainFixture({
+    broker,
+    calls,
+  })
+  const queue = createBlockedUserDataQueue({
+    calls,
+  })
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    onUserDataEvent: queue.onUserDataEvent,
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "outboundAccountPosition",
+  })
+  await queue.queueStarted
+  const stopPromise = runtime.stop()
+  await Promise.all([
+    intake.bookUnsubscribed,
+    intake.marketUnsubscribed,
+  ])
+  assertShutdownIntakeRemainsOrdered({
+    calls,
+    queuedEvents: queue.getQueuedEvents(),
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "outboundAccountPosition",
+  })
+  await Promise.resolve()
+  assert.equal(queue.getQueuedEvents(), 1)
+  queue.release()
   await stopPromise
-  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"), "book-ticker intake must stop before the accepted user-data callback finishes")
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"), "market-price intake must stop before the accepted user-data callback finishes")
-  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
+  assertShutdownCleanupOrder({
+    calls,
+  })
 })
-
 
 test("logs safe correlation details when an execution report is not owned", async () => {
   const broker = createBroker()
