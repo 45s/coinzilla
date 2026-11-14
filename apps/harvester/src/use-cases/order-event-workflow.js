@@ -1,21 +1,15 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { compareDecimal, toResult } from "@coinzilla/utils"
-import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
-import { isHarvesterClientOrderId } from "../application/orders/is-harvester-client-order-id.js"
+import { toResult } from "@coinzilla/utils"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
-  mapBrokerExecutionReportData,
   mapExecutionInvalidFillData,
   mapExecutionAccountingFailedData,
-  mapExecutionUnownedOrderData,
-  mapOrderUpdatedData,
   mapFillAppliedData,
   mapDuplicateFillData,
-  mapRecoveryCycleCompletedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { makeReconcileTerminalOrderFills } from "./reconcile-terminal-order-fills.js"
-import { failureResult, withFailure } from "./recovery-failure.js"
+import { failureResult } from "./recovery-failure.js"
 import { createUserDataEventTransition } from "./create-user-data-event-transition.js"
 
 

@@ -856,3 +856,6 @@ The bootstrap keeps the account snapshot manager behind an explicitly initialize
 
 
 Bootstrap extraction retains the complete initialization order: broker connection, account snapshot manager creation, portfolio workflow setup, recovered-state construction, subscriptions, trading-engine activation and shutdown registration. The helpers replace only local composition, not lifecycle ordering.
+
+
+Transition and submission-gate helpers accept a single context object, keeping dependencies explicit while preserving the original serialized event and exchange-submission decisions.

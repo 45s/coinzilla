@@ -355,6 +355,8 @@ function logOrderAllocation(dependencies, context, balances, allocation) {
 }
 
 function handleNoExecutableActions(dependencies, context, allocation) {
+  void dependencies
+  void dependencies
   const { preflightOnly, decision, operatorSuppressedActions, symbol } = context
   const { deferredActions, executableActions } = allocation
   if (executableActions.length !== 0) {return null}

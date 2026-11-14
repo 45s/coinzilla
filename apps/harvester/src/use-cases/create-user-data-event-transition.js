@@ -13,7 +13,7 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
-async function prepareOrderEvent(dependencies, { event } = {}) {
+async function prepareOrderEvent({ dependencies, event } = {}) {
   const { state, eventPublisher, pairs, pause } = dependencies
   if (event?.eventType === "executionReport" && event?.brokerEvidence) {
     publishLifecycleEvent({
@@ -51,9 +51,19 @@ async function prepareOrderEvent(dependencies, { event } = {}) {
     ].some(isHarvesterClientOrderId)
     const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
     if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
-      return { result: toResult({ data: { ignored: true, externalOrder: true } }) }
+      return {
+        result: toResult({
+          data: {
+            ignored: true,
+            externalOrder: true,
+          },
+        }),
+      }
     }
-    await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
+    await pause({
+      symbol,
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+    })
     return {
       result: failureResult({
         error: new Error("Order update does not belong to a Harvester order"),
@@ -75,19 +85,32 @@ async function prepareOrderEvent(dependencies, { event } = {}) {
       }),
     })
   }
-  return { order, symbol, update }
+  return {
+    order,
+    symbol,
+    update,
+  }
 }
 
 
-async function handlePreFillRecoveryState(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, pause, resolveRecoveryManagedCancellation } = dependencies
   if (state.reconciledTerminalOrderClientIds.delete(order.clientOrderId)) {
-    return toResult({ data: { ignored: true, terminalStateAlreadyReconciled: true } })
+    return toResult({
+      data: {
+        ignored: true,
+        terminalStateAlreadyReconciled: true,
+      },
+    })
   }
   if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
       state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
-    const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
-    await pause({ symbol, reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY", error })
+    const error = new Error(`Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: ${order.clientOrderId}`)
+    await pause({
+      symbol,
+      reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY",
+      error,
+    })
     return failureResult({
       error,
       category: "OWNERSHIP_INTEGRITY",
@@ -96,7 +119,10 @@ async function handlePreFillRecoveryState(dependencies, { order, symbol, recover
     })
   }
   if (recoveryMode && order.status === "CANCELED" &&
-      compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
+      compareDecimal({
+        left: order.executedQuantity.amount,
+        right: "0",
+      }) === 0) {
     if (resolveRecoveryManagedCancellation({ order })) {
       state.deferredEvaluations.add(symbol)
     }
@@ -105,10 +131,13 @@ async function handlePreFillRecoveryState(dependencies, { order, symbol, recover
 }
 
 
-async function reconcileEventFills(dependencies, { order, event, terminalFillsReconciled } = {}) {
+async function reconcileEventFills({ dependencies, order, event, terminalFillsReconciled } = {}) {
   const { processExecutionFillTransition, reconcileTerminalOrderFills } = dependencies
   if (event.executionType === "TRADE") {
-    const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
+    const fillResult = await processExecutionFillTransition({
+      order,
+      fill: event.fill,
+    })
     if (!fillResult.ok) {return fillResult}
   }
   if (!terminalFillsReconciled &&
@@ -122,7 +151,7 @@ async function reconcileEventFills(dependencies, { order, event, terminalFillsRe
   return null
 }
 
-async function handleDuplicateOrStaleUpdate(dependencies, { order, symbol, update, recoveryMode } = {}) {
+async function handleDuplicateOrStaleUpdate({ dependencies, order, symbol, update, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (update.duplicate || update.stale) {
         const isUnprocessedFill = order.status === "FILLED" &&
@@ -162,8 +191,9 @@ async function handleDuplicateOrStaleUpdate(dependencies, { order, symbol, updat
         }
 }
 
+  return null
 }
-async function handleOpenSellReplacement(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handleOpenSellReplacement({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
           state.replacementIntents.has(symbol)) {
@@ -196,8 +226,9 @@ async function handleOpenSellReplacement(dependencies, { order, symbol, recovery
         } })
 }
 
+  return null
 }
-function handlePartialBuyDuringShutdown(dependencies, { order, symbol, recoveryMode } = {}) {
+function handlePartialBuyDuringShutdown({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, isStopping } = dependencies
    if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
           isStopping?.()) {
@@ -212,8 +243,9 @@ function handlePartialBuyDuringShutdown(dependencies, { order, symbol, recoveryM
         })
 }
 
+  return null
 }
-async function handlePartialBuyWithActiveSell(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handlePartialBuyWithActiveSell({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
           state.registry.getActiveOrders({ marketId: order.market.id }).some((active) => active.side === "SELL")) {
@@ -250,8 +282,9 @@ async function handlePartialBuyWithActiveSell(dependencies, { order, symbol, rec
         })
 }
 
+  return null
 }
-function handlePartialBuyWaiting(dependencies, { order } = {}) {
+function handlePartialBuyWaiting({ dependencies, order } = {}) {
   void dependencies
    if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: {
@@ -260,8 +293,9 @@ function handlePartialBuyWaiting(dependencies, { order } = {}) {
         } })
 }
 
+  return null
 }
-async function handlePartialBuyTerminal(dependencies, { order, symbol } = {}) {
+async function handlePartialBuyTerminal({ dependencies, order, symbol } = {}) {
   const { state, pause, isStopping } = dependencies
    if (order.side === "BUY" &&
           ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
@@ -282,8 +316,9 @@ async function handlePartialBuyTerminal(dependencies, { order, symbol } = {}) {
         })
 }
 
+  return null
 }
-function handleNonterminalOrder(dependencies, { order } = {}) {
+function handleNonterminalOrder({ dependencies, order } = {}) {
   void dependencies
    if (!["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
         return toResult({ data: {
@@ -292,8 +327,9 @@ function handleNonterminalOrder(dependencies, { order } = {}) {
         } })
 }
 
+  return null
 }
-async function handleBuyFilled(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handleBuyFilled({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, pause, cancelAndReconcileRecoverySells, getReconciledBuyExecutionPrice, isStopping, resolveRecoveryManagedCancellation } = dependencies
    if (order.status === "FILLED" && order.side === "BUY") {
         if (recoveryMode) {resolveRecoveryManagedCancellation({ order })}
@@ -360,8 +396,9 @@ async function handleBuyFilled(dependencies, { order, symbol, recoveryMode } = {
         state.buyExecutionTotals.delete(order.brokerOrderId)
 }
 
+  return null
 }
-async function handleRejectedOrder(dependencies, { order, symbol } = {}) {
+async function handleRejectedOrder({ dependencies, order, symbol } = {}) {
   const { pause } = dependencies
    if (order.status === "REJECTED") {
         await pause({
@@ -374,8 +411,9 @@ async function handleRejectedOrder(dependencies, { order, symbol } = {}) {
         } })
 }
 
+  return null
 }
-async function handleSellCanceled(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handleSellCanceled({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, evaluateLatestTransition } = dependencies
    if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
         if (recoveryMode) {
@@ -409,8 +447,9 @@ async function handleSellCanceled(dependencies, { order, symbol, recoveryMode } 
         })
 }
 
+  return null
 }
-async function completeSellRecoveryCycle(dependencies, { order, symbol } = {}) {
+async function completeSellRecoveryCycle({ dependencies, order, symbol } = {}) {
   const {
     pause,
     assertReconciledSellExecution,
@@ -420,7 +459,11 @@ async function completeSellRecoveryCycle(dependencies, { order, symbol } = {}) {
   try {
     assertReconciledSellExecution({ order })
   } catch (error) {
-    await pause({ symbol, reason: "SELL_FILL_RECONCILIATION_FAILED", error })
+    await pause({
+      symbol,
+      reason: "SELL_FILL_RECONCILIATION_FAILED",
+      error,
+    })
     return failureResult({
       error,
       category: "ACCOUNTING_INTEGRITY",
@@ -450,10 +493,13 @@ async function completeSellRecoveryCycle(dependencies, { order, symbol } = {}) {
   return { ok: true, completion }
 }
 
-async function handleIncompleteSellRecoveryCycle(dependencies, { order, symbol, completion } = {}) {
+async function handleIncompleteSellRecoveryCycle({ dependencies, order, symbol, completion } = {}) {
   const { state, pause, publishRecoveryCycleNotCompleted } = dependencies
   if (completion.data?.eligible) {return null}
-  publishRecoveryCycleNotCompleted({ order, completion })
+  publishRecoveryCycleNotCompleted({
+    order,
+    completion,
+  })
   if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
       completion.data?.pause === false) {
     state.sellExecutionTotals.delete(order.brokerOrderId)
@@ -478,7 +524,7 @@ async function handleIncompleteSellRecoveryCycle(dependencies, { order, symbol, 
   })
 }
 
-function publishCompletedSellRecoveryCycle(dependencies, { order, symbol, completion } = {}) {
+function publishCompletedSellRecoveryCycle({ dependencies, order, symbol, completion } = {}) {
   const { state, eventPublisher, pairs } = dependencies
   publishLifecycleEvent({
     eventPublisher,
@@ -499,7 +545,7 @@ function publishCompletedSellRecoveryCycle(dependencies, { order, symbol, comple
   state.trailingBuy.set(symbol, true)
 }
 
-async function handleSellFilled(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handleSellFilled({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, resolveRecoveryManagedCancellation } = dependencies
   if (order.status !== "FILLED" || order.side !== "SELL") {return null}
   state.completedRecoverySellSymbols.add(symbol)
@@ -509,15 +555,19 @@ async function handleSellFilled(dependencies, { order, symbol, recoveryMode } = 
   } else {
     state.replacementIntents.delete(symbol)
   }
-  const result = await completeSellRecoveryCycle(dependencies, { order, symbol })
+  const result = await completeSellRecoveryCycle({
+    dependencies,
+    order,
+    symbol,
+  })
   if (!result.ok) {return result}
-  const incomplete = await handleIncompleteSellRecoveryCycle(dependencies, {
+  const incomplete = await handleIncompleteSellRecoveryCycle({ dependencies,
     order,
     symbol,
     completion: result.completion,
   })
   if (incomplete) {return incomplete}
-  publishCompletedSellRecoveryCycle(dependencies, {
+  publishCompletedSellRecoveryCycle({
     order,
     symbol,
     completion: result.completion,
@@ -525,7 +575,7 @@ async function handleSellFilled(dependencies, { order, symbol, recoveryMode } = 
   return null
 }
 
-async function handleOrderStatus(dependencies, { order, symbol, recoveryMode } = {}) {
+async function handleOrderStatus({ dependencies, order, symbol, recoveryMode } = {}) {
   const handlers = [
     handleOpenSellReplacement,
     handlePartialBuyDuringShutdown,
@@ -539,26 +589,51 @@ async function handleOrderStatus(dependencies, { order, symbol, recoveryMode } =
     handleSellFilled,
   ]
   for (const handler of handlers) {
-    const result = await handler(dependencies, { order, symbol, recoveryMode })
+    const result = await handler({
+      dependencies,
+      order,
+      symbol,
+      recoveryMode,
+    })
     if (result) {return result}
   }
   return null
 }
-async function processUserDataEventTransition(dependencies, {
+async function processUserDataEventTransition({
+  dependencies,
   event,
   recoveryMode = false,
   terminalFillsReconciled = false,
 } = {}) {
   const { state } = dependencies
   try {
-    const prepared = await prepareOrderEvent(dependencies, { event })
+    const prepared = await prepareOrderEvent({
+      dependencies,
+      event,
+    })
     if (prepared.result) {return prepared.result}
     const { order, symbol, update } = prepared
-    const recoveryGuard = await handlePreFillRecoveryState(dependencies, { order, symbol, recoveryMode })
+    const recoveryGuard = await handlePreFillRecoveryState({
+      dependencies,
+      order,
+      symbol,
+      recoveryMode,
+    })
     if (recoveryGuard) {return recoveryGuard}
-    const fillResult = await reconcileEventFills(dependencies, { order, event, terminalFillsReconciled })
+    const fillResult = await reconcileEventFills({
+      dependencies,
+      order,
+      event,
+      terminalFillsReconciled,
+    })
     if (fillResult) {return fillResult}
-    const duplicateResult = await handleDuplicateOrStaleUpdate(dependencies, { order, symbol, update, recoveryMode })
+    const duplicateResult = await handleDuplicateOrStaleUpdate({
+      dependencies,
+      order,
+      symbol,
+      update,
+      recoveryMode,
+    })
     if (duplicateResult) {return duplicateResult}
     if (order.status === "FILLED") {
       if (state.completedOrderTransitions.has(order.clientOrderId)) {
@@ -566,10 +641,20 @@ async function processUserDataEventTransition(dependencies, {
       }
       state.completedOrderTransitions.add(order.clientOrderId)
     }
-    const statusResult = await handleOrderStatus(dependencies, { order, symbol, recoveryMode })
+    const statusResult = await handleOrderStatus({
+      dependencies,
+      order,
+      symbol,
+      recoveryMode,
+    })
     if (statusResult) {return statusResult}
     if (recoveryMode) {state.deferredEvaluations.add(symbol)}
-    return toResult({ data: { order, reevaluate: true } })
+    return toResult({
+      data: {
+        order,
+        reevaluate: true,
+      },
+    })
   } catch (error) {
     return failureResult({
       error,
@@ -582,5 +667,8 @@ async function processUserDataEventTransition(dependencies, {
 
 
 export function createUserDataEventTransition(dependencies = {}) {
-  return (options = {}) => processUserDataEventTransition(dependencies, options)
+  return (options = {}) => processUserDataEventTransition({
+    dependencies,
+    ...options,
+  })
 }

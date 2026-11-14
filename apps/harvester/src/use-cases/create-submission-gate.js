@@ -36,7 +36,13 @@ function getSubmissionStateBlocker({
   if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {return defer({ symbol, reason: "TRADING_DISABLED" })}
   if (!marketPrice) {return defer({ symbol, reason: "MARKET_PRICE_UNAVAILABLE" })}
   if (!isMarketPriceFresh(marketPrice)) {
-    return defer({ symbol, reason: "MARKET_PRICE_STALE", details: { priceTimestamp: marketPrice.timestamp } })
+    return defer({
+      symbol,
+      reason: "MARKET_PRICE_STALE",
+      details: {
+        priceTimestamp: marketPrice.timestamp,
+      },
+    })
   }
   return null
 }
@@ -98,9 +104,18 @@ function getMarketBookSubmissionBlocker({
 } = {}) {
   if (order.type !== "LIMIT_MAKER") {return null}
   const marketBook = state.books.get(symbol)
-  if (!marketBook) {return defer({ symbol, reason: "MARKET_BOOK_UNAVAILABLE" })}
+  if (!marketBook) {return defer({
+      symbol,
+      reason: "MARKET_BOOK_UNAVAILABLE",
+    })}
   if (!isMarketBookFresh(marketBook)) {
-    return defer({ symbol, reason: "MARKET_BOOK_STALE", details: { bookTimestamp: marketBook.timestamp } })
+    return defer({
+      symbol,
+      reason: "MARKET_BOOK_STALE",
+      details: {
+        bookTimestamp: marketBook.timestamp,
+      },
+    })
   }
   if (isPostOnlyOrderCrossing({ order, marketBook })) {
     return defer({
@@ -120,7 +135,7 @@ function getMarketBookSubmissionBlocker({
 
 export function createSubmissionGate(dependencies = {}) {
   return ({ order, purpose } = {}) => {
-    const symbol = order.market.symbol
+    const { symbol } = order.market
     const shutdownRecoverySubmission = dependencies.isShutdownRecoverySubmissionAllowed() &&
       dependencies.isStopping?.() === true &&
       order.side === "SELL" &&
