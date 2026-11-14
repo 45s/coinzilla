@@ -197,13 +197,16 @@ export function createShutdownHandler({
         }
       }
 
-      await runPhaseSafely({
+      const marketIntakeResult = await runPhaseSafely({
         phase: "MARKET_INTAKE_STOP",
         operation: () => stopMarketIntake({ subscriptions, bookSubscriptions }),
         stage: "MARKET_INTAKE_STOP",
         message: "Shutdown market-intake stop failed",
         auditReason: "MARKET_INTAKE_SHUTDOWN_FAILED",
       })
+      const marketIntakeErrors = Array.isArray(marketIntakeResult)
+        ? marketIntakeResult
+        : marketIntakeResult?.errors ?? []
       // Unsubscribing prevents new callbacks; accepted market work must finish
       // before the first owned-order reconciliation or BUY cancellation.
       const pendingMarketTasks = [...marketPriceIntake.values()]
@@ -275,13 +278,16 @@ export function createShutdownHandler({
         message: "Shutdown user-data drain failed",
         auditReason: "USER_DATA_DRAIN_FAILED",
       })
-      await runPhaseSafely({
+      const userDataIntakeResult = await runPhaseSafely({
         phase: "USER_DATA_INTAKE_STOP",
         operation: () => stopUserDataIntake({ userDataSubscription }),
         stage: "USER_DATA_INTAKE_STOP",
         message: "Shutdown user-data intake stop failed",
         auditReason: "USER_DATA_INTAKE_SHUTDOWN_FAILED",
       })
+      const userDataIntakeErrors = Array.isArray(userDataIntakeResult)
+        ? userDataIntakeResult
+        : userDataIntakeResult?.errors ?? []
       state.intakeStopped = true
       await runPhaseSafely({
         phase: "USER_DATA_DRAIN_FINAL",
@@ -447,6 +453,8 @@ export function createShutdownHandler({
           ? Object.freeze({ ok: true, reconciledSymbols: recoverySellReconciliation.data?.reconciledSymbols ?? [] })
           : Object.freeze({ ok: false }),
         recoverySellFindings: Object.freeze(recoverySellFindings.map((finding) => Object.freeze({ ...finding }))),
+        failureReasons: Object.freeze(stageFailures.flatMap((entry) =>
+          entry.errors.map((error) => error.failureStage ?? error.code ?? error.name))),
         stageFailures: Object.freeze(stageFailures.map((failure) => Object.freeze({
           stage: failure.stage,
           failure: failure.failure ? Object.freeze({ ...failure.failure }) : null,
