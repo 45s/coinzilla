@@ -46,7 +46,7 @@ function requireRecord({ record, index }) {
 function requireSafeSequence({ sequence, factId }) {
   const numericSequence = Number(sequence)
   if (!Number.isSafeInteger(numericSequence) || numericSequence < 0 || String(numericSequence) !== sequence) {
-    throw new RangeError("Durable fact " + factId + " exceeds the safe recovery sequence range")
+    throw new RangeError("Operational State record " + factId + " exceeds the safe recovery sequence range")
   }
   return numericSequence
 }

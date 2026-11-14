@@ -416,7 +416,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
       readAll: async () => ({
         ok: true,
         data: {
-          records: [{ sequence: "0", factId: "Operational State Store records:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
           durableWriteSupported: true,
           lastCommittedSequence: "0",
           lastCommittedDigest: "a".repeat(64),
@@ -498,7 +498,7 @@ test("verifies Operational State Store records before broker connect and starts/
       ok: true,
       data: {
         records: [
-          { sequence: "0", factId: "Operational State Store records:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } },
+          { sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } },
           ...appendedFacts,
         ],
         durableWriteSupported: true,
@@ -565,7 +565,7 @@ test("stops Telegram and broker when Telegram identity verification fails during
       readAll: async () => ({
         ok: true,
         data: {
-          records: [{ sequence: "0", factId: "Operational State Store records:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
           durableWriteSupported: true,
           lastCommittedSequence: "0",
           lastCommittedDigest: "a".repeat(64),

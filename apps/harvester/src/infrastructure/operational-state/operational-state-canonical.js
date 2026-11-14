@@ -24,60 +24,60 @@ export function requireNonEmptyString({ value, field, maxLength = MAX_STRING_LEN
 }
 
 function canonicalize(value, depth = 0) {
-  if (depth > MAX_JSON_DEPTH) {throw new RangeError("Durable fact JSON exceeds the maximum nesting depth")}
+  if (depth > MAX_JSON_DEPTH) {throw new RangeError("Operational State JSON exceeds the maximum nesting depth")}
   if (value === null || typeof value === "boolean") {return value}
   if (typeof value === "string") {
-    if (value.length > MAX_STRING_LENGTH) {throw new RangeError("Durable fact string exceeds the maximum length")}
+    if (value.length > MAX_STRING_LENGTH) {throw new RangeError("Operational State string exceeds the maximum length")}
     return value
   }
   if (typeof value === "number") {
     if (Object.is(value, -0)) {
-      throw new TypeError("Durable fact numbers must not contain negative zero")
+      throw new TypeError("Operational State numbers must not contain negative zero")
     }
     if (!Number.isSafeInteger(value)) {
-      throw new TypeError("Durable fact numbers must be safe integers; economic decimals must remain strings")
+      throw new TypeError("Operational State numbers must be safe integers; economic decimals must remain strings")
     }
     return value
   }
   if (Array.isArray(value)) {
-    if (value.length > MAX_ARRAY_LENGTH) {throw new RangeError("Durable fact array exceeds the maximum length")}
+    if (value.length > MAX_ARRAY_LENGTH) {throw new RangeError("Operational State array exceeds the maximum length")}
     const arrayKeys = Reflect.ownKeys(value)
     if (Object.keys(value).length !== value.length || arrayKeys.length !== value.length + 1 ||
         arrayKeys.some((key) => typeof key !== "string")) {
-      throw new TypeError("Durable fact arrays must not contain holes, symbols or custom properties")
+      throw new TypeError("Operational State arrays must not contain holes, symbols or custom properties")
     }
     for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) {throw new TypeError("Durable fact arrays must not contain sparse entries")}
+      if (!(index in value)) {throw new TypeError("Operational State arrays must not contain sparse entries")}
     }
     return value.map((item) => canonicalize(item, depth + 1))
   }
   if (typeof value === "object") {
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError("Durable fact payloads must contain only plain JSON objects")
+      throw new TypeError("Operational State payloads must contain only plain JSON objects")
     }
     const ownKeys = Reflect.ownKeys(value)
     const keys = Object.keys(value).sort()
-    if (ownKeys.length !== keys.length) {throw new TypeError("Durable fact objects must not contain symbols or non-enumerable properties")}
-    if (keys.length > MAX_OBJECT_KEYS) {throw new RangeError("Durable fact object exceeds the maximum key count")}
+    if (ownKeys.length !== keys.length) {throw new TypeError("Operational State objects must not contain symbols or non-enumerable properties")}
+    if (keys.length > MAX_OBJECT_KEYS) {throw new RangeError("Operational State object exceeds the maximum key count")}
     const result = {}
     for (const key of keys) {
       if (key === "__proto__" || key === "prototype" || key === "constructor") {
-        throw new TypeError("Durable fact payload contains a forbidden object key")
+        throw new TypeError("Operational State payload contains a forbidden object key")
       }
       if (SECRET_KEY_PATTERN.test(key)) {
-        throw new TypeError("Durable fact payload must not contain credentials or secrets")
+        throw new TypeError("Operational State payload must not contain credentials or secrets")
       }
       const descriptor = Object.getOwnPropertyDescriptor(value, key)
       if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
-        throw new TypeError("Durable fact payload must not contain accessor properties")
+        throw new TypeError("Operational State payload must not contain accessor properties")
       }
-      if (descriptor.value === undefined) {throw new TypeError("Durable fact payload must not contain undefined values")}
+      if (descriptor.value === undefined) {throw new TypeError("Operational State payload must not contain undefined values")}
       result[key] = canonicalize(descriptor.value, depth + 1)
     }
     return result
   }
-  throw new TypeError("Durable fact payload contains a non-JSON value")
+  throw new TypeError("Operational State payload contains a non-JSON value")
 }
 
 /**
@@ -137,7 +137,7 @@ export function normalizeOperationalStateRecordedAt(value) {
   const recordedAt = value instanceof Date ? value.toISOString() : String(value)
   const parsed = new Date(recordedAt)
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== recordedAt) {
-    throw new TypeError("Durable fact recorded-at timestamp must be canonical ISO-8601")
+    throw new TypeError("Operational State recorded-at timestamp must be canonical ISO-8601")
   }
   return recordedAt
 }

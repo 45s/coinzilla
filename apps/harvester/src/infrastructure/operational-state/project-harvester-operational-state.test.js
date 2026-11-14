@@ -83,7 +83,7 @@ const orderFacts = () => [
 
 test("projects verified durable order facts into a candidate recovery projection without opening readiness", () => {
   const result = projectHarvesterOperationalState({
-    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"), baseline(), started(), ...preflightFacts(), ...orderFacts()],
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), ...preflightFacts(), ...orderFacts()],
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -114,7 +114,7 @@ test("does not replay process-lifetime operator pauses into a Operational State 
   }, "process-started:" + sessionId)
   const result = projectHarvesterOperationalState({
     records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       multiMarketBaseline,
       multiMarketStarted,
       ...preflightFacts(),
@@ -148,7 +148,7 @@ test("retains only unresolved pause and safety-blocker controls in the candidate
   }
   const result = projectHarvesterOperationalState({
     records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
       started(),
       ...preflightFacts(),
@@ -172,7 +172,7 @@ test("retains only unresolved pause and safety-blocker controls in the candidate
 test("retains an unresolved account-scoped blocker as global evidence", () => {
   const result = projectHarvesterOperationalState({
     records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
       started(),
       ...preflightFacts(),
@@ -198,7 +198,7 @@ test("fails closed for missing configuration baseline, orphan facts, or resoluti
   })
   const unresolved = projectHarvesterOperationalState({
     records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
       started(),
       record(3, "SAFETY_BLOCKER_RESOLVED", {
@@ -220,7 +220,7 @@ test("projects cancellation outcomes in a later process session against the orig
   const nextSession = "process-session-2"
   const result = projectHarvesterOperationalState({
     records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
       started(),
       ...preflightFacts(),
@@ -342,7 +342,7 @@ test("projects a durable completed recovery cycle only after its full SELL execu
     inventoryDisposition: null,
   }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
   const result = projectHarvesterOperationalState({
-    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -359,7 +359,7 @@ test("projects a durable completed recovery cycle only after its full SELL execu
 test("rejects market-history coverage facts that narrow a previously verified window", () => {
   const result = projectHarvesterOperationalState({
     records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
       started(),
       record(3, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
@@ -448,7 +448,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
     reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
   }, "recovery-cycle-not-completed:binance:BTCUSDT:" + "d".repeat(64))
   const result = projectHarvesterOperationalState({
-    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, nonCompletion],
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, nonCompletion],
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -530,7 +530,7 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
     inventoryDisposition: null,
   }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
   const result = projectHarvesterOperationalState({
-    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
   })
 
   assert.equal(result.ok, false, "A cycle cannot be committed against a different fully filled SELL order.")

@@ -79,12 +79,12 @@ function factIdForOrderOutcome(clientOrderId, outcome) {
 
 function validateFactData({ factType, data, factId, runtimeSessionId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new TypeError("Durable fact data must be a plain object")
+    throw new TypeError("Operational State record data must be a plain object")
   }
   const canonicalData = canonicalizeOperationalStateValue(data)
   const byteLength = Buffer.byteLength(JSON.stringify(canonicalData), "utf8")
   if (byteLength > MAX_FACT_DATA_BYTES) {
-    throw new RangeError("Durable fact data exceeds the " + MAX_FACT_DATA_BYTES + " byte limit")
+    throw new RangeError("Operational State record data exceeds the " + MAX_FACT_DATA_BYTES + " byte limit")
   }
   if (factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED") {
     const allowedFields = new Set(["requestId", "actorId", "symbol"])
@@ -769,12 +769,12 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
 
 function validateFactInput({ fact, runtimeSessionId }) {
   if (!fact || typeof fact !== "object" || Array.isArray(fact)) {
-    throw new TypeError("Durable fact must be an object")
+    throw new TypeError("Operational State record must be an object")
   }
   const factId = requireNonEmptyString({ value: fact.factId, field: "factId", maxLength: MAX_FACT_ID_LENGTH })
   const factType = requireNonEmptyString({ value: fact.factType, field: "factType", maxLength: 64 })
   if (!FACT_TYPES.has(factType) || factType === "LEDGER_INITIALIZED") {
-    throw new TypeError("Durable fact type is not allowlisted: " + factType)
+    throw new TypeError("Operational State record type is not allowlisted: " + factType)
   }
   return {
     factId,
@@ -790,27 +790,27 @@ function validateFactInput({ fact, runtimeSessionId }) {
 
 function validateFactRecord({ record, schemaVersion, expectedSequence, previousDigest, index }) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
-    throw new TypeError("Durable fact record must be an object")
+    throw new TypeError("Operational State record must be an object")
   }
   const expectedKeys = [
     "data", "digest", "factId", "factType", "formatVersion", "previousDigest",
     "recordedAt", "runtimeSessionId", "schemaVersion", "sequence",
   ]
   if (canonicalStringifyOperationalStateValue(Object.keys(record).sort()) !== canonicalStringifyOperationalStateValue(expectedKeys)) {
-    throw new Error("Durable fact record contains missing or unknown envelope fields")
+    throw new Error("Operational State record contains missing or unknown envelope fields")
   }
   if (record.formatVersion !== FORMAT_VERSION || record.schemaVersion !== schemaVersion) {
-    throw new Error("Durable fact record format/schema version is unsupported")
+    throw new Error("Operational State record format/schema version is unsupported")
   }
   if (typeof record.sequence !== "string" || !SEQUENCE_PATTERN.test(record.sequence)) {
-    throw new TypeError("Durable fact sequence must be a canonical base-10 string")
+    throw new TypeError("Operational State record sequence must be a canonical base-10 string")
   }
   if (record.sequence !== expectedSequence) {
-    throw new Error("Durable fact sequence gap or reordering at record " + index)
+    throw new Error("Operational State record sequence gap or reordering at record " + index)
   }
   requireNonEmptyString({ value: record.factId, field: "record.factId", maxLength: MAX_FACT_ID_LENGTH })
   requireNonEmptyString({ value: record.factType, field: "record.factType", maxLength: 64 })
-  if (!FACT_TYPES.has(record.factType)) {throw new Error("Durable fact type is not allowlisted: " + record.factType)}
+  if (!FACT_TYPES.has(record.factType)) {throw new Error("Operational State record type is not allowlisted: " + record.factType)}
   requireNonEmptyString({
     value: record.runtimeSessionId,
     field: "record.runtimeSessionId",
@@ -819,27 +819,27 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
   const recordedAt = requireNonEmptyString({ value: record.recordedAt, field: "record.recordedAt" })
   const parsedDate = new Date(recordedAt)
   if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString() !== recordedAt) {
-    throw new Error("Durable fact recorded-at timestamp is not canonical ISO-8601")
+    throw new Error("Operational State recorded-at timestamp is not canonical ISO-8601")
   }
   if (index === 0) {
-    if (record.sequence !== "0" || record.factId !== "Operational State Store records:genesis" ||
+    if (record.sequence !== "0" || record.factId !== "durable-facts:genesis" ||
         record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null ||
         canonicalStringifyOperationalStateValue(record.data) !== canonicalStringifyOperationalStateValue({ schemaVersion })) {
-      throw new Error("Durable fact stream must begin with its explicit genesis record")
+      throw new Error("Operational State Store record stream must begin with its explicit genesis record")
     }
   } else {
-    if (record.factType === "LEDGER_INITIALIZED") {throw new Error("Durable fact stream contains a second genesis record")}
-    if (record.previousDigest !== previousDigest) {throw new Error("Durable fact previous-digest chain is broken")}
+    if (record.factType === "LEDGER_INITIALIZED") {throw new Error("Operational State Store record stream contains a second genesis record")}
+    if (record.previousDigest !== previousDigest) {throw new Error("Operational State record previous-digest chain is broken")}
   }
   if (record.previousDigest !== null && !SHA256_PATTERN.test(record.previousDigest)) {
-    throw new TypeError("Durable fact previousDigest must be a SHA-256 digest or null for genesis")
+    throw new TypeError("Operational State record previousDigest must be a SHA-256 digest or null for genesis")
   }
-  if (!SHA256_PATTERN.test(record.digest ?? "")) {throw new TypeError("Durable fact digest is malformed")}
+  if (!SHA256_PATTERN.test(record.digest ?? "")) {throw new TypeError("Operational State record digest is malformed")}
   validateFactData({ factType: record.factType, data: record.data, factId: record.factId, runtimeSessionId: record.runtimeSessionId })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
-    throw new Error("Durable fact genesis schema version does not match the stream schema")
+    throw new Error("Operational State Store genesis schema version does not match the stream schema")
   }
-  if (digestOperationalStateRecord(record) !== record.digest) {throw new Error("Durable fact digest mismatch at sequence " + record.sequence)}
+  if (digestOperationalStateRecord(record) !== record.digest) {throw new Error("Operational State record digest mismatch at sequence " + record.sequence)}
 }
 
 function createManifestCheckpoint({ schemaVersion, record, previousManifestDigest }) {
@@ -1011,7 +1011,7 @@ export function createFileOperationalStateStore({
     const records = parseJsonLines({ source: rawLog, label: "Operational State Store record log" })
     const checkpoints = parseJsonLines({ source: rawManifest, label: "Committed-head manifest journal" })
     if (checkpoints.length < records.length) {
-      throw new Error("Durable fact record exists beyond the committed-head manifest journal")
+      throw new Error("Operational State record exists beyond the committed-head manifest journal")
     }
     if (checkpoints.length > records.length) {
       throw new Error("Committed-head manifest journal is ahead of the Operational State Store record log")
@@ -1029,7 +1029,7 @@ export function createFileOperationalStateStore({
         previousDigest: previousFactDigest,
         index,
       })
-      if (factIds.has(record.factId)) {throw new Error("Durable fact identity is duplicated in the append-only stream")}
+      if (factIds.has(record.factId)) {throw new Error("Operational State record identity is duplicated in the append-only stream")}
       factIds.add(record.factId)
       const checkpoint = checkpoints[index]
       validateManifestCheckpoint({
@@ -1069,7 +1069,7 @@ export function createFileOperationalStateStore({
         formatVersion: FORMAT_VERSION,
         schemaVersion,
         sequence: "0",
-        factId: "Operational State Store records:genesis",
+        factId: "durable-facts:genesis",
         factType: "LEDGER_INITIALIZED",
         runtimeSessionId: resolvedRuntimeSessionId,
         recordedAt,
@@ -1143,7 +1143,7 @@ export function createFileOperationalStateStore({
       const existing = state.records.find((record) => record.factId === input.factId)
       if (existing) {
         if (existing.factType !== input.factType || canonicalStringifyOperationalStateValue(existing.data) !== canonicalStringifyOperationalStateValue(input.data)) {
-          throw createError("Durable factId was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
+          throw createError("Operational State record ID was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
         }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
@@ -1189,7 +1189,7 @@ export function createFileOperationalStateStore({
       const record = { ...body, digest: digestOperationalStateRecord(body) }
       const line = canonicalStringifyOperationalStateValue(record)
       if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
-        throw new RangeError("Durable fact record exceeds the " + MAX_RECORD_BYTES + " byte limit")
+        throw new RangeError("Operational State record exceeds the " + MAX_RECORD_BYTES + " byte limit")
       }
       const logHandle = await fileSystem.open(logPath, "a", 0o600)
       try {
