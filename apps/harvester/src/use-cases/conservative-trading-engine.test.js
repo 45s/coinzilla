@@ -8054,98 +8054,82 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
 })
 
 
-test("defers a recovered BUY fill evaluation until application recovery is acknowledged", async () => {
+
+function createRecoveryModeOrder({ clientOrderId, brokerOrderId, side, price, quantity, status, executedQuantity = "0", updatedAt = 1 }) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side,
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: price,
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt,
+    ...(status === "FILLED" ? { completedAt: updatedAt } : {}),
+  })
+}
+
+function createRecoveryModeBuyFillFixture() {
   const initialPosition = new Position({
     market,
     baseQuantity: new Quantity({
       amount: "2",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     freeBaseQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     quoteNetCashFlow: new Money({
       amount: "-100",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
   })
-  const initialPortfolio = new Portfolio({ positions: [initialPosition] })
+  const initialPortfolio = new Portfolio({
+    positions: [initialPosition],
+  })
   const initialRecoveryLedger = new RecoveryLedger({
     market,
-    buyCost: "100"
+    buyCost: "100",
   })
-  const recoverySellOrder = new CanonicalOrder({
+  const recoverySellOrder = createRecoveryModeOrder({
     clientOrderId: "recovery-sell-during-reconnect",
     brokerOrderId: "broker-recovery-sell-during-reconnect",
-    market,
     side: "SELL",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: "110",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1.9",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    price: "110",
+    quantity: "1.9",
     status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
   })
-  const standingBuyOrder = new CanonicalOrder({
+  const standingBuyOrder = createRecoveryModeOrder({
     clientOrderId: "standing-buy-during-reconnect",
     brokerOrderId: "broker-standing-buy-during-reconnect",
-    market,
     side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: "90",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    price: "90",
+    quantity: "1",
     status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
   })
-  const harness = await createHarness({
-    initialPortfolio,
-    initialRecoveryLedger,
-    accountingApplied: true,
-    initialState: {
-      orderRegistry: new OrderRegistry({ orders: [recoverySellOrder, standingBuyOrder] }),
-    },
-  })
-  const filledStandingBuyOrder = new CanonicalOrder({
+  const filledStandingBuyOrder = createRecoveryModeOrder({
     clientOrderId: standingBuyOrder.clientOrderId,
     brokerOrderId: standingBuyOrder.brokerOrderId,
-    market,
     side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: standingBuyOrder.limitPrice,
-    originalQuantity: standingBuyOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
+    price: "90",
+    quantity: "1",
+    executedQuantity: "1",
     status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
     updatedAt: 2,
-    completedAt: 2,
   })
   const recoveredBuyFill = new Fill({
     tradeId: "recovery-mode-buy-fill",
@@ -8156,22 +8140,50 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     price: standingBuyOrder.limitPrice,
     quantity: new Quantity({
       amount: "1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     quoteQuantity: new Money({
       amount: "90",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+  return {
+    initialPortfolio,
+    initialRecoveryLedger,
+    recoverySellOrder,
+    standingBuyOrder,
+    filledStandingBuyOrder,
+    recoveredBuyFill,
+  }
+}
 
+async function createRecoveryModeBuyFillHarness({ fixture }) {
+  return createHarness({
+    initialPortfolio: fixture.initialPortfolio,
+    initialRecoveryLedger: fixture.initialRecoveryLedger,
+    accountingApplied: true,
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [fixture.recoverySellOrder, fixture.standingBuyOrder],
+      }),
+    },
+  })
+}
+
+
+test("defers a recovered BUY fill evaluation until application recovery is acknowledged", async () => {
+  const fixture = createRecoveryModeBuyFillFixture()
+  const harness = await createRecoveryModeBuyFillHarness({
+    fixture,
+  })
   const result = await harness.engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
       executionType: "TRADE",
-      executedOrder: filledStandingBuyOrder,
-      fill: recoveredBuyFill,
+      executedOrder: fixture.filledStandingBuyOrder,
+      fill: fixture.recoveredBuyFill,
     },
     recoveryMode: true,
   })
@@ -8181,18 +8193,12 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     true,
     "a canonical BUY fill received during authoritative recovery must be accounted without attempting an exchange cancellation",
   )
-  assert.deepEqual(
-    harness.cancellationIds,
-    [],
-    "recovery-mode BUY fill processing must leave the existing recovery SELL untouched until broker recovery is acknowledged",
-  )
+  assert.deepEqual(harness.cancellationIds, [])
   assert.deepEqual(
     harness.engine.getRecoveryIntents().deferredEvaluations,
     ["DOGEUSDT"],
-    "the affected market must retain a deferred strategy evaluation so the BUY fill is not lost when the recovery gate closes",
   )
 })
-
 
 test("does not apply partial REST reconciliation after a fill-history timeout and permits a later retry", async () => {
   const {
