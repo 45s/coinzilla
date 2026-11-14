@@ -153,6 +153,16 @@ test("resolves configured pairs from exact registry market keys", () => {
 
 test("fails closed for missing markets, malformed token metadata, and duplicate market ownership", () => {
   assert.throws(
+    () => resolvePairSpecifications({ pairs: null, tokenSpecifications: {} }),
+    /Strategy pairs must be an object/i,
+    "Runtime pair configuration must be a symbol-keyed object."
+  )
+  assert.throws(
+    () => resolvePairSpecifications({ pairs: { LINKUSDT: null }, tokenSpecifications: { LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 } } } } }),
+    /Strategy pair LINKUSDT must be an object/i,
+    "Each configured market must have a pair settings object."
+  )
+  assert.throws(
     () => resolvePairSpecifications({ pairs: { POLUSDT: {} }, tokenSpecifications: {} }),
     /missing token specification.*POLUSDT/i,
     "A configured market without metadata must block configuration loading.",
