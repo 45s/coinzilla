@@ -2756,6 +2756,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   const portfolioRef = { current: seeded.portfolio }
   const ledgerRef = { current: seeded.recoveryLedger }
   const appliedFillIds = new Set()
+  const appliedFills = []
   const sequence = []
   let buyOrder
   let buyFills = []
@@ -2776,6 +2777,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     updateTradingAccounting: async ({ fill }) => {
       if (appliedFillIds.has(fill.id)) return { ok: true, data: { applied: false, duplicate: true } }
       appliedFillIds.add(fill.id)
+      appliedFills.push(fill)
       portfolioRef.current = portfolioRef.current.applyFill({ fill }).portfolio
       ledgerRef.current = ledgerRef.current.applyFill({ fill }).ledger
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -2858,7 +2860,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
   assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
   assert.deepEqual(
-    harness.accountedFills.map((fill) => fill.tradeId),
+    appliedFills.map((fill) => fill.tradeId),
     ["shutdown-buy-partial-fill", "shutdown-buy-final-fill"],
     "Both real BUY fills must be applied exactly once even when the final fill races cancellation.",
   )
