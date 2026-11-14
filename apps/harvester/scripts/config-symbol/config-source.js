@@ -168,6 +168,7 @@ export function insertTradingPairConfiguration({ source, symbol, pairConfig } = 
     }, 2)
     .replace(/"__TRADING_ENVIRONMENT_(BOTH|TESTNET|LIVE)__"/g, "TRADING_ENVIRONMENTS.$1")
     .replace(/"__EXTERNAL_ORDERS_POLICY_(IGNORE|BLOCK)__"/g, "EXTERNAL_ORDERS_POLICIES.$1")
+    .replace(/"(tradingEnvironment|externalOrdersPolicy)": /g, "$1: ")
   } catch (cause) {
     throw new TypeError("pair config must be JSON-serializable: " + cause.message, { cause })
   }

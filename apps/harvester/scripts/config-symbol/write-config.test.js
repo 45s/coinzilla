@@ -6,12 +6,14 @@ import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { writePairConfigAtomically } from "./write-config.js"
+import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 
 const generatedPair = {
   enabled: true,
-  tradingEnvironment: "both",
+  tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
   enableVolatilityProtection: true,
-  externalOrdersPolicy: "ignore",
+  externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
   investment: 100,
   orderQuantity: 20,
   keepQuantity: 0.1,
@@ -33,13 +35,22 @@ const existingPair = {
   quantityPrecision: 2,
   takerPercent: 0.075,
 }
-const createConfigSource = () => [
-  "// This operator-maintained comment must survive pair generation.",
-  "export const tradingPairs = {",
-  "  LINKFDUSD: " + JSON.stringify(existingPair) + ",",
-  "};",
-  "",
-].join("\n")
+const createConfigSource = () => {
+  const environmentImport = new URL("../../src/domain/trading-environment.js", import.meta.url).href
+  const policyImport = new URL("../../src/domain/external-orders-policy.js", import.meta.url).href
+  const existingPairSource = JSON.stringify(existingPair, null, 2)
+    .replace('"tradingEnvironment": "both"', "tradingEnvironment: TRADING_ENVIRONMENTS.BOTH")
+    .replace('"externalOrdersPolicy": "ignore"', "externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE")
+  return [
+    'import { TRADING_ENVIRONMENTS } from "' + environmentImport + '"' ,
+    'import { EXTERNAL_ORDERS_POLICIES } from "' + policyImport + '"' ,
+    "// This operator-maintained comment must survive pair generation.",
+    "export const tradingPairs = {",
+    "  LINKFDUSD: " + existingPairSource.replaceAll("\n", "\n  ") + ",",
+    "};",
+    "",
+  ].join("\n")
+}
 
 async function withConfigFile(run, { source = createConfigSource() } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-config-symbol-"))
