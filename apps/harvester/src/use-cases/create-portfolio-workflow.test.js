@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -291,11 +292,11 @@ test("leaves both accounting projections unchanged when recovery ledger reset fa
   })
 
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const baseLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
 
   class FailingResetRecoveryLedger extends RecoveryLedger {
     resetCycle() {
@@ -408,11 +409,11 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: { info: (entry) => { infoLogs.push(entry) } },
@@ -452,11 +453,11 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const sellOrder = createFilledSellOrder({
     clientOrderId: "harvester-sell-not-completed",
     brokerOrderId: "broker-sell-not-completed",
@@ -501,11 +502,11 @@ test("does not return a non-completed cycle when its durable outcome was not com
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
@@ -540,11 +541,11 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const sellOrder = createFilledSellOrder({
     clientOrderId: "harvester-sell-completed",
     brokerOrderId: "broker-sell-completed",
@@ -589,11 +590,11 @@ test("does not complete or reset a recovery cycle without a canonical fully fill
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
@@ -642,11 +643,11 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
     price: "130000",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   let releaseDurableFill
   let markDurableFillStarted
   const durableFillStarted = new Promise((resolve) => { markDurableFillStarted = resolve })

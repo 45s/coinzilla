@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { addDecimal } from "@coinzilla/utils"
 import { allocateOrderCommitments } from "./allocate-order-commitments.js"
 
 test("allocates BUY actions sequentially against remaining pair investment", () => {
@@ -563,4 +564,33 @@ test("rejects malformed commitment inputs without throwing", () => {
     assert.equal(result.ok, false, "Malformed or incomplete allocation inputs must return a structured failure.")
     assert.ok(result.errors.length > 0, "Every rejected allocation input must include a diagnostic error.")
   }
+})
+
+
+test("rejects a SELL that exceeds shared inventory after combined CG and RS reservations", () => {
+  const coinGrabberReservedBase = "4"
+  const recoverySellerReservedBase = "5"
+  const sharedReservedBase = "9"
+  assert.equal(
+    addDecimal({ left: coinGrabberReservedBase, right: recoverySellerReservedBase }),
+    sharedReservedBase,
+    "The account-level commitment must be the sum of both strategy-owned SELL reservations.",
+  )
+
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "2" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "10",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "10",
+    portfolioBaseBalance: "10",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: sharedReservedBase,
+    committedBaseBalance: sharedReservedBase,
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, false, "The shared order allocator must reject a new SELL that would overcommit inventory reserved by CG and RS together.")
+  assert.match(result.errors[0].message, /active inventory after commitments/, "The rejection must be caused by combined CG/RS reservations against shared active inventory.")
 })

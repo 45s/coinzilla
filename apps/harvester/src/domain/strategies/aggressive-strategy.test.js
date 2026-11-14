@@ -1,3 +1,4 @@
+import { StrategyId } from "./strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -32,7 +33,7 @@ test("is the active Aggressive policy and blocks unsafe initial grid assumptions
 })
 
 test("exposes the current Position and blocks unresolved SELL pricing", () => {
-  const portfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },
@@ -45,9 +46,9 @@ test("exposes the current Position and blocks unresolved SELL pricing", () => {
 
 test("treats zero active quantity with retained free inventory as no active Position", () => {
   const portfolioWithFreeInventory = new Portfolio()
-    .applyFill({ fill: buyFill })
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER })
     .portfolio
-    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5", strategyId: StrategyId.COIN_GRABBER })
 
   const decision = evaluateAggressiveStrategy({
     marketPrice,
@@ -63,9 +64,9 @@ test("treats zero active quantity with retained free inventory as no active Posi
 
 test("uses exact decimal active-quantity comparison for Aggressive inventory gating", () => {
   const zeroQuantityPosition = new Portfolio()
-    .applyFill({ fill: buyFill })
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER })
     .portfolio
-    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5", strategyId: StrategyId.COIN_GRABBER })
   const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },

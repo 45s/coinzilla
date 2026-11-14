@@ -40,7 +40,7 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 - RS owns strategy decisions, cycle attribution, legacy authorization state, and RS-specific risk policy.
 - The shared Harvester Trading Engine owns serialized evaluation, order submission/cancellation, broker interaction, order identity, reservations, reconciliation, and execution safety.
 - The broker adapter supplies canonical orders, canonical fills, actual commission facts, and current exchange filters. RS domain code must not import Binance SDK types or raw exchange messages.
-- The shared Portfolio remains the single actual-position projection for a market. RS must not create a second Position or mutate Portfolio outside established fill/accounting workflows.
+- The shared Portfolio is the authoritative actual-accounting aggregate, but it is not limited to one Position per market. It may contain multiple independent Positions for the same market, including Positions owned by different strategies. RS must not create duplicate representations of the same strategy Position or mutate Portfolio outside established fill/accounting workflows.
 - Actual holdings change only from confirmed canonical fills. A price, order intent, acknowledgement, cancellation request, or operator authorization is not an execution.
 - RS is independent of CG_coinGrabber. It must not change Conservative behavior or its canonical specification.
 
@@ -80,16 +80,16 @@ The original configured quantity and invested amount are historical basis inputs
 
 ### 4.1 Non-negotiable accounting invariants
 
-Harvester has one shared Position per market. Portfolio.applyFill applies canonical fills to that Position; updateTradingAccounting commits the Portfolio and Conservative RecoveryLedger projections together. Position quantities, quote cash flow, and spent basis are fill-driven. Applied-fill IDs and fingerprints prevent duplicate or conflicting executions.
+Harvester has one shared Portfolio per account, with support for multiple independent Positions per market. A Position is an independently owned accounting/lifecycle unit (for example, a strategy-owned position or separately tracked acquisition exposure), not a wallet or custody balance. Portfolio.applyFill applies each canonical fill exactly once to the Position identified by canonical order ownership and the application's attribution rules. updateTradingAccounting currently coordinates the Portfolio and Conservative RecoveryLedger projections; RS integration must preserve CG behavior while adding an explicit RS attribution/Position workflow. Position quantities, quote cash flow, and spent basis are fill-driven. Applied-fill IDs and fingerprints prevent duplicate or conflicting executions.
 
 RS must preserve these facts:
 
-- One actual Position per market, not one Position per strategy or inventory category.
-- Every canonical fill changes actual Portfolio accounting exactly once, using actual execution and commission facts.
-- RS attribution is an additional strategy projection; it does not replace, fork, or double-apply Portfolio accounting.
+- Multiple independent Positions may exist for the same market. Each Position has a stable caller-assigned `positionId`, canonical `marketId`, and explicit `strategyId` owner; a strategy may own more than one Position when its domain requires it.
+- Every canonical fill changes actual Portfolio accounting exactly once, using actual execution and commission facts, and is attributed to the one `positionId`/`strategyId` resolved from its originating order ownership.
+- RS-owned Positions and attribution are part of the shared Portfolio accounting model; they do not create a second wallet, duplicate custody, or double-apply Portfolio accounting.
 - RS attribution references the same canonical market/order/fill identities used by shared broker and Portfolio workflows.
 - Portfolio and RS attribution commit as one logical accounting transition. If either rejects a fill or identity, neither projection advances.
-- Identical duplicate fills are no-ops; conflicting facts under the same canonical fill ID fail closed.
+- Identical duplicate fills for the same Position owner are no-ops; changed execution facts or a different `positionId`/`strategyId` under the same canonical fill ID fail closed.
 - No synthetic BUY Fill may be fabricated to seed legacy inventory or represent operator authorization.
 
 ### 4.2 Required attribution facts
@@ -107,11 +107,11 @@ It must reference canonical Fill IDs and retain fill-facts fingerprints. A singl
 
 ### 4.3 Portfolio integration blocker
 
-The current Portfolio is fill-driven and has no general opening-balance/manual-inventory seeding operation. A SELL containing legacy units not represented in Position could make actual base quantity inconsistent or negative if applied through the existing accounting path unchanged.
+The current Portfolio is fill-driven and has no general opening-balance/manual-inventory seeding operation. A SELL containing legacy units not represented in an appropriately owned Position could make that Position's base quantity inconsistent or negative if applied through the existing accounting path unchanged. Multiple Positions do not remove this opening-inventory accounting blocker.
 
-Therefore, **RS must not submit a SELL consuming legacy inventory until an owner-approved accounting design represents that authorized opening inventory consistently with the one shared Position and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
+Therefore, **RS must not submit a SELL consuming legacy inventory until an owner-approved accounting design represents that authorized opening inventory consistently within the shared multi-Position Portfolio and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
 
-**Owner decision required:** choose the opening-inventory/accounting boundary and how configured legacy inventory is represented in the one shared Position without synthetic fills or balance seeding. The legacy cost-basis input is now agreed at the product level: operator supplies aggregate original quote invested and original base quantity; RS calculates their average. Implementation must still define how that declared historical basis and off-Spot custody are represented without corrupting actual Spot Portfolio quantities. Do not add synthetic fills, seed balances from an unproven wallet snapshot, or bypass Portfolio.
+**Owner decision required:** choose the opening-inventory/accounting boundary and how configured legacy inventory is represented in the appropriate strategy-owned Position(s) within the shared Portfolio, without synthetic fills or balance seeding. The legacy cost-basis input is now agreed at the product level: operator supplies aggregate original quote invested and original base quantity; RS calculates their average. Implementation must still define how that declared historical basis and off-Spot custody are represented without corrupting actual Spot Portfolio quantities. Do not add synthetic fills, seed balances from an unproven wallet snapshot, or bypass Portfolio.
 
 ## 5. Profitability — SELL ONLY IN PROFIT
 
@@ -217,15 +217,15 @@ Final RS lifecycle states/transitions are not approved. Mandatory safety behavio
 
 RS and CG are allowed to run at the same time. This includes concurrent operation on the same market when both strategies are enabled for that market. There is no blanket global or per-market exclusive strategy lock.
 
-Concurrency must preserve one actual Portfolio Position per market and one authoritative view of available inventory:
+Concurrency must preserve multiple independently owned Positions per market and one authoritative view of actual exchange custody and available inventory:
 
 - CG and RS keep independent strategy policies, cycle state, attribution and strategy-specific accounting projections.
-- The shared Portfolio remains the single actual-position projection. A canonical fill updates Portfolio exactly once and is attributed to the strategy that owns the canonical order.
+- The shared Portfolio may contain multiple Positions for the same market. A canonical fill updates exactly one correctly identified Position and the aggregate Portfolio exactly once, and is attributed to the strategy that owns the canonical order.
 - The Trading Engine coordinates both strategies through the same broker, order registry, canonical order/fill identities, account commitments and inventory reservations.
 - Strategy intents are evaluated independently, but order submission and accounting transitions are serialized through the shared application boundary.
 - Every active or in-flight order reserves its remaining quote/base commitment centrally. Reservations from CG, RS and other Harvester strategies must be aggregated before another order is submitted.
 - Two strategies must never reserve or sell the same base quantity, double-spend the same quote commitment, or attribute one fill to both strategies.
-- Strategy-specific profit, recovery and legacy attribution remains separate even though actual holdings and exchange balances are shared.
+- Strategy-specific profit, recovery and legacy attribution remains separate even though actual exchange custody and account balances are shared. Each Position's accounting identity is independent; its available-to-sell quantity is still constrained by centrally verified account inventory and reservations.
 - One strategy being paused or disabled does not implicitly disable the other. Existing orders remain owned by their originating strategy and continue through canonical fill accounting/reconciliation.
 - RS may not adopt, cancel, or modify manual/external orders. Existing external-order policy and canonical broker ownership remain in force.
 - Manual trades/external orders may change exchange free/locked balances. This does not make their inventory or executions RS-owned; authoritative available balance and all reservations must be reconciled without attributing external PnL to RS.

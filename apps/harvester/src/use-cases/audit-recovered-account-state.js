@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { Market } from "@coinzilla/entities"
 import { auditRecoveredTradeHistory } from "./audit-recovered-trade-history.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
@@ -205,7 +206,7 @@ export function auditRecoveredAccountState({
       if (marketsBySymbol.has(market.symbol)) throw new Error("Duplicate canonical Market symbol " + market.symbol)
       marketsById.set(market.id, market)
       marketsBySymbol.set(market.symbol, market)
-      const position = recoveredState.portfolio.getPosition({ marketId: market.id })
+      const position = recoveredState.portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
       if (!position) continue
       addAmount({
         amounts: expectedDeltas,

@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
 const test = (name, ...args) => nodeTest("[conservative-trading-engine.multi-market.test.js] " + name, ...args)
 import assert from "node:assert/strict"
@@ -60,7 +61,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
   ]))
   const appConfig = {
     strategies: {
-      CG_coinGrabber: {
+      [StrategyId.COIN_GRABBER]: {
         enabled: true,
         settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
@@ -253,7 +254,7 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const portfolio = new Portfolio().applyFill({ fill: priorDogeBuy }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: priorDogeBuy, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const { engine, orders } = await createHarness({
     quoteFreeBalance: "150",
     portfolio,
@@ -591,8 +592,8 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const portfolio = new Portfolio().applyFill({ fill: recoveryFill }).portfolio
-  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill }).ledger
+  const portfolio = new Portfolio().applyFill({ fill: recoveryFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const strategyPolicy = {
     evaluate: ({ marketPrice }) => {
       const buy = {

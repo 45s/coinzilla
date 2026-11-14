@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Implementation Roadmap
 
-**Status:** Planned; implementation has not started.
+**Status:** RS-2 domain accounting is in progress; RS policy and runtime execution remain unimplemented.
 **Tracking:** [PR #1115](https://github.com/45s/coinzilla/pull/1115).
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
@@ -18,7 +18,7 @@ created: 2026-11-14
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
 
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
-2. TDD RS domain accounting, custody, attribution and profitability.
+2. [~] TDD RS domain accounting, custody, attribution and profitability. The shared Portfolio contract now supports independent strategy-owned Positions per market; RS-specific accounting remains in this phase.
 3. Implement the pure RS strategy policy.
 4. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
 5. Prove the full lifecycle with deterministic offline tests and exact-head CI.
@@ -30,15 +30,15 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 Concurrent operation is a product requirement, not an optional future optimization. RS and CG may be enabled at the same time, including for the same market.
 
 - Each strategy evaluates its own policy and maintains its own cycle/accounting attribution.
-- Both use the one shared actual Portfolio Position for a market; neither owns a private copy of actual holdings.
-- Orders retain their originating strategy identity through canonical order/fill processing.
+- Both use the shared Portfolio, which may contain multiple independently owned Positions for the same market. Neither strategy owns a private wallet or a duplicate copy of actual exchange custody.
+- Each Position and order retains stable strategy ownership through canonical order/fill processing; fills are attributed to exactly one Position and its owning strategy.
 - The shared Trading Engine serializes order submission and accounting transitions.
-- Quote and base reservations are aggregated centrally across CG, RS and other active strategies before any new order is accepted.
+- Actual quote/base availability and reservations are aggregated centrally across all Positions, CG, RS and other active strategies before any new order is accepted. Multiple Positions do not multiply the underlying exchange balance.
 - When both strategies emit intents for the same scarce resource, deterministic allocation/fairness rules decide which intent can proceed. Deferred intents retain strategy identity and an actionable reason.
 - A pause/disable for one strategy does not implicitly pause/disable the other; existing orders remain owned and reconcilable by their originating strategy.
-- Same-market concurrent tests must prove no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to both strategies.
+- Same-market concurrent tests must prove multiple independent Positions can coexist, no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to multiple Positions or strategies.
 
-The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-4, but mutual exclusion is not an acceptable shortcut.
+The shared Portfolio is actual-accounting truth. Strategy-owned Positions are independent accounting allocations inside that one Portfolio, not separate wallets or duplicated exchange custody. Their aggregate remains bounded by authoritative exchange balances and centrally aggregated reservations. RS-2 now implements stable Position identity, strategy ownership, portfolio-wide fill attribution/deduplication, aggregate market inventory and CG ownership-scoped Portfolio consumers; RS-specific legacy/cycle accounting remains in progress and exact priority/fairness remain RS-4 decisions.
 
 ## RS-1 — Conservative source audit and reuse map
 
@@ -91,7 +91,7 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 - `updateTradingAccounting()` in `src/use-cases/update-trading-accounting.js` commits Portfolio and the Conservative `RecoveryLedger` together. It is not a strategy-neutral accounting function.
 - `createPortfolioWorkflow()` in `src/use-cases/create-portfolio-workflow.js` owns serialized fill processing and Conservative recovery-cycle completion/free-inventory behavior. RS should integrate through an explicit application workflow that coordinates shared Portfolio and RS attribution; do not fork or bypass the shared Portfolio.
-- The current Portfolio is one actual Position per market. RS attribution must remain a separate projection and must commit consistently with the single Portfolio fill application.
+- The shared Portfolio must support multiple independent Positions for the same market, including strategy-owned Positions. It remains one authoritative accounting aggregate over shared exchange custody; fills update the one correctly identified Position and aggregate Portfolio exactly once. RS must not fork Portfolio or create duplicate custody.
 
 **RS-1 acceptance:** source paths and public exports are identified; existing shared capabilities are separated from extraction candidates; CG-specific behavior is explicitly retained; relevant tests are located; no speculative shared abstraction is approved. RS-1 is complete as an audit only. RS-2 is the first code-changing phase.
 
@@ -103,6 +103,7 @@ Before implementing each rule, add a focused test that expresses the agreed busi
 
 Model only the concepts required by the approved RS contract:
 
+- Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
 - Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
 - Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
@@ -179,7 +180,7 @@ Do not copy CG trailing BUY, next-BUY cadence, retained-inventory or recovery-co
 
 **Deliverable:** RS lifecycle integrated through existing Harvester application workflows, with CG and RS able to run concurrently.
 
-Reuse the existing Trading Engine, broker port/adapter, canonical order/fill identities, one actual Portfolio Position per market, reservations, reconciliation and safety gates. Keep RS and CG strategy attribution separate from actual Portfolio accounting; all projections must advance consistently for each canonical fill.
+Reuse the existing Trading Engine, broker port/adapter, canonical order/fill identities, multiple independently owned Positions per market within one shared Portfolio, centrally aggregated custody/reservations, reconciliation and safety gates. Keep RS and CG strategy attribution separate from actual Portfolio accounting; all projections must advance consistently for each canonical fill.
 
 **Concurrency is required, not optional:**
 
@@ -187,7 +188,7 @@ Reuse the existing Trading Engine, broker port/adapter, canonical order/fill ide
 - They may operate on different markets or on the same market when both pair configurations enable them.
 - Do not introduce a global or per-market exclusive strategy lock or require a handoff before RS can run.
 - Each strategy owns its own policy state, cycle attribution and submitted order identities.
-- The shared Portfolio remains the only actual Position per market. Each canonical fill updates it exactly once and is attributed to the originating strategy.
+- The shared Portfolio is the only actual Portfolio aggregate, not one Position per market. It may contain multiple independent Positions for the same market; each canonical fill updates exactly one correctly identified Position and the aggregate Portfolio exactly once and is attributed to the originating strategy.
 - The Trading Engine serializes intent allocation, broker submission and fill/accounting commits. Aggregate quote and base reservations across all active strategies before accepting another intent.
 - Competing intents must have deterministic allocation/priority behavior. Insufficient shared inventory or quote commitment defers/rejects the relevant intent with its strategy identity preserved.
 - One strategy's pause/disable does not implicitly pause/disable the other. Existing orders remain owned by their originating strategy and are reconciled normally.
@@ -235,7 +236,7 @@ flowchart TB
   end
   subgraph app["Existing Harvester application"]
     ENGINE["Shared Trading Engine / serialized workflows"]
-    PORTFOLIO["One actual Portfolio Position per market"]
+    PORTFOLIO["One shared Portfolio; multiple strategy-owned Positions per market"]
     ATTRIBUTION["Independent strategy attribution"]
     RESERVATIONS["Central quote/base reservations across strategies"]
     BROKER["Shared broker port and adapter"]

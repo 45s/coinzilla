@@ -2,6 +2,7 @@ import { Fill } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 /**
  * Apply one canonical execution atomically to shared inventory and the
@@ -25,13 +26,13 @@ export function updateTradingAccounting({
     if (!(fill instanceof Fill)) {
       throw new TypeError("updateTradingAccounting requires a canonical Fill")
     }
-    const portfolioResult = portfolio.applyFill({ fill })
+    const portfolioResult = portfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
     const ledgerResult = recoveryLedger.applyFill({ fill })
     if (portfolioResult.applied !== ledgerResult.applied ||
         portfolioResult.duplicate !== ledgerResult.duplicate) {
       throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
     }
-    const nextPosition = portfolioResult.portfolio.getPosition({ marketId: fill.market.id })
+    const nextPosition = portfolioResult.portfolio.getPosition({ marketId: fill.market.id, strategyId: StrategyId.COIN_GRABBER })
     if (nextPosition?.spent?.amount !== ledgerResult.ledger.buyCost) {
       throw new Error("Position.spent and the legacy RecoveryLedger cost mirror are inconsistent")
     }

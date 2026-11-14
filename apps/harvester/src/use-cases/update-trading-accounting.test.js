@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -283,7 +284,7 @@ test("rejects a wrong-market fill atomically when Portfolio accepts but Recovery
   const recoveryLedger = RecoveryLedger.empty({ market })
   const fill = makeFill({ fillMarket: otherMarket })
 
-  assert.equal(portfolio.applyFill({ fill }).applied, true)
+  assert.equal(portfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).applied, true)
   const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
 
   assert.equal(result.ok, false)

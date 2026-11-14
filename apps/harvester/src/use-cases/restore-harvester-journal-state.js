@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import {
   Asset,
   CanonicalOrder,
@@ -134,6 +135,7 @@ function restoreOrder({ order, market }) {
  * Every non-rejected order is restored as UNKNOWN/CANCELED and still requires
  * canonical read-only exchange reconciliation before trading can resume.
  */
+// eslint-disable-next-line max-lines-per-function -- recovery rehydration stages all domain projections atomically.
 export function restoreHarvesterJournalState({ projection, marketMetadata } = {}) {
   try {
     if (projection?.ok !== true || !projection.data) {
@@ -212,7 +214,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         throw new Error("Recovery-cycle market identity conflicts with canonical exchange metadata for " + item.symbol)
       }
       const recoveryLedger = recoveryLedgers.get(market.id)
-      const position = portfolio.getPosition({ marketId: market.id })
+      const position = portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
       if (!recoveryLedger || !position) {
         throw new Error("Recovery-cycle completion has no replayed Position and RecoveryLedger for " + item.symbol)
       }
@@ -236,10 +238,11 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (compareDecimal({ left: item.freeQuantity, right: "0" }) > 0) {
         nextPortfolio = nextPortfolio.allocateFreeQuantity({
           marketId: market.id,
+          strategyId: StrategyId.COIN_GRABBER,
           quantity: item.freeQuantity,
         })
       }
-      nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id })
+      nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
       const resetLedger = recoveryLedger.resetCycle({
         minProfit: item.minProfit,
         spent: position.spent,

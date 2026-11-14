@@ -1,3 +1,4 @@
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -190,7 +191,7 @@ test("captures Portfolio and active-order baselines at the account snapshot boun
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio().applyFill({ fill: portfolioFill }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: portfolioFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const activeBuyOrder = new CanonicalOrder({
     clientOrderId: "snapshot-baseline-active-buy",
     brokerOrderId: "snapshot-baseline-active-buy-broker",

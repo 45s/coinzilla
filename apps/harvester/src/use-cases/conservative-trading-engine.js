@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
@@ -87,7 +88,7 @@ export function makeConservativeTradingEngine({
   logger,
   initialState = {},
 } = {}) {
-  const strategyConfig = appConfig.strategies.CG_coinGrabber
+  const strategyConfig = appConfig.strategies[StrategyId.COIN_GRABBER]
   const { settings, pairs } = strategyConfig
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
   const isVolatilityProtectionEnabledForSymbol = (symbol) =>
@@ -337,7 +338,7 @@ export function makeConservativeTradingEngine({
     if (!data) {return}
     const marketId = order.market.id
     const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
-    const position = portfolio?.getPosition({ marketId })
+    const position = portfolio?.getPosition({ marketId, strategyId: StrategyId.COIN_GRABBER })
     const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
     const realizedNetProfit = data.realizedNetProfit ??
       (position && recoveryLedger
@@ -1084,7 +1085,7 @@ export function makeConservativeTradingEngine({
     // Portfolio is authoritative: retained free inventory is excluded because
     // only baseQuantity represents active strategy inventory. This check runs
     // inside the serialized transition immediately before any repricing work.
-    const position = getPortfolio().getPosition({ marketId: metadata.market.id })
+    const position = getPortfolio().getPosition({ marketId: metadata.market.id, strategyId: StrategyId.COIN_GRABBER })
     const activePositionQuantity = position?.baseQuantity.amount ?? "0"
     if (compareDecimal({ left: activePositionQuantity, right: "0" }) > 0) {
       logger?.debug?.({
@@ -1305,7 +1306,7 @@ export function makeConservativeTradingEngine({
       }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) {throw new Error("Current account snapshot is unavailable")}
-      const position = portfolioBefore.getPosition({ marketId: metadata.market.id })
+      const position = portfolioBefore.getPosition({ marketId: metadata.market.id, strategyId: StrategyId.COIN_GRABBER })
       const allPositions = portfolioBefore.positions
       const portfolioQuoteCashFlow = allPositions
         .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)

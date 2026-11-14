@@ -1,3 +1,4 @@
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 /**
  * Build a bounded Position snapshot for DEBUG logs without exposing Portfolio
  * execution identity records.
@@ -10,6 +11,8 @@ export function createPositionLogSummary({ position } = {}) {
   if (!position) return null
 
   return {
+    ...(typeof position.positionId === "string" ? { positionId: position.positionId } : {}),
+    ...(typeof position.strategyId === "string" ? { strategyId: position.strategyId } : {}),
     marketId: position.market.id,
     symbol: position.market.symbol,
     quantity: position.quantity.amount,
@@ -48,13 +51,16 @@ export function createRecoveryLedgerLogSummary({ recoveryLedger } = {}) {
  *
  * @param {object} input
  * @param {object} input.portfolio
- * @param {string} input.marketId
+ * @param {string} [input.marketId]
+ * @param {string} [input.positionId]
+ * @param {string} [input.strategyId]
  * @returns {{ position: object|null, appliedFillCount: number }}
  */
-export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
+export function createPortfolioLogSummary({ portfolio, marketId, positionId, strategyId = StrategyId.COIN_GRABBER } = {}) {
+  const hasPositionSelector = typeof marketId === "string" || typeof positionId === "string"
   return {
     position: createPositionLogSummary({
-      position: typeof marketId === "string" ? portfolio.getPosition({ marketId }) : undefined,
+      position: hasPositionSelector ? portfolio.getPosition({ positionId, marketId, strategyId }) : undefined,
     }),
     appliedFillCount: portfolio.appliedFillIds.length,
   }

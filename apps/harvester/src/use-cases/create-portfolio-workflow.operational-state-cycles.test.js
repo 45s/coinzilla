@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -27,8 +28,8 @@ const makeFill = ({ tradeId, side, price, quantity, quoteQuantity }) => new Fill
 })
 const buyFill = makeFill({ tradeId: "cycle-buy", side: "BUY", price: "100", quantity: "2", quoteQuantity: "200" })
 const sellFill = makeFill({ tradeId: "cycle-sell", side: "SELL", price: "210", quantity: "1", quoteQuantity: "210" })
-const initialPortfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio.applyFill({ fill: sellFill }).portfolio
-const initialLedger = RecoveryLedger.empty({ market }).applyFill({ fill: buyFill }).ledger.applyFill({ fill: sellFill }).ledger
+const initialPortfolio = new Portfolio().applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio.applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+const initialLedger = RecoveryLedger.empty({ market }).applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger.applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
 const sellOrder = new CanonicalOrder({
   clientOrderId: "client-cycle-sell",
   brokerOrderId: "broker-cycle-sell",

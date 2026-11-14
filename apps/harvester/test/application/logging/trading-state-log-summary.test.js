@@ -1,3 +1,4 @@
+import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
@@ -131,4 +132,34 @@ test("Portfolio Stats contains only Portfolio inventory and accounting values", 
       quoteNetCashFlow: "0 USDT",
     },
   })
+})
+
+
+test("portfolio log summary selects one Position when a strategy owns multiple Positions for the market", () => {
+  const selectedPosition = {
+    ...position,
+    positionId: "position:rs:cycle-2",
+    strategyId: StrategyId.RECOVERY_SELLER,
+  }
+  const portfolio = {
+    appliedFillIds: ["fill-1"],
+    getPosition: (selection) => {
+      assert.deepEqual(selection, {
+        positionId: "position:rs:cycle-2",
+        marketId: position.market.id,
+        strategyId: StrategyId.RECOVERY_SELLER,
+      })
+      return selectedPosition
+    },
+  }
+
+  const summary = createPortfolioLogSummary({
+    portfolio,
+    marketId: position.market.id,
+    positionId: selectedPosition.positionId,
+    strategyId: selectedPosition.strategyId,
+  })
+
+  assert.equal(summary.position.positionId, selectedPosition.positionId)
+  assert.equal(summary.position.strategyId, selectedPosition.strategyId)
 })
