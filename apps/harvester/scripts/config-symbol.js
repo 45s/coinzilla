@@ -14,7 +14,7 @@ export async function runConfigSymbol({
   fetchImpl = globalThis.fetch,
   metadataFetcher = fetchBinanceSpotMetadata,
   configPath = DEFAULT_CONFIG_PATH,
-  defaultEnvironment = process.env.TRADING_MODE,
+  defaultEnvironment = process.env.TRADING_MODE ?? "testnet",
   loadConfig = loadAppConfig,
   writeConfig = writePairConfigAtomically,
 } = {}) {
