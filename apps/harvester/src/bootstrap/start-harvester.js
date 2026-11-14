@@ -146,266 +146,6 @@ function startPendingUserDataRecovery({ userDataState, startUserDataRecovery } =
   }
 }
 
-function createHarvesterUserDataEventRuntime({
-  userDataState,
-  getTradingEngine,
-  isTradingEnabled,
-  isStopped,
-  logger,
-  onUserDataEvent,
-  getPortfolio,
-  getRecoveryLedger,
-  updatePortfolio,
-  updateTradingAccounting,
-  cancelOwnedBuysAfterAccountingFailure,
-  resumeDeferredStrategyEvaluations,
-  onSafetyBlockerRaised,
-  getUserDataSubscription,
-  tradingEnabled,
-  broker,
-  setCanonicalOwnershipReconciled,
-  refreshAccountSnapshot,
-  publishAccountSnapshot,
-  publishOpenOrdersSnapshot,
-} = {}) {
-  const handleUserDataEvent = createUserDataEventHandler({
-    state: userDataState,
-    getTradingEngine,
-    isTradingEnabled,
-    isStopped,
-    logger,
-    onUserDataEvent,
-    getPortfolio,
-    getRecoveryLedger,
-    updatePortfolio,
-    updateTradingAccounting,
-    cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations,
-    onSafetyBlockerRaised,
-  })
-  const drainUserDataEvents = () => drainHarvesterUserDataEvents({ userDataState })
-  const startUserDataRecovery = createUserDataRecoveryHandler({
-    state: userDataState,
-    isStopped,
-    getUserDataSubscription,
-    getTradingEngine,
-    tradingEnabled,
-    broker,
-    drainUserDataEvents,
-    setCanonicalOwnershipReconciled,
-    refreshAccountSnapshot,
-    publishAccountSnapshot,
-    publishOpenOrdersSnapshot,
-    logger,
-  })
-  return { handleUserDataEvent, startUserDataRecovery }
-}
-
-function createHarvesterUserDataStatusRuntime({
-  userDataState,
-  isStopped,
-  eventPublisher,
-  brokerName,
-  logger,
-  tradingEnabled,
-  startUserDataRecovery,
-  cancelOwnedBuysAfterAccountingFailure,
-  resumeDeferredStrategyEvaluations,
-  onUserDataStatus,
-  now,
-  getLastReportedUserDataReady,
-  setLastReportedUserDataReady,
-} = {}) {
-  const handleUserDataStatusTransition = createUserDataStatusHandler({
-    state: userDataState,
-    isStopped,
-    eventPublisher,
-    brokerName,
-    logger,
-    tradingEnabled,
-    startUserDataRecovery,
-    cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations,
-    onUserDataStatus,
-  })
-  const handleUserDataStatus = (status = {}) => handleHarvesterUserDataStatus({
-    status,
-    userDataState,
-    now,
-    getLastReportedUserDataReady,
-    setLastReportedUserDataReady,
-    handleUserDataStatusTransition,
-    eventPublisher,
-    brokerName,
-    eventNames: HARVESTER_EVENT_NAMES,
-    mapUserDataReadinessChangedData,
-    publishLifecycleEvent,
-  })
-  return { handleUserDataStatus }
-}
-
-async function handleHarvesterStartupFailure({
-  error,
-  logger,
-  userDataState,
-  operatorControlLifecycle,
-  broker,
-  brokerName,
-  eventPublisher,
-  subscriptions,
-  bookSubscriptions,
-  userDataSubscription,
-} = {}) {
-  logger.error?.({
-    message: "Broker startup step failed",
-    errorName: error?.name,
-    errorMessage: error?.message ?? String(error),
-    errorStack: error?.stack,
-  })
-  await userDataState.eventQueue
-  const operatorCleanupErrors = []
-  try {
-    await operatorControlLifecycle.stop()
-  } catch (cleanupError) {
-    operatorCleanupErrors.push(cleanupError)
-  }
-  const brokerCleanupErrors = await cleanupBroker({
-    broker,
-    brokerName,
-    eventPublisher,
-    subscriptions,
-    bookSubscriptions,
-    userDataSubscription,
-  })
-  throwIfStartupCleanupFailed({
-    error,
-    cleanupErrors: [...operatorCleanupErrors, ...brokerCleanupErrors],
-  })
-  throw error
-}
-
-async function initializeHarvesterAccountAndUserData({
-  broker,
-  pairs,
-  marketMetadata,
-  eventPublisher,
-  logger,
-  activateTradingEngine,
-  operatorControlLifecycle,
-  getTradingEngine,
-  getOperatorRuntimeSnapshot,
-  getPortfolio,
-  getRecoveryLedger,
-  getAccountSnapshot,
-  setPortfolioWorkflow,
-  evaluateStrategy,
-  onCommissionAsset,
-  onOperationalStateExecutionFill,
-  onOperationalStateRecoveryCycleCompleted,
-  onOperationalStateRecoveryCycleNotCompleted,
-  userDataState,
-  brokerName,
-  tradingMode,
-  tradingEnabled,
-  enabledSymbols,
-  handleUserDataEvent,
-  handleUserDataStatus,
-  publishAccountSnapshot,
-  publishOpenOrdersSnapshot,
-  resumeDeferredStrategyEvaluations,
-  setUserDataSubscription,
-} = {}) {
-  await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
-  activateTradingEngine()
-  await operatorControlLifecycle.start({
-    engine: getTradingEngine(),
-    getRuntimeSnapshot: getOperatorRuntimeSnapshot,
-    getPortfolio,
-    getRecoveryLedger,
-    getAccountSnapshot,
-    getOpenOrders: () => broker.getOpenOrders(),
-  })
-  setPortfolioWorkflow(createPortfolioWorkflow({
-    evaluateStrategy,
-    logger,
-    onCommissionAsset,
-    onOperationalStateExecutionFill,
-    onOperationalStateRecoveryCycleCompleted,
-    onOperationalStateRecoveryCycleNotCompleted,
-  }))
-  return subscribeToUserData({
-    broker,
-    brokerName,
-    eventPublisher,
-    logger,
-    state: userDataState,
-    tradingMode,
-    tradingEnabled,
-    enabledSymbols,
-    onEvent: handleUserDataEvent,
-    onStatus: handleUserDataStatus,
-    onSubscriptionEstablished: setUserDataSubscription,
-    publishAccountSnapshot,
-    publishOpenOrdersSnapshot,
-    getAccountSnapshot,
-    resumeDeferredStrategyEvaluations,
-  })
-}
-
-async function subscribeHarvesterMarketStreams({
-  broker,
-  brokerName,
-  eventPublisher,
-  logger,
-  tradingEnabled,
-  pairs,
-  settings,
-  accountSnapshotManagerRef,
-  processMarketPrice,
-  processMarketBook,
-  isMarketPriceFresh,
-  now,
-  isStopped,
-  onMarketPriceError,
-  subscriptions,
-  bookSubscriptions,
-  marketPriceIntake,
-  candleHistoryService,
-} = {}) {
-  const marketDataPairs = resolveStrategyMarketDataPairs({
-    pairs,
-    strategyPolicy: conservativeStrategyPolicy,
-    hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    logger,
-  })
-  await subscribeToMarketData({
-    broker,
-    brokerName,
-    eventPublisher,
-    logger,
-    tradingEnabled,
-    pairs: marketDataPairs,
-    settings,
-    processMarketPrice,
-    processMarketBook,
-    isMarketPriceFresh,
-    now,
-    isStopped,
-    onMarketPriceError,
-    subscriptions,
-    bookSubscriptions,
-    marketPriceIntake,
-  })
-  await candleHistoryService.start({
-    pairs: resolveStrategyMarketDataPairs({
-      pairs,
-      strategyPolicy: conservativeStrategyPolicy,
-      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    }),
-    subscriptions,
-  })
-}
-
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -532,48 +272,62 @@ export async function startHarvester({
     skipped: true,
     reason: "TRADING_ENGINE_NOT_READY"
   } })
-  const updatePortf  const isStopped = () => userDataState.stopped || userDataState.shutdownRequested
-  const userDataEventRuntime = createHarvesterUserDataEventRuntime({
-    userDataState,
-    getTradingEngine: () => tradingEngine,
-    isTradingEnabled: () => tradingEnabled,
-    isStopped,
-    logger,
-    onUserDataEvent,
-    getPortfolio,
-    getRecoveryLedger,
-    updatePortfolio,
-    updateTradingAccounting,
-    cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations,
-    onSafetyBlockerRaised,
-    getUserDataSubscription: () => userDataSubscription,
-    tradingEnabled,
-    broker,
-    setCanonicalOwnershipReconciled: (value) => { hasCanonicalOwnershipReconciliation = value },
-    refreshAccountSnapshot,
-    publishAccountSnapshot,
-    publishOpenOrdersSnapshot,
-  })
-  const { handleUserDataEvent, startUserDataRecovery } = userDataEventRuntime
-  const userDataStatusRuntime = createHarvesterUserDataStatusRuntime({
-    userDataState,
-    isStopped,
-    eventPublisher,
-    brokerName,
-    logger,
-    tradingEnabled,
-    startUserDataRecovery,
-    cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations,
-    onUserDataStatus,
-    now,
-    getLastReportedUserDataReady: () => lastReportedUserDataReady,
-    setLastReportedUserDataReady: (value) => { lastReportedUserDataReady = value },
-  })
-  const { handleUserDataStatus } = userDataStatusRuntime
+  const updatePortfolio = (...args) => portfolioWorkflow.updatePortfolio(...args)
+  const updateTradingAccounting = (...args) => portfolioWorkflow.updateTradingAccounting(...args)
+  const getPortfolio = (...args) => portfolioWorkflow.getPortfolio(...args)
+  const getRecoveryLedger = (...args) => portfolioWorkflow.getRecoveryLedger(...args)
+  const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
+  const marketMetadata = new Map()
+  const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
+  const getAccountSnapshot = () => accountSnapshotManagerRef.current?.getAccountSnapshot()
+  let tradingEngine
+  let hasCanonicalOwnershipReconciliation = false
 
-tore,
+  const broker = await connectBroker({
+    brokerAdapterFactory,
+    env,
+    brokerName,
+    tradingMode,
+    eventPublisher,
+    logger
+  })
+
+  const subscriptions = []
+  const marketPriceIntake = new Map()
+  const bookSubscriptions = []
+  let userDataSubscription
+  let lastReportedUserDataReady
+  const candleHistoryService = createHarvesterCandleHistoryService({
+    createCandleHistoryService,
+    broker,
+    logger,
+    now,
+    getTradingEngine: () => tradingEngine,
+  })
+  // One explicit state object makes user-data readiness and queue ownership visible.
+  const userDataState = createHarvesterUserDataState()
+
+  const getOperatorRuntimeSnapshot = () => getHarvesterOperatorRuntimeSnapshot({
+    now,
+    runtimeStartedAt,
+    userDataState,
+    brokerName,
+    tradingEnabled,
+    tradingMode,
+  })
+  accountSnapshotManagerRef.current = createAccountSnapshotManager({
+    broker,
+    eventPublisher,
+    marketMetadata,
+    getPortfolio,
+    getTradingEngine: () => tradingEngine,
+    getRecoveredState: () => recoveredState,
+    getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
+    logger,
+    now,
+    monotonicNow: () => globalThis.performance.now(),
+    runtimeSessionId,
+    operationalStateStore,
   })
   const {
     refreshAccountSnapshot,
@@ -690,37 +444,55 @@ tore,
     processMarketBook = tradingEngine.processBookTicker
   }
   try {
-    userDataSubscription = await initializeHarvesterAccountAndUserData({
+    await loadMarketMetadata({
       broker,
       pairs,
       marketMetadata,
       eventPublisher,
-      logger,
-      activateTradingEngine,
-      operatorControlLifecycle,
-      getTradingEngine: () => tradingEngine,
-      getOperatorRuntimeSnapshot,
+      logger
+    })
+    // Journal replay and runtime state restoration are intentionally disabled.
+    // ADR-0001 Operational State Store records are verified separately and prior process sessions
+    // fail closed until restart recovery is accepted.
+    // PREFLIGHT/RECOVERY/CLOSING account audits and targeted commission
+    // baselines remain independent, mandatory account-integrity boundaries.
+    activateTradingEngine()
+    await operatorControlLifecycle.start({
+      engine: tradingEngine,
+      getRuntimeSnapshot: getOperatorRuntimeSnapshot,
       getPortfolio,
       getRecoveryLedger,
       getAccountSnapshot,
-      setPortfolioWorkflow: (workflow) => { portfolioWorkflow = workflow },
+      getOpenOrders: () => broker.getOpenOrders(),
+    })
+    portfolioWorkflow = createPortfolioWorkflow({
       evaluateStrategy,
+      logger,
       onCommissionAsset,
       onOperationalStateExecutionFill,
       onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted,
-      userDataState,
+    })
+
+    userDataSubscription = await subscribeToUserData({
+      broker,
       brokerName,
+      eventPublisher,
+      logger,
+      state: userDataState,
       tradingMode,
       tradingEnabled,
       enabledSymbols,
-      handleUserDataEvent,
-      handleUserDataStatus,
+      onEvent: handleUserDataEvent,
+      onStatus: handleUserDataStatus,
+      onSubscriptionEstablished: (subscription) => { userDataSubscription = subscription },
       publishAccountSnapshot,
       publishOpenOrdersSnapshot,
+      getAccountSnapshot,
       resumeDeferredStrategyEvaluations,
-      setUserDataSubscription: (subscription) => { userDataSubscription = subscription },
     })
+    // The initial PREFLIGHT/user-data gate is reported after its authoritative
+    // snapshots pass. Later reconnect/reconciliation transitions use the same event.
     lastReportedUserDataReady = userDataState.ready
     publishInitialUserDataReadiness({
       lastReportedUserDataReady,
@@ -728,39 +500,64 @@ tore,
       brokerName,
       userDataState,
     })
-    await subscribeHarvesterMarketStreams({
+
+    await subscribeToMarketData({
       broker,
       brokerName,
       eventPublisher,
       logger,
       tradingEnabled,
-      pairs,
+      pairs: resolveStrategyMarketDataPairs({
+        pairs,
+        strategyPolicy: conservativeStrategyPolicy,
+        hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+        logger
+      }),
       settings,
-      accountSnapshotManagerRef,
       processMarketPrice,
       processMarketBook,
       isMarketPriceFresh,
       now,
-      isStopped,
+      isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
       onMarketPriceError,
       subscriptions,
       bookSubscriptions,
       marketPriceIntake,
-      candleHistoryService,
+    })
+
+    await candleHistoryService.start({
+      pairs: resolveStrategyMarketDataPairs({
+      pairs,
+      strategyPolicy: conservativeStrategyPolicy,
+      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol
+    }),
+      subscriptions
     })
   } catch (error) {
-    await handleHarvesterStartupFailure({
-      error,
-      logger,
-      userDataState,
-      operatorControlLifecycle,
+    logger.error?.({
+      message: "Broker startup step failed",
+      errorName: error?.name,
+      errorMessage: error?.message ?? String(error),
+      errorStack: error?.stack,
+    })
+    await userDataState.eventQueue
+    const operatorCleanupErrors = []
+    try {
+      await operatorControlLifecycle.stop()
+    } catch (cleanupError) {
+      operatorCleanupErrors.push(cleanupError)
+    }
+    const brokerCleanupErrors = await cleanupBroker({
       broker,
       brokerName,
       eventPublisher,
       subscriptions,
       bookSubscriptions,
-      userDataSubscription,
+      userDataSubscription
     })
+    const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
+    throwIfStartupCleanupFailed({ error, cleanupErrors })
+    throw error
   }
 
   userDataState.startupComplete = true
