@@ -5465,54 +5465,23 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   })
 })
 
-test("a partial recovery SELL fill leaves active Position inventory protected from trailing repricing", async () => {
-  const seeded = makeSeededRecoveryState()
-  let repricingEvaluations = 0
-  const strategyPolicy = {
+
+function createPartialSellTrailingPolicy({ onRepricing }) {
+  return {
     ...conservativeStrategyPolicy,
     evaluate: (input) => conservativeStrategyPolicy.evaluate({
       ...input,
-      lastBuyPrice: "100"
+      lastBuyPrice: "100",
     }),
     evaluateTrailingBuyRepricing: (input) => {
-      repricingEvaluations += 1
+      onRepricing()
       return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
     },
   }
-  const harness = await createHarness({
-    strategyPolicy,
-    initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: seeded.recoveryLedger,
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
-    },
-  })
+}
 
-  const initial = await harness.engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
-  })
-  assert.equal(initial.ok, true, initial.errors?.[0]?.message)
-  const buy = harness.engine.getOrders().find((order) => order.side === "BUY")
-  const sell = harness.engine.getOrders().find((order) => order.side === "SELL")
-  assert.ok(buy)
-  assert.ok(sell)
-
-  const partialSell = new CanonicalOrder({
+function createPartialRecoverySellExecution({ sell }) {
+  const partialOrder = new CanonicalOrder({
     clientOrderId: sell.clientOrderId,
     brokerOrderId: sell.brokerOrderId,
     market,
@@ -5522,7 +5491,7 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     originalQuantity: sell.originalQuantity,
     executedQuantity: new Quantity({
       amount: "0.1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     status: "PARTIALLY_FILLED",
     createdAt: sell.createdAt,
@@ -5535,35 +5504,96 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     quantity: "0.1",
     quoteQuantity: multiplyDecimal({
       left: sell.limitPrice.amount,
-      right: "0.1"
+      right: "0.1",
     }),
+  })
+  return {
+    partialOrder,
+    fill,
+  }
+}
+
+function assertPartialRecoverySellBlocksTrailingRepricing({ harness, repricingEvaluations, sell }) {
+  assert.equal(repricingEvaluations, 0)
+  assert.deepEqual(harness.cancellationIds, [])
+  const unchangedSell = harness.engine.getOrders().find((order) =>
+    order.clientOrderId === sell.clientOrderId)
+  assert.equal(unchangedSell.status, "PARTIALLY_FILLED")
+  assert.equal(unchangedSell.limitPrice.amount, sell.limitPrice.amount)
+  assert.equal(unchangedSell.originalQuantity.amount, sell.originalQuantity.amount)
+  assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
+  assert.equal(harness.getCurrentPortfolio().getPosition({
+    marketId: market.id,
+  }).baseQuantity.amount, "0.9")
+}
+
+
+test("a partial recovery SELL fill leaves active Position inventory protected from trailing repricing", async () => {
+  const seeded = makeSeededRecoveryState()
+  let repricingEvaluations = 0
+  const strategyPolicy = createPartialSellTrailingPolicy({
+    onRepricing: () => {
+      repricingEvaluations += 1
+    },
+  })
+  const harness = await createHarness({
+    strategyPolicy,
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    updateTradingAccounting: async ({ fill }) => {
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
+        fill,
+      })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({
+        fill,
+      })
+      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
+      return {
+        ok: true,
+        data: {
+          applied: true,
+          duplicate: false,
+        },
+      }
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const sell = harness.engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(sell)
+  const execution = createPartialRecoverySellExecution({
+    sell,
   })
   const applied = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: partialSell,
-      fill
+      executedOrder: execution.partialOrder,
+      fill: execution.fill,
     },
   })
   assert.equal(applied.ok, true, applied.errors?.[0]?.message)
-  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.9")
-
   const update = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100.06",
-      timestamp: 3
+      timestamp: 3,
     },
   })
   assert.equal(update.ok, true, update.errors?.[0]?.message)
-  assert.equal(repricingEvaluations, 0)
-  assert.deepEqual(harness.cancellationIds, [])
-  const unchangedSell = harness.engine.getOrders().find((order) => order.clientOrderId === sell.clientOrderId)
-  assert.equal(unchangedSell.status, "PARTIALLY_FILLED")
-  assert.equal(unchangedSell.limitPrice.amount, sell.limitPrice.amount)
-  assert.equal(unchangedSell.originalQuantity.amount, sell.originalQuantity.amount)
-  assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
+  assertPartialRecoverySellBlocksTrailingRepricing({
+    harness,
+    repricingEvaluations,
+    sell,
+  })
 })
 
 test("suppresses trailing BUY repricing while an actual active Position exists", async () => {
