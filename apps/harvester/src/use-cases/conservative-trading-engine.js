@@ -287,6 +287,106 @@ function createRecoveryCycleNotCompletedPublisher({
   }
 }
 
+function createPauseHandler({
+  state,
+  onOperationalStateStrategyMarketPaused,
+  logger,
+  eventPublisher,
+  onPause,
+} = {}) {
+  return async ({ symbol, reason, error }) => {
+    const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
+    if (!wasDurablyPaused && onOperationalStateStrategyMarketPaused) {
+      const durable = await onOperationalStateStrategyMarketPaused({ symbol, reason })
+      if (durable?.ok !== true || durable.data?.durable !== true) {
+        logger?.error?.({
+          message: "strategy pause could not be committed to the Operational State Store",
+          symbol,
+          reason,
+          errors: durable?.errors,
+        })
+      }
+    }
+    state.paused.add(symbol)
+    state.durablePausedMarkets.add(symbol)
+    if (!wasDurablyPaused) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
+        dataResult: mapStrategyPausedData({ symbol, reason, error }),
+      })
+    }
+    await onPause({ symbol, reason, error })
+  }
+}
+
+function createOrderCancellationEventPublishers({ eventPublisher } = {}) {
+  return {
+    publishOrderCancelled: ({ order }) => publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
+      dataResult: mapOrderCancelledData({ order }),
+    }),
+    publishOrderCancelFailed: ({ order, outcome, error }) => publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
+      dataResult: mapOrderCancelFailedData({ order, outcome, error }),
+    }),
+  }
+}
+
+function createCancellationFailureHandlers({ state, pause, publishOrderCancelFailed } = {}) {
+  const markCancellationUnknown = async ({
+    symbol,
+    order,
+    reason,
+    error,
+    pauseOnFailure = true,
+  } = {}) => {
+    const result = state.registry.markCancellationUnknown({ clientOrderId: order.clientOrderId })
+    if (!result.ok) {
+      const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
+      await pause({ symbol, reason: reason + "_REGISTRY_FAILED", error: registryError })
+      return toResult({ errors: result.errors ?? [registryError] })
+    }
+    state.registry = result.data.registry
+    publishOrderCancelFailed({ order: result.data.order, outcome: "UNCONFIRMED", error })
+    if (pauseOnFailure) {
+      await pause({ symbol, reason, error })
+    }
+    return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
+  }
+  const markCancellationNotSent = async ({
+    symbol,
+    order,
+    reason,
+    error,
+    pauseOnFailure = true,
+  } = {}) => {
+    publishOrderCancelFailed({ order, outcome: "NOT_SENT", error })
+    const notSentReason = reason.replace(/_UNCONFIRMED$/, "_NOT_SENT")
+    if (pauseOnFailure) {
+      await pause({ symbol, reason: notSentReason, error })
+    }
+    return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
+  }
+  const markCancellationFailure = async ({
+    symbol,
+    order,
+    reason,
+    error,
+    cancellationResultOk,
+    cancellationOutcome,
+    pauseOnFailure = true,
+  } = {}) => {
+    if (cancellationResultOk === false && cancellationOutcome === "NOT_SENT") {
+      return markCancellationNotSent({ symbol, order, reason, error, pauseOnFailure })
+    }
+    return markCancellationUnknown({ symbol, order, reason, error, pauseOnFailure })
+  }
+  return { markCancellationUnknown, markCancellationNotSent, markCancellationFailure }
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -464,45 +564,13 @@ export function makeConservativeTradingEngine({
     pairs,
   })
 
-  const pause = async ({
-    symbol,
-    reason,
-    error
-  }) => {
-    const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
-    if (!wasDurablyPaused && onOperationalStateStrategyMarketPaused) {
-      const durable = await onOperationalStateStrategyMarketPaused({
-        symbol,
-        reason
-      })
-      if (durable?.ok !== true || durable.data?.durable !== true) {
-        logger?.error?.({
-          message: "strategy pause could not be committed to the Operational State Store",
-          symbol,
-          reason,
-          errors: durable?.errors,
-        })
-      }
-    }
-    state.paused.add(symbol)
-    state.durablePausedMarkets.add(symbol)
-    if (!wasDurablyPaused) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
-        dataResult: mapStrategyPausedData({
-          symbol,
-          reason,
-          error
-        }),
-      })
-    }
-    await onPause({
-      symbol,
-      reason,
-      error
-    })
-  }
+  const pause = createPauseHandler({
+    state,
+    onOperationalStateStrategyMarketPaused,
+    logger,
+    eventPublisher,
+    onPause,
+  })
 
   // A FILLED submission acknowledgement is terminal exchange state, but it
   // is not reconciled strategy state until every execution has been fetched
@@ -515,103 +583,19 @@ export function makeConservativeTradingEngine({
     processUserDataEventTransition,
   })
 
-  const publishOrderCancelled = ({ order }) => publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
-    dataResult: mapOrderCancelledData({ order }),
+  const cancellationEventPublishers = createOrderCancellationEventPublishers({ eventPublisher })
+  const { publishOrderCancelled, publishOrderCancelFailed } = cancellationEventPublishers
+
+  const cancellationFailureHandlers = createCancellationFailureHandlers({
+    state,
+    pause,
+    publishOrderCancelFailed,
   })
-
-  const publishOrderCancelFailed = ({
-    order,
-    outcome,
-    error
-  }) => publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-    dataResult: mapOrderCancelFailedData({
-      order,
-      outcome,
-      error
-    }),
-  })
-  const markCancellationUnknown = async ({
-    symbol,
-    order,
-    reason,
-    error,
-    pauseOnFailure = true
-  } = {}) => {
-    const result = state.registry.markCancellationUnknown({ clientOrderId: order.clientOrderId })
-    if (!result.ok) {
-      const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
-      await pause({
-        symbol,
-        reason: reason + "_REGISTRY_FAILED",
-        error: registryError
-      })
-      return toResult({ errors: result.errors ?? [registryError] })
-    }
-    state.registry = result.data.registry
-    publishOrderCancelFailed({
-      order: result.data.order,
-      outcome: "UNCONFIRMED",
-      error,
-    })
-    if (pauseOnFailure) {await pause({
-      symbol,
-      reason,
-      error
-    })}
-    return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
-  }
-
-  const markCancellationNotSent = async ({
-    symbol,
-    order,
-    reason,
-    error,
-    pauseOnFailure = true
-  } = {}) => {
-    publishOrderCancelFailed({
-      order,
-      outcome: "NOT_SENT",
-      error
-    })
-    const notSentReason = reason.replace(/_UNCONFIRMED$/, "_NOT_SENT")
-    if (pauseOnFailure) {await pause({
-      symbol,
-      reason: notSentReason,
-      error
-    })}
-    return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
-  }
-
-  const markCancellationFailure = async ({
-    symbol,
-    order,
-    reason,
-    error,
-    cancellationResultOk,
-    cancellationOutcome,
-    pauseOnFailure = true,
-  } = {}) => {
-    if (cancellationResultOk === false && cancellationOutcome === "NOT_SENT") {
-      return markCancellationNotSent({
-        symbol,
-        order,
-        reason,
-        error,
-        pauseOnFailure
-      })
-    }
-    return markCancellationUnknown({
-      symbol,
-      order,
-      reason,
-      error,
-      pauseOnFailure
-    })
-  }
+  const {
+    markCancellationUnknown,
+    markCancellationNotSent,
+    markCancellationFailure,
+  } = cancellationFailureHandlers
 
   const ensureCancellationEligible = async ({
     symbol,
