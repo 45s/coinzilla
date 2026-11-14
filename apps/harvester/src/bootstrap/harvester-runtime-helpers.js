@@ -332,7 +332,7 @@ export function createOperationalStateCallbacks(dependencies = {}) {
       sequence }),
     onSafetyBlockerRaised: createSafetyBlockerCallback({ store,
       recordSafetyBlockerRaised: dependencies.recordSafetyBlockerRaised,
-      createHash: hashFactory }),
+      createHash: dependencies.createHash ?? createHash }),
     onOperationalStateCancellationOutcome: createCancellationOutcomeCallback({ store,
       recordOrderCancellationOutcome: dependencies.recordOrderCancellationOutcome }),
   }
