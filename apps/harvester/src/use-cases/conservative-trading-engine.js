@@ -9,6 +9,7 @@ import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 import { makeCollectOwnedOrderSnapshots } from "./collect-owned-order-snapshots.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
+import { createSubmissionGate } from "./create-submission-gate.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
@@ -2489,7 +2490,7 @@ export function makeConservativeTradingEngine({
     if (!data) {return}
     const marketId = order.market.id
     const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
-    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId, strategyId: StrategyId.COIN_GRABBER })
+    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId })
     const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
     const realizedNetProfit = data.realizedNetProfit ??
       (position && recoveryLedger
@@ -2711,92 +2712,23 @@ export function makeConservativeTradingEngine({
   })
 
   let shutdownRecoverySubmissionAllowed = false
+  const canSubmit = createSubmissionGate({
+    state,
+    canTrade,
+    isStopping,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+    getVolatilityData,
+    isVolatilityProtectionEnabledForSymbol,
+    hasBlockingOpenOrdersForSymbol,
+    isPostOnlyOrderCrossing,
+    isShutdownRecoverySubmissionAllowed: () => shutdownRecoverySubmissionAllowed,
+  })
   const submit = makeExecuteStrategyDecision({
     broker,
     onOperationalStateSubmissionIntent,
     onOperationalStateSubmissionOutcome,
-    // This is the single fail-closed submission gate; keep each independent blocker explicit.
-    // eslint-disable-next-line complexity
-    canSubmit: ({
-      order,
-      purpose
-    } = {}) => {
-      const { market: { symbol } } = order
-      const defer = (reason, details = {}) => ({
-        allowed: false,
-        reason,
-        details: {
-          symbol,
-          ...details
-        },
-      })
-      const marketPrice = state.prices.get(symbol)
-      const shutdownRecoverySubmission = shutdownRecoverySubmissionAllowed &&
-        isStopping?.() === true &&
-        order.side === "SELL" &&
-        purpose === "RECOVERY_SELL"
-      if (state.paused.has(symbol) && !shutdownRecoverySubmission) {return defer("MARKET_PAUSED")}
-      if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
-        return defer("OPERATOR_MARKET_PAUSED")
-      }
-      if (hasBlockingOpenOrdersForSymbol({ symbol })) {
-        return defer("UNOWNED_OPEN_ORDERS_PRESENT")
-      }
-      if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {return defer("TRADING_DISABLED")}
-      if (!marketPrice) {return defer("MARKET_PRICE_UNAVAILABLE")}
-      if (!isMarketPriceFresh(marketPrice)) {
-        return defer("MARKET_PRICE_STALE", { priceTimestamp: marketPrice.timestamp })
-      }
-      if (isVolatilityProtectionEnabledForSymbol(symbol)) {
-        let volatility
-        try {
-          const volatilityResult = getVolatilityData({ symbol })
-          volatility = volatilityResult?.ok ? volatilityResult.data : null
-        } catch {
-          volatility = null
-        }
-        const protection = state.volatilityProtection.get(symbol) ??
-          createVolatilityProtectionState({ symbol })
-        const latestRatio = volatility?.metrics?.volatilityRatio
-        const latestRatioProtected = typeof latestRatio === "string" &&
-          compareDecimal({
-            left: latestRatio,
-            right: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio
-          }) >= 0
-        const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
-        if (!volatility?.status?.isReady && !recoverySell) {
-          return defer("VOLATILITY_DATA_UNAVAILABLE", {
-            protectionMode: protection.mode,
-            volatilityRatio: latestRatio ?? null,
-          })
-        }
-        if ((protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL || latestRatioProtected) && !recoverySell) {
-          return defer("VOLATILITY_PROTECTION_ACTIVE", {
-            protectionMode: protection.mode,
-            volatilityRatio: latestRatio ?? null,
-          })
-        }
-      }
-      if (order.type !== "LIMIT_MAKER") {return { allowed: true }}
-      const marketBook = state.books.get(symbol)
-      if (!marketBook) {return defer("MARKET_BOOK_UNAVAILABLE")}
-      if (!isMarketBookFresh(marketBook)) {
-        return defer("MARKET_BOOK_STALE", { bookTimestamp: marketBook.timestamp })
-      }
-      if (isPostOnlyOrderCrossing({
-        order,
-        marketBook
-      })) {
-        return defer("POST_ONLY_WOULD_CROSS", {
-          side: order.side,
-          limitPrice: order.limitPrice.amount,
-          bestBidPrice: marketBook.bestBidPrice,
-          bestAskPrice: marketBook.bestAskPrice,
-          bookTimestamp: marketBook.timestamp,
-        })
-      }
-      return { allowed: true }
-    },
+    canSubmit,
     onSubmissionDeferred: ({
       order,
       registered
@@ -3136,7 +3068,7 @@ export function makeConservativeTradingEngine({
       }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) {throw new Error("Current account snapshot is unavailable")}
-      const position = portfolioBefore.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: metadata.market.id, strategyId: StrategyId.COIN_GRABBER })
+      const position = portfolioBefore.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: metadata.market.id })
       const allPositions = portfolioBefore.positions
       const portfolioQuoteCashFlow = allPositions
         .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)

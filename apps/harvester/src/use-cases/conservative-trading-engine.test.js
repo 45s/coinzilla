@@ -123,7 +123,6 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
   },
 })
 
-// eslint-disable-next-line complexity, max-lines-per-function -- test harness centralizes independent fake-broker outcomes for deterministic coverage.
 async function createHarness({
   strategyPolicy,
   hasUnownedOpenOrdersForSymbol = () => false,

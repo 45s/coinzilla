@@ -237,7 +237,6 @@ async function processExecutionFill({ dependencies, order, fill }) {
  * The caller owns serialization and supplies accounting, cancellation,
  * recovery-cycle and strategy-evaluation transitions.
  */
-// eslint-disable-next-line max-lines-per-function -- workflow factory wires serialized event transitions and accounting ports.
 export function makeOrderEventWorkflow({
   state,
   broker,
@@ -279,7 +278,7 @@ export function makeOrderEventWorkflow({
     event,
     recoveryMode = false,
     terminalFillsReconciled = false,
-  } = {}) => { // eslint-disable-line complexity, max-lines-per-function, max-statements -- serialized event transition preserves fill and order-state invariants.
+  } = {}) => {
     try {
       if (event?.eventType === "executionReport" && event?.brokerEvidence) {
         publishLifecycleEvent({
