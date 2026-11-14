@@ -25,7 +25,7 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ## P2 — External trading-pair configuration
 
-- [~] Move all market definitions out of strategy source into the single `apps/harvester/cg-coin-grabber.js` `tradingPairs` map. Keep one entry per symbol, require explicit `tradingEnvironment`, and let `TRADING_MODE` select eligible pairs without defaults or duplicate environment maps. Update the symbol generator, validation, tests, and living configuration documentation. No exchange operations.
+- [x] **Separate exchange-derived market precision from strategy pair settings** — completed in [PR #1117](https://github.com/45s/coinzilla), merge commit `ed6da096ff00cd1c362dab05ebd61a91d8c36cb4`. Strategy decisions remain in the single `apps/harvester/cg-coin-grabber.js` `tradingPairs` map; `pricePrecision`/`quantityPrecision` live in `apps/harvester/token-specification.json`, grouped by base asset with exact per-market entries. `config:symbol` updates only this registry; `loadAppConfig` enriches runtime pairs and fails closed on missing or ambiguous metadata. All seven exact-head GitHub Actions workflows passed; read-only Binance TESTNET integration was skipped. No trading behavior or exchange account operations were performed.
 
 ## P3 — Operational State Store source naming — COMPLETE
 

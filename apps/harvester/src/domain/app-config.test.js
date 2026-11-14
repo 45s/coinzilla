@@ -9,6 +9,7 @@ import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
 import { TRADING_ENVIRONMENTS } from "./trading-environment.js"
 import { OPERATOR_CONTROL_CONFIG } from "../../config/operator-control.js"
 import { appConfig } from "../../config/index.js"
+import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 
 const createAppConfig = () => ({
   strategies: {
@@ -88,9 +89,14 @@ test("accepts disabled process-restart recovery and rejects enabling the unfinis
   )
 })
 
-test("composes the extracted named CG coin-grabber config with restart recovery disabled", () => {
+test("composes raw CG strategy settings and resolves precision from the shared token registry", async () => {
   assert.equal(appConfig.strategies.CG_coinGrabber.settings.recovery.enabled, false)
-  assert.equal(validateAppConfig(appConfig), appConfig)
+  for (const pair of Object.values(appConfig.strategies.CG_coinGrabber.pairs)) {
+    assert.equal(Object.hasOwn(pair, "pricePrecision"), false, "Operator strategy config must not duplicate exchange-derived price precision.")
+    assert.equal(Object.hasOwn(pair, "quantityPrecision"), false, "Operator strategy config must not duplicate exchange-derived quantity precision.")
+  }
+  const effectiveConfig = await loadAppConfig()
+  assert.equal(validateAppConfig(effectiveConfig), effectiveConfig, "The runtime configuration must validate after authoritative market precision is resolved.")
 })
 
 test("accepts only ignore or block for each pair's external-order policy", () => {

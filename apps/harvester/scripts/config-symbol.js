@@ -1,66 +1,64 @@
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout, stderr } from "node:process"
 import { pathToFileURL, fileURLToPath } from "node:url"
-import { normalizeSymbolInput, normalizeTradingEnvironment, normalizePairTradingEnvironment, parseDecimalInput, normalizePairInputs, createPairConfig } from "./config-symbol/configuration.js"
+import { normalizeSymbolInput, normalizeTradingEnvironment } from "./config-symbol/configuration.js"
 import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
-import { writePairConfigAtomically } from "./config-symbol/write-config.js"
-import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
+import { writeTokenSpecificationAtomically } from "./config-symbol/write-token-specification.js"
+import { createMarketSpecification } from "../src/infrastructure/config/token-specifications.js"
 import { TRADING_ENVIRONMENTS } from "../src/domain/trading-environment.js"
 
-const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../cg-coin-grabber.js", import.meta.url))
+const DEFAULT_SPECIFICATION_PATH = fileURLToPath(new URL("../token-specification.json", import.meta.url))
 
 export async function runConfigSymbol({
   ask,
   writeLine = () => {},
   fetchImpl = globalThis.fetch,
   metadataFetcher = fetchBinanceSpotMetadata,
-  configPath = DEFAULT_CONFIG_PATH,
+  specificationPath = DEFAULT_SPECIFICATION_PATH,
   defaultEnvironment = process.env.TRADING_MODE ?? TRADING_ENVIRONMENTS.TESTNET,
-  loadConfig = loadAppConfig,
-  writeConfig = writePairConfigAtomically,
+  writeSpecification = writeTokenSpecificationAtomically,
 } = {}) {
   if (typeof ask !== "function") {
     throw new TypeError("runConfigSymbol requires an interactive ask function")
   }
-  writeLine("Harvester — add a Binance Spot trading pair")
-  writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
-  const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
+  writeLine("Harvester — update Binance token and market specifications")
+  writeLine("This command updates token-specification.json only. It never changes strategy configuration or places/cancels orders.")
+
+  const symbol = normalizeSymbolInput(await ask("Binance Spot market symbol (for example POLUSDT): "))
   const environment = normalizeTradingEnvironment(defaultEnvironment)
-  const tradingEnvironment = normalizePairTradingEnvironment(await ask("Pair trading environment (testnet/live/both): "))
-  const inputs = normalizePairInputs({
-    tradingEnvironment,
-    investment: parseDecimalInput(await ask("Total investment / quote budget for this pair: "), "investment", { exclusiveMin: true }),
-    orderQuantity: parseDecimalInput(await ask("Quantity per individual order (base asset): "), "orderQuantity", { exclusiveMin: true }),
-    keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
-    makerPercent: parseDecimalInput(await ask("Maker commission percent (for example 0): "), "makerPercent"),
-    takerPercent: parseDecimalInput(await ask("Taker commission percent (for example 0.1): "), "takerPercent"),
-    minProfit: parseDecimalInput(await ask("Minimum profit per recovery cycle in quote asset: "), "minProfit", { exclusiveMin: true }),
-    priceStepPercent: parseDecimalInput(await ask("Price step percent: "), "priceStepPercent", { exclusiveMin: true }),
-  })
-  const existingConfig = await loadConfig()
-  const existingSymbol = Object.keys(existingConfig.strategies.CG_coinGrabber.pairs)
-    .find((candidate) => candidate.trim().toUpperCase() === symbol)
-  if (existingSymbol) {
-    throw new Error("Pair " + symbol + " already exists in CG coin-grabber trading-pairs config; refusing to overwrite it")
-  }
-  writeLine("Fetching current public Binance Spot exchange information...")
+  writeLine(`Fetching public Binance Spot exchange information from ${environment}...`)
+
   const metadata = await metadataFetcher({ symbol, environment, fetchImpl })
   if (metadata?.symbol !== symbol || metadata?.environment !== environment) {
     throw new Error("Binance metadata symbol/environment does not match the operator selection")
   }
-  const pairConfig = createPairConfig({ inputs, metadata })
-  writeLine("")
-  writeLine("Configuration preview — apps/harvester/cg-coin-grabber.js entry:")
-  writeLine(JSON.stringify({ [symbol]: pairConfig }, null, 2))
-  const confirmation = (await ask("Add this pair to apps/harvester/cg-coin-grabber.js? [Y/n]: ")).trim().toLowerCase()
-  if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
-    writeLine("Cancelled. No configuration file was changed.")
-    return Object.freeze({ written: false, symbol, pairConfig })
+  const { baseAsset, market } = createMarketSpecification({ metadata })
+  const preview = {
+    [baseAsset]: {
+      baseAsset,
+      markets: {
+        [symbol]: market,
+      },
+    },
   }
-  const writtenPath = await writeConfig({ configPath, symbol, pairConfig })
-  writeLine("Pair configuration added successfully: " + writtenPath)
-  writeLine("The pair was added with enabled: true and tradingEnvironment: " + pairConfig.tradingEnvironment + ".")
-  return Object.freeze({ written: true, symbol, pairConfig, path: writtenPath })
+
+  writeLine("")
+  writeLine("Token specification preview — apps/harvester/token-specification.json:")
+  writeLine(JSON.stringify(preview, null, 2))
+  if (Array.isArray(metadata.unvalidatedConstraints) && metadata.unvalidatedConstraints.length > 0) {
+    writeLine("Public exchange constraints not evaluated by the generator (diagnostic only):")
+    writeLine(JSON.stringify(metadata.unvalidatedConstraints, null, 2))
+  }
+  const confirmation = (await ask("Add or refresh this market in the shared token specification? [Y/n]: ")).trim().toLowerCase()
+  if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
+    writeLine("Cancelled. No token specification file was changed.")
+    return Object.freeze({ written: false, symbol, baseAsset, marketSpecification: market })
+  }
+
+  const writtenPath = await writeSpecification({ specificationPath, metadata })
+  writeLine(`Token specification updated successfully: ${writtenPath}`)
+  writeLine("Strategy pair configuration was not changed.")
+  return Object.freeze({ written: true, symbol, baseAsset, marketSpecification: market, path: writtenPath })
 }
 
 async function main() {
@@ -71,7 +69,7 @@ async function main() {
   try {
     await runConfigSymbol({
       ask: (question) => terminal.question(question),
-      writeLine: (line) => stdout.write(line + "\n"),
+      writeLine: (line) => stdout.write(`${line}\n`),
     })
   } finally {
     terminal.close()

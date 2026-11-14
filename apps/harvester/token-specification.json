@@ -1,0 +1,72 @@
+{
+  "LINK": {
+    "baseAsset": "LINK",
+    "markets": {
+      "LINKUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 3,
+        "quantityPrecision": 2
+      },
+      "LINKFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 3,
+        "quantityPrecision": 2
+      }
+    }
+  },
+  "DOGE": {
+    "baseAsset": "DOGE",
+    "markets": {
+      "DOGEUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 5,
+        "quantityPrecision": 0
+      }
+    }
+  },
+  "SOL": {
+    "baseAsset": "SOL",
+    "markets": {
+      "SOLFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 2,
+        "quantityPrecision": 3
+      }
+    }
+  },
+  "ZRO": {
+    "baseAsset": "ZRO",
+    "markets": {
+      "ZROUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 3,
+        "quantityPrecision": 1
+      },
+      "ZROFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 3,
+        "quantityPrecision": 1
+      }
+    }
+  },
+  "ADA": {
+    "baseAsset": "ADA",
+    "markets": {
+      "ADAFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 4,
+        "quantityPrecision": 1
+      }
+    }
+  },
+  "WLD": {
+    "baseAsset": "WLD",
+    "markets": {
+      "WLDFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 4,
+        "quantityPrecision": 1
+      }
+    }
+  }
+}
