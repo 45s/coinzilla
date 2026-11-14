@@ -5064,7 +5064,7 @@ function createRecoveryModeEventFixture({ broker }) {
   }
 }
 
-async function assertRecoveryModeEventObserved({ fixture, runtime }) {
+async function assertRecoveryModeEventObserved({ fixture, runtime, broker }) {
   await waitForTestSignal(
     fixture.recoverySnapshotStarted,
     "application recovery account snapshot",
@@ -5074,7 +5074,6 @@ async function assertRecoveryModeEventObserved({ fixture, runtime }) {
     }),
     2_000,
   )
-  const broker = runtime.broker
   broker.emitUserDataEvent({
     eventType: "outboundAccountPosition",
   })
@@ -5142,6 +5141,7 @@ test("identifies user-data events received during application recovery as recove
     await assertRecoveryModeEventObserved({
       fixture,
       runtime,
+      broker,
     })
     await assertRecoveryModeAcknowledged({
       fixture,
