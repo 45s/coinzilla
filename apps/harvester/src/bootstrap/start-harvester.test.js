@@ -330,7 +330,7 @@ test("rejects enabled Telegram operator control without a bot token before conne
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => config,
-      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: undefined, DURABLE_FACTS_DIRECTORY: process.cwd() },
+      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: undefined, OPERATIONAL_STATE_DIRECTORY: process.cwd() },
       brokerAdapterFactory: () => {
         brokerFactoryCalled = true
         throw new Error("Broker connection must not start before operator-control configuration is validated.")
@@ -378,7 +378,7 @@ test("verifies the existing durable-facts store before connecting when Telegram 
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => config,
-      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
       runtimeSessionId: "test-runtime-session",
       createDurableFactsStore: ({ directory, runtimeSessionId }) => {
         calls.push({ type: "create-store", directory, runtimeSessionId })
@@ -408,7 +408,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
     createDurableFactsStore: () => ({
       runtimeSessionId: "test-runtime-session",
@@ -518,7 +518,7 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
     createDurableFactsStore: ({ directory, runtimeSessionId }) => {
       calls.push("create-durable-facts-store")
@@ -557,7 +557,7 @@ test("stops Telegram and broker when Telegram identity verification fails during
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: process.cwd() },
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
     createDurableFactsStore: () => ({
       runtimeSessionId: "test-runtime-session",
