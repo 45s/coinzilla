@@ -815,28 +815,6 @@ function createVolatilityMarketDataBroker({ state }) {
   }
 }
 
-function createVolatilityTestBroker({ markets, state }) {
-  const marketData = createVolatilityTestMarkets()
-  const lifecycle = createVolatilityOrderLifecycleBroker({
-    metadataBySymbol: marketData.metadataBySymbol,
-    state,
-  })
-  const account = createVolatilityAccountBroker({
-    metadataBySymbol: marketData.metadataBySymbol,
-    markets,
-    balances: marketData.balances,
-    state,
-  })
-  const streams = createVolatilityMarketDataBroker({
-    state,
-  })
-  return {
-    ...lifecycle,
-    ...account,
-    ...streams,
-  }
-}
-
 async function startVolatilityTestHarvester({ appConfig, broker, state }) {
   return startHarvesterForTest({
     loadConfig: async () => appConfig,
