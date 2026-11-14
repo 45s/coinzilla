@@ -2147,866 +2147,1083 @@ test("does not clear the ownership gate after stream recovery acknowledgement", 
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
   await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
-test("explicit TESTNET trading drains its first BUY fill once after 254 recovery reminders and completes the cycle", { timeout: 90_000 }, async () => {
-  const calls = []
-  const buyCancellationCount = { value: 0 }
-  const subscriptions = new Map()
-  const bookSubscriptions = new Map()
-  let userDataHandlers
-  let snapshotTime = 0
-  let baseBalance = "0"
-  let signalRecoveryCompleted
-  const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
-  const submittedOrders = []
-  const canonicalOrdersByBrokerId = new Map()
-  const fillHistoryByOrder = new Map()
-  const runtimeErrors = []
-  const runtimeDebug = []
-  const runtimeInfo = []
-  const publishedEvents = []
-  const durableFlushes = []
-  const recoveryFillTradeId = "testnet-buy-fill"
-  let recoveryPending = false
-  let recoveryCanonicalHistoryReads = 0
-  let recoveryFillHistoryReads = 0
-  let recoveryAccountWideOpenOrderReads = 0
-  let recoveryOwnedOpenOrderReads = 0
-  let recoveryAccountSnapshotReads = 0
-  let recoveryAcknowledgementCount = 0
-  let recoveryQueuedFillProcessedCount = 0
-  let recoveryQueuedFillMode
-  let recoveryAcknowledgementObservation
-  let resolveRecoveryHistoryStarted
-  let releaseRecoveryHistory
-  let resolveRecoveryQueuedFillProcessed
-  let resolveRecoveryAcknowledged
-  const recoveryHistoryStarted = new Promise((resolve) => {
-    resolveRecoveryHistoryStarted = resolve
-  })
-  const recoveryHistoryGate = new Promise((resolve) => {
-    releaseRecoveryHistory = resolve
-  })
-  const recoveryQueuedFillProcessed = new Promise((resolve) => {
-    resolveRecoveryQueuedFillProcessed = resolve
-  })
-  const recoveryAcknowledged = new Promise((resolve) => {
-    resolveRecoveryAcknowledged = resolve
-  })
-  let resolveThreeOrders
-  let resolveFiveOrders
-  const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
-  const fiveOrdersSubmitted = new Promise((resolve) => { resolveFiveOrders = resolve })
-  const marketMetadata = createMarketMetadata("BTCUSDT")
-  const broker = {
-    connect: async () => calls.push("connect"),
-    disconnect: async () => calls.push("disconnect"),
-    getExchangeMarkets: async () => ({
-      ok: true,
-      data: []
-    }),
-    getSymbolFilters: async () => ({
-      ok: true,
-      data: marketMetadata
-    }),
-    getOpenOrders: async ({ symbol } = {}) => {
-      if (recoveryPending) {
-        if (symbol) {
-          recoveryOwnedOpenOrderReads += 1
-        } else {
-          recoveryAccountWideOpenOrderReads += 1
-        }
-      }
-      return {
+class TestnetTradingRecoveryScenario {
+  createBrokerPart1() {
+    return {
+      connect: async () => this.calls.push("connect"),
+      disconnect: async () => this.calls.push("disconnect"),
+      getExchangeMarkets: async () => ({
         ok: true,
-        data: [...canonicalOrdersByBrokerId.values()]
-          .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-          .filter((order) => !symbol || order.market.symbol === symbol)
-          .map((order) => createOpenOrderSnapshot({ order })),
-      }
-    },
-    getPrices: async () => ({
-      ok: true,
-      data: {
-      symbol: "BTCUSDT",
-      price: "65000"
-    }
-    }),
-    getCandles: async () => ({
-      ok: true,
-      data: []
-    }),
-    subscribeForCandles: async () => ({
-      ok: true,
-      data: { unsubscribe: async () => {} }
-    }),
-    cancelOrder: async ({ order }) => {
-      if (order.side === "BUY") {buyCancellationCount.value += 1}
-      const canceledOrder = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        market: order.market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: order.executedQuantity,
-        status: "CANCELED",
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
-        updatedAt: 3,
-        completedAt: 3,
-      })
-      canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
-      return {
+        data: []
+      }),
+      getSymbolFilters: async () => ({
         ok: true,
-        data: canceledOrder
-      }
-    },
-    getFills: async ({ orderId } = {}) => {
-      if (recoveryPending) {recoveryFillHistoryReads += 1}
-      return {
-        ok: true,
-        data: fillHistoryByOrder.get(String(orderId)) ?? []
-      }
-    },
-    getCanonicalOrderHistory: async ({
-      orderId,
-      symbol
-    } = {}) => {
-      if (recoveryPending) {
-        recoveryCanonicalHistoryReads += 1
-        if (recoveryCanonicalHistoryReads === 1) {
-          resolveRecoveryHistoryStarted()
-          await recoveryHistoryGate
-        }
-      }
-      return {
-        ok: true,
-        data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
-          (!orderId || order.brokerOrderId === String(orderId)) &&
-          (!symbol || order.market.symbol === symbol)),
-      }
-    },
-    getCanonicalOrder: async () => ({
-      ok: false,
-      errors: [new Error("order not found")]
-    }),
-    getAccountSnapshot: async () => {
-      if (recoveryPending) {recoveryAccountSnapshotReads += 1}
-      snapshotTime += 1
-      const balances = [
-        new Balance({
-          free: new Quantity({
-            amount: baseBalance,
-            asset: marketMetadata.market.baseAsset
-          }),
-          locked: new Quantity({
-            amount: "0",
-            asset: marketMetadata.market.baseAsset
-          }),
-        }),
-        new Balance({
-          free: new Quantity({
-            amount: "10000",
-            asset: marketMetadata.market.quoteAsset
-          }),
-          locked: new Quantity({
-            amount: "0",
-            asset: marketMetadata.market.quoteAsset
-          }),
-        }),
-      ]
-      return {
-        ok: true,
-        data: {
-        balances,
-        sourceTime: snapshotTime
-      }
-      }
-    },
-    subscribeForUserData: async (handlers) => {
-      userDataHandlers = {
-        ...handlers,
-        onEvent: (message) => {
-          const event = message?.event
-          const executedOrder = event?.executedOrder
-          if (executedOrder?.brokerOrderId) {
-            canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+        data: this.marketMetadata
+      }),
+      getOpenOrders: async ({ symbol } = {}) => {
+        if (this.recoveryPending) {
+          if (symbol) {
+            this.recoveryOwnedOpenOrderReads += 1
+          } else {
+            this.recoveryAccountWideOpenOrderReads += 1
           }
-          const fill = event?.fill
-          if (fill instanceof Fill) {
-            const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
-            if (!existing.some((item) => item.id === fill.id)) {
-              fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
-            }
-          }
-          return handlers.onEvent(message)
-        },
-      }
-      return {
-        ok: true,
-        data: {
-          disconnect: async () => calls.push("unsubscribe:user-data"),
-          acknowledgeRecoveryResult: (recoveryGeneration) => {
-            assert.equal(
-              recoveryGeneration,
-              1,
-              "The recovery integration fixture must acknowledge the broker generation it reconciled.",
-            )
-            recoveryAcknowledgementCount += 1
-            recoveryAcknowledgementObservation = {
-              queuedFillProcessedCount: recoveryQueuedFillProcessedCount,
-              queuedFillMode: recoveryQueuedFillMode,
-              fillAppliedCount: publishedEvents.filter((event) =>
-                event.name === "execution.fill_applied" && event.data?.tradeId === recoveryFillTradeId).length,
-              accountAuditDurable: durableFlushes.some((flush) =>
-                flush.some((event) => event.name === "account.snapshot_captured" && event.phase === "RECOVERY")),
-              openOrdersAuditDurable: durableFlushes.some((flush) =>
-                flush.some((event) => event.name === "account.open_orders_captured" && event.phase === "RECOVERY")),
-            }
-            handlers.onStatus({
-              type: "reconciled",
-              subscriptionId: 17,
-              recoveryGeneration: 1,
-              recoveryRequired: false,
-              reconciliationRequired: false,
-            })
-            resolveRecoveryAcknowledged()
-            return {
-              accepted: true,
-              completed: true
-            }
-          },
-        },
-      }
-    },
-    subscribeForPrices: async ({
-      symbol,
-      onPrice
-    }) => {
-      subscriptions.set(symbol, onPrice)
-      return {
-        ok: true,
-        data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) }
-      }
-    },
-    subscribeForBookTicker: async ({
-      symbol,
-      onBookTicker
-    }) => {
-      bookSubscriptions.set(symbol, onBookTicker)
-      return {
-        ok: true,
-        data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) }
-      }
-    },
-    placeOrder: async ({ order }) => {
-      calls.push({
-        side: order.side,
-        price: order.price,
-        quantity: order.quantity
-      })
-      submittedOrders.push(order)
-      if (submittedOrders.length === 3) {resolveThreeOrders()}
-      if (submittedOrders.length === 5) {resolveFiveOrders()}
-      const acknowledgedOrder = new CanonicalOrder({
-          clientOrderId: order.clientOrderId,
-          brokerOrderId: "broker-" + order.clientOrderId,
-          market: marketMetadata.market,
-          side: order.side,
-          type: order.type,
-          limitPrice: new Money({
-            amount: order.price,
-            asset: marketMetadata.market.quoteAsset
-          }),
-          originalQuantity: new Quantity({
-            amount: order.quantity,
-            asset: marketMetadata.market.baseAsset
-          }),
-          executedQuantity: new Quantity({
-            amount: "0",
-            asset: marketMetadata.market.baseAsset
-          }),
-          status: "OPEN",
-          createdAt: 1,
-          acknowledgedAt: 1,
-          updatedAt: 1,
-        })
-      canonicalOrdersByBrokerId.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
-      return {
-        ok: true,
-        data: acknowledgedOrder
-      }
-    },
-  }
-  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
-  const config = {
-    strategies: {
-      CG_coinGrabber: {
-        enabled: true,
-        settings: {
-          conservative: { enabled: true },
-          aggressive: { enabled: false }
-        },
-        pairs: {
-      BTCUSDT: {
-        enabled: true,
-          tradingEnvironment: "both",
-        investment: 2000,
-        orderQuantity: 0.01,
-        keepQuantity: 0.001,
-        minProfit: 0.01,
-        priceStepPercent: 0.05,
-        pricePrecision: 2,
-        quantityPrecision: 3,
-        makerPercent: 0,
-        takerPercent: 0,
-        },
-      },
-    },
-    },
-  }
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
-    env: {
-      NODE_ENV: "development",
-      BINANCE_API_KEY: "test-key",
-      BINANCE_API_SECRET_KEY: "test-secret",
-    },
-    brokerAdapterFactory: () => broker,
-    eventPublisher: {
-      publish: (event) => {
-        publishedEvents.push(event)
-        if (event.name === "recovery.cycle_completed") {signalRecoveryCompleted()}
-        return { ok: true }
-      },
-      flush: async () => {
-        durableFlushes.push(publishedEvents.map((event) => ({
-          name: event.name,
-          phase: event.data?.phase,
-        })))
+        }
         return {
           ok: true,
-          durable: true
+          data: [...canonicalOrdersByBrokerId.values()]
+            .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+            .filter((order) => !symbol || order.market.symbol === symbol)
+            .map((order) => createOpenOrderSnapshot({ order })),
         }
       },
-    },
-    onUserDataEvent: async ({
-      event,
-      recoveryMode
-    }) => {
-      if (event?.fill?.tradeId === recoveryFillTradeId) {
-        recoveryQueuedFillProcessedCount += 1
-        recoveryQueuedFillMode = recoveryMode
-        resolveRecoveryQueuedFillProcessed()
+      getPrices: async () => ({
+        ok: true,
+        data: {
+        symbol: "BTCUSDT",
+        price: "65000"
       }
-    },
-    now: () => 1000,
-    logger: {
-      info: (entry) => runtimeInfo.push(entry),
-      debug: (entry) => runtimeDebug.push(entry),
-      error: (entry) => runtimeErrors.push({
-        message: entry.message,
-        symbol: entry.symbol,
-        reason: entry.reason,
-        errors: entry.errors?.map((error) => error.message ?? String(error))
       }),
-    },
-  })
-  assert.equal(runtime.userDataReady, true)
-  const readinessTransitions = [runtime.userDataReady]
-  const recordReadinessTransition = () => {
-    const ready = runtime.userDataReady
-    if (readinessTransitions[readinessTransitions.length - 1] !== ready) {
-      readinessTransitions.push(ready)
+      getCandles: async () => ({
+        ok: true,
+        data: []
+      }),
+      subscribeForCandles: async () => ({
+        ok: true,
+        data: { unsubscribe: async () => {} }
+      }),
     }
   }
-  assert.equal(submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
-  await bookSubscriptions.get("BTCUSDT")({
-    symbol: "BTCUSDT",
-    bestBidPrice: "60000",
-    bestBidQuantity: "1",
-    bestAskPrice: "70000",
-    bestAskQuantity: "1",
-    timestamp: 1000,
-  })
-  assert.equal(submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
-  assert.equal(submittedOrders[0].side, "BUY")
 
-  const acknowledgedBuy = new CanonicalOrder({
-    clientOrderId: submittedOrders[0].clientOrderId,
-    brokerOrderId: "broker-" + submittedOrders[0].clientOrderId,
-    market: marketMetadata.market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: submittedOrders[0].price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: submittedOrders[0].quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: marketMetadata.market.baseAsset
-    }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
-  userDataHandlers.onEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "NEW",
-      executedOrder: acknowledgedBuy,
-    },
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-  const processedOrderLog = runtimeInfo.find(({ message }) =>
-    message === "Order update processed" && message !== undefined)
-  assert.ok(processedOrderLog)
-  assert.equal(processedOrderLog.price, submittedOrders[0].price)
-  assert.equal(processedOrderLog.quantity, submittedOrders[0].quantity)
+  createBrokerPart2() {
+    return {
+      cancelOrder: async ({ order }) => {
+        if (order.side === "BUY") {this.buyCancellationCount.value += 1}
+        const canceledOrder = new CanonicalOrder({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: order.brokerOrderId,
+          market: order.market,
+          side: order.side,
+          type: order.type,
+          limitPrice: order.limitPrice,
+          originalQuantity: order.originalQuantity,
+          executedQuantity: order.executedQuantity,
+          status: "CANCELED",
+          createdAt: order.createdAt,
+          acknowledgedAt: order.acknowledgedAt,
+          updatedAt: 3,
+          completedAt: 3,
+        })
+        this.canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
+        return {
+          ok: true,
+          data: canceledOrder
+        }
+      },
+      getFills: async ({ orderId } = {}) => {
+        if (this.recoveryPending) {this.recoveryFillHistoryReads += 1}
+        return {
+          ok: true,
+          data: this.fillHistoryByOrder.get(String(orderId)) ?? []
+        }
+      },
+      getCanonicalOrderHistory: async ({
+        orderId,
+        symbol
+      } = {}) => {
+        if (this.recoveryPending) {
+          this.recoveryCanonicalHistoryReads += 1
+          if (this.recoveryCanonicalHistoryReads === 1) {
+            this.resolveRecoveryHistoryStarted()
+            await this.recoveryHistoryGate
+          }
+        }
+        return {
+          ok: true,
+          data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+            (!orderId || order.brokerOrderId === String(orderId)) &&
+            (!symbol || order.market.symbol === symbol)),
+        }
+      },
+      getCanonicalOrder: async () => ({
+        ok: false,
+        errors: [new Error("order not found")]
+      }),
+    }
+  }
 
-  const submitted = calls.find((call) => typeof call === "object")
-  const clientOrderId = submittedOrders[0].clientOrderId
-  const canonicalBuy = new CanonicalOrder({
-    clientOrderId,
-    brokerOrderId: "broker-" + clientOrderId,
-    market: marketMetadata.market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: submitted.price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: submitted.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: submitted.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 2,
-    completedAt: 2,
-  })
-  const fill = new Fill({
-    tradeId: "testnet-buy-fill",
-    brokerOrderId: canonicalBuy.brokerOrderId,
-    clientOrderId: canonicalBuy.clientOrderId,
-    market: marketMetadata.market,
-    side: "BUY",
-    price: new Money({
-      amount: submitted.price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: submitted.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "649.6761",
-      asset: marketMetadata.market.quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
-  recoveryPending = true
-  userDataHandlers.onStatus({
-    type: "recovered",
-    subscriptionId: 17,
-    recoveryGeneration: 1,
-    recoveryRequired: true,
-    reconciliationRequired: true,
-  })
-  recordReadinessTransition()
-  await waitForTestSignal(
-    recoveryHistoryStarted,
-    "owned BUY canonical history read during application recovery",
-    () => ({
-      recoveryCanonicalHistoryReads,
-      recoveryAcknowledgementCount,
-      userDataReady: runtime.userDataReady,
-    }),
-    2_000,
-  )
+  createBrokerPart3() {
+    return {
+      getAccountSnapshot: async () => {
+        if (this.recoveryPending) {this.recoveryAccountSnapshotReads += 1}
+        this.snapshotTime += 1
+        const balances = [
+          new Balance({
+            free: new Quantity({
+              amount: this.baseBalance,
+              asset: this.marketMetadata.market.baseAsset
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: this.marketMetadata.market.baseAsset
+            }),
+          }),
+          new Balance({
+            free: new Quantity({
+              amount: "10000",
+              asset: this.marketMetadata.market.quoteAsset
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: this.marketMetadata.market.quoteAsset
+            }),
+          }),
+        ]
+        return {
+          ok: true,
+          data: {
+          balances,
+          sourceTime: this.snapshotTime
+        }
+        }
+      },
+    }
+  }
 
-  const recoveryReminderCount = 254
-  for (let reminderNumber = 0; reminderNumber < recoveryReminderCount; reminderNumber += 1) {
-    userDataHandlers.onStatus({
+  createBrokerPart4() {
+    return {
+      subscribeForUserData: async (handlers) => {
+        this.userDataHandlers = {
+          ...handlers,
+          onEvent: (message) => {
+            const event = message?.event
+            const executedOrder = event?.executedOrder
+            if (executedOrder?.brokerOrderId) {
+              this.canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+            }
+            const fill = event?.fill
+            if (fill instanceof Fill) {
+              const existing = this.fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+              if (!existing.some((item) => item.id === fill.id)) {
+                this.fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+              }
+            }
+            return handlers.onEvent(message)
+          },
+        }
+        return {
+          ok: true,
+          data: {
+            disconnect: async () => this.calls.push("unsubscribe:user-data"),
+            acknowledgeRecoveryResult: (recoveryGeneration) => {
+              assert.equal(
+                recoveryGeneration,
+                1,
+                "The recovery integration fixture must acknowledge the broker generation it reconciled.",
+              )
+              this.recoveryAcknowledgementCount += 1
+              this.recoveryAcknowledgementObservation = {
+                queuedFillProcessedCount: this.recoveryQueuedFillProcessedCount,
+                queuedFillMode: this.recoveryQueuedFillMode,
+                fillAppliedCount: this.publishedEvents.filter((event) =>
+                  event.name === "execution.fill_applied" && event.data?.tradeId === this.recoveryFillTradeId).length,
+                accountAuditDurable: this.durableFlushes.some((flush) =>
+                  flush.some((event) => event.name === "account.snapshot_captured" && event.phase === "RECOVERY")),
+                openOrdersAuditDurable: this.durableFlushes.some((flush) =>
+                  flush.some((event) => event.name === "account.open_orders_captured" && event.phase === "RECOVERY")),
+              }
+              handlers.onStatus({
+                type: "reconciled",
+                subscriptionId: 17,
+                recoveryGeneration: 1,
+                recoveryRequired: false,
+                reconciliationRequired: false,
+              })
+              this.resolveRecoveryAcknowledged()
+              return {
+                accepted: true,
+                completed: true
+              }
+            },
+          },
+        }
+      },
+    }
+  }
+
+  createBrokerPart5() {
+    return {
+      subscribeForPrices: async ({
+        symbol,
+        onPrice
+      }) => {
+        this.subscriptions.set(symbol, onPrice)
+        return {
+          ok: true,
+          data: { unsubscribe: async () => this.calls.push("unsubscribe:" + symbol) }
+        }
+      },
+      subscribeForBookTicker: async ({
+        symbol,
+        onBookTicker
+      }) => {
+        this.bookSubscriptions.set(symbol, onBookTicker)
+        return {
+          ok: true,
+          data: { unsubscribe: async () => this.calls.push("unsubscribe:book:" + symbol) }
+        }
+      },
+    }
+  }
+
+  createBrokerPart6() {
+    return {
+      placeOrder: async ({ order }) => {
+        this.calls.push({
+          side: order.side,
+          price: order.price,
+          quantity: order.quantity
+        })
+        this.submittedOrders.push(order)
+        if (this.submittedOrders.length === 3) {this.resolveThreeOrders()}
+        if (this.submittedOrders.length === 5) {this.resolveFiveOrders()}
+        const acknowledgedOrder = new CanonicalOrder({
+            clientOrderId: order.clientOrderId,
+            brokerOrderId: "broker-" + order.clientOrderId,
+            market: this.marketMetadata.market,
+            side: order.side,
+            type: order.type,
+            limitPrice: new Money({
+              amount: order.price,
+              asset: this.marketMetadata.market.quoteAsset
+            }),
+            originalQuantity: new Quantity({
+              amount: order.quantity,
+              asset: this.marketMetadata.market.baseAsset
+            }),
+            executedQuantity: new Quantity({
+              amount: "0",
+              asset: this.marketMetadata.market.baseAsset
+            }),
+            status: "OPEN",
+            createdAt: 1,
+            acknowledgedAt: 1,
+            updatedAt: 1,
+          })
+        this.canonicalOrdersByBrokerId.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
+        return {
+          ok: true,
+          data: acknowledgedOrder
+        }
+      },
+    }
+    }
+  }
+
+  async runStep1() {
+    this.calls = []
+  
+    this.buyCancellationCount = { value: 0 }
+  
+    this.subscriptions = new Map()
+  
+    this.bookSubscriptions = new Map()
+  
+    this.userDataHandlers = undefined
+    this.snapshotTime = 0
+  
+    this.baseBalance = "0"
+  
+    this.signalRecoveryCompleted = undefined
+    this.recoveryCompleted = new Promise((resolve) => { this.signalRecoveryCompleted = resolve })
+  
+    this.submittedOrders = []
+  
+    this.canonicalOrdersByBrokerId = new Map()
+  
+    this.fillHistoryByOrder = new Map()
+  
+    this.runtimeErrors = []
+  
+    this.runtimeDebug = []
+  
+    this.runtimeInfo = []
+  
+    this.publishedEvents = []
+  
+    this.durableFlushes = []
+  
+    this.recoveryFillTradeId = "testnet-buy-fill"
+  
+    this.recoveryPending = false
+  
+    this.recoveryCanonicalHistoryReads = 0
+  
+    this.recoveryFillHistoryReads = 0
+  
+    this.recoveryAccountWideOpenOrderReads = 0
+  
+    this.recoveryOwnedOpenOrderReads = 0
+  
+    this.recoveryAccountSnapshotReads = 0
+  
+    this.recoveryAcknowledgementCount = 0
+  
+    this.recoveryQueuedFillProcessedCount = 0
+  
+    this.recoveryQueuedFillMode = undefined
+    this.recoveryAcknowledgementObservation = undefined
+    this.resolveRecoveryHistoryStarted = undefined
+    this.releaseRecoveryHistory = undefined
+    this.resolveRecoveryQueuedFillProcessed = undefined
+    this.resolveRecoveryAcknowledged = undefined
+    this.recoveryHistoryStarted = new Promise((resolve) => {
+      this.resolveRecoveryHistoryStarted = resolve
+    })
+  
+  }
+
+  async runStep2() {
+    this.recoveryHistoryGate = new Promise((resolve) => {
+      this.releaseRecoveryHistory = resolve
+    })
+  
+    this.recoveryQueuedFillProcessed = new Promise((resolve) => {
+      this.resolveRecoveryQueuedFillProcessed = resolve
+    })
+  
+    this.recoveryAcknowledged = new Promise((resolve) => {
+      this.resolveRecoveryAcknowledged = resolve
+    })
+  
+    this.resolveThreeOrders = undefined
+    this.resolveFiveOrders = undefined
+    this.threeOrdersSubmitted = new Promise((resolve) => { this.resolveThreeOrders = resolve })
+  
+    this.fiveOrdersSubmitted = new Promise((resolve) => { this.resolveFiveOrders = resolve })
+  
+    this.marketMetadata = createMarketMetadata("BTCUSDT")
+  
+    this.broker = Object.assign(
+      {},
+      this.createBrokerPart1(),
+      this.createBrokerPart2(),
+      this.createBrokerPart3(),
+      this.createBrokerPart4(),
+      this.createBrokerPart5(),
+      this.createBrokerPart6(),
+    )
+    makeVolatilityReadyBroker(broker, ["BTCUSDT"])
+  
+    this.config = {
+      strategies: {
+        CG_coinGrabber: {
+          enabled: true,
+          settings: {
+            conservative: { enabled: true },
+            aggressive: { enabled: false }
+          },
+          pairs: {
+        BTCUSDT: {
+          enabled: true,
+            tradingEnvironment: "both",
+          investment: 2000,
+          orderQuantity: 0.01,
+          keepQuantity: 0.001,
+          minProfit: 0.01,
+          priceStepPercent: 0.05,
+          pricePrecision: 2,
+          quantityPrecision: 3,
+          makerPercent: 0,
+          takerPercent: 0,
+          },
+        },
+      },
+      },
+    }
+  
+  }
+
+  async runStep3() {
+    this.runtime = await startHarvesterForTest({
+      loadConfig: async () => this.config,
+      env: {
+        NODE_ENV: "development",
+        BINANCE_API_KEY: "test-key",
+        BINANCE_API_SECRET_KEY: "test-secret",
+      },
+      brokerAdapterFactory: () => broker,
+      eventPublisher: {
+        publish: (event) => {
+          this.publishedEvents.push(event)
+          if (event.name === "recovery.cycle_completed") {this.signalRecoveryCompleted()}
+          return { ok: true }
+        },
+        flush: async () => {
+          this.durableFlushes.push(this.publishedEvents.map((event) => ({
+            name: event.name,
+            phase: event.data?.phase,
+          })))
+          return {
+            ok: true,
+            durable: true
+          }
+        },
+      },
+      onUserDataEvent: async ({
+        event,
+        recoveryMode
+      }) => {
+        if (event?.fill?.tradeId === this.recoveryFillTradeId) {
+          this.recoveryQueuedFillProcessedCount += 1
+          this.recoveryQueuedFillMode = recoveryMode
+          this.resolveRecoveryQueuedFillProcessed()
+        }
+      },
+      now: () => 1000,
+      logger: {
+        info: (entry) => this.runtimeInfo.push(entry),
+        debug: (entry) => this.runtimeDebug.push(entry),
+        error: (entry) => this.runtimeErrors.push({
+          message: entry.message,
+          symbol: entry.symbol,
+          reason: entry.reason,
+          errors: entry.errors?.map((error) => error.message ?? String(error))
+        }),
+      },
+    })
+  
+    assert.equal(this.runtime.userDataReady, true)
+  
+    this.readinessTransitions = [this.runtime.userDataReady]
+  
+    this.recordReadinessTransition = () => {
+      const ready = this.runtime.userDataReady
+      if (this.readinessTransitions[this.readinessTransitions.length - 1] !== ready) {
+        this.readinessTransitions.push(ready)
+      }
+    }
+  
+    assert.equal(this.submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
+  
+  }
+
+  async runStep4() {
+    await this.bookSubscriptions.get("BTCUSDT")({
+      symbol: "BTCUSDT",
+      bestBidPrice: "60000",
+      bestBidQuantity: "1",
+      bestAskPrice: "70000",
+      bestAskQuantity: "1",
+      timestamp: 1000,
+    })
+  
+    assert.equal(this.submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
+  
+    assert.equal(this.submittedOrders[0].side, "BUY")
+  
+  
+    const acknowledgedBuy = new CanonicalOrder({
+      clientOrderId: this.submittedOrders[0].clientOrderId,
+      brokerOrderId: "broker-" + this.submittedOrders[0].clientOrderId,
+      market: this.marketMetadata.market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: this.submittedOrders[0].price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      originalQuantity: new Quantity({
+        amount: this.submittedOrders[0].quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    })
+  
+    this.userDataHandlers.onEvent({
+      event: {
+        eventType: "executionReport",
+        executionType: "NEW",
+        executedOrder: acknowledgedBuy,
+      },
+    })
+  
+    await new Promise((resolve) => setImmediate(resolve))
+  
+    this.processedOrderLog = this.runtimeInfo.find(({ message }) =>
+      message === "Order update processed" && message !== undefined)
+  
+    assert.ok(this.processedOrderLog)
+  
+    assert.equal(this.processedOrderLog.price, this.submittedOrders[0].price)
+  
+    assert.equal(this.processedOrderLog.quantity, this.submittedOrders[0].quantity)
+  
+  
+    const submitted = this.calls.find((call) => typeof call === "object")
+  
+    this.clientOrderId = this.submittedOrders[0].clientOrderId
+  
+  }
+
+  async runStep5() {
+    this.canonicalBuy = new CanonicalOrder({
+      clientOrderId: this.clientOrderId,
+      brokerOrderId: "broker-" + this.clientOrderId,
+      market: this.marketMetadata.market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: submitted.price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      originalQuantity: new Quantity({
+        amount: submitted.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      executedQuantity: new Quantity({
+        amount: submitted.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      status: "FILLED",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 2,
+      completedAt: 2,
+    })
+  
+    this.initialBuyFill = new Fill({
+      tradeId: "testnet-buy-fill",
+      brokerOrderId: this.canonicalBuy.brokerOrderId,
+      clientOrderId: this.canonicalBuy.clientOrderId,
+      market: this.marketMetadata.market,
+      side: "BUY",
+      price: new Money({
+        amount: submitted.price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      quantity: new Quantity({
+        amount: submitted.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      quoteQuantity: new Money({
+        amount: "649.6761",
+        asset: this.marketMetadata.market.quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    })
+  
+    this.recoveryPending = true
+  
+    this.userDataHandlers.onStatus({
       type: "recovered",
       subscriptionId: 17,
       recoveryGeneration: 1,
       recoveryRequired: true,
       reconciliationRequired: true,
     })
-    recordReadinessTransition()
+  
+    this.recordReadinessTransition()
+  
   }
 
-  assert.equal(
-    recoveryCanonicalHistoryReads,
-    1,
-    "All 254 reminders must share one in-flight owned-order reconciliation instead of starting duplicate canonical-history reads.",
-  )
-  assert.equal(
-    recoveryAcknowledgementCount,
-    0,
-    "The broker must not be acknowledged while the owned BUY canonical-history read is unresolved.",
-  )
-  assert.equal(
-    runtime.userDataReady,
-    false,
-    "Trading readiness must remain closed throughout the pending recovery generation.",
-  )
-
-  baseBalance = "0.01"
-  const queuedFillDelivery = userDataHandlers.onEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: canonicalBuy,
-      fill,
-    },
-  })
-
-  assert.equal(
-    recoveryQueuedFillProcessedCount,
-    0,
-    "The BUY execution report must remain queued while owned-order REST reconciliation is pending.",
-  )
-  assert.equal(
-    recoveryAcknowledgementCount,
-    0,
-    "Repeated recovery reminders and a queued fill must not trigger premature broker acknowledgement.",
-  )
-
-  releaseRecoveryHistory()
-  await waitForTestSignal(
-    recoveryAcknowledged,
-    "one successful global broker recovery acknowledgement",
-    () => ({
-      recoveryCanonicalHistoryReads,
-      recoveryAcknowledgementCount,
-      recoveryQueuedFillProcessedCount,
-      userDataReady: runtime.userDataReady,
-    }),
-    5_000,
-  )
-  recordReadinessTransition()
-  await waitForTestSignal(
-    recoveryQueuedFillProcessed,
-    "queued BUY fill drained during application recovery",
-    () => ({
-      recoveryQueuedFillProcessedCount,
-      recoveryQueuedFillMode,
-      userDataReady: runtime.userDataReady,
-    }),
-    2_000,
-  )
-  await queuedFillDelivery
-  recoveryPending = false
-
-  const recoveryFillAppliedEvents = publishedEvents.filter((event) =>
-    event.name === "execution.fill_applied" && event.data?.tradeId === recoveryFillTradeId)
-  const recoveryReconciledStatusEvents = publishedEvents.filter((event) =>
-    event.name === "broker.status_changed" && event.data?.status === "reconciled")
-  const recoveryCompletionLogs = runtimeInfo.filter((entry) =>
-    entry.message === "application recovery completed and broker acknowledgement accepted")
-
-  assert.equal(
-    recoveryReminderCount,
-    254,
-    "The regression must reproduce the 254 recovered reminders recorded in the incident Journal.",
-  )
-  assert.equal(
-    recoveryCanonicalHistoryReads,
-    1,
-    "One unresolved recovery generation must reconcile its owned BUY exactly once despite all repeated reminders.",
-  )
-  assert.ok(
-    recoveryFillHistoryReads >= 1,
-    "Recovery must consult canonical fill history for the owned BUY before certifying reconciliation.",
-  )
-  assert.equal(
-    recoveryOwnedOpenOrderReads,
-    1,
-    "Owned-order reconciliation must perform one symbol-scoped open-order read for the single owned BUY.",
-  )
-  assert.equal(
-    recoveryAccountWideOpenOrderReads,
-    1,
-    "The recovery generation must perform exactly one account-wide open-orders audit.",
-  )
-  assert.equal(
-    recoveryAccountSnapshotReads,
-    1,
-    "The recovery generation must perform exactly one fresh account snapshot read.",
-  )
-  assert.equal(
-    recoveryQueuedFillProcessedCount,
-    1,
-    "The queued BUY execution report must be drained once rather than replayed for each recovered reminder.",
-  )
-  assert.equal(
-    recoveryQueuedFillMode,
-    true,
-    "The queued BUY execution report must be processed in recovery mode.",
-  )
-  assert.equal(
-    recoveryFillAppliedEvents.length,
-    1,
-    "The stream fill and matching REST fill history must update accounting exactly once.",
-  )
-  assert.equal(
-    runtime.portfolio.getPosition({ symbol: "BTCUSDT" })?.baseQuantity.amount,
-    "0.01",
-    "The Portfolio must contain exactly one executed BUY quantity after stream/REST overlap.",
-  )
-  assert.equal(
-    recoveryAcknowledgementCount,
-    1,
-    "The broker recovery acknowledgement result must be accepted exactly once for the current generation.",
-  )
-  assert.equal(
-    recoveryAcknowledgementObservation.queuedFillProcessedCount,
-    1,
-    "The queued fill must be drained before the broker recovery acknowledgement is attempted.",
-  )
-  assert.equal(
-    recoveryAcknowledgementObservation.queuedFillMode,
-    true,
-    "The queued fill must be processed in recovery mode before broker acknowledgement.",
-  )
-  assert.equal(
-    recoveryAcknowledgementObservation.fillAppliedCount,
-    1,
-    "The canonical BUY fill must already be applied exactly once when broker acknowledgement begins.",
-  )
-  assert.equal(
-    recoveryAcknowledgementObservation.accountAuditDurable,
-    true,
-    "The RECOVERY account snapshot must be durably flushed before broker acknowledgement.",
-  )
-  assert.equal(
-    recoveryAcknowledgementObservation.openOrdersAuditDurable,
-    true,
-    "The RECOVERY account-wide open-orders audit must be durably flushed before broker acknowledgement.",
-  )
-  assert.equal(
-    recoveryReconciledStatusEvents.length,
-    1,
-    "The successful recovery generation must publish exactly one terminal reconciled status.",
-  )
-  assert.equal(
-    recoveryCompletionLogs.length,
-    1,
-    "The successful recovery generation must emit exactly one application completion diagnostic.",
-  )
-  assert.equal(
-    runtime.userDataReady,
-    true,
-    "Trading readiness may reopen only after queued events, canonical reconciliation, durable audits, and broker acknowledgement complete.",
-  )
-  assert.deepEqual(
-    readinessTransitions,
-    [true, false, true],
-    "Readiness must close once for this recovery generation and reopen exactly once after successful global completion.",
-  )
-
-  await waitForTestSignal(threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
-    submittedOrders: submittedOrders.map(({
-      side,
-      price
-    }) => ({
-      side,
-      price
-    })),
-    userDataReady: runtime.userDataReady,
-    userDataStatus: runtime.userDataStatus,
-    errors: runtimeErrors,
-  }))
-  const secondBuyIntent = submittedOrders.find((order) => order.side === "BUY" && order.clientOrderId !== clientOrderId)
-  const canonicalSecondBuy = new CanonicalOrder({
-    clientOrderId: secondBuyIntent.clientOrderId,
-    brokerOrderId: "broker-" + secondBuyIntent.clientOrderId,
-    market: marketMetadata.market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: secondBuyIntent.price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: secondBuyIntent.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: secondBuyIntent.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 3,
-    completedAt: 3,
-  })
-  const secondBuyFill = new Fill({
-    tradeId: "testnet-second-buy-fill",
-    brokerOrderId: canonicalSecondBuy.brokerOrderId,
-    clientOrderId: canonicalSecondBuy.clientOrderId,
-    market: marketMetadata.market,
-    side: "BUY",
-    price: new Money({
-      amount: secondBuyIntent.price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: secondBuyIntent.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: secondBuyIntent.price,
-        right: secondBuyIntent.quantity
+  async runStep6() {
+    await waitForTestSignal(
+      this.recoveryHistoryStarted,
+      "owned BUY canonical history read during application recovery",
+      () => ({
+        recoveryCanonicalHistoryReads: this.recoveryCanonicalHistoryReads,
+        recoveryAcknowledgementCount: this.recoveryAcknowledgementCount,
+        userDataReady: this.runtime.userDataReady,
       }),
-      asset: marketMetadata.market.quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
-  baseBalance = "0.02"
-  userDataHandlers.onEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: canonicalSecondBuy,
-      fill: secondBuyFill,
-    },
-  })
-  await waitForTestSignal(fiveOrdersSubmitted, "five order submissions after the second BUY fill", () => ({
-    submittedOrders: submittedOrders.map(({
-      side,
-      price
-    }) => ({
-      side,
-      price
-    })),
-    userDataReady: runtime.userDataReady,
-    userDataStatus: runtime.userDataStatus,
-    errors: runtimeErrors,
-  }))
+      2_000,
+    )
+  
+  
+    const recoveryReminderCount = 254
+  
+    for (let reminderNumber = 0; reminderNumber < recoveryReminderCount; reminderNumber += 1) {
+      this.userDataHandlers.onStatus({
+        type: "recovered",
+        subscriptionId: 17,
+        recoveryGeneration: 1,
+        recoveryRequired: true,
+        reconciliationRequired: true,
+      })
+      this.recordReadinessTransition()
+    }
+  
+  
+    assert.equal(
+      this.recoveryCanonicalHistoryReads,
+      1,
+      "All 254 reminders must share one in-flight owned-order reconciliation instead of starting duplicate canonical-history reads.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementCount,
+      0,
+      "The broker must not be acknowledged while the owned BUY canonical-history read is unresolved.",
+    )
+  
+    assert.equal(
+      this.runtime.userDataReady,
+      false,
+      "Trading readiness must remain closed throughout the pending recovery generation.",
+    )
+  
+  
+    this.baseBalance = "0.01"
+  
+    this.queuedFillDelivery = this.userDataHandlers.onEvent({
+      event: {
+        eventType: "executionReport",
+        executionType: "TRADE",
+        executedOrder: this.canonicalBuy,
+        fill,
+      },
+    })
+  
+  }
 
-  const replacementSell = submittedOrders.filter((order) => order.side === "SELL").at(-1)
-  assert.equal(replacementSell.side, "SELL")
-  const canonicalSell = new CanonicalOrder({
-    clientOrderId: replacementSell.clientOrderId,
-    brokerOrderId: "broker-" + replacementSell.clientOrderId,
-    market: marketMetadata.market,
-    side: "SELL",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: replacementSell.price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: replacementSell.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: replacementSell.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 4,
-    completedAt: 4,
-  })
-  const sellFill = new Fill({
-    tradeId: "testnet-sell-fill",
-    brokerOrderId: canonicalSell.brokerOrderId,
-    clientOrderId: canonicalSell.clientOrderId,
-    market: marketMetadata.market,
-    side: "SELL",
-    price: new Money({
-      amount: replacementSell.price,
-      asset: marketMetadata.market.quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: replacementSell.quantity,
-      asset: marketMetadata.market.baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: replacementSell.price,
-        right: replacementSell.quantity
+  async runStep7() {
+  
+    assert.equal(
+      this.recoveryQueuedFillProcessedCount,
+      0,
+      "The BUY execution report must remain queued while owned-order REST reconciliation is pending.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementCount,
+      0,
+      "Repeated recovery reminders and a queued fill must not trigger premature broker acknowledgement.",
+    )
+  
+  
+    this.releaseRecoveryHistory()
+  
+    await waitForTestSignal(
+      this.recoveryAcknowledged,
+      "one successful global broker recovery acknowledgement",
+      () => ({
+        recoveryCanonicalHistoryReads: this.recoveryCanonicalHistoryReads,
+        recoveryAcknowledgementCount: this.recoveryAcknowledgementCount,
+        recoveryQueuedFillProcessedCount: this.recoveryQueuedFillProcessedCount,
+        userDataReady: this.runtime.userDataReady,
       }),
-      asset: marketMetadata.market.quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
-  baseBalance = "0.001"
-  userDataHandlers.onEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: canonicalSell,
-      fill: sellFill,
-    },
-  })
-  await waitForTestSignal(recoveryCompleted, "recovery.cycle_completed after the SELL fill", () => ({
-    submittedOrders: submittedOrders.map(({
-      side,
-      price
-    }) => ({
-      side,
-      price
-    })),
-    userDataReady: runtime.userDataReady,
-    userDataStatus: runtime.userDataStatus,
-    errors: runtimeErrors,
-  }))
-  assert.ok(runtimeDebug.some(({
-    message,
-    tradeId
-  }) =>
-    message === "Execution accounted" && tradeId === "testnet-buy-fill"))
-  assert.ok(runtimeDebug.some(({
-    message,
-    tradeId
-  }) =>
-    message === "Execution accounted" && tradeId === "testnet-sell-fill"))
-  assert.ok(runtimeDebug.some(({ message }) =>
-    message === "recovery completion evaluation input"))
-  assert.ok(runtimeDebug.some(({ message }) =>
-    message === "Recovery cycle completed"))
-  await subscriptions.get("BTCUSDT")({
-    eventType: "aggTrade",
-    symbol: "BTCUSDT",
-    price: "65000.12",
-    timestamp: 1000,
-  })
-  // With no active position left, the subsequent market tick preserves the
-  // existing trailing-BUY behavior: it replaces the standing BUY. Shutdown
-  // then cancels the replacement BUY while leaving recovery SELLs untouched.
-  assert.equal(submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
-  assert.equal(buyCancellationCount.value, 1, "the subsequent market tick must trail the standing BUY once")
-  await runtime.stop()
-  assert.equal(buyCancellationCount.value, 2, "shutdown must cancel the replacement standing BUY")
-  const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
-  assert.equal(position.baseQuantity.amount, "0")
-  assert.equal(position.freeBaseQuantity.amount, "0.001")
-  assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
+      5_000,
+    )
+  
+    this.recordReadinessTransition()
+  
+    await waitForTestSignal(
+      this.recoveryQueuedFillProcessed,
+      "queued BUY fill drained during application recovery",
+      () => ({
+        recoveryQueuedFillProcessedCount: this.recoveryQueuedFillProcessedCount,
+        recoveryQueuedFillMode: this.recoveryQueuedFillMode,
+        userDataReady: this.runtime.userDataReady,
+      }),
+      2_000,
+    )
+  
+    await this.queuedFillDelivery
+  
+    this.recoveryPending = false
+  
+  
+    const recoveryFillAppliedEvents = this.publishedEvents.filter((event) =>
+      event.name === "execution.fill_applied" && event.data?.tradeId === this.recoveryFillTradeId)
+  
+    this.recoveryReconciledStatusEvents = this.publishedEvents.filter((event) =>
+      event.name === "broker.status_changed" && event.data?.status === "reconciled")
+  
+    this.recoveryCompletionLogs = this.runtimeInfo.filter((entry) =>
+      entry.message === "application recovery completed and broker acknowledgement accepted")
+  
+  
+    assert.equal(
+      recoveryReminderCount,
+      254,
+      "The regression must reproduce the 254 recovered reminders recorded in the incident Journal.",
+    )
+  
+  }
+
+  async runStep8() {
+    assert.equal(
+      this.recoveryCanonicalHistoryReads,
+      1,
+      "One unresolved recovery generation must reconcile its owned BUY exactly once despite all repeated reminders.",
+    )
+  
+    assert.ok(
+      this.recoveryFillHistoryReads >= 1,
+      "Recovery must consult canonical fill history for the owned BUY before certifying reconciliation.",
+    )
+  
+    assert.equal(
+      this.recoveryOwnedOpenOrderReads,
+      1,
+      "Owned-order reconciliation must perform one symbol-scoped open-order read for the single owned BUY.",
+    )
+  
+    assert.equal(
+      this.recoveryAccountWideOpenOrderReads,
+      1,
+      "The recovery generation must perform exactly one account-wide open-orders audit.",
+    )
+  
+    assert.equal(
+      this.recoveryAccountSnapshotReads,
+      1,
+      "The recovery generation must perform exactly one fresh account snapshot read.",
+    )
+  
+    assert.equal(
+      this.recoveryQueuedFillProcessedCount,
+      1,
+      "The queued BUY execution report must be drained once rather than replayed for each recovered reminder.",
+    )
+  
+    assert.equal(
+      this.recoveryQueuedFillMode,
+      true,
+      "The queued BUY execution report must be processed in recovery mode.",
+    )
+  
+    assert.equal(
+      recoveryFillAppliedEvents.length,
+      1,
+      "The stream fill and matching REST fill history must update accounting exactly once.",
+    )
+  
+    assert.equal(
+      this.runtime.portfolio.getPosition({ symbol: "BTCUSDT" })?.baseQuantity.amount,
+      "0.01",
+      "The Portfolio must contain exactly one executed BUY quantity after stream/REST overlap.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementCount,
+      1,
+      "The broker recovery acknowledgement result must be accepted exactly once for the current generation.",
+    )
+  
+  }
+
+  async runStep9() {
+    assert.equal(
+      this.recoveryAcknowledgementObservation.queuedFillProcessedCount,
+      1,
+      "The queued fill must be drained before the broker recovery acknowledgement is attempted.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementObservation.queuedFillMode,
+      true,
+      "The queued fill must be processed in recovery mode before broker acknowledgement.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementObservation.fillAppliedCount,
+      1,
+      "The canonical BUY fill must already be applied exactly once when broker acknowledgement begins.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementObservation.accountAuditDurable,
+      true,
+      "The RECOVERY account snapshot must be durably flushed before broker acknowledgement.",
+    )
+  
+    assert.equal(
+      this.recoveryAcknowledgementObservation.openOrdersAuditDurable,
+      true,
+      "The RECOVERY account-wide open-orders audit must be durably flushed before broker acknowledgement.",
+    )
+  
+    assert.equal(
+      this.recoveryReconciledStatusEvents.length,
+      1,
+      "The successful recovery generation must publish exactly one terminal reconciled status.",
+    )
+  
+    assert.equal(
+      this.recoveryCompletionLogs.length,
+      1,
+      "The successful recovery generation must emit exactly one application completion diagnostic.",
+    )
+  
+    assert.equal(
+      this.runtime.userDataReady,
+      true,
+      "Trading readiness may reopen only after queued events, canonical reconciliation, durable audits, and broker acknowledgement complete.",
+    )
+  
+    assert.deepEqual(
+      this.readinessTransitions,
+      [true, false, true],
+      "Readiness must close once for this recovery generation and reopen exactly once after successful global completion.",
+    )
+  
+  }
+
+  async runStep10() {
+  
+    await waitForTestSignal(this.threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
+      submittedOrders: this.submittedOrders.map(({
+        side,
+        price
+      }) => ({
+        side,
+        price
+      })),
+      userDataReady: this.runtime.userDataReady,
+      userDataStatus: this.runtime.userDataStatus,
+      errors: this.runtimeErrors,
+    }))
+  
+    this.secondBuyIntent = this.submittedOrders.find((order) => order.side === "BUY" && order.clientOrderId !== this.clientOrderId)
+  
+    this.canonicalSecondBuy = new CanonicalOrder({
+      clientOrderId: this.secondBuyIntent.clientOrderId,
+      brokerOrderId: "broker-" + this.secondBuyIntent.clientOrderId,
+      market: this.marketMetadata.market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: this.secondBuyIntent.price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      originalQuantity: new Quantity({
+        amount: this.secondBuyIntent.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      executedQuantity: new Quantity({
+        amount: this.secondBuyIntent.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      status: "FILLED",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 3,
+      completedAt: 3,
+    })
+  
+  }
+
+  async runStep11() {
+    this.secondBuyFill = new Fill({
+      tradeId: "testnet-second-buy-fill",
+      brokerOrderId: this.canonicalSecondBuy.brokerOrderId,
+      clientOrderId: this.canonicalSecondBuy.clientOrderId,
+      market: this.marketMetadata.market,
+      side: "BUY",
+      price: new Money({
+        amount: this.secondBuyIntent.price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      quantity: new Quantity({
+        amount: this.secondBuyIntent.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      quoteQuantity: new Money({
+        amount: multiplyDecimal({
+          left: this.secondBuyIntent.price,
+          right: this.secondBuyIntent.quantity
+        }),
+        asset: this.marketMetadata.market.quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    })
+  
+    this.baseBalance = "0.02"
+  
+    this.userDataHandlers.onEvent({
+      event: {
+        eventType: "executionReport",
+        executionType: "TRADE",
+        executedOrder: this.canonicalSecondBuy,
+        fill: this.secondBuyFill,
+      },
+    })
+  
+    await waitForTestSignal(this.fiveOrdersSubmitted, "five order submissions after the second BUY fill", () => ({
+      submittedOrders: this.submittedOrders.map(({
+        side,
+        price
+      }) => ({
+        side,
+        price
+      })),
+      userDataReady: this.runtime.userDataReady,
+      userDataStatus: this.runtime.userDataStatus,
+      errors: this.runtimeErrors,
+    }))
+  
+  
+    const replacementSell = this.submittedOrders.filter((order) => order.side === "SELL").at(-1)
+  
+    assert.equal(replacementSell.side, "SELL")
+  
+  }
+
+  async runStep12() {
+    this.canonicalSell = new CanonicalOrder({
+      clientOrderId: replacementSell.clientOrderId,
+      brokerOrderId: "broker-" + replacementSell.clientOrderId,
+      market: this.marketMetadata.market,
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: replacementSell.price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      originalQuantity: new Quantity({
+        amount: replacementSell.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      executedQuantity: new Quantity({
+        amount: replacementSell.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      status: "FILLED",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 4,
+      completedAt: 4,
+    })
+  
+    this.sellFill = new Fill({
+      tradeId: "testnet-sell-fill",
+      brokerOrderId: this.canonicalSell.brokerOrderId,
+      clientOrderId: this.canonicalSell.clientOrderId,
+      market: this.marketMetadata.market,
+      side: "SELL",
+      price: new Money({
+        amount: replacementSell.price,
+        asset: this.marketMetadata.market.quoteAsset
+      }),
+      quantity: new Quantity({
+        amount: replacementSell.quantity,
+        asset: this.marketMetadata.market.baseAsset
+      }),
+      quoteQuantity: new Money({
+        amount: multiplyDecimal({
+          left: replacementSell.price,
+          right: replacementSell.quantity
+        }),
+        asset: this.marketMetadata.market.quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    })
+  
+    this.baseBalance = "0.001"
+  
+    this.userDataHandlers.onEvent({
+      event: {
+        eventType: "executionReport",
+        executionType: "TRADE",
+        executedOrder: this.canonicalSell,
+        fill: this.sellFill,
+      },
+    })
+  
+  }
+
+  async runStep13() {
+    await waitForTestSignal(this.recoveryCompleted, "recovery.cycle_completed after the SELL fill", () => ({
+      submittedOrders: this.submittedOrders.map(({
+        side,
+        price
+      }) => ({
+        side,
+        price
+      })),
+      userDataReady: this.runtime.userDataReady,
+      userDataStatus: this.runtime.userDataStatus,
+      errors: this.runtimeErrors,
+    }))
+  
+    assert.ok(this.runtimeDebug.some(({
+      message,
+      tradeId
+    }) =>
+      message === "Execution accounted" && tradeId === "testnet-buy-fill"))
+  
+    assert.ok(this.runtimeDebug.some(({
+      message,
+      tradeId
+    }) =>
+      message === "Execution accounted" && tradeId === "testnet-sell-fill"))
+  
+    assert.ok(this.runtimeDebug.some(({ message }) =>
+      message === "recovery completion evaluation input"))
+  
+    assert.ok(this.runtimeDebug.some(({ message }) =>
+      message === "Recovery cycle completed"))
+  
+    await this.subscriptions.get("BTCUSDT")({
+      eventType: "aggTrade",
+      symbol: "BTCUSDT",
+      price: "65000.12",
+      timestamp: 1000,
+    })
+  
+    // With no active position left, the subsequent market tick preserves the
+    // existing trailing-BUY behavior: it replaces the standing BUY. Shutdown
+    // then cancels the replacement BUY while leaving recovery SELLs untouched.
+    assert.equal(this.submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
+  
+    assert.equal(this.buyCancellationCount.value, 1, "the subsequent market tick must trail the standing BUY once")
+  
+    await this.runtime.stop()
+  
+    assert.equal(this.buyCancellationCount.value, 2, "shutdown must cancel the replacement standing BUY")
+  
+    this.position = this.runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
+  
+    assert.equal(this.position.baseQuantity.amount, "0")
+  
+    assert.equal(this.position.freeBaseQuantity.amount, "0.001")
+  
+    assert.equal(this.runtime.getRecoveryLedger({ marketId: this.marketMetadata.market.id }).buyCost, "0")
+  
+    assert.deepEqual(this.submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
+  }
+
+  async run() {
+    await this.runStep1()
+    await this.runStep2()
+    await this.runStep3()
+    await this.runStep4()
+    await this.runStep5()
+    await this.runStep6()
+    await this.runStep7()
+    await this.runStep8()
+    await this.runStep9()
+    await this.runStep10()
+    await this.runStep11()
+    await this.runStep12()
+    await this.runStep13()
+  }
+}
+
+test("explicit TESTNET trading drains its first BUY fill once after 254 recovery reminders and completes the cycle", { timeout: 90_000 }, async () => {
+  const scenario = new TestnetTradingRecoveryScenario()
+  await scenario.run()
 })
-
 
 
 function createLifecycleLogCapture() {
