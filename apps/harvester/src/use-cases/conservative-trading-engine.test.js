@@ -7639,9 +7639,9 @@ test("pauses a recovered order canceled without a durable Harvester cancellation
   assert.deepEqual(harness.orders, [])
 })
 
-test("journals broker execution reports and applied canonical order transitions", async () => {
-  const events = []
-  const strategyPolicy = {
+
+function createJournalTransitionStrategyPolicy() {
+  return {
     evaluate: () => ({
       strategy: "CONSERVATIVE",
       symbol: "DOGEUSDT",
@@ -7652,24 +7652,69 @@ test("journals broker execution reports and applied canonical order transitions"
         type: "LIMIT_MAKER",
         price: "99.95",
         quantity: "1",
-        reason: "INITIAL_BUY"
+        reason: "INITIAL_BUY",
       }],
     }),
     evaluateTrailingBuyRepricing: () => ({
       shouldReplace: false,
-      adjustmentThreshold: "0"
+      adjustmentThreshold: "0",
     }),
   }
+}
+
+function createCanceledBrokerExecutionEvidence({ order }) {
+  return {
+    schemaVersion: 1,
+    source: "binance.spot.userData.executionReport",
+    eventTime: 2,
+    transactionTime: 2,
+    symbol: "DOGEUSDT",
+    clientOrderId: order.clientOrderId,
+    originalClientOrderId: order.clientOrderId,
+    side: "BUY",
+    orderType: "LIMIT_MAKER",
+    orderQuantity: "1",
+    orderPrice: "99.95",
+    executionType: "CANCELED",
+    orderStatus: "CANCELED",
+    orderId: order.brokerOrderId,
+    lastExecutedQuantity: "0",
+    cumulativeExecutedQuantity: "0",
+    cumulativeQuoteQuantity: "0",
+    commissionAmount: "0",
+    commissionAsset: null,
+    tradeId: "-1",
+    isMaker: false,
+  }
+}
+
+function assertJournalExecutionReportEvents({ events }) {
+  assert.ok(events.some((event) =>
+    event.name === "broker.execution_report" && event.data.cumulativeQuoteQuantity === "0"))
+  assert.ok(events.some((event) =>
+    event.name === "order.updated" && event.data.status === "CANCELED"))
+}
+
+
+test("journals broker execution reports and applied canonical order transitions", async () => {
+  const events = []
   const harness = await createHarness({
-    strategyPolicy,
-    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+    strategyPolicy: createJournalTransitionStrategyPolicy(),
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return {
+          ok: true,
+        }
+      },
+    },
   })
   const submitted = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
   assert.equal(submitted.ok, true)
@@ -7685,47 +7730,26 @@ test("journals broker execution reports and applied canonical order transitions"
     originalQuantity: current.originalQuantity,
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     status: "CANCELED",
     updatedAt: 2,
   })
-  const brokerEvidence = {
-    schemaVersion: 1,
-    source: "binance.spot.userData.executionReport",
-    eventTime: 2,
-    transactionTime: 2,
-    symbol: "DOGEUSDT",
-    clientOrderId: current.clientOrderId,
-    originalClientOrderId: current.clientOrderId,
-    side: "BUY",
-    orderType: "LIMIT_MAKER",
-    orderQuantity: "1",
-    orderPrice: "99.95",
-    executionType: "CANCELED",
-    orderStatus: "CANCELED",
-    orderId: current.brokerOrderId,
-    lastExecutedQuantity: "0",
-    cumulativeExecutedQuantity: "0",
-    cumulativeQuoteQuantity: "0",
-    commissionAmount: "0",
-    commissionAsset: null,
-    tradeId: "-1",
-    isMaker: false,
-  }
   const result = await harness.engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
       executionType: "CANCELED",
       executedOrder: canceled,
-      brokerEvidence
+      brokerEvidence: createCanceledBrokerExecutionEvidence({
+        order: current,
+      }),
     },
   })
   assert.equal(result.ok, true)
-  assert.ok(events.some((event) => event.name === "broker.execution_report" && event.data.cumulativeQuoteQuantity === "0"))
-  assert.ok(events.some((event) => event.name === "order.updated" && event.data.status === "CANCELED"))
+  assertJournalExecutionReportEvents({
+    events,
+  })
 })
-
 
 test("best-effort strategy evidence failure does not block order submission", async () => {
   const harness = await createHarness({
