@@ -36,15 +36,9 @@ const createOpenOrderSnapshot = ({ order }) => {
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
-}ue
-  }),
 })
 
-const createTestCandle = ({
-  symbol,
-  openTime,
-  isClosed = true
-} = {}) => ({
+const createTestCandle = ({ symbol, openTime, isClosed = true } = {}) => ({
   symbol,
   interval: "1m",
   openTime,
@@ -61,15 +55,9 @@ const startHarvesterForTest = (input = {}) => {
   if (!eventPublisher) {
     eventPublisher = testEventPublisher
   } else if (input.env?.NODE_ENV === "development" && typeof eventPublisher.flush !== "function") {
-    eventPublisher = {
-      ...eventPublisher,
-      flush: testEventPublisher.flush
-    }
+    eventPublisher = { ...eventPublisher, flush: testEventPublisher.flush }
   }
-  return startHarvester({
-    ...input,
-    eventPublisher
-  })
+  return startHarvester({ ...input, eventPublisher })
 }
 
 function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
@@ -91,12 +79,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 test('loads configuration before returning the startup context', async () => {
   const appConfig = {
-    strategies: { CG_coinGrabber: {
-      enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
-      pairs: { ZROUSDT: { enabled: true, tradingEnvironment: "both", enableVolatilityProtection: true } }
-    }leVolatilityProtection: true
-    } } } },
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true, tradingEnvironment: "both", enableVolatilityProtection: true } } } },
   };
   const configSource = '/etc/harvester/config.json';
   const calls = [];
@@ -139,14 +122,8 @@ test('loads the default validated strategy and pair configuration', async () => 
 
 // eslint-disable-next-line max-lines-per-function -- Keep the full ordered accounting lifecycle in one end-to-end scenario.
 test('ordinary TRADE fills update owned accounting after the startup account audit', async () => {
-  const baseAsset = new Asset({
-    id: 'asset-zro',
-    code: 'ZRO'
-  });
-  const quoteAsset = new Asset({
-    id: 'asset-usdt',
-    code: 'USDT'
-  });
+  const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' });
+  const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' });
   const market = new Market({
     venue: 'binance',
     symbol: 'ZROUSDT',
@@ -161,16 +138,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       { type: 'MIN_QUANTITY', status: 'SUPPORTED', value: new Quantity({ amount: '0.01', asset: baseAsset }) },
       { type: 'MIN_NOTIONAL', status: 'SUPPORTED', value: new Money({ amount: '1', asset: quoteAsset }) },
     ],
-  }sset })
-      }: baseAsset
-      }) },
-      {
-        type: 'MIN_NOTIONAL',
-        status: 'SUPPORTED',
-        value: new Money({ amount: '1', asset: quoteAsset })
-      } quoteAsset
-      }) },
-    ],
   });
   const marketMetadata = {
     market,
@@ -182,23 +149,14 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     new Balance({
       free: new Quantity({ amount: '25', asset: baseAsset }),
       locked: new Quantity({ amount: '2', asset: baseAsset }),
-    }2',
-        asset: baseAsset
-      }),
     }),
     new Balance({
       free: new Quantity({ amount: '1000', asset: quoteAsset }),
       locked: new Quantity({ amount: '0', asset: quoteAsset }),
-    }',
-        asset: quoteAsset
-      }),
     }),
   ];
   const appConfig = {
-    strategies: { CG_coinGrabber: {
-      enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
-      pairs: {
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
           tradingEnvironment: "both",
@@ -210,8 +168,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
         takerPercent: 0,
         investment: 1000,
       },
-    }
-    }    },
     } } },
   };
   let accountSnapshotCalls = 0;
@@ -305,14 +261,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       };
       return toResult({ data: { disconnect: async () => {} } });
     },
-  }rId);
-          canonicalOrders.set(orderId, event.executedOrder);
-          fillsByOrderId.set(orderId, [event.fill]);
-        }
-        return callback(message);
-      };
-      return toResult({ data: { disconnect: async () => {} } });
-    },
   };
   const context = await startHarvesterForTest({
     loadConfig: async () => appConfig,
@@ -332,7 +280,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     onUserDataEvent: async ({ event } = {}) => {
       if (event?.executionType === 'TRADE') {observedTrade();}
     },
-  }},
   });
 
   assert.equal(context.userDataReady, true);
@@ -341,8 +288,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   assert.equal(volatility.data.status.isReady, true, JSON.stringify({
     status: volatility.data.status,
     logs: userDataErrors.map(([entry]) => ({ ...entry, error: entry.error?.message, stack: entry.error?.stack })),
-  }or?.stack
-    })),
   }));
   // The startup REST ticker seed is deferred until candle warm-up reaches NORMAL.
   assert.ok(broker.lastOrder, 'the startup ticker seed should be evaluated after volatility history becomes ready');
@@ -363,9 +308,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     originalQuantity: new Quantity({ amount: buyIntent.quantity, asset: baseAsset }),
     executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
     status: 'OPEN',
-  }asset: baseAsset
-    }),
-    status: 'OPEN',
   });
   const fill = new Fill({
     tradeId: 'trade-1',
@@ -379,8 +321,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     liquidityRole: 'MAKER',
     commissionStatus: 'COMPLETE',
     executedAt: 11,
-  }MPLETE',
-    executedAt: 11,
   });
   const filledOrder = new CanonicalOrder({
     clientOrderId: submittedOrder.clientOrderId,
@@ -392,7 +332,6 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     originalQuantity: submittedOrder.originalQuantity,
     executedQuantity: new Quantity({ amount: '10', asset: baseAsset }),
     status: 'FILLED',
-  }s: 'FILLED',
   });
 
   onUserDataEvent({
@@ -423,24 +362,10 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
 
 
 test("subscribes every enabled market and fail-closes BUYs until its volatility history is ready", async () => {
-  const createMetadata = ({
-    symbol,
-    baseCode
-  } = {}) => {
-    const baseAsset = new Asset({
-      id: "asset-" + baseCode.toLowerCase(),
-      code: baseCode
-    })
-    const quoteAsset = new Asset({
-      id: "asset-usdt",
-      code: "USDT"
-    })
-    const market = new Market({
-      venue: "binance",
-      symbol,
-      baseAsset,
-      quoteAsset
-    })
+  const createMetadata = ({ symbol, baseCode } = {}) => {
+    const baseAsset = new Asset({ id: "asset-" + baseCode.toLowerCase(), code: baseCode })
+    const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
+    const market = new Market({ venue: "binance", symbol, baseAsset, quoteAsset })
     const tradingRules = new TradingRules({
       market,
       constraints: [
@@ -449,33 +374,12 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
         { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
         { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
       ],
-    }amount: "0.01", asset: baseAsset })
-        }sset: baseAsset
-        }) },
-        {
-          type: "MIN_NOTIONAL",
-          status: "SUPPORTED",
-          value: new Money({ amount: "1", asset: quoteAsset })
-        }set: quoteAsset
-        }) },
-      ],
     })
-    return {
-      market,
-      tradingRules,
-      supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
-      unvalidatedConstraints: []
-    }
+    return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"], unvalidatedConstraints: [] }
   }
   const metadataBySymbol = new Map([
-    ["DOGEUSDT", createMetadata({
-      symbol: "DOGEUSDT",
-      baseCode: "DOGE"
-    })],
-    ["ZROUSDT", createMetadata({
-      symbol: "ZROUSDT",
-      baseCode: "ZRO"
-    })],
+    ["DOGEUSDT", createMetadata({ symbol: "DOGEUSDT", baseCode: "DOGE" })],
+    ["ZROUSDT", createMetadata({ symbol: "ZROUSDT", baseCode: "ZRO" })],
   ])
   const markets = [...metadataBySymbol.values()].map(({ market }) => market)
   const quoteAsset = markets[0].quoteAsset
@@ -483,15 +387,10 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     ...markets.map((market) => new Balance({
       free: new Quantity({ amount: "100", asset: market.baseAsset }),
       locked: new Quantity({ amount: "0", asset: market.baseAsset }),
-    }     asset: market.baseAsset
-      }),
     })),
     new Balance({
       free: new Quantity({ amount: "1000", asset: quoteAsset }),
       locked: new Quantity({ amount: "0", asset: quoteAsset }),
-    }",
-        asset: quoteAsset
-      }),
     }),
   ]
   const appConfig = {
@@ -513,13 +412,6 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
-          },
-        },
-      }}StepPercent: 0.05,
-            pricePrecision: 3,
-            quantityPrecision: 2,
-            makerPercent: 0.1,
-            takerPercent: 0.1,
           },
         },
       },
@@ -622,13 +514,6 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
       return toResult({ data: { unsubscribe: async () => {} } })
     },
     subscribeForUserData: async () => toResult({ data: { disconnect: async () => {} } }),
-  }Price: String(Number(price) * 1.01),
-        bestAskQuantity: "100",
-        timestamp: 10,
-      })
-      return toResult({ data: { unsubscribe: async () => {} } })
-    },
-    subscribeForUserData: async () => toResult({ data: { disconnect: async () => {} } }),
   }
 
   const context = await startHarvesterForTest({
@@ -652,16 +537,8 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
   assert.deepEqual([...priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
   assert.deepEqual([...candleSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"], "The candle service must subscribe every enabled pair independently.")
   assert.deepEqual(candleHistoryRequests, [
-    {
-      symbol: "DOGEUSDT",
-      interval: "1m",
-      limit: 101
-    },
-    {
-      symbol: "ZROUSDT",
-      interval: "1m",
-      limit: 101
-    },
+    { symbol: "DOGEUSDT", interval: "1m", limit: 101 },
+    { symbol: "ZROUSDT", interval: "1m", limit: 101 },
   ], "Startup must request one-minute history for each enabled market after candle subscriptions are established.")
   assert.deepEqual(
     context.subscriptions,
