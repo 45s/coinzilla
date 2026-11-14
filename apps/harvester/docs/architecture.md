@@ -533,8 +533,8 @@ intake stop and final fill reconciliation. The final owned SELL is compared
 with the policy plan using authoritative `Position.spent` (accumulated BUY
 cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
 (confirmed net SELL proceeds), plus retained quantity, minimum profit and
-existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror
-is not a strategy input. A stale SELL is canceled and its terminal fills reconciled before
+existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is checked for consistency
+with `Position.spent`, but is never used to calculate the recovery plan. A stale SELL is canceled and its terminal fills reconciled before
 a SELL-only replacement is submitted. If the pair is paused, market data is
 stale, cancellation/submission is unresolved, or the replacement cannot be
 verified, the final coverage audit fails and CLOSING cannot report COMPLETE.

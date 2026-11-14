@@ -1617,7 +1617,8 @@ export function makeConservativeTradingEngine({
       right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
     })
     // Position.spent is the authoritative accumulated BUY cost, including
-    // actual BUY commissions; the ledger contributes confirmed net SELL proceeds.
+    // actual BUY commissions. RecoveryLedger.buyCost is only a consistency
+    // mirror; the ledger contributes confirmed net SELL proceeds.
     const recoveryCost = position?.spent.amount ?? "0"
     const outstandingRecoveryAmount = maxDecimal({
       left: "0",
