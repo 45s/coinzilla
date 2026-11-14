@@ -2170,7 +2170,7 @@ class TestnetTradingRecoveryScenario {
         }
         return {
           ok: true,
-          data: [...canonicalOrdersByBrokerId.values()]
+          data: [...this.canonicalOrdersByBrokerId.values()]
             .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
             .filter((order) => !symbol || order.market.symbol === symbol)
             .map((order) => createOpenOrderSnapshot({ order })),
@@ -2239,7 +2239,7 @@ class TestnetTradingRecoveryScenario {
         }
         return {
           ok: true,
-          data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+          data: [...this.canonicalOrdersByBrokerId.values()].filter((order) =>
             (!orderId || order.brokerOrderId === String(orderId)) &&
             (!symbol || order.market.symbol === symbol)),
         }
