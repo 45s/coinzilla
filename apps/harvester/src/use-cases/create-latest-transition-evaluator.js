@@ -7,24 +7,29 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
   if (state.paused.has(symbol)) {
-    return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
+    return toResult({ data: { skipped: true,
+      reason: "PAIR_PAUSED" } })
   }
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
     state.deferredEvaluations.add(symbol)
-    return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
+    return toResult({ data: { skipped: true,
+      reason: "UNOWNED_OPEN_ORDER" } })
   }
   if (shutdownRecoveryOnly && isStopping?.() !== true) {
     return toResult({ error: new Error("Shutdown recovery SELL evaluation requires the stopping state") })
   }
   if (!canTrade({ symbol }) && !shutdownRecoveryOnly) {
     state.deferredEvaluations.add(symbol)
-    return toResult({ data: { skipped: true, reason: "TRADING_NOT_READY" } })
+    return toResult({ data: { skipped: true,
+      reason: "TRADING_NOT_READY" } })
   }
   state.deferredEvaluations.delete(symbol)
   const marketPrice = state.prices.get(symbol)
-  if (!marketPrice) {return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })}
+  if (!marketPrice) {return toResult({ data: { skipped: true,
+    reason: "NO_MARKET_PRICE" } })}
   if (!isMarketPriceFresh(marketPrice)) {
-    return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
+    return toResult({ data: { skipped: true,
+      reason: "STALE_MARKET_PRICE" } })
   }
   return { marketPrice }
 }
@@ -108,8 +113,10 @@ function logEvaluationDecision({ dependencies, context } = {}) {
 }
 
 function prepareEvaluationContext({ dependencies, options } = {}) {
-  const inputs = createEvaluationInputs({ dependencies, ...options })
-  logEvaluationStarted({ dependencies, context: inputs })
+  const inputs = createEvaluationInputs({ dependencies,
+    ...options })
+  logEvaluationStarted({ dependencies,
+    context: inputs })
   const decision = dependencies.strategyPolicy.evaluate(inputs.evaluationInput)
   const operatorPaused = dependencies.state.operatorPausedMarkets.has(inputs.symbol)
   const operatorSuppressedActions = options.shutdownRecoveryOnly || operatorPaused
@@ -127,7 +134,8 @@ function prepareEvaluationContext({ dependencies, options } = {}) {
     preflightOnly: options.preflightOnly === true,
     shutdownRecoveryOnly: options.shutdownRecoveryOnly === true,
   }
-  logEvaluationDecision({ dependencies, context })
+  logEvaluationDecision({ dependencies,
+    context })
   return context
 }
 
@@ -138,7 +146,8 @@ async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
       !state.completedRecoverySellSymbols.has(symbol)) {return null}
   const completedSellOrder = state.completedRecoverySellOrdersBySymbol.get(symbol)
   if (!completedSellOrder) {
-    await pause({ symbol, reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING" })
+    await pause({ symbol,
+      reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING" })
     return toResult({ error: new Error("Completed recovery SELL identity is unavailable for dust completion") })
   }
   const completion = await completeRecoveryCycle({
@@ -176,7 +185,8 @@ async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
     if (effectiveActions.length > 0) {return evaluateLatestTransition({ symbol })}
     return null
   }
-  publishRecoveryCycleNotCompleted({ order: completedSellOrder, completion })
+  publishRecoveryCycleNotCompleted({ order: completedSellOrder,
+    completion })
   if (completion.data?.pause !== false) {
     await pause({
       symbol,
@@ -192,7 +202,8 @@ function handleNoEffectiveActions({ dependencies, context } = {}) {
   const { preflightOnly, decision, evaluationId, symbol, activeOrdersBefore, operatorSuppressedActions, effectiveActions } = context
   if (effectiveActions.length !== 0) {return null}
   if (preflightOnly) {
-    return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_ACTION" } })
+    return toResult({ data: { preflightValid: false,
+      reason: "NO_REPLACEMENT_ACTION" } })
   }
   logger?.debug?.({
     message: "Harvester Conservative evaluation submitted no orders",
@@ -201,7 +212,17 @@ function handleNoEffectiveActions({ dependencies, context } = {}) {
     reason: decision.reason,
     activeOrders: activeOrdersBefore.map((order) => order.value),
   })
-  return toResult({ data: { decision, submittedOrders: [], operatorSuppressedActions } })
+  return toResult({ data: { decision,
+    submittedOrders: [],
+    operatorSuppressedActions } })
+}
+
+function sumDecimalValues({ items, getValue } = {}) {
+  let total = "0"
+  for (const item of items) {
+    total = addDecimal({ left: total, right: getValue(item) })
+  }
+  return total
 }
 
 function getPortfolioBalanceContext({ dependencies, context } = {}) {
@@ -216,34 +237,41 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
   const allPositions = portfolioBefore.positions
   const portfolioQuoteCashFlow = allPositions
     .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)
-    .reduce((total, item) => addDecimal({ left: total, right: item.quoteNetCashFlow.amount }), "0")
+    .reduce((total, item) => addDecimal({ left: total,
+      right: item.quoteNetCashFlow.amount }), "0")
   const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
     assetId: metadata.market.quoteAsset.id,
   }) ?? "0"
-  const quoteCashFlow = subtractDecimal({ left: portfolioQuoteCashFlow, right: quoteCashFlowBaseline })
+  const quoteCashFlow = subtractDecimal({ left: portfolioQuoteCashFlow,
+    right: quoteCashFlowBaseline })
   const portfolioBaseBalance = allPositions
     .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
-    .reduce((total, item) => addDecimal({ left: total, right: item.totalBaseQuantity.amount }), "0")
+    .reduce((total, item) => addDecimal({ left: total,
+      right: item.totalBaseQuantity.amount }), "0")
   const allActiveOrders = dependencies.state.registry.getActiveOrders()
     .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
   const committedQuote = activeOrdersBefore
     .filter((order) => order.side === "BUY")
     .reduce((total, order) => addDecimal({
       left: total,
-      right: multiplyDecimal({ left: order.remainingQuantity.amount, right: order.limitPrice.amount }),
+      right: multiplyDecimal({ left: order.remainingQuantity.amount,
+        right: order.limitPrice.amount }),
     }), "0")
   const committedQuoteBalance = allActiveOrders
     .filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id)
     .reduce((total, order) => addDecimal({
       left: total,
-      right: multiplyDecimal({ left: order.remainingQuantity.amount, right: order.limitPrice.amount }),
+      right: multiplyDecimal({ left: order.remainingQuantity.amount,
+        right: order.limitPrice.amount }),
     }), "0")
   const committedBase = activeOrdersBefore
     .filter((order) => order.side === "SELL")
-    .reduce((total, order) => addDecimal({ left: total, right: order.remainingQuantity.amount }), "0")
+    .reduce((total, order) => addDecimal({ left: total,
+      right: order.remainingQuantity.amount }), "0")
   const committedBaseBalance = allActiveOrders
     .filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id)
-    .reduce((total, order) => addDecimal({ left: total, right: order.remainingQuantity.amount }), "0")
+    .reduce((total, order) => addDecimal({ left: total,
+      right: order.remainingQuantity.amount }), "0")
   const quoteBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })
   const baseBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })
   if (!quoteBalance || !baseBalance) {
@@ -361,7 +389,8 @@ function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
   const { deferredActions, executableActions } = allocation
   if (executableActions.length !== 0) {return null}
   if (preflightOnly) {
-    return toResult({ data: { preflightValid: false, reason: "NO_EXECUTABLE_REPLACEMENT" } })
+    return toResult({ data: { preflightValid: false,
+      reason: "NO_EXECUTABLE_REPLACEMENT" } })
   }
   return toResult({
     data: {
@@ -420,7 +449,8 @@ async function validatePreflightDecision({ dependencies, context, executableDeci
   const { submit } = dependencies
   if (!context.preflightOnly) {return null}
   if (!executableDecision.actions.some((action) => action.side === "BUY")) {
-    return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_BUY" } })
+    return toResult({ data: { preflightValid: false,
+      reason: "NO_REPLACEMENT_BUY" } })
   }
   const validation = await submit.validate({
     decision: executableDecision,
@@ -429,9 +459,11 @@ async function validatePreflightDecision({ dependencies, context, executableDeci
   })
   if (!validation.ok) {return validation}
   if (validation.data?.deferred === true) {
-    return toResult({ data: { preflightValid: false, reason: "REPLACEMENT_MARKET_DATA_UNAVAILABLE" } })
+    return toResult({ data: { preflightValid: false,
+      reason: "REPLACEMENT_MARKET_DATA_UNAVAILABLE" } })
   }
-  return toResult({ data: { preflightValid: true, validatedOrders: validation.data.validatedOrders } })
+  return toResult({ data: { preflightValid: true,
+    validatedOrders: validation.data.validatedOrders } })
 }
 
 async function submitExecutableDecision({ dependencies, context, executableDecision, balances } = {}) {
@@ -530,7 +562,9 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
     referencePriceOverride,
     shutdownRecoveryOnly = false,
   } = {}) {
-    const gate = getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly })
+    const gate = getEvaluationGateResult({ dependencies,
+      symbol,
+      shutdownRecoveryOnly })
     if (gate?.data || gate?.errors) {return gate}
     try {
       const context = prepareEvaluationContext({
@@ -544,9 +578,11 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
           marketPrice: gate.marketPrice,
         },
       })
-      const dustResult = await completeDustRecoveryIfNeeded({ dependencies, context })
+      const dustResult = await completeDustRecoveryIfNeeded({ dependencies,
+        context })
       if (dustResult) {return dustResult}
-      const noActions = handleNoEffectiveActions({ dependencies, context })
+      const noActions = handleNoEffectiveActions({ dependencies,
+        context })
       if (noActions) {return noActions}
       const balances = getPortfolioBalanceContext({
         dependencies,
@@ -555,20 +591,40 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
           excludedActiveOrderClientId,
         },
       })
-      const allocation = allocateEvaluationActions({ dependencies, context, balances })
-      logOrderAllocation({ dependencies, context, balances, allocation })
-      const noExecutableActions = handleNoExecutableActions({ dependencies, context, allocation })
+      const allocation = allocateEvaluationActions({ dependencies,
+        context,
+        balances })
+      logOrderAllocation({ dependencies,
+        context,
+        balances,
+        allocation })
+      const noExecutableActions = handleNoExecutableActions({ dependencies,
+        context,
+        allocation })
       if (noExecutableActions) {return noExecutableActions}
-      publishStrategyDecision({ dependencies, context, balances, allocation })
+      publishStrategyDecision({ dependencies,
+        context,
+        balances,
+        allocation })
       const executableDecision = Object.freeze({
         ...context.decision,
         actions: Object.freeze(allocation.executableActions),
       })
-      const preflightResult = await validatePreflightDecision({ dependencies, context, executableDecision })
+      const preflightResult = await validatePreflightDecision({ dependencies,
+        context,
+        executableDecision })
       if (preflightResult) {return preflightResult}
-      const result = await submitExecutableDecision({ dependencies, context, executableDecision, balances })
-      logSubmissionResult({ dependencies, context, result })
-      return finalizeSubmissionResult({ dependencies, context, result, deferredActions: allocation.deferredActions })
+      const result = await submitExecutableDecision({ dependencies,
+        context,
+        executableDecision,
+        balances })
+      logSubmissionResult({ dependencies,
+        context,
+        result })
+      return finalizeSubmissionResult({ dependencies,
+        context,
+        result,
+        deferredActions: allocation.deferredActions })
     } catch (error) {
       await dependencies.pause({
         symbol,
