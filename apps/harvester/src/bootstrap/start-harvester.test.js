@@ -821,7 +821,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
         ...appConfig.strategies.CG_coinGrabber,
         pairs: {
           ...appConfig.strategies.CG_coinGrabber.pairs,
-          ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
+          ETHUSDT: { enabled: true, tradingEnvironment: "both", investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
         },
       },
     },
