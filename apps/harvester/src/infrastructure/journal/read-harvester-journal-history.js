@@ -59,7 +59,7 @@ function parseProcessStarted({ records, directory }) {
       details: { directory, count: startedRecords.length },
     })
   }
-  if (startedRecords.length === 0) return undefined
+  if (startedRecords.length === 0) { return undefined }
 
   const processStartedEvent = startedRecords[0].payload
   const data = processStartedEvent?.data
