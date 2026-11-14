@@ -188,6 +188,105 @@ function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
   }
 }
 
+function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
+  return async ({ eventName, dataResult } = {}) => {
+    const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
+    if (published && typeof published.then === "function") {
+      Promise.resolve(published).then(
+        (result) => {
+          if (result?.ok === false) {
+            logger?.error?.({
+              message: "Harvester durable intent publication was rejected asynchronously",
+              eventName,
+              errors: result.errors,
+            })
+          }
+        },
+        (error) => logger?.error?.({
+          message: "Harvester durable intent publication promise rejected",
+          eventName,
+          error,
+        }),
+      )
+    } else {
+      if (published?.ok === false) {
+        return published
+      }
+      if (published?.skipped === true) {
+        return toResult({ data: { skipped: true } })
+      }
+    }
+    if (typeof eventPublisher?.flush !== "function") {
+      return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
+    }
+    try {
+      const flushed = await eventPublisher.flush()
+      if (flushed?.ok !== true || flushed?.durable !== true) {
+        return flushed?.ok === false
+          ? flushed
+          : toResult({ error: new Error("Trading intent was published but not durably journaled") })
+      }
+      return toResult({ data: { durable: true } })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+}
+
+function createRecoveryCycleNotCompletedPublisher({
+  eventPublisher,
+  getPortfolio,
+  getRecoveryLedger,
+  pairs,
+} = {}) {
+  return ({ order, completion }) => {
+    const data = completion?.data
+    if (!data) {
+      return
+    }
+    const marketId = order.market.id
+    const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
+    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId })
+    const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
+    const realizedNetProfit = data.realizedNetProfit ??
+      (position && recoveryLedger
+        ? subtractDecimal({
+          left: recoveryLedger.netSellProceeds,
+          right: position.spent.amount,
+        })
+        : undefined)
+    const activeQuantity = data.activeQuantity ?? position?.baseQuantity.amount
+    const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
+    const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
+    if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
+      return
+    }
+    const continueReasons = [
+      "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    ]
+    const outcome = data.pause === false && continueReasons.includes(data.reason)
+      ? "CONTINUE_SELL_THROUGH"
+      : "BLOCKED"
+    return publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED,
+      dataResult: mapRecoveryCycleNotCompletedData({
+        symbol: order.market.symbol,
+        marketId,
+        sellOrderClientId: order.clientOrderId,
+        sellOrderBrokerOrderId: order.brokerOrderId,
+        outcome,
+        reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+        realizedNetProfit,
+        activeQuantity,
+        keepQuantity,
+        minProfit,
+      }),
+    })
+  }
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -357,100 +456,13 @@ export function makeConservativeTradingEngine({
     assertReconciledSellExecution,
   } = executionFillAccounting
 
-  const publishDurableIntent = async ({
-    eventName,
-    dataResult
-  } = {}) => {
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName,
-      dataResult
-    })
-    if (published && typeof published.then === "function") {
-      Promise.resolve(published).then(
-        (result) => {
-          if (result?.ok === false) {
-            logger?.error?.({
-              message: "Harvester durable intent publication was rejected asynchronously",
-              eventName,
-              errors: result.errors,
-            })
-          }
-        },
-        (error) => logger?.error?.({
-          message: "Harvester durable intent publication promise rejected",
-          eventName,
-          error,
-        }),
-      )
-    } else {
-      if (published?.ok === false) {return published}
-      if (published?.skipped === true) {return toResult({ data: { skipped: true } })}
-    }
-    if (typeof eventPublisher?.flush !== "function") {
-      return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
-    }
-    try {
-      const flushed = await eventPublisher.flush()
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        return flushed?.ok === false
-          ? flushed
-          : toResult({ error: new Error("Trading intent was published but not durably journaled") })
-      }
-      return toResult({ data: { durable: true } })
-    } catch (error) {
-      return toResult({ error })
-    }
-  }
-
-  const publishRecoveryCycleNotCompleted = ({
-    order,
-    completion
-  }) => {
-    const data = completion?.data
-    if (!data) {return}
-    const marketId = order.market.id
-    const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
-    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId })
-    const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
-    const realizedNetProfit = data.realizedNetProfit ??
-      (position && recoveryLedger
-        ? subtractDecimal({
-          left: recoveryLedger.netSellProceeds,
-          right: position.spent.amount
-        })
-        : undefined)
-    const activeQuantity = data.activeQuantity ?? position?.baseQuantity.amount
-    const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
-    const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
-    if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
-      // Missing evaluation evidence must remain unresolved in the Journal projection.
-      return
-    }
-    const continueReasons = [
-      "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
-      "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-    ]
-    const outcome = data.pause === false && continueReasons.includes(data.reason)
-      ? "CONTINUE_SELL_THROUGH"
-      : "BLOCKED"
-    return publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED,
-      dataResult: mapRecoveryCycleNotCompletedData({
-        symbol: order.market.symbol,
-        marketId,
-        sellOrderClientId: order.clientOrderId,
-        sellOrderBrokerOrderId: order.brokerOrderId,
-        outcome,
-        reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
-        realizedNetProfit,
-        activeQuantity,
-        keepQuantity,
-        minProfit,
-      }),
-    })
-  }
+  const publishDurableIntent = createDurableIntentPublisher({ eventPublisher, logger })
+  const publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
+    eventPublisher,
+    getPortfolio,
+    getRecoveryLedger,
+    pairs,
+  })
 
   const pause = async ({
     symbol,
