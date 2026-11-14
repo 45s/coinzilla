@@ -248,6 +248,7 @@ async function handlePartialBuyWithActiveSell(dependencies, { order, symbol, rec
 }
 
 function handlePartialBuyWaiting(dependencies, { order } = {}) {
+  void dependencies
    if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: {
           order,
@@ -256,7 +257,7 @@ function handlePartialBuyWaiting(dependencies, { order } = {}) {
 }
 
 async function handlePartialBuyTerminal(dependencies, { order, symbol } = {}) {
-  const { state, pause, evaluateLatestTransition, cancelAndReconcileRecoverySells, isStopping } = dependencies
+  const { state, pause, isStopping } = dependencies
    if (order.side === "BUY" &&
           ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           compareDecimal({
@@ -277,6 +278,7 @@ async function handlePartialBuyTerminal(dependencies, { order, symbol } = {}) {
 }
 
 function handleNonterminalOrder(dependencies, { order } = {}) {
+  void dependencies
    if (!["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
         return toResult({ data: {
           order,
@@ -285,7 +287,7 @@ function handleNonterminalOrder(dependencies, { order } = {}) {
 }
 
 async function handleBuyFilled(dependencies, { order, symbol, recoveryMode } = {}) {
-  const { state, pause, cancelAndReconcileRecoverySells, evaluateLatestTransition, getReconciledBuyExecutionPrice, pairs, isStopping } = dependencies
+  const { state, pause, cancelAndReconcileRecoverySells, getReconciledBuyExecutionPrice, isStopping, resolveRecoveryManagedCancellation } = dependencies
    if (order.status === "FILLED" && order.side === "BUY") {
         if (recoveryMode) {resolveRecoveryManagedCancellation({ order })}
         if (isStopping?.()) {
@@ -365,7 +367,7 @@ async function handleRejectedOrder(dependencies, { order, symbol } = {}) {
 }
 
 async function handleSellCanceled(dependencies, { order, symbol, recoveryMode } = {}) {
-  const { state, pause, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
+  const { state, evaluateLatestTransition } = dependencies
    if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
         if (recoveryMode) {
           // Recovery reconciliation establishes exchange facts only. It must
