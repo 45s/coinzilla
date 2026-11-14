@@ -197,7 +197,7 @@ export function createShutdownHandler({
         }
       }
 
-      const marketIntakeErrors = await runPhaseSafely({
+      await runPhaseSafely({
         phase: "MARKET_INTAKE_STOP",
         operation: () => stopMarketIntake({ subscriptions, bookSubscriptions }),
         stage: "MARKET_INTAKE_STOP",
@@ -275,7 +275,7 @@ export function createShutdownHandler({
         message: "Shutdown user-data drain failed",
         auditReason: "USER_DATA_DRAIN_FAILED",
       })
-      const userDataIntakeErrors = await runPhaseSafely({
+      await runPhaseSafely({
         phase: "USER_DATA_INTAKE_STOP",
         operation: () => stopUserDataIntake({ userDataSubscription }),
         stage: "USER_DATA_INTAKE_STOP",
@@ -421,7 +421,9 @@ export function createShutdownHandler({
       })
       const disconnectErrors = Array.isArray(disconnectResult)
         ? disconnectResult
-        : disconnectResult?.ok === false ? disconnectResult.errors ?? [new Error("Broker disconnect failed")] : []
+        : disconnectResult?.ok === false
+          ? disconnectResult.errors?.length > 0 ? disconnectResult.errors : [new Error("Broker disconnect failed")]
+          : []
       const shutdownAuditFailed = tradingEnabled && auditReasons.length > 0
       const auditError = shutdownAuditFailed
         ? new Error(`CLOSING account audit is incomplete: ${auditReasons.join(", ")}`)
