@@ -6268,7 +6268,7 @@ async function createResidualRecoverySellHarness({ scenario, seeded }) {
   })
 }
 
-async function processResidualRecoverySell({ scenario, harness }) {
+async function processResidualRecoverySell({ harness }) {
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
