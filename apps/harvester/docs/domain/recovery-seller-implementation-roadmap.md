@@ -140,7 +140,7 @@ Model only the concepts required by the approved RS contract:
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
 - Independent recovery-tranche and legacy profitability gates. Recovery profit cannot subsidize a legacy loss.
-- Cycle progress and residual handling only after the remaining owner decisions are settled.
+- Apply the smaller-remainder rule: legacy SELL quantity is capped downward to the remaining authorized, Spot-available, unreserved quantity; sell that smaller amount only when exchange filters and both independent profitability gates pass, otherwise retain it. Separate final-residual liquidation without a new BUY remains blocked pending an owner decision.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
@@ -164,7 +164,7 @@ Required test families:
 - Profitable recovery tranche paired with a loss-making legacy slice.
 - Mixed SELL proceeds/fee allocation after the owner-approved rule exists.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
-- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries; constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
+- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries, including remaining legacy quantity below `sellQuantity`; verify smaller remainder is sold only when both profitability gates and exchange filters pass, otherwise retained. Constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
 
 Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
