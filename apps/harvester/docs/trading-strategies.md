@@ -28,7 +28,7 @@ Implementation code is under src/domain/strategies/conservative/ and src/use-cas
 
 **Status: proposed concept only. RS is not implemented, registered, configurable at runtime, or executable.** This section records the product direction and proposed configuration shape for owner review. It does not amend the Conservative Domain Specification or change Coin Grabber behavior.
 
-**Canonical domain contract:** [Recovery Seller Domain Specification](./domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md) records the draft accounting model, exact-once fill/Portfolio invariants, legacy authorization and profitability safety gates, partial-fill/reservation/reconciliation boundaries, and the owner decisions that block executable implementation. The proposal below remains product context; where details are unresolved, the specification explicitly leaves them open rather than inventing behavior.
+**Canonical domain contract:** [Recovery Seller Domain Specification](./domain/recovery-seller-domain-specification.md) records the draft accounting model, exact-once fill/Portfolio invariants, legacy authorization and profitability safety gates, partial-fill/reservation/reconciliation boundaries, and the owner decisions that block executable implementation. The proposal below remains product context; where details are unresolved, the specification explicitly leaves them open rather than inventing behavior.
 
 #### Purpose
 
@@ -125,7 +125,7 @@ The intended outcome is progressive reduction of the legacy position over multip
 
 RS is a separate strategy policy, not a modification or mode of CG_coinGrabber. Coin Grabber's Conservative behavior and canonical domain specification remain unchanged. RS should reuse established Harvester execution boundaries—canonical fills, Portfolio accounting, order lifecycle, broker constraints, reconciliation and safety gates—rather than introducing a parallel exchange or execution stack.
 
-The exact ownership and attribution model for legacy inventory, recovery-cycle inventory, active orders and reservations must be designed before implementation. RS must not silently adopt external inventory, double-count base-asset quantities, or conflict with another strategy controlling the same market position.
+RS and CG are allowed to run concurrently, including on the same market when both are enabled. They keep independent strategy policies, cycle attribution and order ownership while using one shared actual Portfolio Position per market. The Trading Engine must coordinate both strategies through centralized quote/base reservations, serialized order submission and exact-once fill accounting. Neither strategy may spend the same quote commitment, reserve the same base quantity, or attribute the same fill twice. One strategy being paused or disabled does not implicitly pause or disable the other. This is a required future RS integration capability; it does not describe the current executable release, where RS is not registered.
 
 #### Decisions intentionally left open
 
@@ -136,7 +136,7 @@ The exact ownership and attribution model for legacy inventory, recovery-cycle i
 - Maximum investment, total exposure, drawdown and price-movement limits.
 - Cycle close, pause, abandon, resume and strategy-disable behavior.
 - Partial fills, commissions (including base-asset fees), exchange filters, precision, dust, cancellations, unknown broker outcomes and reservations.
-- Which CG pair settings are shared verbatim, which are RS-specific, and how RS is selected independently or prevented from coexisting with another strategy on the same market.
+- Which CG pair settings are shared verbatim, which are RS-specific, and how the shared Trading Engine allocates simultaneous RS/CG intents and account-level quote/base commitments deterministically.
 
 These decisions require an owner-reviewed domain specification and testable invariants. Do not infer them from this overview or implement guessed defaults.
 
