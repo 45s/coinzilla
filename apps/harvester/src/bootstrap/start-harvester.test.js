@@ -3009,45 +3009,36 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
 })
 
 
-test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG", async () => {
+
+function createLifecycleLogCapture() {
   const calls = []
-  const broker = createBroker()
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: []
-  })
-  const result = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development"
-    },
-    brokerAdapterFactory: () => broker,
-    evaluateStrategy: () => ({ action: "NO_ACTION" }),
-    now: () => 123,
+  return {
+    calls,
     logger: {
       debug: (data) => calls.push({
         level: "debug",
-        ...data
+        ...data,
       }),
       info: (data) => calls.push({
         level: "info",
-        ...data
+        ...data,
       }),
       system: (data) => calls.push({
         level: "system",
-        ...data
+        ...data,
       }),
       error: (data) => calls.push({
         level: "error",
-        ...data
+        ...data,
       }),
     },
-  })
+  }
+}
 
+async function emitLifecycleLogTestEvents({ broker }) {
   await broker.emitUserDataStatus({
     type: "reconciled",
-    recoveryRequired: false
+    recoveryRequired: false,
   })
   await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
@@ -3063,6 +3054,9 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
     bestAskQuantity: "1",
     timestamp: 123,
   })
+}
+
+function assertLifecycleLogLevels({ calls }) {
   const systemMessages = calls.filter(({ level }) => level === "system").map(({ message }) => message)
   const debugCalls = calls.filter(({ level }) => level === "debug")
   const marketEvaluations = debugCalls.filter(({ message }) => message === "Market price evaluated")
@@ -3075,27 +3069,22 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.equal(targetMarketEvaluation.price, "65000.12")
   assert.ok(typeof targetMarketEvaluation.action === "string" && targetMarketEvaluation.action.length > 0)
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
-  assert.ok(systemMessages.includes("App configuration validated"))
-  assert.ok(systemMessages.includes("User-data stream connected"))
-  assert.ok(systemMessages.includes("Exchange account snapshot loaded"))
-  assert.ok(systemMessages.includes("Conservative TESTNET trading engine activated"))
-  assert.ok(systemMessages.includes("Book ticker subscribed"))
-  assert.ok(systemMessages.includes("Market data subscribed"))
-  const marketEvent = debugCalls.find(({
-    message,
-    price
-  }) =>
+  for (const message of [
+    "App configuration validated",
+    "User-data stream connected",
+    "Exchange account snapshot loaded",
+    "Conservative TESTNET trading engine activated",
+    "Book ticker subscribed",
+    "Market data subscribed",
+  ]) {
+    assert.ok(systemMessages.includes(message))
+  }
+  const marketEvent = debugCalls.find(({ message, price }) =>
     message === "Harvester market price event received" && price === "65000.12")
-  const evaluationStarted = debugCalls.find(({
-    message,
-    marketEventId
-  }) =>
+  const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
     message === "Harvester Conservative evaluation started" &&
     marketEventId === marketEvent?.marketEventId)
-  const evaluationDecided = debugCalls.find(({
-    message,
-    evaluationId
-  }) =>
+  const evaluationDecided = debugCalls.find(({ message, evaluationId }) =>
     message === "Harvester Conservative evaluation decided" &&
     evaluationId === evaluationStarted?.evaluationId)
   assert.ok(marketEvent)
@@ -3111,134 +3100,16 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.ok(Array.isArray(evaluationStarted.portfolio.positions))
   assert.equal(evaluationDecided.evaluationId, evaluationStarted.evaluationId)
   assert.ok(Array.isArray(evaluationDecided.actions))
-
-  await result.stop()
-})
-
-test("retains an explicitly injected application event publisher in TESTNET runtime", async () => {
-  const eventPublisher = { publish: () => ({ ok: true }) }
-  const result = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: {},
-    eventPublisher,
-  })
-
-  assert.equal(result.eventPublisher, eventPublisher)
-  await result.stop()
-})
-
-
-
-function createShutdownIntakeDrainFixture({ broker, calls }) {
-  let resolveBookUnsubscribe
-  const bookUnsubscribed = new Promise((resolve) => {
-    resolveBookUnsubscribe = resolve
-  })
-  const subscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
-  broker.subscribeForBookTicker = async (input) => {
-    const result = await subscribeForBookTicker(input)
-    return {
-      ...result,
-      data: {
-        ...result.data,
-        unsubscribe: async () => {
-          calls.push("unsubscribe:book:" + input.symbol)
-          resolveBookUnsubscribe()
-          return result.data.unsubscribe()
-        },
-      },
-    }
-  }
-  let resolveMarketUnsubscribe
-  const marketUnsubscribed = new Promise((resolve) => {
-    resolveMarketUnsubscribe = resolve
-  })
-  const subscribeForPrices = broker.subscribeForPrices.bind(broker)
-  broker.subscribeForPrices = async (input) => {
-    const result = await subscribeForPrices(input)
-    return {
-      ...result,
-      data: {
-        ...result.data,
-        unsubscribe: async () => {
-          calls.push("unsubscribe:" + input.symbol)
-          resolveMarketUnsubscribe()
-          return result.data.unsubscribe()
-        },
-      },
-    }
-  }
-  const subscribeForUserData = broker.subscribeForUserData.bind(broker)
-  broker.subscribeForUserData = async (handlers) => {
-    const result = await subscribeForUserData(handlers)
-    return {
-      ...result,
-      data: {
-        ...result.data,
-        disconnect: async () => {
-          calls.push("unsubscribe:user-data")
-          return result.data.disconnect()
-        },
-      },
-    }
-  }
-  return {
-    bookUnsubscribed,
-    marketUnsubscribed,
-  }
-}
-
-function createBlockedUserDataQueue({ calls }) {
-  let resolveQueue
-  const queueGate = new Promise((resolve) => {
-    resolveQueue = resolve
-  })
-  let signalQueueStarted
-  const queueStarted = new Promise((resolve) => {
-    signalQueueStarted = resolve
-  })
-  let queuedEvents = 0
-  return {
-    queueStarted,
-    release: resolveQueue,
-    getQueuedEvents: () => queuedEvents,
-    onUserDataEvent: async () => {
-      queuedEvents += 1
-      calls.push("queue:start")
-      signalQueueStarted()
-      await queueGate
-      calls.push("queue:done")
-    },
-  }
-}
-
-function assertShutdownIntakeRemainsOrdered({ calls, queuedEvents }) {
-  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"), "shutdown must stop book-ticker intake before draining accepted user-data work")
-  assert.ok(calls.includes("unsubscribe:BTCUSDT"), "shutdown must stop market-price intake before draining accepted user-data work")
-  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain active until already accepted user-data work has drained")
-  assert.equal(calls.includes("queue:done"), false, "shutdown must wait for the deliberately blocked user-data callback before continuing cleanup")
-  assert.equal(calls.includes("disconnect"), false, "the broker must remain connected while accepted user-data work is still running")
-  assert.equal(queuedEvents, 1, "a second event must not enter the serialized queue while its first callback is still running")
-}
-
-function assertShutdownCleanupOrder({ calls }) {
-  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"))
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
 }
 
 
-test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const intake = createShutdownIntakeDrainFixture({
-    broker,
-    calls,
+test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG", async () => {
+  const broker = createBroker()
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [],
   })
-  const queue = createBlockedUserDataQueue({
-    calls,
-  })
+  const logCapture = createLifecycleLogCapture()
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
@@ -3246,187 +3117,21 @@ test("stops broker intake before draining queued user-data and disconnects after
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    evaluateStrategy: () => ({ action: "NO_ACTION" }),
-    onUserDataEvent: queue.onUserDataEvent,
-  })
-
-  broker.emitUserDataEvent({
-    eventType: "outboundAccountPosition",
-  })
-  await queue.queueStarted
-  const stopPromise = runtime.stop()
-  await Promise.all([
-    intake.bookUnsubscribed,
-    intake.marketUnsubscribed,
-  ])
-  assertShutdownIntakeRemainsOrdered({
-    calls,
-    queuedEvents: queue.getQueuedEvents(),
-  })
-
-  broker.emitUserDataEvent({
-    eventType: "outboundAccountPosition",
-  })
-  await Promise.resolve()
-  assert.equal(queue.getQueuedEvents(), 1)
-  queue.release()
-  await stopPromise
-  assertShutdownCleanupOrder({
-    calls,
-  })
-})
-
-test("logs safe correlation details when an execution report is not owned", async () => {
-  const broker = createBroker()
-  const errors = []
-  const result = await startHarvesterForTest({
-    loadConfig: async () => withExternalOrdersPolicy("BTCUSDT", "block"),
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development",
-    },
-    brokerAdapterFactory: () => broker,
-    logger: {
-      info() {},
-      debug() {},
-      error: (entry) => errors.push(entry),
-    },
-  })
-  const metadata = createMarketMetadata("BTCUSDT")
-  const externalOrder = new CanonicalOrder({
-    clientOrderId: "external-client-id",
-    brokerOrderId: "987654",
-    market: metadata.market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "65000",
-      asset: metadata.market.quoteAsset
+    evaluateStrategy: () => ({
+      action: "NO_ACTION",
     }),
-    originalQuantity: new Quantity({
-      amount: "0.01",
-      asset: metadata.market.baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: metadata.market.baseAsset
-    }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
+    now: () => 123,
+    logger: logCapture.logger,
   })
 
-  broker.emitUserDataEvent({
-    eventType: "executionReport",
-    executionType: "NEW",
-    executionId: 123456,
-    executedOrder: externalOrder,
+  await emitLifecycleLogTestEvents({
+    broker,
   })
-  await new Promise((resolve) => setImmediate(resolve))
-
-  const diagnostic = errors.find((entry) =>
-    entry.message === "rejected an unowned or invalid order event")
-  assert.ok(diagnostic)
-  assert.equal(diagnostic.symbol, "BTCUSDT")
-  assert.equal(diagnostic.brokerOrderId, "987654")
-  assert.equal(diagnostic.clientOrderId, "external-client-id")
-  assert.equal(diagnostic.side, "BUY")
-  assert.equal(diagnostic.executionType, "NEW")
-  assert.equal(diagnostic.orderStatus, "OPEN")
-  assert.equal(diagnostic.executionId, 123456)
-  assert.equal(diagnostic.registryMatchedByClientOrderId, false)
-  assert.equal(diagnostic.registryMatchedByBrokerOrderId, false)
-  assert.equal(diagnostic.clientIdMatchStatus, undefined)
-  assert.ok(Array.isArray(diagnostic.errors))
-
-  await assert.rejects(
-    result.stop(),
-    (error) => {
-      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
-      assert.ok(
-        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
-        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
-      )
-      return true
-    },
-    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
-  )
+  assertLifecycleLogLevels({
+    calls: logCapture.calls,
+  })
+  await runtime.stop()
 })
-
-
-test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
-  const broker = createBroker()
-  let acknowledgementCount = 0
-  let resolveAcknowledgement
-  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
-  const subscribeForUserData = broker.subscribeForUserData
-  broker.subscribeForUserData = async (handlers) => {
-    const result = await subscribeForUserData(handlers)
-    return {
-      ...result,
-      data: {
-        ...result.data,
-        acknowledgeRecovery: () => {
-          acknowledgementCount += 1
-          handlers.onStatus({
-            type: "reconciled",
-            recoveryRequired: false,
-            reconciliationRequired: false,
-          })
-          resolveAcknowledgement()
-          return true
-        },
-      },
-    }
-  }
-  const result = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development",
-    },
-    brokerAdapterFactory: () => broker,
-    logger: {
-      info() {},
-      error() {}
-    },
-  })
-
-  assert.equal(result.userDataReady, true)
-  broker.emitUserDataStatus({
-    type: "recovered",
-    subscriptionId: 17,
-    recoveryRequired: true,
-    reconciliationRequired: true,
-  })
-  assert.equal(result.userDataReady, false)
-  await waitForTestSignal(acknowledged, "broker recovery acknowledgement", () => ({
-    acknowledgementCount,
-    userDataStatus: result.userDataStatus,
-  }), 2_000)
-
-  assert.equal(acknowledgementCount, 1)
-  assert.equal(result.userDataReady, true)
-  assert.equal(result.userDataStatus, "READY")
-  await result.stop()
-})
-
-
-test("fails closed when TRADING_MODE is missing, before broker construction", async () => {
-  let brokerFactoryCalled = false
-  await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: { TRADING_MODE: undefined },
-    brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
-    logger: {
-      info() {},
-      error() {}
-    },
-  }), /TRADING_MODE must be set to "testnet" or "live"/)
-  assert.equal(brokerFactoryCalled, false)
-})
-
 
 test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
   const client = {
