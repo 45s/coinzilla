@@ -314,7 +314,9 @@ test("reconciles shutdown recovery SELLs and refuses CLOSING COMPLETE when final
     "A final recovery SELL coverage failure must make shutdown incomplete.",
   )
 
-  assert.ok(calls.indexOf("reconcile-recovery-sells") > calls.lastIndexOf("reconcile"), "Recovery SELL repair must run only after owned-order reconciliation.")
+  const reconcileIndexes = calls.map((value, index) => value === "reconcile" ? index : -1).filter((index) => index >= 0)
+  assert.ok(calls.indexOf("reconcile-recovery-sells") > reconcileIndexes[1], "Recovery SELL repair must run only after final owned-order reconciliation.")
+  assert.ok(calls.indexOf("reconcile-recovery-sells") < reconcileIndexes[2], "Replacement SELLs must be verified by a post-replan reconciliation.")
   assert.ok(calls.indexOf("audit-recovery-sell-coverage") > calls.indexOf("reconcile-recovery-sells"), "The final recovery SELL audit must follow the repair attempt.")
   assert.equal(closingAudit.auditStatus, "INCOMPLETE", "CLOSING must not report COMPLETE with an undersized recovery SELL.")
   assert.ok(closingAudit.auditReasons.includes("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE"))
@@ -359,7 +361,7 @@ test("emits deterministic monotonic timings for shutdown phases and failures", a
     "RECOVERY_SELL_RECONCILIATION",
     "RECOVERY_SELL_COVERAGE_AUDIT",
     "CLOSING_AUDIT",
-    "SHUTDOWN_COMPLETED",
+    "RUNTIME_SHUTDOWN_COMPLETED",
   ]
   for (const phase of required) {
     assert.ok(phases.some((entry) => entry.shutdownPhase === phase), "Missing structured shutdown phase " + phase)

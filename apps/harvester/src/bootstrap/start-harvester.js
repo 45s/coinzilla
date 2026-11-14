@@ -578,7 +578,10 @@ export async function startHarvester({
     now: () => performance.now(),
     runtimeSessionId,
   })
-  const stop = async () => {
+  let stopPromise
+  const stop = () => {
+    if (stopPromise) return stopPromise
+    stopPromise = (async () => {
     const shutdownRequestedAt = performance.now()
     const shutdownCorrelationId = runtimeSessionId ?? null
     const logShutdownPhase = ({ phase, status, startedAt, failureReason } = {}) => {
@@ -649,6 +652,13 @@ export async function startHarvester({
         throw error
       }
     }
+    logShutdownPhase({
+      phase: "SHUTDOWN_COMPLETED",
+      status: "COMPLETED",
+      startedAt: shutdownRequestedAt,
+    })
+    })()
+    return stopPromise
   }
 
   return Object.freeze({

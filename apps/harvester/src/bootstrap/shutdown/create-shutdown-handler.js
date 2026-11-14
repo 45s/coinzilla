@@ -62,7 +62,7 @@ export function createShutdownHandler({
 
     const shutdownRequestedAt = requestedAt ?? now()
     const shutdownCorrelationId = runtimeSessionId ?? null
-    const logPhase = ({ phase, status, startedAt, durationMs, failureReason } = {}) => {
+    const logPhase = ({ phase, status, durationMs, failureReason } = {}) => {
       logSystem(logger, {
         message: "Harvester shutdown phase " + status.toLowerCase(),
         shutdownPhase: phase,
@@ -419,7 +419,7 @@ export function createShutdownHandler({
       }
       state.status = "STOPPED"
       logPhase({
-        phase: "SHUTDOWN_COMPLETED",
+        phase: "RUNTIME_SHUTDOWN_COMPLETED",
         status: "COMPLETED",
         durationMs: Math.max(0, now() - shutdownRequestedAt),
       })
