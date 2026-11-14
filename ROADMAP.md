@@ -4,12 +4,12 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-13
-**Last source-verified develop checkpoint:** `fc7cac7e28a67aa9284a88770d556aff843c81b5` (merge of PR #1099, Telegram notification icon selections; Command Center CC-1–CC-4 remain complete and ADR-0001 restart-recovery Steps 8–9 remain deferred).
+**Last reviewed:** 2026-11-14
+**Last source-verified develop checkpoint:** `a10c3f79c0011fb03fee454a08e71512290e0538` (includes merged PR #1108 Operational State Store naming consolidation and PR #1107 native ESLint rule expansion; Command Center CC-1–CC-4 remain complete and ADR-0001 restart-recovery Steps 8–9 remain deferred).
 
 ## HIGHEST PRIORITY — Harvester Telegram Command Center
 
-- **Command Center (#1077) — CC-1 through CC-4 complete.** CC-4 is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; its exact PR head passed 1,479/1,479 Harvester tests, all six required develop ruleset checks, workspace coverage and external documentation-link validation. Telegram notification icon selections are complete in [PR #1099](https://github.com/45s/coinzilla/pull/1099), merged as `fc7cac7e28a67aa9284a88770d556aff843c81b5`. The production composition follow-up merged in [PR #1100](https://github.com/45s/coinzilla/pull/1100): it supplies the shared Operational State Store when Telegram control is enabled independently of restart recovery. The source-level terminology follow-up is tracked in [PR #1108](https://github.com/45s/coinzilla/pull/1108). See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [operator runbook](apps/harvester/docs/operations/telegram-command-center.md). ADR-0001 restart-recovery Steps 8–9 remain deferred. No exchange operation was part of CC.
+- **Command Center (#1077) — CC-1 through CC-4 complete.** CC-4 is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; its exact PR head passed 1,479/1,479 Harvester tests, all six required develop ruleset checks, workspace coverage and external documentation-link validation. Telegram notification icon selections are complete in [PR #1099](https://github.com/45s/coinzilla/pull/1099), merged as `fc7cac7e28a67aa9284a88770d556aff843c81b5`. The production composition follow-up merged in [PR #1100](https://github.com/45s/coinzilla/pull/1100): it supplies the shared Operational State Store when Telegram control is enabled independently of restart recovery. The source-level terminology consolidation merged in [PR #1108](https://github.com/45s/coinzilla/pull/1108) as `c94a5489c1cc9de721b37879701a96cedc6ae399`; all eight exact-head GitHub Actions workflows passed. See the [Harvester roadmap](apps/harvester/ROADMAP.md) and [operator runbook](apps/harvester/docs/operations/telegram-command-center.md). ADR-0001 restart-recovery Steps 8–9 remain deferred. No exchange operation was part of CC.
 
 ## CRITICAL — Harvester readiness and recovery
 
