@@ -661,7 +661,7 @@ async function finishFilledRecoverySell({ context, order, symbol }) {
   })
 }
 
-function publishRecoverySellCancellationOutcome({ context, order, canceledOrder }) {
+function publishRecoverySellCancellationOutcome({ context, canceledOrder }) {
   if (canceledOrder.status === "CANCELED") {
     context.publishOrderCancelled({
       order: canceledOrder,
@@ -715,7 +715,6 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
   }
   publishRecoverySellCancellationOutcome({
     context,
-    order,
     canceledOrder,
   })
   const terminalReconciliation = await context.reconcileTerminalOrderFills({
