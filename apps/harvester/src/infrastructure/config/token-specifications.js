@@ -110,7 +110,7 @@ export function validateTokenSpecifications(tokenSpecifications) {
 export function mergeTokenSpecifications({ tokenSpecifications = {}, metadata } = {}) {
   validateTokenSpecifications(tokenSpecifications)
   const { baseAsset, market } = createMarketSpecification({ metadata })
-  const symbol = metadata.symbol
+  const { symbol } = metadata
   const existingToken = tokenSpecifications[baseAsset]
 
   const updated = {
