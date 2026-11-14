@@ -113,6 +113,7 @@ Model only the concepts required by the approved RS contract:
 - Active/pending/partial/unknown order reservations.
 - Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
 - Cycle progress and residual handling only after the remaining owner decisions are settled.
+- Exchange-filter-constrained dust may be classified only after a fully reconciled successful cycle; retain it as bonus inventory and permanently exclude it from all later RS cycle quantity, cost, proceeds, profitability, and availability calculations. Ordinary sellable residual must not be classified as dust.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
@@ -163,7 +164,7 @@ Required test families:
 - Profitable recovery tranche paired with a loss-making legacy slice.
 - Mixed SELL proceeds/fee allocation after the owner-approved rule exists.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
-- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries.
+- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries; constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
 
 Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
