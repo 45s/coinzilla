@@ -356,6 +356,9 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
   if (responseError) {
     throw responseError
   }
+  const baselines = getAccountSnapshotBaselines({
+    context,
+  })
   if (capturePreflightBaseline && context.state.preflightSourceTime === undefined) {
     try {
       capturePreflightBalances({
@@ -366,9 +369,6 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
     }
   }
-  const baselines = getAccountSnapshotBaselines({
-    context,
-  })
   let nextSnapshot
   try {
     nextSnapshot = createTrackedAccountSnapshot({
@@ -606,7 +606,7 @@ function createOpenOrdersGuardState({ unownedOrders }) {
       .map((order) => order?.market?.symbol ?? order?.symbol)
       .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0)),
     unresolvedHarvesterOpenOrderSymbols: new Set(unresolvedHarvesterOrders
-      .map((order) => order?.market?.symbol ?? order.symbol)
+      .map((order) => order?.market?.symbol ?? order?.symbol)
       .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0)),
   }
 }
@@ -945,8 +945,10 @@ export function createAccountSnapshotManager({
   const publishOrders = (options = {}) => publishOpenOrdersSnapshot({
     context,
     options: {
-      phase: options.phase ?? "PREFLIGHT",
-      ownershipReconciled: options.ownershipReconciled ?? getHasCanonicalOwnershipReconciliation(),
+      phase: options.phase === undefined ? "PREFLIGHT" : options.phase,
+      ownershipReconciled: options.ownershipReconciled === undefined
+        ? getHasCanonicalOwnershipReconciliation()
+        : options.ownershipReconciled,
       orders: options.orders,
     },
   })
@@ -954,8 +956,8 @@ export function createAccountSnapshotManager({
     context,
     options: {
       phase: options.phase,
-      auditStatus: options.auditStatus ?? "COMPLETE",
-      auditReasons: options.auditReasons ?? [],
+      auditStatus: options.auditStatus === undefined ? "COMPLETE" : options.auditStatus,
+      auditReasons: options.auditReasons === undefined ? [] : options.auditReasons,
       snapshot: options.snapshot,
       allowedAssetCodes: options.allowedAssetCodes,
     },
