@@ -264,6 +264,7 @@ export async function startHarvester({
   // One explicit state object makes user-data readiness and queue ownership visible.
   const userDataState = {
     stopped: false,
+    shutdownRequested: false,
     ready: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: false,
@@ -340,7 +341,7 @@ export async function startHarvester({
     state: userDataState,
     getTradingEngine: () => tradingEngine,
     isTradingEnabled: () => tradingEnabled,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger,
     onUserDataEvent,
     getPortfolio,
@@ -362,7 +363,7 @@ export async function startHarvester({
 
   const startUserDataRecovery = createUserDataRecoveryHandler({
     state: userDataState,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     getUserDataSubscription: () => userDataSubscription,
     getTradingEngine: () => tradingEngine,
     tradingEnabled,
@@ -377,7 +378,7 @@ export async function startHarvester({
 
   const handleUserDataStatusTransition = createUserDataStatusHandler({
     state: userDataState,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     eventPublisher,
     brokerName,
     logger,
@@ -446,7 +447,7 @@ export async function startHarvester({
         completedOrderClientIds: recoveredState.completedOrderClientIds,
         trailingBuySymbols: recoveredState.trailingBuySymbols,
       },
-      isStopping: () => userDataState.stopped,
+      isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
       onPause: async ({ symbol, reason, error }) => {
         logger.error?.({ message: "paused a trading pair", symbol, reason, error })
       },
@@ -524,7 +525,7 @@ export async function startHarvester({
       processMarketBook,
       isMarketPriceFresh,
       now,
-      isStopped: () => userDataState.stopped,
+      isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
       onMarketPriceError,
       subscriptions,
       bookSubscriptions,
