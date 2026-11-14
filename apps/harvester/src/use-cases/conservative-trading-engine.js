@@ -1876,7 +1876,8 @@ async function cancelOwnedBuyOrdersTransition({ context, options }) {
 }
 
 
-function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
+
+function readAcknowledgedPendingOrder({ lookupResult }) {
   if (lookupResult?.ok !== false && lookupResult?.ok !== true) {
     throw recoveryFailureError(
       new Error("Canonical order lookup response is missing an explicit success flag"),
@@ -1910,6 +1911,10 @@ function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
       false,
     )
   }
+  return acknowledgedOrder
+}
+
+function validatePendingOrderIdentity({ pendingOrder, acknowledgedOrder }) {
   const identityMatches = acknowledgedOrder.clientOrderId === pendingOrder.clientOrderId &&
     acknowledgedOrder.market?.id === pendingOrder.market.id &&
     acknowledgedOrder.market?.symbol === pendingOrder.market.symbol &&
@@ -1923,6 +1928,9 @@ function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
       false,
     )
   }
+}
+
+function validatePendingOrderImmutableFacts({ pendingOrder, acknowledgedOrder }) {
   const quantityMatches = compareDecimal({
     left: acknowledgedOrder.originalQuantity.amount,
     right: pendingOrder.originalQuantity.amount,
@@ -1942,6 +1950,20 @@ function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
       false,
     )
   }
+}
+
+function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
+  const acknowledgedOrder = readAcknowledgedPendingOrder({
+    lookupResult,
+  })
+  validatePendingOrderIdentity({
+    pendingOrder,
+    acknowledgedOrder,
+  })
+  validatePendingOrderImmutableFacts({
+    pendingOrder,
+    acknowledgedOrder,
+  })
   return acknowledgedOrder
 }
 
