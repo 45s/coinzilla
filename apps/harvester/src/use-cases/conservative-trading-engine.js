@@ -1869,6 +1869,261 @@ async function cancelOwnedBuyOrdersTransition({ context, options }) {
   })
 }
 
+
+function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
+  if (lookupResult?.ok !== false && lookupResult?.ok !== true) {
+    throw recoveryFailureError(
+      new Error("Canonical order lookup response is missing an explicit success flag"),
+      "ACCOUNTING_INTEGRITY",
+      "PENDING_ORDER_LOOKUP_RESPONSE",
+      false,
+    )
+  }
+  if (lookupResult.ok === false) {
+    throw recoveryFailureError(
+      lookupResult.errors?.[0] ?? new Error("Unable to resolve order by clientOrderId"),
+      "REST_RECONCILIATION",
+      "PENDING_ORDER_LOOKUP",
+      true,
+    )
+  }
+  const acknowledgedOrder = lookupResult.data
+  if (!(acknowledgedOrder instanceof CanonicalOrder) ||
+      typeof acknowledgedOrder.brokerOrderId !== "string" ||
+      !acknowledgedOrder.brokerOrderId.trim()) {
+    throw recoveryFailureError(
+      new Error("Canonical order lookup did not return an acknowledged CanonicalOrder with brokerOrderId"),
+      "ACCOUNTING_INTEGRITY",
+      "PENDING_ORDER_LOOKUP_SHAPE",
+      false,
+    )
+  }
+  const identityMatches = acknowledgedOrder.clientOrderId === pendingOrder.clientOrderId &&
+    acknowledgedOrder.market?.id === pendingOrder.market.id &&
+    acknowledgedOrder.market?.symbol === pendingOrder.market.symbol &&
+    acknowledgedOrder.side === pendingOrder.side &&
+    acknowledgedOrder.type === pendingOrder.type
+  if (!identityMatches) {
+    throw recoveryFailureError(
+      new Error("Canonical order lookup returned an order that does not match the pending order identity"),
+      "OWNERSHIP_INTEGRITY",
+      "PENDING_ORDER_LOOKUP_IDENTITY",
+      false,
+    )
+  }
+  const quantityMatches = compareDecimal({
+    left: acknowledgedOrder.originalQuantity.amount,
+    right: pendingOrder.originalQuantity.amount,
+  }) === 0
+  const limitPriceMatches = acknowledgedOrder.limitPrice === undefined
+    ? pendingOrder.limitPrice === undefined
+    : pendingOrder.limitPrice !== undefined &&
+      compareDecimal({
+        left: acknowledgedOrder.limitPrice.amount,
+        right: pendingOrder.limitPrice.amount,
+      }) === 0
+  if (!quantityMatches || !limitPriceMatches) {
+    throw recoveryFailureError(
+      new Error("Canonical order lookup returned immutable order facts that conflict with the pending submission"),
+      "ACCOUNTING_INTEGRITY",
+      "PENDING_ORDER_LOOKUP_PARITY",
+      false,
+    )
+  }
+  return acknowledgedOrder
+}
+
+async function lookupPendingOwnedOrder({ broker, pendingOrder }) {
+  let lookupResult
+  try {
+    lookupResult = await broker.getCanonicalOrder({
+      symbol: pendingOrder.market.symbol,
+      clientOrderId: pendingOrder.clientOrderId,
+    })
+  } catch (error) {
+    throw recoveryFailureError(
+      error,
+      "ACCOUNTING_INTEGRITY",
+      "PENDING_ORDER_LOOKUP_EXCEPTION",
+      false,
+    )
+  }
+  return validatePendingOrderLookup({
+    pendingOrder,
+    lookupResult,
+  })
+}
+
+async function attachPendingOwnedOrder({ context, pendingOrder, acknowledgedOrder }) {
+  const attachmentResult = await context.runTransition({
+    task: async () => {
+      const currentOrder = context.state.registry.getOrder({
+        clientOrderId: pendingOrder.clientOrderId,
+      })
+      if (!currentOrder) {
+        throw recoveryFailureError(
+          new Error("Pending order disappeared before clientOrderId reconciliation"),
+          "OWNERSHIP_INTEGRITY",
+          "PENDING_ORDER_ATTACHMENT",
+          false,
+        )
+      }
+      if (currentOrder.brokerOrderId !== undefined) {
+        if (currentOrder.brokerOrderId !== acknowledgedOrder.brokerOrderId) {
+          throw recoveryFailureError(
+            new Error("Client-order-ID lookup conflicts with the brokerOrderId already attached to the order"),
+            "OWNERSHIP_INTEGRITY",
+            "PENDING_ORDER_ATTACHMENT",
+            false,
+          )
+        }
+        return toResult({
+          data: {
+            order: currentOrder,
+          },
+        })
+      }
+      const attached = context.state.registry.attachAcknowledgedBrokerOrderId({
+        order: acknowledgedOrder,
+      })
+      context.state.registry = attached.registry
+      return toResult({
+        data: {
+          order: context.state.registry.getOrder({
+            clientOrderId: pendingOrder.clientOrderId,
+          }),
+        },
+      })
+    },
+  })
+  if (!attachmentResult?.ok) {
+    throw recoveryFailureError(
+      attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId"),
+      "OWNERSHIP_INTEGRITY",
+      "PENDING_ORDER_ATTACHMENT",
+      false,
+    )
+  }
+}
+
+async function reconcilePendingOwnedOrders({ context, pendingOrders }) {
+  for (const pendingOrder of pendingOrders) {
+    try {
+      const acknowledgedOrder = await lookupPendingOwnedOrder({
+        broker: context.broker,
+        pendingOrder,
+      })
+      await attachPendingOwnedOrder({
+        context,
+        pendingOrder,
+        acknowledgedOrder,
+      })
+    } catch (error) {
+      return context.runTransition({
+        task: async () => {
+          await context.pause({
+            symbol: pendingOrder.market.symbol,
+            reason: "RECONCILIATION_PENDING_ORDER_OUTCOME",
+            error,
+          })
+          const failure = error?.recoveryFailure ?? {
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "UNCLASSIFIED_PENDING_ORDER_RECONCILIATION",
+            retryable: false,
+          }
+          return failureResult({
+            error,
+            ...failure,
+          })
+        },
+      })
+    }
+  }
+  return undefined
+}
+
+async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbols, recoveryMode, beforeApply }) {
+  let snapshots
+  try {
+    snapshots = await context.collectOwnedOrderSnapshots({
+      ownedOrders,
+    })
+    if (typeof beforeApply === "function") {
+      await beforeApply()
+    }
+  } catch (error) {
+    return context.runTransition({
+      task: async () => {
+        await context.pause({
+          symbol: error.reconciliationSymbol ?? symbols[0],
+          reason: "REST_STREAM_RECONCILIATION_FAILED",
+          error,
+        })
+        return failureResult({
+          error,
+          category: error.recoveryFailure?.category ?? "ACCOUNTING_INTEGRITY",
+          stage: error.recoveryFailure?.stage ?? "UNCLASSIFIED_OWNED_ORDER_RECONCILIATION",
+          retryable: error.recoveryFailure?.retryable ?? false,
+        })
+      },
+    })
+  }
+  return context.runTransition({
+    task: () => context.applyOwnedOrderSnapshotsTransition({
+      ...snapshots,
+      recoveryMode,
+    }),
+  })
+}
+
+async function reconcileOwnedOrdersTransition({ context, options }) {
+  const initialOrdersResult = await context.runTransition({
+    task: async () => toResult({
+      data: {
+        ownedOrders: [...context.state.registry.orders],
+      },
+    }),
+  })
+  if (!initialOrdersResult?.ok) {
+    return initialOrdersResult
+  }
+  const pendingOrders = initialOrdersResult.data.ownedOrders.filter((order) => !order.brokerOrderId)
+  const pendingResult = await reconcilePendingOwnedOrders({
+    context,
+    pendingOrders,
+  })
+  if (pendingResult) {
+    return pendingResult
+  }
+  const ownedOrdersResult = await context.runTransition({
+    task: async () => toResult({
+      data: {
+        ownedOrders: [...context.state.registry.orders],
+      },
+    }),
+  })
+  if (!ownedOrdersResult?.ok) {
+    return ownedOrdersResult
+  }
+  const ownedOrders = ownedOrdersResult.data.ownedOrders
+  const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
+  if (ownedOrders.length === 0) {
+    return toResult({
+      data: {
+        reconciled: 0,
+        symbols: [],
+      },
+    })
+  }
+  return collectAndApplyOwnedOrderSnapshots({
+    context,
+    ownedOrders,
+    symbols,
+    recoveryMode: options.recoveryMode ?? false,
+    beforeApply: options.beforeApply,
+  })
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -3670,191 +3925,17 @@ export function makeConservativeTradingEngine({
   const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
   const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
 
-  const reconcileOwnedOrders = async ({
-    beforeApply,
-    recoveryMode = false
-  } = {}) => {
-    const initialOrdersResult = await runTransition({
-      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
-    })
-    if (!initialOrdersResult?.ok) {return initialOrdersResult}
-    const pendingOrders = initialOrdersResult.data.ownedOrders.filter((order) => !order.brokerOrderId)
-
-    for (const pendingOrder of pendingOrders) {
-      try {
-        let lookupResult
-        try {
-          lookupResult = await broker.getCanonicalOrder({
-            symbol: pendingOrder.market.symbol,
-            clientOrderId: pendingOrder.clientOrderId,
-          })
-        } catch (error) {
-          throw recoveryFailureError(error, "ACCOUNTING_INTEGRITY", "PENDING_ORDER_LOOKUP_EXCEPTION", false)
-        }
-        if (lookupResult?.ok !== false && lookupResult?.ok !== true) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup response is missing an explicit success flag"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_RESPONSE",
-            false,
-          )
-        }
-        if (lookupResult.ok === false) {
-          throw recoveryFailureError(
-            lookupResult?.errors?.[0] ?? new Error("Unable to resolve order by clientOrderId"),
-            "REST_RECONCILIATION",
-            "PENDING_ORDER_LOOKUP",
-            true,
-          )
-        }
-        const acknowledgedOrder = lookupResult.data
-        if (!(acknowledgedOrder instanceof CanonicalOrder)) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup did not return a CanonicalOrder"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_SHAPE",
-            false,
-          )
-        }
-        if (typeof acknowledgedOrder.brokerOrderId !== "string" || !acknowledgedOrder.brokerOrderId.trim()) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup returned an order without a brokerOrderId"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_SHAPE",
-            false,
-          )
-        }
-        if (acknowledgedOrder.clientOrderId !== pendingOrder.clientOrderId ||
-            acknowledgedOrder.market?.id !== pendingOrder.market.id ||
-            acknowledgedOrder.market?.symbol !== pendingOrder.market.symbol ||
-            acknowledgedOrder.side !== pendingOrder.side ||
-            acknowledgedOrder.type !== pendingOrder.type) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup returned an order that does not match the pending order identity"),
-            "OWNERSHIP_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_IDENTITY",
-            false,
-          )
-        }
-        const quantityMatches = compareDecimal({
-          left: acknowledgedOrder.originalQuantity.amount,
-          right: pendingOrder.originalQuantity.amount,
-        }) === 0
-        const limitPriceMatches = acknowledgedOrder.limitPrice === undefined
-          ? pendingOrder.limitPrice === undefined
-          : pendingOrder.limitPrice !== undefined &&
-            compareDecimal({
-              left: acknowledgedOrder.limitPrice.amount,
-              right: pendingOrder.limitPrice.amount,
-            }) === 0
-        if (!quantityMatches || !limitPriceMatches) {
-          throw recoveryFailureError(
-            new Error("Canonical order lookup returned immutable order facts that conflict with the pending submission"),
-            "ACCOUNTING_INTEGRITY",
-            "PENDING_ORDER_LOOKUP_PARITY",
-            false,
-          )
-        }
-
-        const attachmentResult = await runTransition({
-          task: async () => {
-            const currentOrder = state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId })
-            if (!currentOrder) {
-              throw recoveryFailureError(
-                new Error("Pending order disappeared before clientOrderId reconciliation"),
-                "OWNERSHIP_INTEGRITY",
-                "PENDING_ORDER_ATTACHMENT",
-                false,
-              )
-            }
-            if (currentOrder.brokerOrderId !== undefined) {
-              if (currentOrder.brokerOrderId !== acknowledgedOrder.brokerOrderId) {
-                throw recoveryFailureError(
-                  new Error("Client-order-ID lookup conflicts with the brokerOrderId already attached to the order"),
-                  "OWNERSHIP_INTEGRITY",
-                  "PENDING_ORDER_ATTACHMENT",
-                  false,
-                )
-              }
-              return toResult({ data: { order: currentOrder } })
-            }
-            const attached = state.registry.attachAcknowledgedBrokerOrderId({ order: acknowledgedOrder })
-            state.registry = attached.registry
-            return toResult({
-              data: { order: state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId }) },
-            })
-          },
-        })
-        if (!attachmentResult?.ok) {
-          throw recoveryFailureError(
-            attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId"),
-            "OWNERSHIP_INTEGRITY",
-            "PENDING_ORDER_ATTACHMENT",
-            false,
-          )
-        }
-      } catch (error) {
-        return runTransition({
-          task: async () => {
-            await pause({
-              symbol: pendingOrder.market.symbol,
-              reason: "RECONCILIATION_PENDING_ORDER_OUTCOME",
-              error,
-            })
-            const failure = error?.recoveryFailure ?? {
-              category: "ACCOUNTING_INTEGRITY",
-              stage: "UNCLASSIFIED_PENDING_ORDER_RECONCILIATION",
-              retryable: false,
-            }
-            return failureResult({
-              error,
-              ...failure
-            })
-          },
-        })
-      }
-    }
-
-    const ownedOrdersResult = await runTransition({
-      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
-    })
-    if (!ownedOrdersResult?.ok) {return ownedOrdersResult}
-    const ownedOrders = ownedOrdersResult.data.ownedOrders
-    const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
-    if (ownedOrders.length === 0) {return toResult({ data: {
-      reconciled: 0,
-      symbols: []
-    } })}
-
-    let snapshots
-    try {
-      snapshots = await collectOwnedOrderSnapshots({ ownedOrders })
-      if (typeof beforeApply === "function") {await beforeApply()}
-    } catch (error) {
-      return runTransition({
-        task: async () => {
-          await pause({
-            symbol: error.reconciliationSymbol ?? symbols[0],
-            reason: "REST_STREAM_RECONCILIATION_FAILED",
-            error,
-          })
-          return failureResult({
-            error,
-            category: error.recoveryFailure?.category ?? "ACCOUNTING_INTEGRITY",
-            stage: error.recoveryFailure?.stage ?? "UNCLASSIFIED_OWNED_ORDER_RECONCILIATION",
-            retryable: error.recoveryFailure?.retryable ?? false,
-          })
-        },
-      })
-    }
-    return runTransition({
-      task: () => applyOwnedOrderSnapshotsTransition({
-        ...snapshots,
-        recoveryMode
-      }),
-    })
-  }
-
+  const reconcileOwnedOrders = (options = {}) => reconcileOwnedOrdersTransition({
+    context: {
+      state,
+      broker,
+      runTransition,
+      pause,
+      collectOwnedOrderSnapshots,
+      applyOwnedOrderSnapshotsTransition,
+    },
+    options,
+  })
 
   const {
     processVolatilitySnapshot,
