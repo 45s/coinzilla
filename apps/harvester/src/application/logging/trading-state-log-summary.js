@@ -1,4 +1,4 @@
-import { CG_STRATEGY_ID } from "../../domain/strategies/strategy-ids.js"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 /**
  * Build a bounded Position snapshot for DEBUG logs without exposing Portfolio
  * execution identity records.
@@ -56,7 +56,7 @@ export function createRecoveryLedgerLogSummary({ recoveryLedger } = {}) {
  * @param {string} [input.strategyId]
  * @returns {{ position: object|null, appliedFillCount: number }}
  */
-export function createPortfolioLogSummary({ portfolio, marketId, positionId, strategyId = CG_STRATEGY_ID } = {}) {
+export function createPortfolioLogSummary({ portfolio, marketId, positionId, strategyId = StrategyId.COIN_GRABBER } = {}) {
   const hasPositionSelector = typeof marketId === "string" || typeof positionId === "string"
   return {
     position: createPositionLogSummary({
