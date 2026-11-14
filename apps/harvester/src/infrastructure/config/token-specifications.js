@@ -153,7 +153,7 @@ export function resolvePairSpecifications({ pairs, tokenSpecifications } = {}) {
     }
     const specification = markets.get(symbol)
     if (!specification) {
-      throw new Error("Configured market " + symbol + " is missing token specification metadata")
+      throw new Error("Missing token specification metadata for configured market " + symbol)
     }
     resolvedPairs[symbol] = {
       ...pair,
