@@ -1044,6 +1044,45 @@ function logTrailingBuyActivePosition({ context, symbol, metadata, position, act
   })
 }
 
+function getTrailingBuyActivePositionSkip({ context, symbol, metadata }) {
+  const position = context.getPortfolio().getPosition({
+    marketId: metadata.market.id,
+  })
+  const activePositionQuantity = position?.baseQuantity.amount ?? "0"
+  if (compareDecimal({
+    left: activePositionQuantity,
+    right: "0",
+  }) <= 0) {
+    return undefined
+  }
+  logTrailingBuyActivePosition({
+    context,
+    symbol,
+    metadata,
+    position,
+    activePositionQuantity,
+  })
+  return toResult({
+    data: {
+      skipped: true,
+      reason: "ACTIVE_POSITION_EXISTS",
+    },
+  })
+}
+
+function getTrailingBuyPreflightSkip({ preflight, activeBuy }) {
+  if (preflight.data?.preflightValid === true) {
+    return undefined
+  }
+  return toResult({
+    data: {
+      skipped: true,
+      reason: preflight.data?.reason ?? "TRAILING_BUY_REPLACEMENT_NOT_ADMISSIBLE",
+      previousOrderId: activeBuy.brokerOrderId,
+    },
+  })
+}
+
 function evaluateTrailingBuyTrigger({ context, symbol, marketPrice, pairConfig, activeBuy }) {
   const referencePrice = context.state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
   const trigger = context.strategyPolicy.evaluateTrailingBuyRepricing({
@@ -1166,27 +1205,13 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
       symbol,
     })
   }
-  const position = context.getPortfolio().getPosition({
-    marketId: metadata.market.id,
+  const positionSkip = getTrailingBuyActivePositionSkip({
+    context,
+    symbol,
+    metadata,
   })
-  const activePositionQuantity = position?.baseQuantity.amount ?? "0"
-  if (compareDecimal({
-    left: activePositionQuantity,
-    right: "0",
-  }) > 0) {
-    logTrailingBuyActivePosition({
-      context,
-      symbol,
-      metadata,
-      position,
-      activePositionQuantity,
-    })
-    return toResult({
-      data: {
-        skipped: true,
-        reason: "ACTIVE_POSITION_EXISTS",
-      },
-    })
+  if (positionSkip) {
+    return positionSkip
   }
   const trigger = evaluateTrailingBuyTrigger({
     context,
@@ -1226,14 +1251,12 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
   if (!preflight.ok) {
     return preflight
   }
-  if (preflight.data?.preflightValid !== true) {
-    return toResult({
-      data: {
-        skipped: true,
-        reason: preflight.data?.reason ?? "TRAILING_BUY_REPLACEMENT_NOT_ADMISSIBLE",
-        previousOrderId: activeBuy.brokerOrderId,
-      },
-    })
+  const preflightSkip = getTrailingBuyPreflightSkip({
+    preflight,
+    activeBuy,
+  })
+  if (preflightSkip) {
+    return preflightSkip
   }
   return replaceTrailingBuy({
     context,
