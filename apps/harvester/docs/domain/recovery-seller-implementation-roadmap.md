@@ -106,8 +106,8 @@ Model only the concepts required by the approved RS contract:
 
 - Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
 - Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator manually enters original quote investment and original base quantity in configuration before application startup; this is the explicit authorization and declared historical basis. Historical exchange evidence and a runtime authorization UI are not required. Advanced runtime editing, expiry/revocation and authorization lifecycle are deferred under FITDIB.
-- Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
-- Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
+- Original legacy quote investment and original base quantity; RS calculates average historical cost once as invested / quantity and keeps it fixed.
+- Legacy attribution: original and remaining legacy quantity, confirmed disposals; original average cost remains fixed.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
@@ -138,8 +138,8 @@ Required test families:
 
 Model only the concepts required by the approved RS contract:
 
-- Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
-- Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
+- Original legacy quote investment and original base quantity; RS calculates average historical cost once as invested / quantity and keeps it fixed.
+- Legacy attribution: original and remaining legacy quantity, confirmed disposals; original average cost remains fixed.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
@@ -162,11 +162,11 @@ For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. With an illustrative `orderQu
 Required test families:
 
 - Valid/invalid average-cost inputs, exact decimal precision and division behavior.
-- Partial legacy disposal and remaining-basis calculation.
+- Successful-cycle legacy quantity decrement by the actual legacy quantity sold; original average cost is never recalculated.
 - Spot/EARN custody separation, transfers and insufficient Spot quantity.
 - Recovery BUY fills, partial fills, actual commissions and cost basis.
 - Profitable recovery tranche paired with a loss-making legacy slice.
-- Mixed SELL proceeds/fee allocation after the owner-approved rule exists.
+- Mixed SELL execution must identify the actual legacy quantity disposed so it can be deducted exactly once; do not recalculate legacy average cost.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
 - Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries, including remaining legacy quantity below `sellQuantity`; verify smaller remainder is sold only when both profitability gates and exchange filters pass, otherwise retained. Constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
@@ -210,7 +210,7 @@ Preserve manual/external order ownership. EARN/off-Spot quantity is never availa
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
-Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; remaining basis/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, restart, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
+Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, restart, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
 
 Update the canonical RS specification, architecture, runtime config docs only when config is approved, tests index, docs index, Harvester roadmap and PR descriptions.
 
