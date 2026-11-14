@@ -162,7 +162,7 @@ RS must fail closed when a required risk limit is absent, invalid, exceeded, or 
 - maximum authorized legacy inventory and legacy quantity released per cycle;
 - account-wide quote/base commitment boundary shared with other markets.
 
-**Owner decisions required:** exact values, per-market versus account-wide scope, open-commitment reservation, and behavior when a limit is reached while orders rest. No PR #1110 example value is an approved risk limit.
+**Owner decisions required:** exact values, per-market versus account-wide scope, open-commitment reservation, and behavior when a limit is reached while orders rest. No PR #1115 example value is an approved risk limit.
 
 ## 8. sellQuantity, residuals, and exchange constraints
 
