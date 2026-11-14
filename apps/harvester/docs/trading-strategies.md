@@ -28,6 +28,8 @@ Implementation code is under src/domain/strategies/conservative/ and src/use-cas
 
 **Status: proposed concept only. RS is not implemented, registered, configurable at runtime, or executable.** This section records the product direction and proposed configuration shape for owner review. It does not amend the Conservative Domain Specification or change Coin Grabber behavior.
 
+**Canonical domain contract:** [Recovery Seller Domain Specification](./domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md) records the draft accounting model, exact-once fill/Portfolio invariants, legacy authorization and profitability safety gates, partial-fill/reservation/reconciliation boundaries, and the owner decisions that block executable implementation. The proposal below remains product context; where details are unresolved, the specification explicitly leaves them open rather than inventing behavior.
+
 #### Purpose
 
 Recovery Seller is intended to gradually liquidate an existing spot position acquired at a higher market price. Rather than waiting for the entire legacy position to recover to its original acquisition price, RS uses repeated recovery cycles: buy a new tranche, then—when the cycle can be closed under the eventual profitability rules—sell that tranche together with a configured quantity of the pre-existing position.
