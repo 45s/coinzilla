@@ -5318,21 +5318,12 @@ test("blocks a second process start after an unclean prior session before broker
 })
 
 
-test("reuses the process-owned Operational State Store and preserves operator pause across user-data reconnect", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-shared-operator-facts-"))
-  t.after(() => rm(directory, {
-    recursive: true,
-    force: true
-  }))
-  const runtimeSessionId = "shared-process-operator-session"
-  const operationalStateStore = createFileOperationalStateStore({
-    directory,
-    runtimeSessionId
-  })
-  await operationalStateStore.initialize()
-  const broker = createBroker()
+
+async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
   let resolveRecoveryAcknowledgement
-  const recoveryAcknowledged = new Promise((resolve) => { resolveRecoveryAcknowledgement = resolve })
+  const recoveryAcknowledged = new Promise((resolve) => {
+    resolveRecoveryAcknowledgement = resolve
+  })
   const subscribeForUserData = broker.subscribeForUserData
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
@@ -5357,10 +5348,12 @@ test("reuses the process-owned Operational State Store and preserves operator pa
   let secondaryStoreFactoryCalls = 0
   const config = {
     ...appConfig,
-    operatorControl: { telegram: {
-      enabled: true,
-      allowedUserIds: ["12345"]
-    } },
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
   }
   const runtime = await startHarvesterForTest({
     appConfig: config,
@@ -5368,7 +5361,7 @@ test("reuses the process-owned Operational State Store and preserves operator pa
     runtimeSessionId,
     env: {
       ...binanceEnv,
-      TELEGRAM_BOT_TOKEN: "test-telegram-token"
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
     },
     brokerAdapterFactory: () => broker,
     createOperationalStateStore: () => {
@@ -5378,102 +5371,146 @@ test("reuses the process-owned Operational State Store and preserves operator pa
     createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
       operator = suppliedOperator
       return {
-        start: async () => ({ started: true }),
-        stop: async () => ({ stopped: true })
+        start: async () => ({
+          started: true,
+        }),
+        stop: async () => ({
+          stopped: true,
+        }),
       }
     },
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
-
-  try {
-    const pause = await operator.pauseMarket({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"]
-      },
-      requestId: "telegram:shared-store-test",
-      symbol: "BTCUSDT",
-    })
-    assert.equal(pause.ok, true, "An authorized operator pause must append through the process-owned store.")
-
-    broker.emitUserDataStatus({
-      type: "connectionClosed",
-      reason: "test-disconnect"
-    })
-    broker.emitUserDataStatus({
-      type: "recovered",
-      subscriptionId: 17,
-      recoveryRequired: true,
-      reconciliationRequired: true,
-    })
-    await waitForTestSignal(
-      recoveryAcknowledged,
-      "operator pause retention after user-data reconnect",
-      () => ({ recoveryAcknowledged: true }),
-      2_000,
-    )
-    const reconnectedStatus = await operator.getStatus({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"]
-      },
-    })
-    assert.equal(reconnectedStatus.ok, true, "The operator status must remain available after user-data recovery.")
-    assert.equal(reconnectedStatus.data.userData.ready, true, "The user-data recovery must finish before checking the retained operator pause.")
-    const reconnectedMarkets = await operator.getMarkets({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"]
-      },
-    })
-    assert.equal(reconnectedMarkets.ok, true, "The market query must remain available after user-data recovery.")
-    assert.equal(
-      reconnectedMarkets.data.markets.find(({ symbol }) => symbol === "BTCUSDT")?.operatorPaused,
-      true,
-      "A user-data disconnect/reconnect and successful reconciliation must not silently clear the process-lifetime operator pause.",
-    )
-
-    const status = await operator.getStatus({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"]
-      },
-    })
-    assert.equal(status.ok, true, "The process-composed operator facade must expose an authorized read-only runtime status.")
-    assert.equal(status.data.runtimeState, "RUNNING", "The runtime status must reflect the active Harvester process lifecycle.")
-    assert.equal(status.data.broker, "binance", "The runtime status must identify the configured broker without claiming a live socket state.")
-    assert.equal(typeof status.data.userData.ready, "boolean", "The runtime status must expose the live user-data readiness gate.")
-    const markets = await operator.getMarkets({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"]
-      },
-    })
-    assert.equal(markets.ok, true, "The process-composed operator facade must expose read-only configured market snapshots.")
-    assert.ok(
-      markets.data.markets.some(({ symbol }) => symbol === "BTCUSDT"),
-      "The market query must include the configured BTCUSDT market loaded by bootstrap.",
-    )
-  } finally {
-    await runtime.stop()
+  return {
+    runtime,
+    operator,
+    recoveryAcknowledged,
+    getSecondaryStoreFactoryCalls: () => secondaryStoreFactoryCalls,
   }
+}
 
+async function assertOperatorPauseSurvivesReconnect({ fixture, broker }) {
+  const pause = await fixture.operator.pauseMarket({
+    actor: {
+      id: "telegram-user:12345",
+      roles: ["trading-operator"],
+    },
+    requestId: "telegram:shared-store-test",
+    symbol: "BTCUSDT",
+  })
+  assert.equal(pause.ok, true, "An authorized operator pause must append through the process-owned store.")
+
+  broker.emitUserDataStatus({
+    type: "connectionClosed",
+    reason: "test-disconnect",
+  })
+  broker.emitUserDataStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  await waitForTestSignal(
+    fixture.recoveryAcknowledged,
+    "operator pause retention after user-data reconnect",
+    () => ({
+      recoveryAcknowledged: true,
+    }),
+    2_000,
+  )
+  const actor = {
+    id: "telegram-user:12345",
+    roles: ["trading-operator"],
+  }
+  const reconnectedStatus = await fixture.operator.getStatus({
+    actor,
+  })
+  assert.equal(reconnectedStatus.ok, true)
+  assert.equal(reconnectedStatus.data.userData.ready, true)
+  const reconnectedMarkets = await fixture.operator.getMarkets({
+    actor,
+  })
+  assert.equal(reconnectedMarkets.ok, true)
+  assert.equal(
+    reconnectedMarkets.data.markets.find(({ symbol }) => symbol === "BTCUSDT")?.operatorPaused,
+    true,
+    "A user-data disconnect/reconnect and successful reconciliation must not silently clear the process-lifetime operator pause.",
+  )
+}
+
+async function assertOperatorReadOnlyQueries({ operator }) {
+  const actor = {
+    id: "telegram-user:12345",
+    roles: ["trading-operator"],
+  }
+  const status = await operator.getStatus({
+    actor,
+  })
+  assert.equal(status.ok, true)
+  assert.equal(status.data.runtimeState, "RUNNING")
+  assert.equal(status.data.broker, "binance")
+  assert.equal(typeof status.data.userData.ready, "boolean")
+  const markets = await operator.getMarkets({
+    actor,
+  })
+  assert.equal(markets.ok, true)
+  assert.ok(markets.data.markets.some(({ symbol }) => symbol === "BTCUSDT"))
+}
+
+async function assertSharedOperatorFactsPersisted({ operationalStateStore, runtimeSessionId, fixture }) {
   const read = await operationalStateStore.readAll()
   assert.equal(read.ok, true, read.errors?.[0]?.message)
-  assert.equal(secondaryStoreFactoryCalls, 0, "Telegram operator control must reuse the exact store that owns process/order/fill facts.")
+  assert.equal(fixture.getSecondaryStoreFactoryCalls(), 0)
   const pauseFact = read.data.records.find(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
-  assert.ok(pauseFact, "The operator pause must be present in the process-owned durable stream.")
-  assert.equal(pauseFact.runtimeSessionId, runtimeSessionId, "Operator pause facts must share the exact process-session identity.")
+  assert.ok(pauseFact)
+  assert.equal(pauseFact.runtimeSessionId, runtimeSessionId)
   assert.equal(
     read.data.records.some(({ factType }) => factType === "OPERATOR_MARKET_RESUMED"),
     false,
-    "A user-data reconnect must not append an operator-resume fact.",
   )
   assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STARTED").length, 1)
   assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STOPPED").length, 1)
+}
+
+
+test("reuses the process-owned Operational State Store and preserves operator pause across user-data reconnect", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-shared-operator-facts-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const runtimeSessionId = "shared-process-operator-session"
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId,
+  })
+  await operationalStateStore.initialize()
+  const broker = createBroker()
+  const fixture = await createSharedOperatorRuntimeFixture({
+    broker,
+    operationalStateStore,
+    runtimeSessionId,
+  })
+
+  try {
+    await assertOperatorPauseSurvivesReconnect({
+      fixture,
+      broker,
+    })
+    await assertOperatorReadOnlyQueries({
+      operator: fixture.operator,
+    })
+  } finally {
+    await fixture.runtime.stop()
+  }
+  await assertSharedOperatorFactsPersisted({
+    operationalStateStore,
+    runtimeSessionId,
+    fixture,
+  })
 })
 
 test("does not subscribe to a market blocked by this strategy's external-order policy", async () => {
