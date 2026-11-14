@@ -343,7 +343,7 @@ test("rejects enabled Telegram operator control without a bot token before conne
   assert.equal(brokerFactoryCalled, false, "Invalid operator-control configuration must fail before Binance adapter construction.")
 })
 
-test("rejects enabled Telegram operator control without an explicit durable-facts directory", async () => {
+test("uses the app-local Operational State Store default and fails closed when it is not initialized", async () => {
   const config = {
     ...appConfig,
     operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
@@ -353,17 +353,17 @@ test("rejects enabled Telegram operator control without an explicit durable-fact
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => config,
-      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", DURABLE_FACTS_DIRECTORY: undefined },
+      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
       brokerAdapterFactory: () => {
         brokerFactoryCalled = true
-        throw new Error("Broker connection must not start without the configured durable-facts store.")
+        throw new Error("Broker connection must not start before the Operational State Store is verified.")
       },
     }),
-    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED",
-    "Enabled inbound control must require the operator's explicitly configured ADR-0001 store directory.",
+    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+    "Telegram operator control must use the app-local default Operational State Store and fail closed until it is initialized.",
   )
 
-  assert.equal(brokerFactoryCalled, false, "A missing durable-facts directory must fail before connecting to Binance.")
+  assert.equal(brokerFactoryCalled, false, "An uninitialized default Operational State Store must fail before connecting to Binance.")
 })
 
 test("verifies the existing durable-facts store before connecting when Telegram operator control is enabled", async () => {
