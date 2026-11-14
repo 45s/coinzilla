@@ -6,7 +6,7 @@ import { safeErrorMessage } from "./safe-error-message.js"
 
 const TELEGRAM_API_BASE_URL = "https://api.telegram.org"
 
-function createSafeCause(error, token) {
+function createSafeCause({ error, token }) {
   return new Error(safeErrorMessage({ error, token }))
 }
 
@@ -30,7 +30,7 @@ async function readResponsePayload({ response, token, status }) {
   try {
     return await response.json()
   } catch (error) {
-    const cause = createSafeCause(error, token)
+    const cause = createSafeCause({ error, token })
     if (!response.ok) {
       throw new Error(
         `Telegram API HTTP request failed with status ${status}`,
@@ -101,7 +101,7 @@ export class TelegramNotifier {
   #timeoutMs
 
   constructor(options) {
-    const validated = validateTelegramOptions(options, globalThis.fetch)
+    const validated = validateTelegramOptions({ options, defaultFetchImpl: globalThis.fetch })
     this.#token = validated.token
     this.#chatId = validated.chatId
     this.#fetch = validated.fetchImpl
@@ -121,7 +121,7 @@ export class TelegramNotifier {
         signal: AbortSignal.timeout(this.#timeoutMs),
       })
     } catch (error) {
-      const cause = createSafeCause(error, this.#token)
+      const cause = createSafeCause({ error, token: this.#token })
       throw new Error(
         `Telegram Bot API request failed: ${cause.message}`,
         { cause },

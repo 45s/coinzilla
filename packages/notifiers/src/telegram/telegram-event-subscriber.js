@@ -175,6 +175,7 @@ export function subscribeTelegramNotifications({
           maxPending,
           formatMessage,
         }),
+      })
 
       if (!result?.ok || typeof result.subscription?.unsubscribe !== "function") {
         throw new Error(`Unable to subscribe to event: ${eventName}`)
