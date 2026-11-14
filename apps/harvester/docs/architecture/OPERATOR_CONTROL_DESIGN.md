@@ -12,10 +12,10 @@ Provide one Harvester-owned application capability that authorized operators can
 
 - Outbound Telegram notifications remain in `notifications.telegram` and `@coinzilla/notifiers`.
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
-- `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the ADR-0001 durable-facts append port.
-- The use cases pass the durable append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
+- `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the Operational State Store append port (ADR-0001 record contract).
+- The use cases pass the Operational State Store append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
 - `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
-- The ADR-0001 file store and integrity checks are verified by the process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same ledger. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
+- The Operational State Store adapter and integrity checks are verified by process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same store. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
 

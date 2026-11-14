@@ -100,9 +100,6 @@ function validateTelegramOperatorControlConfig(config) {
     }
     seenUserIds.add(userId)
   }
-  if (telegram.enabled && telegram.allowedUserIds.length === 0) {
-    fail(path + ".telegram.allowedUserIds", "a non-empty array of unique positive decimal Telegram user IDs")
-  }
 }
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)

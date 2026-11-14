@@ -1,24 +1,24 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { initializeHarvesterDurableFactsLedger } from "./initialize-durable-facts-ledger.js"
+import { initializeHarvesterOperationalStateStore } from "./initialize-operational-state-store.js"
 
 test("requires explicit confirmation before acquiring locks or creating a ledger", async () => {
   let lockCalls = 0
   let storeCalls = 0
-  const result = await initializeHarvesterDurableFactsLedger({
+  const result = await initializeHarvesterOperationalStateStore({
     confirmed: false,
     acquireProcessLock: async () => { lockCalls += 1; return { ok: true, release: async () => ({ ok: true }) } },
     createStore: () => { storeCalls += 1; return { initialize: async () => ({ ok: true, data: { durable: true } }) } },
   })
-  assert.equal(result.ok, false, "Genesis creation must require an explicit operator confirmation.")
+  assert.equal(result.ok, false, "Operational State Store initialization must require an explicit operator confirmation.")
   assert.equal(lockCalls, 0, "Unconfirmed initialization must not acquire process locks.")
   assert.equal(storeCalls, 0, "Unconfirmed initialization must not create a store.")
 })
 
-test("creates genesis only while holding the broker-wide and Journal process locks", async () => {
+test("initializes operational state only while holding the broker-wide and Journal process locks", async () => {
   const sequence = []
   let storeInput
-  const result = await initializeHarvesterDurableFactsLedger({
+  const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
     directory: "/tmp/recovery-facts",
     processLockDirectory: "/tmp/process-locks",
@@ -39,7 +39,7 @@ test("creates genesis only while holding the broker-wide and Journal process loc
     },
   })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
-  assert.deepEqual(sequence, ["lock", "initialize", "release"], "Genesis must be committed under the same process locks used by runtime startup.")
+  assert.deepEqual(sequence, ["lock", "initialize", "release"], "Operational State Store initialization must be committed under the same process locks used by runtime startup.")
   assert.deepEqual(storeInput, { directory: "/tmp/recovery-facts", runtimeSessionId: "initializer-session" })
   assert.equal(result.data.sequence, "0")
   assert.equal(result.data.durable, true)
@@ -47,7 +47,7 @@ test("creates genesis only while holding the broker-wide and Journal process loc
 
 test("does not claim successful initialization when the store refuses to overwrite an existing ledger", async () => {
   let released = false
-  const result = await initializeHarvesterDurableFactsLedger({
+  const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
     acquireProcessLock: async () => ({ ok: true, release: async () => { released = true; return { ok: true } } }),
     createStore: () => ({ initialize: async () => ({ ok: false, errors: [new Error("refuses to overwrite existing ledger")] }) }),
@@ -58,7 +58,7 @@ test("does not claim successful initialization when the store refuses to overwri
 
 
 test("does not claim genesis success if the process lock cannot be released", async () => {
-  const result = await initializeHarvesterDurableFactsLedger({
+  const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
     acquireProcessLock: async () => ({
       ok: true,

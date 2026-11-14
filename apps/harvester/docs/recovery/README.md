@@ -22,23 +22,23 @@ From `apps/harvester`:
 pnpm run recovery:market -- --context ./recovery-evidence/linkusdt.json
 ```
 
-The default mode is audit-only and never writes the durable-fact ledger. It reports `READY`, `BLOCKED` or `SKIPPED`; exit code `0` means READY in audit-only mode or confirmed in explicit confirmation mode, `2` means the audit did not establish readiness, and `1` means invalid input or an execution/evidence failure.
+The default mode is audit-only and never writes to the Operational State Store. It reports `READY`, `BLOCKED` or `SKIPPED`; exit code `0` means READY in audit-only mode or confirmed in explicit confirmation mode, `2` means the audit did not establish readiness, and `1` means invalid input or an execution/evidence failure.
 
 Only an explicit confirmation flag can append a coverage fact:
 
 ```sh
-DURABLE_FACTS_DIRECTORY=/absolute/path/to/existing/durable-facts \
+OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \
   pnpm run recovery:market -- --context ./recovery-evidence/linkusdt.json --confirm
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
+$env:OPERATIONAL_STATE_DIRECTORY = "C:\coinzilla-data\operational-state"
 pnpm run recovery:market -- --context .\recovery-evidence\linkusdt.json --confirm
 ```
 
-Confirmation requires an already initialized and verifiable ADR-0001 ledger. The CLI never initializes, repairs or replaces a missing ledger. Do not initialize a production ledger for this Step 7 command; the ADR reserves production genesis for the later runtime-integration gate. The context's `runtimeSessionId` identifies the explicit offline confirmation process.
+Confirmation uses `OPERATIONAL_STATE_DIRECTORY` when set; otherwise it resolves the same package-local `apps/harvester/recovery-facts/` directory as the runtime. It requires an already initialized and verifiable ADR-0001 store. The CLI never initializes, repairs or replaces a missing store. Do not initialize a production ledger for this Step 7 command; the ADR reserves production genesis for the later runtime-integration gate. The context's `runtimeSessionId` identifies the explicit offline confirmation process.
 
 ### Evidence bundle contract
 
@@ -141,16 +141,16 @@ This fixture represents a trading-enabled Journal session with a complete PREFLI
 4. Exhaust target-market trade history from the operator-reviewed `coveredFromTime`.
 5. Run the production account audit with `tradeHistoryScope: "MARKET"`, complete-history enforcement, the exact target Market and candidate retention evidence.
 6. Require a non-skipped audit, no target-market blocker, complete history and matching baseline fact identity.
-7. Only with explicit `--confirm`, append `MARKET_HISTORY_COVERAGE_CONFIRMED` through the existing ADR-0001 durable-facts port and verify the readback.
+7. Only with explicit `--confirm`, append `MARKET_HISTORY_COVERAGE_CONFIRMED` through the existing ADR-0001 Operational State Store port and verify the readback.
 
 ## Fail-closed behavior
 
 - A failed/ambiguous owned-order reconciliation stops before account/history evidence is trusted.
 - A target-market unowned order blocks that market's confirmation. It is never adopted, canceled or modified.
 - An unowned order in another market remains a symbol-scoped blocker; it does not automatically invalidate the selected market.
-- Missing assets/market metadata, incomplete history pagination, a history start later than the reviewed boundary, an account-balance mismatch, mismatched retention evidence, a skipped audit or an unreadable durable-fact ledger cannot create a coverage fact.
+- Missing assets/market metadata, incomplete history pagination, a history start later than the reviewed boundary, an account-balance mismatch, mismatched retention evidence, a skipped audit or an unreadable Operational State Store cannot create a coverage fact.
 - The baseline fact identity is deterministic per symbol. An identical retry is idempotent; a conflicting baseline is rejected rather than silently replacing or narrowing existing coverage.
-- The Journal remains an operational evidence observer. The coverage fact is written only to the ADR-0001 durable-facts stream.
+- The Journal remains an operational evidence observer. The coverage fact is written only to the Operational State Store.
 
 ## Current implementation status
 

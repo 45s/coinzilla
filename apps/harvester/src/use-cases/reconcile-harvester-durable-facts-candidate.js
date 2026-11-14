@@ -141,7 +141,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
         return toResult({
           errors: readback?.errors?.length
             ? readback.errors
-            : [new Error("Resolved safety blockers could not be verified in the durable-facts stream")],
+            : [new Error("Resolved safety blockers could not be verified in the Operational State Store")],
         })
       }
       const verifiedProjection = projectHarvesterDurableFacts({ records: readback.data.records })
