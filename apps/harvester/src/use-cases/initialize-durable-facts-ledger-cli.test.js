@@ -41,7 +41,7 @@ test("uses the app-local default directory and rejects relative overrides or unk
     logger: createLogger(),
   })
   const unknown = await runInitializeDurableFactsLedger({
-    env: { DURABLE_FACTS_DIRECTORY: "/tmp/recovery-facts" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize", "--force"],
     initialize,
     logger: createLogger(),
@@ -54,7 +54,7 @@ test("initializes only the operator-selected absolute directory and reports dura
   const logger = createLogger()
   let received
   const exitCode = await runInitializeDurableFactsLedger({
-    env: { DURABLE_FACTS_DIRECTORY: "/tmp/recovery-facts" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize"],
     initialize: async (input) => {
       received = input
@@ -70,7 +70,7 @@ test("initializes only the operator-selected absolute directory and reports dura
 test("does not report success when genesis initialization fails", async () => {
   const logger = createLogger()
   const exitCode = await runInitializeDurableFactsLedger({
-    env: { DURABLE_FACTS_DIRECTORY: "/tmp/recovery-facts" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize"],
     initialize: async () => ({ ok: false, errors: [new Error("ledger already exists")] }),
     logger,
