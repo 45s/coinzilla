@@ -159,3 +159,70 @@ test("ESLint requires braces around single-statement control-flow bodies", async
     "Single-statement if bodies must still use braces under the repository lint policy.",
   );
 });
+
+
+test("parseChangedFileNames preserves original paths for renamed files", async () => {
+  const { parseChangedFileNames } = await import("./check-eslint-changed.js");
+  const changes = parseChangedFileNames([
+    "M",
+    "apps/harvester/src/changed.js",
+    "R100",
+    "apps/harvester/src/old.js",
+    "apps/harvester/src/new.js",
+    "A",
+    "apps/harvester/src/added.js",
+    "D",
+    "apps/harvester/src/deleted.js",
+    "",
+  ].join("\0"));
+
+  assert.deepEqual(changes, [
+    {
+      path: "apps/harvester/src/changed.js",
+      basePath: "apps/harvester/src/changed.js",
+    },
+    {
+      path: "apps/harvester/src/new.js",
+      basePath: "apps/harvester/src/old.js",
+    },
+    {
+      path: "apps/harvester/src/added.js",
+      basePath: null,
+    },
+  ]);
+});
+
+test("findingKey changes when the offending source line changes", async () => {
+  const { findingKey } = await import("./check-eslint-changed.js");
+  const original = {
+    ruleId: "prefer-template",
+    messageId: "unexpectedStringConcatenation",
+    message: "Unexpected string concatenation.",
+    nodeType: "BinaryExpression",
+    source: 'const label = "old" + suffix;',
+  };
+
+  assert.notEqual(
+    findingKey(original),
+    findingKey({ ...original, source: 'const label = "new" + suffix;' }),
+  );
+});
+
+test("countFindings retains duplicate violations", async () => {
+  const { countFindings } = await import("./check-eslint-changed.js");
+  const finding = {
+    ruleId: "max-params",
+    messageId: "exceed",
+    message: "Too many parameters.",
+    nodeType: "FunctionDeclaration",
+    source: "function run(a, b) {}",
+  };
+
+  assert.equal(countFindings([finding, finding]).get(JSON.stringify([
+    "max-params",
+    "exceed",
+    "Too many parameters.",
+    "FunctionDeclaration",
+    "function run(a, b) {}",
+  ])), 2);
+});
