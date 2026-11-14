@@ -72,6 +72,22 @@ export function normalizeTradingEnvironment(value) {
   return environment
 }
 
+/**
+ * Validate the required per-pair runtime eligibility selector.
+ *
+ * This value is separate from TRADING_MODE, which selects the Binance API host.
+ *
+ * @param {unknown} value - Explicit pair environment selection.
+ * @returns {"testnet"|"live"|"both"} Validated pair eligibility.
+ * @throws {TypeError} If no supported explicit value is supplied.
+ */
+export function normalizePairTradingEnvironment(value) {
+  if (typeof value !== "string" || !["testnet", "live", "both"].includes(value.trim())) {
+    throw new TypeError("tradingEnvironment must be one of testnet, live, or both")
+  }
+  return value.trim()
+}
+
 /** Return the effective decimal places required by a positive exchange increment. */
 export function decimalPlaces(value) {
   let normalized
@@ -180,6 +196,7 @@ export function normalizePairInputs(inputs) {
     throw new TypeError("inputs must be an object")
   }
   const normalized = {
+    tradingEnvironment: normalizePairTradingEnvironment(inputs.tradingEnvironment),
     investment: parseDecimalInput(inputs.investment, "investment", { exclusiveMin: true }),
     orderQuantity: parseDecimalInput(inputs.orderQuantity, "orderQuantity", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(inputs.keepQuantity, "keepQuantity"),
@@ -218,7 +235,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   }
 
   const normalizedInputs = normalizePairInputs(inputs)
-  const { investment, orderQuantity: requestedOrderQuantity, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
+  const { tradingEnvironment, investment, orderQuantity: requestedOrderQuantity, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
 
   const normalizedStepSize = parseDecimalInput(metadata.stepSize, "stepSize", { exclusiveMin: true })
   const alignedKeepQuantity = roundDecimalToIncrement({
@@ -255,6 +272,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
 
   return Object.freeze({
     enabled: true,
+    tradingEnvironment,
     enableVolatilityProtection: true,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: toConfigNumber(investment, "investment"),
