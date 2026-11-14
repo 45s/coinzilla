@@ -763,7 +763,8 @@ test("starts the Conservative trading engine and applies fills to Portfolio", as
   assert.equal(second.data.applied, true)
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.02")
   assert.equal(result.portfolio.appliedFillIds.length, 2)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  assert.equal(result.userDataStatus, "SHUTDOWN_INCOMPLETE")
 })
 
 test("serializes concurrent Portfolio updates without losing fills", async () => {
@@ -2630,7 +2631,8 @@ test("emits per-execution debug audit records with commission and before/after a
   assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
   assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
 
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  assert.equal(result.userDataStatus, "SHUTDOWN_INCOMPLETE")
 })
 
 
