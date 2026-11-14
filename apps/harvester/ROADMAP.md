@@ -33,6 +33,17 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ---
 
+## Proposed strategy — Recovery Seller (RS)
+
+**Status: PROPOSED — documentation and implementation roadmap prepared; RS is not implemented, registered, configurable at runtime, or executable. Tracking: [PR #1115](https://github.com/45s/coinzilla/pull/1115).** The product direction is recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy), the [Recovery Seller Domain Specification](./docs/domain/recovery-seller-domain-specification.md), and the [Recovery Seller Implementation Roadmap](./docs/domain/recovery-seller-implementation-roadmap.md).
+
+- **Goal:** progressively reduce explicitly authorized legacy Spot inventory through recovery cycles. Each cycle acquires recovery inventory and may sell it with a configured legacy quantity only when the independent recovery and legacy profitability gates both pass.
+- **Accepted input direction:** per-pair `sellQuantity` plus `legacyPosition.invested` and `legacyPosition.quantity`; RS calculates average historical cost itself. Example: 100 USDT / 50 ZRO = 2 USDT/ZRO. The full logical legacy quantity need not remain in Spot; EARN-held inventory is unavailable for Spot SELL until returned and authoritatively reconciled.
+- **Concurrent operation:** RS and CG may run at the same time, including on the same market when both are enabled. They use one actual Portfolio Position per market, independent strategy attribution/order ownership, and centralized quote/base reservations through the shared Trading Engine. No blanket strategy mutual-exclusion lock or mandatory handoff is allowed.
+- **Delivery order:** RS-1 Conservative source audit is complete (audit only; no code moved); RS-2 proven shared-function extraction; RS-3 TDD accounting/custody/profitability; RS-4 pure RS policy; RS-5 concurrent CG/RS Trading Engine integration; RS-6 offline lifecycle verification.
+- **Remaining implementation decisions:** exact `sellQuantity` target/cap and residual handling; legacy authorization and opening-inventory accounting; historical-basis/proceeds/fee allocation; minimum recovery profit and third-asset fee valuation; BUY cadence and risk limits; pause/disable/resume lifecycle; deterministic resource allocation/fairness when concurrent strategies compete.
+- **Safety:** no runtime wiring or exchange operations until the RS domain contract and implementation phases are complete and reviewed. Existing CG behavior remains unchanged.
+
 ## P0 — Telegram Command Center (CC) — delivered
 
 **Status: [x] COMPLETE — CC-4 merged into `develop` in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; CC-1 through CC-3 were previously merged in PRs #1079, #1081, #1086 and #1087. Required exact-head CI and external documentation links passed.** The initial engine/application foundation remains in [PR #1045](https://github.com/45s/coinzilla/pull/1045), disabled-by-default runtime wiring in [PR #1067](https://github.com/45s/coinzilla/pull/1067), and process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065). ADR-0001 process-restart recovery Steps 8–9 remain explicitly deferred and are not implied by CC completion.

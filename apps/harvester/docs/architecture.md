@@ -245,6 +245,21 @@ Both initial strategy modes use the same Trading Engine and Portfolio, but they 
 
 There is exactly one Position per trading pair, shared by both strategies. The Trading Engine grants operational control to only one strategy at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). It switches from Aggressive to Conservative when actual executed BUY investment exceeds that percentage of the pair's planned total quote budget; open/unfilled BUY orders and their reserved quote commitment are excluded. Conservative retains control until the entire position is sold and the invested quote capital has been recovered. If the position is losing money, the strategy must stop creating new BUY orders while keeping existing SELL orders active; it must never force a sale at a loss merely to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. During a handover, the outgoing strategy stops issuing new orders and the engine reconciles/cancels its outstanding orders before the incoming strategy acts. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved. See [Trading Strategies](./trading-strategies.md) for the behavior contract.
 
+### Planned Recovery Seller and Conservative concurrency
+
+The current Conservative/Aggressive handover above describes those two existing strategy modes; it is not a general rule that only one strategy may operate a market. The planned Recovery Seller requirement explicitly allows RS and CG to run concurrently, including on the same market when both are enabled.
+
+For that integration:
+
+- Keep one actual Portfolio Position per market and separate RS/CG policy state and attribution.
+- Preserve originating-strategy identity on every order and canonical fill.
+- Serialize order submission and Portfolio/strategy-attribution commits through the shared Trading Engine.
+- Aggregate quote and base reservations across both strategies before accepting any new intent.
+- Resolve competing intents deterministically; never rely on timing to avoid double-spend or oversell.
+- Pause/disable remains strategy-scoped and must not silently stop the other strategy.
+
+This is a target requirement, not current runtime behavior. See the [Recovery Seller Domain Specification](./domain/recovery-seller-domain-specification.md) and [implementation roadmap](./domain/recovery-seller-implementation-roadmap.md).
+
 ## Non-negotiable boundaries
 
 - Market-price updates do not directly change Portfolio holdings.
