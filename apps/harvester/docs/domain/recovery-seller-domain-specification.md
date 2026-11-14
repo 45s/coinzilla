@@ -74,7 +74,11 @@ The names above describe the proposed configuration shape, not a runtime schema.
 
 The original configured quantity and invested amount are historical basis inputs; remaining logical legacy quantity, Spot-available quantity, EARN/externally held quantity, and active reservations are distinct facts. A transfer between Spot and EARN changes custody/availability, not historical cost basis or the original acquisition quantity. RS must not assume EARN balances are observable through the Spot broker or silently claim custody of them.
 
-**Owner decision required:** authorization interface and lifecycle: operator confirmation, evidence source/balance baseline, expiry and revocation behavior, durable provenance, and whether authorization survives process restart. Until specified, no runtime authorization mechanism may be invented.
+**Decision recorded — authorization model: explicit operator authorization (Question 1, accepted).**
+
+RS must not infer authorization from a wallet balance, Portfolio quantity, deposit, manual/external order, or historical process state. The operator must explicitly authorize the market's pre-existing legacy position before RS may manage any legacy quantity. The configured original quote investment and original base quantity are historical-basis inputs; they do not by themselves establish Spot custody or immediately sellable quantity. Authorization is permission, not proof of custody, Portfolio accounting, or available balance. Actual Spot availability and reservations must be independently verified before each SELL. EARN/off-Spot inventory remains unavailable for Spot execution until returned and authoritatively reconciled. No authorization may bypass profitability, exchange filters, risk limits, or reconciliation gates.
+
+**Still unresolved owner decisions:** the exact operator interface and confirmation flow; required evidence source and balance baseline; expiry and revocation behavior; durable provenance; and whether/how authorization survives process restart. The explicit-authorization model is approved, but these lifecycle and evidence details are not. Until specified, no runtime authorization mechanism may be invented. Until specified, no runtime authorization mechanism may be invented.
 
 ## 4. Attribution and shared Portfolio accounting
 
@@ -243,7 +247,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 |---|---|---|
 | sellQuantity | Exact per-cycle target or maximum cap | Determines legacy amount requested and smaller-remainder eligibility |
 | Smaller/final residual | Sell smaller balance, require explicit final authorization, or retain it | Prevents unintended liquidation |
-| Legacy authorization | Operator interface, evidence source, expiry/revocation, durable/restart behavior | Prevents silent wallet adoption |
+| Legacy authorization | **Explicit operator authorization agreed**; interface, evidence source/balance baseline, expiry/revocation, durable provenance and restart behavior remain open | Prevents silent wallet adoption and loss of authorization provenance |
 | Legacy accounting | Opening-inventory representation in shared Portfolio and verification of configured invested/quantity inputs | Current Portfolio is fill-driven; configured historical basis is agreed, but Spot holdings and off-Spot custody must be represented safely |
 | Legacy profit | Mixed-order proceeds/fee allocation and treatment of remaining aggregate basis after partial legacy sales | Prevents a profitable recovery tranche hiding a legacy loss; input basis is aggregate invested quote / original quantity |
 | Cycle profit | Minimum net profit and precise cost/proceeds inclusion | Prevents omitted fees/costs |
