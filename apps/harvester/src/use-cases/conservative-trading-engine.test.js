@@ -6191,70 +6191,72 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
 
 
 
-async function runResidualRecoverySellScenario() {
-  const seeded = makeSeededRecoveryState({
-    quantity: "1.05",
+
+async function applyResidualRecoveryFill({ scenario, fill }) {
+  const portfolioUpdate = scenario.currentPortfolio.applyFill({
+    fill,
   })
-  const scenario = {
-    currentPortfolio: seeded.portfolio,
-    currentRecoveryLedger: seeded.recoveryLedger,
-    events: [],
-    completionInputs: [],
+  const ledgerUpdate = scenario.currentRecoveryLedger.applyFill({
+    fill,
+  })
+  scenario.currentPortfolio = portfolioUpdate.portfolio
+  scenario.currentRecoveryLedger = ledgerUpdate.ledger
+  return {
+    ok: true,
+    data: {
+      applied: portfolioUpdate.applied && ledgerUpdate.applied,
+      duplicate: portfolioUpdate.duplicate || ledgerUpdate.duplicate,
+    },
   }
-  const harness = await createHarness({
+}
+
+async function completeResidualRecoveryCycle({ scenario, input }) {
+  scenario.completionInputs.push(input)
+  const position = scenario.currentPortfolio.getPosition({
+    marketId: input.marketId,
+  })
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    netSellProceeds: scenario.currentRecoveryLedger.netSellProceeds,
+    activeQuantity: position.baseQuantity.amount,
+    keepQuantity: "0.1",
+    minProfit: "0.01",
+    ...(input.inventoryDisposition === undefined ? {} : {
+      inventoryDisposition: input.inventoryDisposition,
+    }),
+  })
+  if (completion.eligible) {
+    scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({
+      marketId: input.marketId,
+      quantity: completion.freeQuantity,
+    })
+    scenario.currentRecoveryLedger = scenario.currentRecoveryLedger.resetCycle({
+      minProfit: "0.01",
+      spent: position.spent,
+    })
+  }
+  return {
+    ok: true,
+    data: completion,
+  }
+}
+
+async function createResidualRecoverySellHarness({ scenario, seeded }) {
+  return createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     accountingApplied: true,
     getPortfolio: () => scenario.currentPortfolio,
     getRecoveryLedger: () => scenario.currentRecoveryLedger,
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = scenario.currentPortfolio.applyFill({
-        fill,
-      })
-      const ledgerUpdate = scenario.currentRecoveryLedger.applyFill({
-        fill,
-      })
-      scenario.currentPortfolio = portfolioUpdate.portfolio
-      scenario.currentRecoveryLedger = ledgerUpdate.ledger
-      return {
-        ok: true,
-        data: {
-          applied: portfolioUpdate.applied && ledgerUpdate.applied,
-          duplicate: portfolioUpdate.duplicate || ledgerUpdate.duplicate,
-        },
-      }
-    },
-    completeRecoveryCycle: async (input) => {
-      scenario.completionInputs.push(input)
-      const position = scenario.currentPortfolio.getPosition({
-        marketId: input.marketId,
-      })
-      const completion = evaluateRecoveryCompletion({
-        sellOrderFullyFilled: true,
-        spent: position.spent.amount,
-        netSellProceeds: scenario.currentRecoveryLedger.netSellProceeds,
-        activeQuantity: position.baseQuantity.amount,
-        keepQuantity: "0.1",
-        minProfit: "0.01",
-        ...(input.inventoryDisposition === undefined ? {} : {
-          inventoryDisposition: input.inventoryDisposition,
-        }),
-      })
-      if (completion.eligible) {
-        scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({
-          marketId: input.marketId,
-          quantity: completion.freeQuantity,
-        })
-        scenario.currentRecoveryLedger = scenario.currentRecoveryLedger.resetCycle({
-          minProfit: "0.01",
-          spent: position.spent,
-        })
-      }
-      return {
-        ok: true,
-        data: completion,
-      }
-    },
+    updateTradingAccounting: ({ fill }) => applyResidualRecoveryFill({
+      scenario,
+      fill,
+    }),
+    completeRecoveryCycle: (input) => completeResidualRecoveryCycle({
+      scenario,
+      input,
+    }),
     eventPublisher: {
       publish: (event) => {
         scenario.events.push(event)
@@ -6264,6 +6266,9 @@ async function runResidualRecoverySellScenario() {
       },
     },
   })
+}
+
+async function processResidualRecoverySell({ scenario, harness }) {
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -6293,10 +6298,33 @@ async function runResidualRecoverySellScenario() {
     },
   })
   return {
-    ...scenario,
-    harness,
     recoverySell,
     result,
+  }
+}
+
+async function runResidualRecoverySellScenario() {
+  const seeded = makeSeededRecoveryState({
+    quantity: "1.05",
+  })
+  const scenario = {
+    currentPortfolio: seeded.portfolio,
+    currentRecoveryLedger: seeded.recoveryLedger,
+    events: [],
+    completionInputs: [],
+  }
+  const harness = await createResidualRecoverySellHarness({
+    scenario,
+    seeded,
+  })
+  const result = await processResidualRecoverySell({
+    scenario,
+    harness,
+  })
+  return {
+    ...scenario,
+    harness,
+    ...result,
   }
 }
 
