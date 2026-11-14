@@ -431,6 +431,7 @@ export function createUserDataEventHandler({
       })
     }
 
+    let reevaluateSymbol
     const task = state.eventQueue
       .then(() => processQueuedUserDataEvent({
         event,
@@ -445,6 +446,9 @@ export function createUserDataEventHandler({
         updateTradingAccounting,
         logger,
       }))
+      .then((symbol) => {
+        reevaluateSymbol = symbol
+      })
       .catch((error) => {
         handleUserDataQueueFailure({
           error,
@@ -459,6 +463,7 @@ export function createUserDataEventHandler({
         cancelOwnedBuysAfterAccountingFailure,
         resumeDeferredStrategyEvaluations,
         tradingEngine,
+        reevaluateSymbol,
         logger,
       }))
     state.eventQueue = task
