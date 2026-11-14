@@ -2807,6 +2807,12 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
+  const initialPosition = portfolioRef.current.getPosition({ symbol: "DOGEUSDT" })
+  assert.notEqual(
+    ledgerRef.current.buyCost,
+    initialPosition.spent.amount,
+    "The compatibility buyCost mirror must not be used as the recovery cost basis.",
+  )
   const originalRecoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   buyOrderRef.current = buyOrder
