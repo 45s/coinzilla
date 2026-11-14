@@ -437,44 +437,91 @@ async function readAccountOpenOrders({ broker, suppliedOrders }) {
   return result.data
 }
 
-function isOwnedOpenOrderSnapshot({ order, restoredOrders, matchedOwnedClientIds }) {
+
+function readOpenOrderSnapshotIdentity(order) {
   const clientOrderId = order?.clientOrderId
   const brokerOrderId = order?.brokerOrderId ?? order?.id
   const symbol = order?.market?.symbol ?? order?.symbol
-  if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
-      typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-      typeof symbol !== "string" || !symbol.trim()) {
-    return false
+  const validClientOrderId = typeof clientOrderId === "string" && clientOrderId.trim().length > 0
+  const validBrokerOrderId = typeof brokerOrderId === "string" && brokerOrderId.trim().length > 0
+  const validSymbol = typeof symbol === "string" && symbol.trim().length > 0
+  if (!validClientOrderId || !validBrokerOrderId || !validSymbol) {
+    return undefined
   }
-  const owned = restoredOrders.find((candidate) =>
+  return {
+    clientOrderId,
+    brokerOrderId,
+    symbol,
+    actualPrice: order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price,
+    actualQuantity: order.originalQuantity?.amount ?? order.originalQuantity,
+  }
+}
+
+function findRestoredOpenOrder({ restoredOrders, clientOrderId, brokerOrderId }) {
+  return restoredOrders.find((candidate) =>
     candidate.clientOrderId === clientOrderId ||
     (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId))
+}
+
+function isRestoredOpenOrderEligible({ owned, brokerOrderId, matchedOwnedClientIds }) {
   if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) {
     return false
   }
   if (owned.status === "CANCELED" || owned.status === "REJECTED") {
     return false
   }
-  if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) {
-    return false
-  }
-  const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
-  const expectedPrice = owned.limitPrice?.amount
-  const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
-  const identityMatches = owned.clientOrderId === clientOrderId &&
-    owned.market.symbol === symbol &&
-    owned.side === order.side &&
-    owned.type === order.type &&
+  return owned.brokerOrderId === undefined || owned.brokerOrderId === brokerOrderId
+}
+
+function matchesRestoredOpenOrderIdentity({ owned, identity }) {
+  return owned.clientOrderId === identity.clientOrderId &&
+    owned.market.symbol === identity.symbol &&
+    owned.side === identity.order.side &&
+    owned.type === identity.order.type &&
     compareDecimal({
       left: owned.originalQuantity.amount,
-      right: actualQuantity,
+      right: identity.actualQuantity,
     }) === 0
-  const priceMatches = expectedPrice === undefined
-    ? actualPrice === undefined
-    : actualPrice !== undefined && compareDecimal({
-      left: expectedPrice,
-      right: String(actualPrice),
-    }) === 0
+}
+
+function matchesRestoredOpenOrderPrice({ owned, actualPrice }) {
+  const expectedPrice = owned.limitPrice?.amount
+  if (expectedPrice === undefined) {
+    return actualPrice === undefined
+  }
+  return actualPrice !== undefined && compareDecimal({
+    left: expectedPrice,
+    right: String(actualPrice),
+  }) === 0
+}
+
+function isOwnedOpenOrderSnapshot({ order, restoredOrders, matchedOwnedClientIds }) {
+  const identity = readOpenOrderSnapshotIdentity(order)
+  if (!identity) {
+    return false
+  }
+  const owned = findRestoredOpenOrder({
+    restoredOrders,
+    ...identity,
+  })
+  if (!isRestoredOpenOrderEligible({
+    owned,
+    brokerOrderId: identity.brokerOrderId,
+    matchedOwnedClientIds,
+  })) {
+    return false
+  }
+  const identityMatches = matchesRestoredOpenOrderIdentity({
+    owned,
+    identity: {
+      ...identity,
+      order,
+    },
+  })
+  const priceMatches = matchesRestoredOpenOrderPrice({
+    owned,
+    actualPrice: identity.actualPrice,
+  })
   if (!identityMatches || !priceMatches) {
     return false
   }
@@ -793,7 +840,7 @@ function getPreflightCommissionBalance({ context, assetId, assetCode }) {
   const balance = context.state.preflightBalancesByCode.get(assetCode)
   if (!balance) {
     throw withRecoveryFailure(
-      new Error("PREFLIGHT account snapshot is missing commission asset " + assetCode),
+      new Error(`PREFLIGHT account snapshot is missing commission asset ${assetCode}`),
       "ACCOUNTING_INTEGRITY",
       "COMMISSION_ASSET_PREFLIGHT_BALANCE_MISSING",
       false,
@@ -801,7 +848,7 @@ function getPreflightCommissionBalance({ context, assetId, assetCode }) {
   }
   if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
     throw withRecoveryFailure(
-      new Error("PREFLIGHT commission asset balance identity contradicts the applied fill for " + assetCode),
+      new Error(`PREFLIGHT commission asset balance identity contradicts the applied fill for ${assetCode}`),
       "ACCOUNTING_INTEGRITY",
       "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
       false,
