@@ -714,7 +714,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
   assert.ok(calls.includes("disconnect"), "The broker must still be disconnected after failed Telegram startup.")
 })
 
-test("requires an explicit TRADING_MODE before connecting to Binance", async () => {
+test("fails closed when TRADING_MODE is missing, before broker construction", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => appConfig,
