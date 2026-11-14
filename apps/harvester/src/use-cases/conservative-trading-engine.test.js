@@ -5009,19 +5009,54 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
   })
 })
 
+
+function configureBackfilledRestFillHistory({ broker, buyOrder, historyOrder, laterStreamFill, earlierFill }) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.5",
+    })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [historyOrder],
+  })
+  broker.getFills = async () => ({
+    ok: true,
+    data: [laterStreamFill, earlierFill],
+  })
+}
+
+function assertBackfilledRestFillHistory({ engine, accountedFills, pauses, buyOrder, reconciled }) {
+  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId).sort(), [
+    "rest-earlier-fill",
+    "stream-later-fill",
+  ])
+  const reconciledOrder = engine.getOrders().find((order) =>
+    order.brokerOrderId === buyOrder.brokerOrderId)
+  assert.equal(reconciledOrder.status, "PARTIALLY_FILLED")
+  assert.equal(reconciledOrder.executedQuantity.amount, "0.5")
+  assert.deepEqual(pauses, [])
+}
+
+
 test("accounts missing earlier REST fills without replaying cumulative order quantity backwards", async () => {
   const {
     engine,
     broker,
     accountedFills,
-    pauses
-  } = await createHarness({ accountingApplied: true })
+    pauses,
+  } = await createHarness({
+    accountingApplied: true,
+  })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
@@ -5057,40 +5092,28 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
   })
   assert.equal(streamResult.ok, true)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["stream-later-fill"])
-
   const historyOrder = makeOrderStatusUpdate({
     order: buyOrder,
     status: "PARTIALLY_FILLED",
     executedQuantity: "0.5",
     updatedAt: 4,
   })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.5"
-    })],
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [laterStreamFill, earlierFill]
+  configureBackfilledRestFillHistory({
+    broker,
+    buyOrder,
+    historyOrder,
+    laterStreamFill,
+    earlierFill,
   })
 
   const reconciled = await engine.reconcileOwnedOrders()
-
-  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
-  assert.deepEqual(
-    accountedFills.map((fill) => fill.tradeId).sort(),
-    ["rest-earlier-fill", "stream-later-fill"],
-  )
-  const reconciledOrder = engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId)
-  assert.equal(reconciledOrder.status, "PARTIALLY_FILLED")
-  assert.equal(reconciledOrder.executedQuantity.amount, "0.5")
-  assert.deepEqual(pauses, [])
+  assertBackfilledRestFillHistory({
+    engine,
+    accountedFills,
+    pauses,
+    buyOrder,
+    reconciled,
+  })
 })
 
 test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
