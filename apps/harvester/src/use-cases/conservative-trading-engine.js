@@ -679,6 +679,95 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
   }
 }
 
+function validateInitialEngineState({ initialState, pairs } = {}) {
+  const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
+  if (!(initialRegistry instanceof OrderRegistry)) {
+    throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
+  }
+  for (const field of ["pausedMarkets", "operatorPausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
+    const values = initialState[field]
+    if (values !== undefined && (
+      !(Array.isArray(values) || values instanceof Set) ||
+      [...values].some((value) => typeof value !== "string" || !value.trim())
+    )) {
+      throw new TypeError("initialState." + field + " must contain non-empty strings")
+    }
+  }
+  for (const symbol of initialState.operatorPausedMarkets ?? []) {
+    if (!Object.hasOwn(pairs, symbol)) {
+      throw new TypeError("initialState.operatorPausedMarkets contains an unconfigured market: " + symbol)
+    }
+  }
+  if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
+    throw new TypeError("initialState.journalFills must be an array")
+  }
+  return initialRegistry
+}
+
+function createInitialEngineState({ initialState, pairs, initialRegistry } = {}) {
+  const journalFillsById = new Map()
+  for (const journalFill of initialState.journalFills ?? []) {
+    if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
+        journalFillsById.has(journalFill.fillId)) {
+      throw new TypeError("initialState.journalFills must contain unique canonical fill IDs")
+    }
+    journalFillsById.set(journalFill.fillId, journalFill)
+  }
+  const state = {
+    registry: initialRegistry,
+    journalFillsById,
+    prices: new Map(),
+    books: new Map(),
+    lastBuyPrices: new Map(),
+    buyExecutionTotals: new Map(),
+    sellExecutionTotals: new Map(),
+    processedFillIdsByOrder: new Map(),
+    processedFillsByOrder: new Map(),
+    lastAdjustmentPrices: new Map(),
+    buyReferenceOverrides: new Map(),
+    trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
+    paused: new Set(initialState.pausedMarkets ?? []),
+    operatorPausedMarkets: new Set(initialState.operatorPausedMarkets ?? []),
+    durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
+    recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
+    recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
+    unrequestedTerminalOrderClientIds: new Set(initialState.unrequestedTerminalOrderClientIds ?? []),
+    replacementIntents: new Set(initialState.replacementIntents ?? []),
+    trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
+    deferredEvaluations: new Set(),
+    completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
+    completedRecoverySellSymbols: new Set(),
+    completedRecoverySellOrdersBySymbol: new Map(),
+    shutdownRecoveryReplanSymbols: new Set(),
+    reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
+    marketPriceEventIds: new Map(),
+    volatilityProtection: new Map(Object.entries(pairs)
+      .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
+      .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
+    volatilityCancellationAttemptBySymbol: new Map(),
+    volatilitySnapshotSignatureBySymbol: new Map(),
+  }
+  return { journalFillsById, state }
+}
+
+function createMarketMetadataCache({ getMarketMetadata } = {}) {
+  const refreshedMarketMetadata = new Map()
+  return {
+    refreshedMarketMetadata,
+    getCurrentMarketMetadata: ({ symbol } = {}) =>
+      refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol }),
+  }
+}
+
+function createSerializedTransitionQueue() {
+  let transitionTail = Promise.resolve()
+  return ({ task } = {}) => {
+    const current = transitionTail.then(task)
+    transitionTail = current.catch(() => undefined)
+    return current
+  }
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -760,79 +849,14 @@ export function makeConservativeTradingEngine({
   if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
     throw new TypeError("initialState must be an object")
   }
-  const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
-  if (!(initialRegistry instanceof OrderRegistry)) {throw new TypeError("initialState.orderRegistry must be an OrderRegistry")}
-  for (const field of ["pausedMarkets", "operatorPausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
-    const values = initialState[field]
-    if (values !== undefined && (
-      !(Array.isArray(values) || values instanceof Set) ||
-      [...values].some((value) => typeof value !== "string" || !value.trim())
-    )) {
-      throw new TypeError("initialState." + field + " must contain non-empty strings")
-    }
-  }
-  for (const symbol of initialState.operatorPausedMarkets ?? []) {
-    if (!Object.hasOwn(pairs, symbol)) {
-      throw new TypeError("initialState.operatorPausedMarkets contains an unconfigured market: " + symbol)
-    }
-  }
-  if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
-    throw new TypeError("initialState.journalFills must be an array")
-  }
-
-  const refreshedMarketMetadata = new Map()
-  const getCurrentMarketMetadata = ({ symbol } = {}) =>
-    refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol })
-  const journalFillsById = new Map()
-  for (const journalFill of initialState.journalFills ?? []) {
-    if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
-        journalFillsById.has(journalFill.fillId)) {
-      throw new TypeError("initialState.journalFills must contain unique canonical fill IDs")
-    }
-    journalFillsById.set(journalFill.fillId, journalFill)
-  }
-  let transitionTail = Promise.resolve()
+  const initialRegistry = validateInitialEngineState({ initialState, pairs })
+  const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
+  const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
+  const { journalFillsById, state } = createInitialEngineState({ initialState, pairs, initialRegistry })
+  const runTransition = createSerializedTransitionQueue()
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
-  const runTransition = ({ task } = {}) => {
-    const current = transitionTail.then(task)
-    transitionTail = current.catch(() => undefined)
-    return current
-  }
-  const state = {
-    registry: initialRegistry,
-    journalFillsById,
-    prices: new Map(),
-    books: new Map(),
-    lastBuyPrices: new Map(),
-    buyExecutionTotals: new Map(),
-    sellExecutionTotals: new Map(),
-    processedFillIdsByOrder: new Map(),
-    processedFillsByOrder: new Map(),
-    lastAdjustmentPrices: new Map(),
-    buyReferenceOverrides: new Map(),
-    trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
-    paused: new Set(initialState.pausedMarkets ?? []),
-    operatorPausedMarkets: new Set(initialState.operatorPausedMarkets ?? []),
-    durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
-    recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
-    recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
-    unrequestedTerminalOrderClientIds: new Set(initialState.unrequestedTerminalOrderClientIds ?? []),
-    replacementIntents: new Set(initialState.replacementIntents ?? []),
-    trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
-    deferredEvaluations: new Set(),
-    completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
-    completedRecoverySellSymbols: new Set(),
-    completedRecoverySellOrdersBySymbol: new Map(),
-    shutdownRecoveryReplanSymbols: new Set(),
-    reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
-    marketPriceEventIds: new Map(),
-    volatilityProtection: new Map(Object.entries(pairs)
-      .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
-      .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
-    volatilityCancellationAttemptBySymbol: new Map(),
-    volatilitySnapshotSignatureBySymbol: new Map(),
-  }
+
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
   const {
     hasPendingRecoveryManagedCancellation,
