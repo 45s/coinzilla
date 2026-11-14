@@ -23,13 +23,13 @@ async function readTokenSpecifications(specificationPath) {
   try {
     source = await readFile(specificationPath, "utf8")
   } catch (cause) {
-    throw new Error("Unable to read Harvester token specifications at " + specificationPath + ": " + cause.message, { cause })
+    throw new Error(`Unable to read Harvester token specifications at ${specificationPath}: ${cause.message}`, { cause })
   }
 
   try {
     return JSON.parse(source)
   } catch (cause) {
-    throw new Error("Harvester token specifications at " + specificationPath + " are not valid JSON", { cause })
+    throw new Error(`Harvester token specifications at ${specificationPath} are not valid JSON`, { cause })
   }
 }
 
@@ -45,9 +45,15 @@ async function readTokenSpecifications(specificationPath) {
  * @returns {Promise<object>} Validated effective application configuration.
  * @throws {TypeError|SyntaxError|Error} If either source is missing, malformed, or inconsistent.
  */
-export async function loadAppConfig(source = DEFAULT_CONFIG_URL, {
-  tokenSpecificationsPath = DEFAULT_TOKEN_SPECIFICATIONS_PATH,
-} = {}) {
+export async function loadAppConfig(sourceOrOptions = {}) {
+  const options = sourceOrOptions instanceof URL || typeof sourceOrOptions === "string"
+    ? { source: sourceOrOptions }
+    : sourceOrOptions
+  if (options === null || typeof options !== "object" || Array.isArray(options)) {
+    throw new TypeError("App config options must be a file URL, path, or options object")
+  }
+  const source = options.source ?? DEFAULT_CONFIG_URL
+  const tokenSpecificationsPath = options.tokenSpecificationsPath ?? DEFAULT_TOKEN_SPECIFICATIONS_PATH
   if (typeof tokenSpecificationsPath !== "string" || !tokenSpecificationsPath.trim()) {
     throw new TypeError("tokenSpecificationsPath must be a non-empty file path")
   }
@@ -85,7 +91,7 @@ export async function loadAppConfig(source = DEFAULT_CONFIG_URL, {
       tokenSpecifications,
     })
   } catch (cause) {
-    throw new Error("Unable to resolve configured market precision using token specifications at " + resolve(tokenSpecificationsPath) + ": " + cause.message, { cause })
+    throw new Error(`Unable to resolve configured market precision using token specifications at ${resolve(tokenSpecificationsPath)}: ${cause.message}`, { cause })
   }
 
   const effectiveConfig = {
