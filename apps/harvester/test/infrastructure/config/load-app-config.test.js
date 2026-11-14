@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { loadAppConfig } from "../../../src/infrastructure/config/load-app-config.js"
 
 function createValidConfig() {
@@ -122,7 +123,7 @@ test("loads a named appConfig module from a file URL", async (t) => {
   await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
   const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
 
-  const config = await loadAppConfig({ source: new URL(`file://${configPath}`), tokenSpecificationsPath })
+  const config = await loadAppConfig({ source: pathToFileURL(configPath), tokenSpecificationsPath })
   assertAppConfigStructure(config)
 })
 
