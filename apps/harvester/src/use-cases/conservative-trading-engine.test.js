@@ -450,7 +450,6 @@ async function createHarnessFromOptions({
     }),
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
-    onPause: async ({ reason }) => pauses.push(reason),
     initialState,
   })
   await processHarnessInitialBook({ engine, initialBook })
