@@ -45,6 +45,7 @@ function getSafeFailureReason(error) {
  * accounting state. Shutdown recovery can submit SELLs only; it cannot submit
  * a new standing BUY.
  */
+// eslint-disable-next-line max-lines-per-function -- shutdown coordinator encodes the ordered fail-closed lifecycle.
 export function createShutdownHandler({
   state, logger, tradingEnabled, getTradingEngine, subscriptions, bookSubscriptions,
   marketPriceIntake, getUserDataSubscription, broker, brokerName, eventPublisher,
@@ -56,7 +57,7 @@ export function createShutdownHandler({
   runtimeSessionId,
 } = {}) {
   let shutdownPromise
-  return function stop({ requestedAt, requestLogged = false, stopStateEstablishedLogged = false, preShutdownErrors = [] } = {}) {
+  return function stop({ requestedAt, requestLogged = false, stopStateEstablishedLogged = false, preShutdownErrors = [] } = {}) { // eslint-disable-line max-lines-per-function -- shutdown phases remain serialized in one state machine.
     if (shutdownPromise) {return shutdownPromise}
     if (state.stopped) {return Promise.resolve()}
 
@@ -140,7 +141,8 @@ export function createShutdownHandler({
         if (error) {
           errors = [error]
         } else if (result?.errors?.length) {
-          errors = result.errors
+          const { errors: resultErrors } = result
+          errors = resultErrors
         } else {
           errors = [new Error(message)]
         }
