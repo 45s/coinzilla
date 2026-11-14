@@ -581,6 +581,7 @@ export async function startHarvester({
   let stopPromise
   const stop = () => {
     if (stopPromise) {return stopPromise}
+    // eslint-disable-next-line complexity -- process shutdown is an explicit ordered state machine with fail-closed boundaries.
     stopPromise = (async () => {
     const shutdownRequestedAt = performance.now()
     const shutdownCorrelationId = runtimeSessionId ?? null
@@ -588,7 +589,7 @@ export async function startHarvester({
       const observedAt = performance.now()
       const write = typeof logger.system === "function" ? logger.system.bind(logger) : logger.info?.bind(logger)
       write?.({
-        message: "Harvester shutdown phase " + status.toLowerCase(),
+        message: `Harvester shutdown phase ${status.toLowerCase()}`,
         shutdownPhase: phase,
         phaseStatus: status,
         shutdownCorrelationId,
@@ -638,8 +639,7 @@ export async function startHarvester({
           clean: true,
         })
         if (stopped?.ok !== true || stopped.data?.durable !== true) {
-          throw new Error("Harvester shutdown completed but its clean process-stop boundary was not durable: " +
-            (stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+          throw new Error(`Harvester shutdown completed but its clean process-stop boundary was not durable: ${stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
         }
         logShutdownPhase({ phase: "PROCESS_STOP_DURABILITY", status: "COMPLETED", startedAt: processStopStartedAt })
       } catch (error) {
