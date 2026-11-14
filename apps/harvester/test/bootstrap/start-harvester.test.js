@@ -353,7 +353,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     }),
     2000,
   );
-  await assert.rejects(context.stop(), /Harvester shutdown was incomplete/);
+  await context.stop();
 
   assert.equal(accountSnapshotCalls, 2, "the ordinary TRADE scenario must capture the PREFLIGHT and final CLOSING account snapshots; this test's TRADE does not trigger stream recovery");
   assert.equal(openOrderSnapshotCalls, 4, "the ordinary TRADE scenario must audit open orders at startup, reconcile before BUY cancellation, reconcile after user-data draining, and verify after recovery SELL replanning");
