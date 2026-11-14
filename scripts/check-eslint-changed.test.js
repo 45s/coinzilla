@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ESLint } from "eslint";
 
-import { selectChangedJavaScriptFiles } from "./check-eslint-changed.js";
+import {
+  countFindings,
+  findingKey,
+  parseChangedFileNames,
+  selectChangedJavaScriptFiles,
+} from "./check-eslint-changed.js";
 
 test("selectChangedJavaScriptFiles keeps JavaScript module extensions", () => {
   const changedFiles = selectChangedJavaScriptFiles([
@@ -158,4 +163,68 @@ test("ESLint requires braces around single-statement control-flow bodies", async
     unbracedControlFlow.messages.some((message) => message.ruleId === "curly"),
     "Single-statement if bodies must still use braces under the repository lint policy.",
   );
+});
+
+
+test("parseChangedFileNames preserves original paths for renamed files", () => {
+  const changes = parseChangedFileNames([
+    "M",
+    "apps/harvester/src/changed.js",
+    "R100",
+    "apps/harvester/src/old.js",
+    "apps/harvester/src/new.js",
+    "A",
+    "apps/harvester/src/added.js",
+    "D",
+    "apps/harvester/src/deleted.js",
+    "",
+  ].join("\0"));
+
+  assert.deepEqual(changes, [
+    {
+      path: "apps/harvester/src/changed.js",
+      basePath: "apps/harvester/src/changed.js",
+    },
+    {
+      path: "apps/harvester/src/new.js",
+      basePath: "apps/harvester/src/old.js",
+    },
+    {
+      path: "apps/harvester/src/added.js",
+      basePath: null,
+    },
+  ]);
+});
+
+test("findingKey changes when the offending source line changes", () => {
+  const original = {
+    ruleId: "prefer-template",
+    messageId: "unexpectedStringConcatenation",
+    message: "Unexpected string concatenation.",
+    nodeType: "BinaryExpression",
+    source: 'const label = "old" + suffix;',
+  };
+
+  assert.notEqual(
+    findingKey(original),
+    findingKey({ ...original, source: 'const label = "new" + suffix;' }),
+  );
+});
+
+test("countFindings retains duplicate violations", () => {
+  const finding = {
+    ruleId: "max-params",
+    messageId: "exceed",
+    message: "Too many parameters.",
+    nodeType: "FunctionDeclaration",
+    source: "function run(a, b) {}",
+  };
+
+  assert.equal(countFindings([finding, finding]).get(JSON.stringify([
+    "max-params",
+    "exceed",
+    "Too many parameters.",
+    "FunctionDeclaration",
+    "function run(a, b) {}",
+  ])), 2);
 });
