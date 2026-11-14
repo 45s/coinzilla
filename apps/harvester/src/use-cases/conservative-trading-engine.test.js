@@ -80,7 +80,7 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
   },
 })
 
-// eslint-disable-next-line complexity -- test harness centralizes independent fake-broker outcomes for deterministic coverage.
+// eslint-disable-next-line complexity, max-lines-per-function -- test harness centralizes independent fake-broker outcomes for deterministic coverage.
 async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, hasUnresolvedHarvesterOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureAfterCount, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onOperationalStateCancellationIntent, onOperationalStateCancellationOutcome, onOperationalStateStrategyMarketPaused, canTrade: canTradeOverride = () => true, isStopping: isStoppingOverride = () => false, initialState } = {}) {
   const orders = []
   const pauses = []
@@ -2751,6 +2751,7 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
 })
 
 
+// eslint-disable-next-line max-lines-per-function, max-statements -- deterministic race test controls each fake-broker gate.
 test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
   const seeded = makeSeededRecoveryState()
   const stopping = { value: false }
