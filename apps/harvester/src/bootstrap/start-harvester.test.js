@@ -5618,3 +5618,234 @@ test("does not subscribe to a market blocked by this strategy's external-order p
     await runtime.stop()
   }
 })
+
+// Restored integration regressions retained across the bootstrap decomposition.
+
+test("retains an explicitly injected application event publisher in TESTNET runtime", async () => {
+  const eventPublisher = { publish: () => ({ ok: true }) }
+  const result = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {},
+    eventPublisher,
+  })
+
+  assert.equal(result.eventPublisher, eventPublisher)
+  await result.stop()
+})
+
+test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
+  let resolveBookUnsubscribe
+  const bookUnsubscribed = new Promise((resolve) => { resolveBookUnsubscribe = resolve })
+  const originalSubscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
+  broker.subscribeForBookTicker = async (input) => {
+    const result = await originalSubscribeForBookTicker(input)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        unsubscribe: async () => {
+          calls.push("unsubscribe:book:" + input.symbol)
+          resolveBookUnsubscribe()
+          return result.data.unsubscribe()
+        },
+      },
+    }
+  }
+  let resolveMarketUnsubscribe
+  const marketUnsubscribed = new Promise((resolve) => { resolveMarketUnsubscribe = resolve })
+  broker.subscribeForPrices = async (input) => {
+    const result = await originalSubscribeForPrices(input)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        unsubscribe: async () => {
+          calls.push("unsubscribe:" + input.symbol)
+          resolveMarketUnsubscribe()
+          return result.data.unsubscribe()
+        },
+      },
+    }
+  }
+  const originalSubscribeForUserData = broker.subscribeForUserData.bind(broker)
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await originalSubscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        disconnect: async () => {
+          calls.push("unsubscribe:user-data")
+          return result.data.disconnect()
+        },
+      },
+    }
+  }
+
+  let resolveQueue
+  const queueGate = new Promise((resolve) => { resolveQueue = resolve })
+  let signalQueueStarted
+  const queueStarted = new Promise((resolve) => { signalQueueStarted = resolve })
+  let queuedEvents = 0
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: { ...binanceEnv, NODE_ENV: "development" },
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    onUserDataEvent: async () => {
+      queuedEvents += 1
+      calls.push("queue:start")
+      signalQueueStarted()
+      await queueGate
+      calls.push("queue:done")
+    },
+  })
+
+  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+  await queueStarted
+  const stopPromise = runtime.stop()
+  await Promise.all([bookUnsubscribed, marketUnsubscribed])
+
+  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"), "shutdown must stop book-ticker intake before draining accepted user-data work")
+  assert.ok(calls.includes("unsubscribe:BTCUSDT"), "shutdown must stop market-price intake before draining accepted user-data work")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain active until already accepted user-data work has drained")
+  assert.equal(calls.includes("queue:done"), false, "shutdown must wait for the deliberately blocked user-data callback before continuing cleanup")
+  assert.equal(calls.includes("disconnect"), false, "the broker must remain connected while accepted user-data work is still running")
+
+  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+  await Promise.resolve()
+  assert.equal(queuedEvents, 1, "a second event must not enter the serialized queue while its first callback is still running")
+
+  resolveQueue()
+  await stopPromise
+  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"), "book-ticker intake must stop before the accepted user-data callback finishes")
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"), "market-price intake must stop before the accepted user-data callback finishes")
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
+})
+
+test("logs safe correlation details when an execution report is not owned", async () => {
+  const broker = createBroker()
+  const errors = []
+  const result = await startHarvesterForTest({
+    loadConfig: async () => withExternalOrdersPolicy("BTCUSDT", "block"),
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      debug() {},
+      error: (entry) => errors.push(entry),
+    },
+  })
+  const metadata = createMarketMetadata("BTCUSDT")
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "external-client-id",
+    brokerOrderId: "987654",
+    market: metadata.market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "NEW",
+    executionId: 123456,
+    executedOrder: externalOrder,
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  const diagnostic = errors.find((entry) =>
+    entry.message === "rejected an unowned or invalid order event")
+  assert.ok(diagnostic)
+  assert.equal(diagnostic.symbol, "BTCUSDT")
+  assert.equal(diagnostic.brokerOrderId, "987654")
+  assert.equal(diagnostic.clientOrderId, "external-client-id")
+  assert.equal(diagnostic.side, "BUY")
+  assert.equal(diagnostic.executionType, "NEW")
+  assert.equal(diagnostic.orderStatus, "OPEN")
+  assert.equal(diagnostic.executionId, 123456)
+  assert.equal(diagnostic.registryMatchedByClientOrderId, false)
+  assert.equal(diagnostic.registryMatchedByBrokerOrderId, false)
+  assert.equal(diagnostic.clientIdMatchStatus, undefined)
+  assert.ok(Array.isArray(diagnostic.errors))
+
+  await assert.rejects(
+    result.stop(),
+    (error) => {
+      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
+      assert.ok(
+        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
+        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
+      )
+      return true
+    },
+    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
+  )
+})
+
+test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
+  const broker = createBroker()
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
+  const result = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  assert.equal(result.userDataReady, true)
+  broker.emitUserDataStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  assert.equal(result.userDataReady, false)
+  await waitForTestSignal(acknowledged, "broker recovery acknowledgement", () => ({
+    acknowledgementCount,
+    userDataStatus: result.userDataStatus,
+  }), 2_000)
+
+  assert.equal(acknowledgementCount, 1)
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataStatus, "READY")
+  await result.stop()
+})
