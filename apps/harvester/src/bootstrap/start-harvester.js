@@ -477,28 +477,29 @@ export async function startHarvester({
     userDataSubscription = await subscribeToUserData({
       broker,
       brokerName,
-      eve    publishInitialUserDataReadiness({
-      lastReportedUserDataReady,
       eventPublisher,
-      brokerName,
-      userDataState,
-    })eDeferredStrategyEvaluations,
+      logger,
+      state: userDataState,
+      tradingMode,
+      tradingEnabled,
+      enabledSymbols,
+      onEvent: handleUserDataEvent,
+      onStatus: handleUserDataStatus,
+      onSubscriptionEstablished: (subscription) => { userDataSubscription = subscription },
+      publishAccountSnapshot,
+      publishOpenOrdersSnapshot,
+      getAccountSnapshot,
+      resumeDeferredStrategyEvaluations,
     })
     // The initial PREFLIGHT/user-data gate is reported after its authoritative
     // snapshots pass. Later reconnect/reconciliation transitions use the same event.
     lastReportedUserDataReady = userDataState.ready
-    if (lastReportedUserDataReady) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
-        dataResult: mapUserDataReadinessChangedData({
-          broker: brokerName,
-          ready: true,
-          status: userDataState.status,
-          trigger: "startup-preflight-completed",
-        }),
-      })
-    }
+    publishInitialUserDataReadiness({
+      lastReportedUserDataReady,
+      eventPublisher,
+      brokerName,
+      userDataState,
+    })
 
     await subscribeToMarketData({
       broker,
