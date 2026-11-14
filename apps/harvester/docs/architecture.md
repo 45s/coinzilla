@@ -844,3 +844,6 @@ Harvester operator control is an application capability, not a domain entity, st
 
 
 Harvester bootstrap composition delegates runtime state, candle-history setup, operator snapshots, user-data readiness, operational-state callbacks and shutdown stop orchestration to focused helpers. These helpers preserve the existing startup sequence, serialized user-data queue and durable process-stop boundary.
+
+
+Operational-state callback construction is centralized and each callback retains the same durable record payload, deterministic transition ID and evidence digest.
