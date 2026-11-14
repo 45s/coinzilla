@@ -398,13 +398,13 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
         },
         pairs: {
           DOGEUSDT: {
-            enabled: true, investment: 100, orderQuantity: 100, keepQuantity: 1,
+            enabled: true, tradingEnvironment: "both", investment: 100, orderQuantity: 100, keepQuantity: 1,
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
           },
           ZROUSDT: {
-            enabled: true, investment: 100, orderQuantity: 10, keepQuantity: 0.01,
+            enabled: true, tradingEnvironment: "both", investment: 100, orderQuantity: 10, keepQuantity: 0.01,
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
