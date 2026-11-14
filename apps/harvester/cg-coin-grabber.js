@@ -1,5 +1,5 @@
-import { EXTERNAL_ORDERS_POLICIES } from "./src/domain/external-orders-policy.js"
-import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js"
+import { EXTERNAL_ORDERS_POLICIES } from "./src/domain/external-orders-policy.js";
+import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js";
 
 /**
  * Operator-maintained CG coin-grabber market configuration.
@@ -9,9 +9,9 @@ import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js"
  */
 export const tradingPairs = {
   LINKUSDT: {
-    enabled: false,
+    enabled: true,
     tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
-    enableVolatilityProtection: true,
+    enableVolatilityProtection: false,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 200,
     orderQuantity: 2,
@@ -23,7 +23,7 @@ export const tradingPairs = {
   },
   LINKFDUSD: {
     enabled: true,
-    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
+    tradingEnvironment: TRADING_ENVIRONMENTS.LIVE,
     enableVolatilityProtection: false,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 200,
@@ -34,36 +34,10 @@ export const tradingPairs = {
     makerPercent: 0,
     takerPercent: 0.075,
   },
-  DOGEUSDT: {
-    enabled: false,
-    tradingEnvironment: TRADING_ENVIRONMENTS.LIVE,
-    enableVolatilityProtection: true,
-    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-    investment: 100,
-    orderQuantity: 400,
-    keepQuantity: 1,
-    minProfit: 0.01,
-    priceStepPercent: 0.05,
-    makerPercent: 0.1,
-    takerPercent: 0.1,
-  },
-  SOLFDUSD: {
-    enabled: false,
-    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
-    enableVolatilityProtection: true,
-    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-    investment: 100,
-    orderQuantity: 1,
-    keepQuantity: 0.01,
-    minProfit: 0.01,
-    priceStepPercent: 0.05,
-    makerPercent: 0,
-    takerPercent: 0.1,
-  },
   ZROUSDT: {
-    enabled: false,
-    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
-    enableVolatilityProtection: true,
+    enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+    enableVolatilityProtection: false,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 5,
@@ -75,8 +49,8 @@ export const tradingPairs = {
   },
   ZROFDUSD: {
     enabled: true,
-    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
-    enableVolatilityProtection: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.LIVE,
+    enableVolatilityProtection: false,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 120,
     orderQuantity: 5,
@@ -86,9 +60,36 @@ export const tradingPairs = {
     makerPercent: 0,
     takerPercent: 0.1,
   },
+  DOGEUSDT: {
+    enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+    enableVolatilityProtection: false,
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
+    investment: 100,
+    orderQuantity: 400,
+    keepQuantity: 1,
+    minProfit: 0.01,
+    priceStepPercent: 0.05,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+  },
+  SOLFDUSD: {
+    enabled: false,
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+    enableVolatilityProtection: false,
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
+    investment: 100,
+    orderQuantity: 1,
+    keepQuantity: 0.01,
+    minProfit: 0.01,
+    priceStepPercent: 0.05,
+    makerPercent: 0,
+    takerPercent: 0.1,
+  },
+
   ADAFDUSD: {
     enabled: false,
-    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
+    tradingEnvironment: TRADING_ENVIRONMENTS.LIVE,
     enableVolatilityProtection: false,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 120,
@@ -101,8 +102,8 @@ export const tradingPairs = {
   },
   WLDFDUSD: {
     enabled: true,
-    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
-    enableVolatilityProtection: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.LIVE,
+    enableVolatilityProtection: false,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 20,
