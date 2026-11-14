@@ -18,6 +18,6 @@ test("disables the legacy initializer because it bypasses the process-wide lock"
 
   assert.equal(exitCode, 1)
   assert.equal(storeCreated, false, "The old command must not bypass the lock-protected package command.")
-  assert.match(messages.join("\n"), /durable-facts:init/)
+  assert.match(messages.join("\n"), /operational-state:init/)
   assert.match(messages.join("\n"), /process lock/i)
 })
