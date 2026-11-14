@@ -745,40 +745,12 @@ test("treats a failed flush with unclassified Journal health as terminal", async
   )
 })
 
-test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
-  const market = createFixture().market
-  const syncFailure = new Error("simulated Journal file sync failure")
-  const fixture = createFixture({
-    accountSnapshots: [
-      createAccountSnapshot({
-        market,
-        sourceTime: 100
-      }),
-      createAccountSnapshot({
-        market,
-        sourceTime: 101
-      }),
-    ],
-    flushResults: [
-      {
-        ok: false,
-        durable: false,
-        errors: [syncFailure],
-        recoveryFailure: {
-          category: "DURABILITY",
-          stage: "JOURNAL_FLUSH_FAILURE",
-          retryable: true
-        },
-      },
-      {
-        ok: true,
-        durable: true
-      },
-    ],
-  })
 
+async function assertFirstRecoveryAuditFlushFailed({ fixture }) {
   await assert.rejects(
-    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    fixture.manager.publishAccountSnapshot({
+      phase: "RECOVERY",
+    }),
     (error) => {
       assert.match(error.message, /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/)
       assert.deepEqual(error.recoveryFailure, {
@@ -790,52 +762,62 @@ test("retains the first recovery account audit publication after a transient flu
     },
     "A failed first Journal sync must reject the account audit even though its event publication already completed.",
   )
+  assert.equal(fixture.publishedEvents.length, 1)
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY")
+  assert.equal(fixture.getFlushCount(), 1)
+}
 
-  assert.equal(
-    fixture.publishedEvents.length,
-    1,
-    "The first recovery account audit event must remain published after its durability confirmation fails.",
-  )
-  assert.equal(
-    fixture.publishedEvents[0].data.phase,
-    "RECOVERY",
-    "The first uncertain account audit event must retain its RECOVERY phase.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    1,
-    "The first recovery account audit publication must attempt exactly one durability flush before failing.",
-  )
+async function assertRecoveryAuditRetryPublished({ fixture }) {
+  const retrySnapshot = await fixture.manager.publishAccountSnapshot({
+    phase: "RECOVERY",
+  })
+  assert.equal(retrySnapshot.sourceTime, 101)
+  assert.equal(fixture.publishedEvents.length, 2)
+  assert.notEqual(fixture.publishedEvents[0], fixture.publishedEvents[1])
+  assert.deepEqual(fixture.publishedEvents.map((event) => event.data.phase), ["RECOVERY", "RECOVERY"])
+  assert.equal(fixture.getFlushCount(), 2)
+}
 
-  const retrySnapshot = await fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" })
 
-  assert.equal(
-    retrySnapshot.sourceTime,
-    101,
-    "The later recovery attempt must use the next authoritative account snapshot after the transient flush failure.",
-  )
-  assert.equal(
-    fixture.publishedEvents.length,
-    2,
-    "The retry must publish a second account audit rather than deleting or deduplicating the first uncertain publication.",
-  )
-  assert.notEqual(
-    fixture.publishedEvents[0],
-    fixture.publishedEvents[1],
-    "The retry must create a distinct lifecycle event while preserving the original uncertain event object.",
-  )
-  assert.deepEqual(
-    fixture.publishedEvents.map((event) => event.data.phase),
-    ["RECOVERY", "RECOVERY"],
-    "Both the uncertain first publication and successful retry publication must remain labeled as recovery audits.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    2,
-    "The successful retry must perform a second flush that confirms durability for the retry sequence.",
-  )
+test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
+  const market = createFixture().market
+  const syncFailure = new Error("simulated Journal file sync failure")
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 100,
+      }),
+      createAccountSnapshot({
+        market,
+        sourceTime: 101,
+      }),
+    ],
+    flushResults: [
+      {
+        ok: false,
+        durable: false,
+        errors: [syncFailure],
+        recoveryFailure: {
+          category: "DURABILITY",
+          stage: "JOURNAL_FLUSH_FAILURE",
+          retryable: true,
+        },
+      },
+      {
+        ok: true,
+        durable: true,
+      },
+    ],
+  })
+
+  await assertFirstRecoveryAuditFlushFailed({
+    fixture,
+  })
+  await assertRecoveryAuditRetryPublished({
+    fixture,
+  })
 })
-
 
 test("commits account balance and open-order facts before publishing their Journal audit events", async () => {
   const appendedRecords = []
