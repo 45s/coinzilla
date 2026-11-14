@@ -4444,89 +4444,110 @@ test("pauses on an exchange REJECTED order update", async () => {
 })
 
 
+
+function assertTerminalRecoverySellAccounting({ result, currentPortfolio, currentRecoveryLedger, accountedFills, quoteQuantity }) {
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.reevaluate, true)
+  assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "0.8")
+  assert.equal(currentPortfolio.positions[0].spent.amount, "100")
+  assert.equal(
+    currentPortfolio.positions[0].quoteNetCashFlow.amount,
+    subtractDecimal({
+      left: subtractDecimal({
+        left: quoteQuantity,
+        right: "0.01",
+      }),
+      right: "100",
+    }),
+  )
+  assert.equal(
+    currentRecoveryLedger.netSellProceeds,
+    subtractDecimal({
+      left: quoteQuantity,
+      right: "0.01",
+    }),
+  )
+  assert.equal(accountedFills.length, 1)
+  assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
+}
+
+async function runTerminalRecoverySellStatusScenario({ status }) {
+  const seeded = makeSeededRecoveryState()
+  let currentPortfolio = seeded.portfolio
+  let currentRecoveryLedger = seeded.recoveryLedger
+  const accountedFills = []
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getPortfolio: () => currentPortfolio,
+    getRecoveryLedger: () => currentRecoveryLedger,
+    getTerminalFills: ({ orderId }) => sellFill?.brokerOrderId === orderId ? [sellFill] : [],
+    updateTradingAccounting: async ({ fill }) => {
+      currentPortfolio = currentPortfolio.applyFill({
+        fill,
+      }).portfolio
+      currentRecoveryLedger = currentRecoveryLedger.applyFill({
+        fill,
+      }).ledger
+      accountedFills.push(fill)
+      return {
+        ok: true,
+        data: {
+          applied: true,
+          duplicate: false,
+        },
+      }
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const quoteQuantity = multiplyDecimal({
+    left: sellOrder.limitPrice.amount,
+    right: "0.2",
+  })
+  const sellFill = makeSellFill({
+    order: sellOrder,
+    tradeId: "terminal-recovery-sell-" + status.toLowerCase(),
+    quantity: "0.2",
+    quoteQuantity,
+    commissionAmount: "0.01",
+  })
+  const terminalOrder = makeOrderStatusUpdate({
+    order: sellOrder,
+    status,
+    executedQuantity: "0.2",
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: terminalOrder,
+    },
+  })
+  assertTerminalRecoverySellAccounting({
+    result,
+    currentPortfolio,
+    currentRecoveryLedger,
+    accountedFills,
+    quoteQuantity,
+  })
+  assert.deepEqual(harness.pauses, [])
+}
+
+
 test("terminal recovery SELL reconciles partial fills and commissions before reevaluation", async () => {
   for (const status of ["CANCELED", "EXPIRED"]) {
-    const seeded = makeSeededRecoveryState()
-    let currentPortfolio = seeded.portfolio
-    let currentRecoveryLedger = seeded.recoveryLedger
-    const accountedFills = []
-    const harness = await createHarness({
-      initialPortfolio: seeded.portfolio,
-      initialRecoveryLedger: seeded.recoveryLedger,
-      baseFreeBalance: "1",
-      getPortfolio: () => currentPortfolio,
-      getRecoveryLedger: () => currentRecoveryLedger,
-      getTerminalFills: ({ orderId }) => sellFill?.brokerOrderId === orderId ? [sellFill] : [],
-      updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
-        accountedFills.push(fill)
-        return {
-          ok: true,
-          data: {
-          applied: true,
-          duplicate: false
-        }
-        }
-      },
-    })
-    await harness.engine.processMarketPrice({
-      symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
-    })
-    const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
-    const quoteQuantity = multiplyDecimal({
-      left: sellOrder.limitPrice.amount,
-      right: "0.2"
-    })
-    const sellFill = makeSellFill({
-      order: sellOrder,
-      tradeId: `terminal-recovery-sell-${status.toLowerCase()}`,
-      quantity: "0.2",
-      quoteQuantity,
-      commissionAmount: "0.01",
-    })
-    const terminalOrder = makeOrderStatusUpdate({
-      order: sellOrder,
+    await runTerminalRecoverySellStatusScenario({
       status,
-      executedQuantity: "0.2",
     })
-
-    const result = await harness.engine.processUserDataEvent({
-      event: { executedOrder: terminalOrder },
-    })
-
-    assert.equal(result.ok, true, result.errors?.[0]?.message)
-    assert.equal(result.data.reevaluate, true)
-    assert.deepEqual(harness.pauses, [])
-    assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "0.8")
-    assert.equal(currentPortfolio.positions[0].spent.amount, "100")
-    assert.equal(
-      currentPortfolio.positions[0].quoteNetCashFlow.amount,
-      subtractDecimal({
-        left: subtractDecimal({
-          left: quoteQuantity,
-          right: "0.01"
-        }),
-        right: "100",
-      }),
-    )
-    assert.equal(
-      currentRecoveryLedger.netSellProceeds,
-      subtractDecimal({
-        left: quoteQuantity,
-        right: "0.01"
-      }),
-    )
-    assert.equal(accountedFills.length, 1)
-    assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
   }
 })
-
 
 test("classifies terminal fill-history REST timeouts as retryable reconciliation failures", async () => {
   const seeded = makeSeededRecoveryState()
