@@ -56,7 +56,7 @@ async function readResponsePayload({ response, token, status }) {
     }
     throw new Error(
       `Telegram API returned invalid JSON: ${error.message}`,
-      { cause },
+      { cause: error },
     )
   }
 }
@@ -141,7 +141,7 @@ export class TelegramNotifier {
       error = sanitizeCaughtError({ error, token: this.#token })
       throw new Error(
         `Telegram Bot API request failed: ${error.message}`,
-        { cause },
+        { cause: error },
       )
     }
 
