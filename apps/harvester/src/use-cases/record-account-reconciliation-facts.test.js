@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import {
   recordAccountOpenOrdersCaptured,
   recordAccountSnapshotCaptured,
@@ -109,7 +109,7 @@ test("rejects a conflicting open-order snapshot that reuses the same phase and o
   assert.equal(conflict.ok, false, "Changed open-order evidence cannot reuse the same immutable phase/observation identity.")
 })
 
-test("does not initialize a missing durable-fact store", async (t) => {
+test("does not initialize a missing Operational State Store", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-account-recorders-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
   const operationalStateStore = createFileOperationalStateStore({

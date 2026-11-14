@@ -1720,7 +1720,7 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
 })
 
 
-test("does not construct, verify, or inject durable facts even when a stale ledger path is configured", async () => {
+test("does not construct, verify, or inject Operational State Store records even when a stale ledger path is configured", async () => {
   let storeCreated = false
   let journalCreated = false
   let runtimeStarted = false

@@ -29,7 +29,7 @@ function matchesCoverage({ coverage, evidence }) {
  * Existing coverage for the symbol is never silently replaced or narrowed.
  *
  * @param {object} options
- * @param {object} options.operationalStateStore - ADR-0001 durable-fact read/append port.
+ * @param {object} options.operationalStateStore - ADR-0001 Operational State Store record read/append port.
  * @param {string} options.symbol - Canonical uppercase target market symbol.
  * @param {number} options.coveredFromTime - Earliest operator-reviewed history timestamp (Unix ms).
  * @param {number} options.verifiedAt - Operator verification timestamp (Unix ms).
@@ -50,7 +50,7 @@ export async function confirmMarketHistoryCoverage({
   try {
     if (typeof operationalStateStore?.readAll !== "function" ||
         typeof operationalStateStore?.append !== "function") {
-      throw new TypeError("confirmMarketHistoryCoverage requires the ADR-0001 durable-facts read/append port")
+      throw new TypeError("confirmMarketHistoryCoverage requires the ADR-0001 Operational State Store records read/append port")
     }
     if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
@@ -83,12 +83,12 @@ export async function confirmMarketHistoryCoverage({
     const ledgerResult = await operationalStateStore.readAll()
     if (ledgerResult?.ok !== true) {
       return toResult({
-        errors: ledgerResult?.errors ?? [new Error("Durable-fact ledger could not be verified")],
+        errors: ledgerResult?.errors ?? [new Error("Operational State Store record ledger could not be verified")],
       })
     }
     const records = ledgerResult.data?.records
     if (!Array.isArray(records)) {
-      throw new TypeError("Durable-fact read result must contain a records array")
+      throw new TypeError("Operational State Store record read result must contain a records array")
     }
     const existingCoverage = records.filter((record) =>
       record?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&

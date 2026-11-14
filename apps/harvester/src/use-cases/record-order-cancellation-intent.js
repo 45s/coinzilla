@@ -6,7 +6,7 @@ const isReason = (reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,63
 /** Persist the exact expected owned-order state before a broker cancellation RPC. */
 export async function recordOrderCancellationIntent({ operationalStateStore, order, reason } = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationIntent requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationIntent requires a Operational State Store append capability") }
     if (!(order instanceof CanonicalOrder)) { throw new TypeError("recordOrderCancellationIntent requires a canonical order") }
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
       throw new TypeError("Cancellation intent requires an active acknowledged canonical order")

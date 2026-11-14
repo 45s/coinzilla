@@ -14,7 +14,7 @@ export async function recordRecoveryCycleCompleted({
   minProfit,
 } = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordRecoveryCycleCompleted requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordRecoveryCycleCompleted requires a Operational State Store append capability") }
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
       throw new TypeError("recordRecoveryCycleCompleted requires canonical RecoveryLedger and Position values")
     }

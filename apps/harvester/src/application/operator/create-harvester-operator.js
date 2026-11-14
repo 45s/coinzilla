@@ -11,7 +11,7 @@ import { createReadOperatorTradingState } from "../../use-cases/operator-control
  *
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
- * @param {object} options.operationalStateStore - ADR-0001 application-owned durable-facts port.
+ * @param {object} options.operationalStateStore - ADR-0001 application-owned Operational State Store port.
  * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */

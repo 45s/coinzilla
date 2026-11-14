@@ -667,10 +667,10 @@ test("commits account balance and open-order facts before publishing their Journ
   assert.deepEqual(
     operationalStateStore.map(({ factType }) => factType),
     ["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED"],
-    "Both recovery-critical account snapshots must be committed to the durable-fact stream.",
+    "Both recovery-critical account snapshots must be committed to the Operational State Store record stream.",
   )
-  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after durable-fact acknowledgement.")
-  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after durable-fact commits.")
+  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after Operational State Store record acknowledgement.")
+  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after Operational State Store record commits.")
 })
 
 test("fails closed before Journal publication when the durable balance snapshot append is not acknowledged", async () => {

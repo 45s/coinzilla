@@ -38,7 +38,7 @@ function requireRecord({ record, index }) {
       typeof record.runtimeSessionId !== "string" || !record.runtimeSessionId.trim() ||
       typeof record.sequence !== "string" || !/^(0|[1-9][0-9]*)$/.test(record.sequence) ||
       !record.data || typeof record.data !== "object" || Array.isArray(record.data)) {
-    throw new TypeError("Durable-fact record " + index + " has an invalid committed envelope")
+    throw new TypeError("Operational State Store record record " + index + " has an invalid committed envelope")
   }
   return record
 }
@@ -260,19 +260,19 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
 /**
  * Project the application-owned durable stream into the existing canonical
  * recovery reducer. The Journal is not read or trusted here: this adapter
- * translates verified durable facts into the reducer's domain-event vocabulary.
+ * translates verified Operational State Store records into the reducer's domain-event vocabulary.
  *
  * This is a candidate projection only. It never performs broker reads, mutates
  * orders, or opens the trading-readiness gate. Exchange and history completeness
  * remain mandatory independent reconciliation steps.
  *
  * @param {object} options
- * @param {object[]} options.records Verified, globally ordered durable-fact records.
+ * @param {object[]} options.records Verified, globally ordered Operational State Store record records.
  * @returns {object} Candidate recovery projection.
  */
 export function projectHarvesterOperationalState({ records } = {}) {
   try {
-    if (!Array.isArray(records)) { throw new TypeError("Durable-fact projection requires a verified records array") }
+    if (!Array.isArray(records)) { throw new TypeError("Operational State Store record projection requires a verified records array") }
     const configurationBaselines = new Map()
     const sessions = new Map()
     const seenFactIds = new Set()
@@ -292,9 +292,9 @@ export function projectHarvesterOperationalState({ records } = {}) {
     for (const [index, rawRecord] of records.entries()) {
       const record = requireRecord({ record: rawRecord, index })
       const sequence = BigInt(record.sequence)
-      if (sequence <= previousSequence) { throw new Error("Durable-fact sequence must be strictly increasing") }
+      if (sequence <= previousSequence) { throw new Error("Operational State Store record sequence must be strictly increasing") }
       previousSequence = sequence
-      if (seenFactIds.has(record.factId)) { throw new Error("Durable-fact stream contains duplicate factId " + record.factId) }
+      if (seenFactIds.has(record.factId)) { throw new Error("Operational State Store record stream contains duplicate factId " + record.factId) }
       seenFactIds.add(record.factId)
 
       if (record.factType === "LEDGER_INITIALIZED") { continue }
@@ -410,7 +410,7 @@ export function projectHarvesterOperationalState({ records } = {}) {
         throw new Error("Durable trading fact is outside an active process session: " + record.factType)
       }
       if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED", "RECOVERY_CYCLE_NOT_COMPLETED"].includes(record.factType)) {
-        throw new Error("Unsupported durable-fact projection type: " + record.factType)
+        throw new Error("Unsupported Operational State Store record projection type: " + record.factType)
       }
       if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
         orderSubmissionOutcomes.push(Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence }))

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js"
 
 const createStore = async (t) => {
@@ -73,7 +73,7 @@ test("rejects a coverage verification timestamp that moves backwards", async (t)
   assert.match(result.errors[0].message, /verification timestamp must be monotonic/)
 })
 
-test("does not initialize a missing durable-fact store", async (t) => {
+test("does not initialize a missing Operational State Store", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-history-coverage-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
   const operationalStateStore = createFileOperationalStateStore({

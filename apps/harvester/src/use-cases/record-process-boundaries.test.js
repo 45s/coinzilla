@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordConfigurationBaseline } from "./record-configuration-baseline.js"
 import { recordProcessStarted } from "./record-process-started.js"
 import { recordProcessStopped } from "./record-process-stopped.js"

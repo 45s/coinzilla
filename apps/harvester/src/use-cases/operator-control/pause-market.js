@@ -5,12 +5,12 @@ import { assertOperationalStatePort } from "../../application/ports/operational-
 /**
  * Create the transport-independent use case for pausing one configured market.
  *
- * The engine invokes the durable-fact callback inside its serialized transition,
+ * The engine invokes the Operational State Store callback inside its serialized transition,
  * before applying the operator-owned in-memory pause.
  *
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
- * @param {object} options.operationalStateStore - ADR-0001 application-owned durable-facts port.
+ * @param {object} options.operationalStateStore - ADR-0001 application-owned Operational State Store port.
  * @returns {(request: object) => Promise<object>} Pause-market use case.
  */
 export function createPauseMarket({ engine, operationalStateStore } = {}) {

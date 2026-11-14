@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { access, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-operational-state-store.js"
 import {
   parseRecoveryMarketArguments,
   runRecoveryMarketCommand,
@@ -114,7 +114,7 @@ test("CLI runs an audit-only offline context without requiring exchange credenti
   assert.equal(JSON.parse(output[0]).data.reconciliation.status, "SKIPPED")
 })
 
-test("CLI requires an absolute existing durable-fact directory only for explicit confirmation", async () => {
+test("CLI requires an absolute existing Operational State Store record directory only for explicit confirmation", async () => {
   const errors = []
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],
@@ -125,11 +125,11 @@ test("CLI requires an absolute existing durable-fact directory only for explicit
     writeError: (value) => errors.push(value),
   })
 
-  assert.equal(exitCode, 1, "Confirmation with a relative durable-fact directory must fail.")
+  assert.equal(exitCode, 1, "Confirmation with a relative Operational State Store record directory must fail.")
   assert.match(errors[0], /OPERATIONAL_STATE_DIRECTORY/)
 })
 
-test("CLI help is available without reading evidence or touching the durable-fact store", async () => {
+test("CLI help is available without reading evidence or touching the Operational State Store", async () => {
   const output = []
   const exitCode = await runRecoveryMarketCommand({
     args: ["--help"],
@@ -173,7 +173,7 @@ test("CLI explicitly confirms a READY offline audit against an already initializ
   }
 })
 
-test("CLI never initializes a missing durable-fact directory during confirmation", async () => {
+test("CLI never initializes a missing Operational State Store record directory during confirmation", async () => {
   const directory = path.join(tmpdir(), "coinzilla-recovery-cli-missing-" + process.pid)
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],

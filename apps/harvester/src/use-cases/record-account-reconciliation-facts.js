@@ -4,7 +4,7 @@ import { toResult } from "@coinzilla/utils"
 
 const requireAppendPort = ({ operationalStateStore, operation }) => {
   if (typeof operationalStateStore?.append !== "function") {
-    throw new TypeError(operation + " requires a durable-fact append port")
+    throw new TypeError(operation + " requires a Operational State Store append capability")
   }
 }
 

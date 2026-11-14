@@ -381,7 +381,7 @@ export function makeConservativeTradingEngine({
       const durable = await onOperationalStateStrategyMarketPaused({ symbol, reason })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         logger?.error?.({
-          message: "strategy pause could not be committed to the durable-fact ledger",
+          message: "strategy pause could not be committed to the Operational State Store",
           symbol,
           reason,
           errors: durable?.errors,
@@ -542,7 +542,7 @@ export function makeConservativeTradingEngine({
     return result
   }
 
-  const cancelOrderWithDurableFacts = async ({ order, reason } = {}) => {
+  const cancelOrderWithOperationalState = async ({ order, reason } = {}) => {
     if (onOperationalStateCancellationIntent) {
       let intentResult
       try {
@@ -836,7 +836,7 @@ export function makeConservativeTradingEngine({
       }
       let cancelResult
       try {
-        cancelResult = await cancelOrderWithDurableFacts({ order, reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL" })
+        cancelResult = await cancelOrderWithOperationalState({ order, reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL" })
       } catch (error) {
         return withFailure(
           await markCancellationUnknown({
@@ -999,7 +999,7 @@ export function makeConservativeTradingEngine({
     }
     let cancelResult
     try {
-      cancelResult = await cancelOrderWithDurableFacts({ order, reason: "TRAILING_BUY_REPRICE" })
+      cancelResult = await cancelOrderWithOperationalState({ order, reason: "TRAILING_BUY_REPRICE" })
     } catch (error) {
       return markCancellationUnknown({
         symbol,
@@ -1762,7 +1762,7 @@ export function makeConservativeTradingEngine({
 
         let cancelResult
         try {
-          cancelResult = await cancelOrderWithDurableFacts({ order, reason })
+          cancelResult = await cancelOrderWithOperationalState({ order, reason })
         } catch (error) {
           const failed = await markCancellationUnknown({
             symbol,
@@ -2152,7 +2152,7 @@ export function makeConservativeTradingEngine({
         return toResult({ error })
       }
       if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator pause requires a durable-fact commit callback") })
+        return toResult({ error: new TypeError("Operator pause requires a Operational State Store commit callback") })
       }
       if (state.operatorPausedMarkets.has(symbol)) {
         return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: true } })
@@ -2201,7 +2201,7 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
       }
       if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator resume requires a durable-fact commit callback") })
+        return toResult({ error: new TypeError("Operator resume requires a Operational State Store commit callback") })
       }
       let committed
       try {

@@ -6,7 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordRecoveryCycleCompleted } from "./record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "./record-recovery-cycle-not-completed.js"
 

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js"
 import { readMarketHistoryCoverage } from "./read-market-history-coverage.js"
 
@@ -64,7 +64,7 @@ test("does not borrow another market's history coverage", async (t) => {
   assert.match(result.errors[0].message, /No durable history-coverage fact exists for ETHUSDT/)
 })
 
-test("refuses a missing or corrupt durable-fact store", async (t) => {
+test("refuses a missing or corrupt Operational State Store", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-history-coverage-read-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
   const operationalStateStore = createFileOperationalStateStore({
@@ -118,8 +118,8 @@ test("rejects a durable history-coverage sequence that narrows prior verified co
 
 test("rejects invalid read ports, symbols, and malformed record collections", async () => {
   const missingPort = await readMarketHistoryCoverage({ operationalStateStore: {}, symbol: "BTCUSDT" })
-  assert.equal(missingPort.ok, false, "A missing durable-fact read port must be rejected before history coverage is returned.")
-  assert.match(missingPort.errors[0].message, /durable-fact read port/, "The error must identify the required durable-fact read capability.")
+  assert.equal(missingPort.ok, false, "A missing Operational State Store read capability must be rejected before history coverage is returned.")
+  assert.match(missingPort.errors[0].message, /Operational State Store read capability/, "The error must identify the required Operational State Store record read capability.")
 
   const invalidSymbol = await readMarketHistoryCoverage({
     operationalStateStore: { readAll: async () => ({ ok: true, data: { records: [] } }) },

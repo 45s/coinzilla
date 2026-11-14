@@ -23,14 +23,14 @@ function validateCoverageSequence({ records, symbol }) {
  * for the requested symbol and returns the shape consumed by the recovery audit.
  *
  * @param {object} options
- * @param {object} options.operationalStateStore - ADR-0001 durable-fact port.
+ * @param {object} options.operationalStateStore - ADR-0001 Operational State Store port.
  * @param {string} options.symbol - Canonical market symbol.
  * @returns {Promise<object>} Projected history-retention evidence.
  */
 export async function readMarketHistoryCoverage({ operationalStateStore, symbol } = {}) {
   try {
     if (typeof operationalStateStore?.readAll !== "function") {
-      throw new TypeError("readMarketHistoryCoverage requires a durable-fact read port")
+      throw new TypeError("readMarketHistoryCoverage requires a Operational State Store read capability")
     }
     if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
@@ -41,7 +41,7 @@ export async function readMarketHistoryCoverage({ operationalStateStore, symbol 
     }
     const records = result.data?.records
     if (!Array.isArray(records)) {
-      throw new TypeError("Durable-fact read result must contain a records array")
+      throw new TypeError("Operational State Store record read result must contain a records array")
     }
     const latest = validateCoverageSequence({ records, symbol })
     if (!latest) {

@@ -4,7 +4,7 @@ import { toResult } from "@coinzilla/utils"
 const requireStore = ({ operationalStateStore, operation, needsRead = false }) => {
   if (typeof operationalStateStore?.append !== "function" ||
       (needsRead && typeof operationalStateStore?.readAll !== "function")) {
-    throw new TypeError(operation + " requires the initialized durable-fact append/read port")
+    throw new TypeError(operation + " requires the initialized Operational State Store append/read capability")
   }
 }
 
@@ -117,7 +117,7 @@ export async function recordSafetyBlockerResolved({
     const read = await operationalStateStore.readAll()
     if (read?.ok !== true || !Array.isArray(read.data?.records)) {
       return toResult({
-        errors: read?.errors?.length ? read.errors : [new Error("Safety blocker resolution requires a verified durable-fact stream")],
+        errors: read?.errors?.length ? read.errors : [new Error("Safety blocker resolution requires a verified Operational State Store record stream")],
       })
     }
     const raised = read.data.records.find((record) =>

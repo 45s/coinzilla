@@ -36,7 +36,7 @@ test("rejects negative zero and every non-safe-integer number", () => {
     assert.throws(
       () => canonicalizeOperationalStateValue(value),
       TypeError,
-      "Durable-fact numeric values must be safe integers and must not include negative zero.",
+      "Operational State Store record numeric values must be safe integers and must not include negative zero.",
     )
   }
   assert.throws(
@@ -92,12 +92,12 @@ test("normalizes Date and canonical ISO timestamp string values", () => {
   assert.throws(
     () => normalizeOperationalStateRecordedAt("2026-11-13T02:00:00+02:00"),
     /canonical ISO-8601/,
-    "Equivalent timestamps with offsets are not canonical durable-fact timestamps.",
+    "Equivalent timestamps with offsets are not canonical Operational State Store record timestamps.",
   )
   assert.throws(
     () => normalizeOperationalStateRecordedAt(new Date("invalid")),
     RangeError,
-    "An invalid Date must not be converted into a durable-fact timestamp.",
+    "An invalid Date must not be converted into a Operational State Store record timestamp.",
   )
 })
 

@@ -38,7 +38,7 @@ function requireString({ value, field }) {
  * @param {object} options
  * @param {object} options.context - Operator-prepared Journal and exchange evidence bundle.
  * @param {boolean} [options.confirm=false] - Whether to append the coverage fact after a READY audit.
- * @param {object} [options.operationalStateStore] - Existing ADR-0001 durable-facts read/append port; required only for confirmation.
+ * @param {object} [options.operationalStateStore] - Existing ADR-0001 Operational State Store records read/append port; required only for confirmation.
  * @returns {Promise<object>} Result containing an audit-only reconciliation or explicit confirmation outcome.
  */
 export async function runOfflineMarketRecovery({
@@ -131,7 +131,7 @@ export async function runOfflineMarketRecovery({
       requireString({ value: context.runtimeSessionId, field: "context.runtimeSessionId" })
       if (typeof operationalStateStore?.readAll !== "function" ||
           typeof operationalStateStore?.append !== "function") {
-        throw new TypeError("Offline coverage confirmation requires the existing ADR-0001 durable-facts read/append port")
+        throw new TypeError("Offline coverage confirmation requires the existing ADR-0001 Operational State Store records read/append port")
       }
       const confirmation = await confirmMarketHistoryCoverage({
         operationalStateStore,

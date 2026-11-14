@@ -8,7 +8,7 @@ const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
  * Persist the broker's classified submission outcome before local order state advances.
  *
  * @param {object} options
- * @param {object} options.operationalStateStore - Initialized ADR-0001 durable-fact append port.
+ * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {CanonicalOrder} options.order - Canonical pending or broker-acknowledged order.
  * @param {string} options.outcome - ACKNOWLEDGED, REJECTED, REJECTED_OR_UNKNOWN, or UNKNOWN.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
@@ -22,7 +22,7 @@ export async function recordOrderSubmissionOutcome({
 } = {}) {
   try {
     if (typeof operationalStateStore?.append !== "function") {
-      throw new TypeError("recordOrderSubmissionOutcome requires a durable-fact append port")
+      throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
     }
     if (!(order instanceof CanonicalOrder)) {
       throw new TypeError("recordOrderSubmissionOutcome requires a canonical order")

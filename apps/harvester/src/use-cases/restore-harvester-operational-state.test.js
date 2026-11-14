@@ -25,7 +25,7 @@ const record = (sequence, factType, data, factId = factType + ":" + sequence, ru
 })
 
 const records = ({ accountBlocker = false, externalOpenOrder = false } = {}) => [
-  record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+  record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
   record(1, "CONFIGURATION_BASELINE", {
     schemaVersion: 1,
     strategyName: "conservative",
@@ -189,7 +189,7 @@ test("replays a completed recovery cycle before later-session fills when non-pro
   const secondBuyOutcomeSequence = 55
   const secondBuyFillSequence = 56
   const cycleEvidence = [
-    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "Operational State Store records:genesis"),
     record(1, "CONFIGURATION_BASELINE", {
       schemaVersion: 1, strategyName: "conservative", markets: ["BTCUSDT"], fingerprint,
     }, "configuration-baseline:" + fingerprint),

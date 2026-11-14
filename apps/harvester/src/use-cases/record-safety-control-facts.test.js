@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import {
   recordSafetyBlockerRaised,
   recordSafetyBlockerResolved,
@@ -109,7 +109,7 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   assert.equal(implicit.ok, false, "A process restart must never be accepted as a blocker-resolution action.")
 })
 
-test("does not initialize a missing durable-fact store for safety controls", async (t) => {
+test("does not initialize a missing Operational State Store for safety controls", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-safety-recorders-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
   const operationalStateStore = createFileOperationalStateStore({

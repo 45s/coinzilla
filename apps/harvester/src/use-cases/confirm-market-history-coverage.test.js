@@ -187,12 +187,12 @@ test("rejects a second conflicting coverage baseline for the same market", async
   assert.equal(store.records.length, 1, "A conflicting baseline must not append another coverage fact.")
 })
 
-test("does not reconcile or append when the durable-fact ledger cannot be read", async () => {
+test("does not reconcile or append when the Operational State Store cannot be read", async () => {
   const { store, calls, options } = createOptions()
   store.readAll = async () => ({ ok: false, errors: [new Error("durable ledger unavailable")] })
   const result = await confirmMarketHistoryCoverage(options)
 
-  assert.equal(result.ok, false, "An unreadable durable-fact ledger must fail the confirmation workflow.")
+  assert.equal(result.ok, false, "An unreadable Operational State Store must fail the confirmation workflow.")
   assert.equal(calls.length, 0, "Reconciliation must not proceed when durable fact integrity cannot be established.")
   assert.equal(store.records.length, 0, "No coverage fact may be appended when the existing ledger cannot be verified.")
 })

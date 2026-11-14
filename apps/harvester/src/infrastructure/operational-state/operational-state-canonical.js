@@ -81,7 +81,7 @@ function canonicalize(value, depth = 0) {
 }
 
 /**
- * Clone a durable-fact value into its bounded canonical JSON representation.
+ * Clone a Operational State Store record value into its bounded canonical JSON representation.
  *
  * Numeric values are restricted to safe integers and negative zero is rejected
  * because JSON.stringify would otherwise silently normalize it to ordinary zero.
@@ -96,7 +96,7 @@ export function canonicalizeOperationalStateValue(value) {
 }
 
 /**
- * Serialize a durable-fact value as recursively key-sorted JSON.
+ * Serialize a Operational State Store record value as recursively key-sorted JSON.
  *
  * @param {unknown} value
  * @returns {string}

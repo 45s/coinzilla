@@ -822,7 +822,7 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
     throw new Error("Durable fact recorded-at timestamp is not canonical ISO-8601")
   }
   if (index === 0) {
-    if (record.sequence !== "0" || record.factId !== "durable-facts:genesis" ||
+    if (record.sequence !== "0" || record.factId !== "Operational State Store records:genesis" ||
         record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null ||
         canonicalStringifyOperationalStateValue(record.data) !== canonicalStringifyOperationalStateValue({ schemaVersion })) {
       throw new Error("Durable fact stream must begin with its explicit genesis record")
@@ -915,12 +915,12 @@ function parseJsonLines({ source, label }) {
  * must verify/read an existing ledger and must never create one implicitly.
  *
  * @param {object} options
- * @param {string} options.directory - Stable per-installation durable-fact directory.
+ * @param {string} options.directory - Stable per-installation Operational State Store record directory.
  * @param {string} options.runtimeSessionId - Current process-session identity.
- * @param {number} [options.schemaVersion=1] - Durable-fact schema version.
+ * @param {number} [options.schemaVersion=1] - Operational State Store record schema version.
  * @param {() => Date|string} [options.now] - Injectable canonical timestamp source.
  * @param {object} [options.fileSystem] - Injectable Node fs/promises-compatible adapter.
- * @returns {Readonly<object>} Durable-facts application port.
+ * @returns {Readonly<object>} Operational State Store records application port.
  */
 export function createFileOperationalStateStore({
   directory,
@@ -936,11 +936,11 @@ export function createFileOperationalStateStore({
     maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
   })
   if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) {
-    throw new TypeError("Durable-fact schemaVersion must be a positive safe integer")
+    throw new TypeError("Operational State Store record schemaVersion must be a positive safe integer")
   }
-  if (typeof now !== "function") {throw new TypeError("Durable-fact now must be a function")}
+  if (typeof now !== "function") {throw new TypeError("Operational State Store record now must be a function")}
   for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "chmod"]) {
-    if (typeof fileSystem?.[method] !== "function") {throw new TypeError("Durable-fact fileSystem requires " + method)}
+    if (typeof fileSystem?.[method] !== "function") {throw new TypeError("Operational State Store record fileSystem requires " + method)}
   }
 
   const absoluteDirectory = path.resolve(resolvedDirectory)
@@ -951,7 +951,7 @@ export function createFileOperationalStateStore({
   const assertNoUncertainWrite = () => {
     if (writeUncertain) {
       throw createError(
-        "A previous durable-fact write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
+        "A previous Operational State Store record write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
         "DURABLE_FACTS_COMMIT_UNCERTAIN",
       )
     }
@@ -981,16 +981,16 @@ export function createFileOperationalStateStore({
   const verifyState = async () => {
     const directoryStat = await fileSystem.lstat(absoluteDirectory)
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-      throw new Error("Durable-fact directory must be a real directory, not a symlink")
+      throw new Error("Operational State Store record directory must be a real directory, not a symlink")
     }
     if (supportsPosixModeBits &&
         ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)) {
-      throw new Error("Durable-fact directory permissions must be private (0700)")
+      throw new Error("Operational State Store record directory permissions must be private (0700)")
     }
     const entries = await fileSystem.readdir(absoluteDirectory)
     const unexpectedEntries = entries.filter((entry) => ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry))
     if (unexpectedEntries.length > 0) {
-      throw new Error("Durable-fact directory contains an unresolved temporary or unexpected file")
+      throw new Error("Operational State Store record directory contains an unresolved temporary or unexpected file")
     }
     const [logStat, manifestStat] = await Promise.all([
       fileSystem.lstat(logPath),
@@ -998,23 +998,23 @@ export function createFileOperationalStateStore({
     ])
     if (logStat.isSymbolicLink() || !logStat.isFile() ||
         manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
-      throw new Error("Durable-fact streams must be regular files, not symlinks")
+      throw new Error("Operational State Store record streams must be regular files, not symlinks")
     }
     if (supportsPosixModeBits && [logStat, manifestStat].some((stat) =>
       (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
-      throw new Error("Durable-fact streams must use private file permissions (0600)")
+      throw new Error("Operational State Store record streams must use private file permissions (0600)")
     }
     const [rawLog, rawManifest] = await Promise.all([
       fileSystem.readFile(logPath, "utf8"),
       fileSystem.readFile(manifestPath, "utf8"),
     ])
-    const records = parseJsonLines({ source: rawLog, label: "Durable-fact log" })
+    const records = parseJsonLines({ source: rawLog, label: "Operational State Store record log" })
     const checkpoints = parseJsonLines({ source: rawManifest, label: "Committed-head manifest journal" })
     if (checkpoints.length < records.length) {
       throw new Error("Durable fact record exists beyond the committed-head manifest journal")
     }
     if (checkpoints.length > records.length) {
-      throw new Error("Committed-head manifest journal is ahead of the durable-fact log")
+      throw new Error("Committed-head manifest journal is ahead of the Operational State Store record log")
     }
     const factIds = new Set()
     let previousFactDigest = null
@@ -1059,17 +1059,17 @@ export function createFileOperationalStateStore({
       await fileSystem.mkdir(absoluteDirectory, { recursive: true, mode: 0o700 })
       const directoryStat = await fileSystem.lstat(absoluteDirectory)
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-        throw new Error("Durable-fact initialization requires a real directory")
+        throw new Error("Operational State Store record initialization requires a real directory")
       }
       const entries = await fileSystem.readdir(absoluteDirectory)
-      if (entries.length > 0) {throw new Error("Durable-fact initialization refuses to overwrite an existing directory")}
+      if (entries.length > 0) {throw new Error("Operational State Store record initialization refuses to overwrite an existing directory")}
       if (supportsPosixModeBits) {await fileSystem.chmod(absoluteDirectory, 0o700)}
       const recordedAt = normalizeOperationalStateRecordedAt(now())
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
         sequence: "0",
-        factId: "durable-facts:genesis",
+        factId: "Operational State Store records:genesis",
         factType: "LEDGER_INITIALIZED",
         runtimeSessionId: resolvedRuntimeSessionId,
         recordedAt,

@@ -6,11 +6,11 @@ import { assertOperationalStatePort } from "../../application/ports/operational-
  * Create the transport-independent use case for removing only an operator pause.
  *
  * The engine rejects this operation while any safety or recovery blocker is
- * active, before invoking the durable-fact callback.
+ * active, before invoking the Operational State Store callback.
  *
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
- * @param {object} options.operationalStateStore - ADR-0001 application-owned durable-facts port.
+ * @param {object} options.operationalStateStore - ADR-0001 application-owned Operational State Store port.
  * @returns {(request: object) => Promise<object>} Resume-market use case.
  */
 export function createResumeMarket({ engine, operationalStateStore } = {}) {

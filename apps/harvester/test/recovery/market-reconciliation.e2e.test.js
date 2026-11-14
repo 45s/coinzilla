@@ -8,7 +8,7 @@ import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../../src/domain/account/account-snapshot.js"
 import { OrderRegistry } from "../../src/domain/orders/order-registry.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
-import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-operational-state-store.js"
 import { confirmMarketHistoryCoverage } from "../../src/use-cases/confirm-market-history-coverage.js"
 import { reconcileRecoveredMarketState } from "../../src/use-cases/reconcile-recovered-market-state.js"
 
@@ -122,7 +122,7 @@ function createReconciliationOptions(overrides = {}) {
   }
 }
 
-async function withDurableFactsStore(callback) {
+async function withOperationalStateStore(callback) {
   const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-step7-"))
   try {
     const store = createFileOperationalStateStore({
@@ -130,7 +130,7 @@ async function withDurableFactsStore(callback) {
       runtimeSessionId: "step7-offline-e2e",
     })
     const initialized = await store.initialize()
-    assert.equal(initialized.ok, true, "The test must explicitly initialize its isolated durable-fact ledger before exercising confirmation.")
+    assert.equal(initialized.ok, true, "The test must explicitly initialize its isolated Operational State Store before exercising confirmation.")
     return await callback({ store })
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -225,8 +225,8 @@ test("production audit blocks only the market with an unowned open order and pre
   }, "Read-only reconciliation must leave the supplied external order evidence unchanged.")
 })
 
-test("production durable-fact confirmation is idempotent and rejects a conflicting baseline", async () => {
-  await withDurableFactsStore(async ({ store }) => {
+test("production Operational State Store record confirmation is idempotent and rejects a conflicting baseline", async () => {
+  await withOperationalStateStore(async ({ store }) => {
     const { options } = createReconciliationOptions()
     let reconciliationCount = 0
     const reconcileMarketState = async ({ historyRetentionEvidence }) => {
@@ -267,7 +267,7 @@ test("production durable-fact confirmation is idempotent and rejects a conflicti
   })
 })
 
-test("production confirmation fails closed when the durable-fact ledger is missing", async () => {
+test("production confirmation fails closed when the Operational State Store is missing", async () => {
   const directory = path.join(tmpdir(), "coinzilla-missing-recovery-ledger-" + process.pid)
   const store = createFileOperationalStateStore({
     directory,
@@ -287,11 +287,11 @@ test("production confirmation fails closed when the durable-fact ledger is missi
     },
   })
 
-  assert.equal(result.ok, false, "A missing durable-fact ledger must not be initialized implicitly by the confirmation workflow.")
-  assert.equal(reconciliationCalled, false, "Reconciliation must not run until the existing durable-fact ledger has been verified.")
+  assert.equal(result.ok, false, "A missing Operational State Store must not be initialized implicitly by the confirmation workflow.")
+  assert.equal(reconciliationCalled, false, "Reconciliation must not run until the existing Operational State Store has been verified.")
 })
 
-test("production confirmation fails closed when the durable-fact commit checkpoint cannot be written", async () => {
+test("production confirmation fails closed when the Operational State Store record commit checkpoint cannot be written", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-commit-failure-"))
   try {
     const fileSystem = {

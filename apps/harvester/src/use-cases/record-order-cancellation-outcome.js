@@ -14,7 +14,7 @@ export async function recordOrderCancellationOutcome({
   outcome,
 } = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationOutcome requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationOutcome requires a Operational State Store append capability") }
     if (!(order instanceof CanonicalOrder)) { throw new TypeError("recordOrderCancellationOutcome requires the original canonical order") }
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
       throw new TypeError("Cancellation outcome requires the original active acknowledged order")

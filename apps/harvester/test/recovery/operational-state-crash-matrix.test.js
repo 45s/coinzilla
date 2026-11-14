@@ -6,7 +6,7 @@ import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
-import { createFileOperationalStateStore } from "../../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../src/infrastructure/Operational State Store records/create-file-operational-state-store.js"
 import { evaluateRecoveryCompletion } from "../../src/domain/strategies/conservative/recovery-completion.js"
 import { recordConfigurationBaseline } from "../../src/use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../../src/use-cases/record-process-started.js"
@@ -16,7 +16,7 @@ import { recordExecutionFill } from "../../src/use-cases/record-execution-fill.j
 import { recordRecoveryCycleCompleted } from "../../src/use-cases/record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "../../src/use-cases/record-recovery-cycle-not-completed.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../../src/use-cases/record-safety-control-facts.js"
-import { restoreHarvesterOperationalState } from "../../src/use-cases/restore-harvester-durable-facts-state.js"
+import { restoreHarvesterOperationalState } from "../../src/use-cases/restore-harvester-Operational State Store records-state.js"
 
 const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })

@@ -23,7 +23,7 @@ function canonicalize(value) {
 /** Persist a deterministic, non-secret fingerprint of all strategy decision settings. */
 export async function recordConfigurationBaseline({ operationalStateStore, appConfig } = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordConfigurationBaseline requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordConfigurationBaseline requires a Operational State Store append capability") }
     const strategies = appConfig?.strategies
     if (!strategies || typeof strategies !== "object" || Array.isArray(strategies)) {
       throw new TypeError("Configuration baseline requires the validated strategies object")

@@ -7,7 +7,7 @@ const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
  * Persist the immutable canonical order intent before the broker placement side effect.
  *
  * @param {object} options
- * @param {object} options.operationalStateStore - Initialized ADR-0001 durable-fact append port.
+ * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {CanonicalOrder} options.order - Validated PENDING canonical order.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
@@ -15,7 +15,7 @@ const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
 export async function recordOrderSubmissionIntent({ operationalStateStore, order, purpose = null } = {}) {
   try {
     if (typeof operationalStateStore?.append !== "function") {
-      throw new TypeError("recordOrderSubmissionIntent requires a durable-fact append port")
+      throw new TypeError("recordOrderSubmissionIntent requires a Operational State Store append capability")
     }
     if (!(order instanceof CanonicalOrder)) {
       throw new TypeError("recordOrderSubmissionIntent requires a canonical order")

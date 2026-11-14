@@ -20,7 +20,7 @@ export async function recordRecoveryCycleNotCompleted({
 } = {}) {
   try {
     if (typeof operationalStateStore?.append !== "function") {
-      throw new TypeError("recordRecoveryCycleNotCompleted requires a durable-fact append port")
+      throw new TypeError("recordRecoveryCycleNotCompleted requires a Operational State Store append capability")
     }
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
       throw new TypeError("recordRecoveryCycleNotCompleted requires canonical RecoveryLedger and Position values")
