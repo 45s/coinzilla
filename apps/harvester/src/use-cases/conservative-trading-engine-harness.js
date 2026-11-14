@@ -29,14 +29,17 @@ function createPlaceOrderHandler({
     if (placeOrderGate && order.side === deferOrderSide) {await placeOrderGate.promise}
     if (placeOrderThrow) {throw new Error("socket closed")}
     if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount.value > placeOrderFailureAfterCount) {
-      return { ok: false, errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
+      return { ok: false,
+        errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
     }
     if (placeOrderFailureAfterFirst && placeOrderCallCount.value > 1) {
-      return { ok: false, errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
+      return { ok: false,
+        errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
     }
     if (remainingPlaceOrderFailures.value > 0) {
       if (Number.isFinite(remainingPlaceOrderFailures.value)) {remainingPlaceOrderFailures.value -= 1}
-      return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
+      return { ok: false,
+        errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
     }
     const acknowledgedOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
@@ -44,8 +47,10 @@ function createPlaceOrderHandler({
       market,
       side: order.side,
       type: order.type,
-      limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+      limitPrice: new Money({ amount: order.price,
+        asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: order.quantity,
+        asset: baseAsset }),
       executedQuantity: new Quantity({
         amount: immediateFilledAcknowledgement ? order.quantity : "0",
         asset: baseAsset,
@@ -63,7 +68,8 @@ function createPlaceOrderHandler({
         getAcknowledgedFills({ order: acknowledgedOrder }),
       )
     }
-    return { ok: true, data: acknowledgedOrder }
+    return { ok: true,
+      data: acknowledgedOrder }
   }
 }
 
@@ -100,7 +106,8 @@ function createCancelOrderHandler({
         errors: [new Error("contradictory cancellation result")],
       }
     }
-    if (cancelFailure) {return { ok: false, errors: [new Error("cancel denied")] }}
+    if (cancelFailure) {return { ok: false,
+      errors: [new Error("cancel denied")] }}
     canceledOrders.set(order.brokerOrderId, order)
     const executedQuantity = typeof cancelExecutedQuantity === "function"
       ? cancelExecutedQuantity({ order })
@@ -118,7 +125,8 @@ function createCancelOrderHandler({
         type: order.type,
         limitPrice: order.limitPrice,
         originalQuantity: order.originalQuantity,
-        executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: executedQuantity,
+          asset: baseAsset }),
         status: resolvedStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
@@ -145,7 +153,8 @@ function createGetFillsHandler({
     if (acknowledgedFillsByOrder.has(orderId)) {
       if (acknowledgedFillsGate) {await acknowledgedFillsGate.promise}
       const fills = acknowledgedFillsByOrder.get(orderId)
-      return { ok: true, data: typeof fills === "function" ? fills() : fills }
+      return { ok: true,
+        data: typeof fills === "function" ? fills() : fills }
     }
     const canceledOrder = canceledOrders.get(orderId)
     const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
@@ -159,9 +168,11 @@ function createGetFillsHandler({
         market,
         side: canceledOrder.side,
         price: canceledOrder.limitPrice,
-        quantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+        quantity: new Quantity({ amount: executedQuantity,
+          asset: baseAsset }),
         quoteQuantity: new Money({
-          amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: executedQuantity }),
+          amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount,
+            right: executedQuantity }),
           asset: quoteAsset,
         }),
         commissions: [],
@@ -191,8 +202,10 @@ function createHarnessAccountSnapshot({
 } = {}) {
   return {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
-      ? new Quantity({ amount: quoteFreeBalance, asset: quoteAsset })
-      : new Quantity({ amount: baseFreeBalance, asset: baseAsset }),
+      ? new Quantity({ amount: quoteFreeBalance,
+        asset: quoteAsset })
+      : new Quantity({ amount: baseFreeBalance,
+        asset: baseAsset }),
     getQuoteCashFlowBaseline: ({ assetId }) => assetId === quoteAsset.id ? quoteCashFlowBaseline : "0",
     getPortfolioBaseQuantityBaseline: ({ assetId }) => assetId === baseAsset.id ? portfolioBaseQuantityBaseline : "0",
     getCommittedQuoteBalanceBaseline: ({ assetId }) => assetId === quoteAsset.id ? committedQuoteBalanceBaseline : "0",
@@ -236,8 +249,10 @@ function createCanonicalOrderLookupHandler({ canonicalOrdersByClientId } = {}) {
   return async ({ clientOrderId }) => {
     const order = canonicalOrdersByClientId.get(clientOrderId)
     return order
-      ? { ok: true, data: order }
-      : { ok: false, errors: [new Error("order not found by client order ID")] }
+      ? { ok: true,
+        data: order }
+      : { ok: false,
+        errors: [new Error("order not found by client order ID")] }
   }
 }
 
@@ -249,15 +264,19 @@ function createCanonicalOrderHistoryHandler({ acknowledgedOrdersById } = {}) {
 }
 
 function createEmptyOpenOrdersHandler() {
-  return async () => ({ ok: true, data: [] })
+  return async () => ({ ok: true,
+    data: [] })
 }
 
 function createHarnessBrokerPort({ options, state } = {}) {
   return {
     getSymbolFilters: createSymbolFiltersHandler(options),
-    placeOrder: createPlaceOrderHandler({ ...options, ...state }),
-    cancelOrder: createCancelOrderHandler({ ...options, ...state }),
-    getFills: createGetFillsHandler({ ...options, ...state }),
+    placeOrder: createPlaceOrderHandler({ ...options,
+      ...state }),
+    cancelOrder: createCancelOrderHandler({ ...options,
+      ...state }),
+    getFills: createGetFillsHandler({ ...options,
+      ...state }),
     getCanonicalOrder: createCanonicalOrderLookupHandler(state),
     getOpenOrders: createEmptyOpenOrdersHandler(),
     getCanonicalOrderHistory: createCanonicalOrderHistoryHandler(state),
@@ -268,7 +287,8 @@ export function createHarnessBroker(options = {}) {
   const state = createHarnessState(options)
   return {
     ...state,
-    broker: createHarnessBrokerPort({ options, state }),
+    broker: createHarnessBrokerPort({ options,
+      state }),
     accountSnapshot: createHarnessAccountSnapshot(options),
   }
 }
