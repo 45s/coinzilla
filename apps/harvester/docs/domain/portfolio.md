@@ -2,11 +2,13 @@
 
 ## Purpose
 
-A **Portfolio** is the domain representation of the bot's spot positions. It contains one position for each configured spot market (trading pair).
+A **Portfolio** is the single authoritative in-memory accounting aggregate for Harvester's actual Spot activity. It may contain multiple independent Positions for the same market.
 
-For example, a portfolio may contain separate positions for `BTCUSDT`, `ETHUSDT`, and `ZROFDUSD`. A position describes the bot's holdings and trading activity for that pair. Conservative and Aggressive use the same position and inventory, but **only one strategy controls that position at a time**. The position is not duplicated or split by strategy. It is not a market-price snapshot and it is not an order.
+Each Position has a stable `positionId`, a canonical `marketId`, and an explicit `strategyId` owner. For example, `ETHUSDT` may have one Position owned by `CG_coinGrabber` and another owned by `RS_recoverySeller`. A strategy may also own multiple Positions for one market when its domain needs distinct accounting units, such as separately tracked legacy and recovery-cycle exposure.
 
-The portfolio is updated from **executed fills**. Prices, submitted orders, open orders, and order-status changes without an execution do not change held quantities.
+Strategy-owned Positions are independent accounting allocations, not separate wallets or exchange balances. The sum of their base quantities is the Portfolio's aggregate tracked inventory for that market. Shared exchange custody, account free balances, and active-order reservations remain centrally reconciled across every Position and strategy. Creating another Position never creates more spendable exchange inventory.
+
+The Portfolio changes from **canonical executed fills** and explicitly defined domain transitions such as moving a completed CG keep quantity into its retained-free bucket. Prices, submitted orders, acknowledgements, cancellations, and order-status changes without an execution do not create or remove held quantity.
 
 ## Where it belongs
 
@@ -18,7 +20,7 @@ src/
     portfolio/
 ```
 
-The application use case that coordinates portfolio updates belongs under:
+The application use case that coordinates Portfolio updates belongs under:
 
 ```text
 src/
@@ -33,149 +35,139 @@ See [Harvester Architecture](../architecture.md) for the distinction between dom
 ## Lifecycle and data flow
 
 1. Bootstrap loads and validates `config/index.js`.
-2. The configured, enabled trading pairs are made available to the trading engine.
+2. The configured, enabled trading pairs and strategy registrations are made available to the shared Trading Engine.
 3. The market-data adapter subscribes to the broker's market streams.
-4. Incoming prices are normalized and delivered to the selected strategy. A price update may cause the strategy to request an order, but it does not modify the portfolio.
-5. The broker reports order lifecycle events. Submission, acknowledgement, cancellation, rejection, and expiration alone do not change portfolio holdings.
-6. When an order executes, the broker adapter normalizes the execution into a domain-level fill.
-7. The application calls `use-cases/update-portfolio.js` with the current portfolio and the normalized fill.
-8. The use case applies the fill to the matching position and returns the updated portfolio (or an explicit failure). The strategy/engine then observes the updated portfolio when making subsequent decisions.
+4. Each enabled strategy evaluates its own policy. A price update may cause an order intent, but it does not modify Portfolio accounting.
+5. The broker reports order lifecycle events. Submission, acknowledgement, cancellation, rejection, and expiration alone do not change held quantities.
+6. When an order executes, the broker adapter normalizes the execution into a canonical domain Fill.
+7. The application resolves the originating order's `positionId` and `strategyId` and applies the Fill to exactly that Position.
+8. Portfolio records the fill identity together with its Position/strategy attribution. Identical replays are no-ops; conflicting facts or conflicting ownership fail closed.
+9. The shared Portfolio exposes both the independent Positions and aggregate market/asset quantities. Strategy policies read only their own Position; account-level balance and reservation logic reads the aggregate.
 
 ```text
-config/index.js
-       |
-       v
-    Bootstrap
-       |
-       v
-  Broker market stream -----> normalized prices -----> Strategy
-                                                       |
-                                                       v
-                                                  order request
-                                                       |
-                                                       v
-                                                     Broker
-                                                       |
-                                                execution / fill
-                                                       |
-                                                       v
-                                           normalized domain Fill
-                                                       |
-                                                       v
-                                      use-cases/update-portfolio.js
-                                                       |
-                                                       v
-                                                   Portfolio
-                                                       |
-                                                       v
-                                             updated Positions
+Market data -> CG policy -----> CG order (positionId + strategyId) --+
+                                                                    |
+Market data -> RS policy -----> RS order (positionId + strategyId) --+--> shared Trading Engine
+                                                                    |            |
+                                                                    +------------+
+                                                                                 v
+Broker execution -> canonical Fill + originating ownership -> Portfolio
+                                                               |        |
+                                             independent Positions      aggregate custody
+                                                               |        |
+                                                        strategy policy  account/reservations
 ```
+
+## Strategy identifiers
+
+Strategy ownership uses the immutable, named `StrategyId` registry exported from `src/domain/strategies/strategy-ids.js`. Use `StrategyId.COIN_GRABBER` and `StrategyId.RECOVERY_SELLER` rather than repeating serialized identifier strings at call sites. The underlying values (`CG_coinGrabber` and `RS_recoverySeller`) remain stable because they are persisted in Portfolio and Journal state. Adding a strategy means adding its stable identifier to this registry; it does not make the registry a runtime restriction on strategy composition.
 
 ## Core concepts
 
 ### Portfolio
 
-- Contains multiple spot positions.
-- Provides a single domain object for the bot's current position state.
-- Is updated by applying fills, not by polling or copying ticker prices.
+- Contains zero or more Positions; multiple Positions may refer to the same market.
+- Enforces unique stable Position IDs and portfolio-wide canonical fill identity.
+- Applies each canonical fill to exactly one Position selected by explicit ownership attribution.
+- Exposes aggregate base quantity for a market by summing every Position's active and retained-free quantity.
+- Remains one domain object for actual Harvester accounting; it is not a collection of private strategy wallets.
 - Must not contain broker clients, sockets, timers, filesystem access, or exchange SDK objects.
 
 ### Position
 
-A position is associated with exactly one spot market/pair (for example, `ZROUSDT`) and is shared by all strategy modes operating on that pair.
+A Position represents one independently owned accounting allocation for exactly one canonical market and one strategy owner. Its stable identity is the caller-supplied `positionId`; `strategyId` records who owns the allocation. A market may have many Positions, including several Positions owned by the same strategy.
 
-The agreed Position accounting responsibility includes:
+A Position's accounting includes:
 
-- actual net base and quote quantities, represented with exact decimal arithmetic;
-- quote capital invested and average entry cost;
-- realized profit and actual commissions;
-- base inventory reserved for open orders and the remaining available inventory.
+- active net base quantity attributable to that Position;
+- retained/free base quantity, where the owning strategy has an explicit retained-inventory rule;
+- total base quantity (active plus retained/free);
+- quote amount spent and its recovery basis;
+- cumulative quote net cash flow;
+- actual base, quote, and reliably valued third-asset commission effects.
 
-These are shared pair-level accounting facts, not separate Conservative and Aggressive copies. The active strategy must consult and respect this accounting and its reservations. Strategy-specific decision state may remain separate, but it must not contradict the shared accounting. The Trading Engine grants operational control to only one strategy for a pair at a time; the inactive strategy must not submit or manage orders for that Position.
+A Position does not independently reserve exchange balances. Active order reservations belong to the shared order/commitment workflow and are aggregated centrally across strategies. A strategy may plan only against its own Position allocation and the remaining shared exchange balance after all commitments.
 
-A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule. Conservative position quantity/spent, actual commission valuation, SELL proceeds, and recovery basis are defined only in [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+A market price is not part of held-quantity accounting. If valuation is needed (including valuing commissions), it is a separate calculation using an explicitly supplied price and a defined conversion rule. Conservative quantity/spent, actual commission valuation, SELL proceeds, and recovery basis remain defined only in [the canonical Conservative specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md). RS-specific legacy basis and custody decisions remain in the [RS specification](./recovery-seller-domain-specification.md).
 
-### Aggressive strategy inventory
+### Coin Grabber strategy modes
 
-The agreed Aggressive strategy model uses **one shared inventory pool per market**:
+Conservative and Aggressive are modes within `CG_coinGrabber`; they continue to use the same CG-owned Position for a market and retain their existing internal control/takeover semantics. This does not prevent the independent Recovery Seller strategy from owning another Position for the same market.
 
-- Filled quantities from different BUY orders contribute to the same available base-asset inventory.
+The current Aggressive model uses one shared inventory pool inside the CG-owned Position:
+
+- Filled quantities from different BUY orders contribute to the same CG active base inventory.
 - Inventory is not treated as a collection of exclusive coin lots permanently owned by individual BUY orders.
 - Multiple SELL orders may coexist, but each SELL order reserves its remaining unfilled quantity from the shared pool.
-- The sum of active SELL reservations must never exceed the available base quantity.
-- A SELL fill reduces the shared inventory by the actual executed quantity and applicable commission.
+- The sum of active CG SELL reservations must never exceed the CG Position's available active quantity and the centrally available exchange balance.
+- A SELL fill reduces the CG Position by the actual executed quantity and applicable commission.
 - A cancelled or rejected SELL releases only its unfilled reservation. Any execution received during cancellation remains a real fill and must be applied.
-- When Aggressive switches to Conservative, active SELL reservations are cancelled/reconciled and the remaining available position is consolidated into one SELL order. The transition must not count reserved or in-flight quantities twice.
+- Conservative/Aggressive control transitions remain governed by the [Conservative specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md); they do not grant RS ownership of CG inventory.
 
-This defines inventory sharing **inside Aggressive for one market**. Conservative and Aggressive do not operate that market simultaneously: the Trading Engine selects one active controller for the shared Position. Switching controllers requires the outgoing strategy to stop issuing new orders and the engine to reconcile/cancel its outstanding orders before the incoming strategy acts. Account-wide exchange free-balance allocation is shared by asset across markets. Each account snapshot captures the aggregate total Portfolio base quantity (active plus retained free) and all active BUY/SELL commitments by asset ID. The Trading Engine adjusts snapshot free balances only by post-snapshot Portfolio cash-flow, total-base and commitment deltas. Pair-specific investment and active-inventory limits remain separate constraints; this prevents one market from spending funds reserved by another without double-counting locks already represented in exchange free/locked balances. The snapshot-relative implementation and regression evidence were delivered in [PR #968](https://github.com/45s/coinzilla/pull/968); [issue #955](https://github.com/45s/coinzilla/issues/955) is closed.
+### Shared exchange custody and reservations
+
+All strategy Positions share the same underlying exchange account. For a market, aggregate tracked base quantity is the sum of each Position's `totalBaseQuantity`; account-level snapshots aggregate all Positions by canonical asset ID. A separate strategy Position must never increase the balance available for a SELL.
+
+The Trading Engine and `allocate-order-commitments` remain responsible for shared quote/base commitments. They aggregate active and in-flight BUY/SELL reservations across CG, RS, and other active strategies before accepting another intent. A regression verifies that the combined CG and RS SELL reservations exhaust the same shared market/account inventory and reject an additional overcommitting SELL because combined reservations leave only one unit of active market inventory, below the requested SELL quantity. Pair/strategy-specific investment and active-inventory limits are additional constraints, not substitutes for shared account availability.
+
+Snapshot-relative account reconciliation continues to use total Portfolio base quantity, quote cash flow, and active-order commitments by asset. It adjusts exchange free balances only by post-snapshot deltas so existing exchange locks are not subtracted twice. This behavior is covered by the account snapshot baseline implementation and [PR #968](https://github.com/45s/coinzilla/pull/968); [issue #955](https://github.com/45s/coinzilla/issues/955) is closed.
 
 ### Fill
 
-A fill is an execution fact, not an order intention. It must carry enough normalized information to account for the executed portion of an order, including:
+A Fill is an execution fact, not an order intention. It carries normalized information required to account for the executed portion of an order:
 
-- market/pair and side (BUY or SELL);
-- actual executed base quantity;
-- actual executed quote quantity (or an exact execution price and quantity from which it can be derived);
-- commission amount and commission asset, when charged;
-- stable execution identity where the broker provides one, so duplicate delivery can be handled safely.
+- canonical market and side (`BUY` or `SELL`);
+- actual executed base quantity and quote notional;
+- actual commission amount and asset, when charged;
+- stable canonical execution identity (market ID plus exchange trade ID).
 
-The broker adapter is responsible for translating exchange-specific payloads into this domain shape and validating them at the boundary.
+The application supplies the originating `positionId` and `strategyId` from the order's ownership record. When a strategy has one Position per market, `createPositionId({ marketId, strategyId })` provides its stable default identity; strategies with multiple Positions supply the explicit ID. These attribution facts are not inferred from the market symbol or the Fill's quantity. The same canonical Fill ID can belong to only one Position/strategy attribution in a Portfolio.
+
+The broker adapter translates exchange-specific payloads into the canonical Fill shape and validates them at the boundary. Strategy ownership remains an application/domain fact, not a raw Binance message field.
 
 ## Applying a fill
 
-For a spot fill, before commissions:
+For a Spot fill, before commissions:
 
 | Fill side | Base-asset delta | Quote-asset delta |
 | --- | ---: | ---: |
-| BUY | increase by executed base quantity | decrease by executed quote quantity |
-| SELL | decrease by executed base quantity | increase by executed quote quantity |
+| BUY | increase the attributed Position's base quantity | decrease the attributed Position's quote cash flow |
+| SELL | decrease the attributed Position's base quantity | increase the attributed Position's quote cash flow |
 
-Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset (for example, BNB commission on a `BTCUSDT` trade) requires a reliable quote-currency valuation. If the asset, amount, or valuation is unavailable or unreliable, fail closed atomically; never ignore the debit or invent a conversion rate. The Conservative-specific rule is defined in [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+Commission is accounted for in the asset in which it was actually charged. A base-asset commission changes that Position's net base quantity; a quote-asset commission changes its quote cash flow and cost/proceeds; a third-asset commission requires reliable quote-currency valuation. If the asset, amount, or valuation is unavailable or unreliable, fail closed atomically; never ignore the debit or invent a conversion rate. Conservative-specific rules remain in the [canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-Only the executed part is applied. A partially filled order updates the portfolio by that partial execution; a later fill applies only its own newly executed quantities. Never apply the original requested order quantity as if it had all executed.
+Only the executed part is applied. A partially filled order updates the attributed Position by that partial execution; a later fill applies only its own newly executed quantities. Never apply the original requested order quantity as if it had all executed.
 
 ## Responsibilities and boundaries
 
-- **Market-data adapter:** obtains exchange prices and normalizes market data. It does not mutate the portfolio.
-- **Broker adapter:** submits/cancels orders and translates broker execution reports into normalized fills.
-- **Order lifecycle handling:** tracks order state. An order is not a position and an accepted order is not a fill.
-- **`update-portfolio` use case:** validates the normalized fill's applicability, finds the matching position, delegates the domain update, and returns the result. It coordinates; it must not own strategy policy or exchange-specific parsing.
-- **Portfolio domain:** enforces position/accounting invariants and calculates the state transition from a fill. It remains deterministic and I/O-free.
-- **Strategy policy:** decides what to do using prices, orders, and portfolio state. It does not directly interpret raw broker messages or bypass portfolio accounting.
-- **Trading Engine:** coordinates the workflow between market data, the selected strategy policy, broker operations, and fill processing. It does not own strategy-specific trading rules.
+- **Market-data adapter:** obtains exchange prices and normalizes market data. It does not mutate Portfolio.
+- **Broker adapter:** submits/cancels orders and translates broker execution reports into canonical fills.
+- **Order lifecycle handling:** tracks order state and originating strategy/Position ownership. An order is not a Position and an accepted order is not a fill.
+- **Application accounting workflow:** resolves the order's stable Position and strategy owner, validates the canonical Fill, and applies it exactly once.
+- **Portfolio domain:** enforces Position identity, attribution, fill deduplication, and accounting invariants. It remains deterministic and I/O-free.
+- **Strategy policy:** reads its own Positions and emits intents; it does not interpret raw broker messages or bypass Portfolio accounting.
+- **Trading Engine:** serializes strategy intents, shared reservation allocation, broker operations, and accounting commits. It does not own strategy-specific economic rules.
 
-Use the repository's object-input/object-output function convention and `toResult` for use-case outcomes. Keep meaningful pure calculations in focused domain modules.
+Use object-input/object-output functions and `toResult` for use-case outcomes. Keep exact decimal calculations in focused domain modules and reuse `@coinzilla/utils` decimal primitives.
 
 ## Reliability requirements
 
 - Apply actual execution quantities and actual commission data, never estimates from order requests.
 - Handle partial fills as separate execution increments.
-- Do not apply the same execution twice. The canonical `Fill.id` (market ID plus exchange trade ID) is the process-local deduplication identity; identical replays are ignored and conflicting facts for the same identity fail closed.
-- Reject or explicitly report fills for unknown markets, invalid quantities, unsupported commission assets, and impossible position transitions. Never silently discard them.
+- Deduplicate canonical Fill IDs portfolio-wide and retain the accepted `positionId`/`strategyId` attribution. Identical replays for the same owner are ignored; changed facts or a different owner fail closed.
+- Reject unknown Position IDs, market/owner mismatches, invalid quantities, unsupported commission assets, and impossible Position transitions.
 - Use exact decimal arithmetic for all quantities and quote/commission calculations.
-- Do not mutate shared portfolio state concurrently without an explicit serialization/consistency policy.
-- Keep durable persistence and process-restart recovery separate from the in-memory domain model. The application now performs bounded reconnect-time reconciliation for orders already in its in-memory registry; this does not restore state after restart or reconcile account balances.
-
-## Implemented in-memory transition — implementation evidence only
-
-The application currently applies canonical fills through paired Portfolio/RecoveryLedger accounting. This section records architecture and code location only; it does not define Conservative accounting or completion rules.
-
-The authoritative Conservative contract, including the quantity/spent model, actual commission valuation, full-cost recovery, per-cycle `keepQuantity` retention (which accumulates in the free-inventory bucket across completed cycles), residual sell-through, dust, cancellation/reconciliation, and completion, is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+- A market-only Position lookup must fail closed when multiple Positions match; callers must specify enough identity to select exactly one. Position log summaries accept an explicit `positionId` so multiple same-market Positions owned by one strategy remain individually observable.
+- Do not mutate shared Portfolio state concurrently without an explicit serialization/consistency policy.
+- Keep durable persistence and process-restart recovery separate from the in-memory domain model. Runtime restoration remains disabled under ADR-0001 until its separate acceptance gates pass.
 
 ## Confirmed domain decisions
 
-The following decisions have been agreed:
+1. **Multiple Positions per market.** A Position is identified by stable `positionId`, canonical market, and explicit `strategyId`. CG and RS may own independent Positions for the same market. A strategy may own multiple Positions when its domain requires separate accounting units.
+2. **Independent strategy accounting, shared custody.** Strategy Positions maintain independent quantities and quote cost/cash-flow accounting. Their aggregate is the one Portfolio view of actual tracked holdings; no strategy gets a private or duplicated exchange balance.
+3. **CG mode behavior remains unchanged.** Conservative and Aggressive continue to share the CG-owned Position and their existing internal controller/takeover rules. This is separate from CG/RS coexistence.
+4. **Portfolio-wide fill identity.** One canonical Fill ID may be applied exactly once to one Position. A duplicate attributed to another owner is a conflict, not a second application.
+5. **Central reservations.** Shared quote/base commitments are aggregated across all Positions by the existing Trading Engine/order-commitment boundary. Position ownership does not bypass exchange free balances or other active reservations.
+6. **Third-asset commissions.** Conservative third-asset commissions require reliable quote-currency valuation; otherwise fail closed. See the canonical Conservative specification.
 
-1. **Position ownership — one position per trading pair.** `BTCUSDT` and `ETHUSDT` have separate positions. A Position is not account-wide per asset and is not split into separate strategy-owned positions.
-
-**Cross-strategy BUY repricing invariant:** Conservative trailing-BUY repricing eligibility is defined only in the canonical Conservative specification. The shared engine must enforce that gate against active Position quantity; retained free inventory is excluded. Any future Aggressive BUY-grid repricing requires its own approved strategy specification before becoming executable. This paragraph records the engine boundary only; it does not define Conservative behavior.
-
-2. **Cross-strategy control — exclusive, with shared accounting.** Conservative and Aggressive use the same Position and inventory for a pair, but only one strategy controls it at a time. Each pair has a planned total quote budget. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). When actual executed BUY investment exceeds that percentage of the pair's planned total quote budget, the Trading Engine automatically hands control from Aggressive to Conservative. Only executed BUY fills count: unfilled/open BUY orders and their reserved quote commitment are excluded. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; a position becoming smaller than the takeover threshold does not return control to Aggressive. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Never force a sale at a loss to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. The inactive strategy must not operate the Position.
-3. **Accounting — shared pair projection.** Portfolio is the shared source for actual pair holdings and reservations. Conservative quantity/spent and recovery cost/proceeds semantics are defined only in the canonical Conservative specification.
-4. **Third-asset commissions.** Conservative third-asset commissions require a reliable quote-currency valuation; otherwise fail closed. The canonical specification defines this rule. Do not silently ignore the debit or invent a conversion.
-
-These decisions define pair-level accounting and exclusive strategy control for each pair. They do **not** yet define how one exchange asset shared by different pairs (for example, USDT used by both `BTCUSDT` and `ZROUSDT`) is globally allocated against the exchange's actual account balance.
-
-## Decisions still required
-
-The remaining questions in this document concern shared Portfolio/Aggressive architecture only. They do not reopen or override Conservative Strategy decisions. For Conservative, see [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+RS-specific opening-inventory representation, legacy authorization, profitability, and resource-allocation decisions remain governed by the draft [RS specification](./recovery-seller-domain-specification.md); this Portfolio document does not resolve them.

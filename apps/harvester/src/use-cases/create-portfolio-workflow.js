@@ -1,6 +1,7 @@
 import { Fill } from "@coinzilla/entities"
 import { compareDecimal, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { assertTerminalRecoverySellOrder } from "../domain/orders/assert-terminal-recovery-sell-order.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
@@ -60,7 +61,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
       activeOrders: input.activeOrders,
       pairConfig: input.pairConfig,
       settings: input.settings,
-      portfolio: createPortfolioLogSummary({ portfolio, marketId }),
+      portfolio: createPortfolioLogSummary({ portfolio, marketId, strategyId: StrategyId.COIN_GRABBER }),
       recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
     })
     const decision = evaluateStrategy(input)
@@ -103,7 +104,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     const previousPortfolio = portfolio
     const currentLedger = recoveryLedgers.get(fill.market.id) ??
       RecoveryLedger.empty({ market: fill.market })
-    const previousPosition = previousPortfolio.getPosition({ marketId: fill.market.id })
+    const previousPosition = previousPortfolio.getPosition({ marketId: fill.market.id, strategyId: StrategyId.COIN_GRABBER })
     const commissionFacts = (fill.commissions ?? []).map(({ amount } = {}) => ({
       amount: amount?.amount,
       asset: amount?.asset?.code,
@@ -180,7 +181,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     if (result.ok) {
       portfolio = result.data.portfolio
       recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
-      const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
+      const nextPosition = portfolio.getPosition({ marketId: fill.market.id, strategyId: StrategyId.COIN_GRABBER })
       const nextLedger = result.data.recoveryLedger
       const portfolioStatsChanged = [
         [previousPosition?.baseQuantity.amount, nextPosition?.baseQuantity.amount],
@@ -281,7 +282,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
     completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition, sellOrder } = {}) =>
       enqueueAccountingTransition(async () => {
         const recoveryLedger = recoveryLedgers.get(marketId)
-        const position = portfolio.getPosition({ marketId })
+        const position = portfolio.getPosition({ marketId, strategyId: StrategyId.COIN_GRABBER })
         if (!recoveryLedger || !position) {
           return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
         }
@@ -318,13 +319,13 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             // Stage both immutable accounting projections before committing either reference.
             let nextPortfolio = previousPortfolio
             if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
-              nextPortfolio = nextPortfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+              nextPortfolio = nextPortfolio.allocateFreeQuantity({ marketId, strategyId: StrategyId.COIN_GRABBER, quantity: completion.freeQuantity })
             }
-            nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId })
+            nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId, strategyId: StrategyId.COIN_GRABBER })
             const resetLedger = previousLedger.resetCycle({ minProfit, spent: position.spent })
             const nextRecoveryLedgers = new Map(recoveryLedgers)
             nextRecoveryLedgers.set(marketId, resetLedger)
-            const nextPosition = nextPortfolio.getPosition({ marketId })
+            const nextPosition = nextPortfolio.getPosition({ marketId, strategyId: StrategyId.COIN_GRABBER })
 
             if (onOperationalStateRecoveryCycleCompleted) {
               const durableResult = await onOperationalStateRecoveryCycleCompleted({
@@ -350,7 +351,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
               marketId,
               symbol: recoveryLedger.market.symbol,
               completion,
-              previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
+              previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId, strategyId: StrategyId.COIN_GRABBER }) }),
               nextPosition: createPositionLogSummary({ position: nextPosition }),
               previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
               nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
