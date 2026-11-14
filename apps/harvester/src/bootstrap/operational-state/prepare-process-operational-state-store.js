@@ -1,6 +1,5 @@
-import os from "node:os"
-import path from "node:path"
 import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
+import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
 
 export class ProcessOperationalStateStartupError extends Error {
   constructor(message, code, cause) {
@@ -8,19 +7,6 @@ export class ProcessOperationalStateStartupError extends Error {
     this.name = "ProcessOperationalStateStartupError"
     this.code = code
   }
-}
-function resolveOperationalStateDirectory(env) {
-  const configured = env?.DURABLE_FACTS_DIRECTORY
-  if (configured === undefined) {
-    return path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts")
-  }
-  if (typeof configured !== "string" || !configured.trim() || configured !== configured.trim() || !path.isAbsolute(configured)) {
-    throw new ProcessOperationalStateStartupError(
-      "Invalid DURABLE_FACTS_DIRECTORY: expected a non-empty absolute local filesystem path",
-      "PROCESS_OPERATIONAL_STATE_DIRECTORY_INVALID",
-    )
-  }
-  return path.resolve(configured)
 }
 
 /** Compose the one process-owned ADR-0001 store shared by recovery and operator control. */
@@ -44,7 +30,16 @@ export async function prepareProcessOperationalStateStore({
       "PROCESS_OPERATIONAL_STATE_FACTORY_INVALID",
     )
   }
-  const directory = resolveOperationalStateDirectory(env)
+  let directory
+  try {
+    directory = resolveOperationalStateDirectory({ env })
+  } catch (cause) {
+    throw new ProcessOperationalStateStartupError(
+      "Invalid OPERATIONAL_STATE_DIRECTORY for the process-owned Operational State Store",
+      "PROCESS_OPERATIONAL_STATE_DIRECTORY_INVALID",
+      cause,
+    )
+  }
   let store
   try {
     store = await createOperationalStateStore({ directory, runtimeSessionId })
