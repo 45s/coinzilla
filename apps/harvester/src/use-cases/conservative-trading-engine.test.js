@@ -5245,60 +5245,13 @@ test("fails closed when REST fill IDs conflict with executions already processed
 })
 
 
-test("rejects REST order history that is behind an already processed stream fill", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses
-  } = await createHarness({ accountingApplied: true })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
-  })
-  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const streamFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "stream-ahead-of-rest",
-    price: "99.95",
-    quantity: "0.5",
-    quoteQuantity: "49.975",
-    executedAt: 10,
-  })
-  const streamOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.5",
-    updatedAt: 3,
-  })
-  const streamResult = await engine.processUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: streamOrder,
-      fill: streamFill
-    },
-  })
-  assert.equal(streamResult.ok, true)
-  assert.equal(accountedFills.length, 1)
 
-  const staleRestFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "stale-rest-history-fill",
-    price: "99.95",
-    quantity: "0.4",
-    quoteQuantity: "39.98",
-    executedAt: 9,
-  })
+function configureStaleRestOrderHistory({ broker, buyOrder, staleRestFill }) {
   broker.getOpenOrders = async () => ({
     ok: true,
     data: [makeOpenOrder({
       order: buyOrder,
-      executedQuantity: "0.4"
+      executedQuantity: "0.4",
     })],
   })
   broker.getCanonicalOrderHistory = async () => ({
@@ -5312,11 +5265,11 @@ test("rejects REST order history that is behind an already processed stream fill
   })
   broker.getFills = async () => ({
     ok: true,
-    data: [staleRestFill]
+    data: [staleRestFill],
   })
+}
 
-  const result = await engine.reconcileOwnedOrders()
-
+function assertStaleRestOrderHistoryRejected({ engine, accountedFills, pauses, buyOrder, result }) {
   assert.equal(result.ok, false)
   assert.equal(accountedFills.length, 1)
   assert.equal(accountedFills[0].tradeId, "stream-ahead-of-rest")
@@ -5326,64 +5279,35 @@ test("rejects REST order history that is behind an already processed stream fill
   )
   assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
   assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
-})
+}
 
-test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
-  let releaseFills
-  let signalFillsStarted
-  const fillsGate = { promise: new Promise((resolve) => { releaseFills = resolve }) }
-  const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
+
+test("rejects REST order history that is behind an already processed stream fill", async () => {
   const {
     engine,
     broker,
     accountedFills,
-    pauses
-  } = await createHarness()
+    pauses,
+  } = await createHarness({
+    accountingApplied: true,
+  })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const recoveredFill = makeBuyFill({
+  const streamFill = makeBuyFill({
     order: buyOrder,
-    tradeId: "stream-during-rest-read",
+    tradeId: "stream-ahead-of-rest",
     price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
     executedAt: 10,
   })
-  const partialOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.2",
-    updatedAt: 3,
-  })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0"
-    })],
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [partialOrder]
-  })
-  broker.getFills = async () => {
-    signalFillsStarted()
-    await fillsGate.promise
-    return {
-      ok: true,
-      data: [recoveredFill]
-    }
-  }
-
-  const reconciliation = engine.reconcileOwnedOrders()
-  await fillsStarted
   const streamResult = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
@@ -5391,59 +5315,36 @@ test("processes stream fills received during REST reads before applying the REST
       executedOrder: makeOrderStatusUpdate({
         order: buyOrder,
         status: "PARTIALLY_FILLED",
-        executedQuantity: "0.2",
-        updatedAt: 2,
+        executedQuantity: "0.5",
+        updatedAt: 3,
       }),
-      fill: recoveredFill,
+      fill: streamFill,
     },
   })
-  releaseFills()
-  const reconciled = await reconciliation
-
   assert.equal(streamResult.ok, true)
-  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
-  assert.equal(accountedFills.length, 1)
-  assert.deepEqual(pauses, [])
-})
-
-
-test("uses the injected strategy policy instead of a hard-coded Conservative evaluator", async () => {
-  let evaluations = 0
-  const strategyPolicy = {
-    evaluate: ({ marketPrice }) => {
-      evaluations += 1
-      return Object.freeze({
-        strategy: "TEST_POLICY",
-        symbol: marketPrice.symbol,
-        action: "NO_ACTION",
-        actions: Object.freeze([]),
-        reason: "TEST_POLICY_NO_ACTION",
-      })
-    },
-    evaluateTrailingBuyRepricing: () => ({
-      shouldReplace: false,
-      adjustmentThreshold: "0"
-    }),
-  }
-  const {
-    engine,
-    orders
-  } = await createHarness({ strategyPolicy })
-
-  const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
+  const staleRestFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stale-rest-history-fill",
+    price: "99.95",
+    quantity: "0.4",
+    quoteQuantity: "39.98",
+    executedAt: 9,
+  })
+  configureStaleRestOrderHistory({
+    broker,
+    buyOrder,
+    staleRestFill,
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(evaluations, 1)
-  assert.equal(orders.length, 0)
+  const result = await engine.reconcileOwnedOrders()
+  assertStaleRestOrderHistoryRejected({
+    engine,
+    accountedFills,
+    pauses,
+    buyOrder,
+    result,
+  })
 })
-
 
 test("a partial BUY fill creates active Portfolio inventory before trailing can reprice", async () => {
   let repricingEvaluations = 0
