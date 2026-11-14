@@ -39,27 +39,60 @@ Concurrent operation is a product requirement, not an optional future optimizati
 
 The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-5, but mutual exclusion is not an acceptable shortcut.
 
-## RS-1 — CG source audit and reuse map
+## RS-1 — Conservative source audit and reuse map
 
-**Deliverable:** source-verified inventory and extraction proposal. No code moves in this phase.
+<badge>Audit complete</badge>
 
-Inspect actual Conservative implementation, imports/exports, all callers, tests, configuration and canonical specification. Include policy entry points, calculations, recovery completion, quantity/fee/price helpers, order eligibility, trailing behavior, Portfolio/accounting collaborators and engine orchestration.
+**Deliverable:** source-verified inventory and extraction proposal. This audit was performed against the PR's `develop` base (`336c2dd078744b8dd2e2c3f471f04b796c2e63a2`). No source code was moved or changed.
 
-For each candidate, record:
+### Reuse existing shared domain capabilities
 
-| Field | Required evidence |
-|---|---|
-| Symbol and source path | Exact function and current location |
-| Purity | Inputs/outputs; mutation, I/O, clock, randomness or hidden state |
-| Ownership | Strategy-neutral, CG-specific, or application/exchange orchestration |
-| Consumers | All production callers and relevant tests |
-| Contract | Decimal precision, units, rounding, errors, invariants and return shape |
-| Decision | Reuse in place, extract, keep in CG, or reject |
-| Tests | Existing coverage and missing characterization/regression cases |
+These are already outside the Conservative strategy. RS should consume them rather than create copies:
 
-A function is reusable only if its business semantics are identical for CG and RS—not merely because it is pure. Keep CG-specific rules such as retained-inventory and recovery-completion policy inside CG unless RS independently requires the exact same contract. Reuse existing @coinzilla/utils, @coinzilla/entities and established Harvester modules where appropriate. Follow Shared Utilities Policy before creating cross-package helpers. Separate confirmed defects from risks and optional cleanup.
+| Capability | Existing source | Existing test evidence |
+|---|---|---|
+| Exact decimal arithmetic and comparisons | `@coinzilla/utils` | Existing Utils package tests |
+| Canonical execution identity and fill facts | `@coinzilla/entities` (`Fill`) | Existing entity tests |
+| Actual Position accounting | `src/domain/portfolio/position.js`, `position-accounting.js` | `position.test.js` |
+| Commission validation | `src/domain/fills/validate-fill-commissions.js` | Existing fill/accounting coverage; locate exact direct suite before extraction |
+| Exchange order-rule validation | `src/domain/orders/validate-order-against-trading-rules.js` | `validate-order-against-trading-rules.test.js` |
+| Shared quote/base commitment allocation | `src/domain/orders/allocate-order-commitments.js` | `allocate-order-commitments.test.js` |
+| Canonical pending order creation | `src/domain/orders/create-pending-canonical-order.js` | `create-pending-canonical-order.test.js` |
 
-**Acceptance:** complete function inventory, dependency/call graph for selected candidates, characterization-test inventory and explicit extraction boundaries. No speculative claim of reuse and no source changes in RS-1.
+These capabilities are shared infrastructure, not RS extraction tasks.
+
+### Conservative pure-function candidates
+
+| Function | Current source | RS decision | Reason / condition |
+|---|---|---|---|
+| `isActiveOrderStatus` | `src/domain/strategies/conservative/helpers.js` | Extract candidate | Generic order lifecycle predicate; verify its blocking-status contract against RS order lifecycle. |
+| `hasActiveOrder` | `src/domain/strategies/conservative/helpers.js` | Extract candidate | Market/side duplicate-order predicate; verify strategy ownership filtering before sharing. |
+| `hasActivePosition` | `src/domain/strategies/conservative/helpers.js` | Extract candidate | Pure positive-quantity predicate with no CG-specific retained-inventory rule. |
+| `calculateSellFeeRate` | `src/domain/strategies/conservative/sell-fee-rate.js` | Conditional extract | Reuse only if RS uses the same maker/taker fee-reserve semantics and order-type assumptions. |
+| `calculateInitialBuyPrice` | `src/domain/strategies/conservative/initial-buy-price.js` | Conditional extract | Reuse only if RS uses the same percentage/tick-rounding rule; do not force CG's BUY pricing into RS. |
+| `hasOutstandingRecovery` | `src/domain/strategies/conservative/helpers.js` | Conditional reuse | Its spent-versus-net-proceeds predicate may fit the RS recovery tranche, but must receive RS-tranche values only, never combined legacy basis. |
+
+Relevant existing Conservative tests located: `helpers.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. RS-2 must add/strengthen characterization tests before extracting any candidate.
+
+### Keep inside Conservative
+
+| Function / model | Current source | Why it is not shared |
+|---|---|---|
+| `evaluateConservativeStrategy` | `src/domain/strategies/conservative/strategy.js` | Complete CG policy composition and order-intent rules. |
+| `hasSellableInventory` | `src/domain/strategies/conservative/helpers.js` | Defined specifically as inventory above CG's `keepQuantity`. |
+| `calculateRecoverySellPlan` | `src/domain/strategies/conservative/recovery-sell-plan.js` | Uses CG active quantity, `keepQuantity`, pooled recovery cost/proceeds and CG fee-reserve assumptions. |
+| `evaluateRecoveryCompletion` | `src/domain/strategies/conservative/recovery-completion.js` | Owns CG's full-fill, minimum-profit, retained-inventory and constrained-dust completion semantics. |
+| `RecoveryLedger` | `src/domain/strategies/conservative/recovery-ledger.js` | Stores CG-specific recovery-cycle accounting. RS needs separate attribution and legacy basis semantics. |
+
+Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `recovery-completion.test.js`, and `recovery-completion.dust.test.js`. Preserve these as CG regression coverage; do not rewrite their meaning to fit RS.
+
+### Application workflow boundary — do not copy
+
+- `updateTradingAccounting()` in `src/use-cases/update-trading-accounting.js` commits Portfolio and the Conservative `RecoveryLedger` together. It is not a strategy-neutral accounting function.
+- `createPortfolioWorkflow()` in `src/use-cases/create-portfolio-workflow.js` owns serialized fill processing and Conservative recovery-cycle completion/free-inventory behavior. RS should integrate through an explicit application workflow that coordinates shared Portfolio and RS attribution; do not fork or bypass the shared Portfolio.
+- The current Portfolio is one actual Position per market. RS attribution must remain a separate projection and must commit consistently with the single Portfolio fill application.
+
+**RS-1 acceptance:** source paths and public exports are identified; existing shared capabilities are separated from extraction candidates; CG-specific behavior is explicitly retained; relevant tests are located; no speculative shared abstraction is approved. RS-1 is complete as an audit only. RS-2 is the first code-changing phase.
 
 ## RS-2 — Shared pure-function extraction
 
