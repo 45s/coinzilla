@@ -838,6 +838,87 @@ function createOwnedOrderManagementHandlers({
   }
 }
 
+function createOperatorMarketSnapshotsGetter({
+  state,
+  pairs,
+  runTransition,
+  getCurrentMarketMetadata,
+  isMarketPriceFresh,
+  hasBlockingOpenOrdersForSymbol,
+  isVolatilityProtectionEnabledForSymbol,
+} = {}) {
+  return () => runTransition({
+    task: async () => {
+      const markets = Object.entries(pairs).map(([symbol, pairConfig]) => {
+        const metadata = getCurrentMarketMetadata({ symbol })
+        const marketPrice = state.prices.get(symbol)
+        const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
+        const operatorPaused = state.operatorPausedMarkets.has(symbol)
+        const safetyPaused = state.durablePausedMarkets.has(symbol) ||
+          (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
+        const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
+        const replacementPending = state.replacementIntents.has(symbol)
+        const trailingBuyRepricePending = state.trailingBuyRepriceIntents.has(symbol)
+        const openOrderBlockerActive = pairConfig.enabled === true && hasBlockingOpenOrdersForSymbol({ symbol })
+        const volatilityState = isVolatilityProtectionEnabledForSymbol(symbol)
+          ? state.volatilityProtection.get(symbol)
+          : undefined
+        const blockers = []
+        if (pairConfig.enabled !== true) {
+          blockers.push("MARKET_DISABLED")
+        } else {
+          if (!metadata?.market) {blockers.push("MARKET_METADATA_UNAVAILABLE")}
+          if (!marketPrice) {
+            blockers.push("MARKET_PRICE_UNAVAILABLE")
+          } else if (!priceFresh) {
+            blockers.push("MARKET_PRICE_STALE")
+          }
+          if (safetyPaused) {blockers.push("STRATEGY_SAFETY_PAUSED")}
+          if (operatorPaused) {blockers.push("OPERATOR_PAUSED")}
+          if (recoveryManagedPaused) {blockers.push("RECOVERY_MANAGED_PAUSED")}
+          if (replacementPending) {blockers.push("ORDER_REPLACEMENT_PENDING")}
+          if (trailingBuyRepricePending) {blockers.push("TRAILING_BUY_REPRICE_PENDING")}
+          if (volatilityState && volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
+            blockers.push("VOLATILITY_PROTECTION_ACTIVE")
+          }
+          if (openOrderBlockerActive) {blockers.push("OPEN_ORDER_OWNERSHIP_BLOCKER")}
+        }
+        const market = metadata?.market
+        const volatilityProtection = volatilityState
+          ? Object.freeze({
+              mode: volatilityState.mode,
+              reason: volatilityState.reason,
+              stableCandleCount: volatilityState.stableCandleCount,
+              volatilityRatio: volatilityState.volatilityRatio,
+              natr: volatilityState.natr,
+              referenceNatr: volatilityState.referenceNatr,
+              atr: volatilityState.atr,
+            })
+          : null
+        return Object.freeze({
+          symbol,
+          enabled: pairConfig.enabled === true,
+          baseAsset: market?.baseAsset?.code ?? null,
+          quoteAsset: market?.quoteAsset?.code ?? null,
+          marketMetadataReady: Boolean(market),
+          latestPrice: marketPrice?.price ?? null,
+          priceTimestamp: marketPrice?.timestamp ?? null,
+          priceFresh,
+          operatorPaused,
+          safetyPaused,
+          recoveryManagedPaused,
+          replacementPending,
+          trailingBuyRepricePending,
+          openOrderBlockerActive,
+          volatilityProtection,
+          blockers: Object.freeze(blockers),
+        })
+      })
+      return toResult({ data: Object.freeze({ markets: Object.freeze(markets) }) })
+    },
+  })
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -1281,77 +1362,14 @@ export function makeConservativeTradingEngine({
     },
   })
 
-  const getOperatorMarketSnapshots = () => runTransition({
-    task: async () => {
-      const markets = Object.entries(pairs).map(([symbol, pairConfig]) => {
-        const metadata = getCurrentMarketMetadata({ symbol })
-        const marketPrice = state.prices.get(symbol)
-        const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
-        const operatorPaused = state.operatorPausedMarkets.has(symbol)
-        const safetyPaused = state.durablePausedMarkets.has(symbol) ||
-          (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
-        const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
-        const replacementPending = state.replacementIntents.has(symbol)
-        const trailingBuyRepricePending = state.trailingBuyRepriceIntents.has(symbol)
-        const openOrderBlockerActive = pairConfig.enabled === true && hasBlockingOpenOrdersForSymbol({ symbol })
-        const volatilityState = isVolatilityProtectionEnabledForSymbol(symbol)
-          ? state.volatilityProtection.get(symbol)
-          : undefined
-        const blockers = []
-
-        if (pairConfig.enabled !== true) {
-          blockers.push("MARKET_DISABLED")
-        } else {
-          if (!metadata?.market) {blockers.push("MARKET_METADATA_UNAVAILABLE")}
-          if (!marketPrice) {
-            blockers.push("MARKET_PRICE_UNAVAILABLE")
-          } else if (!priceFresh) {
-            blockers.push("MARKET_PRICE_STALE")
-          }
-          if (safetyPaused) {blockers.push("STRATEGY_SAFETY_PAUSED")}
-          if (operatorPaused) {blockers.push("OPERATOR_PAUSED")}
-          if (recoveryManagedPaused) {blockers.push("RECOVERY_MANAGED_PAUSED")}
-          if (replacementPending) {blockers.push("ORDER_REPLACEMENT_PENDING")}
-          if (trailingBuyRepricePending) {blockers.push("TRAILING_BUY_REPRICE_PENDING")}
-          if (volatilityState && volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
-            blockers.push("VOLATILITY_PROTECTION_ACTIVE")
-          }
-          if (openOrderBlockerActive) {blockers.push("OPEN_ORDER_OWNERSHIP_BLOCKER")}
-        }
-
-        const market = metadata?.market
-        const volatilityProtection = volatilityState
-          ? Object.freeze({
-              mode: volatilityState.mode,
-              reason: volatilityState.reason,
-              stableCandleCount: volatilityState.stableCandleCount,
-              volatilityRatio: volatilityState.volatilityRatio,
-              natr: volatilityState.natr,
-              referenceNatr: volatilityState.referenceNatr,
-              atr: volatilityState.atr,
-            })
-          : null
-        return Object.freeze({
-          symbol,
-          enabled: pairConfig.enabled === true,
-          baseAsset: market?.baseAsset?.code ?? null,
-          quoteAsset: market?.quoteAsset?.code ?? null,
-          marketMetadataReady: Boolean(market),
-          latestPrice: marketPrice?.price ?? null,
-          priceTimestamp: marketPrice?.timestamp ?? null,
-          priceFresh,
-          operatorPaused,
-          safetyPaused,
-          recoveryManagedPaused,
-          replacementPending,
-          trailingBuyRepricePending,
-          openOrderBlockerActive,
-          volatilityProtection,
-          blockers: Object.freeze(blockers),
-        })
-      })
-      return toResult({ data: Object.freeze({ markets: Object.freeze(markets) }) })
-    },
+  const getOperatorMarketSnapshots = createOperatorMarketSnapshotsGetter({
+    state,
+    pairs,
+    runTransition,
+    getCurrentMarketMetadata,
+    isMarketPriceFresh,
+    hasBlockingOpenOrdersForSymbol,
+    isVolatilityProtectionEnabledForSymbol,
   })
 
   return Object.freeze({
