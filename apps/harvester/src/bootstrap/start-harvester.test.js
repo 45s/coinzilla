@@ -4352,63 +4352,79 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   await runtime.stop()
 })
 
-test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const market = createMarketMetadata("BTCUSDT").market
+
+function createShutdownBuyCancellationGates() {
   let resolveCancelStarted
   let releaseCancel
   let resolveUserDataObserved
-  const cancelStarted = new Promise((resolve) => { resolveCancelStarted = resolve })
-  const cancelGate = new Promise((resolve) => { releaseCancel = resolve })
-  const userDataObserved = new Promise((resolve) => { resolveUserDataObserved = resolve })
-  const observedEvents = []
+  return {
+    cancelStarted: new Promise((resolve) => {
+      resolveCancelStarted = resolve
+    }),
+    cancelGate: new Promise((resolve) => {
+      releaseCancel = resolve
+    }),
+    userDataObserved: new Promise((resolve) => {
+      resolveUserDataObserved = resolve
+    }),
+    signalCancelStarted: () => resolveCancelStarted(),
+    releaseCancel: () => releaseCancel(),
+    signalUserDataObserved: () => resolveUserDataObserved(),
+  }
+}
+
+function createShutdownBuyCancellationBroker({ calls, gates }) {
+  const broker = createBroker(calls)
+  const market = createMarketMetadata("BTCUSDT").market
   let submittedOrder
   let canceledOrder
   broker.getOpenOrders = async () => ({
     ok: true,
     data: submittedOrder && !canceledOrder
-      ? [createOpenOrderSnapshot({ order: submittedOrder })]
+      ? [createOpenOrderSnapshot({
+        order: submittedOrder,
+      })]
       : [],
   })
   broker.getCanonicalOrderHistory = async ({ orderId }) => ({
     ok: true,
-    data: [canceledOrder ?? submittedOrder].filter((order) => order?.brokerOrderId === orderId),
+    data: [canceledOrder ?? submittedOrder].filter((order) =>
+      order?.brokerOrderId === orderId),
   })
   broker.placeOrder = async ({ order }) => {
     calls.push("placeOrder:" + order.side)
     submittedOrder = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: "broker-" + order.clientOrderId,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({
-          amount: order.price,
-          asset: market.quoteAsset
-        }),
-        originalQuantity: new Quantity({
-          amount: order.quantity,
-          asset: market.baseAsset
-        }),
-        executedQuantity: new Quantity({
-          amount: "0",
-          asset: market.baseAsset
-        }),
-        status: "OPEN",
-        createdAt: 1,
-        acknowledgedAt: 1,
-        updatedAt: 1,
-      })
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: "broker-" + order.clientOrderId,
+      market,
+      side: order.side,
+      type: order.type,
+      limitPrice: new Money({
+        amount: order.price,
+        asset: market.quoteAsset,
+      }),
+      originalQuantity: new Quantity({
+        amount: order.quantity,
+        asset: market.baseAsset,
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: market.baseAsset,
+      }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    })
     return {
       ok: true,
-      data: submittedOrder
+      data: submittedOrder,
     }
   }
   broker.cancelOrder = async ({ order }) => {
     calls.push("cancelOrder:" + order.side)
-    resolveCancelStarted()
-    await cancelGate
+    gates.signalCancelStarted()
+    await gates.cancelGate
     canceledOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
       brokerOrderId: order.brokerOrderId,
@@ -4426,12 +4442,15 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     })
     return {
       ok: true,
-      data: canceledOrder
+      data: canceledOrder,
     }
   }
-
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
-  const config = {
+  return broker
+}
+
+function createShutdownBuyCancellationConfig() {
+  return {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
@@ -4447,8 +4466,11 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
       },
     },
   }
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
+}
+
+async function startShutdownBuyCancellationRuntime({ broker, observedEvents, gates }) {
+  return startHarvesterForTest({
+    loadConfig: async () => createShutdownBuyCancellationConfig(),
     env: {
       ...binanceEnv,
       NODE_ENV: "development",
@@ -4457,15 +4479,37 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     now: () => 1000,
     onUserDataEvent: async ({ event }) => {
       observedEvents.push(event)
-      resolveUserDataObserved()
+      gates.signalUserDataObserved()
     },
     logger: {
       info() {},
       debug() {},
-      error() {}
+      error() {},
     },
   })
+}
 
+function assertUserDataRemainsActiveDuringShutdown({ calls, observedEvents }) {
+  assert.equal(observedEvents.length, 1, "the user-data event delivered during the broker cancellation window must reach the application handler")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain subscribed until cancellation and fill reconciliation have completed")
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"))
+  assert.equal(calls.includes("cancelOrder:SELL"), false, "graceful shutdown must never cancel a strategy-owned SELL recovery order")
+}
+
+
+test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
+  const calls = []
+  const gates = createShutdownBuyCancellationGates()
+  const broker = createShutdownBuyCancellationBroker({
+    calls,
+    gates,
+  })
+  const observedEvents = []
+  const runtime = await startShutdownBuyCancellationRuntime({
+    broker,
+    observedEvents,
+    gates,
+  })
   await broker.emitBookTicker("BTCUSDT", {
     symbol: "BTCUSDT",
     bestBidPrice: "64900",
@@ -4479,26 +4523,27 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     price: "65000",
     timestamp: 1000,
   })
-  assert.ok(calls.includes("placeOrder:BUY"), "the fixture must create an acknowledged strategy-owned BUY before graceful shutdown begins")
+  assert.ok(calls.includes("placeOrder:BUY"))
 
   const stopPromise = runtime.stop()
   let testError
   try {
-    await waitForTestSignal(cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
-    broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
-    await waitForTestSignal(userDataObserved, "user-data event during shutdown", () => ({
+    await waitForTestSignal(gates.cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
+    broker.emitUserDataEvent({
+      eventType: "outboundAccountPosition",
+    })
+    await waitForTestSignal(gates.userDataObserved, "user-data event during shutdown", () => ({
       observedEvents: observedEvents.length,
       calls,
     }))
-
-    assert.equal(observedEvents.length, 1, "the user-data event delivered during the broker cancellation window must reach the application handler")
-    assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain subscribed until cancellation and fill reconciliation have completed")
-    assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"), "market-price intake must stop before the shutdown BUY cancellation request is sent")
-    assert.equal(calls.includes("cancelOrder:SELL"), false, "graceful shutdown must never cancel a strategy-owned SELL recovery order")
+    assertUserDataRemainsActiveDuringShutdown({
+      calls,
+      observedEvents,
+    })
   } catch (error) {
     testError = error
   } finally {
-    releaseCancel()
+    gates.releaseCancel()
   }
 
   let stopError
@@ -4507,13 +4552,15 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   } catch (error) {
     stopError = error
   }
-  if (testError) {throw testError}
-  if (stopError) {throw stopError}
-
-  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"), "the BUY cancellation request must complete before user-data intake is disconnected")
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "user-data intake must be disconnected only after cancellation reconciliation and before broker disconnect")
+  if (testError) {
+    throw testError
+  }
+  if (stopError) {
+    throw stopError
+  }
+  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
 })
-
 
 test("cancels acknowledged Harvester BUY orders across markets after an unowned external execution closes the global accounting gate", async () => {
   const calls = []
