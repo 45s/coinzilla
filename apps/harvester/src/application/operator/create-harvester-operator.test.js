@@ -84,7 +84,7 @@ test("pause rejects an actor without the trading-operator role before touching t
 
   assert.equal(result.ok, false)
   assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED")
-  assert.deepEqual(calls, [], "Unauthorized requests must not reach the engine or durable-fact port.")
+  assert.deepEqual(calls, [], "Unauthorized requests must not reach the engine or Operational State Store port.")
 })
 
 test("pause rejects a missing or oversized idempotency request ID before touching the engine", async () => {
@@ -103,7 +103,7 @@ test("pause rejects a missing or oversized idempotency request ID before touchin
   assert.equal(calls.length, 0)
 })
 
-test("pause propagates a failed durable-fact commit without applying the operator state", async () => {
+test("pause propagates a failed Operational State Store commit without applying the operator state", async () => {
   const { calls, operationalStateStore, engine } = createHarness({
     appendResult: { ok: false, errors: [new Error("durable commit failed")] },
   })
