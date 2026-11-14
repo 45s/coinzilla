@@ -273,6 +273,169 @@ async function reconcileFilledAcknowledgementTransition({ order, broker, pause, 
   })
 }
 
+
+async function persistCancellationIntent({ callback, order, reason }) {
+  if (!callback) {
+    return undefined
+  }
+  let intentResult
+  try {
+    intentResult = await callback({
+      order,
+      reason,
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      cancellationOutcome: "NOT_SENT",
+      errors: [error],
+    }
+  }
+  if (intentResult?.ok !== true || intentResult.data?.durable !== true) {
+    return {
+      ok: false,
+      cancellationOutcome: "NOT_SENT",
+      errors: intentResult?.errors?.length
+        ? intentResult.errors
+        : [new Error("Durable order-cancellation intent was not acknowledged")],
+    }
+  }
+  return undefined
+}
+
+async function persistCancellationOutcome({ callback, order, canceledOrder, reason, outcome }) {
+  if (!callback) {
+    return undefined
+  }
+  try {
+    const result = await callback({
+      order,
+      canceledOrder,
+      reason,
+      outcome,
+    })
+    if (result?.ok === true && result.data?.durable === true) {
+      return undefined
+    }
+    return {
+      ok: false,
+      cancellationOutcome: "OUTCOME_UNKNOWN",
+      errors: result?.errors?.length
+        ? result.errors
+        : [new Error("Durable cancellation outcome was not acknowledged")],
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      cancellationOutcome: "OUTCOME_UNKNOWN",
+      errors: [error],
+    }
+  }
+}
+
+function classifyCancellationResponse({ cancelResult, order }) {
+  let outcome
+  let canceledOrder
+  if (cancelResult?.ok === true && cancelResult.data instanceof CanonicalOrder) {
+    canceledOrder = cancelResult.data
+    const identityMatches = canceledOrder.clientOrderId === order.clientOrderId &&
+      canceledOrder.brokerOrderId === order.brokerOrderId &&
+      canceledOrder.market.id === order.market.id &&
+      canceledOrder.side === order.side
+    if (!identityMatches) {
+      outcome = "UNKNOWN"
+      canceledOrder = undefined
+    } else if (["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(canceledOrder.status)) {
+      outcome = canceledOrder.status
+    } else if (["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
+      outcome = "NOT_CANCELED"
+    } else {
+      outcome = "UNCONFIRMED"
+      canceledOrder = undefined
+    }
+  } else if (cancelResult?.cancellationOutcome === "NOT_SENT") {
+    outcome = "NOT_SENT"
+  } else if (cancelResult?.cancellationOutcome === "OUTCOME_UNKNOWN") {
+    outcome = "OUTCOME_UNKNOWN"
+  } else {
+    outcome = "UNCONFIRMED"
+  }
+  return {
+    outcome,
+    canceledOrder,
+  }
+}
+
+async function handleCancellationRpcException({ error, callback, order, reason }) {
+  const recorded = await persistCancellationOutcome({
+    callback,
+    order,
+    reason,
+    outcome: "OUTCOME_UNKNOWN",
+  })
+  return recorded ?? {
+    ok: false,
+    cancellationOutcome: "OUTCOME_UNKNOWN",
+    errors: [error],
+  }
+}
+
+async function cancelOrderWithOperationalStateTransition({ dependencies, order, reason }) {
+  const {
+    broker,
+    onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome,
+  } = dependencies
+  const intentFailure = await persistCancellationIntent({
+    callback: onOperationalStateCancellationIntent,
+    order,
+    reason,
+  })
+  if (intentFailure) {
+    return intentFailure
+  }
+
+  let cancelResult
+  try {
+    cancelResult = await broker.cancelOrder({
+      order,
+    })
+  } catch (error) {
+    return handleCancellationRpcException({
+      error,
+      callback: onOperationalStateCancellationOutcome,
+      order,
+      reason,
+    })
+  }
+  if (!onOperationalStateCancellationOutcome) {
+    return cancelResult
+  }
+
+  const classification = classifyCancellationResponse({
+    cancelResult,
+    order,
+  })
+  const outcomeFailure = await persistCancellationOutcome({
+    callback: onOperationalStateCancellationOutcome,
+    order,
+    canceledOrder: classification.canceledOrder,
+    reason,
+    outcome: classification.outcome,
+  })
+  if (outcomeFailure) {
+    return outcomeFailure
+  }
+  if (["UNKNOWN", "UNCONFIRMED"].includes(classification.outcome)) {
+    return {
+      ok: false,
+      cancellationOutcome: "OUTCOME_UNKNOWN",
+      errors: [new Error("Broker cancellation response did not confirm the owned order identity and terminal state")],
+    }
+  }
+  return cancelResult
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -815,123 +978,14 @@ export function makeConservativeTradingEngine({
     return result
   }
 
-  const cancelOrderWithOperationalState = async ({
-    order,
-    reason
-  } = {}) => {
-    if (onOperationalStateCancellationIntent) {
-      let intentResult
-      try {
-        intentResult = await onOperationalStateCancellationIntent({
-          order,
-          reason
-        })
-      } catch (error) {
-        return {
-          ok: false,
-          cancellationOutcome: "NOT_SENT",
-          errors: [error]
-        }
-      }
-      if (intentResult?.ok !== true || intentResult.data?.durable !== true) {
-        return {
-          ok: false,
-          cancellationOutcome: "NOT_SENT",
-          errors: intentResult?.errors?.length ? intentResult.errors : [new Error("Durable order-cancellation intent was not acknowledged")],
-        }
-      }
-    }
-    let cancelResult
-    try {
-      cancelResult = await broker.cancelOrder({ order })
-    } catch (error) {
-      if (onOperationalStateCancellationOutcome) {
-        let outcomeResult
-        try {
-          outcomeResult = await onOperationalStateCancellationOutcome({
-            order,
-            reason,
-            outcome: "OUTCOME_UNKNOWN"
-          })
-        } catch (outcomeError) {
-          return {
-            ok: false,
-            cancellationOutcome: "OUTCOME_UNKNOWN",
-            errors: [outcomeError]
-          }
-        }
-        if (outcomeResult?.ok !== true || outcomeResult.data?.durable !== true) {
-          return {
-            ok: false,
-            cancellationOutcome: "OUTCOME_UNKNOWN",
-            errors: outcomeResult?.errors?.length ? outcomeResult.errors : [new Error("Durable cancellation outcome was not acknowledged")],
-          }
-        }
-      }
-      return {
-        ok: false,
-        cancellationOutcome: "OUTCOME_UNKNOWN",
-        errors: [error]
-      }
-    }
-    if (!onOperationalStateCancellationOutcome) {return cancelResult}
-    let outcome
-    let canceledOrder
-    if (cancelResult?.ok === true && cancelResult.data instanceof CanonicalOrder) {
-      canceledOrder = cancelResult.data
-      const identityMatches = canceledOrder.clientOrderId === order.clientOrderId &&
-        canceledOrder.brokerOrderId === order.brokerOrderId &&
-        canceledOrder.market.id === order.market.id &&
-        canceledOrder.side === order.side
-      if (!identityMatches) {
-        outcome = "UNKNOWN"
-        canceledOrder = undefined
-      } else if (["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(canceledOrder.status)) {
-        outcome = canceledOrder.status
-      } else if (["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
-        outcome = "NOT_CANCELED"
-      } else {
-        outcome = "UNCONFIRMED"
-        canceledOrder = undefined
-      }
-    } else if (cancelResult?.cancellationOutcome === "NOT_SENT") {
-      outcome = "NOT_SENT"
-    } else if (cancelResult?.cancellationOutcome === "OUTCOME_UNKNOWN") {
-      outcome = "OUTCOME_UNKNOWN"
-    } else {
-      outcome = "UNCONFIRMED"
-    }
-    let outcomeResult
-    try {
-      outcomeResult = await onOperationalStateCancellationOutcome({
-        order,
-        canceledOrder,
-        reason,
-        outcome
-      })
-    } catch (error) {
-      return {
-        ok: false,
-        cancellationOutcome: "OUTCOME_UNKNOWN",
-        errors: [error]
-      }
-    }
-    if (outcomeResult?.ok !== true || outcomeResult.data?.durable !== true) {
-      return {
-        ok: false,
-        cancellationOutcome: "OUTCOME_UNKNOWN",
-        errors: outcomeResult?.errors?.length ? outcomeResult.errors : [new Error("Durable order-cancellation outcome was not acknowledged")],
-      }
-    }
-    if (outcome === "UNKNOWN" || outcome === "UNCONFIRMED") {
-      return {
-        ok: false,
-        cancellationOutcome: "OUTCOME_UNKNOWN",
-        errors: [new Error("Broker cancellation response did not confirm the owned order identity and terminal state")],
-      }
-    }
-    return cancelResult
-  }
+  const cancelOrderWithOperationalState = (options = {}) => cancelOrderWithOperationalStateTransition({
+    dependencies: {
+      broker,
+      onOperationalStateCancellationIntent,
+      onOperationalStateCancellationOutcome,
+    },
+    ...options,
+  })
 
   let shutdownRecoverySubmissionAllowed = false
   const submit = makeExecuteStrategyDecision({
