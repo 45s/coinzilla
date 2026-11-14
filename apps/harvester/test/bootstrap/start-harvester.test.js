@@ -431,7 +431,7 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     connect: async () => {},
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
-      const market = metadataBySymbol.get(order.symbol).market
+      const { market } = metadataBySymbol.get(order.symbol)
       submittedSymbols.push(order.symbol)
       const submitted = new CanonicalOrder({
         clientOrderId: order.clientOrderId,

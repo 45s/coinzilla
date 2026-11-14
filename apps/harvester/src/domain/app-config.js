@@ -102,7 +102,7 @@ function validateTelegramOperatorControlConfig(appConfig) {
   }
 }
 
-/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
+/** Validate CG coin-grabber strategy settings. */
 function validateStrategySettings(strategy) {
   requireRecord(strategy.settings, "strategies.CG_coinGrabber.settings")
   const settingsPath = "strategies.CG_coinGrabber.settings"
@@ -154,6 +154,7 @@ function validateStrategyPairs(strategy) {
     requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0, max: 100, exclusiveMax: true })
   }
 }
+/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 export function validateAppConfig(config) {
   requireRecord(config, "root")
 
