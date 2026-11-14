@@ -75,7 +75,7 @@ The Operational State Store currently supports append-only operational record pr
 
 ## Configuration
 
-Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Strategy-level switches remain in `config/strategies/cg-coin-grabber.js`. All market definitions live in one separate JavaScript module: `apps/harvester/cg-coin-grabber.js`, exported as the flat `tradingPairs` map. A symbol is defined once; do not duplicate markets in source modules or maintain separate TESTNET/LIVE maps.
+Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Strategy-level switches remain in `config/strategies/cg-coin-grabber.js`. All strategy pair definitions live in one separate JavaScript module: `apps/harvester/cg-coin-grabber.js`, exported as the flat `tradingPairs` map. A symbol is defined once; do not duplicate markets in source modules or maintain separate TESTNET/LIVE maps.
 
 Each pair must explicitly use `TRADING_ENVIRONMENTS.TESTNET`, `.LIVE`, or `.BOTH` from `src/domain/trading-environment.js`. `TRADING_MODE=testnet` includes TESTNET and BOTH; `TRADING_MODE=live` includes LIVE and BOTH. The serialized values remain `"testnet"`, `"live"`, and `"both"`. Non-matching pairs are excluded, and `tradingEnvironment` is removed from the effective runtime pair config. There is no default or fallback. If no pair matches (or no matching pair is enabled), startup fails before broker connection. The pair's `enabled` flag remains independent of its environment.
 
