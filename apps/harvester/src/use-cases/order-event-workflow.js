@@ -139,7 +139,7 @@ export function makeOrderEventWorkflow({
     event,
     recoveryMode = false,
     terminalFillsReconciled = false,
-  } = {}) => {
+  } = {}) => { // eslint-disable-line complexity -- serialized event transition preserves fill and order-state invariants.
     try {
       if (event?.eventType === "executionReport" && event?.brokerEvidence) {
         publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT, dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence }) })
