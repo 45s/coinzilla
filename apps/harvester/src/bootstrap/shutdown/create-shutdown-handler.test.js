@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createShutdownHandler } from "./create-shutdown-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-shutdown-handler.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[create-shutdown-handler.test.js] ${name}`, ...args)
 
 const createState = (overrides = {}) => ({
   stopped: false,
@@ -43,7 +43,7 @@ const createShutdown = ({ state = createState(), tradingEnabled = false, engine,
     brokerName: "binance",
     eventPublisher: {},
     publishAccountSnapshot: async (input) => {
-      calls.push("account-audit:" + input.phase)
+      calls.push(`account-audit:${input.phase}`)
       if (publishAccountSnapshot) await publishAccountSnapshot(input, calls)
     },
     stopMarketIntake: async () => {
@@ -82,7 +82,7 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     subscriptions: [{ unsubscribe: async () => calls.push("price-unsubscribe") }],
     bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
     userDataSubscription: { disconnect: async () => calls.push("user-data-disconnect") },
-    publishAccountSnapshot: async (input) => calls.push("audit-status:" + input.auditStatus),
+    publishAccountSnapshot: async (input) => calls.push(`audit-status:${input.auditStatus}`),
     disconnectBroker: async () => [],
     stopMarketIntake: async () => [],
     stopUserDataIntake: async (_timeline, subscription) => {
@@ -112,7 +112,7 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     "broker-disconnect",
   ]
   for (let index = 0; index < order.length; index += 1) {
-    assert.equal(stop.calls[index], order[index], "Shutdown step " + (index + 1) + " must preserve the safety-critical ordering.")
+    assert.equal(stop.calls[index], order[index], `Shutdown step ${index + 1} must preserve the safety-critical ordering.`)
   }
   assert.equal(state.stopped, true, "The shutdown state must be terminal once shutdown begins.")
   assert.equal(state.status, "STOPPED", "Successful shutdown must finish in the STOPPED state.")
@@ -137,7 +137,7 @@ test("drains BUY fills arriving during initial reconciliation, BUY cancellation,
   const engine = {
     reconcileOwnedOrders: async () => {
       reconciliationCount += 1
-      calls.push("reconcile:" + reconciliationCount)
+      calls.push(`reconcile:${reconciliationCount}`)
       if (reconciliationCount === 1) {
         signalInitialReconciliation()
         await initialReconciliationGate
@@ -399,9 +399,11 @@ test("reconciles shutdown recovery SELLs and refuses CLOSING COMPLETE when final
     "A final recovery SELL coverage failure must make shutdown incomplete.",
   )
 
-  const reconcileIndexes = calls.map((value, index) => value === "reconcile" ? index : -1).filter((index) => index >= 0)
-  assert.ok(calls.indexOf("reconcile-recovery-sells") > reconcileIndexes[1], "Recovery SELL repair must run only after final owned-order reconciliation.")
-  assert.ok(calls.indexOf("reconcile-recovery-sells") < reconcileIndexes[2], "Replacement SELLs must be verified by a post-replan reconciliation.")
+  const firstReconcileIndex = calls.indexOf("reconcile")
+  const secondReconcileIndex = calls.indexOf("reconcile", firstReconcileIndex + 1)
+  const thirdReconcileIndex = calls.indexOf("reconcile", secondReconcileIndex + 1)
+  assert.ok(calls.indexOf("reconcile-recovery-sells") > secondReconcileIndex, "Recovery SELL repair must run only after final owned-order reconciliation.")
+  assert.ok(calls.indexOf("reconcile-recovery-sells") < thirdReconcileIndex, "Replacement SELLs must be verified by a post-replan reconciliation.")
   assert.ok(calls.indexOf("audit-recovery-sell-coverage") > calls.indexOf("reconcile-recovery-sells"), "The final recovery SELL audit must follow the repair attempt.")
   assert.equal(closingAudit.auditStatus, "INCOMPLETE", "CLOSING must not report COMPLETE with an undersized recovery SELL.")
   assert.ok(closingAudit.auditReasons.includes("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE"))
@@ -449,7 +451,7 @@ test("emits deterministic monotonic timings for shutdown phases and failures", a
     "RUNTIME_SHUTDOWN_COMPLETED",
   ]
   for (const phase of required) {
-    assert.ok(phases.some((entry) => entry.shutdownPhase === phase), "Missing structured shutdown phase " + phase)
+    assert.ok(phases.some((entry) => entry.shutdownPhase === phase), `Missing structured shutdown phase ${phase}`)
   }
   const completed = phases.filter((entry) => entry.phaseStatus === "COMPLETED")
   assert.ok(completed.length > 0, "Completed phases must emit timing records.")
