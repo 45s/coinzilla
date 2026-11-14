@@ -59,13 +59,15 @@ const appConfig = {
       settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
         BTCUSDT: {
-          enabled: true, enableVolatilityProtection: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
+          enabled: true,
+          tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
           minProfit: 0.01,
           priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
           makerPercent: 0, takerPercent: 0,
         },
         ETHUSDT: {
-          enabled: false, enableVolatilityProtection: true, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
+          enabled: false,
+          tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
           minProfit: 0.01,
           priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
           makerPercent: 0, takerPercent: 0,
