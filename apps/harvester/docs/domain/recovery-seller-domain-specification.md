@@ -23,7 +23,7 @@ Recovery Seller is an independent strategy intended to reduce an explicitly auth
 - **Recovery inventory:** net base quantity acquired by BUY fills attributed to the current RS cycle.
 - **Legacy inventory:** pre-existing base quantity explicitly authorized for RS liquidation before that cycle. It is not created by that cycle's BUY fills.
 - **Cycle SELL:** SELL execution(s) intended to dispose of recovery inventory and an additional legacy quantity, subject to the final approved quantity and profitability rules.
-- **sellQuantity:** proposed per-pair base-asset amount of legacy inventory included in addition to newly acquired recovery quantity. It is not the total SELL quantity and is not CG's retained keepQuantity.
+- **sellQuantity:** configured per-pair base-asset quantity of legacy inventory added to the recovery tranche in each cycle SELL. It is an additive legacy slice, not the total SELL quantity, not a maximum cap, and not CG's retained `keepQuantity`. The conceptual SELL target is the cycle's actual net recovery quantity plus `sellQuantity`.
 
 Illustrative examples only; these are not approved trading defaults:
 
@@ -172,15 +172,16 @@ RS must fail closed when a required risk limit is absent, invalid, exceeded, or 
 
 ## 8. sellQuantity, residuals, and exchange constraints
 
-The exact sellQuantity contract remains unresolved.
+**Agreed sellQuantity contract:** `sellQuantity` is the configured legacy base-asset quantity to add to each cycle's recovery SELL. It is the opposite kind of control from Conservative's `keepQuantity`: Conservative retains a configured quantity, while RS disposes of the configured legacy slice in addition to the newly acquired recovery tranche. `sellQuantity` is neither the total SELL quantity nor a maximum cap.
 
-**Owner decisions required:**
+For example, with `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, when the BUY tranche has produced 5 ZRO of net recovery inventory, the conceptual combined SELL target is 5.01 ZRO. Actual canonical BUY fills and base-asset commissions determine the recovery quantity available; configured order quantity or an order acknowledgement must never be treated as executed inventory. The SELL price and proceeds allocation must independently satisfy the recovery-tranche investment/commission gate and the legacy slice's historical-basis/selling-cost gate. The 0.01 ZRO slice is charged against authorized, Spot-available legacy inventory and its remaining historical basis.
 
-1. Is sellQuantity an exact per-cycle target or a maximum per-cycle cap?
-2. If remaining authorized legacy inventory is smaller, may RS sell the smaller remainder, or is explicit final-liquidation authorization required?
-3. What happens to positive residuals smaller than the configured amount, below exchange minimum quantity/notional, or otherwise unsellable?
-4. May a final residual be sold in a separate cycle without a new recovery BUY? If so, what profit basis applies?
-5. Does RS stop when authorized legacy quantity is exhausted, only dust remains, or the operator disables it?
+**Owner decisions still required:**
+
+1. If remaining authorized legacy inventory is smaller than `sellQuantity`, may RS sell the smaller remainder, or is explicit final-liquidation authorization required?
+2. What happens to positive residuals smaller than the configured amount, below exchange minimum quantity/notional, or otherwise unsellable?
+3. May a final residual be sold in a separate cycle without a new recovery BUY? If so, what profit basis applies?
+4. Does RS stop when authorized legacy quantity is exhausted, only dust remains, or the operator disables it?
 
 Until decided:
 
@@ -247,7 +248,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 
 | Decision | Required owner choice | Why it blocks implementation |
 |---|---|---|
-| sellQuantity | Exact per-cycle target or maximum cap | Determines legacy amount requested and smaller-remainder eligibility |
+| sellQuantity | **Agreed:** additive legacy quantity per cycle, added to the actual net recovery quantity; not a total quantity or cap. Smaller-remainder/final-residual behavior remains unresolved. | Defines the combined cycle SELL target; residual policy still prevents implementation from guessing how to handle insufficient legacy inventory |
 | Smaller/final residual | Sell smaller balance, require explicit final authorization, or retain it | Prevents unintended liquidation |
 | Legacy authorization | **Explicit operator authorization agreed**; interface, evidence source/balance baseline, expiry/revocation, durable provenance and restart behavior remain open | Prevents silent wallet adoption and loss of authorization provenance |
 | Legacy accounting | Opening-inventory representation in shared Portfolio and verification of configured invested/quantity inputs | Current Portfolio is fill-driven; configured historical basis is agreed, but Spot holdings and off-Spot custody must be represented safely |
@@ -268,7 +269,7 @@ No executable RS tests are added in this documentation-only phase. Future implem
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - missing/ambiguous legacy cost basis and a profitable cycle paired with a legacy loss;
-- exact sellQuantity, smaller remainder, final residual, and exchange dust after those rules are approved;
+- the agreed additive `sellQuantity` calculation (actual net recovery quantity + configured legacy slice), plus smaller-remainder, final-residual, and exchange-dust behavior after those remaining rules are approved;
 - one/multiple BUY tranches, open/partial/unknown BUYs, and each approved next-BUY boundary;
 - base, quote, and third-asset commission accounting;
 - Portfolio/RS attribution atomicity, identical duplicate fills, and conflicting fill identity;
