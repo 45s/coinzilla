@@ -31,7 +31,7 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ## Recovery Seller (RS) — domain specification
 
-**Status: [~] DRAFT DOMAIN CONTRACT DOCUMENTED; owner decisions block executable implementation.** The proposal remains in [PR #1110](https://github.com/45s/coinzilla/pull/1110) (open, unmerged). The canonical draft is [Recovery Seller Domain Specification](./docs/domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md).
+**Status: [~] DRAFT DOMAIN CONTRACT DOCUMENTED; owner decisions block executable implementation.** The proposal remains in [PR #1110](https://github.com/45s/coinzilla/pull/1110) (open, unmerged); the domain-specification phase is under review in [PR #1112](https://github.com/45s/coinzilla/pull/1112). The canonical draft is [Recovery Seller Domain Specification](./docs/domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md).
 
 - RS is independent of CG_coinGrabber and must reuse shared Portfolio, canonical fills, Trading Engine, broker, reservations and reconciliation boundaries.
 - The draft records hard safety invariants for explicit legacy authorization, separate recovery/legacy profitability, exact-once attribution, partial fills, fees, unknown outcomes, risk limits, lifecycle and strategy ownership.
