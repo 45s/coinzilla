@@ -182,7 +182,8 @@ export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
     if (pair.tradingEnvironment !== "both" && pair.tradingEnvironment !== tradingMode) {
       continue
     }
-    const { tradingEnvironment, ...runtimePair } = pair
+    const runtimePair = { ...pair }
+    delete runtimePair.tradingEnvironment
     selectedPairs[symbol] = runtimePair
   }
   return selectedPairs
