@@ -41,7 +41,7 @@ test("fetches market metadata and writes only the shared token specification aft
   })
 
   assert.equal(prompts.length, 2, "The generator should ask only for a market symbol and confirmation.")
-  assert.match(prompts[0], /trading symbol/i, "The first prompt must request the Binance market symbol.")
+  assert.match(prompts[0], /market symbol/i, "The first prompt must request the Binance market symbol.")
   assert.match(prompts[1], /update.*token specification/i, "The final prompt must confirm a token metadata update.")
   assert.deepEqual(metadataCalls, [{ symbol: "POLUSDT", environment: "testnet", fetchImpl: globalThis.fetch }], "The generator must fetch metadata for the normalized symbol from the selected public endpoint.")
   assert.equal(writes.length, 1, "Confirmation must trigger exactly one token-specification write.")
