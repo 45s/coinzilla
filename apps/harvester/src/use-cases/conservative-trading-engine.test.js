@@ -985,7 +985,7 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: recoveryLedger,
+    initialRecoveryLedger: seeded.recoveryLedger,
     accountingApplied: true,
     cancelExecutedQuantity: "0.0",
   })
@@ -2776,7 +2776,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   const cancelStarted = new Promise((resolve) => { signalCancelStarted = resolve })
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: seeded.recoveryLedger,
+    initialRecoveryLedger: recoveryLedger,
     baseFreeBalance: "1",
     appConfig: withExternalOrdersPolicy("IGNORE"),
     hasUnownedOpenOrdersForSymbol: () => true,
