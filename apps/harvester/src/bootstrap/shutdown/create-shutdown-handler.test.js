@@ -15,10 +15,12 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createShutdown = ({ state = createState(), tradingEnabled = false, engine, disconnectBroker, stopMarketIntake, stopUserDataIntake, publishAccountSnapshot, subscriptions = [], bookSubscriptions = [], marketPriceIntake = new Map(), userDataSubscription = {}, calls = [] } = {}) => {
+const createShutdown = ({ state = createState(), tradingEnabled = false, engine, disconnectBroker, stopMarketIntake, stopUserDataIntake, publishAccountSnapshot, subscriptions = [], bookSubscriptions = [], marketPriceIntake = new Map(), userDataSubscription = {}, calls = [], logger = {}, now, runtimeSessionId } = {}) => {
   const stop = createShutdownHandler({
     state,
-    logger: {},
+    logger,
+    now,
+    runtimeSessionId,
     tradingEnabled,
     getTradingEngine: () => engine,
     subscriptions,
@@ -257,4 +259,101 @@ test("reports the exact unresolved shutdown state and does not claim STOPPED aft
     },
     "The unresolved-order diagnostic must expose exact safe identity and execution quantities without dumping broker payloads.",
   )
+})
+
+
+test("reconciles shutdown recovery SELLs and refuses CLOSING COMPLETE when final coverage is invalid", async () => {
+  const calls = []
+  let closingAudit
+  const engine = {
+    reconcileOwnedOrders: async () => { calls.push("reconcile"); return { ok: true } },
+    cancelOwnedBuyOrdersForShutdown: async () => { calls.push("cancel-owned-buys"); return { ok: true } },
+    reconcileRecoverySellsForShutdown: async () => { calls.push("reconcile-recovery-sells"); return { ok: true } },
+    auditShutdownRecoverySellCoverage: async () => {
+      calls.push("audit-recovery-sell-coverage")
+      return {
+        ok: false,
+        data: {
+          covered: false,
+          findings: [{
+            symbol: "ADAFDUSD",
+            reason: "RECOVERY_SELL_UNDERSIZED",
+            requiredQuantity: "389.9",
+            committedQuantity: "359.9",
+          }],
+        },
+      }
+    },
+    getOrders: () => [],
+  }
+  const fixture = createShutdown({
+    calls,
+    tradingEnabled: true,
+    engine,
+    publishAccountSnapshot: async (input) => { closingAudit = input },
+  })
+
+  await assert.rejects(
+    fixture.stop(),
+    (error) => error instanceof AggregateError,
+    "A final recovery SELL coverage failure must make shutdown incomplete.",
+  )
+
+  assert.ok(calls.indexOf("reconcile-recovery-sells") > calls.lastIndexOf("reconcile"), "Recovery SELL repair must run only after owned-order reconciliation.")
+  assert.ok(calls.indexOf("audit-recovery-sell-coverage") > calls.indexOf("reconcile-recovery-sells"), "The final recovery SELL audit must follow the repair attempt.")
+  assert.equal(closingAudit.auditStatus, "INCOMPLETE", "CLOSING must not report COMPLETE with an undersized recovery SELL.")
+  assert.ok(closingAudit.auditReasons.includes("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE"))
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+})
+
+test("emits deterministic monotonic timings for shutdown phases and failures", async () => {
+  const logEntries = []
+  let tick = 0
+  const now = () => {
+    tick += 5
+    return tick
+  }
+  const fixture = createShutdown({
+    logger: {
+      system: (entry) => logEntries.push(entry),
+      error: (entry) => logEntries.push(entry),
+    },
+    now,
+    runtimeSessionId: "runtime-session-test",
+    tradingEnabled: true,
+    engine: {
+      reconcileOwnedOrders: async () => ({ ok: true }),
+      cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
+      reconcileRecoverySellsForShutdown: async () => ({ ok: true }),
+      auditShutdownRecoverySellCoverage: async () => ({ ok: true, data: { covered: true, findings: [] } }),
+      getOrders: () => [],
+    },
+  })
+
+  await fixture.stop()
+
+  const phases = logEntries.filter((entry) => entry.shutdownPhase)
+  const required = [
+    "SHUTDOWN_REQUESTED",
+    "STOP_STATE_ESTABLISHED",
+    "MARKET_WORK_DRAIN",
+    "INITIAL_RECONCILIATION",
+    "BUY_CANCELLATION",
+    "USER_DATA_DRAIN",
+    "FINAL_RECONCILIATION",
+    "RECOVERY_SELL_RECONCILIATION",
+    "RECOVERY_SELL_COVERAGE_AUDIT",
+    "CLOSING_AUDIT",
+    "SHUTDOWN_COMPLETED",
+  ]
+  for (const phase of required) {
+    assert.ok(phases.some((entry) => entry.shutdownPhase === phase), "Missing structured shutdown phase " + phase)
+  }
+  const completed = phases.filter((entry) => entry.phaseStatus === "COMPLETED")
+  assert.ok(completed.length > 0, "Completed phases must emit timing records.")
+  for (const entry of completed) {
+    assert.equal(typeof entry.durationMs, "number", "Every completed phase must expose its monotonic duration.")
+    assert.equal(typeof entry.elapsedMs, "number", "Every completed phase must expose elapsed time since shutdown request.")
+    assert.equal(entry.shutdownCorrelationId, "runtime-session-test")
+  }
 })

@@ -73,6 +73,8 @@ function makeWorkflow({
     data: { eligible: true, freeQuantity: "0", realizedNetProfit: "1" },
   }),
   externalOrdersPolicy = "ignore",
+  isStopping = () => false,
+  activeOrders = [],
 } = {}) {
   const calls = {
     published: [],
@@ -89,7 +91,7 @@ function makeWorkflow({
     registry: {
       orders: [],
       applyUpdate: () => ({ ...updateResult, registry: state.registry }),
-      getActiveOrders: () => [],
+      getActiveOrders: () => activeOrders,
     },
     reconciledTerminalOrderClientIds: new Set(),
     unrequestedTerminalOrderClientIds: new Set(),
@@ -144,7 +146,7 @@ function makeWorkflow({
       calls.buyExecutionPriceReads.push(order)
       return "100"
     },
-    isStopping: () => false,
+    isStopping,
     assertReconciledSellExecution: () => {},
     completeRecoveryCycle: async (input) => {
       calls.completedCycles.push(input)
@@ -269,4 +271,54 @@ test("rejects a TRADE event without a canonical Fill before accounting", async (
   assert.equal(result.ok, false, "A TRADE report without a canonical Fill must fail.")
   assert.equal(result.failure.stage, "STREAM_FILL_MISSING", "The missing-fill failure stage must remain stable.")
   assert.deepEqual(calls.accounting, [], "Missing fill facts must not reach accounting.")
+})
+
+
+test("reconciles recovery SELL coverage after a BUY fill received during shutdown", async () => {
+  const order = makeOrder({
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
+  const fill = makeFill({ quantity: "1", quoteQuantity: "100" })
+  const activeRecoverySell = makeOrder({
+    side: "SELL",
+    status: "OPEN",
+    quantity: "2",
+    executedQuantity: "0",
+    brokerOrderId: "broker-recovery-sell",
+    clientOrderId: "h-dogeusdt-recovery-sell",
+  })
+  const { workflow, state, calls } = makeWorkflow({
+    terminalFills: [fill],
+    isStopping: () => true,
+    activeOrders: [activeRecoverySell],
+  })
+  const event = {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: order,
+    fill,
+  }
+
+  const result = await workflow.processUserDataEventTransition({ event })
+
+  assert.equal(result.ok, true, "A fully reconciled BUY fill during shutdown must remain accounted.")
+  assert.deepEqual(calls.cancellations, [{
+    symbol: market.symbol,
+    marketId: market.id,
+  }], "Shutdown must cancel and reconcile the now-stale owned recovery SELL.")
+  assert.deepEqual(calls.evaluations, [{
+    symbol: market.symbol,
+    shutdownRecoveryOnly: true,
+  }], "Shutdown may re-plan a recovery SELL but must not run the ordinary BUY-producing evaluation.")
+  assert.equal(state.lastBuyPrices.get(market.symbol), "100", "The final BUY VWAP must be retained for the final recovery plan.")
+  assert.equal(state.trailingBuy.get(market.symbol), false, "A shutdown fill must not re-enable trailing BUY.")
+  assert.equal(calls.accounting.length, 1, "The canonical BUY fill must be applied once.")
+
+  const duplicate = await workflow.processUserDataEventTransition({ event })
+
+  assert.equal(duplicate.ok, true, "A duplicate shutdown fill notification must be harmless.")
+  assert.equal(calls.accounting.length, 1, "A duplicate fill must not be applied twice.")
+  assert.equal(calls.cancellations.length, 1, "A duplicate fill must not trigger another recovery SELL replacement.")
 })

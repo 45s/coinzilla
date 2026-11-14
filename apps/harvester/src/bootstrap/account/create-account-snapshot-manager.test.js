@@ -6,7 +6,7 @@ import { createAccountSnapshotManager } from "./create-account-snapshot-manager.
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [], operationalStateStore } = {}) => {
+const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [], operationalStateStore, logger = {}, monotonicNow } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -39,8 +39,9 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
-    logger: {},
+    logger,
     now: () => 123,
+    monotonicNow,
     operationalStateStore,
   })
   return {
@@ -806,4 +807,30 @@ test("separates manual external orders from unresolved prior-process Harvester o
   assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false, "Manual orders must not be mistaken for unresolved Harvester orders.")
   assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false, "A prior-process Harvester order must not be classified as manual.")
   assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true, "A prior-process Harvester order must remain a symbol-scoped blocker.")
+})
+
+
+test("times the CLOSING Journal durability barrier and reports failed flushes", async () => {
+  const market = createFixture().market
+  const logEntries = []
+  let tick = 0
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    logger: { system: (entry) => logEntries.push(entry) },
+    monotonicNow: () => {
+      tick += 7
+      return tick
+    },
+  })
+
+  await fixture.manager.publishAccountSnapshot({ phase: "CLOSING", auditStatus: "COMPLETE" })
+
+  const started = logEntries.find((entry) =>
+    entry.shutdownPhase === "JOURNAL_DURABILITY_BARRIER" && entry.phaseStatus === "STARTED")
+  const completed = logEntries.find((entry) =>
+    entry.shutdownPhase === "JOURNAL_DURABILITY_BARRIER" && entry.phaseStatus === "COMPLETED")
+  assert.ok(started, "The CLOSING audit must log when its Journal barrier starts.")
+  assert.ok(completed, "The CLOSING audit must log when its Journal barrier completes.")
+  assert.equal(completed.durationMs, 7, "The barrier duration must use the injected monotonic clock.")
+  assert.equal(completed.phase, "CLOSING")
 })
