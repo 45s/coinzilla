@@ -152,6 +152,8 @@ The full-workspace report makes remaining debt visible; the changed-file CI gate
 
 ### 5. Functions and side effects
 
+Module boundaries and feature-folder organization MUST follow the canonical [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md), including its rule for feature-root components and pure local helpers.
+
 - Prefer small, cohesive functions with one clear responsibility.
 - Prefer pure functions when practical: same inputs produce the same outputs, with no observable side effects.
 - Keep I/O (network, filesystem, database, clock, randomness, process environment) at explicit boundaries; pass dependencies in when that improves testability.
