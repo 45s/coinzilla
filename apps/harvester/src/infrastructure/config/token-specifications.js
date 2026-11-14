@@ -113,6 +113,7 @@ export function mergeTokenSpecifications({ tokenSpecifications = {}, metadata } 
   const updated = {
     ...tokenSpecifications,
     [baseAsset]: {
+      ...(existingToken ?? {}),
       baseAsset,
       markets: {
         ...(existingToken?.markets ?? {}),
