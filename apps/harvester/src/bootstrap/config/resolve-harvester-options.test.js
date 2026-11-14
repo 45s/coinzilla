@@ -16,7 +16,7 @@ const config = ({
       settings: { conservative: { enabled: conservative },
         aggressive: { enabled: aggressive },
       },
-      pairs: Object.fromEntries(enabledSymbols.map((symbol) => [symbol, { enabled: true }])),
+      pairs: Object.fromEntries(enabledSymbols.map((symbol) => [symbol, { enabled: true, tradingEnvironment: "both" }])),
     },
   },
 })
@@ -92,6 +92,47 @@ test("rejects an invalid TRADING_MODE", async () => {
     resolveHarvesterOptions(fixture.input),
     /TRADING_MODE must be set to "testnet" or "live"/,
     "Only the exact supported exchange-mode values may pass startup validation.",
+  )
+})
+
+test("selects only matching pairs and strips tradingEnvironment before runtime", async () => {
+  const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT", "DOGEUSDT"] })
+  const pairs = cfg.strategies.CG_coinGrabber.pairs
+  pairs.BTCUSDT.tradingEnvironment = "testnet"
+  pairs.ETHUSDT.tradingEnvironment = "live"
+  pairs.DOGEUSDT.tradingEnvironment = "both"
+  pairs.DOGEUSDT.enabled = false
+
+  const testnet = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "testnet" } }).input)
+  assert.deepEqual(Object.keys(testnet.pairs), ["BTCUSDT", "DOGEUSDT"], "TESTNET must include testnet-only and both pairs, but exclude live-only pairs.")
+  assert.deepEqual(testnet.enabledSymbols, ["BTCUSDT"], "The enabled flag must remain independent of environment eligibility.")
+  assert.equal(Object.hasOwn(testnet.pairs.BTCUSDT, "tradingEnvironment"), false, "The selector must be removed from runtime pair settings.")
+  assert.equal(Object.hasOwn(testnet.appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, "tradingEnvironment"), false, "The effective appConfig must expose only the existing runtime pair shape.")
+  assert.deepEqual(testnet.appConfig.strategies.CG_coinGrabber.pairs, testnet.pairs, "The effective appConfig and returned pairs must use the same filtered runtime map.")
+
+  const live = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "live" } }).input)
+  assert.deepEqual(Object.keys(live.pairs), ["ETHUSDT", "DOGEUSDT"], "LIVE must include live-only and both pairs, but exclude testnet-only pairs.")
+  assert.deepEqual(live.enabledSymbols, ["ETHUSDT"], "Disabled both-environment pairs must remain configured but not become enabled.")
+  assert.equal(Object.hasOwn(live.pairs.ETHUSDT, "tradingEnvironment"), false, "LIVE runtime pair settings must also omit the selector.")
+})
+
+test("does not fall back when no pair matches TRADING_MODE", async () => {
+  const cfg = config()
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.tradingEnvironment = "live"
+  await assert.rejects(
+    resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "testnet" } }).input),
+    /No CG_coinGrabber pairs configured for TRADING_MODE=testnet/i,
+    "A mode with no eligible pairs must fail instead of falling back to the other environment.",
+  )
+})
+
+test("rejects a pair without an explicit tradingEnvironment before startup", async () => {
+  const cfg = config()
+  delete cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.tradingEnvironment
+  await assert.rejects(
+    resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "testnet" } }).input),
+    /tradingEnvironment/i,
+    "Runtime pair selection must not infer an environment for an incomplete supplied config.",
   )
 })
 
