@@ -138,6 +138,29 @@ test("fails closed for missing markets, malformed token metadata, and duplicate 
   )
 })
 
+test("rejects token registry entries whose market symbol disagrees with base and quote assets", () => {
+  assert.throws(
+    () => createMarketSpecification({ metadata: metadata({ symbol: "POLUSDT" }) }),
+    /does not match baseAsset \+ quoteAsset/i,
+    "Fresh exchange metadata must be internally consistent before it can be written."
+  )
+  assert.throws(
+    () => resolvePairSpecifications({
+      pairs: { LINKUSDT: {} },
+      tokenSpecifications: {
+        LINK: {
+          baseAsset: "LINK",
+          markets: {
+            LINKUSDT: { quoteAsset: "FDUSD", pricePrecision: 3, quantityPrecision: 2 },
+          },
+        },
+      },
+    }),
+    /does not match base asset LINK and quote asset FDUSD/i,
+    "A market must be stored under the base and quote assets that actually form its symbol."
+  )
+})
+
 test("rejects manually configured precision values instead of allowing stale duplicates", () => {
   const tokenSpecifications = mergeTokenSpecifications({ tokenSpecifications: {}, metadata: metadata() })
   assert.throws(
