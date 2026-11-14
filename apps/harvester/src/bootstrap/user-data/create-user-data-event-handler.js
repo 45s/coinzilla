@@ -9,7 +9,11 @@ function resolveUserDataFailure(failure) {
   const validRetryable = retryableFailureCategories.has(failure?.category) && failure?.retryable === true
   const validTerminal = terminalFailureCategories.has(failure?.category) && failure?.retryable === false
   if (validStage && (validRetryable || validTerminal)) { return failure }
-  return { category: "ACCOUNTING_INTEGRITY", stage: "UNCLASSIFIED_ENGINE_FAILURE", retryable: false }
+  return {
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "UNCLASSIFIED_ENGINE_FAILURE",
+    retryable: false
+  }
 }
 
 function getUserDataFailureMessage(failure) {
@@ -36,9 +40,19 @@ function getUserDataFailureMessage(failure) {
  * and process-lifecycle actions.
  */
 export function createUserDataEventHandler({
-  state, getTradingEngine, isTradingEnabled, isStopped, logger, onUserDataEvent,
-  getPortfolio, getRecoveryLedger, updatePortfolio, updateTradingAccounting,
-  cancelOwnedBuysAfterAccountingFailure, resumeDeferredStrategyEvaluations, onSafetyBlockerRaised,
+  state,
+  getTradingEngine,
+  isTradingEnabled,
+  isStopped,
+  logger,
+  onUserDataEvent,
+  getPortfolio,
+  getRecoveryLedger,
+  updatePortfolio,
+  updateTradingAccounting,
+  cancelOwnedBuysAfterAccountingFailure,
+  resumeDeferredStrategyEvaluations,
+  onSafetyBlockerRaised,
 } = {}) {
   return ({ event } = {}) => {
     const tradingEngine = getTradingEngine()
@@ -233,7 +247,10 @@ export function createUserDataEventHandler({
       state.accountingFailed = true
       state.ready = false
       state.status = "EVENT_QUEUE_FAILED"
-      logger.error?.({ message: "user-data event queue failed", error })
+      logger.error?.({
+        message: "user-data event queue failed",
+        error
+      })
     }).finally(async () => {
       if (isStopped()) {
         state.ready = false
@@ -260,7 +277,10 @@ export function createUserDataEventHandler({
       state.status = "READY"
       if (reevaluateSymbol && tradingEngine) {
         const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
-        if (!reevaluated.ok) { logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors }) }
+        if (!reevaluated.ok) { logger.error?.({
+          message: "next strategy evaluation failed",
+          errors: reevaluated.errors
+        }) }
       }
       resumeDeferredStrategyEvaluations()
     })
