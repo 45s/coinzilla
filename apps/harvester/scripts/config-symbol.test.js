@@ -9,6 +9,7 @@ const metadata = {
   quoteAsset: "USDT",
   tickSize: "0.0001",
   stepSize: "0.01",
+  unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" }],
 }
 
 function createAsk(answers, prompts = []) {
@@ -53,6 +54,7 @@ test("fetches market metadata and writes only the shared token specification aft
   assert.equal(result.marketSpecification.quantityPrecision, 2, "Quantity precision must be derived from LOT_SIZE.stepSize.")
   assert.ok(output.some((line) => line.includes("token-specification.json")), "The preview must identify the shared token specification file.")
   assert.ok(output.some((line) => line.includes('"POL"')), "The preview must be grouped under the base token.")
+  assert.ok(output.some((line) => line.includes("DYNAMIC_PRICE_BAND")), "Public exchange constraints that the generator does not evaluate must remain visible as diagnostics.")
   assert.ok(!output.some((line) => line.includes("investment") || line.includes("makerPercent")), "The metadata generator must not request or generate strategy settings.")
 })
 
