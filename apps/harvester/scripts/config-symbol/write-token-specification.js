@@ -70,7 +70,7 @@ export async function writeTokenSpecificationAtomically({ specificationPath, met
       }
       throw error
     }
-    await lockHandle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }) + "\n", "utf8")
+    await lockHandle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })}\n`, "utf8")
     await removeStaleTemporaryFiles({ directory, fileName })
 
     const currentSpecifications = await readCurrentSpecifications(absolutePath)
@@ -86,7 +86,7 @@ export async function writeTokenSpecificationAtomically({ specificationPath, met
     })
 
     temporaryCreated = true
-    await writeFile(temporaryPath, JSON.stringify(updatedSpecifications, null, 2) + "\n", {
+    await writeFile(temporaryPath, `${JSON.stringify(updatedSpecifications, null, 2)}\n`, {
       encoding: "utf8",
       flag: "wx",
       mode: originalMode,
