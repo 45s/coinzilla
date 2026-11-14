@@ -4107,8 +4107,7 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
 
 test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
   const scenario = await createShutdownBuyRaceScenario()
-  const seeded = scenario.seeded
-  const buyOrder = scenario.buyOrder
+  const { seeded, buyOrder } = scenario
   const firstQuantity = "0.5"
   const secondQuantity = subtractDecimal({
     left: buyOrder.originalQuantity.amount,
