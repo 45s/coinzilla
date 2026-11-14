@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { EventBus } from "../../../event-bus/src/event-bus.js"
 import {
   subscribeTelegramNotifications as subscribeTelegramNotificationsRaw,
-} from "./telegram-event-subscriber.js"
+} from "./event-subscriber.js"
 
 const TELEGRAM_NOTIFICATION_EVENTS = Object.freeze(["order.filled", "fill.received", "bot.pair_paused", "bot.recovery_failed", "bot.recovery_completed", "bot.startup_failed", "broker.connected", "broker.disconnected", "order.submitted", "order.cancelled", "order.failed", "account.safety_alert", "bot.started", "bot.stopped"])
 

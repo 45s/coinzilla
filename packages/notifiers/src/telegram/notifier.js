@@ -1,8 +1,14 @@
 import {
   validateTelegramOptions,
   validateTelegramMessage,
-} from "./telegram-validation.js"
-import { safeErrorMessage } from "./safe-error-message.js"
+} from "./helpers/run-validation.js"
+import { safeErrorMessage } from "./helpers/get-safe-error-msg.js"
+import {
+  assertHttpResponse,
+  createHttpFailure,
+  getHttpStatus,
+  validateSuccessfulPayload,
+} from "./helpers/run-response-validation.js"
 
 const TELEGRAM_API_BASE_URL = "https://api.telegram.org"
 
@@ -32,22 +38,6 @@ function sanitizeCaughtError({ error, token }) {
   }
 }
 
-function assertHttpResponse(response) {
-  if (
-    !response ||
-    typeof response !== "object" ||
-    Array.isArray(response) ||
-    typeof response.ok !== "boolean" ||
-    typeof response.json !== "function"
-  ) {
-    throw new TypeError("Telegram API returned an invalid HTTP response")
-  }
-}
-
-function getHttpStatus(response) {
-  return Number.isSafeInteger(response.status) ? response.status : "unknown"
-}
-
 async function readResponsePayload({ response, token, status }) {
   try {
     const payload = await Promise.resolve()
@@ -69,42 +59,6 @@ async function readResponsePayload({ response, token, status }) {
       { cause: error },
     )
   }
-}
-
-function createHttpFailure({ payload, status, token }) {
-  const description = typeof payload?.description === "string"
-    ? safeErrorMessage({ error: payload.description, token })
-    : null
-  const detail = description ? `: ${description}` : ""
-  return new Error(
-    `Telegram API HTTP request failed with status ${status}${detail}`,
-  )
-}
-
-function validateSuccessfulPayload({ payload, token }) {
-  if (
-    !payload ||
-    typeof payload !== "object" ||
-    Array.isArray(payload) ||
-    payload.ok !== true
-  ) {
-    const description = typeof payload?.description === "string"
-      ? safeErrorMessage({ error: payload.description, token })
-      : "unknown Telegram API error"
-    throw new Error(`Telegram API rejected sendMessage: ${description}`)
-  }
-  if (
-    !payload.result ||
-    typeof payload.result !== "object" ||
-    Array.isArray(payload.result) ||
-    !Number.isSafeInteger(payload.result.message_id) ||
-    payload.result.message_id < 1
-  ) {
-    throw new TypeError(
-      "Telegram API returned a success response without a valid message_id",
-    )
-  }
-  return payload.result
 }
 
 async function parseTelegramResponse({ response, token }) {

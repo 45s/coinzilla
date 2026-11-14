@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import {
   validateTelegramMessage,
   validateTelegramOptions,
-} from "./telegram-validation.js"
+} from "./run-validation.js"
 
 test("normalizes valid Telegram options and applies explicit defaults", () => {
   const fetchImpl = async () => {}

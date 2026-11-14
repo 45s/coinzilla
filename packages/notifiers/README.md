@@ -10,12 +10,17 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
       src/
         index.js
         telegram/
+          event-subscriber.js
+          notifier.js
           index.js
-          telegram-notifier.js
-          telegram-validation.js
-          safe-error-message.js
-          telegram-event-subscriber.js
-          *.test.js
+          notifier.test.js
+          event-subscriber.test.js
+          helpers/
+            run-validation.js
+            run-validation.test.js
+            run-response-validation.js
+            get-safe-error-msg.js
+            get-safe-error-msg.test.js
         email/    (future; create when implemented)
         discord/  (future; create when implemented)
 

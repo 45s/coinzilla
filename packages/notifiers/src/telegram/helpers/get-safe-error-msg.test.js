@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { safeErrorMessage } from "./safe-error-message.js"
+import { safeErrorMessage } from "./get-safe-error-msg.js"
 
 test("redacts raw and URL-encoded credentials and bounds diagnostic text", () => {
   const token = "123456:secret/token"
