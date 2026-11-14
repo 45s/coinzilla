@@ -1,1 +1,4 @@
-export const CG_STRATEGY_ID = "CG_coinGrabber"
+export const StrategyId = Object.freeze({
+  COIN_GRABBER: "CG_coinGrabber",
+  RECOVERY_SELLER: "RS_recoverySeller",
+})
