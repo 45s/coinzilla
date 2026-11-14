@@ -6374,13 +6374,17 @@ function assertResidualRecoverySellEvents({ scenario }) {
   const completedEvent = scenario.events.find((event) => event.name === "recovery.cycle_completed")
   assert.ok(completedEvent)
   assert.ok(scenario.events.indexOf(continuedEvent) < scenario.events.indexOf(completedEvent))
-  assert.deepEqual(completedEvent.data.dust, {
-    status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity: "0.05",
-    reason: "QUANTITY_INCREMENT",
-    quantityStepSize: "0.01",
-    evaluatedQuantity: "0",
-  })
+  assert.deepEqual(
+    completedEvent.data.dust,
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.05",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1",
+      evaluatedQuantity: "0",
+    },
+    "The 0.05 residual must be classified as dust below the market's actual 0.1 quantity increment.",
+  )
 }
 
 function assertResidualRecoverySellCompletionIdentity({ scenario }) {
