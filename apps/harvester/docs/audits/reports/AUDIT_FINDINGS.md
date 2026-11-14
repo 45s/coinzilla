@@ -1039,6 +1039,8 @@ LINKFDUSD SELL client `h-fa576fd67e08430298f142-24` has a durable `order.submiss
 
 The application log records shutdown started at 19:42:26.967Z; the first visible shutdown-reconciliation execution processing appears at 19:44:35.014Z, a 128.047-second interval. Available evidence does not identify the cause. Do not attribute it to a broker request, lock, queue or timer without further instrumentation.
 
+**Follow-up — PR #1120:** Monotonic phase instrumentation now records shutdown request, operator-control cleanup, stop-state establishment, market-work drain, reconciliation, BUY cancellation, user-data drain, recovery SELL repair, CLOSING audit, Journal durability barrier, broker disconnect and process-stop durability. The original 128.047-second interval remains **UNKNOWN**: the original raw log, trace and Journal artifacts were not available in the repository or searched Library sources during this follow-up; the preserved audit report and source hashes do not identify which phase consumed the interval. No historical cause is assigned.
+
 ### F-052 — Effective configuration evidence absent with dirty runtime provenance
 
 **Status:** CONFIRMED evidence gap; no enabled-market mismatch proven in this session. **Severity:** High (configuration integrity). **Tracking:** [#1101](https://github.com/45s/coinzilla/issues/1101).

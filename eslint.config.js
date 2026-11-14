@@ -89,6 +89,7 @@ export default defineConfig([
       "no-useless-concat": "error",
       "no-extra-bind": "error",
       "no-multi-assign": "error",
+      "object-property-newline": ["error", { allowAllPropertiesOnSameLine: false }],
 
       // Defensive programming and security
       "no-implied-eval": "error",

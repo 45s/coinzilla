@@ -526,6 +526,21 @@ registered order, the pair pauses. No replacement SELL is submitted from
 unreconciled quantities. This covers the ordinary cancel/replace path without
 claiming durable restart or stream-recovery reconciliation.
 
+During graceful shutdown, BUY fills do not invoke the ordinary strategy
+evaluator. The event workflow records a per-market recovery-replan request, and
+the shutdown coordinator processes it only after BUY cancellation, user-data
+intake stop and final fill reconciliation. The final owned SELL is compared
+with the policy plan using authoritative `Position.spent` (accumulated BUY
+cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
+(confirmed net SELL proceeds), plus retained quantity, minimum profit and
+existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is checked for consistency
+with `Position.spent`, but is never used to calculate the recovery plan. A stale SELL is canceled and its terminal fills reconciled before
+a SELL-only replacement is submitted. If the pair is paused, market data is
+stale, cancellation/submission is unresolved, or the replacement cannot be
+verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
+External orders remain unowned and untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE`
+is preserved.
+
 ## Trailing BUY lifecycle
 
 The engine tracks whether the pair is in a trailing phase. A newly initialized
@@ -559,9 +574,10 @@ The Journal is not trading-state authority and ordinary event delivery remains a
 - Immediately before broker placement/cancellation, publish the allowlisted intent event and await a successful durable flush. If it fails, do not perform the exchange write and pause the pair.
 - Ordinary event publication remains best-effort. A synchronous EventBus publication exception or failed result must be contained and reported without escaping into unrelated trading workflows.
 - EventBus subscriber delivery and ordinary Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted; only the explicit barriers above establish durability.
+- Structured shutdown phase records use a monotonic clock and a shared runtime-session correlation ID. They expose phase/status, elapsed time from shutdown request, phase duration and a bounded failure reason; the CLOSING Journal durability barrier is timed separately. The historical 2026-11-13 delay of 128.047 seconds remains unexplained because the raw evidence artifacts are not stored in the repository; do not infer a cause from the summary report.
 - Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
 - Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
-- On normal shutdown, stop market-price/book intake first and prevent new strategy decisions. Keep user-data intake active while the existing engine cancels only acknowledged, strategy-owned BUY orders and reconciles cancellation-racing fills. Preserve all SELL orders. Drain accepted user-data events, perform final owned-order reconciliation as verification only (without another BUY-cancellation pass), then stop user-data intake and drain again before the CLOSING audit and resource cleanup. Known open SELL orders are intentional and do not make CLOSING incomplete; unresolved BUYs or unknown order states do. For trading-enabled runs, unresolved cancellation, owned-order reconciliation, or user-data/accounting state fails shutdown and retains the trading-process lock. Other incomplete CLOSING audits remain recorded. A failed Journal close must not skip broker/resource cleanup.
+- On normal shutdown, record the request and establish the stop state before operator-control cleanup; the stop state disables new market work and trading while user-data intake remains active. Stop market-price/book intake and drain accepted market work; perform initial owned-order reconciliation; cancel only acknowledged, strategy-owned BUYs; drain events that race cancellation; stop user-data intake and drain again; perform final owned-order reconciliation; then reconcile recovery SELL coverage. BUY fills received while stopping are applied through the idempotent Portfolio/RecoveryLedger transition and schedule deferred recovery replanning; they never trigger ordinary strategy evaluation. The shutdown replan validates remaining SELL quantity and financial sufficiency against final active Position, retained `keepQuantity`, actual commission-adjusted recovery cost/proceeds, minimum profit and owned SELL commitments. It confirms cancellation of stale owned SELLs before submitting a SELL-only replacement; it never submits a new BUY and never mutates external orders. A post-replan owned-order reconciliation and final coverage audit must pass before CLOSING. An open SELL is intentional only when its remaining quantity and proceeds satisfy the final plan; otherwise CLOSING is INCOMPLETE and shutdown remains SHUTDOWN_INCOMPLETE. Unresolved cancellation/submission outcomes, unavailable planning inputs, or failed coverage remain fail-closed. A failed Journal close must not skip broker/resource cleanup.
 - Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
 
 Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. Broker-connected startup intentionally fails closed when Journal readiness or the durable PREFLIGHT audit is unavailable; order and cancellation intents likewise require a durable pre-write barrier.

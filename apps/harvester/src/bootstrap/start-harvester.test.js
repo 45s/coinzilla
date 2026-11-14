@@ -12,7 +12,10 @@ import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
-  flush: async () => ({ ok: true, durable: true }),
+  flush: async () => ({
+    ok: true,
+    durable: true
+  }),
 })
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher ?? testEventPublisher
@@ -21,7 +24,10 @@ const startHarvesterForTest = (input = {}) => {
   }
   return startHarvester({
     ...input,
-    env: { ...binanceEnv, ...input.env },
+    env: {
+      ...binanceEnv,
+      ...input.env
+    },
     brokerAdapterFactory: input.brokerAdapterFactory ?? (() => createBroker()),
     eventPublisher,
   })
@@ -56,21 +62,38 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: {
+        conservative: { enabled: true },
+        aggressive: { enabled: false }
+      },
       pairs: {
         BTCUSDT: {
           enabled: true,
-          tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
+          tradingEnvironment: "both",
+          enableVolatilityProtection: true,
+          investment: 100,
+          orderQuantity: 0.01,
+          keepQuantity: 0.001,
           minProfit: 0.01,
-          priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
-          makerPercent: 0, takerPercent: 0,
+          priceStepPercent: 0.05,
+          pricePrecision: 2,
+          quantityPrecision: 3,
+          makerPercent: 0,
+          takerPercent: 0,
         },
         ETHUSDT: {
           enabled: false,
-          tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
+          tradingEnvironment: "both",
+          enableVolatilityProtection: true,
+          investment: 100,
+          orderQuantity: 0.1,
+          keepQuantity: 0.001,
           minProfit: 0.01,
-          priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
-          makerPercent: 0, takerPercent: 0,
+          priceStepPercent: 0.05,
+          pricePrecision: 2,
+          quantityPrecision: 3,
+          makerPercent: 0,
+          takerPercent: 0,
         },
       },
     },
@@ -96,8 +119,14 @@ const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
   if (!quoteCode) {throw new Error("Unsupported test market quote asset for " + symbol)}
   const baseCode = symbol.slice(0, -quoteCode.length)
-  const baseAsset = new Asset({ id: "asset:" + baseCode, code: baseCode })
-  const quoteAsset = new Asset({ id: "asset:" + quoteCode, code: quoteCode })
+  const baseAsset = new Asset({
+    id: "asset:" + baseCode,
+    code: baseCode
+  })
+  const quoteAsset = new Asset({
+    id: "asset:" + quoteCode,
+    code: quoteCode
+  })
   const market = new Market({
     venue: "binance",
     symbol,
@@ -107,10 +136,38 @@ const createMarketMetadata = (symbol) => {
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: new Money({
+        amount: "0.01",
+        asset: quoteAsset
+      })
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: new Quantity({
+        amount: "0.001",
+        asset: baseAsset
+      })
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: new Quantity({
+        amount: "0.001",
+        asset: baseAsset
+      })
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: new Money({
+        amount: "5",
+        asset: quoteAsset
+      })
+      },
     ],
   })
   return {
@@ -168,7 +225,10 @@ const createBroker = (calls = [], {
         completedAt: Date.now(),
       })
       canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
-      return { ok: true, data: canceledOrder }
+      return {
+        ok: true,
+        data: canceledOrder
+      }
     },
     getOpenOrders: async ({ symbol } = {}) => ({
       ok: true,
@@ -180,38 +240,80 @@ const createBroker = (calls = [], {
           .map((order) => createOpenOrderSnapshot({ order })),
       ],
     }),
-    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }),
-    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
+    getFills: async ({ orderId }) => ({
+      ok: true,
+      data: fillHistoryByOrder.get(String(orderId)) ?? []
+    }),
+    getCanonicalOrderHistory: async ({
+      orderId,
+      symbol
+    } = {}) => ({
       ok: true,
       data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
         (!orderId || order.brokerOrderId === String(orderId)) &&
         (!symbol || order.market.symbol === symbol)),
     }),
-    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
+    getCanonicalOrder: async () => ({
+      ok: false,
+      errors: [new Error("order not found")]
+    }),
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
       accountSnapshotTime += 1
       const balances = ["BTC", "ETH", "USDT"].map((code) => {
-        const asset = new Asset({ id: "asset:" + code, code })
+        const asset = new Asset({
+          id: "asset:" + code,
+          code
+        })
         return new Balance({
-          free: new Quantity({ amount: "1000", asset }),
-          locked: new Quantity({ amount: "0", asset }),
+          free: new Quantity({
+            amount: "1000",
+            asset
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset
+          }),
         })
       })
       return {
         ok: true,
-        data: { balances, sourceTime: accountSnapshotTime },
+        data: {
+          balances,
+          sourceTime: accountSnapshotTime
+        },
       }
     },
-    getExchangeMarkets: async () => ({ ok: true, data: [] }),
+    getExchangeMarkets: async () => ({
+      ok: true,
+      data: []
+    }),
     getSymbolFilters: async ({ symbol }) => {
       calls.push("filters:" + symbol)
-      return { ok: true, data: createMarketMetadata(symbol) }
+      return {
+        ok: true,
+        data: createMarketMetadata(symbol)
+      }
     },
-    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
-    getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
-    subscribeForPrices: async ({ symbol, onPrice }) => {
+    getPrices: async ({ symbol }) => ({
+      ok: true,
+      data: {
+      symbol,
+      price: "65000"
+    }
+    }),
+    getCandles: async () => ({
+      ok: true,
+      data: []
+    }),
+    subscribeForCandles: async () => ({
+      ok: true,
+      data: { unsubscribe: async () => {} }
+    }),
+    subscribeForPrices: async ({
+      symbol,
+      onPrice
+    }) => {
       calls.push("subscribe:" + symbol)
       subscriptions.set(symbol, onPrice)
       return subscribeResultBySymbol[symbol] ?? subscribeResult ?? {
@@ -219,10 +321,16 @@ const createBroker = (calls = [], {
         data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) },
       }
     },
-    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+    subscribeForBookTicker: async ({
+      symbol,
+      onBookTicker
+    }) => {
       calls.push("subscribe:book:" + symbol)
       bookSubscriptions.set(symbol, onBookTicker)
-      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) } }
+      return {
+        ok: true,
+        data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) }
+      }
     },
     subscribeForUserData: async (handlers) => {
       calls.push("subscribe:user-data")
@@ -266,7 +374,10 @@ const createBroker = (calls = [], {
 }
 
 const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
-  const createCandle = ({ symbol, openTime } = {}) => ({
+  const createCandle = ({
+    symbol,
+    openTime
+  } = {}) => ({
     symbol,
     interval: "1m",
     openTime,
@@ -278,22 +389,38 @@ const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
     volume: "1",
     isClosed: true,
   })
-  broker.getCandles = async ({ symbol, limit } = {}) => ({
+  broker.getCandles = async ({
+    symbol,
+    limit
+  } = {}) => ({
     ok: true,
     data: symbols.includes(symbol)
       ? Array.from({ length: Math.min(limit ?? 100, 100) }, (_, index) =>
-        createCandle({ symbol, openTime: index * 60_000 }))
+        createCandle({
+          symbol,
+          openTime: index * 60_000
+        }))
       : [],
   })
-  broker.subscribeForCandles = async ({ symbol, interval, onCandle } = {}) => {
+  broker.subscribeForCandles = async ({
+    symbol,
+    interval,
+    onCandle
+  } = {}) => {
     if (symbols.includes(symbol)) {
       for (const index of [100, 101, 102]) {
-        await onCandle(createCandle({ symbol, openTime: index * 60_000 }))
+        await onCandle(createCandle({
+          symbol,
+          openTime: index * 60_000
+        }))
       }
     }
     return {
       ok: true,
-      data: { stream: symbol.toLowerCase() + "@kline_" + interval, unsubscribe: async () => {} },
+      data: {
+        stream: symbol.toLowerCase() + "@kline_" + interval,
+        unsubscribe: async () => {}
+      },
     }
   }
   return broker
@@ -304,18 +431,41 @@ const binanceEnv = {
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
 }
-const createFill = ({ tradeId = "trade-1", quantity = "0.01" } = {}) => {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+const createFill = ({
+  tradeId = "trade-1",
+  quantity = "0.01"
+} = {}) => {
+  const baseAsset = new Asset({
+    id: "asset:BTC",
+    code: "BTC"
+  })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT"
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAsset,
+    quoteAsset
+  })
   return new Fill({
     tradeId,
     brokerOrderId: "order-" + tradeId,
     market,
     side: "BUY",
-    price: new Money({ amount: "65000", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "650", asset: quoteAsset }),
+    price: new Money({
+      amount: "65000",
+      asset: quoteAsset
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset
+    }),
+    quoteQuantity: new Money({
+      amount: "650",
+      asset: quoteAsset
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -325,14 +475,21 @@ const createFill = ({ tradeId = "trade-1", quantity = "0.01" } = {}) => {
 test("rejects enabled Telegram operator control without a bot token before connecting to Binance", async () => {
   const config = {
     ...appConfig,
-    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+    operatorControl: { telegram: {
+      enabled: true,
+      allowedUserIds: ["12345"]
+    } },
   }
   let brokerFactoryCalled = false
 
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => config,
-      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: undefined, OPERATIONAL_STATE_DIRECTORY: process.cwd() },
+      env: {
+        ...binanceEnv,
+        TELEGRAM_BOT_TOKEN: undefined,
+        OPERATIONAL_STATE_DIRECTORY: process.cwd()
+      },
       brokerAdapterFactory: () => {
         brokerFactoryCalled = true
         throw new Error("Broker connection must not start before operator-control configuration is validated.")
@@ -348,14 +505,20 @@ test("rejects enabled Telegram operator control without a bot token before conne
 test("uses the app-local Operational State Store default and fails closed when it is not initialized", async () => {
   const config = {
     ...appConfig,
-    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+    operatorControl: { telegram: {
+      enabled: true,
+      allowedUserIds: ["12345"]
+    } },
   }
   let brokerFactoryCalled = false
 
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => config,
-      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+      env: {
+        ...binanceEnv,
+        TELEGRAM_BOT_TOKEN: "test-telegram-token"
+      },
       runtimeSessionId: "telegram-default-directory-session",
       brokerAdapterFactory: () => {
         brokerFactoryCalled = true
@@ -372,7 +535,10 @@ test("uses the app-local Operational State Store default and fails closed when i
 test("verifies the existing Operational State Store before connecting when Telegram operator control is enabled", async () => {
   const config = {
     ...appConfig,
-    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+    operatorControl: { telegram: {
+      enabled: true,
+      allowedUserIds: ["12345"]
+    } },
   }
   const calls = []
   let brokerFactoryCalled = false
@@ -380,13 +546,30 @@ test("verifies the existing Operational State Store before connecting when Teleg
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => config,
-      env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
+      env: {
+        ...binanceEnv,
+        TELEGRAM_BOT_TOKEN: "test-telegram-token",
+        OPERATIONAL_STATE_DIRECTORY: process.cwd()
+      },
       runtimeSessionId: "test-runtime-session",
-      createOperationalStateStore: ({ directory, runtimeSessionId }) => {
-        calls.push({ type: "create-store", directory, runtimeSessionId })
+      createOperationalStateStore: ({
+        directory,
+        runtimeSessionId
+      }) => {
+        calls.push({
+          type: "create-store",
+          directory,
+          runtimeSessionId
+        })
         return {
-          verify: async () => ({ ok: false, errors: [new Error("ledger genesis is missing")] }),
-          append: async () => ({ ok: true, data: { durable: true } }),
+          verify: async () => ({
+            ok: false,
+            errors: [new Error("ledger genesis is missing")]
+          }),
+          append: async () => ({
+            ok: true,
+            data: { durable: true }
+          }),
         }
       },
       brokerAdapterFactory: () => {
@@ -404,27 +587,52 @@ test("verifies the existing Operational State Store before connecting when Teleg
 })
 
 test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
-  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: {
+    enabled: true,
+    allowedUserIds: ["12345"]
+  } }
+  }
   const calls = []
   let stopAttempts = 0
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
+    env: {
+      ...binanceEnv,
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      OPERATIONAL_STATE_DIRECTORY: process.cwd()
+    },
     runtimeSessionId: "test-runtime-session",
     createOperationalStateStore: () => ({
       runtimeSessionId: "test-runtime-session",
-      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      verify: async () => ({
+        ok: true,
+        data: {
+        valid: true,
+        durableWriteSupported: true
+      }
+      }),
       readAll: async () => ({
         ok: true,
         data: {
-          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          records: [{
+            sequence: "0",
+            factId: "durable-facts:genesis",
+            factType: "LEDGER_INITIALIZED",
+            runtimeSessionId: "test-runtime-session",
+            data: { schemaVersion: 1 }
+          }],
           durableWriteSupported: true,
           lastCommittedSequence: "0",
           lastCommittedDigest: "a".repeat(64),
         },
       }),
-      append: async () => ({ ok: true, data: { durable: true } }),
+      append: async () => ({
+        ok: true,
+        data: { durable: true }
+      }),
     }),
     createTelegramOperatorAdapter: () => ({
       start: async () => { throw new Error("Telegram getMe unauthorized") },
@@ -438,7 +646,10 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
       },
     }),
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   }), (error) => error.code === "OPERATOR_CONTROL_TELEGRAM_START_FAILED", "Telegram startup must still fail after cleanup is retried.")
   assert.equal(stopAttempts, 2, "The outer startup rollback must retry adapter shutdown when the adapter start rollback could not confirm it.")
   assert.ok(calls.includes("telegram-stop-confirmed"), "The retry must confirm the poller has stopped before broker cleanup completes.")
@@ -458,10 +669,25 @@ test("requires an explicit TRADING_MODE before connecting to Binance", async () 
 test("rejects enabling the deferred Aggressive strategy in app config", async () => {
   await assert.rejects(
     startHarvesterForTest({
-      loadConfig: async () => ({ ...appConfig, strategies: { ...appConfig.strategies, CG_coinGrabber: { ...appConfig.strategies.CG_coinGrabber, settings: { ...appConfig.strategies.CG_coinGrabber.settings, aggressive: { enabled: true } } } } }),
+      loadConfig: async () => ({
+        ...appConfig,
+        strategies: {
+        ...appConfig.strategies,
+        CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        settings: {
+        ...appConfig.strategies.CG_coinGrabber.settings,
+        aggressive: { enabled: true }
+      }
+      }
+      }
+      }),
       env: binanceEnv,
       brokerAdapterFactory: () => createBroker(),
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /Aggressive strategy is disabled and deferred/,
   )
@@ -475,7 +701,10 @@ test("keeps inbound operator control disabled without constructing its store or 
     env: binanceEnv,
     createOperationalStateStore: () => { storeFactoryCalls += 1; throw new Error("Disabled operator control must not open the Operational State Store.") },
     createTelegramOperatorAdapter: () => { adapterFactoryCalls += 1; throw new Error("Disabled operator control must not construct a Telegram adapter.") },
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
   try {
     assert.equal(storeFactoryCalls, 0, "Disabled operator control must not inspect or open the Operational State Store.")
@@ -484,7 +713,13 @@ test("keeps inbound operator control disabled without constructing its store or 
 })
 
 test("verifies Operational State Store records before broker connect and starts/stops Telegram around the trading runtime", async () => {
-  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: {
+    enabled: true,
+    allowedUserIds: ["12345"]
+  } }
+  }
   const calls = []
   const appendedFacts = []
   let operator
@@ -495,12 +730,24 @@ test("verifies Operational State Store records before broker connect and starts/
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
   const operationalStateStore = {
     runtimeSessionId: "test-runtime-session",
-    verify: async () => { calls.push("verify-Operational State Store records"); return { ok: true, data: { valid: true, durableWriteSupported: true } } },
+    verify: async () => { calls.push("verify-Operational State Store records"); return {
+      ok: true,
+      data: {
+      valid: true,
+      durableWriteSupported: true
+    }
+    } },
     readAll: async () => ({
       ok: true,
       data: {
         records: [
-          { sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } },
+          {
+            sequence: "0",
+            factId: "durable-facts:genesis",
+            factType: "LEDGER_INITIALIZED",
+            runtimeSessionId: "test-runtime-session",
+            data: { schemaVersion: 1 }
+          },
           ...appendedFacts,
         ],
         durableWriteSupported: true,
@@ -515,33 +762,63 @@ test("verifies Operational State Store records before broker connect and starts/
         sequence: String(appendedFacts.length + 1),
         runtimeSessionId: "test-runtime-session",
       })
-      return { ok: true, data: { durable: true, duplicate: false } }
+      return {
+        ok: true,
+        data: {
+        durable: true,
+        duplicate: false
+      }
+      }
     },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
+    env: {
+      ...binanceEnv,
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      OPERATIONAL_STATE_DIRECTORY: process.cwd()
+    },
     runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: ({ directory, runtimeSessionId }) => {
+    createOperationalStateStore: ({
+      directory,
+      runtimeSessionId
+    }) => {
       calls.push("create-Operational State Store records-store")
       assert.equal(directory, process.cwd(), "The configured absolute store directory must be passed unchanged to the ADR-0001 adapter.")
       assert.equal(runtimeSessionId, "test-runtime-session", "The current process identity must scope appended Operational State Store records.")
       return operationalStateStore
     },
-    createTelegramOperatorAdapter: ({ botToken, allowedUserIds, operator: suppliedOperator }) => {
+    createTelegramOperatorAdapter: ({
+      botToken,
+      allowedUserIds,
+      operator: suppliedOperator
+    }) => {
       calls.push("create-telegram-adapter")
       assert.equal(botToken, "test-telegram-token", "The Telegram bot token must come from the environment and never app config.")
       assert.deepEqual(allowedUserIds, ["12345"], "Only configured trusted Telegram user IDs may reach the adapter.")
       operator = suppliedOperator
-      return { start: async () => calls.push("start-telegram-poller"), stop: async () => calls.push("stop-telegram-poller") }
+      return {
+        start: async () => calls.push("start-telegram-poller"),
+        stop: async () => calls.push("stop-telegram-poller")
+      }
     },
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
   try {
     assert.ok(calls.indexOf("verify-Operational State Store records") < calls.indexOf("connect"), "Operational State Store records integrity must be verified before Binance broker connection.")
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
-    const pauseResult = await operator.pauseMarket({ actor: { id: "telegram-user:12345", roles: ["trading-operator"] }, requestId: "telegram:9001", symbol: "BTCUSDT" })
+    const pauseResult = await operator.pauseMarket({
+      actor: {
+      id: "telegram-user:12345",
+      roles: ["trading-operator"]
+    },
+      requestId: "telegram:9001",
+      symbol: "BTCUSDT"
+    })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
     const operatorPauseFacts = appendedFacts.filter(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
     assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one Operational State Store record.")
@@ -554,30 +831,61 @@ test("verifies Operational State Store records before broker connect and starts/
 })
 
 test("stops Telegram and broker when Telegram identity verification fails during startup", async () => {
-  const config = { ...appConfig, operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } } }
+  const config = {
+    ...appConfig,
+    operatorControl: { telegram: {
+    enabled: true,
+    allowedUserIds: ["12345"]
+  } }
+  }
   const calls = []
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
+    env: {
+      ...binanceEnv,
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      OPERATIONAL_STATE_DIRECTORY: process.cwd()
+    },
     runtimeSessionId: "test-runtime-session",
     createOperationalStateStore: () => ({
       runtimeSessionId: "test-runtime-session",
-      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      verify: async () => ({
+        ok: true,
+        data: {
+        valid: true,
+        durableWriteSupported: true
+      }
+      }),
       readAll: async () => ({
         ok: true,
         data: {
-          records: [{ sequence: "0", factId: "durable-facts:genesis", factType: "LEDGER_INITIALIZED", runtimeSessionId: "test-runtime-session", data: { schemaVersion: 1 } }],
+          records: [{
+            sequence: "0",
+            factId: "durable-facts:genesis",
+            factType: "LEDGER_INITIALIZED",
+            runtimeSessionId: "test-runtime-session",
+            data: { schemaVersion: 1 }
+          }],
           durableWriteSupported: true,
           lastCommittedSequence: "0",
           lastCommittedDigest: "a".repeat(64),
         },
       }),
-      append: async () => ({ ok: true, data: { durable: true } }),
+      append: async () => ({
+        ok: true,
+        data: { durable: true }
+      }),
     }),
-    createTelegramOperatorAdapter: () => ({ start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") }, stop: async () => calls.push("stop-telegram-poller") }),
+    createTelegramOperatorAdapter: () => ({
+      start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") },
+      stop: async () => calls.push("stop-telegram-poller")
+    }),
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   }), (error) => error.code === "OPERATOR_CONTROL_TELEGRAM_START_FAILED", "Telegram identity verification failure must abort startup.")
   assert.ok(calls.includes("stop-telegram-poller"), "A partially started Telegram adapter must be stopped during startup rollback.")
   assert.ok(calls.includes("disconnect"), "The broker must be disconnected during startup rollback.")
@@ -591,7 +899,10 @@ test("subscribes only enabled pairs for Binance trading", async () => {
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
   assert.equal(result.connected, true)
   assert.equal(result.tradingEnabled, true)
@@ -622,9 +933,18 @@ test("keeps external open orders audit-blocked but does not block startup or can
     market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "64000", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({
+      amount: "64000",
+      asset: market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -677,19 +997,40 @@ test("subscribes every enabled market before waiting for the first market's REST
   broker.getPrices = async ({ symbol }) => {
     calls.push("prices:" + symbol)
     if (symbol === "BTCUSDT") {return firstTicker}
-    return { ok: true, data: { symbol, price: "65000" } }
+    return {
+      ok: true,
+      data: {
+      symbol,
+      price: "65000"
+    }
+    }
   }
   let accountSnapshotTime = 0
   broker.getAccountSnapshot = async () => {
     accountSnapshotTime += 1
     const balances = ["BTC", "ETH", "USDT"].map((code) => {
-      const asset = new Asset({ id: "asset:" + code, code })
+      const asset = new Asset({
+        id: "asset:" + code,
+        code
+      })
       return new Balance({
-        free: new Quantity({ amount: "0", asset }),
-        locked: new Quantity({ amount: "0", asset }),
+        free: new Quantity({
+          amount: "0",
+          asset
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset
+        }),
       })
     })
-    return { ok: true, data: { balances, sourceTime: accountSnapshotTime } }
+    return {
+      ok: true,
+      data: {
+      balances,
+      sourceTime: accountSnapshotTime
+    }
+    }
   }
   let placeOrderCalls = 0
   broker.placeOrder = async () => {
@@ -705,7 +1046,10 @@ test("subscribes every enabled market before waiting for the first market's REST
         ...strategy,
         pairs: {
           ...strategy.pairs,
-          ETHUSDT: { ...strategy.pairs.ETHUSDT, enabled: true },
+          ETHUSDT: {
+            ...strategy.pairs.ETHUSDT,
+            enabled: true
+          },
         },
       },
     },
@@ -717,7 +1061,11 @@ test("subscribes every enabled market before waiting for the first market's REST
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   let resolveSecondSubscription
@@ -739,7 +1087,13 @@ test("subscribes every enabled market before waiting for the first market's REST
   assert.ok(calls.includes("subscribe:book:BTCUSDT"))
   assert.ok(calls.includes("subscribe:book:ETHUSDT"))
 
-  resolveFirstTicker({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } })
+  resolveFirstTicker({
+    ok: true,
+    data: {
+    symbol: "BTCUSDT",
+    price: "65000"
+  }
+  })
   const runtime = await startup
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
   assert.equal(placeOrderCalls, 0)
@@ -751,7 +1105,10 @@ test("starts the Conservative trading engine and applies fills to Portfolio", as
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => createBroker(),
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
   assert.equal(result.tradingEnabled, true)
   assert.equal(result.strategyMode, "conservative")
@@ -763,11 +1120,15 @@ test("starts the Conservative trading engine and applies fills to Portfolio", as
   assert.equal(second.data.applied, true)
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.02")
   assert.equal(result.portfolio.appliedFillIds.length, 2)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  assert.equal(result.userDataStatus, "SHUTDOWN_INCOMPLETE")
 })
 
 test("serializes concurrent Portfolio updates without losing fills", async () => {
-  const result = await startHarvesterForTest({ loadConfig: async () => appConfig, env: {} })
+  const result = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {}
+  })
   const [first, second] = await Promise.all([
     result.updatePortfolio({ fill: createFill({ tradeId: "trade-1" }) }),
     result.updatePortfolio({ fill: createFill({ tradeId: "trade-2" }) }),
@@ -781,14 +1142,20 @@ test("serializes concurrent Portfolio updates without losing fills", async () =>
 test("disconnects when a market price subscription fails", async () => {
   const calls = []
   const broker = createBroker(calls, {
-    subscribeResult: { ok: false, errors: [new Error("stream unavailable")] },
+    subscribeResult: {
+      ok: false,
+      errors: [new Error("stream unavailable")]
+    },
   })
   await assert.rejects(
     startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /Unable to subscribe to market prices for BTCUSDT: stream unavailable/,
   )
@@ -810,7 +1177,10 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   const calls = []
   const broker = createBroker(calls, {
     subscribeResultBySymbol: {
-      ETHUSDT: { ok: false, errors: [new Error("stream unavailable")] },
+      ETHUSDT: {
+        ok: false,
+        errors: [new Error("stream unavailable")]
+      },
     },
   })
   const config = {
@@ -821,7 +1191,14 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
         ...appConfig.strategies.CG_coinGrabber,
         pairs: {
           ...appConfig.strategies.CG_coinGrabber.pairs,
-          ETHUSDT: { enabled: true, tradingEnvironment: "both", investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
+          ETHUSDT: {
+            enabled: true,
+            tradingEnvironment: "both",
+            investment: 100,
+            orderQuantity: 0.1,
+            makerPercent: 0,
+            takerPercent: 0
+          },
         },
       },
     },
@@ -831,7 +1208,10 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
       loadConfig: async () => config,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /Unable to subscribe to market prices for ETHUSDT/,
   )
@@ -857,12 +1237,19 @@ test("passes live TRADING_MODE to the Binance broker factory during startup", as
   let brokerConfig
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "test", TRADING_MODE: "live" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "test",
+      TRADING_MODE: "live"
+    },
     brokerAdapterFactory: ({ config }) => {
       brokerConfig = config
       return createBroker()
     },
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   assert.equal(result.tradingMode, "live")
@@ -905,9 +1292,16 @@ test("does not adopt unowned execution events into strategy accounting", async (
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
-  await broker.emitUserDataEvent({ eventType: "executionReport", executionType: "TRADE", fill })
+  await broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill
+  })
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
@@ -924,32 +1318,9 @@ test("does not clear a genuine startup stream-recovery gate with only the initia
   const subscribeForUserData = broker.subscribeForUserData
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
-    handlers.onStatus({ type: "connectionClosed", recoveryRequired: true })
-    return result
-  }
-
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => appConfig,
-      env: {
-        ...binanceEnv,
-        NODE_ENV: "development",
-      },
-      brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
-    }),
-    /user-data stream reconciliation is required/,
-  )
-})
-
-test("does not adopt an external order report received before the ownership registry is ready", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const subscribeForUserData = broker.subscribeForUserData
-  broker.subscribeForUserData = async (handlers) => {
-    const result = await subscribeForUserData(handlers)
-    handlers.onEvent({
-      event: { eventType: "executionReport", executionType: "NEW" },
+    handlers.onStatus({
+      type: "connectionClosed",
+      recoveryRequired: true
     })
     return result
   }
@@ -962,7 +1333,42 @@ test("does not adopt an external order report received before the ownership regi
         NODE_ENV: "development",
       },
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
+    }),
+    /user-data stream reconciliation is required/,
+  )
+})
+
+test("does not adopt an external order report received before the ownership registry is ready", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    handlers.onEvent({
+      event: {
+        eventType: "executionReport",
+        executionType: "NEW"
+      },
+    })
+    return result
+  }
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => appConfig,
+      env: {
+        ...binanceEnv,
+        NODE_ENV: "development",
+      },
+      brokerAdapterFactory: () => broker,
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /unowned or invalid user-data event before order ownership was initialized/,
   )
@@ -981,7 +1387,10 @@ test("starts application reconciliation on transport recovery and acknowledges o
   const journalEvents = []
   const eventPublisher = {
     publish: (event) => { journalEvents.push(event); return { ok: true } },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({
+      ok: true,
+      durable: true
+    }),
   }
   let acknowledgementCount = 0
   let resolveAcknowledgement
@@ -1019,7 +1428,10 @@ test("starts application reconciliation on transport recovery and acknowledges o
     brokerAdapterFactory: () => broker,
     eventPublisher,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   assert.equal(result.userDataReady, true)
@@ -1033,7 +1445,10 @@ test("starts application reconciliation on transport recovery and acknowledges o
   await waitForTestSignal(
     acknowledged,
     "application recovery acknowledgement",
-    () => ({ acknowledgementCount, userDataReady: result.userDataReady }),
+    () => ({
+      acknowledgementCount,
+      userDataReady: result.userDataReady
+    }),
     2_000,
   )
 
@@ -1101,9 +1516,15 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
   }
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   broker.emitUserDataStatus({
@@ -1139,7 +1560,11 @@ test("logs stack and cause details when a user-data RPC error has an empty messa
   })
   const error = new TypeError("")
   error.cause = new Error("socket callback failed")
-  broker.emitUserDataStatus({ type: "rpcError", error, recoveryRequired: false })
+  broker.emitUserDataStatus({
+    type: "rpcError",
+    error,
+    recoveryRequired: false
+  })
 
   const diagnostic = diagnostics.find((entry) =>
     entry?.message === "User-data stream error")
@@ -1160,7 +1585,10 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   let accountReads = 0
   broker.getAccountSnapshot = async () => {
     accountReads += 1
-    if (accountReads === 2) {return { ok: false, errors: [new Error("account endpoint unavailable")] }}
+    if (accountReads === 2) {return {
+      ok: false,
+      errors: [new Error("account endpoint unavailable")]
+    }}
     return getAccountSnapshot()
   }
   let acknowledgementCount = 0
@@ -1180,7 +1608,10 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
 
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
@@ -1199,7 +1630,10 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  await waitForTestSignal(failed, "failed recovery audit", () => ({ accountReads, acknowledgementCount }), 2_000)
+  await waitForTestSignal(failed, "failed recovery audit", () => ({
+    accountReads,
+    acknowledgementCount
+  }), 2_000)
 
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
@@ -1240,7 +1674,10 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
 
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
@@ -1260,9 +1697,16 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
     reconciliationRequired: true,
   })
   await waitForTestSignal(recoverySnapshotStarted, "recovery account snapshot", () => ({ accountReads }), 2_000)
-  broker.emitUserDataStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
+  broker.emitUserDataStatus({
+    type: "connectionClosed",
+    code: 1006,
+    recoveryRequired: true
+  })
   releaseRecoverySnapshot()
-  await waitForTestSignal(staleFailure, "stale recovery rejection", () => ({ accountReads, acknowledgementCount }), 2_000)
+  await waitForTestSignal(staleFailure, "stale recovery rejection", () => ({
+    accountReads,
+    acknowledgementCount
+  }), 2_000)
 
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
@@ -1274,7 +1718,11 @@ test("fails startup when user-data recovery is required during subscription setu
   const subscribeForUserData = broker.subscribeForUserData
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
-    handlers.onStatus({ type: "recovered", recoveryRequired: true, reconciliationRequired: true })
+    handlers.onStatus({
+      type: "recovered",
+      recoveryRequired: true,
+      reconciliationRequired: true
+    })
     return result
   }
   await assert.rejects(
@@ -1282,7 +1730,10 @@ test("fails startup when user-data recovery is required during subscription setu
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /user-data stream reconciliation is required/,
   )
@@ -1294,10 +1745,16 @@ test("marks trading ready only after the mandatory account preflight audit", asy
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
   assert.equal(result.userDataReady, true)
-  broker.emitUserDataStatus({ type: "ready", recoveryRequired: false })
+  broker.emitUserDataStatus({
+    type: "ready",
+    recoveryRequired: false
+  })
   assert.equal(result.userDataReady, true)
   assert.equal(result.placeOrder, undefined)
   assert.equal(result.broker, undefined)
@@ -1311,7 +1768,10 @@ test("blocks trading after execution accounting failure", async () => {
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     onUserDataEvent: async () => {},
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
   await broker.emitUserDataEvent({
     eventType: "executionReport",
@@ -1339,7 +1799,10 @@ test("fails startup closed when user-data subscription cannot be established", a
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /Unable to subscribe to user data: user stream unavailable/,
   )
@@ -1352,7 +1815,10 @@ test("does not expose a broker port that could bypass the trading engine", async
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   assert.equal(result.placeOrder, undefined)
@@ -1367,7 +1833,10 @@ test("fails closed on malformed external TRADE reports", async () => {
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
     onUserDataEvent: async () => { observed = true },
   })
   await broker.emitUserDataEvent({
@@ -1410,7 +1879,10 @@ test("fails startup before opening streams when required minimum notional is una
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /Required exchange trading rule is unavailable: MIN_NOTIONAL/,
   )
@@ -1436,7 +1908,10 @@ test("fails startup when the configured post-only order type is unsupported", as
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /does not support required LIMIT_MAKER/,
   )
@@ -1450,13 +1925,19 @@ test("does not request another account snapshot after a TRADE when later snapsho
   broker.getAccountSnapshot = async () => {
     calls += 1
     if (calls === 1) {return getAccountSnapshot()}
-    return { ok: false, errors: [new Error("account endpoint unavailable")] }
+    return {
+      ok: false,
+      errors: [new Error("account endpoint unavailable")]
+    }
   }
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   broker.emitUserDataEvent({
@@ -1481,13 +1962,22 @@ test("fails startup when the exchange snapshot omits a configured market asset",
   const broker = createBroker(calls)
   broker.getAccountSnapshot = async () => {
     calls.push("account:snapshot")
-    const asset = new Asset({ id: "asset:BTC", code: "BTC" })
+    const asset = new Asset({
+      id: "asset:BTC",
+      code: "BTC"
+    })
     return {
       ok: true,
       data: {
         balances: [new Balance({
-          free: new Quantity({ amount: "1", asset }),
-          locked: new Quantity({ amount: "0", asset }),
+          free: new Quantity({
+            amount: "1",
+            asset
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset
+          }),
         })],
         sourceTime: 1,
       },
@@ -1499,7 +1989,10 @@ test("fails startup when the exchange snapshot omits a configured market asset",
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {} },
+      logger: {
+        info() {},
+        error() {}
+      },
     }),
     /missing required market asset balances: USDT/,
   )
@@ -1521,10 +2014,16 @@ test("does not clear the ownership gate after stream recovery acknowledgement", 
     loadConfig: async () => appConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
-  broker.emitUserDataStatus({ type: "connectionClosed", recoveryRequired: true })
+  broker.emitUserDataStatus({
+    type: "connectionClosed",
+    recoveryRequired: true
+  })
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
@@ -1595,8 +2094,14 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   const broker = {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
-    getExchangeMarkets: async () => ({ ok: true, data: [] }),
-    getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
+    getExchangeMarkets: async () => ({
+      ok: true,
+      data: []
+    }),
+    getSymbolFilters: async () => ({
+      ok: true,
+      data: marketMetadata
+    }),
     getOpenOrders: async ({ symbol } = {}) => {
       if (recoveryPending) {
         if (symbol) {
@@ -1613,9 +2118,21 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
           .map((order) => createOpenOrderSnapshot({ order })),
       }
     },
-    getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
-    getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    getPrices: async () => ({
+      ok: true,
+      data: {
+      symbol: "BTCUSDT",
+      price: "65000"
+    }
+    }),
+    getCandles: async () => ({
+      ok: true,
+      data: []
+    }),
+    subscribeForCandles: async () => ({
+      ok: true,
+      data: { unsubscribe: async () => {} }
+    }),
     cancelOrder: async ({ order }) => {
       if (order.side === "BUY") {buyCancellationCount.value += 1}
       const canceledOrder = new CanonicalOrder({
@@ -1634,13 +2151,22 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
         completedAt: 3,
       })
       canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
-      return { ok: true, data: canceledOrder }
+      return {
+        ok: true,
+        data: canceledOrder
+      }
     },
     getFills: async ({ orderId } = {}) => {
       if (recoveryPending) {recoveryFillHistoryReads += 1}
-      return { ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }
+      return {
+        ok: true,
+        data: fillHistoryByOrder.get(String(orderId)) ?? []
+      }
     },
-    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => {
+    getCanonicalOrderHistory: async ({
+      orderId,
+      symbol
+    } = {}) => {
       if (recoveryPending) {
         recoveryCanonicalHistoryReads += 1
         if (recoveryCanonicalHistoryReads === 1) {
@@ -1655,21 +2181,42 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
           (!symbol || order.market.symbol === symbol)),
       }
     },
-    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
+    getCanonicalOrder: async () => ({
+      ok: false,
+      errors: [new Error("order not found")]
+    }),
     getAccountSnapshot: async () => {
       if (recoveryPending) {recoveryAccountSnapshotReads += 1}
       snapshotTime += 1
       const balances = [
         new Balance({
-          free: new Quantity({ amount: baseBalance, asset: marketMetadata.market.baseAsset }),
-          locked: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
+          free: new Quantity({
+            amount: baseBalance,
+            asset: marketMetadata.market.baseAsset
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset: marketMetadata.market.baseAsset
+          }),
         }),
         new Balance({
-          free: new Quantity({ amount: "10000", asset: marketMetadata.market.quoteAsset }),
-          locked: new Quantity({ amount: "0", asset: marketMetadata.market.quoteAsset }),
+          free: new Quantity({
+            amount: "10000",
+            asset: marketMetadata.market.quoteAsset
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset: marketMetadata.market.quoteAsset
+          }),
         }),
       ]
-      return { ok: true, data: { balances, sourceTime: snapshotTime } }
+      return {
+        ok: true,
+        data: {
+        balances,
+        sourceTime: snapshotTime
+      }
+      }
     },
     subscribeForUserData: async (handlers) => {
       userDataHandlers = {
@@ -1719,21 +2266,40 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
               reconciliationRequired: false,
             })
             resolveRecoveryAcknowledged()
-            return { accepted: true, completed: true }
+            return {
+              accepted: true,
+              completed: true
+            }
           },
         },
       }
     },
-    subscribeForPrices: async ({ symbol, onPrice }) => {
+    subscribeForPrices: async ({
+      symbol,
+      onPrice
+    }) => {
       subscriptions.set(symbol, onPrice)
-      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) } }
+      return {
+        ok: true,
+        data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) }
+      }
     },
-    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+    subscribeForBookTicker: async ({
+      symbol,
+      onBookTicker
+    }) => {
       bookSubscriptions.set(symbol, onBookTicker)
-      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) } }
+      return {
+        ok: true,
+        data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) }
+      }
     },
     placeOrder: async ({ order }) => {
-      calls.push({ side: order.side, price: order.price, quantity: order.quantity })
+      calls.push({
+        side: order.side,
+        price: order.price,
+        quantity: order.quantity
+      })
       submittedOrders.push(order)
       if (submittedOrders.length === 3) {resolveThreeOrders()}
       if (submittedOrders.length === 5) {resolveFiveOrders()}
@@ -1743,16 +2309,28 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
           market: marketMetadata.market,
           side: order.side,
           type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: marketMetadata.market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: marketMetadata.market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
+          limitPrice: new Money({
+            amount: order.price,
+            asset: marketMetadata.market.quoteAsset
+          }),
+          originalQuantity: new Quantity({
+            amount: order.quantity,
+            asset: marketMetadata.market.baseAsset
+          }),
+          executedQuantity: new Quantity({
+            amount: "0",
+            asset: marketMetadata.market.baseAsset
+          }),
           status: "OPEN",
           createdAt: 1,
           acknowledgedAt: 1,
           updatedAt: 1,
         })
       canonicalOrdersByBrokerId.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
-      return { ok: true, data: acknowledgedOrder }
+      return {
+        ok: true,
+        data: acknowledgedOrder
+      }
     },
   }
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
@@ -1760,7 +2338,10 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: {
+          conservative: { enabled: true },
+          aggressive: { enabled: false }
+        },
         pairs: {
       BTCUSDT: {
         enabled: true,
@@ -1798,10 +2379,16 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
           name: event.name,
           phase: event.data?.phase,
         })))
-        return { ok: true, durable: true }
+        return {
+          ok: true,
+          durable: true
+        }
       },
     },
-    onUserDataEvent: async ({ event, recoveryMode }) => {
+    onUserDataEvent: async ({
+      event,
+      recoveryMode
+    }) => {
       if (event?.fill?.tradeId === recoveryFillTradeId) {
         recoveryQueuedFillProcessedCount += 1
         recoveryQueuedFillMode = recoveryMode
@@ -1812,7 +2399,12 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     logger: {
       info: (entry) => runtimeInfo.push(entry),
       debug: (entry) => runtimeDebug.push(entry),
-      error: (entry) => runtimeErrors.push({ message: entry.message, symbol: entry.symbol, reason: entry.reason, errors: entry.errors?.map((error) => error.message ?? String(error)) }),
+      error: (entry) => runtimeErrors.push({
+        message: entry.message,
+        symbol: entry.symbol,
+        reason: entry.reason,
+        errors: entry.errors?.map((error) => error.message ?? String(error))
+      }),
     },
   })
   assert.equal(runtime.userDataReady, true)
@@ -1825,8 +2417,12 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   }
   assert.equal(submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
   await bookSubscriptions.get("BTCUSDT")({
-    symbol: "BTCUSDT", bestBidPrice: "60000", bestBidQuantity: "1",
-    bestAskPrice: "70000", bestAskQuantity: "1", timestamp: 1000,
+    symbol: "BTCUSDT",
+    bestBidPrice: "60000",
+    bestBidQuantity: "1",
+    bestAskPrice: "70000",
+    bestAskQuantity: "1",
+    timestamp: 1000,
   })
   assert.equal(submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
   assert.equal(submittedOrders[0].side, "BUY")
@@ -1837,9 +2433,18 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     market: marketMetadata.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: submittedOrders[0].price, asset: marketMetadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: submittedOrders[0].quantity, asset: marketMetadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: submittedOrders[0].price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: submittedOrders[0].quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: marketMetadata.market.baseAsset
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -1867,9 +2472,18 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     market: marketMetadata.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: submitted.price, asset: marketMetadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: submitted.quantity, asset: marketMetadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: submitted.quantity, asset: marketMetadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: submitted.price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: submitted.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: submitted.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -1882,8 +2496,14 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     clientOrderId: canonicalBuy.clientOrderId,
     market: marketMetadata.market,
     side: "BUY",
-    price: new Money({ amount: submitted.price, asset: marketMetadata.market.quoteAsset }),
-    quantity: new Quantity({ amount: submitted.quantity, asset: marketMetadata.market.baseAsset }),
+    price: new Money({
+      amount: submitted.price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    quantity: new Quantity({
+      amount: submitted.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
     quoteQuantity: new Money({
       amount: "649.6761",
       asset: marketMetadata.market.quoteAsset,
@@ -2094,7 +2714,13 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   )
 
   await waitForTestSignal(threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
-    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    submittedOrders: submittedOrders.map(({
+      side,
+      price
+    }) => ({
+      side,
+      price
+    })),
     userDataReady: runtime.userDataReady,
     userDataStatus: runtime.userDataStatus,
     errors: runtimeErrors,
@@ -2106,9 +2732,18 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     market: marketMetadata.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: secondBuyIntent.price, asset: marketMetadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: marketMetadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: secondBuyIntent.price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: secondBuyIntent.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: secondBuyIntent.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -2121,10 +2756,19 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     clientOrderId: canonicalSecondBuy.clientOrderId,
     market: marketMetadata.market,
     side: "BUY",
-    price: new Money({ amount: secondBuyIntent.price, asset: marketMetadata.market.quoteAsset }),
-    quantity: new Quantity({ amount: secondBuyIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    price: new Money({
+      amount: secondBuyIntent.price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    quantity: new Quantity({
+      amount: secondBuyIntent.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
     quoteQuantity: new Money({
-      amount: multiplyDecimal({ left: secondBuyIntent.price, right: secondBuyIntent.quantity }),
+      amount: multiplyDecimal({
+        left: secondBuyIntent.price,
+        right: secondBuyIntent.quantity
+      }),
       asset: marketMetadata.market.quoteAsset,
     }),
     commissions: [],
@@ -2140,7 +2784,13 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
   })
   await waitForTestSignal(fiveOrdersSubmitted, "five order submissions after the second BUY fill", () => ({
-    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    submittedOrders: submittedOrders.map(({
+      side,
+      price
+    }) => ({
+      side,
+      price
+    })),
     userDataReady: runtime.userDataReady,
     userDataStatus: runtime.userDataStatus,
     errors: runtimeErrors,
@@ -2154,9 +2804,18 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     market: marketMetadata.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: replacementSell.price, asset: marketMetadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: replacementSell.quantity, asset: marketMetadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: replacementSell.quantity, asset: marketMetadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: replacementSell.price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: replacementSell.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: replacementSell.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -2169,10 +2828,19 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     clientOrderId: canonicalSell.clientOrderId,
     market: marketMetadata.market,
     side: "SELL",
-    price: new Money({ amount: replacementSell.price, asset: marketMetadata.market.quoteAsset }),
-    quantity: new Quantity({ amount: replacementSell.quantity, asset: marketMetadata.market.baseAsset }),
+    price: new Money({
+      amount: replacementSell.price,
+      asset: marketMetadata.market.quoteAsset
+    }),
+    quantity: new Quantity({
+      amount: replacementSell.quantity,
+      asset: marketMetadata.market.baseAsset
+    }),
     quoteQuantity: new Money({
-      amount: multiplyDecimal({ left: replacementSell.price, right: replacementSell.quantity }),
+      amount: multiplyDecimal({
+        left: replacementSell.price,
+        right: replacementSell.quantity
+      }),
       asset: marketMetadata.market.quoteAsset,
     }),
     commissions: [],
@@ -2188,14 +2856,26 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
   })
   await waitForTestSignal(recoveryCompleted, "recovery.cycle_completed after the SELL fill", () => ({
-    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    submittedOrders: submittedOrders.map(({
+      side,
+      price
+    }) => ({
+      side,
+      price
+    })),
     userDataReady: runtime.userDataReady,
     userDataStatus: runtime.userDataStatus,
     errors: runtimeErrors,
   }))
-  assert.ok(runtimeDebug.some(({ message, tradeId }) =>
+  assert.ok(runtimeDebug.some(({
+    message,
+    tradeId
+  }) =>
     message === "Execution accounted" && tradeId === "testnet-buy-fill"))
-  assert.ok(runtimeDebug.some(({ message, tradeId }) =>
+  assert.ok(runtimeDebug.some(({
+    message,
+    tradeId
+  }) =>
     message === "Execution accounted" && tradeId === "testnet-sell-fill"))
   assert.ok(runtimeDebug.some(({ message }) =>
     message === "recovery completion evaluation input"))
@@ -2225,22 +2905,43 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
 test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG", async () => {
   const calls = []
   const broker = createBroker()
-  broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: []
+  })
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     now: () => 123,
     logger: {
-      debug: (data) => calls.push({ level: "debug", ...data }),
-      info: (data) => calls.push({ level: "info", ...data }),
-      system: (data) => calls.push({ level: "system", ...data }),
-      error: (data) => calls.push({ level: "error", ...data }),
+      debug: (data) => calls.push({
+        level: "debug",
+        ...data
+      }),
+      info: (data) => calls.push({
+        level: "info",
+        ...data
+      }),
+      system: (data) => calls.push({
+        level: "system",
+        ...data
+      }),
+      error: (data) => calls.push({
+        level: "error",
+        ...data
+      }),
     },
   })
 
-  await broker.emitUserDataStatus({ type: "reconciled", recoveryRequired: false })
+  await broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false
+  })
   await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
     symbol: "BTCUSDT",
@@ -2273,12 +2974,21 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.ok(systemMessages.includes("Conservative TESTNET trading engine activated"))
   assert.ok(systemMessages.includes("Book ticker subscribed"))
   assert.ok(systemMessages.includes("Market data subscribed"))
-  const marketEvent = debugCalls.find(({ message, price }) =>
+  const marketEvent = debugCalls.find(({
+    message,
+    price
+  }) =>
     message === "Harvester market price event received" && price === "65000.12")
-  const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
+  const evaluationStarted = debugCalls.find(({
+    message,
+    marketEventId
+  }) =>
     message === "Harvester Conservative evaluation started" &&
     marketEventId === marketEvent?.marketEventId)
-  const evaluationDecided = debugCalls.find(({ message, evaluationId }) =>
+  const evaluationDecided = debugCalls.find(({
+    message,
+    evaluationId
+  }) =>
     message === "Harvester Conservative evaluation decided" &&
     evaluationId === evaluationStarted?.evaluationId)
   assert.ok(marketEvent)
@@ -2370,7 +3080,10 @@ test("stops broker intake before draining queued user-data and disconnects after
   let queuedEvents = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     onUserDataEvent: async () => {
@@ -2429,9 +3142,18 @@ test("logs safe correlation details when an execution report is not owned", asyn
     market: metadata.market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: "65000",
+      asset: metadata.market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: metadata.market.baseAsset
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -2508,7 +3230,10 @@ test("reconciles the in-memory order registry before reopening trading after str
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   assert.equal(result.userDataReady, true)
@@ -2537,7 +3262,10 @@ test("fails closed when TRADING_MODE is missing, before broker construction", as
     loadConfig: async () => appConfig,
     env: { TRADING_MODE: undefined },
     brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   }), /TRADING_MODE must be set to "testnet" or "live"/)
   assert.equal(brokerFactoryCalled, false)
 })
@@ -2545,43 +3273,98 @@ test("fails closed when TRADING_MODE is missing, before broker construction", as
 
 test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
   const client = {
-    connect: async () => {}, disconnect: async () => {}, createOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }), getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
-    getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
-    getExchangeMarkets: async () => ({ ok: true, data: [] }),
-    getPrices: async () => ({ ok: true }), getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForPrices: async () => ({ ok: true }), subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
-    subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
+    connect: async () => {},
+    disconnect: async () => {},
+    createOrder: async () => ({ ok: true }),
+    cancelOrder: async () => ({ ok: true }),
+    getOpenOrders: async () => ({
+      ok: true,
+      data: []
+    }),
+    getFills: async () => ({ ok: true }),
+    getCanonicalOrderHistory: async () => ({ ok: true }),
+    getCanonicalOrder: async () => ({
+      ok: false,
+      errors: [new Error("order not found")]
+    }),
+    getAccountSnapshot: async () => ({ ok: true }),
+    getSymbolFilters: async () => ({ ok: true }),
+    getExchangeMarkets: async () => ({
+      ok: true,
+      data: []
+    }),
+    getPrices: async () => ({ ok: true }),
+    getCandles: async () => ({
+      ok: true,
+      data: []
+    }),
+    subscribeForPrices: async () => ({ ok: true }),
+    subscribeForCandles: async () => ({
+      ok: true,
+      data: { unsubscribe: async () => {} }
+    }),
+    subscribeForBookTicker: async () => ({ ok: true }),
+    subscribeForUserData: async () => ({ ok: true }),
   }
   const broker = createBinanceBrokerAdapter({
-    config: { apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" },
+    config: {
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      tradingMode: "testnet"
+    },
     brokerFactory: () => client,
   })
   const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })
-  client.createCanonicalOrder = async () => ({ ok: false, errors: [rejection] })
-  const result = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  client.createCanonicalOrder = async () => ({
+    ok: false,
+    errors: [rejection]
+  })
+  const result = await broker.placeOrder({ order: {
+    symbol: "BTCUSDT",
+    type: "LIMIT_MAKER"
+  } })
   assert.equal(result.errors[0].code, "POST_ONLY_WOULD_TAKE")
   const unrelated = Object.assign(new Error("insufficient balance"), { code: -2010 })
-  client.createCanonicalOrder = async () => ({ ok: false, errors: [unrelated] })
-  const other = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  client.createCanonicalOrder = async () => ({
+    ok: false,
+    errors: [unrelated]
+  })
+  const other = await broker.placeOrder({ order: {
+    symbol: "BTCUSDT",
+    type: "LIMIT_MAKER"
+  } })
   assert.equal(other.errors[0], unrelated)
 
   const unknownOutcome = Object.assign(
     new Error("Order would immediately match and take."),
-    { code: -2010, outcomeUnknown: true },
+    {
+      code: -2010,
+      outcomeUnknown: true
+    },
   )
-  client.createCanonicalOrder = async () => ({ ok: false, errors: [unknownOutcome] })
-  const unknown = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  client.createCanonicalOrder = async () => ({
+    ok: false,
+    errors: [unknownOutcome]
+  })
+  const unknown = await broker.placeOrder({ order: {
+    symbol: "BTCUSDT",
+    type: "LIMIT_MAKER"
+  } })
   assert.equal(unknown.errors[0], unknownOutcome)
 
   let forwardedSubscription
   const onBookTicker = () => {}
   client.subscribeForBookTicker = async (input) => {
     forwardedSubscription = input
-    return { ok: true, data: { unsubscribe: async () => {} } }
+    return {
+      ok: true,
+      data: { unsubscribe: async () => {} }
+    }
   }
-  await broker.subscribeForBookTicker({ symbol: "BTCUSDT", onBookTicker })
+  await broker.subscribeForBookTicker({
+    symbol: "BTCUSDT",
+    onBookTicker
+  })
   assert.equal(forwardedSubscription.symbol, "BTCUSDT")
   assert.equal(forwardedSubscription.onBookTicker, onBookTicker)
 })
@@ -2600,7 +3383,10 @@ test("emits per-execution debug audit records with commission and before/after a
     },
   })
 
-  const fill = createFill({ tradeId: "audited-trade", quantity: "0.01" })
+  const fill = createFill({
+    tradeId: "audited-trade",
+    quantity: "0.01"
+  })
   const applied = await result.updateTradingAccounting({ fill })
 
   assert.equal(applied.ok, true)
@@ -2630,7 +3416,8 @@ test("emits per-execution debug audit records with commission and before/after a
   assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
   assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
 
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  assert.equal(result.userDataStatus, "SHUTDOWN_INCOMPLETE")
 })
 
 
@@ -2641,7 +3428,10 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   let flushCount = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
@@ -2649,12 +3439,22 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
         flushCount += 1
         calls.push("journal:flush:" + flushCount)
         return flushCount < 3
-          ? { ok: true, durable: true }
-          : { ok: false, errors: [new Error("closing snapshot fsync failed")] }
+          ? {
+            ok: true,
+            durable: true
+          }
+          : {
+            ok: false,
+            errors: [new Error("closing snapshot fsync failed")]
+          }
       },
     },
     now: () => 1000,
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
@@ -2678,7 +3478,10 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
   const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
   broker.getOpenOrders = async ({ symbol } = {}) => {
-    if (symbol === undefined) {return { ok: true, data: [] }}
+    if (symbol === undefined) {return {
+      ok: true,
+      data: []
+    }}
     signalOpenOrdersStarted()
     await openOrdersGate
     return { ok: true }
@@ -2693,9 +3496,18 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
         market: btcMarket,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: btcMarket.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: btcMarket.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: btcMarket.baseAsset }),
+        limitPrice: new Money({
+          amount: order.price,
+          asset: btcMarket.quoteAsset
+        }),
+        originalQuantity: new Quantity({
+          amount: order.quantity,
+          asset: btcMarket.baseAsset
+        }),
+        executedQuantity: new Quantity({
+          amount: "0",
+          asset: btcMarket.baseAsset
+        }),
         status: "OPEN",
         createdAt: 1,
         acknowledgedAt: 1,
@@ -2722,14 +3534,24 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true
+      }),
     },
     now: () => 1000,
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   await broker.emitBookTicker("BTCUSDT", {
@@ -2786,15 +3608,25 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
     },
     flush: async () => {
       calls.push("journal:flush")
-      return { ok: true, durable: true }
+      return {
+        ok: true,
+        durable: true
+      }
     },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher,
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
@@ -2835,13 +3667,23 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
   const broker = createBroker(calls)
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: false, errors: [new Error("fsync failed")] }),
+      flush: async () => ({
+        ok: false,
+        errors: [new Error("fsync failed")]
+      }),
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   }), /Unable to durably persist PREFLIGHT account snapshot/)
   assert.ok(calls.includes("disconnect"))
   assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
@@ -2876,7 +3718,10 @@ test("journals pre-existing account-wide orders and allows trading startup witho
   const events = []
   const eventPublisher = {
     publish: (event) => { events.push(event); return { ok: true } },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({
+      ok: true,
+      durable: true
+    }),
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => ({
@@ -2887,15 +3732,25 @@ test("journals pre-existing account-wide orders and allows trading startup witho
           ...appConfig.strategies.CG_coinGrabber,
           pairs: {
             ...appConfig.strategies.CG_coinGrabber.pairs,
-            BTCUSDT: { ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, enabled: true },
+            BTCUSDT: {
+              ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+              enabled: true
+            },
           },
         },
       },
     }),
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher,
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
@@ -2925,13 +3780,23 @@ test("fails closed before market subscriptions when the account-wide open-order 
   })
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true
+      }),
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   }), /Unable to load authoritative account-wide open orders/)
   assert.ok(events.some((event) => event.name === "account.snapshot_captured"))
   assert.equal(events.some((event) => event.name === "account.open_orders_captured"), false)
@@ -2953,10 +3818,19 @@ test("captures and durably journals balances and account-wide open orders on tra
       ok: true,
       data: {
         balances: ["BTC", "ETH", "USDT"].map((code) => {
-          const asset = new Asset({ id: "asset:" + code, code })
+          const asset = new Asset({
+            id: "asset:" + code,
+            code
+          })
           return new Balance({
-            free: new Quantity({ amount: "12.5", asset }),
-            locked: new Quantity({ amount: "0.5", asset }),
+            free: new Quantity({
+              amount: "12.5",
+              asset
+            }),
+            locked: new Quantity({
+              amount: "0.5",
+              asset
+            }),
           })
         }),
         sourceTime: 123,
@@ -2967,7 +3841,10 @@ test("captures and durably journals balances and account-wide open orders on tra
     openOrderReads += 1
     calls.push("account:open-orders")
     assert.deepEqual(input, {})
-    return { ok: true, data: [] }
+    return {
+      ok: true,
+      data: []
+    }
   }
   const events = []
   let flushCount = 0
@@ -2984,10 +3861,17 @@ test("captures and durably journals balances and account-wide open orders on tra
       flush: async () => {
         flushCount += 1
         calls.push("journal:flush:" + flushCount)
-        return { ok: true, durable: true }
+        return {
+          ok: true,
+          durable: true
+        }
       },
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   assert.equal(accountReads, 1)
@@ -3036,9 +3920,16 @@ test("records pre-existing account-wide orders without adopting or changing them
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => { events.push(event); return { ok: true } },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true
+      }),
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   const audit = events.find((event) => event.name === "account.open_orders_captured")
@@ -3057,16 +3948,26 @@ test("blocks trading startup when either account audit query fails", async () =>
     const calls = []
     const broker = createBroker(calls)
     if (failure === "balances") {
-      broker.getAccountSnapshot = async () => ({ ok: false, errors: [new Error("account status failed")] })
+      broker.getAccountSnapshot = async () => ({
+        ok: false,
+        errors: [new Error("account status failed")]
+      })
     } else {
-      broker.getOpenOrders = async () => ({ ok: false, errors: [new Error("open orders status failed")] })
+      broker.getOpenOrders = async () => ({
+        ok: false,
+        errors: [new Error("open orders status failed")]
+      })
     }
 
     await assert.rejects(startHarvesterForTest({
       loadConfig: async () => appConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
-      logger: { info() {}, error() {}, debug() {} },
+      logger: {
+        info() {},
+        error() {},
+        debug() {}
+      },
     }), failure === "balances"
       ? /Unable to load canonical exchange account balances/
       : /Unable to load authoritative account-wide open orders/)
@@ -3076,8 +3977,20 @@ test("blocks trading startup when either account audit query fails", async () =>
 })
 
 test("blocks trading startup when either PREFLIGHT audit event cannot be durably flushed", async () => {
-  for (const scenario of [{ failedFlush: 1, nonOperationalState: false }, { failedFlush: 1, nonOperationalState: true }, { failedFlush: 2, nonOperationalState: true }]) {
-    const { failedFlush, nonOperationalState } = scenario
+  for (const scenario of [{
+    failedFlush: 1,
+    nonOperationalState: false
+  }, {
+    failedFlush: 1,
+    nonOperationalState: true
+  }, {
+    failedFlush: 2,
+    nonOperationalState: true
+  }]) {
+    const {
+      failedFlush,
+      nonOperationalState
+    } = scenario
     const calls = []
     const broker = createBroker(calls)
     const events = []
@@ -3090,13 +4003,26 @@ test("blocks trading startup when either PREFLIGHT audit event cannot be durably
         publish: (event) => { events.push(event); return { ok: true } },
         flush: async () => {
           flushCount += 1
-          if (flushCount !== failedFlush) {return { ok: true, durable: true }}
+          if (flushCount !== failedFlush) {return {
+            ok: true,
+            durable: true
+          }}
           return nonOperationalState
-            ? { ok: true, durable: false }
-            : { ok: false, errors: [new Error("journal fsync failed")] }
+            ? {
+              ok: true,
+              durable: false
+            }
+            : {
+              ok: false,
+              errors: [new Error("journal fsync failed")]
+            }
         },
       },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: {
+        info() {},
+        error() {},
+        debug() {}
+      },
     }), failedFlush === 1
       ? /Unable to durably persist PREFLIGHT account snapshot/
       : /Unable to durably persist account open-orders audit/)
@@ -3123,12 +4049,22 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
         publish: (event) => {
           events.push(event)
           return event.name === failedEvent
-            ? { ok: false, errors: [new Error("event publication rejected")] }
+            ? {
+              ok: false,
+              errors: [new Error("event publication rejected")]
+            }
             : { ok: true }
         },
-        flush: async () => ({ ok: true, durable: true }),
+        flush: async () => ({
+          ok: true,
+          durable: true
+        }),
       },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: {
+        info() {},
+        error() {},
+        debug() {}
+      },
     }), failedEvent === "account.snapshot_captured"
       ? /Unable to publish PREFLIGHT account snapshot audit event/
       : /Unable to publish account open-orders audit event/)
@@ -3144,19 +4080,31 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   const historicalReads = []
   broker.getCanonicalOrder = async () => {
     historicalReads.push("getCanonicalOrder")
-    return { ok: false, errors: [new Error("not found")] }
+    return {
+      ok: false,
+      errors: [new Error("not found")]
+    }
   }
   broker.getCanonicalOrderHistory = async () => {
     historicalReads.push("getCanonicalOrderHistory")
-    return { ok: true, data: [] }
+    return {
+      ok: true,
+      data: []
+    }
   }
   broker.getFills = async () => {
     historicalReads.push("getFills")
-    return { ok: true, data: [] }
+    return {
+      ok: true,
+      data: []
+    }
   }
   broker.getExchangeMarkets = async () => {
     historicalReads.push("getExchangeMarkets")
-    return { ok: true, data: [] }
+    return {
+      ok: true,
+      data: []
+    }
   }
 
   const runtime = await startHarvesterForTest({
@@ -3174,9 +4122,15 @@ test("starts from fresh in-memory state without replaying historical Journal rec
         name: "execution.fill_applied",
         data: { fillId: "legacy-fill-without-tradeId" },
       },
-      position: { fileName: "session.jsonl", lineNumber: 1 },
+      position: {
+        fileName: "session.jsonl",
+        lineNumber: 1
+      },
     }],
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   assert.equal(runtime.tradingEnabled, true)
@@ -3222,15 +4176,27 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+        limitPrice: new Money({
+          amount: order.price,
+          asset: market.quoteAsset
+        }),
+        originalQuantity: new Quantity({
+          amount: order.quantity,
+          asset: market.baseAsset
+        }),
+        executedQuantity: new Quantity({
+          amount: "0",
+          asset: market.baseAsset
+        }),
         status: "OPEN",
         createdAt: 1,
         acknowledgedAt: 1,
         updatedAt: 1,
       })
-    return { ok: true, data: submittedOrder }
+    return {
+      ok: true,
+      data: submittedOrder
+    }
   }
   broker.cancelOrder = async ({ order }) => {
     calls.push("cancelOrder:" + order.side)
@@ -3251,7 +4217,10 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
       updatedAt: 2,
       completedAt: 2,
     })
-    return { ok: true, data: canceledOrder }
+    return {
+      ok: true,
+      data: canceledOrder
+    }
   }
 
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
@@ -3283,7 +4252,11 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
       observedEvents.push(event)
       resolveUserDataObserved()
     },
-    logger: { info() {}, debug() {}, error() {} },
+    logger: {
+      info() {},
+      debug() {},
+      error() {}
+    },
   })
 
   await broker.emitBookTicker("BTCUSDT", {
@@ -3350,7 +4323,10 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
 
   broker.getPrices = async ({ symbol } = {}) => ({
     ok: true,
-    data: { symbol, price: "6500" },
+    data: {
+      symbol,
+      price: "6500"
+    },
   })
   broker.placeOrder = async ({ order } = {}) => {
     const metadata = createMarketMetadata(order.symbol)
@@ -3360,9 +4336,18 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
       market: metadata.market,
       side: order.side,
       type: order.type,
-      limitPrice: new Money({ amount: order.price, asset: metadata.market.quoteAsset }),
-      originalQuantity: new Quantity({ amount: order.quantity, asset: metadata.market.baseAsset }),
-      executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
+      limitPrice: new Money({
+        amount: order.price,
+        asset: metadata.market.quoteAsset
+      }),
+      originalQuantity: new Quantity({
+        amount: order.quantity,
+        asset: metadata.market.baseAsset
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: metadata.market.baseAsset
+      }),
       status: "OPEN",
       createdAt: 1,
       acknowledgedAt: 1,
@@ -3373,7 +4358,10 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
       executionType: "NEW",
       executedOrder: acknowledgedOrder,
     })
-    return { ok: true, data: acknowledgedOrder }
+    return {
+      ok: true,
+      data: acknowledgedOrder
+    }
   }
   const cancelOrder = broker.cancelOrder
   broker.cancelOrder = async ({ order } = {}) => {
@@ -3418,14 +4406,21 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
         journalEvents.push(event)
         return { ok: true }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true
+      }),
     },
     onUserDataEvent: ({ event } = {}) => {
       if (event?.executionType === "NEW" && event.executedOrder?.brokerOrderId === "owned-buy-1") {
         resolveOwnedBuyAcknowledged(event.executedOrder)
       }
     },
-    logger: { info() {}, debug() {}, error() {} },
+    logger: {
+      info() {},
+      debug() {},
+      error() {}
+    },
   })
 
   // The initial REST ticker seed arrives before candle warm-up. Submit a fresh
@@ -3440,7 +4435,10 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
   await waitForTestSignal(
     ownedBuyAcknowledged,
     "acknowledged Harvester BUY before the ownership failure",
-    () => ({ calls, userDataStatus: result.userDataStatus }),
+    () => ({
+      calls,
+      userDataStatus: result.userDataStatus
+    }),
     2_000,
   )
   assert.deepEqual(
@@ -3456,9 +4454,18 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     market: metadata.market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "1.639", asset: metadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "59.87", asset: metadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "59.87", asset: metadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: "1.639",
+      asset: metadata.market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "59.87",
+      asset: metadata.market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "59.87",
+      asset: metadata.market.baseAsset
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -3471,9 +4478,18 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     clientOrderId: externalOrder.clientOrderId,
     market: metadata.market,
     side: "SELL",
-    price: new Money({ amount: "1.639", asset: metadata.market.quoteAsset }),
-    quantity: new Quantity({ amount: "59.87", asset: metadata.market.baseAsset }),
-    quoteQuantity: new Money({ amount: "98.12693", asset: metadata.market.quoteAsset }),
+    price: new Money({
+      amount: "1.639",
+      asset: metadata.market.quoteAsset
+    }),
+    quantity: new Quantity({
+      amount: "59.87",
+      asset: metadata.market.baseAsset
+    }),
+    quoteQuantity: new Money({
+      amount: "98.12693",
+      asset: metadata.market.quoteAsset
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -3550,22 +4566,46 @@ test("account snapshots include every configured pair asset, including disabled 
         pairs: {
           ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
-            enabled: false, tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 400, keepQuantity: 1,
+            enabled: false,
+            tradingEnvironment: "both",
+            enableVolatilityProtection: true,
+            investment: 100,
+            orderQuantity: 400,
+            keepQuantity: 1,
             minProfit: 0.01,
-            priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
-            makerPercent: 0, takerPercent: 0.1,
+            priceStepPercent: 0.05,
+            pricePrecision: 5,
+            quantityPrecision: 0,
+            makerPercent: 0,
+            takerPercent: 0.1,
           },
           ZROFDUSD: {
-            enabled: false, tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
+            enabled: false,
+            tradingEnvironment: "both",
+            enableVolatilityProtection: true,
+            investment: 100,
+            orderQuantity: 5,
+            keepQuantity: 0.01,
             minProfit: 0.01,
-            priceStepPercent: 0.5, pricePrecision: 3, quantityPrecision: 1,
-            makerPercent: 0, takerPercent: 0.1,
+            priceStepPercent: 0.5,
+            pricePrecision: 3,
+            quantityPrecision: 1,
+            makerPercent: 0,
+            takerPercent: 0.1,
           },
           SOLFDUSD: {
-            enabled: false, tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 1, keepQuantity: 0.01,
+            enabled: false,
+            tradingEnvironment: "both",
+            enableVolatilityProtection: true,
+            investment: 100,
+            orderQuantity: 1,
+            keepQuantity: 0.01,
             minProfit: 0.01,
-            priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
-            makerPercent: 0, takerPercent: 0.1,
+            priceStepPercent: 0.05,
+            pricePrecision: 2,
+            quantityPrecision: 3,
+            makerPercent: 0,
+            takerPercent: 0.1,
           },
         },
       },
@@ -3577,29 +4617,51 @@ test("account snapshots include every configured pair asset, including disabled 
     assetsByCode.set(market.baseAsset.code, market.baseAsset)
     assetsByCode.set(market.quoteAsset.code, market.quoteAsset)
   }
-  const unrelatedAsset = new Asset({ id: "asset:XRP", code: "XRP" })
+  const unrelatedAsset = new Asset({
+    id: "asset:XRP",
+    code: "XRP"
+  })
   const sourceBalances = [...assetsByCode.values(), unrelatedAsset].map((asset) => new Balance({
-    free: new Quantity({ amount: "10", asset }),
-    locked: new Quantity({ amount: "0", asset }),
+    free: new Quantity({
+      amount: "10",
+      asset
+    }),
+    locked: new Quantity({
+      amount: "0",
+      asset
+    }),
   }))
   broker.getAccountSnapshot = async () => ({
     ok: true,
-    data: { balances: sourceBalances, sourceTime: 1 },
+    data: {
+      balances: sourceBalances,
+      sourceTime: 1
+    },
   })
 
   const events = []
   const runtime = await startHarvesterForTest({
     loadConfig: async () => snapshotConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
         events.push(event)
         return { ok: true }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true
+      }),
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
   })
 
   const expectedAssetCodes = ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"]
@@ -3701,7 +4763,10 @@ test("identifies user-data events received during application recovery as recove
       observedRecoveryMode = recoveryMode
       resolveObservedEvent()
     },
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   try {
@@ -3714,7 +4779,10 @@ test("identifies user-data events received during application recovery as recove
     await waitForTestSignal(
       recoverySnapshotStarted,
       "application recovery account snapshot",
-      () => ({ accountReads, userDataReady: runtime.userDataReady }),
+      () => ({
+        accountReads,
+        userDataReady: runtime.userDataReady
+      }),
       2_000,
     )
 
@@ -3722,7 +4790,10 @@ test("identifies user-data events received during application recovery as recove
     await waitForTestSignal(
       observedEvent,
       "user-data event observed during application recovery",
-      () => ({ observedRecoveryMode, userDataReady: runtime.userDataReady }),
+      () => ({
+        observedRecoveryMode,
+        userDataReady: runtime.userDataReady
+      }),
       2_000,
     )
 
@@ -3736,7 +4807,10 @@ test("identifies user-data events received during application recovery as recove
     await waitForTestSignal(
       recoveryAcknowledged,
       "application recovery acknowledgement after durable snapshots",
-      () => ({ accountReads, userDataReady: runtime.userDataReady }),
+      () => ({
+        accountReads,
+        userDataReady: runtime.userDataReady
+      }),
       2_000,
     )
     assert.equal(
@@ -3757,9 +4831,18 @@ test("verifies an injected Operational State Store before connecting to the brok
     () => startHarvesterForTest({
       appConfig,
       operationalStateStore: {
-        append: async () => ({ ok: true, data: { durable: true } }),
-        verify: async () => ({ ok: false, errors: [new Error("durable ledger integrity failed")] }),
-        readAll: async () => ({ ok: true, data: { records: [] } }),
+        append: async () => ({
+          ok: true,
+          data: { durable: true }
+        }),
+        verify: async () => ({
+          ok: false,
+          errors: [new Error("durable ledger integrity failed")]
+        }),
+        readAll: async () => ({
+          ok: true,
+          data: { records: [] }
+        }),
       },
       brokerAdapterFactory: () => {
         calls.push("broker-factory")
@@ -3774,7 +4857,10 @@ test("verifies an injected Operational State Store before connecting to the brok
 
 test("records configuration and process boundaries before broker startup and after shutdown", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-boundaries-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true
+  }))
   const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "start-harvester-process-boundary-test",
@@ -3782,7 +4868,10 @@ test("records configuration and process boundaries before broker startup and aft
   })
   await operationalStateStore.initialize()
 
-  const harvester = await startHarvesterForTest({ appConfig, operationalStateStore })
+  const harvester = await startHarvesterForTest({
+    appConfig,
+    operationalStateStore
+  })
   const started = await operationalStateStore.readAll()
   assert.equal(started.ok, true, started.errors?.[0]?.message)
   const configuration = started.data.records.find(({ factType }) => factType === "CONFIGURATION_BASELINE")
@@ -3807,13 +4896,19 @@ test("records configuration and process boundaries before broker startup and aft
 
 test("blocks even a clean second process start until the restart-recovery gate is accepted", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true
+  }))
   const firstStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "first-process-session",
   })
   await firstStore.initialize()
-  const baseline = await recordConfigurationBaseline({ operationalStateStore: firstStore, appConfig })
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: firstStore,
+    appConfig
+  })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
     operationalStateStore: firstStore,
@@ -3852,13 +4947,19 @@ test("blocks even a clean second process start until the restart-recovery gate i
 
 test("blocks a second process start after an unclean prior session before broker connection", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true
+  }))
   const firstStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "crashed-process-session",
   })
   await firstStore.initialize()
-  const baseline = await recordConfigurationBaseline({ operationalStateStore: firstStore, appConfig })
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: firstStore,
+    appConfig
+  })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
     operationalStateStore: firstStore,
@@ -3891,9 +4992,15 @@ test("blocks a second process start after an unclean prior session before broker
 
 test("reuses the process-owned Operational State Store and preserves operator pause across user-data reconnect", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-shared-operator-facts-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true
+  }))
   const runtimeSessionId = "shared-process-operator-session"
-  const operationalStateStore = createFileOperationalStateStore({ directory, runtimeSessionId })
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId
+  })
   await operationalStateStore.initialize()
   const broker = createBroker()
   let resolveRecoveryAcknowledgement
@@ -3922,13 +5029,19 @@ test("reuses the process-owned Operational State Store and preserves operator pa
   let secondaryStoreFactoryCalls = 0
   const config = {
     ...appConfig,
-    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+    operatorControl: { telegram: {
+      enabled: true,
+      allowedUserIds: ["12345"]
+    } },
   }
   const runtime = await startHarvesterForTest({
     appConfig: config,
     operationalStateStore,
     runtimeSessionId,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+    env: {
+      ...binanceEnv,
+      TELEGRAM_BOT_TOKEN: "test-telegram-token"
+    },
     brokerAdapterFactory: () => broker,
     createOperationalStateStore: () => {
       secondaryStoreFactoryCalls += 1
@@ -3936,20 +5049,32 @@ test("reuses the process-owned Operational State Store and preserves operator pa
     },
     createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
       operator = suppliedOperator
-      return { start: async () => ({ started: true }), stop: async () => ({ stopped: true }) }
+      return {
+        start: async () => ({ started: true }),
+        stop: async () => ({ stopped: true })
+      }
     },
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {}
+    },
   })
 
   try {
     const pause = await operator.pauseMarket({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      actor: {
+        id: "telegram-user:12345",
+        roles: ["trading-operator"]
+      },
       requestId: "telegram:shared-store-test",
       symbol: "BTCUSDT",
     })
     assert.equal(pause.ok, true, "An authorized operator pause must append through the process-owned store.")
 
-    broker.emitUserDataStatus({ type: "connectionClosed", reason: "test-disconnect" })
+    broker.emitUserDataStatus({
+      type: "connectionClosed",
+      reason: "test-disconnect"
+    })
     broker.emitUserDataStatus({
       type: "recovered",
       subscriptionId: 17,
@@ -3963,12 +5088,18 @@ test("reuses the process-owned Operational State Store and preserves operator pa
       2_000,
     )
     const reconnectedStatus = await operator.getStatus({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      actor: {
+        id: "telegram-user:12345",
+        roles: ["trading-operator"]
+      },
     })
     assert.equal(reconnectedStatus.ok, true, "The operator status must remain available after user-data recovery.")
     assert.equal(reconnectedStatus.data.userData.ready, true, "The user-data recovery must finish before checking the retained operator pause.")
     const reconnectedMarkets = await operator.getMarkets({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      actor: {
+        id: "telegram-user:12345",
+        roles: ["trading-operator"]
+      },
     })
     assert.equal(reconnectedMarkets.ok, true, "The market query must remain available after user-data recovery.")
     assert.equal(
@@ -3978,14 +5109,20 @@ test("reuses the process-owned Operational State Store and preserves operator pa
     )
 
     const status = await operator.getStatus({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      actor: {
+        id: "telegram-user:12345",
+        roles: ["trading-operator"]
+      },
     })
     assert.equal(status.ok, true, "The process-composed operator facade must expose an authorized read-only runtime status.")
     assert.equal(status.data.runtimeState, "RUNNING", "The runtime status must reflect the active Harvester process lifecycle.")
     assert.equal(status.data.broker, "binance", "The runtime status must identify the configured broker without claiming a live socket state.")
     assert.equal(typeof status.data.userData.ready, "boolean", "The runtime status must expose the live user-data readiness gate.")
     const markets = await operator.getMarkets({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      actor: {
+        id: "telegram-user:12345",
+        roles: ["trading-operator"]
+      },
     })
     assert.equal(markets.ok, true, "The process-composed operator facade must expose read-only configured market snapshots.")
     assert.ok(
@@ -4019,9 +5156,18 @@ test("does not subscribe to a market blocked by this strategy's external-order p
     market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "64000", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({
+      amount: "64000",
+      asset: market.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: market.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -4034,9 +5180,18 @@ test("does not subscribe to a market blocked by this strategy's external-order p
     market: ignoredMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "2400", asset: ignoredMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1", asset: ignoredMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: ignoredMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: "2400",
+      asset: ignoredMarket.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.1",
+      asset: ignoredMarket.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: ignoredMarket.baseAsset
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,

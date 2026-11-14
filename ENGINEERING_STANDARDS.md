@@ -137,7 +137,7 @@ Follow the canonical [Structured Error Handling Standard](docs/engineering/struc
 
 The workspace uses the root ESLint flat configuration in `eslint.config.js`. It applies to JavaScript in `apps/`, `packages/`, and repository tooling, including tests. The configuration uses the `@eslint/js` recommended rules and Node built-in globals; browser globals and implicit test-runner globals are not enabled.
 
-The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `no-nested-ternary`, `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting and stylistic rules are intentionally out of scope.
+The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `no-nested-ternary`, `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting rules remain intentionally limited; `object-property-newline` is enforced so each object-literal property is written on its own line. Keep destructured option properties one per line as well. Do not add inline suppressions or disable this rule to accommodate changed files.
 
 Gradual adoption is enforced by the changed-file gate rather than a permanent suppression file:
 

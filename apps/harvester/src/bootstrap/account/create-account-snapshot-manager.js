@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks"
 import { compareDecimal } from "@coinzilla/utils"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../../domain/account/assert-account-snapshot-covers-markets.js"
@@ -12,8 +13,14 @@ import {
 import { recordAccountSnapshotCaptured, recordAccountOpenOrdersCaptured } from "../../use-cases/record-account-reconciliation-facts.js"
 
 function withRecoveryFailure(error, category, stage, retryable) {
-  const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
-  normalized.recoveryFailure = normalized.recoveryFailure ?? { category, stage, retryable }
+  const normalized = error instanceof Error ? error : new Error(String(error), {
+    cause: error,
+  })
+  normalized.recoveryFailure = normalized.recoveryFailure ?? {
+    category,
+    stage,
+    retryable,
+  }
   return normalized
 }
 
@@ -21,13 +28,23 @@ function resolveAuditFlushFailure(flushed, stage) {
   const failure = flushed?.recoveryFailure
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) { return failure }
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) { return failure }
-  return { category: "DURABILITY", stage: stage + "_UNCLASSIFIED", retryable: false }
+  return {
+    category: "DURABILITY",
+    stage: stage + "_UNCLASSIFIED",
+    retryable: false,
+  }
 }
 
-function createAuditFlushError({ flushed, message, stage }) {
+function createAuditFlushError({
+  flushed,
+  message,
+  stage,
+}) {
   const failure = resolveAuditFlushFailure(flushed, stage)
   const cause = flushed?.errors?.find?.((error) => error instanceof Error)
-  const error = cause ? new Error(message, { cause }) : new Error(message)
+  const error = cause ? new Error(message, {
+    cause,
+  }) : new Error(message)
   return withRecoveryFailure(error, failure.category, failure.stage, failure.retryable)
 }
 
@@ -37,6 +54,191 @@ function logSystem(logger, data) {
     return
   }
   logger?.info?.(data)
+}
+
+function createAccountSnapshotAuditPayload({
+  phase,
+  snapshot,
+  allowedAssetCodes,
+  auditStatus,
+  auditReasons,
+}) {
+  let dataResult
+  try {
+    dataResult = mapAccountSnapshotCapturedData({
+      phase,
+      snapshot,
+      allowedAssetCodes,
+      auditStatus,
+      auditReasons,
+    })
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
+  }
+  if (!dataResult?.ok) {
+    throw withRecoveryFailure(
+      dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
+      false,
+    )
+  }
+  return dataResult
+}
+
+async function persistAccountSnapshotAudit({
+  operationalStateStore,
+  data,
+}) {
+  if (!operationalStateStore) {
+    return
+  }
+  const durable = await recordAccountSnapshotCaptured({
+    operationalStateStore,
+    data,
+  })
+  if (durable?.ok !== true || durable.data?.durable !== true) {
+    const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
+    throw withRecoveryFailure(
+      new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), {
+        cause,
+      }),
+      "DURABILITY",
+      "ACCOUNT_SNAPSHOT_DURABLE_FACT",
+      false,
+    )
+  }
+}
+
+function logClosingJournalBarrier({
+  logger,
+  runtimeSessionId,
+  monotonicNow,
+  startedAt,
+  phaseStatus,
+  failureReason,
+}) {
+  logSystem(logger, {
+    message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
+    shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+    phaseStatus,
+    phase: "CLOSING",
+    shutdownCorrelationId: runtimeSessionId ?? null,
+    ...(startedAt === undefined ? {} : { durationMs: Math.max(0, monotonicNow() - startedAt) }),
+    ...(failureReason ? { failureReason } : {}),
+  })
+}
+
+function throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSessionId }) {
+  if (phase === "CLOSING") {
+    logSystem(logger, {
+      message: "Harvester shutdown phase failed",
+      shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+      phaseStatus: "FAILED",
+      phase: "CLOSING",
+      shutdownCorrelationId: runtimeSessionId ?? null,
+      failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
+    })
+  }
+  throw withRecoveryFailure(
+    new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
+    "ACCOUNTING_INTEGRITY",
+    "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY",
+    false,
+  )
+}
+
+function throwAccountSnapshotFlushException({ error, isClosing, logger, runtimeSessionId, monotonicNow, startedAt }) {
+  if (isClosing) {
+    logClosingJournalBarrier({
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+      phaseStatus: "FAILED",
+      failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED",
+    })
+  }
+  throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
+}
+
+function throwNonDurableAccountSnapshotFlush({ flushed, phase, isClosing, logger, runtimeSessionId, monotonicNow, startedAt }) {
+  if (isClosing) {
+    logClosingJournalBarrier({
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+      phaseStatus: "FAILED",
+      failureReason: flushed?.recoveryFailure?.stage ?? "JOURNAL_FLUSH_NOT_DURABLE",
+    })
+  }
+  const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+  throw createAuditFlushError({
+    flushed,
+    message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
+    stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+  })
+}
+
+async function flushAccountSnapshotAudit({
+  eventPublisher,
+  phase,
+  logger,
+  runtimeSessionId,
+  monotonicNow,
+}) {
+  if (typeof eventPublisher?.flush !== "function") {
+    throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSessionId })
+  }
+
+  const startedAt = monotonicNow()
+  const isClosing = phase === "CLOSING"
+  if (isClosing) {
+    logSystem(logger, {
+      message: "Harvester shutdown phase started",
+      shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+      phaseStatus: "STARTED",
+      phase: "CLOSING",
+      shutdownCorrelationId: runtimeSessionId ?? null,
+    })
+  }
+
+  let flushed
+  try {
+    flushed = await eventPublisher.flush()
+  } catch (error) {
+    throwAccountSnapshotFlushException({
+      error,
+      isClosing,
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+    })
+  }
+
+  if (flushed?.ok !== true || flushed?.durable !== true) {
+    throwNonDurableAccountSnapshotFlush({
+      flushed,
+      phase,
+      isClosing,
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+    })
+  }
+
+  if (isClosing) {
+    logClosingJournalBarrier({
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+      phaseStatus: "COMPLETED",
+    })
+  }
 }
 
 /**
@@ -59,8 +261,18 @@ function logSystem(logger, data) {
  * @returns {object} Account snapshot read and durable audit operations.
  */
 export function createAccountSnapshotManager({
-  broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, operationalStateStore,
+  broker,
+  eventPublisher,
+  marketMetadata,
+  getPortfolio,
+  getTradingEngine,
+  getRecoveredState,
+  getHasCanonicalOwnershipReconciliation,
+  logger,
+  now = Date.now,
+  monotonicNow = () => performance.now(),
+  runtimeSessionId,
+  operationalStateStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
@@ -88,7 +300,9 @@ export function createAccountSnapshotManager({
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       const cause = result?.errors?.find?.((error) => error instanceof Error)
       throw withRecoveryFailure(
-        new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), { cause }),
+        new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), {
+          cause,
+        }),
         "REST_RECONCILIATION",
         "ACCOUNT_SNAPSHOT_READ",
         true,
@@ -145,7 +359,10 @@ export function createAccountSnapshotManager({
         sourceTime: result.data.sourceTime,
         ...baselineResult.data,
       })
-      assertAccountSnapshotCoversMarkets({ accountSnapshot: nextSnapshot, markets: accountAuditMarkets })
+      assertAccountSnapshotCoversMarkets({
+        accountSnapshot: nextSnapshot,
+        markets: accountAuditMarkets,
+      })
       if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
         throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
       }
@@ -183,7 +400,9 @@ export function createAccountSnapshotManager({
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         const cause = result?.errors?.find?.((error) => error instanceof Error)
         throw withRecoveryFailure(
-          new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), { cause }),
+          new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), {
+            cause,
+          }),
           "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true,
         )
       }
@@ -221,10 +440,16 @@ export function createAccountSnapshotManager({
         owned.market.symbol !== symbol ||
         owned.side !== order.side ||
         owned.type !== order.type ||
-        compareDecimal({ left: owned.originalQuantity.amount, right: actualQuantity }) !== 0 ||
+        compareDecimal({
+          left: owned.originalQuantity.amount,
+          right: actualQuantity,
+        }) !== 0 ||
         (expectedPrice === undefined
           ? actualPrice !== undefined
-          : actualPrice === undefined || compareDecimal({ left: expectedPrice, right: String(actualPrice) }) !== 0)
+          : actualPrice === undefined || compareDecimal({
+              left: expectedPrice,
+              right: String(actualPrice),
+            }) !== 0)
       ) { return true }
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
@@ -243,7 +468,13 @@ export function createAccountSnapshotManager({
     }
     let dataResult
     try {
-      dataResult = mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons })
+      dataResult = mapAccountOpenOrdersCapturedData({
+        phase,
+        observedAt: now(),
+        orders,
+        readiness,
+        blockReasons,
+      })
     } catch (error) {
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
     }
@@ -256,13 +487,22 @@ export function createAccountSnapshotManager({
       )
     }
     if (operationalStateStore) {
-      const durable = await recordAccountOpenOrdersCaptured({ operationalStateStore, data: dataResult.data })
+      const durable = await recordAccountOpenOrdersCaptured({
+        operationalStateStore,
+        data: dataResult.data,
+      })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
-        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
+        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), {
+          cause,
+        }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
       }
     }
-    const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED, dataResult })
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+      dataResult,
+    })
     if (!published?.ok) {
       const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       throw withRecoveryFailure(
@@ -333,66 +573,60 @@ export function createAccountSnapshotManager({
       capturePreflightBaseline: phase === "PREFLIGHT",
     })
     const configuredAssetCodes = [...new Set([...marketMetadata.values()]
-      .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
+      .flatMap(({ market }) => [
+        market.baseAsset.code,
+        market.quoteAsset.code,
+      ]))]
     const allowedAssetCodes = suppliedAllowedAssetCodes ?? [...new Set([
       ...configuredAssetCodes,
       ...commissionBaselineAssetIds.keys(),
     ])]
-    let dataResult
-    try {
-      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes, auditStatus, auditReasons })
-    } catch (error) {
-      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
-    }
-    if (!dataResult?.ok) {
-      throw withRecoveryFailure(
-        dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
-        "ACCOUNTING_INTEGRITY",
-        "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
-        false,
-      )
-    }
-    if (operationalStateStore) {
-      const durable = await recordAccountSnapshotCaptured({ operationalStateStore, data: dataResult.data })
-      if (durable?.ok !== true || durable.data?.durable !== true) {
-        const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
-        throw withRecoveryFailure(new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_SNAPSHOT_DURABLE_FACT", false)
-      }
-    }
-    const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED, dataResult })
+    const dataResult = createAccountSnapshotAuditPayload({
+      phase,
+      snapshot,
+      allowedAssetCodes,
+      auditStatus,
+      auditReasons,
+    })
+    await persistAccountSnapshotAudit({
+      operationalStateStore,
+      data: dataResult.data,
+    })
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+      dataResult,
+    })
     if (!published?.ok) {
       throw withRecoveryFailure(
         new Error("Unable to publish " + phase + " account snapshot audit event"),
-        "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION", true,
+        "DURABILITY",
+        "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
+        true,
       )
     }
-    if (typeof eventPublisher?.flush === "function") {
-      let flushed
-      try { flushed = await eventPublisher.flush() } catch (error) {
-        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
-      }
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw createAuditFlushError({
-          flushed,
-          message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
-          stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
-        })
-      }
-    } else {
-      throw withRecoveryFailure(
-        new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
-        "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY", false,
-      )
-    }
+    await flushAccountSnapshotAudit({
+      eventPublisher,
+      phase,
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+    })
     logSystem(logger, {
       message: "Account snapshot captured and durably journaled",
-      phase, auditStatus, assetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
+      phase,
+      auditStatus,
+      assetCount: snapshot.balances.length,
+      sourceTime: snapshot.sourceTime,
+      auditReasons,
     })
     return snapshot
   }
 
-  const publishCommissionAssetBaseline = async ({ assetId, assetCode } = {}) => {
+  const publishCommissionAssetBaseline = async ({
+    assetId,
+    assetCode,
+  } = {}) => {
     if (typeof assetId !== "string" || !assetId.trim() ||
         typeof assetCode !== "string" || !assetCode.trim()) {
       throw withRecoveryFailure(
@@ -418,7 +652,13 @@ export function createAccountSnapshotManager({
           false,
         )
       }
-      return { ok: true, data: Object.freeze({ skipped: true, reason: "CONFIGURED_MARKET_ASSET" }) }
+      return {
+        ok: true,
+        data: Object.freeze({
+          skipped: true,
+          reason: "CONFIGURED_MARKET_ASSET",
+        }),
+      }
     }
 
     const knownAssetId = commissionBaselineAssetIds.get(assetCode)
@@ -432,7 +672,13 @@ export function createAccountSnapshotManager({
           false,
         )
       }
-      return { ok: true, data: Object.freeze({ skipped: true, reason: "BASELINE_ALREADY_CAPTURED" }) }
+      return {
+        ok: true,
+        data: Object.freeze({
+          skipped: true,
+          reason: "BASELINE_ALREADY_CAPTURED",
+        }),
+      }
     }
 
     if (preflightSourceTime === undefined) {
@@ -454,7 +700,7 @@ export function createAccountSnapshotManager({
     }
     if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
       throw withRecoveryFailure(
-        new Error("PREFLIGHT commission asset balance identity contradicts the applied fill for " + assetCode),
+        new Error(`PREFLIGHT commission asset balance identity contradicts the applied fill for ${assetCode}`),
         "ACCOUNTING_INTEGRITY",
         "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
         false,
@@ -474,7 +720,11 @@ export function createAccountSnapshotManager({
     commissionBaselineAssetCodesById.set(assetId, assetCode)
     return {
       ok: true,
-      data: Object.freeze({ assetId, assetCode, sourceTime: preflightSourceTime }),
+      data: Object.freeze({
+        assetId,
+        assetCode,
+        sourceTime: preflightSourceTime,
+      }),
     }
   }
 

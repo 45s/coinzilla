@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { performance } from "node:perf_hooks"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -38,6 +39,7 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
+// eslint-disable-next-line max-lines-per-function, max-statements -- bootstrap composes runtime ports and lifecycle boundaries.
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -47,7 +49,11 @@ export async function startHarvester({
   evaluateStrategy = conservativeStrategyPolicy.evaluate,
   logger = defaultLogger,
   eventPublisher,
-  onMarketPriceError = ({ symbol, error, errors }) => {
+  onMarketPriceError = ({
+    symbol,
+    error,
+    errors
+  }) => {
     logger.error?.({
       message: "Market price processing failed",
       symbol,
@@ -74,7 +80,14 @@ export async function startHarvester({
     brokerName,
     tradingMode,
     tradingEnabled,
-  } = await resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env, eventPublisher, logger })
+  } = await resolveHarvesterOptions({
+    configSource,
+    appConfig: suppliedAppConfig,
+    loadConfig,
+    env,
+    eventPublisher,
+    logger
+  })
 
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig: appConfig.operatorControl?.telegram,
@@ -120,7 +133,10 @@ export async function startHarvester({
   }
   let processConfigurationFingerprint
   if (operationalStateStore) {
-    const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
+    const baseline = await recordConfigurationBaseline({
+      operationalStateStore,
+      appConfig
+    })
     if (baseline?.ok !== true || baseline.data?.durable !== true) {
       throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
         (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
@@ -139,10 +155,20 @@ export async function startHarvester({
     }
   }
   const onOperationalStateExecutionFill = operationalStateStore
-    ? ({ fill }) => recordExecutionFill({ operationalStateStore, fill })
+    ? ({ fill }) => recordExecutionFill({
+      operationalStateStore,
+      fill
+    })
     : undefined
   const onOperationalStateRecoveryCycleCompleted = operationalStateStore
-    ? ({ recoveryLedger, position, sellOrder, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
+    ? ({
+      recoveryLedger,
+      position,
+      sellOrder,
+      completion,
+      minProfit,
+      inventoryDisposition
+    }) => recordRecoveryCycleCompleted({
         operationalStateStore,
         recoveryLedger,
         position,
@@ -153,7 +179,13 @@ export async function startHarvester({
       })
     : undefined
   const onOperationalStateRecoveryCycleNotCompleted = operationalStateStore
-    ? ({ recoveryLedger, position, sellOrder, completion, minProfit }) => recordRecoveryCycleNotCompleted({
+    ? ({
+      recoveryLedger,
+      position,
+      sellOrder,
+      completion,
+      minProfit
+    }) => recordRecoveryCycleNotCompleted({
         operationalStateStore,
         recoveryLedger,
         position,
@@ -163,17 +195,43 @@ export async function startHarvester({
       })
     : undefined
   const onOperationalStateSubmissionIntent = operationalStateStore
-    ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore, order, purpose })
+    ? ({
+      order,
+      purpose
+    }) => recordOrderSubmissionIntent({
+      operationalStateStore,
+      order,
+      purpose
+    })
     : undefined
   const onOperationalStateSubmissionOutcome = operationalStateStore
-    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore, order, outcome, purpose })
+    ? ({
+      order,
+      outcome,
+      purpose
+    }) => recordOrderSubmissionOutcome({
+      operationalStateStore,
+      order,
+      outcome,
+      purpose
+    })
     : undefined
   const onOperationalStateCancellationIntent = operationalStateStore
-    ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore, order, reason })
+    ? ({
+      order,
+      reason
+    }) => recordOrderCancellationIntent({
+      operationalStateStore,
+      order,
+      reason
+    })
     : undefined
   let strategyPauseTransitionSequence = 0
   const onOperationalStateStrategyMarketPaused = operationalStateStore
-    ? ({ symbol, reason }) => recordStrategyMarketControl({
+    ? ({
+      symbol,
+      reason
+    }) => recordStrategyMarketControl({
         operationalStateStore,
         action: "PAUSE",
         transitionId: operationalStateStore.runtimeSessionId + ":" + (++strategyPauseTransitionSequence),
@@ -182,16 +240,32 @@ export async function startHarvester({
       })
     : undefined
   const onSafetyBlockerRaised = operationalStateStore
-    ? ({ scope, symbol, reason, evidence }) => {
+    ? ({
+      scope,
+      symbol,
+      reason,
+      evidence
+    }) => {
         const canonicalEvidence = Object.fromEntries(
           Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right)),
         )
         const evidenceDigest = createHash("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
-        return recordSafetyBlockerRaised({ operationalStateStore, scope, symbol, reason, evidenceDigest })
+        return recordSafetyBlockerRaised({
+          operationalStateStore,
+          scope,
+          symbol,
+          reason,
+          evidenceDigest
+        })
       }
     : undefined
   const onOperationalStateCancellationOutcome = operationalStateStore
-    ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
+    ? ({
+      order,
+      canceledOrder,
+      reason,
+      outcome
+    }) => recordOrderCancellationOutcome({
         operationalStateStore,
         order,
         canceledOrder,
@@ -201,13 +275,26 @@ export async function startHarvester({
     : undefined
 
   const accountSnapshotManagerRef = { current: null }
-  const onCommissionAsset = ({ assetId, assetCode } = {}) => {
+  const onCommissionAsset = ({
+    assetId,
+    assetCode
+  } = {}) => {
     if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({
+      assetId,
+      assetCode
+    })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onOperationalStateExecutionFill, onOperationalStateRecoveryCycleCompleted, onOperationalStateRecoveryCycleNotCompleted })
+  let portfolioWorkflow = createPortfolioWorkflow({
+    evaluateStrategy,
+    logger,
+    onCommissionAsset,
+    onOperationalStateExecutionFill,
+    onOperationalStateRecoveryCycleCompleted,
+    onOperationalStateRecoveryCycleNotCompleted
+  })
   const recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
@@ -225,7 +312,10 @@ export async function startHarvester({
     requiresExchangeReconciliation: false,
   })
   let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
-  let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_ENGINE_NOT_READY" } })
+  let processMarketBook = () => toResult({ data: {
+    skipped: true,
+    reason: "TRADING_ENGINE_NOT_READY"
+  } })
   const updatePortfolio = (...args) => portfolioWorkflow.updatePortfolio(...args)
   const updateTradingAccounting = (...args) => portfolioWorkflow.updateTradingAccounting(...args)
   const getPortfolio = (...args) => portfolioWorkflow.getPortfolio(...args)
@@ -237,7 +327,14 @@ export async function startHarvester({
   let tradingEngine
   let hasCanonicalOwnershipReconciliation = false
 
-  const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, tradingMode, eventPublisher, logger })
+  const broker = await connectBroker({
+    brokerAdapterFactory,
+    env,
+    brokerName,
+    tradingMode,
+    eventPublisher,
+    logger
+  })
 
   const subscriptions = []
   const marketPriceIntake = new Map()
@@ -248,8 +345,14 @@ export async function startHarvester({
     broker,
     logger,
     now,
-    onSnapshot: async ({ symbol, snapshot }) => {
-      const result = await tradingEngine?.processVolatilitySnapshot({ symbol, snapshot })
+    onSnapshot: async ({
+      symbol,
+      snapshot
+    }) => {
+      const result = await tradingEngine?.processVolatilitySnapshot({
+        symbol,
+        snapshot
+      })
       if (result && !result.ok) {
         logger.error?.({
           message: "Harvester volatility protection update failed",
@@ -263,6 +366,7 @@ export async function startHarvester({
   // One explicit state object makes user-data readiness and queue ownership visible.
   const userDataState = {
     stopped: false,
+    shutdownRequested: false,
     ready: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: false,
@@ -312,6 +416,8 @@ export async function startHarvester({
     getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
     logger,
     now,
+    monotonicNow: () => performance.now(),
+    runtimeSessionId,
     operationalStateStore,
   })
   const {
@@ -320,16 +426,22 @@ export async function startHarvester({
     publishAccountSnapshot,
   } = accountSnapshotManagerRef.current
   const resumeDeferredStrategyEvaluations = () => {
-    if (!tradingEngine || !userDataState.ready || userDataState.stopped) {return}
+    if (!tradingEngine || !userDataState.ready || userDataState.stopped || userDataState.shutdownRequested) {return}
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
-      if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })}
+      if (!result.ok) {logger.error?.({
+        message: "deferred strategy evaluation failed",
+        errors: result.errors
+      })}
     }).catch((error) => {
-      logger.error?.({ message: "deferred strategy evaluation failed", error })
+      logger.error?.({
+        message: "deferred strategy evaluation failed",
+        error
+      })
     })
   }
   const cancelOwnedBuysAfterAccountingFailure = createAccountIntegritySafetyHalt({
     getTradingEngine: () => tradingEngine,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger,
   })
 
@@ -337,7 +449,7 @@ export async function startHarvester({
     state: userDataState,
     getTradingEngine: () => tradingEngine,
     isTradingEnabled: () => tradingEnabled,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger,
     onUserDataEvent,
     getPortfolio,
@@ -359,7 +471,7 @@ export async function startHarvester({
 
   const startUserDataRecovery = createUserDataRecoveryHandler({
     state: userDataState,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     getUserDataSubscription: () => userDataSubscription,
     getTradingEngine: () => tradingEngine,
     tradingEnabled,
@@ -374,7 +486,7 @@ export async function startHarvester({
 
   const handleUserDataStatusTransition = createUserDataStatusHandler({
     state: userDataState,
-    isStopped: () => userDataState.stopped,
+    isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     eventPublisher,
     brokerName,
     logger,
@@ -403,8 +515,14 @@ export async function startHarvester({
     return result
   }
 
-  const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
-  const isMarketBookFresh = (marketBook) => isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
+  const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({
+    timestamp: marketPrice.timestamp,
+    now: now()
+  })
+  const isMarketBookFresh = (marketBook) => isMarketDataFresh({
+    timestamp: marketBook.timestamp,
+    now: now()
+  })
 
   const activateTradingEngine = () => {
     tradingEngine = makeConservativeTradingEngine({
@@ -443,16 +561,31 @@ export async function startHarvester({
         completedOrderClientIds: recoveredState.completedOrderClientIds,
         trailingBuySymbols: recoveredState.trailingBuySymbols,
       },
-      isStopping: () => userDataState.stopped,
-      onPause: async ({ symbol, reason, error }) => {
-        logger.error?.({ message: "paused a trading pair", symbol, reason, error })
+      isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
+      onPause: async ({
+        symbol,
+        reason,
+        error
+      }) => {
+        logger.error?.({
+          message: "paused a trading pair",
+          symbol,
+          reason,
+          error
+        })
       },
     })
     processMarketPrice = tradingEngine.processMarketPrice
     processMarketBook = tradingEngine.processBookTicker
   }
   try {
-    await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
+    await loadMarketMetadata({
+      broker,
+      pairs,
+      marketMetadata,
+      eventPublisher,
+      logger
+    })
     // Journal replay and runtime state restoration are intentionally disabled.
     // ADR-0001 Operational State Store records are verified separately and prior process sessions
     // fail closed until restart recovery is accepted.
@@ -515,20 +648,32 @@ export async function startHarvester({
       eventPublisher,
       logger,
       tradingEnabled,
-      pairs: resolveStrategyMarketDataPairs({ pairs, strategyPolicy: conservativeStrategyPolicy, hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol, logger }),
+      pairs: resolveStrategyMarketDataPairs({
+        pairs,
+        strategyPolicy: conservativeStrategyPolicy,
+        hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+        logger
+      }),
       settings,
       processMarketPrice,
       processMarketBook,
       isMarketPriceFresh,
       now,
-      isStopped: () => userDataState.stopped,
+      isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
       onMarketPriceError,
       subscriptions,
       bookSubscriptions,
       marketPriceIntake,
     })
 
-    await candleHistoryService.start({ pairs: resolveStrategyMarketDataPairs({ pairs, strategyPolicy: conservativeStrategyPolicy, hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol }), subscriptions })
+    await candleHistoryService.start({
+      pairs: resolveStrategyMarketDataPairs({
+      pairs,
+      strategyPolicy: conservativeStrategyPolicy,
+      hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol
+    }),
+      subscriptions
+    })
   } catch (error) {
     logger.error?.({
       message: "Broker startup step failed",
@@ -543,7 +688,14 @@ export async function startHarvester({
     } catch (cleanupError) {
       operatorCleanupErrors.push(cleanupError)
     }
-    const brokerCleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
+    const brokerCleanupErrors = await cleanupBroker({
+      broker,
+      brokerName,
+      eventPublisher,
+      subscriptions,
+      bookSubscriptions,
+      userDataSubscription
+    })
     const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
@@ -571,29 +723,118 @@ export async function startHarvester({
     brokerName,
     eventPublisher,
     publishAccountSnapshot,
+    now: () => performance.now(),
+    runtimeSessionId,
   })
-  const stop = async () => {
+  let stopPromise
+  const stop = () => { // eslint-disable-line max-lines-per-function -- shutdown orchestration remains an explicit ordered state machine.
+    if (stopPromise) {return stopPromise}
+    // eslint-disable-next-line complexity -- process shutdown is an explicit ordered state machine with fail-closed boundaries.
+    stopPromise = (async () => {
+    const shutdownRequestedAt = performance.now()
+    const shutdownCorrelationId = runtimeSessionId ?? null
+    const logShutdownPhase = ({
+      phase,
+      status,
+      startedAt,
+      failureReason
+    } = {}) => {
+      const observedAt = performance.now()
+      const write = typeof logger.system === "function" ? logger.system.bind(logger) : logger.info?.bind(logger)
+      write?.({
+        message: `Harvester shutdown phase ${status.toLowerCase()}`,
+        shutdownPhase: phase,
+        phaseStatus: status,
+        shutdownCorrelationId,
+        elapsedMs: Math.max(0, observedAt - shutdownRequestedAt),
+        ...(startedAt === undefined ? {} : { durationMs: Math.max(0, observedAt - startedAt) }),
+        ...(failureReason ? { failureReason } : {}),
+      })
+    }
+    // Stop new market work and disable trading before operator-control cleanup.
+    userDataState.shutdownRequested = true
+    userDataState.ready = false
+    logShutdownPhase({
+      phase: "SHUTDOWN_REQUESTED",
+      status: "COMPLETED"
+    })
+    logShutdownPhase({
+      phase: "STOP_STATE_ESTABLISHED",
+      status: "COMPLETED",
+      startedAt: shutdownRequestedAt,
+    })
+
     let operatorStopError
+    const operatorStopStartedAt = performance.now()
+    logShutdownPhase({
+      phase: "OPERATOR_CONTROL_STOP",
+      status: "STARTED"
+    })
     try {
       await operatorControlLifecycle.stop()
+      logShutdownPhase({
+        phase: "OPERATOR_CONTROL_STOP",
+        status: "COMPLETED",
+        startedAt: operatorStopStartedAt
+      })
     } catch (error) {
       operatorStopError = error
-    }
-    await stopRuntime()
-    if (operatorStopError) {
-      throw operatorStopError
-    }
-    if (operationalStateStore) {
-      const stopped = await recordProcessStopped({
-        operationalStateStore,
-        reason: "SHUTDOWN_COMPLETED",
-        clean: true,
+      logShutdownPhase({
+        phase: "OPERATOR_CONTROL_STOP",
+        status: "FAILED",
+        startedAt: operatorStopStartedAt,
+        failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "OPERATOR_CONTROL_STOP_FAILED",
       })
-      if (stopped?.ok !== true || stopped.data?.durable !== true) {
-        throw new Error("Harvester shutdown completed but its clean process-stop boundary was not durable: " +
-          (stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    }
+    await stopRuntime({
+      requestedAt: shutdownRequestedAt,
+      requestLogged: true,
+      stopStateEstablishedLogged: true,
+      preShutdownErrors: operatorStopError ? [operatorStopError] : [],
+    })
+    if (operationalStateStore) {
+      const processStopStartedAt = performance.now()
+      logShutdownPhase({
+        phase: "PROCESS_STOP_DURABILITY",
+        status: "STARTED"
+      })
+      try {
+        const stopped = await recordProcessStopped({
+          operationalStateStore,
+          reason: "SHUTDOWN_COMPLETED",
+          clean: true,
+        })
+        if (stopped?.ok !== true || stopped.data?.durable !== true) {
+          throw new Error(`Harvester shutdown completed but its clean process-stop boundary was not durable: ${stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
+        }
+        logShutdownPhase({
+          phase: "PROCESS_STOP_DURABILITY",
+          status: "COMPLETED",
+          startedAt: processStopStartedAt
+        })
+      } catch (error) {
+        userDataState.status = "SHUTDOWN_INCOMPLETE"
+        logShutdownPhase({
+          phase: "PROCESS_STOP_DURABILITY",
+          status: "FAILED",
+          startedAt: processStopStartedAt,
+          failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "PROCESS_STOP_DURABILITY_FAILED",
+        })
+        logShutdownPhase({
+          phase: "SHUTDOWN_FAILED",
+          status: "FAILED",
+          failureReason: "PROCESS_STOP_DURABILITY_FAILED",
+        })
+        throw error
       }
     }
+    logShutdownPhase({
+      phase: "SHUTDOWN_COMPLETED",
+      status: "COMPLETED",
+      startedAt: shutdownRequestedAt,
+    })
+    })()
+    return stopPromise
   }
 
   return Object.freeze({
@@ -620,7 +861,13 @@ export async function startHarvester({
     stop,
   })
 }
-function resolveStrategyMarketDataPairs({ pairs, strategyPolicy, hasUnownedOpenOrdersForSymbol, logger } = {}) {
+
+function resolveStrategyMarketDataPairs({
+  pairs,
+  strategyPolicy,
+  hasUnownedOpenOrdersForSymbol,
+  logger
+} = {}) {
   const marketDataSubscriptionSymbols = new Set(strategyPolicy.getMarketDataSubscriptionSymbols({
     pairs,
     hasUnownedOpenOrdersForSymbol,
@@ -640,4 +887,3 @@ function resolveStrategyMarketDataPairs({ pairs, strategyPolicy, hasUnownedOpenO
     Object.entries(pairs).filter(([symbol]) => marketDataSubscriptionSymbols.has(symbol)),
   )
 }
-
