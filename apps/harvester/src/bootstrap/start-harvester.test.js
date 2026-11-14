@@ -5002,8 +5002,8 @@ test("account snapshots include every configured pair asset, including disabled 
   })
 })
 
-test("identifies user-data events received during application recovery as recovery-mode work", async () => {
-  const broker = createBroker()
+
+function createRecoveryModeEventFixture({ broker }) {
   const getAccountSnapshot = broker.getAccountSnapshot
   let accountReads = 0
   let resolveRecoverySnapshotStarted
@@ -5022,7 +5022,6 @@ test("identifies user-data events received during application recovery as recove
     }
     return getAccountSnapshot()
   }
-
   let observedRecoveryMode
   let resolveObservedEvent
   const observedEvent = new Promise((resolve) => {
@@ -5051,7 +5050,74 @@ test("identifies user-data events received during application recovery as recove
       },
     }
   }
+  return {
+    recoverySnapshotStarted,
+    releaseRecoverySnapshot,
+    observedEvent,
+    recoveryAcknowledged,
+    getAccountReads: () => accountReads,
+    getObservedRecoveryMode: () => observedRecoveryMode,
+    observeUserDataEvent: ({ recoveryMode }) => {
+      observedRecoveryMode = recoveryMode
+      resolveObservedEvent()
+    },
+  }
+}
 
+async function assertRecoveryModeEventObserved({ fixture, runtime }) {
+  await waitForTestSignal(
+    fixture.recoverySnapshotStarted,
+    "application recovery account snapshot",
+    () => ({
+      accountReads: fixture.getAccountReads(),
+      userDataReady: runtime.userDataReady,
+    }),
+    2_000,
+  )
+  const broker = runtime.broker
+  broker.emitUserDataEvent({
+    eventType: "outboundAccountPosition",
+  })
+  await waitForTestSignal(
+    fixture.observedEvent,
+    "user-data event observed during application recovery",
+    () => ({
+      observedRecoveryMode: fixture.getObservedRecoveryMode(),
+      userDataReady: runtime.userDataReady,
+    }),
+    2_000,
+  )
+  assert.equal(
+    fixture.getObservedRecoveryMode(),
+    true,
+    "an event accepted while authoritative recovery is pending must be classified as recovery-mode work",
+  )
+}
+
+async function assertRecoveryModeAcknowledged({ fixture, runtime }) {
+  fixture.releaseRecoverySnapshot()
+  await waitForTestSignal(
+    fixture.recoveryAcknowledged,
+    "application recovery acknowledgement after durable snapshots",
+    () => ({
+      accountReads: fixture.getAccountReads(),
+      userDataReady: runtime.userDataReady,
+    }),
+    2_000,
+  )
+  assert.equal(
+    runtime.userDataReady,
+    true,
+    "trading readiness must return only after the application acknowledges the fully reconciled recovery generation",
+  )
+}
+
+
+test("identifies user-data events received during application recovery as recovery-mode work", async () => {
+  const broker = createBroker()
+  const fixture = createRecoveryModeEventFixture({
+    broker,
+  })
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
@@ -5059,13 +5125,10 @@ test("identifies user-data events received during application recovery as recove
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    onUserDataEvent: async ({ recoveryMode }) => {
-      observedRecoveryMode = recoveryMode
-      resolveObservedEvent()
-    },
+    onUserDataEvent: fixture.observeUserDataEvent,
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
 
@@ -5076,54 +5139,19 @@ test("identifies user-data events received during application recovery as recove
       recoveryRequired: true,
       reconciliationRequired: true,
     })
-    await waitForTestSignal(
-      recoverySnapshotStarted,
-      "application recovery account snapshot",
-      () => ({
-        accountReads,
-        userDataReady: runtime.userDataReady
-      }),
-      2_000,
-    )
-
-    broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
-    await waitForTestSignal(
-      observedEvent,
-      "user-data event observed during application recovery",
-      () => ({
-        observedRecoveryMode,
-        userDataReady: runtime.userDataReady
-      }),
-      2_000,
-    )
-
-    assert.equal(
-      observedRecoveryMode,
-      true,
-      "an event accepted while authoritative recovery is pending must be classified as recovery-mode work",
-    )
-
-    releaseRecoverySnapshot()
-    await waitForTestSignal(
-      recoveryAcknowledged,
-      "application recovery acknowledgement after durable snapshots",
-      () => ({
-        accountReads,
-        userDataReady: runtime.userDataReady
-      }),
-      2_000,
-    )
-    assert.equal(
-      runtime.userDataReady,
-      true,
-      "trading readiness must return only after the application acknowledges the fully reconciled recovery generation",
-    )
+    await assertRecoveryModeEventObserved({
+      fixture,
+      runtime,
+    })
+    await assertRecoveryModeAcknowledged({
+      fixture,
+      runtime,
+    })
   } finally {
-    releaseRecoverySnapshot()
+    fixture.releaseRecoverySnapshot()
     await runtime.stop()
   }
 })
-
 
 test("verifies an injected Operational State Store before connecting to the broker", async () => {
   const calls = []
