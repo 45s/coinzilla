@@ -2901,6 +2901,75 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   assert.ok(compareDecimal({ left: replacementSell.limitPrice.amount, right: expectedSell.price }) >= 0)
 })
 
+test("fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved", async () => {
+  for (const scenario of [
+    { name: "cancel", cancelFailure: true },
+    { name: "replacement-submit", placeOrderFailureAfterCount: 2 },
+  ]) {
+    const seeded = makeSeededRecoveryState()
+    const stopping = { value: false }
+    const portfolioRef = { current: seeded.portfolio }
+    const ledgerRef = { current: seeded.recoveryLedger }
+    let buyOrder
+    const harness = await createHarness({
+      initialPortfolio: seeded.portfolio,
+      initialRecoveryLedger: seeded.recoveryLedger,
+      baseFreeBalance: "1",
+      canTrade: () => !stopping.value,
+      isStopping: () => stopping.value,
+      getPortfolio: () => portfolioRef.current,
+      getRecoveryLedger: () => ledgerRef.current,
+      updateTradingAccounting: async ({ fill }) => {
+        if (portfolioRef.current.appliedFillIds.includes(fill.id)) {
+          return { ok: true, data: { applied: false, duplicate: true } }
+        }
+        portfolioRef.current = portfolioRef.current.applyFill({ fill }).portfolio
+        ledgerRef.current = ledgerRef.current.applyFill({ fill }).ledger
+        return { ok: true, data: { applied: true, duplicate: false } }
+      },
+      cancelFailure: scenario.cancelFailure ?? false,
+      placeOrderFailureAfterCount: scenario.placeOrderFailureAfterCount,
+    })
+    await harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    })
+    buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+    assert.ok(buyOrder)
+
+    const fill = makeBuyFill({
+      order: buyOrder,
+      tradeId: "shutdown-unresolved-" + scenario.name,
+      price: buyOrder.limitPrice.amount,
+      quantity: buyOrder.originalQuantity.amount,
+      quoteQuantity: multiplyDecimal({
+        left: buyOrder.limitPrice.amount,
+        right: buyOrder.originalQuantity.amount,
+      }),
+    })
+    stopping.value = true
+    const fillResult = await harness.engine.processUserDataEvent({
+      event: {
+        executionType: "TRADE",
+        executedOrder: makeFilledOrder({ order: buyOrder }),
+        fill,
+      },
+    })
+    assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
+
+    const reconciliation = await harness.engine.reconcileRecoverySellsForShutdown()
+    assert.equal(reconciliation.ok, false, "An unresolved " + scenario.name + " outcome must fail shutdown recovery.")
+    const audit = await harness.engine.auditShutdownRecoverySellCoverage()
+    assert.equal(audit.ok, true)
+    assert.equal(audit.data.covered, false, "Unresolved recovery SELL lifecycle state must never pass final coverage.")
+    assert.equal(
+      harness.engine.getOrders().filter((order) => order.side === "BUY").length,
+      1,
+      "Shutdown recovery must not submit another standing BUY after either failure.",
+    )
+  }
+})
+
 test("does not submit the next standing BUY when recovery SELL submission fails", async () => {
   const seeded = makeSeededRecoveryState()
   const { engine, orders, pauses } = await createHarness({
