@@ -114,6 +114,16 @@ async function persistHarvesterProcessStart({ operationalStateStore, appConfig, 
   }
 }
 
+function throwIfStartupCleanupFailed({ error, cleanupErrors } = {}) {
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [error, ...cleanupErrors],
+      "Harvester startup failed and operator/broker cleanup was incomplete",
+      { cause: error },
+    )
+  }
+}
+
 function publishInitialUserDataReadiness({ lastReportedUserDataReady, eventPublisher, brokerName, userDataState } = {}) {
   if (!lastReportedUserDataReady) {
     return
@@ -545,13 +555,7 @@ export async function startHarvester({
       userDataSubscription
     })
     const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [error, ...cleanupErrors],
-        "Harvester startup failed and operator/broker cleanup was incomplete",
-        { cause: error },
-      )
-    }
+    throwIfStartupCleanupFailed({ error, cleanupErrors })
     throw error
   }
 
