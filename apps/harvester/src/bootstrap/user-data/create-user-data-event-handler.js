@@ -219,6 +219,18 @@ async function handleFailedOrderEvent({ processed, event, tradingEngine, state, 
   })
 }
 
+function getSuccessfulOrderSymbol({ executedOrder, fill }) {
+  return executedOrder?.market?.symbol ?? fill?.market?.symbol
+}
+
+function getSuccessfulOrderBrokerId({ executedOrder, fill }) {
+  return executedOrder?.brokerOrderId ?? fill?.brokerOrderId
+}
+
+function getSuccessfulOrderClientId({ executedOrder, event, fill }) {
+  return executedOrder?.clientOrderId ?? event.clientOrderId ?? fill?.clientOrderId
+}
+
 function createSuccessfulOrderEventLog({ processed, event }) {
   const { executedOrder, fill } = event
   const ignored = processed.data?.ignored === true
@@ -226,9 +238,9 @@ function createSuccessfulOrderEventLog({ processed, event }) {
     message: "Order update processed",
     eventType: event.eventType ?? "UNKNOWN",
     executionType: event.executionType,
-    symbol: executedOrder?.market?.symbol ?? fill?.market?.symbol,
-    brokerOrderId: executedOrder?.brokerOrderId ?? fill?.brokerOrderId,
-    clientOrderId: executedOrder?.clientOrderId ?? event.clientOrderId ?? fill?.clientOrderId,
+    symbol: getSuccessfulOrderSymbol({ executedOrder, fill }),
+    brokerOrderId: getSuccessfulOrderBrokerId({ executedOrder, fill }),
+    clientOrderId: getSuccessfulOrderClientId({ executedOrder, event, fill }),
     originalClientOrderId: event.originalClientOrderId,
     side: executedOrder?.side ?? fill?.side,
     price: executedOrder?.limitPrice?.amount ?? null,
