@@ -125,7 +125,7 @@ export function createShutdownHandler({
       })
     }
 
-    // eslint-disable-next-line complexity -- this is the ordered shutdown state machine; phase order is the safety contract.
+    // eslint-disable-next-line complexity, max-statements -- ordered shutdown phases are the safety contract.
     shutdownPromise = (async () => {
       const tradingEngine = getTradingEngine()
       const userDataSubscription = getUserDataSubscription()
