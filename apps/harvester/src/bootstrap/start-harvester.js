@@ -191,7 +191,7 @@ function createHarvesterUserDataEventRuntime({
     publishAccountSnapshot,
     publishOpenOrdersSnapshot,
   })
-  const { handleUserDataEvent, drainUserDataEvents, startUserDataRecovery } = userDataEventRuntime
+  const { handleUserDataEvent, startUserDataRecovery } = userDataEventRuntime
   const userDataStatusRuntime = createHarvesterUserDataStatusRuntime({
     userDataState,
     isStopped,
