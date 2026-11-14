@@ -1,7 +1,7 @@
 import os from "node:os"
 import path from "node:path"
 import { generateUUID, toResult } from "@coinzilla/utils"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { acquireHarvesterProcessLocks } from "../infrastructure/process-lock/acquire-harvester-process-locks.js"
 
