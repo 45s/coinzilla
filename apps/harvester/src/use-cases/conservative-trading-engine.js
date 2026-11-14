@@ -1194,14 +1194,13 @@ export function makeConservativeTradingEngine({
   }
 
   // This existing single-market state transition intentionally keeps its ordered gates together.
-  // eslint-disable-next-line complexity
   const evaluateLatestTransition = async ({
     symbol,
     preflightOnly = false,
     excludedActiveOrderClientId,
     referencePriceOverride,
     shutdownRecoveryOnly = false,
-  } = {}) => {
+  } = {}) => { // eslint-disable-line complexity -- ordered strategy gates are the trading safety contract.
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
     }
@@ -1558,7 +1557,7 @@ export function makeConservativeTradingEngine({
 
   const shutdownRecoveryError = (code, message) => Object.assign(new Error(message), { code })
 
-  const getShutdownRecoveryInventory = ({ symbol } = {}) => {
+  const getShutdownRecoveryInventory = ({ symbol } = {}) => { // eslint-disable-line complexity -- inventory assessment keeps fail-closed checks together.
     let metadata
     try {
       metadata = getCurrentMarketMetadata({ symbol })
@@ -1788,7 +1787,7 @@ export function makeConservativeTradingEngine({
     })
   }
 
-  const reconcileRecoverySellForShutdownSymbol = async ({ symbol } = {}) => {
+  const reconcileRecoverySellForShutdownSymbol = async ({ symbol } = {}) => { // eslint-disable-line complexity -- cancel/reconcile/replace ordering is safety-critical.
     let assessment = assessShutdownRecoverySellCoverage({ symbol })
     if (assessment.covered) {
       return { ok: true, assessment }
@@ -2273,8 +2272,7 @@ export function makeConservativeTradingEngine({
           continue
         }
 
-        // eslint-disable-next-line max-params -- Array#sort comparators require both adjacent values.
-        const fills = [...fillsById.values()].sort((left, right) => {
+        const fills = [...fillsById.values()].sort((left, right) => { // eslint-disable-line max-params -- Array#sort comparators require both adjacent values.
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
               left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
           return left.tradeId.localeCompare(right.tradeId)
