@@ -54,13 +54,13 @@ function logSystem(logger, data) {
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
  * @param {object} options.logger Structured logger.
- * @param {object} [options.durableFactsStore] Optional initialized ADR-0001 durable-fact store.
+ * @param {object} [options.operationalStateStore] Optional initialized ADR-0001 Operational State Store.
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, durableFactsStore,
+  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, operationalStateStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
@@ -229,16 +229,18 @@ export function createAccountSnapshotManager({
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
     })
-    const blockReasons = unownedOrders.length > 0
-      ? ["UNOWNED_OPEN_ORDERS:" + unownedOrders.length]
-      : orders.length > 0 && !ownershipReconciled
-        ? ["CANONICAL_ORDER_RECONCILIATION_REQUIRED"]
-        : []
-    const readiness = blockReasons.length > 0
-      ? "BLOCKED"
-      : orders.length > 0
-        ? "RECONCILED"
-        : "READY"
+    const blockReasons = []
+    if (unownedOrders.length > 0) {
+      blockReasons.push("UNOWNED_OPEN_ORDERS:" + unownedOrders.length)
+    } else if (orders.length > 0 && !ownershipReconciled) {
+      blockReasons.push("CANONICAL_ORDER_RECONCILIATION_REQUIRED")
+    }
+    let readiness = "READY"
+    if (blockReasons.length > 0) {
+      readiness = "BLOCKED"
+    } else if (orders.length > 0) {
+      readiness = "RECONCILED"
+    }
     let dataResult
     try {
       dataResult = mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons })
@@ -253,8 +255,8 @@ export function createAccountSnapshotManager({
         false,
       )
     }
-    if (durableFactsStore) {
-      const durable = await recordAccountOpenOrdersCaptured({ durableFactsStore, data: dataResult.data })
+    if (operationalStateStore) {
+      const durable = await recordAccountOpenOrdersCaptured({ operationalStateStore, data: dataResult.data })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
         throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
@@ -303,14 +305,16 @@ export function createAccountSnapshotManager({
     unresolvedHarvesterOpenOrderSymbols = new Set(unresolvedHarvesterOrders
       .map((order) => order?.market?.symbol ?? order?.symbol)
       .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
+    let auditMessage = "Account-wide open-orders audit is waiting for canonical order reconciliation"
+    if (readiness === "READY") {
+      auditMessage = "Account-wide open-orders audit complete; no open orders found"
+    } else if (readiness === "RECONCILED") {
+      auditMessage = "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
+    } else if (unownedOrders.length > 0) {
+      auditMessage = "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
+    }
     logger.info?.({
-      message: readiness === "READY"
-        ? "Account-wide open-orders audit complete; no open orders found"
-        : readiness === "RECONCILED"
-          ? "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
-          : unownedOrders.length > 0
-          ? "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
-          : "Account-wide open-orders audit is waiting for canonical order reconciliation",
+      message: auditMessage,
       orderCount: orders.length,
       readiness,
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
@@ -348,8 +352,8 @@ export function createAccountSnapshotManager({
         false,
       )
     }
-    if (durableFactsStore) {
-      const durable = await recordAccountSnapshotCaptured({ durableFactsStore, data: dataResult.data })
+    if (operationalStateStore) {
+      const durable = await recordAccountSnapshotCaptured({ operationalStateStore, data: dataResult.data })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
         throw withRecoveryFailure(new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_SNAPSHOT_DURABLE_FACT", false)

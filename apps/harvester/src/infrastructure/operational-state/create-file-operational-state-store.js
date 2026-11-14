@@ -1,13 +1,13 @@
 import * as nodeFileSystem from "node:fs/promises"
 import path from "node:path"
 import {
-  canonicalizeDurableFactValue,
-  canonicalStringifyDurableFactValue,
-  digestDurableFactRecord,
-  normalizeDurableFactRecordedAt,
+  canonicalizeOperationalStateValue,
+  canonicalStringifyOperationalStateValue,
+  digestOperationalStateRecord,
+  normalizeOperationalStateRecordedAt,
   requireNonEmptyString,
-  sha256DurableFactValue,
-} from "./durable-facts-canonical.js"
+  sha256OperationalStateValue,
+} from "./operational-state-canonical.js"
 import { addDecimal, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 
 const FORMAT_VERSION = 1
@@ -79,12 +79,12 @@ function factIdForOrderOutcome(clientOrderId, outcome) {
 
 function validateFactData({ factType, data, factId, runtimeSessionId }) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new TypeError("Durable fact data must be a plain object")
+    throw new TypeError("Operational State record data must be a plain object")
   }
-  const canonicalData = canonicalizeDurableFactValue(data)
+  const canonicalData = canonicalizeOperationalStateValue(data)
   const byteLength = Buffer.byteLength(JSON.stringify(canonicalData), "utf8")
   if (byteLength > MAX_FACT_DATA_BYTES) {
-    throw new RangeError("Durable fact data exceeds the " + MAX_FACT_DATA_BYTES + " byte limit")
+    throw new RangeError("Operational State record data exceeds the " + MAX_FACT_DATA_BYTES + " byte limit")
   }
   if (factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED") {
     const allowedFields = new Set(["requestId", "actorId", "symbol"])
@@ -136,7 +136,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
     if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
       throw new TypeError("Safety-blocker evidenceDigest must be a SHA-256 digest")
     }
-    const expectedBlockerId = sha256DurableFactValue([
+    const expectedBlockerId = sha256OperationalStateValue([
       canonicalData.scope,
       canonicalData.symbol ?? "",
       reason,
@@ -523,7 +523,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       canonicalData.freeQuantity,
       canonicalData.inventoryDisposition,
     ])
-    if (sha256DurableFactValue(cycleIdentity) !== cycleId) {
+    if (sha256OperationalStateValue(cycleIdentity) !== cycleId) {
       throw new TypeError("Recovery-cycle ID must be derived from the exact fill, accounting, inventory, and terminal SELL identity")
     }
   }
@@ -603,7 +603,7 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
       canonicalData.outcome,
       reason,
     ])
-    if (sha256DurableFactValue(evaluationIdentity) !== evaluationId) {
+    if (sha256OperationalStateValue(evaluationIdentity) !== evaluationId) {
       throw new TypeError("Recovery-cycle evaluation ID must be derived from its exact fill, accounting, and terminal SELL identity")
     }
   }
@@ -769,12 +769,12 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
 
 function validateFactInput({ fact, runtimeSessionId }) {
   if (!fact || typeof fact !== "object" || Array.isArray(fact)) {
-    throw new TypeError("Durable fact must be an object")
+    throw new TypeError("Operational State record must be an object")
   }
   const factId = requireNonEmptyString({ value: fact.factId, field: "factId", maxLength: MAX_FACT_ID_LENGTH })
   const factType = requireNonEmptyString({ value: fact.factType, field: "factType", maxLength: 64 })
   if (!FACT_TYPES.has(factType) || factType === "LEDGER_INITIALIZED") {
-    throw new TypeError("Durable fact type is not allowlisted: " + factType)
+    throw new TypeError("Operational State record type is not allowlisted: " + factType)
   }
   return {
     factId,
@@ -790,27 +790,27 @@ function validateFactInput({ fact, runtimeSessionId }) {
 
 function validateFactRecord({ record, schemaVersion, expectedSequence, previousDigest, index }) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
-    throw new TypeError("Durable fact record must be an object")
+    throw new TypeError("Operational State record must be an object")
   }
   const expectedKeys = [
     "data", "digest", "factId", "factType", "formatVersion", "previousDigest",
     "recordedAt", "runtimeSessionId", "schemaVersion", "sequence",
   ]
-  if (canonicalStringifyDurableFactValue(Object.keys(record).sort()) !== canonicalStringifyDurableFactValue(expectedKeys)) {
-    throw new Error("Durable fact record contains missing or unknown envelope fields")
+  if (canonicalStringifyOperationalStateValue(Object.keys(record).sort()) !== canonicalStringifyOperationalStateValue(expectedKeys)) {
+    throw new Error("Operational State record contains missing or unknown envelope fields")
   }
   if (record.formatVersion !== FORMAT_VERSION || record.schemaVersion !== schemaVersion) {
-    throw new Error("Durable fact record format/schema version is unsupported")
+    throw new Error("Operational State record format/schema version is unsupported")
   }
   if (typeof record.sequence !== "string" || !SEQUENCE_PATTERN.test(record.sequence)) {
-    throw new TypeError("Durable fact sequence must be a canonical base-10 string")
+    throw new TypeError("Operational State record sequence must be a canonical base-10 string")
   }
   if (record.sequence !== expectedSequence) {
-    throw new Error("Durable fact sequence gap or reordering at record " + index)
+    throw new Error("Operational State record sequence gap or reordering at record " + index)
   }
   requireNonEmptyString({ value: record.factId, field: "record.factId", maxLength: MAX_FACT_ID_LENGTH })
   requireNonEmptyString({ value: record.factType, field: "record.factType", maxLength: 64 })
-  if (!FACT_TYPES.has(record.factType)) {throw new Error("Durable fact type is not allowlisted: " + record.factType)}
+  if (!FACT_TYPES.has(record.factType)) {throw new Error("Operational State record type is not allowlisted: " + record.factType)}
   requireNonEmptyString({
     value: record.runtimeSessionId,
     field: "record.runtimeSessionId",
@@ -819,27 +819,27 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
   const recordedAt = requireNonEmptyString({ value: record.recordedAt, field: "record.recordedAt" })
   const parsedDate = new Date(recordedAt)
   if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString() !== recordedAt) {
-    throw new Error("Durable fact recorded-at timestamp is not canonical ISO-8601")
+    throw new Error("Operational State recorded-at timestamp is not canonical ISO-8601")
   }
   if (index === 0) {
     if (record.sequence !== "0" || record.factId !== "durable-facts:genesis" ||
         record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null ||
-        canonicalStringifyDurableFactValue(record.data) !== canonicalStringifyDurableFactValue({ schemaVersion })) {
-      throw new Error("Durable fact stream must begin with its explicit genesis record")
+        canonicalStringifyOperationalStateValue(record.data) !== canonicalStringifyOperationalStateValue({ schemaVersion })) {
+      throw new Error("Operational State Store record stream must begin with its explicit genesis record")
     }
   } else {
-    if (record.factType === "LEDGER_INITIALIZED") {throw new Error("Durable fact stream contains a second genesis record")}
-    if (record.previousDigest !== previousDigest) {throw new Error("Durable fact previous-digest chain is broken")}
+    if (record.factType === "LEDGER_INITIALIZED") {throw new Error("Operational State Store record stream contains a second genesis record")}
+    if (record.previousDigest !== previousDigest) {throw new Error("Operational State record previous-digest chain is broken")}
   }
   if (record.previousDigest !== null && !SHA256_PATTERN.test(record.previousDigest)) {
-    throw new TypeError("Durable fact previousDigest must be a SHA-256 digest or null for genesis")
+    throw new TypeError("Operational State record previousDigest must be a SHA-256 digest or null for genesis")
   }
-  if (!SHA256_PATTERN.test(record.digest ?? "")) {throw new TypeError("Durable fact digest is malformed")}
+  if (!SHA256_PATTERN.test(record.digest ?? "")) {throw new TypeError("Operational State record digest is malformed")}
   validateFactData({ factType: record.factType, data: record.data, factId: record.factId, runtimeSessionId: record.runtimeSessionId })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
-    throw new Error("Durable fact genesis schema version does not match the stream schema")
+    throw new Error("Operational State Store genesis schema version does not match the stream schema")
   }
-  if (digestDurableFactRecord(record) !== record.digest) {throw new Error("Durable fact digest mismatch at sequence " + record.sequence)}
+  if (digestOperationalStateRecord(record) !== record.digest) {throw new Error("Operational State record digest mismatch at sequence " + record.sequence)}
 }
 
 function createManifestCheckpoint({ schemaVersion, record, previousManifestDigest }) {
@@ -851,7 +851,7 @@ function createManifestCheckpoint({ schemaVersion, record, previousManifestDiges
     recordCount: (BigInt(record.sequence) + 1n).toString(),
     previousManifestDigest,
   }
-  return { ...body, digest: digestDurableFactRecord(body) }
+  return { ...body, digest: digestOperationalStateRecord(body) }
 }
 
 function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, expectedSequence, previousManifestDigest, index }) {
@@ -862,7 +862,7 @@ function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, exp
   if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint)) {
     throw new TypeError("Committed-head manifest checkpoint must be an object")
   }
-  if (canonicalStringifyDurableFactValue(Object.keys(checkpoint).sort()) !== canonicalStringifyDurableFactValue(expectedKeys)) {
+  if (canonicalStringifyOperationalStateValue(Object.keys(checkpoint).sort()) !== canonicalStringifyOperationalStateValue(expectedKeys)) {
     throw new Error("Committed-head manifest contains missing or unknown fields")
   }
   if (checkpoint.formatVersion !== FORMAT_VERSION || checkpoint.schemaVersion !== schemaVersion) {
@@ -884,7 +884,7 @@ function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, exp
   if (checkpoint.previousManifestDigest !== null && !SHA256_PATTERN.test(checkpoint.previousManifestDigest)) {
     throw new TypeError("Committed-head manifest previous digest is malformed")
   }
-  if (!SHA256_PATTERN.test(checkpoint.digest ?? "") || digestDurableFactRecord(checkpoint) !== checkpoint.digest) {
+  if (!SHA256_PATTERN.test(checkpoint.digest ?? "") || digestOperationalStateRecord(checkpoint) !== checkpoint.digest) {
     throw new Error("Committed-head manifest digest mismatch at sequence " + checkpoint.sequence)
   }
 }
@@ -899,7 +899,7 @@ function parseJsonLines({ source, label }) {
   }
   return lines.map((line, index) => {
     const parsed = JSON.parse(line)
-    if (canonicalStringifyDurableFactValue(parsed) !== line) {
+    if (canonicalStringifyOperationalStateValue(parsed) !== line) {
       throw new Error(label + " is not canonical JSON at line " + (index + 1))
     }
     return parsed
@@ -915,14 +915,14 @@ function parseJsonLines({ source, label }) {
  * must verify/read an existing ledger and must never create one implicitly.
  *
  * @param {object} options
- * @param {string} options.directory - Stable per-installation durable-fact directory.
+ * @param {string} options.directory - Stable per-installation Operational State Store record directory.
  * @param {string} options.runtimeSessionId - Current process-session identity.
- * @param {number} [options.schemaVersion=1] - Durable-fact schema version.
+ * @param {number} [options.schemaVersion=1] - Operational State Store record schema version.
  * @param {() => Date|string} [options.now] - Injectable canonical timestamp source.
  * @param {object} [options.fileSystem] - Injectable Node fs/promises-compatible adapter.
- * @returns {Readonly<object>} Durable-facts application port.
+ * @returns {Readonly<object>} Operational State Store records application port.
  */
-export function createFileDurableFactsStore({
+export function createFileOperationalStateStore({
   directory,
   runtimeSessionId,
   schemaVersion = DEFAULT_SCHEMA_VERSION,
@@ -936,11 +936,11 @@ export function createFileDurableFactsStore({
     maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
   })
   if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) {
-    throw new TypeError("Durable-fact schemaVersion must be a positive safe integer")
+    throw new TypeError("Operational State Store record schemaVersion must be a positive safe integer")
   }
-  if (typeof now !== "function") {throw new TypeError("Durable-fact now must be a function")}
+  if (typeof now !== "function") {throw new TypeError("Operational State Store record now must be a function")}
   for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "chmod"]) {
-    if (typeof fileSystem?.[method] !== "function") {throw new TypeError("Durable-fact fileSystem requires " + method)}
+    if (typeof fileSystem?.[method] !== "function") {throw new TypeError("Operational State Store record fileSystem requires " + method)}
   }
 
   const absoluteDirectory = path.resolve(resolvedDirectory)
@@ -951,7 +951,7 @@ export function createFileDurableFactsStore({
   const assertNoUncertainWrite = () => {
     if (writeUncertain) {
       throw createError(
-        "A previous durable-fact write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
+        "A previous Operational State Store record write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
         "DURABLE_FACTS_COMMIT_UNCERTAIN",
       )
     }
@@ -981,16 +981,16 @@ export function createFileDurableFactsStore({
   const verifyState = async () => {
     const directoryStat = await fileSystem.lstat(absoluteDirectory)
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-      throw new Error("Durable-fact directory must be a real directory, not a symlink")
+      throw new Error("Operational State Store record directory must be a real directory, not a symlink")
     }
     if (supportsPosixModeBits &&
         ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)) {
-      throw new Error("Durable-fact directory permissions must be private (0700)")
+      throw new Error("Operational State Store record directory permissions must be private (0700)")
     }
     const entries = await fileSystem.readdir(absoluteDirectory)
     const unexpectedEntries = entries.filter((entry) => ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry))
     if (unexpectedEntries.length > 0) {
-      throw new Error("Durable-fact directory contains an unresolved temporary or unexpected file")
+      throw new Error("Operational State Store record directory contains an unresolved temporary or unexpected file")
     }
     const [logStat, manifestStat] = await Promise.all([
       fileSystem.lstat(logPath),
@@ -998,23 +998,23 @@ export function createFileDurableFactsStore({
     ])
     if (logStat.isSymbolicLink() || !logStat.isFile() ||
         manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
-      throw new Error("Durable-fact streams must be regular files, not symlinks")
+      throw new Error("Operational State Store record streams must be regular files, not symlinks")
     }
     if (supportsPosixModeBits && [logStat, manifestStat].some((stat) =>
       (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
-      throw new Error("Durable-fact streams must use private file permissions (0600)")
+      throw new Error("Operational State Store record streams must use private file permissions (0600)")
     }
     const [rawLog, rawManifest] = await Promise.all([
       fileSystem.readFile(logPath, "utf8"),
       fileSystem.readFile(manifestPath, "utf8"),
     ])
-    const records = parseJsonLines({ source: rawLog, label: "Durable-fact log" })
+    const records = parseJsonLines({ source: rawLog, label: "Operational State Store record log" })
     const checkpoints = parseJsonLines({ source: rawManifest, label: "Committed-head manifest journal" })
     if (checkpoints.length < records.length) {
-      throw new Error("Durable fact record exists beyond the committed-head manifest journal")
+      throw new Error("Operational State record exists beyond the committed-head manifest journal")
     }
     if (checkpoints.length > records.length) {
-      throw new Error("Committed-head manifest journal is ahead of the durable-fact log")
+      throw new Error("Committed-head manifest journal is ahead of the Operational State Store record log")
     }
     const factIds = new Set()
     let previousFactDigest = null
@@ -1029,7 +1029,7 @@ export function createFileDurableFactsStore({
         previousDigest: previousFactDigest,
         index,
       })
-      if (factIds.has(record.factId)) {throw new Error("Durable fact identity is duplicated in the append-only stream")}
+      if (factIds.has(record.factId)) {throw new Error("Operational State record identity is duplicated in the append-only stream")}
       factIds.add(record.factId)
       const checkpoint = checkpoints[index]
       validateManifestCheckpoint({
@@ -1059,12 +1059,12 @@ export function createFileDurableFactsStore({
       await fileSystem.mkdir(absoluteDirectory, { recursive: true, mode: 0o700 })
       const directoryStat = await fileSystem.lstat(absoluteDirectory)
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-        throw new Error("Durable-fact initialization requires a real directory")
+        throw new Error("Operational State Store record initialization requires a real directory")
       }
       const entries = await fileSystem.readdir(absoluteDirectory)
-      if (entries.length > 0) {throw new Error("Durable-fact initialization refuses to overwrite an existing directory")}
+      if (entries.length > 0) {throw new Error("Operational State Store record initialization refuses to overwrite an existing directory")}
       if (supportsPosixModeBits) {await fileSystem.chmod(absoluteDirectory, 0o700)}
-      const recordedAt = normalizeDurableFactRecordedAt(now())
+      const recordedAt = normalizeOperationalStateRecordedAt(now())
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
         schemaVersion,
@@ -1076,11 +1076,11 @@ export function createFileDurableFactsStore({
         previousDigest: null,
         data: { schemaVersion },
       }
-      const genesisRecord = { ...genesisBody, digest: digestDurableFactRecord(genesisBody) }
+      const genesisRecord = { ...genesisBody, digest: digestOperationalStateRecord(genesisBody) }
       const logHandle = await fileSystem.open(logPath, "wx", 0o600)
       try {
         factWriteStarted = true
-        await logHandle.writeFile(canonicalStringifyDurableFactValue(genesisRecord) + "\n", "utf8")
+        await logHandle.writeFile(canonicalStringifyOperationalStateValue(genesisRecord) + "\n", "utf8")
         await logHandle.sync()
       } finally {
         await logHandle.close()
@@ -1093,7 +1093,7 @@ export function createFileDurableFactsStore({
       const manifestHandle = await fileSystem.open(manifestPath, "wx", 0o600)
       try {
         manifestWriteStarted = true
-        await manifestHandle.writeFile(canonicalStringifyDurableFactValue(genesisCheckpointBody) + "\n", "utf8")
+        await manifestHandle.writeFile(canonicalStringifyOperationalStateValue(genesisCheckpointBody) + "\n", "utf8")
         await manifestHandle.sync()
       } finally {
         await manifestHandle.close()
@@ -1142,12 +1142,12 @@ export function createFileDurableFactsStore({
       const input = validateFactInput({ fact, runtimeSessionId: resolvedRuntimeSessionId })
       const existing = state.records.find((record) => record.factId === input.factId)
       if (existing) {
-        if (existing.factType !== input.factType || canonicalStringifyDurableFactValue(existing.data) !== canonicalStringifyDurableFactValue(input.data)) {
-          throw createError("Durable factId was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
+        if (existing.factType !== input.factType || canonicalStringifyOperationalStateValue(existing.data) !== canonicalStringifyOperationalStateValue(input.data)) {
+          throw createError("Operational State record ID was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
         }
         return toResult({ data: { durable: true, duplicate: true, record: existing } })
       }
-      const recordedAt = normalizeDurableFactRecordedAt(now())
+      const recordedAt = normalizeOperationalStateRecordedAt(now())
       if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
         const nowTime = new Date(recordedAt).getTime()
         if (!Number.isSafeInteger(nowTime) || input.data.verifiedAt > nowTime) {
@@ -1186,10 +1186,10 @@ export function createFileDurableFactsStore({
         previousDigest: state.lastRecord.digest,
         data: input.data,
       }
-      const record = { ...body, digest: digestDurableFactRecord(body) }
-      const line = canonicalStringifyDurableFactValue(record)
+      const record = { ...body, digest: digestOperationalStateRecord(body) }
+      const line = canonicalStringifyOperationalStateValue(record)
       if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
-        throw new RangeError("Durable fact record exceeds the " + MAX_RECORD_BYTES + " byte limit")
+        throw new RangeError("Operational State record exceeds the " + MAX_RECORD_BYTES + " byte limit")
       }
       const logHandle = await fileSystem.open(logPath, "a", 0o600)
       try {
@@ -1204,7 +1204,7 @@ export function createFileDurableFactsStore({
         record,
         previousManifestDigest: state.manifest.digest,
       })
-      const manifestLine = canonicalStringifyDurableFactValue(checkpoint)
+      const manifestLine = canonicalStringifyOperationalStateValue(checkpoint)
       if (Buffer.byteLength(manifestLine, "utf8") > MAX_RECORD_BYTES) {
         throw new RangeError("Committed-head manifest checkpoint exceeds the " + MAX_RECORD_BYTES + " byte limit")
       }

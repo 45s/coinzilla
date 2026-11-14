@@ -8,21 +8,21 @@ const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
  * Persist the broker's classified submission outcome before local order state advances.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore - Initialized ADR-0001 durable-fact append port.
+ * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {CanonicalOrder} options.order - Canonical pending or broker-acknowledged order.
  * @param {string} options.outcome - ACKNOWLEDGED, REJECTED, REJECTED_OR_UNKNOWN, or UNKNOWN.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
 export async function recordOrderSubmissionOutcome({
-  durableFactsStore,
+  operationalStateStore,
   order,
   outcome,
   purpose = null,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") {
-      throw new TypeError("recordOrderSubmissionOutcome requires a durable-fact append port")
+    if (typeof operationalStateStore?.append !== "function") {
+      throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
     }
     if (!(order instanceof CanonicalOrder)) {
       throw new TypeError("recordOrderSubmissionOutcome requires a canonical order")
@@ -57,7 +57,7 @@ export async function recordOrderSubmissionOutcome({
     }
 
     const clientOrderId = order.clientOrderId
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "order-submission-outcome:" + clientOrderId + ":" + outcome,
       factType: "ORDER_SUBMISSION_OUTCOME",
       data: {

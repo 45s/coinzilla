@@ -16,7 +16,7 @@ function requireObject({ value, field }) {
 }
 
 function requireArray({ value, field }) {
-  if (!Array.isArray(value)) throw new TypeError(field + " must be an array")
+  if (!Array.isArray(value)) { throw new TypeError(field + " must be an array") }
   return value
 }
 
@@ -38,18 +38,18 @@ function requireString({ value, field }) {
  * @param {object} options
  * @param {object} options.context - Operator-prepared Journal and exchange evidence bundle.
  * @param {boolean} [options.confirm=false] - Whether to append the coverage fact after a READY audit.
- * @param {object} [options.durableFactsStore] - Existing ADR-0001 durable-facts read/append port; required only for confirmation.
+ * @param {object} [options.operationalStateStore] - Existing ADR-0001 Operational State Store records read/append port; required only for confirmation.
  * @returns {Promise<object>} Result containing an audit-only reconciliation or explicit confirmation outcome.
  */
 export async function runOfflineMarketRecovery({
   context,
   confirm = false,
-  durableFactsStore,
+  operationalStateStore,
 } = {}) {
   try {
-    if (typeof confirm !== "boolean") throw new TypeError("confirm must be a boolean")
+    if (typeof confirm !== "boolean") { throw new TypeError("confirm must be a boolean") }
     const canonical = createCanonicalEvidence({ context })
-    if (canonical?.ok !== true) return canonical
+    if (canonical?.ok !== true) { return canonical }
     const {
       projection,
       recoveredState: initialRecoveredState,
@@ -59,7 +59,7 @@ export async function runOfflineMarketRecovery({
     } = canonical.data
     const symbol = requireString({ value: context.symbol, field: "context.symbol" })
     const targetMarket = marketsBySymbol.get(symbol)
-    if (!targetMarket) throw new Error("Canonical target market metadata is missing for " + symbol)
+    if (!targetMarket) { throw new Error("Canonical target market metadata is missing for " + symbol) }
     const coverage = requireObject({ value: context.coverage, field: "context.coverage" })
     const historyRetentionEvidence = {
       factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
@@ -129,12 +129,12 @@ export async function runOfflineMarketRecovery({
 
     if (confirm) {
       requireString({ value: context.runtimeSessionId, field: "context.runtimeSessionId" })
-      if (typeof durableFactsStore?.readAll !== "function" ||
-          typeof durableFactsStore?.append !== "function") {
-        throw new TypeError("Offline coverage confirmation requires the existing ADR-0001 durable-facts read/append port")
+      if (typeof operationalStateStore?.readAll !== "function" ||
+          typeof operationalStateStore?.append !== "function") {
+        throw new TypeError("Offline coverage confirmation requires the existing ADR-0001 Operational State Store records read/append port")
       }
       const confirmation = await confirmMarketHistoryCoverage({
-        durableFactsStore,
+        operationalStateStore,
         symbol,
         ...coverage,
         reconcileMarketState,

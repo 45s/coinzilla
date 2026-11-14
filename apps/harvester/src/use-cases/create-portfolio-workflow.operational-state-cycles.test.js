@@ -3,7 +3,7 @@ import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
 import { recordRecoveryCycleCompleted } from "./record-recovery-cycle-completed.js"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -48,7 +48,7 @@ const sellOrder = new CanonicalOrder({
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-recovery-cycle-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "recovery-cycle-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -58,7 +58,7 @@ const createStore = async (t) => {
 }
 
 test("records a deterministic completed-cycle fact with its fill boundary and exact accounting values", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const position = initialPortfolio.getPosition({ marketId: market.id })
   const completion = {
     eligible: true,
@@ -69,7 +69,7 @@ test("records a deterministic completed-cycle fact with its fill boundary and ex
     realizedNetProfit: initialLedger.realizedNetProfit,
   }
   const result = await recordRecoveryCycleCompleted({
-    durableFactsStore,
+    operationalStateStore,
     recoveryLedger: initialLedger,
     position,
     sellOrder,
@@ -99,7 +99,7 @@ test("commits the cycle fact before publishing the reset Portfolio and RecoveryL
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleCompleted: async ({ recoveryLedger, position, completion }) => {
+    onOperationalStateRecoveryCycleCompleted: async ({ recoveryLedger, position, completion }) => {
       observed = true
       assert.equal(recoveryLedger, initialLedger)
       assert.equal(position, initialPortfolio.getPosition({ marketId: market.id }))
@@ -129,7 +129,7 @@ test("does not reset Portfolio or RecoveryLedger when the completed-cycle fact i
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleCompleted: async () => ({
+    onOperationalStateRecoveryCycleCompleted: async () => ({
       ok: false,
       errors: [new Error("cycle fact fsync failed")],
     }),

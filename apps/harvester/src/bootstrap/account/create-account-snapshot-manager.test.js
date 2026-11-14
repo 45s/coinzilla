@@ -6,7 +6,7 @@ import { createAccountSnapshotManager } from "./create-account-snapshot-manager.
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [], durableFactsStore } = {}) => {
+const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [], operationalStateStore } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -41,7 +41,7 @@ const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders
     getHasCanonicalOwnershipReconciliation: () => false,
     logger: {},
     now: () => 123,
-    durableFactsStore,
+    operationalStateStore,
   })
   return {
     manager,
@@ -648,35 +648,35 @@ test("retains the first recovery account audit publication after a transient flu
 
 
 test("commits account balance and open-order facts before publishing their Journal audit events", async () => {
-  const durableFacts = []
-  const durableFactsStore = {
+  const appendedRecords = []
+  const operationalStateStore = {
     append: async (fact) => {
-      durableFacts.push(fact)
+      appendedRecords.push(fact)
       return { ok: true, data: { durable: true, record: fact } }
     },
   }
   const market = createFixture().market
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
-    durableFactsStore,
+    operationalStateStore,
   })
 
   await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
   await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT", orders: [] })
 
   assert.deepEqual(
-    durableFacts.map(({ factType }) => factType),
+    appendedRecords.map(({ factType }) => factType),
     ["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED"],
-    "Both recovery-critical account snapshots must be committed to the durable-fact stream.",
+    "Both recovery-critical account snapshots must be committed to the Operational State Store record stream.",
   )
-  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after durable-fact acknowledgement.")
-  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after durable-fact commits.")
+  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after Operational State Store record acknowledgement.")
+  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after Operational State Store record commits.")
 })
 
 test("fails closed before Journal publication when the durable balance snapshot append is not acknowledged", async () => {
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({ market: createFixture().market, sourceTime: 100 })],
-    durableFactsStore: {
+    operationalStateStore: {
       append: async () => ({ ok: false, errors: [new Error("simulated durable balance snapshot failure")] }),
     },
   })
@@ -692,7 +692,7 @@ test("fails closed before Journal publication when the durable balance snapshot 
 
 test("fails closed before Journal publication when the durable open-order snapshot append is not acknowledged", async () => {
   const fixture = createFixture({
-    durableFactsStore: {
+    operationalStateStore: {
       append: async () => ({ ok: false, errors: [new Error("simulated durable open-order snapshot failure")] }),
     },
   })
@@ -708,7 +708,7 @@ test("fails closed before Journal publication when the durable open-order snapsh
 
 
 test("durably records a Binance NEW external order without inventing its Harvester identity", async () => {
-  const durableFacts = []
+  const operationalStateStore = []
   const externalOrder = {
     id: "external-new-order-1",
     symbol: "BTCUSDT",
@@ -722,9 +722,9 @@ test("durably records a Binance NEW external order without inventing its Harvest
   }
   const fixture = createFixture({
     openOrders: [externalOrder],
-    durableFactsStore: {
+    operationalStateStore: {
       append: async (fact) => {
-        durableFacts.push(fact)
+        operationalStateStore.push(fact)
         return { ok: true, data: { durable: true, record: fact } }
       },
     },
@@ -732,16 +732,16 @@ test("durably records a Binance NEW external order without inventing its Harvest
 
   await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
 
-  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
-  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
-  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
-  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
-  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "The observed external client ID is evidence only and does not confer ownership.")
+  assert.equal(operationalStateStore.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(operationalStateStore[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(operationalStateStore[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(operationalStateStore[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(operationalStateStore[0].data.orders[0].clientOrderId, "manual-client-order-1", "The observed external client ID is evidence only and does not confer ownership.")
 })
 
 
 test("durably records a Binance NEW external order without treating its client ID as ownership", async () => {
-  const durableFacts = []
+  const operationalStateStore = []
   const fixture = createFixture({
     openOrders: [{
       id: "external-new-order-1",
@@ -754,9 +754,9 @@ test("durably records a Binance NEW external order without treating its client I
       status: "NEW",
       clientOrderId: "manual-client-order-1",
     }],
-    durableFactsStore: {
+    operationalStateStore: {
       append: async (fact) => {
-        durableFacts.push(fact)
+        operationalStateStore.push(fact)
         return { ok: true, data: { durable: true, record: fact } }
       },
     },
@@ -764,11 +764,11 @@ test("durably records a Binance NEW external order without treating its client I
 
   await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
 
-  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
-  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
-  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
-  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
-  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "An observed external client ID is evidence only and does not confer ownership.")
+  assert.equal(operationalStateStore.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(operationalStateStore[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(operationalStateStore[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(operationalStateStore[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(operationalStateStore[0].data.orders[0].clientOrderId, "manual-client-order-1", "An observed external client ID is evidence only and does not confer ownership.")
 })
 
 

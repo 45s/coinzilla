@@ -6,7 +6,7 @@ import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
-import { createFileDurableFactsStore } from "../../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-operational-state-store.js"
 import { evaluateRecoveryCompletion } from "../../src/domain/strategies/conservative/recovery-completion.js"
 import { recordConfigurationBaseline } from "../../src/use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../../src/use-cases/record-process-started.js"
@@ -16,7 +16,7 @@ import { recordExecutionFill } from "../../src/use-cases/record-execution-fill.j
 import { recordRecoveryCycleCompleted } from "../../src/use-cases/record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "../../src/use-cases/record-recovery-cycle-not-completed.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../../src/use-cases/record-safety-control-facts.js"
-import { restoreHarvesterDurableFactsState } from "../../src/use-cases/restore-harvester-durable-facts-state.js"
+import { restoreHarvesterOperationalState } from "../../src/use-cases/restore-harvester-operational-state.js"
 
 const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
@@ -36,14 +36,14 @@ const createDirectory = async (t) => {
   return directory
 }
 const createStore = (directory, runtimeSessionId = "crash-matrix-process-1") =>
-  createFileDurableFactsStore({ directory, runtimeSessionId })
+  createFileOperationalStateStore({ directory, runtimeSessionId })
 const initializeProcess = async (store) => {
   const initialized = await store.initialize()
   assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
-  const baseline = await recordConfigurationBaseline({ durableFactsStore: store, appConfig })
+  const baseline = await recordConfigurationBaseline({ operationalStateStore: store, appConfig })
   assert.equal(baseline.ok, true, baseline.errors?.map(({ message }) => message).join("; "))
   const started = await recordProcessStarted({
-    durableFactsStore: store,
+    operationalStateStore: store,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
@@ -51,8 +51,8 @@ const initializeProcess = async (store) => {
   })
   assert.equal(started.ok, true, started.errors?.map(({ message }) => message).join("; "))
 }
-const readCandidate = (directory, runtimeSessionId) => restoreHarvesterDurableFactsState({
-  durableFactsStore: createStore(directory, runtimeSessionId),
+const readCandidate = (directory, runtimeSessionId) => restoreHarvesterOperationalState({
+  operationalStateStore: createStore(directory, runtimeSessionId),
   marketMetadata: new Map([[market.symbol, { market }]]),
 })
 const makeOrder = ({
@@ -105,11 +105,11 @@ const makeFill = ({ tradeId, clientOrderId, brokerOrderId, side, quantity, quote
   })
 const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpose = null }) => {
   const pending = makeOrder({ clientOrderId, side, quantity, price })
-  const intent = await recordOrderSubmissionIntent({ durableFactsStore: store, order: pending, purpose })
+  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store, order: pending, purpose })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
   const acknowledged = acknowledge({ clientOrderId, side, quantity, price, purpose })
   const outcome = await recordOrderSubmissionOutcome({
-    durableFactsStore: store,
+    operationalStateStore: store,
     order: acknowledged,
     outcome: "ACKNOWLEDGED",
     purpose,
@@ -118,7 +118,7 @@ const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpo
   return acknowledged
 }
 const applyFill = async ({ store, fill }) => {
-  const result = await recordExecutionFill({ durableFactsStore: store, fill })
+  const result = await recordExecutionFill({ operationalStateStore: store, fill })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
 }
 
@@ -133,7 +133,7 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
     quantity: "0.02",
     price: "100",
   })
-  const intent = await recordOrderSubmissionIntent({ durableFactsStore: store, order: pending })
+  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store, order: pending })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
 
   const afterIntent = await readCandidate(directory, "crash-reader-after-intent")
@@ -154,7 +154,7 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
     executedQuantity: "0",
   })
   const outcome = await recordOrderSubmissionOutcome({
-    durableFactsStore: store,
+    operationalStateStore: store,
     order: acknowledged,
     outcome: "ACKNOWLEDGED",
   })
@@ -246,7 +246,7 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   })
   assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
   const recorded = await recordRecoveryCycleNotCompleted({
-    durableFactsStore: store,
+    operationalStateStore: store,
     recoveryLedger,
     position,
     sellOrder,
@@ -256,14 +256,14 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
 
   await recordStrategyMarketControl({
-    durableFactsStore: store,
+    operationalStateStore: store,
     action: "PAUSE",
     transitionId: "crash-matrix-pause-1",
     symbol: market.symbol,
     reason: "RECOVERY_RECONCILIATION_REQUIRED",
   })
   await recordSafetyBlockerRaised({
-    durableFactsStore: store,
+    operationalStateStore: store,
     scope: "MARKET",
     symbol: market.symbol,
     reason: "UNOWNED_ORDER",
@@ -340,7 +340,7 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
   })
   assert.equal(completion.eligible, true)
   const recorded = await recordRecoveryCycleCompleted({
-    durableFactsStore: store,
+    operationalStateStore: store,
     recoveryLedger,
     position,
     sellOrder,

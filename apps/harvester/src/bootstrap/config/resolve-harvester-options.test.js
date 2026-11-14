@@ -48,6 +48,26 @@ test("requires an explicit TRADING_MODE before publishing validated configuratio
   assert.equal(fixture.events.length, 0, "Invalid environment configuration must not publish config.validated.")
 })
 
+test("adds the validated TELEGRAM_USER_ID to the resolved operator allowlist", async () => {
+  const cfg = {
+    ...config(),
+    operatorControl: { telegram: { enabled: true, allowedUserIds: [] } },
+  }
+  const fixture = createFixture({ cfg, env: { TRADING_MODE: "testnet", TELEGRAM_USER_ID: "123456789" } })
+  const result = await resolveHarvesterOptions(fixture.input)
+  assert.deepEqual(result.appConfig.operatorControl.telegram.allowedUserIds, ["123456789"])
+  assert.deepEqual(cfg.operatorControl.telegram.allowedUserIds, [], "Resolving the environment ID must not mutate loaded configuration.")
+})
+
+test("rejects invalid TELEGRAM_USER_ID before publishing validated configuration", async () => {
+  const fixture = createFixture({ env: { TRADING_MODE: "testnet", TELEGRAM_USER_ID: "not-a-number" } })
+  await assert.rejects(
+    resolveHarvesterOptions(fixture.input),
+    (error) => error.code === "TELEGRAM_USER_ID_INVALID" && error.message.includes("TELEGRAM_USER_ID"),
+  )
+  assert.equal(fixture.events.length, 0, "Invalid Telegram identity must fail before config.validated is published.")
+})
+
 test("selects TESTNET and enables trading even when NODE_ENV is production", async () => {
   const fixture = createFixture({ env: { NODE_ENV: "production", TRADING_MODE: "testnet" } })
   const result = await resolveHarvesterOptions(fixture.input)

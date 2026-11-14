@@ -3,7 +3,7 @@ import { toResult } from "@coinzilla/utils"
 function validateCoverageSequence({ records, symbol }) {
   let previous
   for (const record of records) {
-    if (record.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" || record.data?.symbol !== symbol) continue
+    if (record.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" || record.data?.symbol !== symbol) { continue }
     if (previous && record.data.coveredFromTime > previous.data.coveredFromTime) {
       throw new Error("Durable market-history coverage narrows the verified history window for " + symbol)
     }
@@ -23,25 +23,25 @@ function validateCoverageSequence({ records, symbol }) {
  * for the requested symbol and returns the shape consumed by the recovery audit.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore - ADR-0001 durable-fact port.
+ * @param {object} options.operationalStateStore - ADR-0001 Operational State Store port.
  * @param {string} options.symbol - Canonical market symbol.
  * @returns {Promise<object>} Projected history-retention evidence.
  */
-export async function readMarketHistoryCoverage({ durableFactsStore, symbol } = {}) {
+export async function readMarketHistoryCoverage({ operationalStateStore, symbol } = {}) {
   try {
-    if (typeof durableFactsStore?.readAll !== "function") {
-      throw new TypeError("readMarketHistoryCoverage requires a durable-fact read port")
+    if (typeof operationalStateStore?.readAll !== "function") {
+      throw new TypeError("readMarketHistoryCoverage requires a Operational State Store read capability")
     }
     if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
     }
-    const result = await durableFactsStore.readAll()
+    const result = await operationalStateStore.readAll()
     if (!result.ok) {
       return toResult({ errors: result.errors })
     }
     const records = result.data?.records
     if (!Array.isArray(records)) {
-      throw new TypeError("Durable-fact read result must contain a records array")
+      throw new TypeError("Operational State Store record read result must contain a records array")
     }
     const latest = validateCoverageSequence({ records, symbol })
     if (!latest) {

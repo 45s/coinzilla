@@ -6,7 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordRecoveryCycleCompleted } from "./record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "./record-recovery-cycle-not-completed.js"
 
@@ -41,7 +41,7 @@ const makeSellOrder = ({ status = "FILLED", quantity = "1", executedQuantity = q
 const makeStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-recovery-cycle-outcomes-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "recovery-cycle-outcomes-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -90,11 +90,11 @@ const makeNotCompletedCycle = () => {
 }
 
 test("persists a completed recovery cycle with its exact terminal SELL identity", async (t) => {
-  const durableFactsStore = await makeStore(t)
+  const operationalStateStore = await makeStore(t)
   const cycle = makeCycle()
   const sellOrder = makeSellOrder()
   const result = await recordRecoveryCycleCompleted({
-    durableFactsStore,
+    operationalStateStore,
     ...cycle,
     sellOrder,
     minProfit: "5",
@@ -109,10 +109,10 @@ test("persists a completed recovery cycle with its exact terminal SELL identity"
 })
 
 test("requires a canonical fully filled SELL before recording a completed cycle", async (t) => {
-  const durableFactsStore = await makeStore(t)
+  const operationalStateStore = await makeStore(t)
   const cycle = makeCycle()
   const result = await recordRecoveryCycleCompleted({
-    durableFactsStore,
+    operationalStateStore,
     ...cycle,
     sellOrder: makeSellOrder({ status: "OPEN", executedQuantity: "0" }),
     minProfit: "5",
@@ -123,11 +123,11 @@ test("requires a canonical fully filled SELL before recording a completed cycle"
 })
 
 test("persists an explicit CONTINUE_SELL_THROUGH outcome tied to the full SELL and current cycle evidence", async (t) => {
-  const durableFactsStore = await makeStore(t)
+  const operationalStateStore = await makeStore(t)
   const cycle = makeNotCompletedCycle()
   const sellOrder = makeSellOrder({ quantity: "0.4", price: "100" })
   const result = await recordRecoveryCycleNotCompleted({
-    durableFactsStore,
+    operationalStateStore,
     ...cycle,
     sellOrder,
     completion: {
@@ -152,10 +152,10 @@ test("persists an explicit CONTINUE_SELL_THROUGH outcome tied to the full SELL a
 
 test("does not persist a non-completion outcome for an unfilled or non-SELL order", async () => {
   let appendCalls = 0
-  const durableFactsStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
+  const operationalStateStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
   const cycle = makeNotCompletedCycle()
   const result = await recordRecoveryCycleNotCompleted({
-    durableFactsStore,
+    operationalStateStore,
     ...cycle,
     sellOrder: makeSellOrder({ status: "OPEN", quantity: "0.4", executedQuantity: "0", price: "100" }),
     completion: {

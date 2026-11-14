@@ -1,6 +1,6 @@
-import path from "node:path"
 import { createHarvesterOperator } from "../../application/operator/create-harvester-operator.js"
-import { createFileDurableFactsStore } from "../../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
+import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { createTelegramOperatorAdapter } from "../../infrastructure/telegram/telegram-operator-adapter.js"
 
 export class OperatorControlStartupError extends Error {
@@ -13,15 +13,15 @@ export class OperatorControlStartupError extends Error {
 
 const disabledLifecycle = Object.freeze({
   enabled: false,
-  durableFactsStore: undefined,
+  operationalStateStore: undefined,
   async start() { return Object.freeze({ started: false, disabled: true }) },
   async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
 })
 
 /** Prepare optional Telegram control after verifying the pre-initialized ADR-0001 store. */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env, runtimeSessionId, durableFactsStore: suppliedDurableFactsStore,
-  createDurableFactsStore = createFileDurableFactsStore,
+  telegramConfig, env = process.env, runtimeSessionId, operationalStateStore: suppliedOperationalStateStore,
+  createOperationalStateStore = createFileOperationalStateStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
@@ -31,53 +31,59 @@ export async function prepareTelegramOperatorControl({
   if (!botToken) {
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
-  const directory = env.DURABLE_FACTS_DIRECTORY?.trim()
-  let durableFacts = suppliedDurableFactsStore
-  if (durableFacts === undefined) {
-    if (!directory || !path.isAbsolute(directory)) {
-      throw new OperatorControlStartupError("Telegram operator control requires an absolute DURABLE_FACTS_DIRECTORY containing an initialized ADR-0001 store", "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED")
+  let operationalStateStore = suppliedOperationalStateStore
+  if (operationalStateStore === undefined) {
+    let directory
+    try {
+      directory = resolveOperationalStateDirectory({ env })
+    } catch (cause) {
+      throw new OperatorControlStartupError(
+        "Telegram operator control has an invalid Operational State Store directory",
+        "OPERATOR_CONTROL_OPERATIONAL_STATE_DIRECTORY_INVALID",
+        cause,
+      )
     }
     if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
       throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
     }
     try {
-      durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
+      operationalStateStore = createOperationalStateStore({ directory, runtimeSessionId })
     } catch (cause) {
-      throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+      throw new OperatorControlStartupError("Unable to construct the configured Operational State Store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
     }
   } else if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
     throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
   }
   if (runtimeSessionId !== undefined &&
-      durableFacts?.runtimeSessionId !== undefined &&
-      durableFacts.runtimeSessionId !== runtimeSessionId) {
+      operationalStateStore?.runtimeSessionId !== undefined &&
+      operationalStateStore.runtimeSessionId !== runtimeSessionId) {
     throw new OperatorControlStartupError(
-      "Telegram operator control must share the current Harvester process-session durable-facts store",
+      "Telegram operator control must share the current Harvester process-session Operational State Store",
       "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
     )
   }
-  if (typeof durableFacts?.verify !== "function" || typeof durableFacts?.append !== "function") {
-    throw new OperatorControlStartupError("Configured ADR-0001 durable-facts store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
+  if (typeof operationalStateStore?.verify !== "function" || typeof operationalStateStore?.append !== "function") {
+    throw new OperatorControlStartupError("Configured Operational State Store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
   }
   let verification
   try {
-    verification = await durableFacts.verify()
+    verification = await operationalStateStore.verify()
   } catch (cause) {
-    throw new OperatorControlStartupError("Unable to verify the initialized ADR-0001 durable-facts store; operator control remains disabled", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+    throw new OperatorControlStartupError("Unable to verify the initialized Operational State Store; operator control remains disabled", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
   }
   if (verification?.ok !== true || verification.data?.valid !== true || verification.data?.durableWriteSupported !== true) {
-    const cause = verification?.errors?.[0] ?? new Error("Durable-facts verification did not confirm a valid durable store")
-    throw new OperatorControlStartupError("Configured ADR-0001 durable-facts store is missing, uninitialized, corrupt or not durably writable", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+    const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification did not confirm a valid durable store")
+    throw new OperatorControlStartupError("Configured Operational State Store is missing, uninitialized, corrupt or not durably writable", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
   }
   let adapter
   return Object.freeze({
     enabled: true,
-    durableFactsStore: durableFacts,
+    operationalStateStore: operationalStateStore,
     async start({ engine, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
       if (adapter) {
         return Object.freeze({ started: true, alreadyStarted: true })
       }
-      const operator = createHarvesterOperator({ engine, durableFacts, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })
+      const operator = createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })
       try {
         adapter = createAdapter({ botToken, allowedUserIds: telegramConfig.allowedUserIds, operator, fetchImpl, logger })
         if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {

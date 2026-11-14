@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { projectHarvesterDurableFacts } from "./project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "./project-harvester-operational-state.js"
 
 const sessionId = "process-session-1"
 const fingerprint = "f".repeat(64)
@@ -82,7 +82,7 @@ const orderFacts = () => [
 ]
 
 test("projects verified durable order facts into a candidate recovery projection without opening readiness", () => {
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), ...preflightFacts(), ...orderFacts()],
   })
 
@@ -99,7 +99,7 @@ test("projects verified durable order facts into a candidate recovery projection
   assert.equal(result.data.sessions[0].uncleanTradingShutdown, true, "An unclosed trading-capable session must remain classified as unclean.")
 })
 
-test("does not replay process-lifetime operator pauses into a durable-facts restart candidate", () => {
+test("does not replay process-lifetime operator pauses into a Operational State Store records restart candidate", () => {
   const multiMarketBaseline = record(1, "CONFIGURATION_BASELINE", {
     schemaVersion: 1,
     strategyName: "conservative",
@@ -112,7 +112,7 @@ test("does not replay process-lifetime operator pauses into a durable-facts rest
     markets: ["BTCUSDT", "ETHUSDT"],
     tradingEnabled: true,
   }, "process-started:" + sessionId)
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       multiMarketBaseline,
@@ -146,7 +146,7 @@ test("retains only unresolved pause and safety-blocker controls in the candidate
     reason: "UNOWNED_EXECUTION",
     evidenceDigest: blockerDigest,
   }
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
@@ -170,7 +170,7 @@ test("retains only unresolved pause and safety-blocker controls in the candidate
 })
 
 test("retains an unresolved account-scoped blocker as global evidence", () => {
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
@@ -192,11 +192,11 @@ test("retains an unresolved account-scoped blocker as global evidence", () => {
 })
 
 test("fails closed for missing configuration baseline, orphan facts, or resolution without a raised blocker", () => {
-  const noBaseline = projectHarvesterDurableFacts({ records: [started()] })
-  const orphan = projectHarvesterDurableFacts({
+  const noBaseline = projectHarvesterOperationalState({ records: [started()] })
+  const orphan = projectHarvesterOperationalState({
     records: [record(1, "ORDER_SUBMISSION_INTENT", { clientOrderId: "orphan" })],
   })
-  const unresolved = projectHarvesterDurableFacts({
+  const unresolved = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
@@ -218,7 +218,7 @@ test("fails closed for missing configuration baseline, orphan facts, or resoluti
 
 test("projects cancellation outcomes in a later process session against the original durable order intent", () => {
   const nextSession = "process-session-2"
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
@@ -341,7 +341,7 @@ test("projects a durable completed recovery cycle only after its full SELL execu
     freeQuantity: "0.01",
     inventoryDisposition: null,
   }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
   })
 
@@ -357,7 +357,7 @@ test("projects a durable completed recovery cycle only after its full SELL execu
 
 
 test("rejects market-history coverage facts that narrow a previously verified window", () => {
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
       baseline(),
@@ -447,7 +447,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
     outcome: "CONTINUE_SELL_THROUGH",
     reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
   }, "recovery-cycle-not-completed:binance:BTCUSDT:" + "d".repeat(64))
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, nonCompletion],
   })
 
@@ -529,7 +529,7 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
     freeQuantity: "0.01",
     inventoryDisposition: null,
   }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
-  const result = projectHarvesterDurableFacts({
+  const result = projectHarvesterOperationalState({
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
   })
 

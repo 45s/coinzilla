@@ -6,6 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "./infrastructure/operational-state/resolve-operational-state-directory.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
@@ -26,7 +27,7 @@ const main = (options = {}) => {
   const { createJournalService = disabledJournalService, env = {}, ...rest } = options
   return startMain({
     acquireProcessLock,
-    createDurableFactsStore: () => ({
+    createOperationalStateStore: () => ({
       verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
     }),
     ...rest,
@@ -52,9 +53,9 @@ test("does not create or inject durable recovery facts while recovery is disable
   let storeCreated = false
   let startupInput
   await runMain({
-    createDurableFactsStore: () => {
+    createOperationalStateStore: () => {
       storeCreated = true
-      throw new Error("disabled recovery must not construct a durable-facts store")
+      throw new Error("disabled recovery must not construct a Operational State Store")
     },
     start: async (input) => {
       startupInput = input
@@ -62,8 +63,62 @@ test("does not create or inject durable recovery facts while recovery is disable
     },
     logger: { info() {}, system() {}, error() {} },
   })
-  assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a durable-facts ledger.")
-  assert.equal(startupInput.durableFactsStore, undefined, "Disabled restart recovery must not inject a durable-facts store into runtime startup.")
+  assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
+  assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
+})
+
+test("injects the shared default Operational State Store when Telegram operator control is enabled without recovery", async () => {
+  const configuredApp = {
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+    strategies: {
+      CG_coinGrabber: {
+        settings: {
+          recovery: {
+            enabled: false,
+          },
+        },
+      },
+    },
+  }
+  const operationalStateStore = {
+    verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+    append: async () => ({ ok: true, data: { durable: true } }),
+    readAll: async () => ({ ok: true, data: { durableWriteSupported: true, records: [] } }),
+  }
+  let operationalStateStoreOptions
+  let startupInput
+
+  await runMain({
+    loadConfig: async () => configuredApp,
+    createOperationalStateStore: (options) => {
+      operationalStateStoreOptions = options
+      return operationalStateStore
+    },
+    start: async (input) => {
+      startupInput = input
+      return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
+    },
+    logger: { info() {}, system() {}, error() {} },
+  })
+
+  assert.deepEqual(
+    operationalStateStoreOptions,
+    {
+      directory: DEFAULT_OPERATIONAL_STATE_DIRECTORY,
+      runtimeSessionId: startupInput.runtimeSessionId,
+    },
+    "Enabling Telegram operator control without restart recovery must select the documented default ADR-0001 directory and current process identity.",
+  )
+  assert.strictEqual(
+    startupInput.operationalStateStore,
+    operationalStateStore,
+    "The production composition must pass the exact shared Operational State Store to Harvester when Telegram operator control is enabled independently of recovery.",
+  )
 })
 
 test("uses the injected logger after Binance TESTNET startup", async () => {
@@ -1665,13 +1720,13 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
 })
 
 
-test("does not construct, verify, or inject durable facts even when a stale ledger path is configured", async () => {
+test("does not construct, verify, or inject Operational State Store records even when a stale ledger path is configured", async () => {
   let storeCreated = false
   let journalCreated = false
   let runtimeStarted = false
   await runMain({
-    env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
-    createDurableFactsStore: () => {
+    env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
+    createOperationalStateStore: () => {
       storeCreated = true
       throw new Error("restart recovery is disabled")
     },
@@ -1681,12 +1736,12 @@ test("does not construct, verify, or inject durable facts even when a stale ledg
     },
     start: async (input) => {
       runtimeStarted = true
-      assert.equal(input.durableFactsStore, undefined)
+      assert.equal(input.operationalStateStore, undefined)
       return { connected: false }
     },
     logger: { info() {}, system() {}, error() {} },
   })
-  assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the durable-facts store.")
+  assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the Operational State Store.")
   assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })

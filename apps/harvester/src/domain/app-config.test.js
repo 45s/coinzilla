@@ -258,16 +258,10 @@ test("accepts explicitly disabled Telegram operator control without an allowlist
   assert.equal(validateAppConfig(config), config, "Disabled inbound control must not require credentials or trusted users.")
 })
 
-test("requires trusted Telegram user IDs before enabling operator control", () => {
+test("allows bootstrap to supply the trusted Telegram user ID from the runtime environment", () => {
   const config = createAppConfig()
   config.operatorControl = { telegram: { enabled: true, allowedUserIds: [] } }
-  assert.throws(
-    () => validateAppConfig(config),
-    (error) => error instanceof ConfigValidationError &&
-      error.path === "operatorControl.telegram.allowedUserIds" &&
-      error.expected === "a non-empty array of unique positive decimal Telegram user IDs",
-    "Enabled inbound control must fail configuration validation when no trusted Telegram users are configured.",
-  )
+  assert.equal(validateAppConfig(config), config)
 })
 
 test("rejects malformed or duplicate Telegram operator user IDs", () => {

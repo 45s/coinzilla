@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -28,7 +28,7 @@ const makeOrder = ({ status = "OPEN", executedQuantity = "0" } = {}) => new Cano
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-order-cancellation-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "order-cancellation-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -38,10 +38,10 @@ const createStore = async (t) => {
 }
 
 test("records the canonical expected order state before cancellation is attempted", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const order = makeOrder({ status: "PARTIALLY_FILLED", executedQuantity: "12.5" })
   const result = await recordOrderCancellationIntent({
-    durableFactsStore,
+    operationalStateStore,
     order,
     reason: "TRAILING_BUY_REPRICE",
   })
@@ -69,7 +69,7 @@ test("records the canonical expected order state before cancellation is attempte
 })
 
 test("records a confirmed cancellation outcome with the canonical terminal state", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const order = makeOrder()
   const canceledOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
@@ -87,7 +87,7 @@ test("records a confirmed cancellation outcome with the canonical terminal state
     completedAt: 2,
   })
   const result = await recordOrderCancellationOutcome({
-    durableFactsStore,
+    operationalStateStore,
     order,
     canceledOrder,
     reason: "TRAILING_BUY_REPRICE",
@@ -103,10 +103,10 @@ test("records a confirmed cancellation outcome with the canonical terminal state
 })
 
 test("records NOT_SENT without inventing a canceled state or changing the expected order", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const order = makeOrder()
   const result = await recordOrderCancellationOutcome({
-    durableFactsStore,
+    operationalStateStore,
     order,
     reason: "TRAILING_BUY_REPRICE",
     outcome: "NOT_SENT",
@@ -136,7 +136,7 @@ test("rejects a cancellation response that changes canonical order identity", as
     completedAt: 2,
   })
   const result = await recordOrderCancellationOutcome({
-    durableFactsStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
+    operationalStateStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
     order,
     canceledOrder: mismatched,
     reason: "TRAILING_BUY_REPRICE",
@@ -151,12 +151,12 @@ test("rejects non-canonical cancellation intents and requires durable append ack
   const order = makeOrder()
   let appendCalls = 0
   const invalid = await recordOrderCancellationIntent({
-    durableFactsStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
+    operationalStateStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
     order: { ...order },
     reason: "TRAILING_BUY_REPRICE",
   })
   const uncommitted = await recordOrderCancellationIntent({
-    durableFactsStore: { append: async () => ({ ok: true, data: { durable: false } }) },
+    operationalStateStore: { append: async () => ({ ok: true, data: { durable: false } }) },
     order,
     reason: "TRAILING_BUY_REPRICE",
   })

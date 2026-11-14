@@ -5,10 +5,10 @@ import * as fsPromises from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileDurableFactsStore } from "./create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
 
-const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-durable-facts-"))
-const createStore = (directory, options = {}) => createFileDurableFactsStore({
+const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-Operational State Store records-"))
+const createStore = (directory, options = {}) => createFileOperationalStateStore({
   directory,
   runtimeSessionId: "runtime-session-1",
   now: () => new Date("2026-11-11T12:00:00.000Z"),
@@ -35,8 +35,8 @@ const digestRecord = (record) => {
 const readLines = async (filePath) => (await readFile(filePath, "utf8")).trimEnd().split("\n")
 const readManifestRecords = async (directory) => (await readLines(path.join(directory, "manifest.jsonl"))).map(JSON.parse)
 
-test("normal verification and append never initialize a missing durable-fact store", async (t) => {
-  const directory = path.join(os.tmpdir(), "harvester-durable-facts-missing-" + process.pid + "-" + Date.now())
+test("normal verification and append never initialize a missing Operational State Store", async (t) => {
+  const directory = path.join(os.tmpdir(), "harvester-Operational State Store records-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)
   const verification = await store.verify()
@@ -142,7 +142,7 @@ test("rejects reuse of a fact identity with changed economic or control payload"
     data: { requestId: "request-1", actorId: "telegram-actor-1", symbol: "ETHUSDT" },
   }))
   assert.equal(conflict.ok, false)
-  assert.match(conflict.errors[0].message, /factId.*different payload|identity.*payload/i)
+  assert.match(conflict.errors[0].message, /record ID.*different payload|identity.*payload/i)
 })
 
 test("serializes concurrent appends across multiple store instances in one process", async (t) => {
@@ -476,7 +476,7 @@ test("accepts canonical ISO timestamp strings from the injected clock for market
   })
 
   const initialized = await store.initialize()
-  assert.equal(initialized.ok, true, "The durable-facts store must initialize before testing its injected clock.")
+  assert.equal(initialized.ok, true, "The Operational State Store must initialize before testing its injected clock.")
   clockCalls = 0
 
   const appended = await store.append({
@@ -504,7 +504,7 @@ test("accepts canonical ISO timestamp strings from the injected clock for market
   )
 })
 
-test("rejects negative zero in durable-fact numeric fields before JSON can normalize it to zero", async (t) => {
+test("rejects negative zero in Operational State Store record numeric fields before JSON can normalize it to zero", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true, force: true }))
   const store = createStore(directory)

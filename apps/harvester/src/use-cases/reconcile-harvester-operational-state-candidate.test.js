@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
-import { reconcileHarvesterDurableFactsCandidate } from "./reconcile-harvester-durable-facts-candidate.js"
+import { reconcileHarvesterOperationalStateCandidate } from "./reconcile-harvester-operational-state-candidate.js"
 
 const market = new Market({
   venue: "binance",
@@ -143,8 +143,8 @@ const makeDependencies = ({ auditTargetMarketBlocked = false } = {}) => {
 
 test("reconciles a target market without ever opening account-wide readiness", async () => {
   const deps = makeDependencies()
-  const result = await reconcileHarvesterDurableFactsCandidate({
-    durableFactsStore: makeStore(records()),
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: makeStore(records()),
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,
@@ -165,8 +165,8 @@ test("reconciles a target market without ever opening account-wide readiness", a
 
 test("does not query the exchange when committed market-history retention evidence is missing", async () => {
   const deps = makeDependencies()
-  const result = await reconcileHarvesterDurableFactsCandidate({
-    durableFactsStore: makeStore(records({ includeCoverage: false })),
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: makeStore(records({ includeCoverage: false })),
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,
@@ -179,8 +179,8 @@ test("does not query the exchange when committed market-history retention eviden
 
 test("preserves a target-market blocker even when the other reconciliation evidence is complete", async () => {
   const deps = makeDependencies({ auditTargetMarketBlocked: true })
-  const result = await reconcileHarvesterDurableFactsCandidate({
-    durableFactsStore: makeStore(records()),
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: makeStore(records()),
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,
@@ -198,8 +198,8 @@ test("resolves a market safety blocker only after its target-market audit is aut
   const store = makeStore(records({ blockerScope: "MARKET" }))
   const raised = store.records.find(({ factType }) => factType === "SAFETY_BLOCKER_RAISED")
   const deps = makeDependencies()
-  const result = await reconcileHarvesterDurableFactsCandidate({
-    durableFactsStore: store,
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: store,
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,
@@ -220,8 +220,8 @@ test("resolves a market safety blocker only after its target-market audit is aut
 test("does not resolve an account-scoped blocker from a one-market audit", async () => {
   const store = makeStore(records({ blockerScope: "ACCOUNT" }))
   const deps = makeDependencies()
-  const result = await reconcileHarvesterDurableFactsCandidate({
-    durableFactsStore: store,
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: store,
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,
@@ -237,8 +237,8 @@ test("does not resolve an account-scoped blocker from a one-market audit", async
 test("does not resolve a market blocker when the target-market audit is blocked", async () => {
   const store = makeStore(records({ blockerScope: "MARKET" }))
   const deps = makeDependencies({ auditTargetMarketBlocked: true })
-  const result = await reconcileHarvesterDurableFactsCandidate({
-    durableFactsStore: store,
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: store,
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,

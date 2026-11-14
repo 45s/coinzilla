@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 
-const requireStore = ({ durableFactsStore, operation, needsRead = false }) => {
-  if (typeof durableFactsStore?.append !== "function" ||
-      (needsRead && typeof durableFactsStore?.readAll !== "function")) {
-    throw new TypeError(operation + " requires the initialized durable-fact append/read port")
+const requireStore = ({ operationalStateStore, operation, needsRead = false }) => {
+  if (typeof operationalStateStore?.append !== "function" ||
+      (needsRead && typeof operationalStateStore?.readAll !== "function")) {
+    throw new TypeError(operation + " requires the initialized Operational State Store append/read capability")
   }
 }
 
-const appendDurably = async ({ durableFactsStore, fact, operation }) => {
-  const result = await durableFactsStore.append(fact)
+const appendDurably = async ({ operationalStateStore, fact, operation }) => {
+  const result = await operationalStateStore.append(fact)
   if (result?.ok !== true || result.data?.durable !== true) {
     return toResult({
       errors: result?.errors?.length
@@ -22,14 +22,14 @@ const appendDurably = async ({ durableFactsStore, fact, operation }) => {
 
 /** Persist a strategy pause/resume transition with a caller-owned unique transition ID. */
 export async function recordStrategyMarketControl({
-  durableFactsStore,
+  operationalStateStore,
   action,
   transitionId,
   symbol,
   reason,
 } = {}) {
   try {
-    requireStore({ durableFactsStore, operation: "recordStrategyMarketControl" })
+    requireStore({ operationalStateStore, operation: "recordStrategyMarketControl" })
     if (action !== "PAUSE" && action !== "RESUME") {
       throw new TypeError("Strategy market-control action must be PAUSE or RESUME")
     }
@@ -40,7 +40,7 @@ export async function recordStrategyMarketControl({
     }
     const prefix = action === "PAUSE" ? "strategy-market-paused:" : "strategy-market-resumed:"
     return await appendDurably({
-      durableFactsStore,
+      operationalStateStore,
       operation: "Strategy market-control",
       fact: {
         factId: prefix + transitionId,
@@ -59,14 +59,14 @@ export async function recordStrategyMarketControl({
  * the fact stream unless separately allowlisted.
  */
 export async function recordSafetyBlockerRaised({
-  durableFactsStore,
+  operationalStateStore,
   scope,
   symbol = null,
   reason,
   evidenceDigest,
 } = {}) {
   try {
-    requireStore({ durableFactsStore, operation: "recordSafetyBlockerRaised" })
+    requireStore({ operationalStateStore, operation: "recordSafetyBlockerRaised" })
     if (scope !== "ACCOUNT" && scope !== "MARKET") {
       throw new TypeError("Safety blocker scope must be ACCOUNT or MARKET")
     }
@@ -82,7 +82,7 @@ export async function recordSafetyBlockerRaised({
       .update([scope, symbol ?? "", reason, evidenceDigest].join("\0"))
       .digest("hex")
     return await appendDurably({
-      durableFactsStore,
+      operationalStateStore,
       operation: "Safety blocker",
       fact: {
         factId: "safety-blocker-raised:" + blockerId,
@@ -100,24 +100,24 @@ export async function recordSafetyBlockerRaised({
  * independent reconciliation evidence. Restart alone is never a resolution.
  */
 export async function recordSafetyBlockerResolved({
-  durableFactsStore,
+  operationalStateStore,
   blockerId,
   resolvedBy,
   resolution,
   evidenceDigest,
 } = {}) {
   try {
-    requireStore({ durableFactsStore, operation: "recordSafetyBlockerResolved", needsRead: true })
+    requireStore({ operationalStateStore, operation: "recordSafetyBlockerResolved", needsRead: true })
     if (typeof blockerId !== "string" || !/^[a-f0-9]{64}$/.test(blockerId) ||
         typeof resolvedBy !== "string" || !resolvedBy.trim() || resolvedBy !== resolvedBy.trim() ||
         !["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(resolution) ||
         typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
       throw new TypeError("Safety blocker resolution requires blocker identity, actor, explicit resolution, and SHA-256 evidence")
     }
-    const read = await durableFactsStore.readAll()
+    const read = await operationalStateStore.readAll()
     if (read?.ok !== true || !Array.isArray(read.data?.records)) {
       return toResult({
-        errors: read?.errors?.length ? read.errors : [new Error("Safety blocker resolution requires a verified durable-fact stream")],
+        errors: read?.errors?.length ? read.errors : [new Error("Safety blocker resolution requires a verified Operational State Store record stream")],
       })
     }
     const raised = read.data.records.find((record) =>
@@ -133,7 +133,7 @@ export async function recordSafetyBlockerResolved({
       throw new TypeError("Safety-blocker resolver identity must match the explicit reconciliation or operator action")
     }
     return await appendDurably({
-      durableFactsStore,
+      operationalStateStore,
       operation: "Safety blocker resolution",
       fact: {
         factId: "safety-blocker-resolved:" + blockerId,

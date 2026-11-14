@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import {
   recordSafetyBlockerRaised,
   recordSafetyBlockerResolved,
@@ -13,7 +13,7 @@ import {
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-safety-recorders-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "safety-recorders-test-session",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -24,17 +24,17 @@ const createStore = async (t) => {
 }
 
 test("records strategy pause/resume transitions with distinct durable identities", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const strategyPause = await recordStrategyMarketControl({
-    durableFactsStore, action: "PAUSE", transitionId: "session-1:1", symbol: "ETHUSDT", reason: "FILL_RECONCILIATION_FAILED",
+    operationalStateStore, action: "PAUSE", transitionId: "session-1:1", symbol: "ETHUSDT", reason: "FILL_RECONCILIATION_FAILED",
   })
   const strategyResume = await recordStrategyMarketControl({
-    durableFactsStore, action: "RESUME", transitionId: "session-1:2", symbol: "ETHUSDT", reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED",
+    operationalStateStore, action: "RESUME", transitionId: "session-1:2", symbol: "ETHUSDT", reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED",
   })
 
   assert.equal(strategyPause.ok, true, "A strategy pause transition must be durably recorded.")
   assert.equal(strategyResume.ok, true, "A strategy resume transition must be durably recorded.")
-  const read = await durableFactsStore.readAll()
+  const read = await operationalStateStore.readAll()
   assert.deepEqual(
     read.data.records.slice(-2).map(({ factType }) => factType),
     ["STRATEGY_MARKET_PAUSED", "STRATEGY_MARKET_RESUMED"],
@@ -43,9 +43,9 @@ test("records strategy pause/resume transitions with distinct durable identities
 })
 
 test("records a sticky safety blocker and resolves it only after a committed raise with explicit evidence", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const raised = await recordSafetyBlockerRaised({
-    durableFactsStore,
+    operationalStateStore,
     scope: "MARKET",
     symbol: "BTCUSDT",
     reason: "UNOWNED_EXECUTION",
@@ -54,7 +54,7 @@ test("records a sticky safety blocker and resolves it only after a committed rai
   assert.equal(raised.ok, true, "The triggering safety evidence must be committed before a blocker is considered durable.")
   const blockerId = raised.data.record.data.blockerId
   const resolved = await recordSafetyBlockerResolved({
-    durableFactsStore,
+    operationalStateStore,
     blockerId,
     resolvedBy: "reconciliation:binance-history-audit",
     resolution: "AUTHORITATIVE_RECONCILIATION",
@@ -63,7 +63,7 @@ test("records a sticky safety blocker and resolves it only after a committed rai
   assert.equal(resolved.ok, true, "A blocker may be resolved only by a separate evidence-backed resolution fact.")
   assert.equal(resolved.data.record.data.blockerId, blockerId)
   const duplicate = await recordSafetyBlockerResolved({
-    durableFactsStore,
+    operationalStateStore,
     blockerId,
     resolvedBy: "reconciliation:binance-history-audit",
     resolution: "AUTHORITATIVE_RECONCILIATION",
@@ -74,9 +74,9 @@ test("records a sticky safety blocker and resolves it only after a committed rai
 })
 
 test("refuses to resolve an absent safety blocker or accept an implicit restart resolution", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const absent = await recordSafetyBlockerResolved({
-    durableFactsStore,
+    operationalStateStore,
     blockerId: "c".repeat(64),
     resolvedBy: "reconciliation:binance-history-audit",
     resolution: "AUTHORITATIVE_RECONCILIATION",
@@ -84,7 +84,7 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   })
   assert.equal(absent.ok, false, "A resolution without a committed raised blocker must be rejected.")
   const raised = await recordSafetyBlockerRaised({
-    durableFactsStore,
+    operationalStateStore,
     scope: "ACCOUNT",
     symbol: null,
     reason: "ACCOUNTING_INTEGRITY_FAILURE",
@@ -92,7 +92,7 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   })
   assert.equal(raised.ok, true, "The account-level blocker fixture must be recorded.")
   const reusedEvidence = await recordSafetyBlockerResolved({
-    durableFactsStore,
+    operationalStateStore,
     blockerId: raised.data.record.data.blockerId,
     resolvedBy: "operator:trader",
     resolution: "OPERATOR_ACTION",
@@ -100,7 +100,7 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   })
   assert.equal(reusedEvidence.ok, false, "The triggering evidence digest cannot also serve as independent resolution proof.")
   const implicit = await recordSafetyBlockerResolved({
-    durableFactsStore,
+    operationalStateStore,
     blockerId: raised.data.record.data.blockerId,
     resolvedBy: "process-restart",
     resolution: "PROCESS_RESTART",
@@ -109,15 +109,15 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   assert.equal(implicit.ok, false, "A process restart must never be accepted as a blocker-resolution action.")
 })
 
-test("does not initialize a missing durable-fact store for safety controls", async (t) => {
+test("does not initialize a missing Operational State Store for safety controls", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-safety-recorders-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const durableFactsStore = createFileDurableFactsStore({
+  const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "safety-recorders-test-session",
   })
   const result = await recordStrategyMarketControl({
-    durableFactsStore, action: "PAUSE", transitionId: "missing-ledger:1", symbol: "BTCUSDT", reason: "FILL_RECONCILIATION_FAILED",
+    operationalStateStore, action: "PAUSE", transitionId: "missing-ledger:1", symbol: "BTCUSDT", reason: "FILL_RECONCILIATION_FAILED",
   })
   assert.equal(result.ok, false, "Safety recorders must never initialize a missing ledger.")
 })

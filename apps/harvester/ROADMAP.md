@@ -23,6 +23,12 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 All items remain open. A documentation PR or a clean offline audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
+## P3 — Operational State Store source naming — in progress
+
+- [~] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Rename the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; update all consumers and current architecture documentation. Preserve the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation is part of this refactor. Implemented in [PR #1108](https://github.com/45s/coinzilla/pull/1108); awaiting exact-head CI and review.
+
+---
+
 ## P0 — Telegram Command Center (CC) — delivered
 
 **Status: [x] COMPLETE — CC-4 merged into `develop` in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; CC-1 through CC-3 were previously merged in PRs #1079, #1081, #1086 and #1087. Required exact-head CI and external documentation links passed.** The initial engine/application foundation remains in [PR #1045](https://github.com/45s/coinzilla/pull/1045), disabled-by-default runtime wiring in [PR #1067](https://github.com/45s/coinzilla/pull/1067), and process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065). ADR-0001 process-restart recovery Steps 8–9 remain explicitly deferred and are not implied by CC completion.
@@ -128,13 +134,13 @@ The current coverage workflow includes shared workspace dependencies, so it cann
 
 - Telegram Command Center commands: `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. Read commands are immutable application snapshots; state changes remain limited to the existing safe pause/resume use cases.
 - Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
-- The engine commits the operator fact to the ADR-0001 durable-facts stream before applying in-memory state. Journal is not the control-state store.
+- The engine commits an operator-control record to the Operational State Store (ADR-0001 append-only ledger) before applying in-memory state. Journal is not the control-state store.
 - **Process-lifetime limitation:** operator pause state is not restored after a process restart. The process starts without the previous operator pause; reissue `/pause <SYMBOL>` if it must remain paused. This is an explicit scope boundary, not a claim that restart recovery is complete.
 - Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
-- [x] Engine pause/resume boundary, application actor authorization and durable append ordering — PR #1045.
+- [x] Engine pause/resume boundary, application actor authorization and append-only commit ordering — PR #1045.
 - [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
-- [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid durable-store verification — PR #1067.
-- [x] Runtime composition: verify the initialized ADR-0001 store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
+- [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid Operational State Store verification — PR #1067.
+- [x] Runtime composition: verify the initialized Operational State Store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
 - [x] Exact-head workspace CI passed on PR #1067 head `baf21f7ca4a42b6622d2282dda53e7d5c7c03699`: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The optional read-only Binance TESTNET integration was skipped. PR #1067 merged at `96293daa5ee3b831e55c49b56af22ce1857f936c`; no exchange operation was performed.
 - [x] Telegram CC-1 command expansion merged in PR #1079; roadmap status correction merged in PR #1080.
 - [x] Read-only runtime/market application queries, serialized immutable engine market snapshots, Telegram `/status` + `/markets`, and bootstrap/adapter regression coverage delivered in PR #1081. No exchange operation is performed.
@@ -285,9 +291,9 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ## Process-restart recovery — small-step delivery plan (#654)
 
-**Status: IN PROGRESS — Steps 1–7 complete; Step 8 durable-fact producers/barriers and offline candidate projection merged in PR #1055; Step 8 projection/invariant parity and account-wide readiness remain open; Step 9 crash/restart proof is pending. Runtime restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
+**Status: IN PROGRESS — Steps 1–7 complete; Step 8 Operational State Store record producers/barriers and offline candidate projection merged in PR #1055; Step 8 projection/invariant parity and account-wide readiness remain open; Step 9 crash/restart proof is pending. Runtime restart restoration remains disabled.** This plan is intentionally incremental: one small, reviewable PR per step, each with RED → GREEN tests and exact-head CI. Do not combine phases or enable recovery early.
 
-**Current runtime configuration:** `strategies.CG_coinGrabber.settings.recovery.enabled` is explicitly `false`. The production entry point skips durable-facts store creation/verification and does not pass a recovery store into runtime startup. Keep it disabled until the remaining projection, exchange-reconciliation and crash/restart acceptance work is complete.
+**Current runtime configuration:** `strategies.CG_coinGrabber.settings.recovery.enabled` is explicitly `false`. The production entry point skips Operational State Store creation/verification and does not pass a recovery store into runtime startup. Keep it disabled until the remaining projection, exchange-reconciliation and crash/restart acceptance work is complete.
 
 **Scope for the first safe version:** one Harvester process, one enabled market, deterministic offline tests, offline candidate projection/reconciliation, and a closed runtime startup gate. Runtime restoration is not enabled until Step 9 is accepted. Keep existing trading/domain behavior unchanged unless a specific regression proves a correction is required. No Binance/LIVE operations are part of implementation verification; any TESTNET exercise requires a separately approved, bounded plan.
 
@@ -295,7 +301,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 1. **[x] Step 1 — Freeze the recovery contract (docs/design only; merged in PR #1003).**
    - **Accepted:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./docs/architecture/decisions/0001-application-owned-recovery-facts.md) defines the authoritative append-only fact stream, global sequence and committed-head integrity, minimum durable fact set, acknowledgement/failure boundary, candidate-state projection, closed readiness gate, external-order policy, and legacy Journal treatment.
-   - **Authority boundary:** the new application-owned durable-fact port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
+   - **Authority boundary:** the Operational State Store port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
    - **Scope:** this is a documentation/design decision only. No runtime source, tests, configuration, exchange behavior, or restart readiness changed. PR #1003 is merged; Step 2's deterministic harness is merged in [PR #1014](https://github.com/45s/coinzilla/pull/1014); Step 3's recursive legacy-session discovery and chronology validation are merged in [PR #1015](https://github.com/45s/coinzilla/pull/1015).
@@ -940,7 +946,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] On startup/reconnect, reconcile persisted state against exchange balances, open orders, and available order/trade history before READY.
 - [ ] **History discovery:** enumerate all nested `logs/sessions/<process-session>/` directories and legacy flat Journal sessions. The current Journal reader scans only direct files in its configured directory; the new process-specific directory cannot discover prior sibling sessions.
 - [ ] **Open-order readiness:** define and test the policy for unowned account-wide orders. Current PREFLIGHT can record `BLOCKED` while `subscribeToUserData()` still sets READY; same-symbol overlap must be tested with a market tick.
-- [ ] **Durable fact contract:** resolve the conflict between crash-safe fill/pause persistence and the current rule that additional Journal evidence must not block fill accounting. Evaluate a separate application-owned durable-fact port before changing Journal's role.
+- [ ] **Operational State Store contract:** resolve the conflict between crash-safe fill/pause persistence and the current rule that additional Journal evidence must not block fill accounting. Evaluate a Operational State Store port before changing Journal's role.
 - [ ] **History completeness:** do not override `marketUniverseComplete: false`; establish a provable owned-market/history scope and retention boundary, otherwise require operator reconciliation.
 - [ ] **Recovery-cycle restoration:** replay must reproduce the live atomic completion transition: require exact `freeQuantity === activeQuantity`, allocate the complete retained inventory, reset `Position.spent`, and reset RecoveryLedger together. Current restore helper omits the Position cost-basis reset (F-038).
 - [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.

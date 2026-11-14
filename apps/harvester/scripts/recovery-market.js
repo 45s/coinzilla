@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { defaultLogger } from "@coinzilla/utils"
-import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-operational-state-store.js"
+import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-operational-state-directory.js"
 import { runOfflineMarketRecovery } from "./recovery-market-context.js"
 
 const HELP = `Usage:
@@ -15,12 +16,12 @@ Options:
   --help            Show this help
 
 The command never connects to Binance, starts Harvester, places/cancels orders,
-or initializes a durable-fact ledger. --confirm requires an existing ledger at
-DURABLE_FACTS_DIRECTORY and a runtimeSessionId in the evidence bundle.
+or initializes the Operational State Store. --confirm requires an existing store at
+OPERATIONAL_STATE_DIRECTORY and a runtimeSessionId in the evidence bundle.
 `
 
 export function parseRecoveryMarketArguments(args = []) {
-  if (!Array.isArray(args)) throw new TypeError("CLI arguments must be an array")
+  if (!Array.isArray(args)) { throw new TypeError("CLI arguments must be an array") }
   const parsed = { confirm: false, help: false, contextPath: undefined }
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
@@ -29,21 +30,21 @@ export function parseRecoveryMarketArguments(args = []) {
       continue
     }
     if (argument === "--confirm") {
-      if (parsed.confirm) throw new Error("--confirm must not be repeated")
+      if (parsed.confirm) { throw new Error("--confirm must not be repeated") }
       parsed.confirm = true
       continue
     }
     if (argument === "--context") {
-      if (parsed.contextPath !== undefined) throw new Error("--context must not be repeated")
+      if (parsed.contextPath !== undefined) { throw new Error("--context must not be repeated") }
       const value = args[index + 1]
-      if (!value || value.startsWith("--")) throw new Error("--context requires a file path")
+      if (!value || value.startsWith("--")) { throw new Error("--context requires a file path") }
       parsed.contextPath = value
       index += 1
       continue
     }
     throw new Error("Unknown recovery CLI argument: " + argument)
   }
-  if (!parsed.help && !parsed.contextPath) throw new Error("--context is required")
+  if (!parsed.help && !parsed.contextPath) { throw new Error("--context is required") }
   return Object.freeze(parsed)
 }
 
@@ -81,16 +82,18 @@ export async function runRecoveryMarketCommand({
     const contextPath = path.resolve(cwd, parsed.contextPath)
     const raw = await readContext(contextPath, "utf8")
     const context = JSON.parse(raw)
-    let durableFactsStore
+    let operationalStateStore
     if (parsed.confirm) {
-      const directory = env.DURABLE_FACTS_DIRECTORY
-      if (typeof directory !== "string" || !path.isAbsolute(directory)) {
-        throw new Error("--confirm requires an absolute DURABLE_FACTS_DIRECTORY for an existing ADR-0001 ledger")
+      let directory
+      try {
+        directory = resolveOperationalStateDirectory({ env })
+      } catch (cause) {
+        throw new Error("--confirm requires a valid OPERATIONAL_STATE_DIRECTORY", { cause })
       }
       if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
         throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
       }
-      durableFactsStore = createFileDurableFactsStore({
+      operationalStateStore = createFileOperationalStateStore({
         directory,
         runtimeSessionId: context.runtimeSessionId,
       })
@@ -99,12 +102,12 @@ export async function runRecoveryMarketCommand({
     const result = await runOfflineMarketRecovery({
       context,
       confirm: parsed.confirm,
-      durableFactsStore,
+      operationalStateStore,
     })
     const summary = summarizeResult({ result })
     writeOutput(JSON.stringify(summary, null, 2))
-    if (!summary.ok) return 1
-    if (parsed.confirm) return summary.data.confirmation?.confirmed === true ? 0 : 2
+    if (!summary.ok) { return 1 }
+    if (parsed.confirm) { return summary.data.confirmation?.confirmed === true ? 0 : 2 }
     return summary.data.reconciliation?.ready === true ? 0 : 2
   } catch (error) {
     writeError(error?.message ?? String(error))
