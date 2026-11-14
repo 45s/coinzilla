@@ -26,45 +26,111 @@ Implementation code is under src/domain/strategies/conservative/ and src/use-cas
 
 ### Recovery Seller (RS) — proposed strategy
 
-**Status: proposed concept only. RS is not implemented, registered, configurable, or executable.** This section records the initial product direction so it can be reviewed before a domain specification or code is created. It does not amend the Conservative Domain Specification or change the behavior of Coin Grabber.
+**Status: proposed concept only. RS is not implemented, registered, configurable at runtime, or executable.** This section records the product direction and proposed configuration shape for owner review. It does not amend the Conservative Domain Specification or change Coin Grabber behavior.
 
 #### Purpose
 
-Recovery Seller is intended to help an operator gradually liquidate an existing spot position that was acquired at a higher market price, without requiring the entire position to recover to its original average acquisition price before any inventory can be sold.
+Recovery Seller is intended to gradually liquidate an existing spot position acquired at a higher market price. Rather than waiting for the entire legacy position to recover to its original acquisition price, RS uses repeated recovery cycles: buy a new tranche, then—when the cycle can be closed under the eventual profitability rules—sell that tranche together with a configured quantity of the pre-existing position.
 
-Its objective differs from Coin Grabber:
+This differs from Coin Grabber:
 
-- **Coin Grabber** seeks to trade recovery cycles while retaining the configured amount of base asset from completed cycles.
-- **Recovery Seller** seeks to reduce an existing spot inventory over repeated cycles. Newly acquired base asset is used as part of a recovery cycle, and a controlled additional portion of the pre-existing inventory is intended to be liquidated when that cycle can be closed under the strategy's eventual profitability rules.
+- **Coin Grabber** retains the configured base-asset quantity from completed cycles.
+- **Recovery Seller** uses the proposed per-pair **sellQuantity** to define how much additional pre-existing inventory is included in each successful recovery-cycle SELL.
+
+#### Proposed per-pair configuration
+
+Follow the existing CG_COIN_GRABBER_CONFIG.pairs convention: RS has independent pair settings and uses **sellQuantity** where CG uses **keepQuantity**. The value is a base-asset quantity, configured separately for each market.
+
+The following is a documentation-only proposal, not a runtime config file or accepted schema:
+
+```js
+export const RS_RECOVERY_SELLER_CONFIG = {
+  enabled: false,
+  pairs: {
+    DOGEUSDT: {
+      enabled: false,
+      investment: 100,
+      orderQuantity: 400,
+      sellQuantity: 1,
+      minProfit: 0.01,
+      priceStepPercent: 0.05,
+      pricePrecision: 5,
+      quantityPrecision: 0,
+      makerPercent: 0.1,
+      takerPercent: 0.1,
+    },
+    ZROUSDT: {
+      enabled: false,
+      investment: 100,
+      orderQuantity: 10,
+      sellQuantity: 0.01,
+      minProfit: 0.01,
+      priceStepPercent: 0.05,
+      pricePrecision: 3,
+      quantityPrecision: 1,
+      makerPercent: 0.1,
+      takerPercent: 0.1,
+    },
+    LINKUSDT: {
+      enabled: false,
+      investment: 200,
+      orderQuantity: 2,
+      sellQuantity: 0.01,
+      minProfit: 0.1,
+      priceStepPercent: 0.3,
+      pricePrecision: 3,
+      quantityPrecision: 2,
+      makerPercent: 0.075,
+      takerPercent: 0.075,
+    },
+  },
+};
+```
+
+The pair values are illustrative examples aligned with existing CG pair configuration conventions; they are not approved trading defaults. Shared pair fields such as volatility protection and external-order policy can be carried over when the eventual RS config contract is specified.
+
+#### Meaning of sellQuantity and cycle example
+
+**sellQuantity is the amount of legacy/pre-existing base inventory to include in each successfully completed recovery cycle.** It is not the total SELL quantity and it is not an amount retained in the wallet.
+
+For example, if a ZRO recovery tranche buys 10 ZRO and the configured sellQuantity is 0.01 ZRO, the conceptual cycle SELL quantity is 10.01 ZRO:
+
+| Component | Quantity |
+|---|---:|
+| Newly acquired recovery tranche | 10.00 ZRO |
+| Legacy inventory released for liquidation | 0.01 ZRO |
+| Conceptual combined SELL quantity | **10.01 ZRO** |
+
+Likewise, example quantities are 400 + 1 = 401 DOGE, and 2 + 0.01 = 2.01 LINK. Actual order quantity must still be bounded by net available inventory after commissions, active reservations, exchange precision/step-size rules and other broker constraints. These examples do not define fee treatment or order rounding.
+
+The profitability target must be calculated for the combined cycle and must include applicable BUY/SELL commissions. There is no hard-coded requirement to wait for a separate 1% market-price increase just to release the configured legacy quantity. The exit becomes eligible only when the eventual, explicitly specified profitability rule is satisfied. **SELL ONLY IN PROFIT remains mandatory.**
 
 #### Initial conceptual workflow
 
-1. Begin with an existing spot position that the operator wants to reduce.
-2. Acquire an additional tranche of the same base asset to create a recovery cycle.
-3. If the market moves against the cycle, the concept allows further acquisition tranches, subject to risk and investment limits that have not yet been designed.
-4. When market conditions permit a profitable cycle close, sell the cycle's acquired inventory together with the intended portion of the pre-existing position.
-5. Record the completed cycle and the reduction in pre-existing inventory, then repeat while liquidation remains possible and enabled.
+1. Begin with an existing spot position that the operator has explicitly authorized RS to reduce.
+2. Acquire a new tranche using the pair's configured orderQuantity, subject to investment and risk limits that remain to be specified.
+3. If the market moves against the cycle, the concept may allow further acquisition tranches, subject to those same future limits.
+4. When the combined cycle meets its profitability condition, sell the cycle-acquired inventory together with up to the configured sellQuantity of legacy inventory.
+5. Attribute the completed fill and legacy-inventory reduction exactly once, then repeat while liquidation remains possible and enabled.
 
-The intended outcome is progressive reduction of the legacy position across multiple completed cycles. This is a product-level description, not an approved order algorithm.
+The intended outcome is progressive reduction of the legacy position over multiple completed cycles. This is a product-level description, not an approved order algorithm or mathematical specification.
 
 #### Relationship to Harvester and Coin Grabber
 
-RS is proposed as a separate strategy policy, not as a modification or mode of the existing `CG_coinGrabber` strategy. Coin Grabber's Conservative behavior and canonical domain specification remain unchanged. RS should reuse established Harvester execution boundaries—canonical fills, Portfolio accounting, order lifecycle, broker constraints, reconciliation and safety gates—rather than introducing a parallel exchange or execution stack.
+RS is a separate strategy policy, not a modification or mode of CG_coinGrabber. Coin Grabber's Conservative behavior and canonical domain specification remain unchanged. RS should reuse established Harvester execution boundaries—canonical fills, Portfolio accounting, order lifecycle, broker constraints, reconciliation and safety gates—rather than introducing a parallel exchange or execution stack.
 
-The exact ownership and attribution model for pre-existing inventory, recovery-cycle inventory, active orders and reservations must be designed before implementation. In particular, RS must not silently adopt external inventory or orders, double-count a base-asset quantity, or conflict with another strategy controlling the same market position.
+The exact ownership and attribution model for legacy inventory, recovery-cycle inventory, active orders and reservations must be designed before implementation. RS must not silently adopt external inventory, double-count base-asset quantities, or conflict with another strategy controlling the same market position.
 
 #### Decisions intentionally left open
 
-The following are not settled by this initialization:
-
-- The precise meaning of **SELL ONLY IN PROFIT**: whether it applies to the incremental recovery cycle, the combined transaction, the historical cost basis of each liquidated unit, or another explicitly defined measure.
-- How much pre-existing inventory each completed cycle may liquidate.
-- How the strategy distinguishes legacy inventory from inventory acquired during the current recovery cycle without breaking the shared Portfolio accounting model.
-- When additional BUY tranches are allowed, and the maximum investment, exposure and drawdown limits.
-- The conditions for closing, pausing, abandoning or resuming a cycle.
-- How partial fills, commissions, exchange filters, dust, cancellations and uncertain broker outcomes affect cycle state.
-- How RS is selected and enabled independently of `CG_coinGrabber`, and whether it can ever coexist with another strategy on the same market.
-- How operator-owned or externally acquired inventory is explicitly authorized for liquidation.
+- The precise meaning of **SELL ONLY IN PROFIT**: the cycle's incremental economics, combined transaction economics, historical cost basis of each liquidated legacy unit, or another explicitly defined measure.
+- Whether sellQuantity is a per-cycle target, a maximum amount, or subject to a smaller remaining legacy balance; how the final residual is handled.
+- How RS proves that legacy inventory is authorized for liquidation and distinguishes it from newly acquired inventory without breaking shared Portfolio accounting.
+- Whether orderQuantity means each tranche or the initial tranche only, and when additional BUY tranches are allowed.
+- Maximum investment, total exposure, drawdown and price-movement limits.
+- Cycle close, pause, abandon, resume and strategy-disable behavior.
+- Partial fills, commissions (including base-asset fees), exchange filters, precision, dust, cancellations, unknown broker outcomes and reservations.
+- Which CG pair settings are shared verbatim, which are RS-specific, and how RS is selected independently or prevented from coexisting with another strategy on the same market.
 
 These decisions require an owner-reviewed domain specification and testable invariants. Do not infer them from this overview or implement guessed defaults.
 
@@ -76,7 +142,7 @@ Until the RS specification is accepted and a separate implementation task is sel
 - Do not place, cancel or manage orders on behalf of RS.
 - Do not change Coin Grabber, Conservative, Aggressive, Portfolio or existing recovery accounting.
 - Do not treat this proposal as permission to liquidate existing wallet inventory.
-- Keep all future strategy decisions in pure domain policy and all exchange side effects in the existing Harvester application/broker workflow.
+- Keep future strategy decisions in pure domain policy and exchange side effects in the existing Harvester application/broker workflow.
 
 ### Shared commission and order-type policy — Conservative and Aggressive
 
