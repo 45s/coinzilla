@@ -6,6 +6,7 @@ import {
 } from "@coinzilla/utils"
 import { validateAppConfig } from "../../src/domain/app-config.js"
 import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 
 const ZERO = "0"
 const HUNDRED = "100"
@@ -66,10 +67,26 @@ export function normalizeTradingEnvironment(value) {
     throw new TypeError("environment must be either testnet or live")
   }
   const environment = value.trim().toLowerCase()
-  if (environment !== "testnet" && environment !== "live") {
+  if (environment !== TRADING_ENVIRONMENTS.TESTNET && environment !== TRADING_ENVIRONMENTS.LIVE) {
     throw new TypeError("environment must be either testnet or live")
   }
   return environment
+}
+
+/**
+ * Validate the required per-pair runtime eligibility selector.
+ *
+ * This value is separate from TRADING_MODE, which selects the Binance API host.
+ *
+ * @param {unknown} value - Explicit pair environment selection.
+ * @returns {"testnet"|"live"|"both"} Validated pair eligibility.
+ * @throws {TypeError} If no supported explicit value is supplied.
+ */
+export function normalizePairTradingEnvironment(value) {
+  if (typeof value !== "string" || !Object.values(TRADING_ENVIRONMENTS).includes(value.trim())) {
+    throw new TypeError("tradingEnvironment must be one of testnet, live, or both")
+  }
+  return value.trim()
 }
 
 /** Return the effective decimal places required by a positive exchange increment. */
@@ -180,6 +197,7 @@ export function normalizePairInputs(inputs) {
     throw new TypeError("inputs must be an object")
   }
   const normalized = {
+    tradingEnvironment: normalizePairTradingEnvironment(inputs.tradingEnvironment),
     investment: parseDecimalInput(inputs.investment, "investment", { exclusiveMin: true }),
     orderQuantity: parseDecimalInput(inputs.orderQuantity, "orderQuantity", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(inputs.keepQuantity, "keepQuantity"),
@@ -218,7 +236,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
   }
 
   const normalizedInputs = normalizePairInputs(inputs)
-  const { investment, orderQuantity: requestedOrderQuantity, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
+  const { tradingEnvironment, investment, orderQuantity: requestedOrderQuantity, keepQuantity, makerPercent, takerPercent, minProfit, priceStepPercent } = normalizedInputs
 
   const normalizedStepSize = parseDecimalInput(metadata.stepSize, "stepSize", { exclusiveMin: true })
   const alignedKeepQuantity = roundDecimalToIncrement({
@@ -255,6 +273,7 @@ export function createPairConfig({ inputs, metadata } = {}) {
 
   return Object.freeze({
     enabled: true,
+    tradingEnvironment,
     enableVolatilityProtection: true,
     externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: toConfigNumber(investment, "investment"),

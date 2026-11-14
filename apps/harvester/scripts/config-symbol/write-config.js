@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto"
 import { isDeepStrictEqual } from "node:util"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { appConfig } from "../../config/index.js"
 import { validateAppConfig } from "../../src/domain/app-config.js"
-import { addPairToAppConfig } from "./configuration.js"
-import { replacePairConfiguration } from "./config-source.js"
+import { insertTradingPairConfiguration } from "./config-source.js"
 
 async function removeIfPresent(filePath) {
   try {
@@ -27,49 +27,56 @@ async function removeStaleTemporaryFiles(directory, configFileName) {
   }
 }
 
-async function importAppConfig(configPath) {
+async function importTradingPairs(configPath) {
   const moduleUrl = pathToFileURL(configPath)
   moduleUrl.searchParams.set("config-symbol-load", randomUUID())
-
   let configModule
   try {
     configModule = await import(moduleUrl.href)
   } catch (cause) {
-    const message = "Unable to load CG coin-grabber strategy config module at " + configPath + ": " + cause.message
+    const message = "Unable to load CG coin-grabber trading-pairs config at " + configPath + ": " + cause.message
     if (cause instanceof SyntaxError) {
       throw new SyntaxError(message, { cause })
     }
     throw new Error(message, { cause })
   }
-
-  if (!Object.hasOwn(configModule, "CG_COIN_GRABBER_CONFIG")) {
-    throw new TypeError("CG coin-grabber config module must export a named CG_COIN_GRABBER_CONFIG value")
+  if (!Object.hasOwn(configModule, "tradingPairs")) {
+    throw new TypeError("CG coin-grabber config module must export a named tradingPairs object")
   }
-  return { strategies: { CG_coinGrabber: configModule.CG_COIN_GRABBER_CONFIG } }
+  return configModule.tradingPairs
+}
+
+function createValidatedAppConfig(pairs) {
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs,
+      },
+    },
+  }
 }
 
 /**
- * Merge a new pair into the marked pair region in the CG coin-grabber strategy module and atomically replace it.
+ * Add one pair to the external tradingPairs module and atomically replace it.
  *
  * @param {{configPath: string, symbol: string, pairConfig: object}} options - Target config and generated pair.
  * @returns {Promise<string>} Absolute path of the updated config module.
- * @throws {Error|TypeError} If the module, pair, marker region, lock, or write is invalid.
  */
 export async function writePairConfigAtomically({ configPath, symbol, pairConfig } = {}) {
   if (typeof configPath !== "string" || !configPath.trim()) {
     throw new TypeError("configPath must be a non-empty file path")
   }
   const absoluteConfigPath = path.resolve(configPath)
-  const lockPath = absoluteConfigPath + ".config-symbol.lock"
+  const lockPath = `${absoluteConfigPath}.config-symbol.lock`
   const directory = path.dirname(absoluteConfigPath)
   const configFileName = path.basename(absoluteConfigPath)
-  const temporaryPath = path.join(
-    directory,
-    "." + configFileName + "." + randomUUID() + ".tmp.mjs",
-  )
-
+  const temporaryPath = path.join(directory, "." + configFileName + "." + randomUUID() + ".tmp.mjs")
   let lockHandle
   let temporaryCreated = false
+
   try {
     try {
       lockHandle = await open(lockPath, "wx", 0o600)
@@ -79,45 +86,31 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
       }
       throw error
     }
-    await lockHandle.writeFile(JSON.stringify({
-      pid: process.pid,
-      createdAt: new Date().toISOString(),
-    }) + "\n", "utf8")
+    await lockHandle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }) + "\n", "utf8")
     await removeStaleTemporaryFiles(directory, configFileName)
 
-    let currentConfigText
+    let currentSource
     try {
-      currentConfigText = await readFile(absoluteConfigPath, "utf8")
+      currentSource = await readFile(absoluteConfigPath, "utf8")
     } catch (cause) {
-      throw new Error("Unable to read CG coin-grabber strategy config module at " + absoluteConfigPath + ": " + cause.message, { cause })
+      throw new Error("Unable to read CG coin-grabber trading-pairs config at " + absoluteConfigPath + ": " + cause.message, { cause })
     }
-
-    const currentConfig = await importAppConfig(absoluteConfigPath)
-    validateAppConfig(currentConfig)
-    const updatedConfig = addPairToAppConfig({
-      appConfig: currentConfig,
-      symbol,
-      pairConfig,
-    })
-    const updatedSource = replacePairConfiguration({
-      source: currentConfigText,
-      pairs: updatedConfig.strategies.CG_coinGrabber.pairs,
-    })
+    const currentPairs = await importTradingPairs(absoluteConfigPath)
+    validateAppConfig(createValidatedAppConfig(currentPairs))
+    if (Object.hasOwn(currentPairs, symbol)) {
+      throw new Error("Pair " + symbol + " already exists in CG coin-grabber trading-pairs config; refusing to overwrite it")
+    }
+    const updatedPairs = { ...currentPairs, [symbol]: pairConfig }
+    const updatedSource = insertTradingPairConfiguration({ source: currentSource, symbol, pairConfig })
     const originalMode = (await stat(absoluteConfigPath)).mode & 0o777
 
     temporaryCreated = true
-    await writeFile(temporaryPath, updatedSource, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: originalMode,
-    })
-
-    const temporaryConfig = await importAppConfig(temporaryPath)
-    validateAppConfig(temporaryConfig)
-    if (!isDeepStrictEqual(temporaryConfig, updatedConfig)) {
-      throw new Error("Generated CG coin-grabber strategy module does not match the validated pair update")
+    await writeFile(temporaryPath, updatedSource, { encoding: "utf8", flag: "wx", mode: originalMode })
+    const temporaryPairs = await importTradingPairs(temporaryPath)
+    validateAppConfig(createValidatedAppConfig(temporaryPairs))
+    if (!isDeepStrictEqual(temporaryPairs, updatedPairs)) {
+      throw new Error("Generated tradingPairs module does not match the validated pair update")
     }
-
     await rename(temporaryPath, absoluteConfigPath)
     temporaryCreated = false
     return absoluteConfigPath

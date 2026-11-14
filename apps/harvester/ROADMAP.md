@@ -23,6 +23,10 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 All items remain open. A documentation PR or a clean offline audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
+## P2 — External trading-pair configuration
+
+- [~] Move all market definitions out of strategy source into the single `apps/harvester/cg-coin-grabber.js` `tradingPairs` map. Keep one entry per symbol, require explicit `tradingEnvironment`, and let `TRADING_MODE` select eligible pairs without defaults or duplicate environment maps. Update the symbol generator, validation, tests, and living configuration documentation. No exchange operations.
+
 ## P3 — Operational State Store source naming — COMPLETE
 
 - [x] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Renamed the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; updated consumers and current architecture documentation. Preserved the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation was performed. Merged in [PR #1108](https://github.com/45s/coinzilla/pull/1108) as `c94a5489c1cc9de721b37879701a96cedc6ae399`; all eight exact-head GitHub Actions workflows passed.

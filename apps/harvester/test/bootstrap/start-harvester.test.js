@@ -51,11 +51,12 @@ const createTestCandle = ({ symbol, openTime, isClosed = true } = {}) => ({
   isClosed,
 })
 const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? input.env?.NODE_ENV === "development" && typeof input.eventPublisher.flush !== "function"
-      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
-      : input.eventPublisher
-    : testEventPublisher
+  let eventPublisher = input.eventPublisher
+  if (!eventPublisher) {
+    eventPublisher = testEventPublisher
+  } else if (input.env?.NODE_ENV === "development" && typeof eventPublisher.flush !== "function") {
+    eventPublisher = { ...eventPublisher, flush: testEventPublisher.flush }
+  }
   return startHarvester({ ...input, eventPublisher })
 }
 
@@ -78,7 +79,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
 
 test('loads configuration before returning the startup context', async () => {
   const appConfig = {
-    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true, enableVolatilityProtection: true } } } },
+    strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true, tradingEnvironment: "both", enableVolatilityProtection: true } } } },
   };
   const configSource = '/etc/harvester/config.json';
   const calls = [];
@@ -93,7 +94,9 @@ test('loads configuration before returning the startup context', async () => {
   });
 
   assert.deepEqual(calls, [configSource]);
-  assert.equal(context.appConfig, appConfig);
+  assert.notEqual(context.appConfig, appConfig, "Runtime resolution must build a separate effective config rather than mutating the loaded source config.");
+  assert.equal(Object.hasOwn(context.appConfig.strategies.CG_coinGrabber.pairs.ZROUSDT, "tradingEnvironment"), false, "The effective runtime pair must not expose its source selector.");
+  assert.equal(Object.hasOwn(appConfig.strategies.CG_coinGrabber.pairs.ZROUSDT, "tradingEnvironment"), true, "The loaded source config must retain the selector for validation.");
   assert.equal(Object.isFrozen(context), true);
 });
 
@@ -117,6 +120,7 @@ test('loads the default validated strategy and pair configuration', async () => 
 });
 
 
+// eslint-disable-next-line max-lines-per-function -- Keep the full ordered accounting lifecycle in one end-to-end scenario.
 test('ordinary TRADE fills update owned accounting after the startup account audit', async () => {
   const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' });
   const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' });
@@ -155,6 +159,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
+          tradingEnvironment: "both",
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,
@@ -397,13 +402,13 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
         },
         pairs: {
           DOGEUSDT: {
-            enabled: true, investment: 100, orderQuantity: 100, keepQuantity: 1,
+            enabled: true, tradingEnvironment: "both", investment: 100, orderQuantity: 100, keepQuantity: 1,
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
           },
           ZROUSDT: {
-            enabled: true, investment: 100, orderQuantity: 10, keepQuantity: 0.01,
+            enabled: true, tradingEnvironment: "both", investment: 100, orderQuantity: 10, keepQuantity: 0.01,
             minProfit: 0.01,
             priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
             makerPercent: 0.1, takerPercent: 0.1,
@@ -426,7 +431,7 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     connect: async () => {},
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
-      const market = metadataBySymbol.get(order.symbol).market
+      const { market } = metadataBySymbol.get(order.symbol)
       submittedSymbols.push(order.symbol)
       const submitted = new CanonicalOrder({
         clientOrderId: order.clientOrderId,

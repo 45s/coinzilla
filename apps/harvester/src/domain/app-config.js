@@ -1,7 +1,10 @@
 import { NOTIFICATIONS_TG_PROFILES } from "../../config/notifications-tg-profiles.js"
 import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "./trading-environment.js"
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
+const TRADING_ENVIRONMENT_VALUES = Object.values(TRADING_ENVIRONMENTS)
+const TRADING_ENVIRONMENT_SET = new Set(TRADING_ENVIRONMENT_VALUES)
 export class ConfigValidationError extends TypeError {
   constructor(path, expected) {
     super(`Invalid app config at "${path}": expected ${expected}`)
@@ -65,21 +68,18 @@ function validateTelegramNotificationConfig(config) {
   }
 }
 
-/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
-export function validateAppConfig(config) {
-  requireRecord(config, "root")
-function validateTelegramOperatorControlConfig(config) {
-  if (config.operatorControl === undefined) {
+function validateTelegramOperatorControlConfig(appConfig) {
+  if (appConfig.operatorControl === undefined) {
     return
   }
   const path = "operatorControl"
-  requireRecord(config.operatorControl, path)
-  for (const key of Object.keys(config.operatorControl)) {
+  requireRecord(appConfig.operatorControl, path)
+  for (const key of Object.keys(appConfig.operatorControl)) {
     if (key !== "telegram") {
       fail(path + "." + key, "a supported operator-control configuration field")
     }
   }
-  const telegram = config.operatorControl.telegram
+  const telegram = appConfig.operatorControl.telegram
   requireRecord(telegram, path + ".telegram")
   for (const key of Object.keys(telegram)) {
     if (key !== "enabled" && key !== "allowedUserIds") {
@@ -101,14 +101,9 @@ function validateTelegramOperatorControlConfig(config) {
     seenUserIds.add(userId)
   }
 }
-  validateTelegramNotificationConfig(config)
-  validateTelegramOperatorControlConfig(config)
-  if (config.runtime !== undefined) {fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")}
-  requireRecord(config.strategies, "strategies")
-  requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
-  const strategy = config.strategies.CG_coinGrabber
-  requireBoolean(strategy.enabled, "strategies.CG_coinGrabber.enabled")
-  if (!strategy.enabled) {fail("strategies.CG_coinGrabber.enabled", "CG_coinGrabber must remain enabled")}
+
+/** Validate CG coin-grabber strategy settings. */
+function validateStrategySettings(strategy) {
   requireRecord(strategy.settings, "strategies.CG_coinGrabber.settings")
   const settingsPath = "strategies.CG_coinGrabber.settings"
   if (Object.hasOwn(strategy.settings, "minProfit")) {
@@ -127,6 +122,9 @@ function validateTelegramOperatorControlConfig(config) {
       fail(`${settingsPath}.recovery.enabled`, "process-restart recovery is deferred and must remain disabled")
     }
   }
+}
+
+function validateStrategyPairs(strategy) {
   requireRecord(strategy.pairs, "strategies.CG_coinGrabber.pairs")
   const pairs = Object.entries(strategy.pairs)
   if (pairs.length === 0) {fail("strategies.CG_coinGrabber.pairs", "at least one pair")}
@@ -135,6 +133,9 @@ function validateTelegramOperatorControlConfig(config) {
     if (!symbol.trim()) {fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")}
     requireRecord(pair, pairPath)
     requireBoolean(pair.enabled, `${pairPath}.enabled`)
+    if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
+      fail(`${pairPath}.tradingEnvironment`, "testnet, live, or both")
+    }
     requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
     if (pair.externalOrdersPolicy !== undefined && !Object.values(EXTERNAL_ORDERS_POLICIES).includes(pair.externalOrdersPolicy)) {
       fail(
@@ -152,11 +153,56 @@ function validateTelegramOperatorControlConfig(config) {
     requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0, max: 100, exclusiveMax: true })
     requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0, max: 100, exclusiveMax: true })
   }
+}
+/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
+export function validateAppConfig(config) {
+  requireRecord(config, "root")
+
+  validateTelegramNotificationConfig(config)
+  validateTelegramOperatorControlConfig(config)
+  if (config.runtime !== undefined) {fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")}
+  requireRecord(config.strategies, "strategies")
+  requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
+  const strategy = config.strategies.CG_coinGrabber
+  requireBoolean(strategy.enabled, "strategies.CG_coinGrabber.enabled")
+  if (!strategy.enabled) {fail("strategies.CG_coinGrabber.enabled", "CG_coinGrabber must remain enabled")}
+  validateStrategySettings(strategy)
+  validateStrategyPairs(strategy)
   return config
+}
+
+/**
+ * Select pairs for the mandatory Binance trading mode and remove the config-only selector.
+ *
+ * @param {{pairs: object, tradingMode: "testnet"|"live"}} options - Source pair map and resolved exchange mode.
+ * @returns {object} Matching runtime pair map without tradingEnvironment.
+ * @throws {ConfigValidationError} If any pair has a missing or unsupported selector.
+ */
+export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
+  if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {
+    fail("TRADING_MODE", "testnet or live")
+  }
+  requireRecord(pairs, "strategies.CG_coinGrabber.pairs")
+  const selectedPairs = {}
+  for (const [symbol, pair] of Object.entries(pairs)) {
+    const pairPath = `strategies.CG_coinGrabber.pairs.${symbol}`
+    if (!symbol.trim()) {fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")}
+    requireRecord(pair, pairPath)
+    if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
+      fail(`${pairPath}.tradingEnvironment`, "testnet, live, or both")
+    }
+    if (pair.tradingEnvironment !== TRADING_ENVIRONMENTS.BOTH && pair.tradingEnvironment !== tradingMode) {
+      continue
+    }
+    const runtimePair = { ...pair }
+    delete runtimePair.tradingEnvironment
+    selectedPairs[symbol] = runtimePair
+  }
+  return selectedPairs
 }
 
 /** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
 export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
-  if (tradingMode !== "testnet" && tradingMode !== "live") {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
+  if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
   return Object.freeze({ environment: environment ?? "unspecified", brokerName: "binance", tradingMode, tradingEnabled: true })
 }
