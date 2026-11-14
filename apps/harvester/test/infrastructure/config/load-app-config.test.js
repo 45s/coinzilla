@@ -120,9 +120,9 @@ test("loads a named appConfig module from a file URL", async (t) => {
   t.after(() => rm(directory, { recursive: true, force: true }))
   const configPath = join(directory, "config.mjs")
   await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
-  const tokenSpecificationsPath = await writeTokenSpecifications(directory)
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
 
-  const config = await loadAppConfig({ source: new URL("file://" + configPath), tokenSpecificationsPath })
+  const config = await loadAppConfig({ source: new URL(`file://${configPath}`), tokenSpecificationsPath })
   assertAppConfigStructure(config)
 })
 
@@ -149,7 +149,7 @@ test("rejects malformed token registry JSON with its source path", async (t) => 
   await writeFile(tokenSpecificationsPath, "{", "utf8")
 
   await assert.rejects(
-    loadAppConfig(configPath, { tokenSpecificationsPath }),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     (error) => error instanceof Error && error.message.includes(tokenSpecificationsPath),
     "Malformed token metadata must identify the file that prevented startup.",
   )
@@ -159,11 +159,11 @@ test("reports the source path and preserves the syntax cause for malformed JavaS
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
   const configPath = join(directory, "invalid.mjs")
-  const tokenSpecificationsPath = await writeTokenSpecifications(directory)
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
   await writeFile(configPath, "export const appConfig = {", "utf8")
 
   await assert.rejects(
-    loadAppConfig(configPath, { tokenSpecificationsPath }),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     (error) => error instanceof SyntaxError
       && error.message.includes(configPath)
       && error.cause instanceof SyntaxError,
@@ -184,11 +184,11 @@ test("rejects a module that does not export the named appConfig value", async (t
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
   const configPath = join(directory, "missing-export.mjs")
-  const tokenSpecificationsPath = await writeTokenSpecifications(directory)
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
   await writeFile(configPath, "export const otherConfig = {};", "utf8")
 
   await assert.rejects(
-    loadAppConfig(configPath, { tokenSpecificationsPath }),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     /must export a named appConfig/i,
     "A module without the required named appConfig value must fail clearly.",
   )
@@ -198,11 +198,11 @@ test("rejects structurally invalid named appConfig exports", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
   const configPath = join(directory, "invalid-shape.mjs")
-  const tokenSpecificationsPath = await writeTokenSpecifications(directory)
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
   await writeFile(configPath, createConfigModule({ strategies: {} }), "utf8")
 
   await assert.rejects(
-    loadAppConfig(configPath, { tokenSpecificationsPath }),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     /CG_coinGrabber/,
     "An ESM module with an invalid appConfig shape must fail runtime validation before startup.",
   )
