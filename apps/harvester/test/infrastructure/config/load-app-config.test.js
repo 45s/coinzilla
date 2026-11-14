@@ -156,6 +156,43 @@ test("rejects malformed token registry JSON with its source path", async (t) => 
   )
 })
 
+test("preserves the one-argument filesystem path API", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const configPath = join(directory, "config.mjs")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+
+  const config = await loadAppConfig(configPath)
+  assertAppConfigStructure(config)
+})
+
+test("reports a missing token registry path before configuration validation", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const configPath = join(directory, "config.mjs")
+  const tokenSpecificationsPath = join(directory, "missing-token-specification.json")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+
+  await assert.rejects(
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
+    (error) => error instanceof Error && error.message.includes(tokenSpecificationsPath),
+    "A missing token registry must identify its expected path."
+  )
+})
+
+test("rejects invalid loader options before importing the config module", async () => {
+  await assert.rejects(
+    loadAppConfig(null),
+    /options.*file URL, path, or options object/i,
+    "Invalid loader input must fail with a clear options error."
+  )
+  await assert.rejects(
+    loadAppConfig({ tokenSpecificationsPath: 42 }),
+    /tokenSpecificationsPath.*non-empty/i,
+    "The registry path must be a non-empty string."
+  )
+})
+
 test("reports the source path and preserves the syntax cause for malformed JavaScript", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
