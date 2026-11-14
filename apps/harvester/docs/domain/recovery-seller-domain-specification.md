@@ -84,12 +84,12 @@ Harvester has one shared Portfolio per account, with support for multiple indepe
 
 RS must preserve these facts:
 
-- Multiple independent Positions may exist for the same market. Each Position has stable identity and explicit ownership/attribution; a strategy may own more than one Position when its domain requires it.
-- Every canonical fill changes actual Portfolio accounting exactly once, using actual execution and commission facts.
+- Multiple independent Positions may exist for the same market. Each Position has a stable caller-assigned `positionId`, canonical `marketId`, and explicit `strategyId` owner; a strategy may own more than one Position when its domain requires it.
+- Every canonical fill changes actual Portfolio accounting exactly once, using actual execution and commission facts, and is attributed to the one `positionId`/`strategyId` resolved from its originating order ownership.
 - RS-owned Positions and attribution are part of the shared Portfolio accounting model; they do not create a second wallet, duplicate custody, or double-apply Portfolio accounting.
 - RS attribution references the same canonical market/order/fill identities used by shared broker and Portfolio workflows.
 - Portfolio and RS attribution commit as one logical accounting transition. If either rejects a fill or identity, neither projection advances.
-- Identical duplicate fills are no-ops; conflicting facts under the same canonical fill ID fail closed.
+- Identical duplicate fills for the same Position owner are no-ops; changed execution facts or a different `positionId`/`strategyId` under the same canonical fill ID fail closed.
 - No synthetic BUY Fill may be fabricated to seed legacy inventory or represent operator authorization.
 
 ### 4.2 Required attribution facts

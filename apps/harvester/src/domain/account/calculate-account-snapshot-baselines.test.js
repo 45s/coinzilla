@@ -140,3 +140,33 @@ test("rejects non-Portfolio and non-canonical active-order inputs", () => {
   assert.equal(nonCanonicalOrder.ok, false, "Plain order-shaped objects must not be trusted as canonical active exchange orders.")
   assert.match(nonCanonicalOrder.errors[0].message, /activeOrders must contain CanonicalOrder values/, "The validation error must identify the canonical active-order collection contract.")
 })
+
+
+test("aggregates same-market strategy Positions into one actual account custody baseline", () => {
+  const portfolio = new Portfolio()
+    .applyFill({
+      fill: makeBuyFill({ market: btcMarket, tradeId: "cg-btc-buy", quantity: "10", quoteQuantity: "100" }),
+      positionId: "position:cg:btcusdt",
+      strategyId: "CG_coinGrabber",
+    }).portfolio
+    .applyFill({
+      fill: makeBuyFill({ market: btcMarket, tradeId: "rs-btc-buy", quantity: "3", quoteQuantity: "60" }),
+      positionId: "position:rs:btcusdt",
+      strategyId: "RS_recoverySeller",
+    }).portfolio
+
+  const result = calculateAccountSnapshotBaselines({ portfolio, activeOrders: [] })
+
+  assert.equal(portfolio.positions.length, 2, "The shared Portfolio must retain both strategy-owned BTCUSDT Positions instead of collapsing them by market.")
+  assert.equal(result.ok, true, "Multiple strategy Positions must produce one valid aggregate exchange-account baseline.")
+  assert.deepEqual(
+    result.data.portfolioBaseQuantityBaseline,
+    [{ assetId: btc.id, amount: "13" }],
+    "The account baseline must sum the ten CG BTC and three RS BTC exactly once as thirteen units of shared custody.",
+  )
+  assert.deepEqual(
+    result.data.quoteCashFlowBaseline,
+    [{ assetId: usdt.id, amount: "-160" }],
+    "The account baseline must aggregate both strategy quote cash flows without merging their independent Position cost bases.",
+  )
+})

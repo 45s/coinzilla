@@ -6,14 +6,14 @@ import { Portfolio } from "./portfolio.js"
 const baseAsset = new Asset({ id: "asset:ETH", code: "ETH" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const market = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset, quoteAsset })
-const makeFill = ({ tradeId = "trade-1", quantity = "1", commissions = [] } = {}) => new Fill({
+const makeFill = ({ tradeId = "trade-1", quantity = "1", quoteQuantity = "100", commissions = [] } = {}) => new Fill({
   tradeId,
   brokerOrderId: "order-1",
   market,
   side: "BUY",
   price: new Money({ amount: "100", asset: quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-  quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+  quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
   commissions,
   commissionStatus: "COMPLETE",
 })
@@ -202,4 +202,147 @@ test("deduplicates equivalent history-response and user-data stream fills in eit
   assert.equal(duplicateHistory.applied, false)
   assert.equal(duplicateHistory.duplicate, true)
   assert.equal(duplicateHistory.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
+})
+
+
+test("keeps independent strategy-owned Positions for the same market", () => {
+  const coinGrabberPositionId = "position:cg:ethusdt"
+  const recoverySellerPositionId = "position:rs:ethusdt"
+  const coinGrabberFill = makeFill({
+    tradeId: "cg-buy",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const recoverySellerFill = makeFill({
+    tradeId: "rs-buy",
+    quantity: "3",
+    quoteQuantity: "600",
+  })
+
+  const portfolio = new Portfolio()
+    .applyFill({
+      fill: coinGrabberFill,
+      positionId: coinGrabberPositionId,
+      strategyId: "CG_coinGrabber",
+    }).portfolio
+    .applyFill({
+      fill: recoverySellerFill,
+      positionId: recoverySellerPositionId,
+      strategyId: "RS_recoverySeller",
+    }).portfolio
+
+  assert.equal(portfolio.positions.length, 2, "Two strategies trading ETHUSDT must create two independent Positions inside the one shared Portfolio.")
+  const coinGrabberPosition = portfolio.getPosition({ positionId: coinGrabberPositionId })
+  const recoverySellerPosition = portfolio.getPosition({ positionId: recoverySellerPositionId })
+
+  assert.equal(coinGrabberPosition.strategyId, "CG_coinGrabber", "The first Position must retain its Coin Grabber strategy owner.")
+  assert.equal(coinGrabberPosition.baseQuantity.amount, "10", "Coin Grabber accounting must contain only its ten executed ETH.")
+  assert.equal(coinGrabberPosition.spent.amount, "1000", "Coin Grabber recovery basis must contain only its 1,000 USDT execution cost.")
+  assert.equal(recoverySellerPosition.strategyId, "RS_recoverySeller", "The second Position must retain its Recovery Seller strategy owner.")
+  assert.equal(recoverySellerPosition.baseQuantity.amount, "3", "Recovery Seller accounting must contain only its three executed ETH.")
+  assert.equal(recoverySellerPosition.spent.amount, "600", "Recovery Seller recovery basis must contain only its 600 USDT execution cost.")
+  assert.equal(portfolio.getTotalBaseQuantity({ market }).amount, "13", "Aggregate ETH custody must sum both strategy Positions without duplicating or hiding actual inventory.")
+})
+
+test("requires stable Position identity and explicit strategy ownership for each fill", () => {
+  assert.throws(
+    () => new Portfolio().applyFill({ fill: makeFill({ tradeId: "missing-owner" }) }),
+    /positionId|strategyId/,
+    "A canonical fill without its originating Position and strategy attribution must be rejected instead of being assigned implicitly.",
+  )
+})
+
+test("rejects applying one canonical fill to a different strategy Position", () => {
+  const fill = makeFill({ tradeId: "one-owner-only" })
+  const portfolio = new Portfolio().applyFill({
+    fill,
+    positionId: "position:cg:ethusdt",
+    strategyId: "CG_coinGrabber",
+  }).portfolio
+  const originalState = portfolio.value
+
+  assert.throws(
+    () => portfolio.applyFill({
+      fill,
+      positionId: "position:rs:ethusdt",
+      strategyId: "RS_recoverySeller",
+    }),
+    /Conflicting strategy attribution/,
+    "A duplicate canonical execution must not be reassigned from its original strategy Position to another strategy.",
+  )
+  assert.deepEqual(portfolio.value, originalState, "Rejecting conflicting fill ownership must preserve every accepted Position and fill-identity fact.")
+})
+
+test("rejects ambiguous market lookup when multiple strategy Positions exist", () => {
+  const portfolio = new Portfolio()
+    .applyFill({
+      fill: makeFill({ tradeId: "ambiguous-cg", quantity: "10", quoteQuantity: "1000" }),
+      positionId: "position:cg:ethusdt",
+      strategyId: "CG_coinGrabber",
+    }).portfolio
+    .applyFill({
+      fill: makeFill({ tradeId: "ambiguous-rs", quantity: "3", quoteQuantity: "600" }),
+      positionId: "position:rs:ethusdt",
+      strategyId: "RS_recoverySeller",
+    }).portfolio
+
+  assert.equal(
+    portfolio.getPosition({ marketId: market.id, strategyId: "CG_coinGrabber" }).id,
+    "position:cg:ethusdt",
+    "A strategy-scoped market lookup must return that strategy's independent Position.",
+  )
+  assert.throws(
+    () => portfolio.getPosition({ marketId: market.id }),
+    /ambiguous|positionId|strategyId/,
+    "A market-only lookup must fail closed when it could select between independent strategy Positions.",
+  )
+})
+
+test("allocates retained inventory only from the explicitly selected strategy Position", () => {
+  const coinGrabberPositionId = "position:cg:ethusdt"
+  const recoverySellerPositionId = "position:rs:ethusdt"
+  const portfolio = new Portfolio()
+    .applyFill({
+      fill: makeFill({ tradeId: "allocation-cg", quantity: "10", quoteQuantity: "1000" }),
+      positionId: coinGrabberPositionId,
+      strategyId: "CG_coinGrabber",
+    }).portfolio
+    .applyFill({
+      fill: makeFill({ tradeId: "allocation-rs", quantity: "3", quoteQuantity: "600" }),
+      positionId: recoverySellerPositionId,
+      strategyId: "RS_recoverySeller",
+    }).portfolio
+
+  const allocated = portfolio.allocateFreeQuantity({
+    positionId: recoverySellerPositionId,
+    marketId: market.id,
+    strategyId: "RS_recoverySeller",
+    quantity: "1",
+  })
+
+  assert.equal(allocated.getPosition({ positionId: coinGrabberPositionId }).baseQuantity.amount, "10", "Allocating Recovery Seller retained inventory must not reduce Coin Grabber active inventory.")
+  assert.equal(allocated.getPosition({ positionId: recoverySellerPositionId }).baseQuantity.amount, "2", "The selected Recovery Seller Position must lose exactly the allocated active quantity.")
+  assert.equal(allocated.getPosition({ positionId: recoverySellerPositionId }).freeBaseQuantity.amount, "1", "The selected Recovery Seller Position must retain exactly the allocated free quantity.")
+  assert.equal(allocated.getTotalBaseQuantity({ market }).amount, "13", "Moving one unit between active and free buckets must conserve aggregate exchange custody across both strategies.")
+})
+
+test("supports multiple stable Positions owned by one strategy on the same market", () => {
+  const firstPositionId = "position:rs:legacy"
+  const secondPositionId = "position:rs:cycle-1"
+  const portfolio = new Portfolio()
+    .applyFill({
+      fill: makeFill({ tradeId: "rs-legacy-buy", quantity: "50", quoteQuantity: "100" }),
+      positionId: firstPositionId,
+      strategyId: "RS_recoverySeller",
+    }).portfolio
+    .applyFill({
+      fill: makeFill({ tradeId: "rs-cycle-buy", quantity: "10", quoteQuantity: "20" }),
+      positionId: secondPositionId,
+      strategyId: "RS_recoverySeller",
+    }).portfolio
+
+  assert.equal(portfolio.positions.length, 2, "One strategy must be able to retain distinct same-market accounting Positions when its domain needs separate legacy and cycle exposure.")
+  assert.equal(portfolio.getPosition({ positionId: firstPositionId }).baseQuantity.amount, "50", "The legacy Position must preserve its own original quantity.")
+  assert.equal(portfolio.getPosition({ positionId: secondPositionId }).baseQuantity.amount, "10", "The cycle Position must preserve its own independently acquired quantity.")
+  assert.equal(portfolio.getTotalBaseQuantity({ market }).amount, "60", "Aggregate market custody must include both Positions owned by the same strategy.")
 })
