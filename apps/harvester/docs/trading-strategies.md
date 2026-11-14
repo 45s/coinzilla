@@ -24,6 +24,60 @@ This page intentionally does not restate Conservative BUY/SELL rules, accounting
 
 Implementation code is under src/domain/strategies/conservative/ and src/use-cases/conservative-trading-engine.js. Its behavior is implementation evidence, not an alternate rule source. Current blockers and verification status are tracked in [ROADMAP](../ROADMAP.md).
 
+### Recovery Seller (RS) — proposed strategy
+
+**Status: proposed concept only. RS is not implemented, registered, configurable, or executable.** This section records the initial product direction so it can be reviewed before a domain specification or code is created. It does not amend the Conservative Domain Specification or change the behavior of Coin Grabber.
+
+#### Purpose
+
+Recovery Seller is intended to help an operator gradually liquidate an existing spot position that was acquired at a higher market price, without requiring the entire position to recover to its original average acquisition price before any inventory can be sold.
+
+Its objective differs from Coin Grabber:
+
+- **Coin Grabber** seeks to trade recovery cycles while retaining the configured amount of base asset from completed cycles.
+- **Recovery Seller** seeks to reduce an existing spot inventory over repeated cycles. Newly acquired base asset is used as part of a recovery cycle, and a controlled additional portion of the pre-existing inventory is intended to be liquidated when that cycle can be closed under the strategy's eventual profitability rules.
+
+#### Initial conceptual workflow
+
+1. Begin with an existing spot position that the operator wants to reduce.
+2. Acquire an additional tranche of the same base asset to create a recovery cycle.
+3. If the market moves against the cycle, the concept allows further acquisition tranches, subject to risk and investment limits that have not yet been designed.
+4. When market conditions permit a profitable cycle close, sell the cycle's acquired inventory together with the intended portion of the pre-existing position.
+5. Record the completed cycle and the reduction in pre-existing inventory, then repeat while liquidation remains possible and enabled.
+
+The intended outcome is progressive reduction of the legacy position across multiple completed cycles. This is a product-level description, not an approved order algorithm.
+
+#### Relationship to Harvester and Coin Grabber
+
+RS is proposed as a separate strategy policy, not as a modification or mode of the existing `CG_coinGrabber` strategy. Coin Grabber's Conservative behavior and canonical domain specification remain unchanged. RS should reuse established Harvester execution boundaries—canonical fills, Portfolio accounting, order lifecycle, broker constraints, reconciliation and safety gates—rather than introducing a parallel exchange or execution stack.
+
+The exact ownership and attribution model for pre-existing inventory, recovery-cycle inventory, active orders and reservations must be designed before implementation. In particular, RS must not silently adopt external inventory or orders, double-count a base-asset quantity, or conflict with another strategy controlling the same market position.
+
+#### Decisions intentionally left open
+
+The following are not settled by this initialization:
+
+- The precise meaning of **SELL ONLY IN PROFIT**: whether it applies to the incremental recovery cycle, the combined transaction, the historical cost basis of each liquidated unit, or another explicitly defined measure.
+- How much pre-existing inventory each completed cycle may liquidate.
+- How the strategy distinguishes legacy inventory from inventory acquired during the current recovery cycle without breaking the shared Portfolio accounting model.
+- When additional BUY tranches are allowed, and the maximum investment, exposure and drawdown limits.
+- The conditions for closing, pausing, abandoning or resuming a cycle.
+- How partial fills, commissions, exchange filters, dust, cancellations and uncertain broker outcomes affect cycle state.
+- How RS is selected and enabled independently of `CG_coinGrabber`, and whether it can ever coexist with another strategy on the same market.
+- How operator-owned or externally acquired inventory is explicitly authorized for liquidation.
+
+These decisions require an owner-reviewed domain specification and testable invariants. Do not infer them from this overview or implement guessed defaults.
+
+#### Implementation boundary
+
+Until the RS specification is accepted and a separate implementation task is selected:
+
+- Do not add RS to runtime configuration or strategy registration.
+- Do not place, cancel or manage orders on behalf of RS.
+- Do not change Coin Grabber, Conservative, Aggressive, Portfolio or existing recovery accounting.
+- Do not treat this proposal as permission to liquidate existing wallet inventory.
+- Keep all future strategy decisions in pure domain policy and all exchange side effects in the existing Harvester application/broker workflow.
+
 ### Shared commission and order-type policy — Conservative and Aggressive
 
 For Conservative, the canonical specification is authoritative. This section does not define or override Conservative fee reserves or order selection. Aggressive is not currently executable; any future Aggressive fee policy requires its own approved specification before implementation.
