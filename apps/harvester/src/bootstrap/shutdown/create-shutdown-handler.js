@@ -71,7 +71,7 @@ export function createShutdownHandler({
     requestLogged = false,
     stopStateEstablishedLogged = false,
     preShutdownErrors = []
-  } = {}) { // eslint-disable-line max-lines-per-function -- shutdown phases remain serialized in one state machine.
+  } = {}) {
     if (shutdownPromise) {return shutdownPromise}
     if (state.stopped) {return Promise.resolve()}
 
