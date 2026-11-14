@@ -90,9 +90,9 @@ Trading settings and pairs belong to their strategy. Future strategies can be si
 
 **Runtime environment contract:** `TRADING_MODE` is the only operator-facing exchange-mode setting and accepts exactly `testnet` or `live`. Binance is the only broker, so there is no broker selector or exchange-mode profile selector. Trading is enabled in either selected mode; there is no trading-enable flag. Telegram notification profiles are independent and never select the exchange environment. Missing or invalid `TRADING_MODE` must fail startup rather than silently choose an exchange environment. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
 
-The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. The named `appConfig` export in `config/index.js` contains strategy and pair settings under `strategies`.
+The implementation reads `TRADING_MODE` at startup, fixes the broker to Binance, and rejects missing or invalid mode values. The named `appConfig` export in `config/index.js` contains strategy settings under `strategies`; market definitions are maintained separately in `apps/harvester/cg-coin-grabber.js` as one flat `tradingPairs` map.
 
-### Generate a new trading pair
+### Trading-pair configuration\n\nAll markets are defined once in `apps/harvester/cg-coin-grabber.js` as the named `tradingPairs` export. This file is the only market-definition source; `config/strategies/cg-coin-grabber.js` contains strategy-level switches and imports the pair map. Each pair explicitly declares `tradingEnvironment: "testnet" | "live" | "both"`. `TRADING_MODE=testnet` selects `testnet` and `both`; `TRADING_MODE=live` selects `live` and `both`. No default or fallback is used. The selector is removed from the effective runtime pair map.\n\n### Generate a new trading pair
 
 Use the interactive generator instead of manually guessing Binance precision and trading filters:
 
