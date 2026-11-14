@@ -2416,7 +2416,6 @@ class TestnetTradingRecoveryScenario {
         }
       },
     }
-    }
   }
 
   async runStep1() {
