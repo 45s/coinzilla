@@ -38,7 +38,7 @@ Concurrent operation is a product requirement, not an optional future optimizati
 - A pause/disable for one strategy does not implicitly pause/disable the other; existing orders remain owned and reconcilable by their originating strategy.
 - Same-market concurrent tests must prove no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to both strategies.
 
-The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-5, but mutual exclusion is not an acceptable shortcut.
+The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-4, but mutual exclusion is not an acceptable shortcut.
 
 ## RS-1 — Conservative source audit and reuse map
 
@@ -73,7 +73,7 @@ These capabilities are shared infrastructure, not RS extraction tasks.
 | `calculateInitialBuyPrice` | `src/domain/strategies/conservative/initial-buy-price.js` | Conditional extract | Reuse only if RS uses the same percentage/tick-rounding rule; do not force CG's BUY pricing into RS. |
 | `hasOutstandingRecovery` | `src/domain/strategies/conservative/helpers.js` | Conditional reuse | Its spent-versus-net-proceeds predicate may fit the RS recovery tranche, but must receive RS-tranche values only, never combined legacy basis. |
 
-Relevant existing Conservative tests located: `helpers.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. RS-2 must add/strengthen characterization tests before extracting any candidate.
+Relevant existing Conservative tests located: `helpers.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. If RS-2 exposes a concrete need for one of these capabilities, add/strengthen characterization tests before extracting it; otherwise leave CG source untouched.
 
 ### Keep inside Conservative
 
