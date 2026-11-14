@@ -2914,63 +2914,67 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
 
 
 
-const runCompleteConservativeCycle = async ({ keepQuantity }) => {
-  let currentPortfolio = new Portfolio()
-  let currentRecoveryLedger = RecoveryLedger.empty({ market })
-  const events = []
-  const completionCalls = []
-  const buyAfterSellAcknowledgements = []
-  let allocationCount = 0
-  let resetCount = 0
-  let completionSnapshot
 
-  const makeCommissionedFill = ({
-    order,
+function makeCommissionedCycleFill({ order, tradeId, quantity, commissionAsset, executedAt }) {
+  const quoteQuantity = multiplyDecimal({
+    left: order.limitPrice.amount,
+    right: quantity,
+  })
+  const asset = commissionAsset === "BASE" ? baseAsset : quoteAsset
+  const commissionBasis = commissionAsset === "BASE" ? quantity : quoteQuantity
+  const commissionAmount = multiplyDecimal({
+    left: commissionBasis,
+    right: "0",
+  })
+  return new Fill({
     tradeId,
-    quantity,
-    commissionAsset,
-    executedAt,
-  }) => {
-    const quoteQuantity = multiplyDecimal({
-      left: order.limitPrice.amount,
-      right: quantity,
-    })
-    const asset = commissionAsset === "BASE" ? baseAsset : quoteAsset
-    const commissionBasis = commissionAsset === "BASE" ? quantity : quoteQuantity
-    const commissionAmount = multiplyDecimal({
-      left: commissionBasis,
-      right: "0",
-    })
-    return new Fill({
-      tradeId,
-      brokerOrderId: order.brokerOrderId,
-      clientOrderId: order.clientOrderId,
-      market,
-      side: order.side,
-      price: new Money({
-        amount: order.limitPrice.amount,
-        asset: quoteAsset
-      }),
-      quantity: new Quantity({
-        amount: quantity,
-        asset: baseAsset
-      }),
-      quoteQuantity: new Money({
-        amount: quoteQuantity,
-        asset: quoteAsset
-      }),
-      commissions: commissionAmount === "0" ? [] : [
-        new Commission({ amount: new Money({
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market,
+    side: order.side,
+    price: new Money({
+      amount: order.limitPrice.amount,
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
+    commissions: commissionAmount === "0" ? [] : [
+      new Commission({
+        amount: new Money({
           amount: commissionAmount,
-          asset
-        }) }),
-      ],
-      commissionStatus: "COMPLETE",
-      ...(executedAt === undefined ? {} : { executedAt }),
-    })
-  }
+          asset,
+        }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+    ...(executedAt === undefined ? {} : { executedAt }),
+  })
+}
 
-  const zeroFeeAppConfig = {
+function createCompleteCycleScenario() {
+  return {
+    currentPortfolio: new Portfolio(),
+    currentRecoveryLedger: RecoveryLedger.empty({
+      market,
+    }),
+    events: [],
+    completionCalls: [],
+    buyAfterSellAcknowledgements: [],
+    allocationCount: 0,
+    resetCount: 0,
+    completionSnapshot: undefined,
+    harness: undefined,
+  }
+}
+
+function createZeroFeeCycleConfig({ keepQuantity }) {
+  return {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
@@ -2988,117 +2992,162 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
       },
     },
   }
-  const harness = await createHarness({
-    appConfig: zeroFeeAppConfig,
-    baseFreeBalance: "2",
-    quoteFreeBalance: "1000",
-    cancelWithFill: true,
-    getPortfolio: () => currentPortfolio,
-    getRecoveryLedger: () => currentRecoveryLedger,
-    updateTradingAccounting: async ({ fill }) => {
-      try {
-        const portfolioResult = currentPortfolio.applyFill({ fill })
-        const ledgerResult = currentRecoveryLedger.applyFill({ fill })
-        if (portfolioResult.applied !== ledgerResult.applied ||
-            portfolioResult.duplicate !== ledgerResult.duplicate) {
-          throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
-        }
-        currentPortfolio = portfolioResult.portfolio
-        currentRecoveryLedger = ledgerResult.ledger
-        return {
-          ok: true,
-          data: {
-            applied: portfolioResult.applied,
-            duplicate: portfolioResult.duplicate,
-          },
-        }
-      } catch (error) {
-        return {
-          ok: false,
-          errors: [error]
-        }
-      }
-    },
-    completeRecoveryCycle: async ({
-      marketId,
-      keepQuantity: requestedKeepQuantity,
-      minProfit
-    }) => {
-      completionCalls.push(marketId)
-      const position = currentPortfolio.getPosition({ marketId })
-      const result = evaluateRecoveryCompletion({
-        sellOrderFullyFilled: true,
-        spent: currentPortfolio.getPosition({ marketId }).spent.amount,
-        netSellProceeds: currentRecoveryLedger.netSellProceeds,
-        activeQuantity: position.baseQuantity.amount,
-        keepQuantity: requestedKeepQuantity,
-        minProfit,
+}
+
+async function updateCompleteCycleAccounting({ scenario, fill }) {
+  try {
+    const portfolioResult = scenario.currentPortfolio.applyFill({
+      fill,
+    })
+    const ledgerResult = scenario.currentRecoveryLedger.applyFill({
+      fill,
+    })
+    if (portfolioResult.applied !== ledgerResult.applied ||
+        portfolioResult.duplicate !== ledgerResult.duplicate) {
+      throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
+    }
+    scenario.currentPortfolio = portfolioResult.portfolio
+    scenario.currentRecoveryLedger = ledgerResult.ledger
+    return {
+      ok: true,
+      data: {
+        applied: portfolioResult.applied,
+        duplicate: portfolioResult.duplicate,
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [error],
+    }
+  }
+}
+
+async function completeCycleRecovery({ scenario, marketId, keepQuantity, minProfit }) {
+  scenario.completionCalls.push(marketId)
+  const position = scenario.currentPortfolio.getPosition({
+    marketId,
+  })
+  const result = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    netSellProceeds: scenario.currentRecoveryLedger.netSellProceeds,
+    activeQuantity: position.baseQuantity.amount,
+    keepQuantity,
+    minProfit,
+  })
+  scenario.completionSnapshot = {
+    spent: position.spent.amount,
+    netSellProceeds: scenario.currentRecoveryLedger.netSellProceeds,
+    activeQuantity: position.baseQuantity.amount,
+    realizedNetProfit: result.realizedNetProfit,
+  }
+  if (result.eligible) {
+    if (compareDecimal({
+      left: result.freeQuantity,
+      right: "0",
+    }) > 0) {
+      scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({
+        marketId,
+        quantity: result.freeQuantity,
       })
-      completionSnapshot = {
-        spent: currentPortfolio.getPosition({ marketId }).spent.amount,
-        netSellProceeds: currentRecoveryLedger.netSellProceeds,
-        activeQuantity: position.baseQuantity.amount,
-        realizedNetProfit: result.realizedNetProfit,
-      }
-      if (result.eligible) {
-        if (compareDecimal({
-          left: result.freeQuantity,
-          right: "0"
-        }) > 0) {
-          currentPortfolio = currentPortfolio.allocateFreeQuantity({
-            marketId,
-            quantity: result.freeQuantity,
-          })
-          allocationCount += 1
-        }
-        currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle({
-          minProfit,
-          spent: position.spent
-        })
-        resetCount += 1
+      scenario.allocationCount += 1
+    }
+    scenario.currentPortfolio = scenario.currentPortfolio.resetRecoveryBasis({
+      marketId,
+    })
+    scenario.currentRecoveryLedger = scenario.currentRecoveryLedger.resetCycle({
+      minProfit,
+      spent: position.spent,
+    })
+    scenario.resetCount += 1
+  }
+  return {
+    ok: true,
+    data: result,
+  }
+}
+
+function observeBuyAfterSellAcknowledgement({ scenario, order }) {
+  if (order.side !== "BUY" || !scenario.harness.engine) {
+    return
+  }
+  const previousSell = scenario.harness.engine.getOrders()
+    .filter((item) => item.side === "SELL")
+    .at(-1)
+  if (!previousSell) {
+    return
+  }
+  assert.equal(previousSell.status, "OPEN")
+  scenario.buyAfterSellAcknowledgements.push(previousSell.clientOrderId)
+}
+
+function createCompleteCycleEventPublisher({ scenario, keepQuantity }) {
+  return {
+    publish: (event) => {
+      scenario.events.push(event)
+      if (event.name === "recovery.cycle_completed") {
+        assert.equal(scenario.completionCalls.length, 1)
+        assert.equal(scenario.allocationCount, keepQuantity === "0" ? 0 : 1)
+        assert.equal(scenario.resetCount, 1)
       }
       return {
         ok: true,
-        data: result
       }
     },
-    onPlaceOrder: ({ order }) => {
-      if (order.side !== "BUY" || !harness.engine) {return}
-      const previousSell = harness.engine.getOrders().filter((item) => item.side === "SELL").at(-1)
-      if (previousSell) {
-        assert.equal(previousSell.status, "OPEN")
-        buyAfterSellAcknowledgements.push(previousSell.clientOrderId)
-      }
-    },
-    eventPublisher: {
-      publish: (event) => {
-        events.push(event)
-        if (event.name === "recovery.cycle_completed") {
-          assert.equal(completionCalls.length, 1)
-          assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
-          assert.equal(resetCount, 1)
-        }
-        return { ok: true }
-      },
-      flush: async () => ({
-        ok: true,
-        durable: true
-      }),
-    },
-  })
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+  }
+}
 
-  // The cancellation response reports a 0.1 partial SELL fill. Supply its
-  // actual base-asset commission through canonical REST fill reconciliation.
-  const originalGetFills = harness.broker.getFills.bind(harness.broker)
-  harness.broker.getFills = async ({ orderId }) => {
-    const result = await originalGetFills({ orderId })
-    if (!result.ok || !Array.isArray(result.data) || result.data.length === 0) {return result}
-    const canceledSell = harness.engine.getOrders().find((order) => order.brokerOrderId === orderId)
+async function createCompleteCycleHarness({ scenario, keepQuantity }) {
+  const harness = await createHarness({
+    appConfig: createZeroFeeCycleConfig({
+      keepQuantity,
+    }),
+    baseFreeBalance: "2",
+    quoteFreeBalance: "1000",
+    cancelWithFill: true,
+    getPortfolio: () => scenario.currentPortfolio,
+    getRecoveryLedger: () => scenario.currentRecoveryLedger,
+    updateTradingAccounting: ({ fill }) => updateCompleteCycleAccounting({
+      scenario,
+      fill,
+    }),
+    completeRecoveryCycle: (options) => completeCycleRecovery({
+      scenario,
+      ...options,
+    }),
+    onPlaceOrder: ({ order }) => observeBuyAfterSellAcknowledgement({
+      scenario,
+      order,
+    }),
+    eventPublisher: createCompleteCycleEventPublisher({
+      scenario,
+      keepQuantity,
+    }),
+  })
+  scenario.harness = harness
+  return harness
+}
+
+async function supplyRecoverySellCommissionFacts({ scenario }) {
+  const originalGetFills = scenario.harness.broker.getFills.bind(scenario.harness.broker)
+  scenario.harness.broker.getFills = async ({ orderId }) => {
+    const result = await originalGetFills({
+      orderId,
+    })
+    if (!result.ok || !Array.isArray(result.data) || result.data.length === 0) {
+      return result
+    }
+    const canceledSell = scenario.harness.engine.getOrders().find((order) =>
+      order.brokerOrderId === orderId)
     assert.ok(canceledSell)
     return {
       ok: true,
-      data: result.data.map((fill) => makeCommissionedFill({
+      data: result.data.map((fill) => makeCommissionedCycleFill({
         order: canceledSell,
         tradeId: fill.tradeId,
         quantity: fill.quantity.amount,
@@ -3107,27 +3156,28 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
       })),
     }
   }
+}
 
-  const started = await harness.engine.processMarketPrice({
+async function runFirstCycleBuy({ scenario }) {
+  const started = await scenario.harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
-  const firstBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const firstBuy = scenario.harness.engine.getOrders().find((order) => order.side === "BUY")
   assert.ok(firstBuy)
-
-  const firstBuyPartialFill = makeCommissionedFill({
+  const partialFill = makeCommissionedCycleFill({
     order: firstBuy,
     tradeId: "cycle-buy-1-partial",
     quantity: "0.4",
     commissionAsset: "BASE",
     executedAt: 10,
   })
-  const firstBuyPartial = await harness.engine.processUserDataEvent({
+  const partial = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
@@ -3135,43 +3185,47 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         executedQuantity: "0.4",
         updatedAt: 2,
       }),
-      fill: firstBuyPartialFill,
+      fill: partialFill,
     },
   })
-  assert.equal(firstBuyPartial.ok, true, firstBuyPartial.errors?.[0]?.message)
-  assert.equal(firstBuyPartial.data.waitingForFullFill, true)
-
-  const firstBuyFinalFill = makeCommissionedFill({
+  assert.equal(partial.ok, true, partial.errors?.[0]?.message)
+  assert.equal(partial.data.waitingForFullFill, true)
+  const finalFill = makeCommissionedCycleFill({
     order: firstBuy,
     tradeId: "cycle-buy-1-final",
     quantity: "0.6",
     commissionAsset: "QUOTE",
     executedAt: 11,
   })
-  const firstBuyCompleted = await harness.engine.processUserDataEvent({
+  const completed = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: firstBuy }),
-      fill: firstBuyFinalFill,
+      executedOrder: makeFilledOrder({
+        order: firstBuy,
+      }),
+      fill: finalFill,
     },
   })
-  assert.equal(firstBuyCompleted.ok, true, firstBuyCompleted.errors?.[0]?.message)
-  assert.equal(firstBuyCompleted.data.reevaluate, true)
-  await harness.engine.evaluateLatest({ symbol: "DOGEUSDT" })
+  assert.equal(completed.ok, true, completed.errors?.[0]?.message)
+  assert.equal(completed.data.reevaluate, true)
+  await scenario.harness.engine.evaluateLatest({
+    symbol: "DOGEUSDT",
+  })
+  return {
+    firstRecoverySell: scenario.harness.engine.getOrders().filter((order) => order.side === "SELL").at(-1),
+    secondBuy: scenario.harness.engine.getOrders().filter((order) => order.side === "BUY").at(-1),
+  }
+}
 
-  const firstRecoverySell = harness.engine.getOrders().filter((order) => order.side === "SELL").at(-1)
-  const secondBuy = harness.engine.getOrders().filter((order) => order.side === "BUY").at(-1)
-  assert.ok(firstRecoverySell)
-  assert.ok(secondBuy)
-
-  const secondBuyPartialFill = makeCommissionedFill({
+async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySell }) {
+  const fill = makeCommissionedCycleFill({
     order: secondBuy,
     tradeId: "cycle-buy-2-partial",
     quantity: "0.25",
     commissionAsset: "QUOTE",
     executedAt: 13,
   })
-  const secondBuyPartial = await harness.engine.processUserDataEvent({
+  const result = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
@@ -3179,67 +3233,86 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         executedQuantity: "0.25",
         updatedAt: 2,
       }),
-      fill: secondBuyPartialFill,
+      fill,
     },
   })
-  assert.equal(secondBuyPartial.ok, true, secondBuyPartial.errors?.[0]?.message)
-  assert.equal(secondBuyPartial.data.waitingForFullFill, true)
-  assert.equal(secondBuyPartial.data.recoverySellReplaced, true)
-  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === secondBuy.clientOrderId).status, "PARTIALLY_FILLED")
-  assert.deepEqual(harness.cancellationIds, [firstRecoverySell.brokerOrderId])
-  const partialBuyReplacementSell = harness.engine.getOrders().filter((order) => order.side === "SELL").at(-1)
-  assert.ok(partialBuyReplacementSell)
-  assert.notEqual(partialBuyReplacementSell.clientOrderId, firstRecoverySell.clientOrderId)
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.waitingForFullFill, true)
+  assert.equal(result.data.recoverySellReplaced, true)
   assert.equal(
-    harness.engine.getOrders().find((order) => order.clientOrderId === firstRecoverySell.clientOrderId).status,
+    scenario.harness.engine.getOrders().find((order) => order.clientOrderId === secondBuy.clientOrderId).status,
+    "PARTIALLY_FILLED",
+  )
+  assert.deepEqual(scenario.harness.cancellationIds, [firstRecoverySell.brokerOrderId])
+  const replacementSell = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL").at(-1)
+  assert.ok(replacementSell)
+  assert.notEqual(replacementSell.clientOrderId, firstRecoverySell.clientOrderId)
+  assert.equal(
+    scenario.harness.engine.getOrders().find((order) => order.clientOrderId === firstRecoverySell.clientOrderId).status,
     "CANCELED",
   )
+  return replacementSell
+}
 
-  const secondBuyFinalFill = makeCommissionedFill({
+async function applySecondBuyFinalFill({ scenario, secondBuy, firstRecoverySell, replacementSell }) {
+  const fill = makeCommissionedCycleFill({
     order: secondBuy,
     tradeId: "cycle-buy-2-final",
     quantity: "0.75",
     commissionAsset: "BASE",
     executedAt: 14,
   })
-  const secondBuyCompleted = await harness.engine.processUserDataEvent({
+  const result = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: secondBuy }),
-      fill: secondBuyFinalFill,
+      executedOrder: makeFilledOrder({
+        order: secondBuy,
+      }),
+      fill,
     },
   })
-  assert.equal(secondBuyCompleted.ok, true, secondBuyCompleted.errors?.[0]?.message)
-  assert.equal(secondBuyCompleted.data.reevaluate, true)
-  assert.deepEqual(harness.cancellationIds, [
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.reevaluate, true)
+  assert.deepEqual(scenario.harness.cancellationIds, [
     firstRecoverySell.brokerOrderId,
-    partialBuyReplacementSell.brokerOrderId,
+    replacementSell.brokerOrderId,
   ])
   assert.equal(
-    harness.engine.getOrders().find((order) => order.clientOrderId === partialBuyReplacementSell.clientOrderId).status,
+    scenario.harness.engine.getOrders().find((order) => order.clientOrderId === replacementSell.clientOrderId).status,
     "CANCELED",
   )
-
-  await harness.engine.evaluateLatest({ symbol: "DOGEUSDT" })
-  const recoverySell = harness.engine.getOrders().filter((order) => order.side === "SELL").at(-1)
-  const nextStandingBuy = harness.engine.getOrders().filter((order) => order.side === "BUY").at(-1)
+  await scenario.harness.engine.evaluateLatest({
+    symbol: "DOGEUSDT",
+  })
+  const recoverySell = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL").at(-1)
+  const nextStandingBuy = scenario.harness.engine.getOrders().filter((order) => order.side === "BUY").at(-1)
   assert.ok(recoverySell)
   assert.ok(nextStandingBuy)
   assert.notEqual(recoverySell.clientOrderId, firstRecoverySell.clientOrderId)
-  assert.deepEqual(harness.orders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "SELL", "BUY"])
-  assert.deepEqual(buyAfterSellAcknowledgements, [
+  assert.deepEqual(scenario.harness.orders.map((order) => order.side), [
+    "BUY",
+    "SELL",
+    "BUY",
+    "SELL",
+    "SELL",
+    "BUY",
+  ])
+  assert.deepEqual(scenario.buyAfterSellAcknowledgements, [
     firstRecoverySell.clientOrderId,
     recoverySell.clientOrderId,
   ])
+  return recoverySell
+}
 
-  const recoverySellPartialFill = makeCommissionedFill({
+async function applyRecoverySellPartialFill({ scenario, recoverySell }) {
+  const fill = makeCommissionedCycleFill({
     order: recoverySell,
     tradeId: "cycle-recovery-sell-partial",
     quantity: "0.5",
     commissionAsset: "QUOTE",
     executedAt: 15,
   })
-  const recoverySellPartial = await harness.engine.processUserDataEvent({
+  const result = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
@@ -3247,99 +3320,178 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         executedQuantity: "0.5",
         updatedAt: 2,
       }),
-      fill: recoverySellPartialFill,
+      fill,
     },
   })
-  assert.equal(recoverySellPartial.ok, true, recoverySellPartial.errors?.[0]?.message)
-  assert.equal(recoverySellPartial.data.waitingForFullFill, true)
-  assert.equal(completionCalls.length, 0)
-  assert.equal(allocationCount, 0)
-  assert.equal(resetCount, 0)
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.waitingForFullFill, true)
+  assert.equal(scenario.completionCalls.length, 0)
+  assert.equal(scenario.allocationCount, 0)
+  assert.equal(scenario.resetCount, 0)
+}
 
+async function applyRecoverySellFinalFill({ scenario, recoverySell }) {
   const finalSellQuantity = subtractDecimal({
     left: recoverySell.originalQuantity.amount,
     right: "0.5",
   })
-  const recoverySellFinalFill = makeCommissionedFill({
+  const fill = makeCommissionedCycleFill({
     order: recoverySell,
     tradeId: "cycle-recovery-sell-final",
     quantity: finalSellQuantity,
     commissionAsset: "QUOTE",
     executedAt: 16,
   })
-  const recoverySellCompleted = await harness.engine.processUserDataEvent({
+  const result = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: recoverySell }),
-      fill: recoverySellFinalFill,
+      executedOrder: makeFilledOrder({
+        order: recoverySell,
+      }),
+      fill,
     },
   })
-  assert.equal(recoverySellCompleted.ok, true, recoverySellCompleted.errors?.[0]?.message)
-  assert.equal(completionCalls.length, 1)
-  assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
-  assert.equal(resetCount, 1)
-  assert.ok(completionSnapshot)
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(scenario.completionCalls.length, 1)
+  assert.equal(scenario.allocationCount, scenario.keepQuantity === "0" ? 0 : 1)
+  assert.equal(scenario.resetCount, 1)
+  assert.ok(scenario.completionSnapshot)
   assert.ok(compareDecimal({
-    left: completionSnapshot.spent,
-    right: "0"
+    left: scenario.completionSnapshot.spent,
+    right: "0",
   }) > 0)
   assert.ok(compareDecimal({
-    left: completionSnapshot.netSellProceeds,
-    right: "0"
+    left: scenario.completionSnapshot.netSellProceeds,
+    right: "0",
   }) > 0)
   assert.ok(compareDecimal({
-    left: completionSnapshot.realizedNetProfit,
-    right: "0.01"
+    left: scenario.completionSnapshot.realizedNetProfit,
+    right: "0.01",
   }) >= 0)
+  return fill
+}
 
-  const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
-  assert.equal(completedPosition.freeBaseQuantity.amount, keepQuantity)
-  assert.equal(completedPosition.baseQuantity.amount, "0")
-  assert.equal(currentRecoveryLedger.buyCost, "0")
-  assert.equal(currentRecoveryLedger.netSellProceeds, "0")
-  assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
-  assert.equal(currentPortfolio.appliedFillIds.length, 8)
-  assert.equal(currentRecoveryLedger.appliedFillIds.length, 8)
-  assert.equal(events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
-
-  // Only the exact configured reserve remains, in the separate free bucket.
-  const afterCompletionEvaluation = await harness.engine.evaluateLatest({ symbol: "DOGEUSDT" })
-  assert.equal(afterCompletionEvaluation.ok, true, afterCompletionEvaluation.errors?.[0]?.message)
-  assert.equal(harness.orders.length, 6)
-  assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 3)
-
-  const beforeReplay = {
-    activeQuantity: completedPosition.baseQuantity.amount,
-    freeQuantity: completedPosition.freeBaseQuantity.amount,
-    buyCost: currentRecoveryLedger.buyCost,
-    netSellProceeds: currentRecoveryLedger.netSellProceeds,
-    orderCount: harness.orders.length,
+async function assertCompletedCycleAccounting({ scenario, keepQuantity }) {
+  const position = scenario.currentPortfolio.getPosition({
+    marketId: market.id,
+  })
+  assert.equal(position.freeBaseQuantity.amount, keepQuantity)
+  assert.equal(position.baseQuantity.amount, "0")
+  assert.equal(scenario.currentRecoveryLedger.buyCost, "0")
+  assert.equal(scenario.currentRecoveryLedger.netSellProceeds, "0")
+  assert.equal(scenario.currentRecoveryLedger.outstandingRecoveryAmount, "0")
+  assert.equal(scenario.currentPortfolio.appliedFillIds.length, 8)
+  assert.equal(scenario.currentRecoveryLedger.appliedFillIds.length, 8)
+  assert.equal(scenario.events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
+  const evaluation = await scenario.harness.engine.evaluateLatest({
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(evaluation.ok, true, evaluation.errors?.[0]?.message)
+  assert.equal(scenario.harness.orders.length, 6)
+  assert.equal(scenario.harness.engine.getOrders().filter((order) => order.side === "SELL").length, 3)
+  return {
+    beforeReplay: {
+      activeQuantity: position.baseQuantity.amount,
+      freeQuantity: position.freeBaseQuantity.amount,
+      buyCost: scenario.currentRecoveryLedger.buyCost,
+      netSellProceeds: scenario.currentRecoveryLedger.netSellProceeds,
+      orderCount: scenario.harness.orders.length,
+    },
   }
-  const replayedTerminalFill = await harness.engine.processUserDataEvent({
+}
+
+async function replayCompletedSellFill({ scenario, recoverySell, finalFill, beforeReplay, keepQuantity }) {
+  const replayed = await scenario.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: recoverySell }),
-      fill: recoverySellFinalFill,
+      executedOrder: makeFilledOrder({
+        order: recoverySell,
+      }),
+      fill: finalFill,
     },
   })
-  assert.equal(replayedTerminalFill.ok, true)
-  assert.equal(replayedTerminalFill.data.ignored, true)
-  assert.equal(completionCalls.length, 1)
-  assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
-  assert.equal(resetCount, 1)
-  assert.equal(events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
-  assert.equal(harness.orders.length, beforeReplay.orderCount)
-  const afterReplayPosition = currentPortfolio.getPosition({ marketId: market.id })
-  assert.equal(afterReplayPosition.baseQuantity.amount, beforeReplay.activeQuantity)
-  assert.equal(afterReplayPosition.freeBaseQuantity.amount, beforeReplay.freeQuantity)
-  assert.equal(currentRecoveryLedger.buyCost, beforeReplay.buyCost)
-  assert.equal(currentRecoveryLedger.netSellProceeds, beforeReplay.netSellProceeds)
-  assert.deepEqual(harness.cancellationIds, [
-    firstRecoverySell.brokerOrderId,
-    partialBuyReplacementSell.brokerOrderId,
-  ])
-  assert.deepEqual(harness.pauses, [])
+  assert.equal(replayed.ok, true)
+  assert.equal(replayed.data.ignored, true)
+  assert.equal(scenario.completionCalls.length, 1)
+  assert.equal(scenario.allocationCount, keepQuantity === "0" ? 0 : 1)
+  assert.equal(scenario.resetCount, 1)
+  assert.equal(scenario.events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
+  assert.equal(scenario.harness.orders.length, beforeReplay.orderCount)
+  const afterPosition = scenario.currentPortfolio.getPosition({
+    marketId: market.id,
+  })
+  assert.equal(afterPosition.baseQuantity.amount, beforeReplay.activeQuantity)
+  assert.equal(afterPosition.freeBaseQuantity.amount, beforeReplay.freeQuantity)
+  assert.equal(scenario.currentRecoveryLedger.buyCost, beforeReplay.buyCost)
+  assert.equal(scenario.currentRecoveryLedger.netSellProceeds, beforeReplay.netSellProceeds)
+  assert.deepEqual(scenario.harness.cancellationIds, scenario.expectedCancellationIds)
+  assert.deepEqual(scenario.harness.pauses, [])
 }
+
+async function runCompleteConservativeCycle({ keepQuantity }) {
+  const scenario = createCompleteCycleScenario()
+  scenario.keepQuantity = keepQuantity
+  scenario.expectedCancellationIds = []
+  scenario.harness = await createCompleteCycleHarness({
+    scenario,
+    keepQuantity,
+  })
+  await supplyRecoverySellCommissionFacts({
+    scenario,
+  })
+  const {
+    firstRecoverySell,
+    secondBuy,
+  } = await runFirstCycleBuy({
+    scenario,
+  })
+  const replacementSell = await applySecondBuyPartialFill({
+    scenario,
+    secondBuy,
+    firstRecoverySell,
+  })
+  const recoverySell = await applySecondBuyFinalFill({
+    scenario,
+    secondBuy,
+    firstRecoverySell,
+    replacementSell,
+  })
+  await applyRecoverySellPartialFill({
+    scenario,
+    recoverySell,
+  })
+  const finalFill = await applyRecoverySellFinalFill({
+    scenario,
+    recoverySell,
+  })
+  const { beforeReplay } = await assertCompletedCycleAccounting({
+    scenario,
+    keepQuantity,
+  })
+  scenario.expectedCancellationIds = [
+    firstRecoverySell.brokerOrderId,
+    replacementSell.brokerOrderId,
+  ]
+  await replayCompletedSellFill({
+    scenario,
+    recoverySell,
+    finalFill,
+    beforeReplay,
+    keepQuantity,
+  })
+}
+
+test("completes the full Conservative lifecycle with the supported zero keepQuantity", async () => {
+  await runCompleteConservativeCycle({
+    keepQuantity: "0",
+  })
+})
+
+test("completes the full Conservative lifecycle with the configured retained quantity", async () => {
+  await runCompleteConservativeCycle({
+    keepQuantity: "0.1",
+  })
+})
 
 test("completes the full Conservative lifecycle with the supported zero keepQuantity", async () => {
   await runCompleteConservativeCycle({ keepQuantity: "0" })
