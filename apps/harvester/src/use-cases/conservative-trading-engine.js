@@ -1244,6 +1244,170 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
   })
 }
 
+
+function validateOwnedOrderSnapshotParity({ context, snapshots }) {
+  const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
+  for (const currentOrder of context.state.registry.orders) {
+    if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
+      throw recoveryFailureError(
+        new Error("Order registry changed while REST reconciliation was in progress"),
+        "ORDER_TRANSITION",
+        "REST_STREAM_REGISTRY_RACE",
+        true,
+      )
+    }
+  }
+  for (const snapshot of snapshots) {
+    const {
+      ownedOrder,
+      historyOrder,
+      fillIds,
+    } = snapshot
+    context.affectedSymbol = ownedOrder.market.symbol
+    const currentOrder = context.state.registry.orders.find(
+      (order) => order.brokerOrderId === ownedOrder.brokerOrderId,
+    )
+    if (!currentOrder) {
+      throw recoveryFailureError(
+        new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId),
+        "OWNERSHIP_INTEGRITY",
+        "REST_STREAM_ORDER_OWNERSHIP",
+        false,
+      )
+    }
+    if (compareDecimal({
+      left: historyOrder.executedQuantity.amount,
+      right: currentOrder.executedQuantity.amount,
+    }) < 0) {
+      throw recoveryFailureError(
+        new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId),
+        "REST_RECONCILIATION",
+        "REST_STREAM_EXECUTION_LAG",
+        true,
+      )
+    }
+    const processedFillIds = context.state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
+    for (const fillId of processedFillIds) {
+      if (!fillIds.has(fillId)) {
+        throw recoveryFailureError(
+          new Error("REST fill history is missing previously processed execution ID " + fillId),
+          "ACCOUNTING_INTEGRITY",
+          "REST_STREAM_JOURNAL_FILL_PARITY",
+          false,
+        )
+      }
+    }
+  }
+}
+
+async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recoveryMode }) {
+  for (const snapshot of snapshots) {
+    const {
+      ownedOrder,
+      historyOrder,
+      fills,
+    } = snapshot
+    context.affectedSymbol = ownedOrder.market.symbol
+    const currentOrder = context.state.registry.getOrder({
+      clientOrderId: ownedOrder.clientOrderId,
+    })
+    if (!currentOrder) {
+      throw recoveryFailureError(
+        new Error("Owned order disappeared before REST fill accounting: " + ownedOrder.brokerOrderId),
+        "OWNERSHIP_INTEGRITY",
+        "REST_FILL_ORDER_OWNERSHIP",
+        false,
+      )
+    }
+    for (const fill of fills) {
+      const processed = await context.processExecutionFillTransition({
+        order: currentOrder,
+        fill,
+      })
+      if (!processed.ok) {
+        const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
+        await context.pause({
+          symbol: ownedOrder.market.symbol,
+          reason: "REST_FILL_RECONCILIATION_FAILED",
+          error,
+        })
+        return withFailure(
+          toResult({
+            errors: processed.errors ?? [error],
+          }),
+          processed.failure ?? {
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "REST_FILL_ACCOUNTING",
+            retryable: false,
+          },
+        )
+      }
+    }
+    const processedOrder = await context.processUserDataEventTransition({
+      event: {
+        executedOrder: historyOrder,
+      },
+      recoveryMode,
+      terminalFillsReconciled: true,
+    })
+    if (!processedOrder.ok) {
+      const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
+      await context.pause({
+        symbol: ownedOrder.market.symbol,
+        reason: "REST_ORDER_RECONCILIATION_FAILED",
+        error,
+      })
+      return withFailure(
+        toResult({
+          errors: processedOrder.errors ?? [error],
+        }),
+        processedOrder.failure ?? {
+          category: "ACCOUNTING_INTEGRITY",
+          stage: "REST_ORDER_STATE_APPLICATION",
+          retryable: false,
+        },
+      )
+    }
+  }
+  return undefined
+}
+
+async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode }) {
+  context.affectedSymbol = symbols[0]
+  try {
+    validateOwnedOrderSnapshotParity({
+      context,
+      snapshots,
+    })
+    const result = await applyOwnedOrderSnapshotTransitions({
+      context,
+      snapshots,
+      recoveryMode,
+    })
+    if (result) {
+      return result
+    }
+    return toResult({
+      data: {
+        reconciled: snapshots.length,
+        symbols,
+      },
+    })
+  } catch (error) {
+    await context.pause({
+      symbol: context.affectedSymbol,
+      reason: "REST_STREAM_RECONCILIATION_FAILED",
+      error,
+    })
+    return failureResult({
+      error,
+      category: error?.recoveryFailure?.category ?? "ACCOUNTING_INTEGRITY",
+      stage: error?.recoveryFailure?.stage ?? "UNCLASSIFIED_REST_STREAM_PARITY",
+      retryable: error?.recoveryFailure?.retryable ?? false,
+    })
+  }
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -3012,126 +3176,16 @@ export function makeConservativeTradingEngine({
     journalFillsById: state.journalFillsById,
   })
 
-  const applyOwnedOrderSnapshotsTransition = async ({
-    snapshots,
-    symbols,
-    recoveryMode = false
-  } = {}) => {
-    let [affectedSymbol] = symbols
-    try {
-      // Validate the collected REST snapshot against stream facts processed
-      // while REST was being read. Do this for every order before applying
-      // any recovered execution.
-      const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
-      for (const currentOrder of state.registry.orders) {
-        if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
-          throw recoveryFailureError(new Error("Order registry changed while REST reconciliation was in progress"), "ORDER_TRANSITION", "REST_STREAM_REGISTRY_RACE", true)
-        }
-      }
-      for (const {
-        ownedOrder,
-        historyOrder,
-        fillIds
-      } of snapshots) {
-        affectedSymbol = ownedOrder.market.symbol
-        const currentOrder = state.registry.orders.find(
-          (order) => order.brokerOrderId === ownedOrder.brokerOrderId,
-        )
-        if (!currentOrder) {
-          throw recoveryFailureError(new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId), "OWNERSHIP_INTEGRITY", "REST_STREAM_ORDER_OWNERSHIP", false)
-        }
-        if (compareDecimal({
-          left: historyOrder.executedQuantity.amount,
-          right: currentOrder.executedQuantity.amount,
-        }) < 0) {
-          throw recoveryFailureError(new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId), "REST_RECONCILIATION", "REST_STREAM_EXECUTION_LAG", true)
-        }
-        const previouslyProcessedFillIds = state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
-        for (const fillId of previouslyProcessedFillIds) {
-          if (!fillIds.has(fillId)) {
-            throw recoveryFailureError(new Error("REST fill history is missing previously processed execution ID " + fillId), "ACCOUNTING_INTEGRITY", "REST_STREAM_JOURNAL_FILL_PARITY", false)
-          }
-        }
-      }
-
-      for (const {
-        ownedOrder,
-        historyOrder,
-        fills
-      } of snapshots) {
-        affectedSymbol = ownedOrder.market.symbol
-        const currentOrder = state.registry.getOrder({ clientOrderId: ownedOrder.clientOrderId })
-        if (!currentOrder) {
-          throw recoveryFailureError(new Error("Owned order disappeared before REST fill accounting: " + ownedOrder.brokerOrderId), "OWNERSHIP_INTEGRITY", "REST_FILL_ORDER_OWNERSHIP", false)
-        }
-
-        // Account every exchange fill idempotently without replaying historical
-        // cumulative order quantities into a registry that may already include
-        // later stream executions. Apply the authoritative order state once,
-        // after the complete fill history has been accounted.
-        for (const fill of fills) {
-          const processed = await processExecutionFillTransition({
-            order: currentOrder,
-            fill
-          })
-          if (!processed.ok) {
-            const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
-            await pause({
-              symbol: ownedOrder.market.symbol,
-              reason: "REST_FILL_RECONCILIATION_FAILED",
-              error
-            })
-            return withFailure(
-              toResult({ errors: processed.errors ?? [error] }),
-              processed.failure ?? {
-                category: "ACCOUNTING_INTEGRITY",
-                stage: "REST_FILL_ACCOUNTING",
-                retryable: false,
-              },
-            )
-          }
-        }
-
-        const processedOrder = await processUserDataEventTransition({
-          event: { executedOrder: historyOrder },
-          recoveryMode,
-          terminalFillsReconciled: true,
-        })
-        if (!processedOrder.ok) {
-          const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
-          await pause({
-            symbol: ownedOrder.market.symbol,
-            reason: "REST_ORDER_RECONCILIATION_FAILED",
-            error
-          })
-          return withFailure(
-            toResult({ errors: processedOrder.errors ?? [error] }),
-            processedOrder.failure ?? {
-              category: "ACCOUNTING_INTEGRITY",
-              stage: "REST_ORDER_STATE_APPLICATION",
-              retryable: false,
-            },
-          )
-        }
-      }
-      return toResult({ data: {
-        reconciled: snapshots.length,
-        symbols
-      } })
-    } catch (error) {
-      await pause({
-        symbol: affectedSymbol,
-        reason: "REST_STREAM_RECONCILIATION_FAILED",
-        error
-      })
-      return failureResult({
-        error,
-        category: error?.recoveryFailure?.category ?? "ACCOUNTING_INTEGRITY",
-        stage: error?.recoveryFailure?.stage ?? "UNCLASSIFIED_REST_STREAM_PARITY",
-        retryable: error?.recoveryFailure?.retryable ?? false,
-      })
-    }
-  }
+  const applyOwnedOrderSnapshotsTransition = (options = {}) => applyOwnedOrderSnapshots({
+    context: {
+      state,
+      processExecutionFillTransition,
+      processUserDataEventTransition,
+      pause,
+      affectedSymbol: undefined,
+    },
+    ...options,
+  })
 
   const cancelOwnedBuyOrders = ({
     reason = "PROCESS_SHUTDOWN",
