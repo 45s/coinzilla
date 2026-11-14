@@ -16,8 +16,8 @@ Options:
   --help            Show this help
 
 The command never connects to Binance, starts Harvester, places/cancels orders,
-or initializes a durable-fact ledger. --confirm requires an existing ledger at
-DURABLE_FACTS_DIRECTORY and a runtimeSessionId in the evidence bundle.
+or initializes the Operational State Store. --confirm requires an existing store at
+OPERATIONAL_STATE_DIRECTORY (or the legacy DURABLE_FACTS_DIRECTORY override) and a runtimeSessionId in the evidence bundle.
 `
 
 export function parseRecoveryMarketArguments(args = []) {
