@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks"
 import { compareDecimal } from "@coinzilla/utils"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../../domain/account/assert-account-snapshot-covers-markets.js"
@@ -60,7 +61,8 @@ function logSystem(logger, data) {
  */
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, operationalStateStore,
+  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
+  monotonicNow = () => performance.now(), runtimeSessionId, operationalStateStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
@@ -367,11 +369,38 @@ export function createAccountSnapshotManager({
       )
     }
     if (typeof eventPublisher?.flush === "function") {
+      const barrierStartedAt = monotonicNow()
+      const isClosingBarrier = phase === "CLOSING"
+      const logClosingBarrier = (phaseStatus, failureReason) => {
+        if (!isClosingBarrier) return
+        logSystem(logger, {
+          message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
+          shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+          phaseStatus,
+          phase: "CLOSING",
+          shutdownCorrelationId: runtimeSessionId ?? null,
+          durationMs: Math.max(0, monotonicNow() - barrierStartedAt),
+          ...(failureReason ? { failureReason } : {}),
+        })
+      }
+      if (isClosingBarrier) {
+        logSystem(logger, {
+          message: "Harvester shutdown phase started",
+          shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+          phaseStatus: "STARTED",
+          phase: "CLOSING",
+          shutdownCorrelationId: runtimeSessionId ?? null,
+        })
+      }
       let flushed
-      try { flushed = await eventPublisher.flush() } catch (error) {
+      try {
+        flushed = await eventPublisher.flush()
+      } catch (error) {
+        logClosingBarrier("FAILED", error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED")
         throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
       }
       if (flushed?.ok !== true || flushed?.durable !== true) {
+        logClosingBarrier("FAILED", flushed?.recoveryFailure?.stage ?? "JOURNAL_FLUSH_NOT_DURABLE")
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw createAuditFlushError({
           flushed,
@@ -379,7 +408,18 @@ export function createAccountSnapshotManager({
           stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
         })
       }
+      logClosingBarrier("COMPLETED")
     } else {
+      if (phase === "CLOSING") {
+        logSystem(logger, {
+          message: "Harvester shutdown phase failed",
+          shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+          phaseStatus: "FAILED",
+          phase: "CLOSING",
+          shutdownCorrelationId: runtimeSessionId ?? null,
+          failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
+        })
+      }
       throw withRecoveryFailure(
         new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
         "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY", false,
