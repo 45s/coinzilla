@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ESLint } from "eslint";
 
-import { selectChangedJavaScriptFiles } from "./check-eslint-changed.js";
+import {
+  countFindings,
+  findingKey,
+  parseChangedFileNames,
+  selectChangedJavaScriptFiles,
+} from "./check-eslint-changed.js";
 
 test("selectChangedJavaScriptFiles keeps JavaScript module extensions", () => {
   const changedFiles = selectChangedJavaScriptFiles([
@@ -161,8 +166,7 @@ test("ESLint requires braces around single-statement control-flow bodies", async
 });
 
 
-test("parseChangedFileNames preserves original paths for renamed files", async () => {
-  const { parseChangedFileNames } = await import("./check-eslint-changed.js");
+test("parseChangedFileNames preserves original paths for renamed files", () => {
   const changes = parseChangedFileNames([
     "M",
     "apps/harvester/src/changed.js",
@@ -192,8 +196,7 @@ test("parseChangedFileNames preserves original paths for renamed files", async (
   ]);
 });
 
-test("findingKey changes when the offending source line changes", async () => {
-  const { findingKey } = await import("./check-eslint-changed.js");
+test("findingKey changes when the offending source line changes", () => {
   const original = {
     ruleId: "prefer-template",
     messageId: "unexpectedStringConcatenation",
@@ -208,8 +211,7 @@ test("findingKey changes when the offending source line changes", async () => {
   );
 });
 
-test("countFindings retains duplicate violations", async () => {
-  const { countFindings } = await import("./check-eslint-changed.js");
+test("countFindings retains duplicate violations", () => {
   const finding = {
     ruleId: "max-params",
     messageId: "exceed",
