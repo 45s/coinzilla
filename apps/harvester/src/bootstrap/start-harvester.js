@@ -580,9 +580,9 @@ export async function startHarvester({
     runtimeSessionId,
   })
   let stopPromise
-  const stop = () => {
+  const stop = () => { // eslint-disable-line max-lines-per-function -- shutdown orchestration remains an explicit ordered state machine.
     if (stopPromise) {return stopPromise}
-    // eslint-disable-next-line complexity, max-lines-per-function -- process shutdown is an explicit ordered state machine with fail-closed boundaries.
+    // eslint-disable-next-line complexity -- process shutdown is an explicit ordered state machine with fail-closed boundaries.
     stopPromise = (async () => {
     const shutdownRequestedAt = performance.now()
     const shutdownCorrelationId = runtimeSessionId ?? null
