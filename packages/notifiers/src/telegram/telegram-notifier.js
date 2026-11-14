@@ -6,6 +6,13 @@ import { safeErrorMessage } from "./safe-error-message.js"
 
 const TELEGRAM_API_BASE_URL = "https://api.telegram.org"
 
+function normalizeRejectedError({ error, token }) {
+  if (error instanceof Error) {
+    return error
+  }
+  return new Error(safeErrorMessage({ error, token }))
+}
+
 function sanitizeCaughtError({ error, token }) {
   error.message = safeErrorMessage({ error, token })
   if (typeof token !== "string" || token.length < 6) {
@@ -43,26 +50,23 @@ function getHttpStatus(response) {
 
 async function readResponsePayload({ response, token, status }) {
   try {
-    return await response.json()
+    const payload = await Promise.resolve()
+      .then(() => response.json())
+      .catch((error) => {
+        throw normalizeRejectedError({ error, token })
+      })
+    return payload
   } catch (error) {
-    if (error instanceof Error) {
-      sanitizeCaughtError({ error, token })
-      if (!response.ok) {
-        throw new Error(
-          `Telegram API HTTP request failed with status ${status}`,
-          { cause: error },
-        )
-      }
+    sanitizeCaughtError({ error, token })
+    if (!response.ok) {
       throw new Error(
-        `Telegram API returned invalid JSON: ${error.message}`,
+        `Telegram API HTTP request failed with status ${status}`,
         { cause: error },
       )
     }
-
-    const message = safeErrorMessage({ error, token })
-    const detail = response.ok ? `: ${message}` : ""
     throw new Error(
-      `Telegram API HTTP request failed with status ${status}${detail}`,
+      `Telegram API returned invalid JSON: ${error.message}`,
+      { cause: error },
     )
   }
 }
@@ -137,22 +141,21 @@ export class TelegramNotifier {
     let response
 
     try {
-      response = await this.#fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ chat_id: this.#chatId, text: message }),
-        signal: AbortSignal.timeout(this.#timeoutMs),
-      })
+      response = await Promise.resolve()
+        .then(() => this.#fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ chat_id: this.#chatId, text: message }),
+          signal: AbortSignal.timeout(this.#timeoutMs),
+        }))
+        .catch((error) => {
+          throw normalizeRejectedError({ error, token: this.#token })
+        })
     } catch (error) {
-      if (error instanceof Error) {
-        sanitizeCaughtError({ error, token: this.#token })
-        throw new Error(
-          `Telegram Bot API request failed: ${error.message}`,
-          { cause: error },
-        )
-      }
+      sanitizeCaughtError({ error, token: this.#token })
       throw new Error(
-        `Telegram Bot API request failed: ${safeErrorMessage({ error, token: this.#token })}`,
+        `Telegram Bot API request failed: ${error.message}`,
+        { cause: error },
       )
     }
 
