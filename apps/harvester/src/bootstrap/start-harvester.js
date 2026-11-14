@@ -32,7 +32,7 @@ import { recordConfigurationBaseline } from "../use-cases/record-configuration-b
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"

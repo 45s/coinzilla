@@ -1,5 +1,5 @@
 import { toResult } from "@coinzilla/utils"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 
 /**

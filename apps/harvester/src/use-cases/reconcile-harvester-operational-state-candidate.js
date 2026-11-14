@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import { recordSafetyBlockerResolved } from "./record-safety-control-facts.js"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { reconcileRecoveredMarketState } from "./reconcile-recovered-market-state.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 
