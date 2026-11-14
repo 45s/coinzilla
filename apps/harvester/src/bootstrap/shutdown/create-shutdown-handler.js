@@ -419,11 +419,14 @@ export function createShutdownHandler({
         stage: "BROKER_DISCONNECT",
         message: "Broker disconnect failed",
       })
-      const disconnectErrors = Array.isArray(disconnectResult)
-        ? disconnectResult
-        : disconnectResult?.ok === false
-          ? disconnectResult.errors?.length > 0 ? disconnectResult.errors : [new Error("Broker disconnect failed")]
-          : []
+      let disconnectErrors = []
+      if (Array.isArray(disconnectResult)) {
+        disconnectErrors = disconnectResult
+      } else if (disconnectResult?.ok === false) {
+        disconnectErrors = disconnectResult.errors?.length > 0
+          ? disconnectResult.errors
+          : [new Error("Broker disconnect failed")]
+      }
       const shutdownAuditFailed = tradingEnabled && auditReasons.length > 0
       const auditError = shutdownAuditFailed
         ? new Error(`CLOSING account audit is incomplete: ${auditReasons.join(", ")}`)
