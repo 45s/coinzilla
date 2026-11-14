@@ -12,7 +12,9 @@ created: 2026-11-14
 
 **Authority:** Canonical RS contract only after the owner decisions below are resolved and this document is accepted. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and unresolved decisions. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-**Implementation status:** RS is not implemented, registered, configurable at runtime, or executable. This draft authorizes no trading or exchange operations.
+**Implementation status:** RS is not implemented, registered, configurable at runtime, or executable. The owner has approved the proposed sellQuantity plus legacyPosition.invested / legacyPosition.quantity input shape and RS-calculated average cost. This is a product-level input decision, not an executable runtime schema. Remaining domain decisions still block trading implementation. This draft authorizes no trading or exchange operations.
+
+The phased implementation plan is maintained in the [Recovery Seller Implementation Roadmap](./RECOVERY_SELLER_IMPLEMENTATION_ROADMAP.md).
 
 ## 1. Purpose and vocabulary
 
