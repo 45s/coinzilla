@@ -330,7 +330,7 @@ export function createAccountSnapshotManager({
     auditReasons = [],
     snapshot: suppliedSnapshot,
     allowedAssetCodes: suppliedAllowedAssetCodes,
-  } = {}) => {
+  } = {}) => { // eslint-disable-line complexity -- account snapshot publication preserves its ordered durability gates.
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot({
       capturePreflightBaseline: phase === "PREFLIGHT",
     })
@@ -371,7 +371,7 @@ export function createAccountSnapshotManager({
     if (typeof eventPublisher?.flush === "function") {
       const barrierStartedAt = monotonicNow()
       const isClosingBarrier = phase === "CLOSING"
-      const logClosingBarrier = (phaseStatus, failureReason) => {
+      const logClosingBarrier = (phaseStatus, failureReason) => { // eslint-disable-line max-params -- logger callback receives phase and optional reason.
         if (!isClosingBarrier) {return}
         logSystem(logger, {
           message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
@@ -494,7 +494,7 @@ export function createAccountSnapshotManager({
     }
     if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
       throw withRecoveryFailure(
-        new Error("PREFLIGHT commission asset balance identity contradicts the applied fill for " + assetCode),
+        new Error(`PREFLIGHT commission asset balance identity contradicts the applied fill for ${assetCode}`),
         "ACCOUNTING_INTEGRITY",
         "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
         false,
