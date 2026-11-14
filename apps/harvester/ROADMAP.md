@@ -31,7 +31,7 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ## Proposed strategy — Recovery Seller (RS)
 
-**Status: [~] INITIALIZATION DOCUMENTED; awaiting owner review.** The concept and proposed pair configuration are recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy). RS remains proposed and non-executable; the example config is documentation only and is not wired into runtime configuration or strategy registration.
+**Status: [~] PROPOSAL AND DRAFT DOMAIN CONTRACT DOCUMENTED; owner decisions block executable implementation.** The product proposal and canonical draft contract are recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy) and the [Recovery Seller Domain Specification](./docs/domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md). RS remains proposed and non-executable; no runtime configuration or strategy registration exists.
 
 - **Goal:** progressively reduce an existing spot position through repeated recovery cycles: acquire a new tranche, then sell that tranche together with a configured quantity of legacy inventory when the combined cycle satisfies the approved profitability rule.
 - **Per-pair configuration proposal:** mirror the CG pair configuration convention, using sellQuantity instead of CG's keepQuantity. It represents the legacy base-asset quantity included in each successful cycle's SELL, in addition to the newly acquired tranche. Examples: 400 DOGE + 1 DOGE = 401 DOGE; 10 ZRO + 0.01 ZRO = 10.01 ZRO; 2 LINK + 0.01 LINK = 2.01 LINK.
@@ -41,11 +41,11 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 - **Next phases after review:**
   1. Approve the meaning and semantics of sellQuantity, including final residual handling and legacy-inventory authorization.
   2. Define and approve the RS domain language, profitability basis, inventory attribution, cycle lifecycle and risk boundaries.
-  3. Write the canonical RS domain specification and explicit accounting/order invariants.
+  3. Review and resolve the owner decisions in the canonical RS domain specification before implementation.
   4. Implement pure strategy decisions test-first, with deterministic offline domain and application tests.
   5. Integrate RS independently without changing Coin Grabber; prove shared-position and order-ownership safety.
   6. Complete offline lifecycle/reconciliation coverage before any separately authorized TESTNET validation.
-- **Not decided:** exact profitability basis and formula; whether sellQuantity is a target or maximum per cycle; additional-BUY policy and exposure limits; legacy-inventory attribution; final residual handling; cycle termination; shared versus RS-specific pair settings; strategy coexistence.
+- **Implementation blockers:** the owner decisions in the [canonical RS domain specification](./docs/domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md), including sellQuantity target versus cap; additional-BUY policy and exposure limits; legacy-inventory authorization, accounting and cost basis; final residual handling; cycle lifecycle; shared versus RS-specific pair settings; strategy coexistence.
 - **Safety:** RS remains unavailable for trading until its specification, implementation, tests, runtime configuration and operator controls are reviewed and accepted. Existing strategy defaults and runtime behavior remain unchanged.
 
 ## P0 — Telegram Command Center (CC) — delivered
