@@ -19,33 +19,55 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
 
   const shutdownRecoveryError = ({ code, message }) => Object.assign(new Error(message), { code })
 
-  const getShutdownRecoveryInventory = ({ symbol } = {}) => { 
-    let metadata
+  const getShutdownRecoveryMetadata = ({ symbol } = {}) => {
     try {
-      metadata = getCurrentMarketMetadata({ symbol })
+      return getCurrentMarketMetadata({ symbol })
     } catch {
-      metadata = undefined
+      return undefined
     }
-    const portfolio = getPortfolio()
+  }
+
+  const getShutdownRecoveryOrders = ({ symbol, portfolio } = {}) => {
     const activeOrdersForSymbol = state.registry.orders.filter((order) =>
       order.market.symbol === symbol &&
       ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
-    const activeSellsForSymbol = activeOrdersForSymbol.filter((order) => order.side === "SELL")
-    const positionBySymbol = portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER, symbol })
-    if (!metadata?.market) {
-      return {
-        symbol,
-        portfolio,
-        metadata,
-        position: positionBySymbol,
-        activeSells: activeSellsForSymbol,
-        errorReason: positionBySymbol || activeSellsForSymbol.length > 0 || pairs[symbol]?.enabled === true
-          ? "MARKET_METADATA_UNAVAILABLE"
-          : null,
-        noRecoveryRequired: !positionBySymbol && activeSellsForSymbol.length === 0 && pairs[symbol]?.enabled !== true,
-      }
+    return {
+      activeSellsForSymbol: activeOrdersForSymbol.filter((order) => order.side === "SELL"),
+      positionBySymbol: portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER, symbol }),
     }
-    const position = portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: metadata.market.id }) ?? positionBySymbol
+  }
+
+  const inventoryWithoutMarketMetadata = ({
+    symbol,
+    portfolio,
+    metadata,
+    positionBySymbol,
+    activeSells,
+  } = {}) => {
+    const marketEnabled = pairs[symbol]?.enabled === true
+    return {
+      symbol,
+      portfolio,
+      metadata,
+      position: positionBySymbol,
+      activeSells,
+      errorReason: positionBySymbol || activeSells.length > 0 || marketEnabled
+        ? "MARKET_METADATA_UNAVAILABLE"
+        : null,
+      noRecoveryRequired: !positionBySymbol && activeSells.length === 0 && !marketEnabled,
+    }
+  }
+
+  const buildShutdownRecoveryInventory = ({
+    symbol,
+    portfolio,
+    metadata,
+    positionBySymbol,
+  } = {}) => {
+    const position = portfolio.getPosition({
+      strategyId: StrategyId.COIN_GRABBER,
+      marketId: metadata.market.id,
+    }) ?? positionBySymbol
     const recoveryLedger = getRecoveryLedger({ marketId: metadata.market.id })
     const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .filter((order) => order.side === "SELL")
@@ -75,14 +97,10 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
     const keepQuantity = String(pairs[symbol].keepQuantity ?? "0")
     const sellableQuantity = maxDecimal({
       left: "0",
-      right: subtractDecimal({
-        left: activeQuantity,
-        right: keepQuantity
-      }),
+      right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
     })
-    // Position.spent is the authoritative accumulated BUY cost, including
-    // actual BUY commissions. RecoveryLedger.buyCost is only a consistency
-    // mirror; the ledger contributes confirmed net SELL proceeds.
+    // Position.spent is authoritative accumulated BUY cost, including actual commissions.
+    // RecoveryLedger.buyCost is only a consistency mirror; the ledger contributes confirmed net SELL proceeds.
     const recoveryCost = position?.spent.amount ?? "0"
     const outstandingRecoveryAmount = maxDecimal({
       left: "0",
@@ -91,13 +109,8 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
         right: recoveryLedger?.netSellProceeds ?? "0",
       }),
     })
-    const committedQuantity = activeSells.reduce((...args) => {
-      const [total, order] = args
-      return addDecimal({
-        left: total,
-        right: order.remainingQuantity.amount,
-      })
-    }, "0")
+    const committedQuantity = activeSells.reduce((total, order) =>
+      addDecimal({ left: total, right: order.remainingQuantity.amount }), "0")
     const common = {
       symbol,
       activeQuantity,
@@ -107,14 +120,8 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
       activeSellCount: activeSells.length,
       committedQuantity,
     }
-    const requiresSell = compareDecimal({
-      left: sellableQuantity,
-      right: "0"
-    }) > 0 ||
-      compareDecimal({
-        left: outstandingRecoveryAmount,
-        right: "0"
-      }) > 0
+    const requiresSell = compareDecimal({ left: sellableQuantity, right: "0" }) > 0 ||
+      compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) > 0
     return {
       symbol,
       metadata,
@@ -126,6 +133,30 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
       requiresSell,
       noRecoveryRequired: !requiresSell && activeSells.length === 0,
     }
+  }
+
+  const getShutdownRecoveryInventory = ({ symbol } = {}) => {
+    const metadata = getShutdownRecoveryMetadata({ symbol })
+    const portfolio = getPortfolio()
+    const { activeSellsForSymbol, positionBySymbol } = getShutdownRecoveryOrders({
+      symbol,
+      portfolio,
+    })
+    if (!metadata?.market) {
+      return inventoryWithoutMarketMetadata({
+        symbol,
+        portfolio,
+        metadata,
+        positionBySymbol,
+        activeSells: activeSellsForSymbol,
+      })
+    }
+    return buildShutdownRecoveryInventory({
+      symbol,
+      portfolio,
+      metadata,
+      positionBySymbol,
+    })
   }
 
   const getShutdownRecoverySellPlan = ({
@@ -303,50 +334,48 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
     })
   }
 
-  const reconcileRecoverySellForShutdownSymbol = async ({ symbol } = {}) => { 
-    let assessment = assessShutdownRecoverySellCoverage({ symbol })
-    if (assessment.covered) {
-      return {
-        ok: true,
-        assessment
-      }
-    }
-    if (["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "KEEP_QUANTITY_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)) {
-      return {
-        ok: false,
-        error: shutdownRecoveryError({ code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", message: `Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}` }),
-      }
-    }
+  const isShutdownRecoveryInputUnavailable = ({ assessment } = {}) =>
+    ["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "KEEP_QUANTITY_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)
+
+  const cancelStaleShutdownRecoverySells = async ({ symbol, assessment } = {}) => {
     const metadata = getCurrentMarketMetadata({ symbol })
     const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .filter((order) => order.side === "SELL")
-    if (activeSells.length > 0) {
-      const cancellation = await cancelAndReconcileRecoverySells({
-        symbol,
-        marketId: metadata.market.id,
-      })
-      if (!cancellation?.ok || cancellation.data?.deferred === true) {
-        return {
-          ok: false,
-          error: cancellation?.errors?.[0] ??
-            shutdownRecoveryError({ code: "SHUTDOWN_RECOVERY_CANCELLATION_UNRESOLVED", message: `Shutdown recovery SELL cancellation is unresolved for ${symbol}` }),
-        }
-      }
-      assessment = assessShutdownRecoverySellCoverage({ symbol })
-      if (assessment.covered) {
-        return {
-          ok: true,
-          assessment,
-          canceledStaleSell: true
-        }
-      }
+    if (activeSells.length === 0) {
+      return { ok: true, assessment, canceledStaleSell: false }
     }
-    if (state.paused.has(symbol) || hasBlockingOpenOrdersForSymbol({ symbol })) {
+    const cancellation = await cancelAndReconcileRecoverySells({
+      symbol,
+      marketId: metadata.market.id,
+    })
+    if (!cancellation?.ok || cancellation.data?.deferred === true) {
       return {
         ok: false,
-        error: shutdownRecoveryError({ code: "SHUTDOWN_RECOVERY_REPLACEMENT_BLOCKED", message: `Shutdown recovery SELL replacement is blocked for ${symbol}` }),
+        error: cancellation?.errors?.[0] ??
+          shutdownRecoveryError({
+            code: "SHUTDOWN_RECOVERY_CANCELLATION_UNRESOLVED",
+            message: `Shutdown recovery SELL cancellation is unresolved for ${symbol}`,
+          }),
       }
     }
+    return {
+      ok: true,
+      assessment: assessShutdownRecoverySellCoverage({ symbol }),
+      canceledStaleSell: true,
+    }
+  }
+
+  const getShutdownRecoveryReplacementBlocker = ({ symbol } = {}) => {
+    if (!state.paused.has(symbol) && !hasBlockingOpenOrdersForSymbol({ symbol })) {return null}
+    return shutdownRecoveryError({
+      code: "SHUTDOWN_RECOVERY_REPLACEMENT_BLOCKED",
+      message: `Shutdown recovery SELL replacement is blocked for ${symbol}`,
+    })
+  }
+
+  const submitShutdownRecoveryReplacement = async ({ symbol } = {}) => {
+    const blocker = getShutdownRecoveryReplacementBlocker({ symbol })
+    if (blocker) {return { ok: false, error: blocker }}
     const replacement = await evaluateLatestTransition({
       symbol,
       shutdownRecoveryOnly: true,
@@ -357,20 +386,53 @@ export function createShutdownRecoveryWorkflow(dependencies = {}) {
       return {
         ok: false,
         error: replacement?.errors?.[0] ??
-          shutdownRecoveryError({ code: "SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED", message: `Shutdown recovery SELL replacement was not confirmed for ${symbol}` }),
+          shutdownRecoveryError({
+            code: "SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED",
+            message: `Shutdown recovery SELL replacement was not confirmed for ${symbol}`,
+          }),
       }
     }
+    return { ok: true }
+  }
+
+  const reconcileRecoverySellForShutdownSymbol = async ({ symbol } = {}) => {
+    let assessment = assessShutdownRecoverySellCoverage({ symbol })
+    if (assessment.covered) {return { ok: true, assessment }}
+    if (isShutdownRecoveryInputUnavailable({ assessment })) {
+      return {
+        ok: false,
+        error: shutdownRecoveryError({
+          code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+          message: `Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}`,
+        }),
+      }
+    }
+    const cancellation = await cancelStaleShutdownRecoverySells({ symbol, assessment })
+    if (!cancellation.ok) {return cancellation}
+    assessment = cancellation.assessment
+    if (assessment.covered) {
+      return {
+        ok: true,
+        assessment,
+        canceledStaleSell: cancellation.canceledStaleSell,
+      }
+    }
+    const replacement = await submitShutdownRecoveryReplacement({ symbol })
+    if (!replacement.ok) {return replacement}
     assessment = assessShutdownRecoverySellCoverage({ symbol })
     if (!assessment.covered) {
       return {
         ok: false,
-        error: shutdownRecoveryError({ code: "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE", message: `Shutdown recovery SELL coverage remains incomplete for ${symbol}: ${assessment.reason}` }),
+        error: shutdownRecoveryError({
+          code: "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE",
+          message: `Shutdown recovery SELL coverage remains incomplete for ${symbol}: ${assessment.reason}`,
+        }),
       }
     }
     return {
       ok: true,
       assessment,
-      replacedStaleSell: true
+      replacedStaleSell: true,
     }
   }
 
