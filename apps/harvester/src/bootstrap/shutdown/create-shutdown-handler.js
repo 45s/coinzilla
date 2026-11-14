@@ -82,7 +82,7 @@ export function createShutdownHandler({
       result?.errors?.[0]?.code ??
       result?.errors?.[0]?.name ??
       "PHASE_RESULT_FAILED"
-    const runPhase = async (...args) => {
+    const runPhase = async (...args) => { // eslint-disable-line complexity -- phase runner centralizes ordered timing and failure reporting.
       const [phase, operation, isFailure = isPhaseFailure] = args
       const startedAt = now()
       logPhase({ phase, status: "STARTED" })
