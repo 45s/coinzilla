@@ -105,13 +105,16 @@ Before implementing each rule, add a focused test that expresses the agreed busi
 Model only the concepts required by the approved RS contract:
 
 - Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
-- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator declares legacy quantity and original quote investment in configuration; historical exchange evidence is not required. These values establish declared historical basis, not custody or sellable balance. Configuration validation/confirmation, expiry/revocation, durable provenance and restart behavior remain owner decisions.
+- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator manually enters original quote investment and original base quantity in configuration before application startup; this is the explicit authorization and declared historical basis. Historical exchange evidence and a runtime authorization UI are not required. Advanced runtime editing, expiry/revocation and authorization lifecycle are deferred under FITDIB.
 - Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
 - Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
 - Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
+- Reuse Conservative's configured investment-limit logic. At the limit, stop submitting new BUYs but leave an already-open recovery SELL live and unchanged until it is filled/terminal; continue reconciliation.
+- Follow Conservative's third-asset commission rule: require a reliable quote-currency valuation; missing, stale, ambiguous or unavailable valuation is not zero and fails closed before either accounting projection commits.
+- Reuse Conservative BUY cadence, tranche sizing/configuration and pending-order safeguards where applicable, rather than introducing parallel RS-only behavior.
 - When authorized legacy inventory is exhausted, continue normal recovery-only BUY/SELL cycles until the operator stops RS. Each recovery-only SELL must meet the existing pair-level `minProfit` after applicable commissions; the legacy historical-basis gate applies only when a legacy slice is included. Exhaustion alone does not pause RS or require reauthorization. Existing orders/fills/reservations remain owned and reconciled.
 - Exchange-filter-constrained dust may be classified only after a fully reconciled successful cycle; retain it as bonus inventory and permanently exclude it from all later RS cycle quantity, cost, proceeds, profitability, and availability calculations. Ordinary sellable residual must not be classified as dust.
 - If remaining authorized legacy inventory is smaller than `sellQuantity`, use the smaller available/unreserved quantity in the current cycle SELL only when exchange filters and both independent profitability gates pass; otherwise retain it. No extra final-liquidation authorization is needed solely because the remainder is smaller.
@@ -281,4 +284,4 @@ flowchart TD
   K -->|"Yes"| L["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md) or resolve its outstanding authorization, accounting, profit allocation, risk, lifecycle and concurrent-resource-allocation decisions.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). The first implementation reuses Conservative's investment-limit, BUY cadence and fee-valuation behavior where agreed; advanced lifecycle functionality is deferred under FITDIB. Remaining accounting, profit-allocation and concurrent-resource-allocation implementation requirements still apply.
