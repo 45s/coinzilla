@@ -207,11 +207,11 @@ export function createHarvesterTradingEngine({
 }
 
 
-function createExecutionFillCallback(store, recordExecutionFill) {
+function createExecutionFillCallback({ store, recordExecutionFill } = {}) {
   return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store, fill }) : undefined
 }
 
-function createRecoveryCycleCompletedCallback(store, recordRecoveryCycleCompleted) {
+function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted } = {}) {
   return store
     ? ({ recoveryLedger, position, sellOrder, completion, minProfit, inventoryDisposition }) =>
       recordRecoveryCycleCompleted({
@@ -226,7 +226,7 @@ function createRecoveryCycleCompletedCallback(store, recordRecoveryCycleComplete
     : undefined
 }
 
-function createRecoveryCycleNotCompletedCallback(store, recordRecoveryCycleNotCompleted) {
+function createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNotCompleted } = {}) {
   return store
     ? ({ recoveryLedger, position, sellOrder, completion, minProfit }) =>
       recordRecoveryCycleNotCompleted({
@@ -240,21 +240,21 @@ function createRecoveryCycleNotCompletedCallback(store, recordRecoveryCycleNotCo
     : undefined
 }
 
-function createSubmissionIntentCallback(store, recordOrderSubmissionIntent) {
+function createSubmissionIntentCallback({ store, recordOrderSubmissionIntent } = {}) {
   return store ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store, order, purpose }) : undefined
 }
 
-function createSubmissionOutcomeCallback(store, recordOrderSubmissionOutcome) {
+function createSubmissionOutcomeCallback({ store, recordOrderSubmissionOutcome } = {}) {
   return store
     ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store, order, outcome, purpose })
     : undefined
 }
 
-function createCancellationIntentCallback(store, recordOrderCancellationIntent) {
+function createCancellationIntentCallback({ store, recordOrderCancellationIntent } = {}) {
   return store ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore: store, order, reason }) : undefined
 }
 
-function createStrategyMarketPausedCallback(store, recordStrategyMarketControl, sequence) {
+function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl, sequence } = {}) {
   return store
     ? ({ symbol, reason }) => recordStrategyMarketControl({
       operationalStateStore: store,
@@ -266,7 +266,7 @@ function createStrategyMarketPausedCallback(store, recordStrategyMarketControl, 
     : undefined
 }
 
-function createSafetyBlockerCallback(store, recordSafetyBlockerRaised, createHash) {
+function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createHash } = {}) {
   return store
     ? ({ scope, symbol, reason, evidence }) => {
       const canonicalEvidence = Object.fromEntries(
@@ -284,7 +284,7 @@ function createSafetyBlockerCallback(store, recordSafetyBlockerRaised, createHas
     : undefined
 }
 
-function createCancellationOutcomeCallback(store, recordOrderCancellationOutcome) {
+function createCancellationOutcomeCallback({ store, recordOrderCancellationOutcome } = {}) {
   return store
     ? ({ order, canceledOrder, reason, outcome }) =>
       recordOrderCancellationOutcome({ operationalStateStore: store, order, canceledOrder, reason, outcome })
@@ -295,15 +295,15 @@ export function createOperationalStateCallbacks(dependencies = {}) {
   const { operationalStateStore: store } = dependencies
   const sequence = { value: 0 }
   return {
-    onOperationalStateExecutionFill: createExecutionFillCallback(store, dependencies.recordExecutionFill),
-    onOperationalStateRecoveryCycleCompleted: createRecoveryCycleCompletedCallback(store, dependencies.recordRecoveryCycleCompleted),
-    onOperationalStateRecoveryCycleNotCompleted: createRecoveryCycleNotCompletedCallback(store, dependencies.recordRecoveryCycleNotCompleted),
-    onOperationalStateSubmissionIntent: createSubmissionIntentCallback(store, dependencies.recordOrderSubmissionIntent),
-    onOperationalStateSubmissionOutcome: createSubmissionOutcomeCallback(store, dependencies.recordOrderSubmissionOutcome),
-    onOperationalStateCancellationIntent: createCancellationIntentCallback(store, dependencies.recordOrderCancellationIntent),
-    onOperationalStateStrategyMarketPaused: createStrategyMarketPausedCallback(store, dependencies.recordStrategyMarketControl, sequence),
-    onSafetyBlockerRaised: createSafetyBlockerCallback(store, dependencies.recordSafetyBlockerRaised, dependencies.createHash ?? createHash),
-    onOperationalStateCancellationOutcome: createCancellationOutcomeCallback(store, dependencies.recordOrderCancellationOutcome),
+    onOperationalStateExecutionFill: createExecutionFillCallback({ store, recordExecutionFill: dependencies.recordExecutionFill }),
+    onOperationalStateRecoveryCycleCompleted: createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted: dependencies.recordRecoveryCycleCompleted }),
+    onOperationalStateRecoveryCycleNotCompleted: createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNotCompleted: dependencies.recordRecoveryCycleNotCompleted }),
+    onOperationalStateSubmissionIntent: createSubmissionIntentCallback({ store, recordOrderSubmissionIntent: dependencies.recordOrderSubmissionIntent }),
+    onOperationalStateSubmissionOutcome: createSubmissionOutcomeCallback({ store, recordOrderSubmissionOutcome: dependencies.recordOrderSubmissionOutcome }),
+    onOperationalStateCancellationIntent: createCancellationIntentCallback({ store, recordOrderCancellationIntent: dependencies.recordOrderCancellationIntent }),
+    onOperationalStateStrategyMarketPaused: createStrategyMarketPausedCallback({ store, recordStrategyMarketControl: dependencies.recordStrategyMarketControl, sequence }),
+    onSafetyBlockerRaised: createSafetyBlockerCallback({ store, recordSafetyBlockerRaised: dependencies.recordSafetyBlockerRaised, createHash: dependencies.createHash ?? createHash }),
+    onOperationalStateCancellationOutcome: createCancellationOutcomeCallback({ store, recordOrderCancellationOutcome: dependencies.recordOrderCancellationOutcome }),
   }
 }
 

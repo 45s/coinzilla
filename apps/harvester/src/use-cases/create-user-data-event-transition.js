@@ -51,19 +51,9 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     ].some(isHarvesterClientOrderId)
     const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
     if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
-      return {
-        result: toResult({
-          data: {
-            ignored: true,
-            externalOrder: true,
-          },
-        }),
-      }
+      return { result: toResult({ data: { ignored: true, externalOrder: true } }) }
     }
-    await pause({
-      symbol,
-      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-    })
+    await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
     return {
       result: failureResult({
         error: new Error("Order update does not belong to a Harvester order"),
@@ -85,32 +75,19 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
       }),
     })
   }
-  return {
-    order,
-    symbol,
-    update,
-  }
+  return { order, symbol, update }
 }
 
 
 async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, pause, resolveRecoveryManagedCancellation } = dependencies
   if (state.reconciledTerminalOrderClientIds.delete(order.clientOrderId)) {
-    return toResult({
-      data: {
-        ignored: true,
-        terminalStateAlreadyReconciled: true,
-      },
-    })
+    return toResult({ data: { ignored: true, terminalStateAlreadyReconciled: true } })
   }
   if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
       state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
-    const error = new Error(`Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: ${order.clientOrderId}`)
-    await pause({
-      symbol,
-      reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY",
-      error,
-    })
+    const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
+    await pause({ symbol, reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY", error })
     return failureResult({
       error,
       category: "OWNERSHIP_INTEGRITY",
@@ -119,10 +96,7 @@ async function handlePreFillRecoveryState({ dependencies, order, symbol, recover
     })
   }
   if (recoveryMode && order.status === "CANCELED" &&
-      compareDecimal({
-        left: order.executedQuantity.amount,
-        right: "0",
-      }) === 0) {
+      compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
     if (resolveRecoveryManagedCancellation({ order })) {
       state.deferredEvaluations.add(symbol)
     }
@@ -134,10 +108,7 @@ async function handlePreFillRecoveryState({ dependencies, order, symbol, recover
 async function reconcileEventFills({ dependencies, order, event, terminalFillsReconciled } = {}) {
   const { processExecutionFillTransition, reconcileTerminalOrderFills } = dependencies
   if (event.executionType === "TRADE") {
-    const fillResult = await processExecutionFillTransition({
-      order,
-      fill: event.fill,
-    })
+    const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
     if (!fillResult.ok) {return fillResult}
   }
   if (!terminalFillsReconciled &&
@@ -459,11 +430,7 @@ async function completeSellRecoveryCycle({ dependencies, order, symbol } = {}) {
   try {
     assertReconciledSellExecution({ order })
   } catch (error) {
-    await pause({
-      symbol,
-      reason: "SELL_FILL_RECONCILIATION_FAILED",
-      error,
-    })
+    await pause({ symbol, reason: "SELL_FILL_RECONCILIATION_FAILED", error })
     return failureResult({
       error,
       category: "ACCOUNTING_INTEGRITY",
@@ -496,10 +463,7 @@ async function completeSellRecoveryCycle({ dependencies, order, symbol } = {}) {
 async function handleIncompleteSellRecoveryCycle({ dependencies, order, symbol, completion } = {}) {
   const { state, pause, publishRecoveryCycleNotCompleted } = dependencies
   if (completion.data?.eligible) {return null}
-  publishRecoveryCycleNotCompleted({
-    order,
-    completion,
-  })
+  publishRecoveryCycleNotCompleted({ order, completion })
   if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
       completion.data?.pause === false) {
     state.sellExecutionTotals.delete(order.brokerOrderId)
@@ -555,11 +519,7 @@ async function handleSellFilled({ dependencies, order, symbol, recoveryMode } = 
   } else {
     state.replacementIntents.delete(symbol)
   }
-  const result = await completeSellRecoveryCycle({
-    dependencies,
-    order,
-    symbol,
-  })
+  const result = await completeSellRecoveryCycle({ dependencies, order, symbol })
   if (!result.ok) {return result}
   const incomplete = await handleIncompleteSellRecoveryCycle({ dependencies,
     order,
@@ -589,12 +549,7 @@ async function handleOrderStatus({ dependencies, order, symbol, recoveryMode } =
     handleSellFilled,
   ]
   for (const handler of handlers) {
-    const result = await handler({
-      dependencies,
-      order,
-      symbol,
-      recoveryMode,
-    })
+    const result = await handler({ dependencies, order, symbol, recoveryMode })
     if (result) {return result}
   }
   return null
@@ -607,33 +562,14 @@ async function processUserDataEventTransition({
 } = {}) {
   const { state } = dependencies
   try {
-    const prepared = await prepareOrderEvent({
-      dependencies,
-      event,
-    })
+    const prepared = await prepareOrderEvent({ dependencies, event })
     if (prepared.result) {return prepared.result}
     const { order, symbol, update } = prepared
-    const recoveryGuard = await handlePreFillRecoveryState({
-      dependencies,
-      order,
-      symbol,
-      recoveryMode,
-    })
+    const recoveryGuard = await handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode })
     if (recoveryGuard) {return recoveryGuard}
-    const fillResult = await reconcileEventFills({
-      dependencies,
-      order,
-      event,
-      terminalFillsReconciled,
-    })
+    const fillResult = await reconcileEventFills({ dependencies, order, event, terminalFillsReconciled })
     if (fillResult) {return fillResult}
-    const duplicateResult = await handleDuplicateOrStaleUpdate({
-      dependencies,
-      order,
-      symbol,
-      update,
-      recoveryMode,
-    })
+    const duplicateResult = await handleDuplicateOrStaleUpdate({ dependencies, order, symbol, update, recoveryMode })
     if (duplicateResult) {return duplicateResult}
     if (order.status === "FILLED") {
       if (state.completedOrderTransitions.has(order.clientOrderId)) {
@@ -641,20 +577,10 @@ async function processUserDataEventTransition({
       }
       state.completedOrderTransitions.add(order.clientOrderId)
     }
-    const statusResult = await handleOrderStatus({
-      dependencies,
-      order,
-      symbol,
-      recoveryMode,
-    })
+    const statusResult = await handleOrderStatus({ dependencies, order, symbol, recoveryMode })
     if (statusResult) {return statusResult}
     if (recoveryMode) {state.deferredEvaluations.add(symbol)}
-    return toResult({
-      data: {
-        order,
-        reevaluate: true,
-      },
-    })
+    return toResult({ data: { order, reevaluate: true } })
   } catch (error) {
     return failureResult({
       error,
@@ -667,8 +593,5 @@ async function processUserDataEventTransition({
 
 
 export function createUserDataEventTransition(dependencies = {}) {
-  return (options = {}) => processUserDataEventTransition({
-    dependencies,
-    ...options,
-  })
+  return (options = {}) => processUserDataEventTransition({ dependencies, ...options })
 }

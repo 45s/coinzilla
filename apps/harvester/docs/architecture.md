@@ -859,3 +859,6 @@ Bootstrap extraction retains the complete initialization order: broker connectio
 
 
 Transition and submission-gate helpers accept a single context object, keeping dependencies explicit while preserving the original serialized event and exchange-submission decisions.
+
+
+The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders now use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.

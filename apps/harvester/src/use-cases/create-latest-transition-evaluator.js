@@ -4,7 +4,7 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapRecoveryCycleCompletedData, mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
-function getEvaluationGateResult(dependencies, { symbol, shutdownRecoveryOnly } = {}) {
+function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
   if (state.paused.has(symbol)) {
     return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
@@ -29,7 +29,8 @@ function getEvaluationGateResult(dependencies, { symbol, shutdownRecoveryOnly } 
   return { marketPrice }
 }
 
-function createEvaluationInputs(dependencies, {
+function createEvaluationInputs({
+  dependencies,
   symbol,
   excludedActiveOrderClientId,
   referencePriceOverride,
@@ -68,7 +69,7 @@ function createEvaluationInputs(dependencies, {
   }
 }
 
-function logEvaluationStarted(dependencies, context) {
+function logEvaluationStarted({ dependencies, context } = {}) {
   const { logger, state, pairs } = dependencies
   const { evaluationId, symbol, marketPrice, lastBuyPrice, portfolioBefore, recoveryLedgerBefore, activeOrdersBefore } = context
   logger?.debug?.({
@@ -87,7 +88,7 @@ function logEvaluationStarted(dependencies, context) {
   })
 }
 
-function logEvaluationDecision(dependencies, context) {
+function logEvaluationDecision({ dependencies, context } = {}) {
   const { logger, state } = dependencies
   const { evaluationId, symbol, decision, operatorPaused, operatorSuppressedActions, portfolioBefore, recoveryLedgerBefore } = context
   logger?.debug?.({
@@ -106,9 +107,9 @@ function logEvaluationDecision(dependencies, context) {
   })
 }
 
-function prepareEvaluationContext(dependencies, options = {}) {
-  const inputs = createEvaluationInputs(dependencies, options)
-  logEvaluationStarted(dependencies, inputs)
+function prepareEvaluationContext({ dependencies, options } = {}) {
+  const inputs = createEvaluationInputs({ dependencies, ...options })
+  logEvaluationStarted({ dependencies, context: inputs })
   const decision = dependencies.strategyPolicy.evaluate(inputs.evaluationInput)
   const operatorPaused = dependencies.state.operatorPausedMarkets.has(inputs.symbol)
   const operatorSuppressedActions = options.shutdownRecoveryOnly || operatorPaused
@@ -126,11 +127,11 @@ function prepareEvaluationContext(dependencies, options = {}) {
     preflightOnly: options.preflightOnly === true,
     shutdownRecoveryOnly: options.shutdownRecoveryOnly === true,
   }
-  logEvaluationDecision(dependencies, context)
+  logEvaluationDecision({ dependencies, context })
   return context
 }
 
-async function completeDustRecoveryIfNeeded(dependencies, context) {
+async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
   const { state, pause, completeRecoveryCycle, eventPublisher, publishRecoveryCycleNotCompleted, evaluateLatestTransition, pairs } = dependencies
   const { symbol, metadata, decision, effectiveActions } = context
   if (decision.inventoryDisposition?.status !== "EXCHANGE_CONSTRAINED_DUST" ||
@@ -186,7 +187,7 @@ async function completeDustRecoveryIfNeeded(dependencies, context) {
   return null
 }
 
-function handleNoEffectiveActions(dependencies, context) {
+function handleNoEffectiveActions({ dependencies, context } = {}) {
   const { logger } = dependencies
   const { preflightOnly, decision, evaluationId, symbol, activeOrdersBefore, operatorSuppressedActions, effectiveActions } = context
   if (effectiveActions.length !== 0) {return null}
@@ -203,7 +204,7 @@ function handleNoEffectiveActions(dependencies, context) {
   return toResult({ data: { decision, submittedOrders: [], operatorSuppressedActions } })
 }
 
-function getPortfolioBalanceContext(dependencies, context) {
+function getPortfolioBalanceContext({ dependencies, context } = {}) {
   const { getAccountSnapshot } = dependencies
   const { metadata, portfolioBefore, activeOrdersBefore, excludedActiveOrderClientId } = context
   const accountSnapshot = getAccountSnapshot()
@@ -264,7 +265,7 @@ function getPortfolioBalanceContext(dependencies, context) {
   }
 }
 
-function allocateEvaluationActions(dependencies, context, balances) {
+function allocateEvaluationActions({ dependencies, context, balances } = {}) {
   const { allocateOrderCommitments, pairs } = dependencies
   const { symbol, effectiveActions, recoveryLedgerBefore, metadata } = context
   const {
@@ -308,7 +309,7 @@ function allocateEvaluationActions(dependencies, context, balances) {
   return allocation.data
 }
 
-function logOrderAllocation(dependencies, context, balances, allocation) {
+function logOrderAllocation({ dependencies, context, balances, allocation } = {}) {
   const { logger } = dependencies
   const { evaluationId, symbol, metadata } = context
   const {
@@ -354,8 +355,7 @@ function logOrderAllocation(dependencies, context, balances, allocation) {
   })
 }
 
-function handleNoExecutableActions(dependencies, context, allocation) {
-  void dependencies
+function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
   void dependencies
   const { preflightOnly, decision, operatorSuppressedActions, symbol } = context
   const { deferredActions, executableActions } = allocation
@@ -375,7 +375,7 @@ function handleNoExecutableActions(dependencies, context, allocation) {
   })
 }
 
-function publishStrategyDecision(dependencies, context, balances, allocation) {
+function publishStrategyDecision({ dependencies, context, balances, allocation } = {}) {
   const { eventPublisher, pairs } = dependencies
   const { decision, symbol, marketPrice, activeOrdersBefore } = context
   const { position, portfolioBaseBalance, quoteBalance, baseBalance, quoteCashFlow, committedQuote, committedQuoteBalance, committedBase, committedBaseBalance } = balances
@@ -416,7 +416,7 @@ function publishStrategyDecision(dependencies, context, balances, allocation) {
   })
 }
 
-async function validatePreflightDecision(dependencies, context, executableDecision) {
+async function validatePreflightDecision({ dependencies, context, executableDecision } = {}) {
   const { submit } = dependencies
   if (!context.preflightOnly) {return null}
   if (!executableDecision.actions.some((action) => action.side === "BUY")) {
@@ -434,7 +434,7 @@ async function validatePreflightDecision(dependencies, context, executableDecisi
   return toResult({ data: { preflightValid: true, validatedOrders: validation.data.validatedOrders } })
 }
 
-async function submitExecutableDecision(dependencies, context, executableDecision, balances) {
+async function submitExecutableDecision({ dependencies, context, executableDecision, balances } = {}) {
   const { submit, setShutdownRecoverySubmissionAllowed, logger, state } = dependencies
   const { evaluationId, symbol, decision, marketPrice } = context
   const { accountSnapshot, quoteCashFlow, portfolioQuoteCashFlow, quoteCashFlowBaseline, committedQuote, committedQuoteBalance, committedBase, committedBaseBalance, portfolioBaseBalance } = balances
@@ -469,7 +469,7 @@ async function submitExecutableDecision(dependencies, context, executableDecisio
   }
 }
 
-function logSubmissionResult(dependencies, context, result) {
+function logSubmissionResult({ dependencies, context, result } = {}) {
   const { logger, state } = dependencies
   const { evaluationId, symbol, metadata } = context
   logger?.debug?.({
@@ -490,7 +490,7 @@ function logSubmissionResult(dependencies, context, result) {
   })
 }
 
-function finalizeSubmissionResult(dependencies, context, result, deferredActions) {
+function finalizeSubmissionResult({ dependencies, context, result, deferredActions } = {}) {
   const { state } = dependencies
   const { symbol, marketPrice, decision, operatorSuppressedActions } = context
   if (!result.ok) {return result}
@@ -530,39 +530,45 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
     referencePriceOverride,
     shutdownRecoveryOnly = false,
   } = {}) {
-    const gate = getEvaluationGateResult(dependencies, { symbol, shutdownRecoveryOnly })
+    const gate = getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly })
     if (gate?.data || gate?.errors) {return gate}
     try {
-      const context = prepareEvaluationContext(dependencies, {
-        symbol,
-        preflightOnly,
-        excludedActiveOrderClientId,
-        referencePriceOverride,
-        shutdownRecoveryOnly,
-        marketPrice: gate.marketPrice,
+      const context = prepareEvaluationContext({
+        dependencies,
+        options: {
+          symbol,
+          preflightOnly,
+          excludedActiveOrderClientId,
+          referencePriceOverride,
+          shutdownRecoveryOnly,
+          marketPrice: gate.marketPrice,
+        },
       })
-      const dustResult = await completeDustRecoveryIfNeeded(dependencies, context)
+      const dustResult = await completeDustRecoveryIfNeeded({ dependencies, context })
       if (dustResult) {return dustResult}
-      const noActions = handleNoEffectiveActions(dependencies, context)
+      const noActions = handleNoEffectiveActions({ dependencies, context })
       if (noActions) {return noActions}
-      const balances = getPortfolioBalanceContext(dependencies, {
-        ...context,
-        excludedActiveOrderClientId,
+      const balances = getPortfolioBalanceContext({
+        dependencies,
+        context: {
+          ...context,
+          excludedActiveOrderClientId,
+        },
       })
-      const allocation = allocateEvaluationActions(dependencies, context, balances)
-      logOrderAllocation(dependencies, context, balances, allocation)
-      const noExecutableActions = handleNoExecutableActions(dependencies, context, allocation)
+      const allocation = allocateEvaluationActions({ dependencies, context, balances })
+      logOrderAllocation({ dependencies, context, balances, allocation })
+      const noExecutableActions = handleNoExecutableActions({ dependencies, context, allocation })
       if (noExecutableActions) {return noExecutableActions}
-      publishStrategyDecision(dependencies, context, balances, allocation)
+      publishStrategyDecision({ dependencies, context, balances, allocation })
       const executableDecision = Object.freeze({
         ...context.decision,
         actions: Object.freeze(allocation.executableActions),
       })
-      const preflightResult = await validatePreflightDecision(dependencies, context, executableDecision)
+      const preflightResult = await validatePreflightDecision({ dependencies, context, executableDecision })
       if (preflightResult) {return preflightResult}
-      const result = await submitExecutableDecision(dependencies, context, executableDecision, balances)
-      logSubmissionResult(dependencies, context, result)
-      return finalizeSubmissionResult(dependencies, context, result, allocation.deferredActions)
+      const result = await submitExecutableDecision({ dependencies, context, executableDecision, balances })
+      logSubmissionResult({ dependencies, context, result })
+      return finalizeSubmissionResult({ dependencies, context, result, deferredActions: allocation.deferredActions })
     } catch (error) {
       await dependencies.pause({
         symbol,
