@@ -5849,3 +5849,15 @@ test("reconciles the in-memory order registry before reopening trading after str
   assert.equal(result.userDataStatus, "READY")
   await result.stop()
 })
+
+// Preserve both independent TRADING_MODE startup regressions.
+
+test("requires an explicit TRADING_MODE before connecting to Binance", async () => {
+  let brokerFactoryCalled = false
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: { TRADING_MODE: undefined },
+    brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
+  }), /TRADING_MODE must be set to "testnet" or "live"/)
+  assert.equal(brokerFactoryCalled, false)
+})
