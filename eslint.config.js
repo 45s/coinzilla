@@ -86,7 +86,6 @@ export default defineConfig([
       "prefer-destructuring": "warn",
       "prefer-arrow-callback": "error",
       "object-shorthand": "error",
-      "object-property-newline": ["error", { allowAllPropertiesOnSameLine: false }],
       "no-useless-concat": "error",
       "no-extra-bind": "error",
       "no-multi-assign": "error",
