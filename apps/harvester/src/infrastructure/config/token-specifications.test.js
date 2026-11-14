@@ -2,8 +2,10 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   createMarketSpecification,
+  decimalPlaces,
   mergeTokenSpecifications,
   resolvePairSpecifications,
+  validateTokenSpecifications,
 } from "./token-specifications.js"
 
 const metadata = (overrides = {}) => ({
@@ -13,6 +15,44 @@ const metadata = (overrides = {}) => ({
   tickSize: "0.00100000",
   stepSize: "0.01000000",
   ...overrides,
+})
+
+test("counts effective decimal places and rejects invalid exchange increments", () => {
+  assert.equal(decimalPlaces("1.00000000"), 0, "Integer increments require zero decimal places.")
+  assert.equal(decimalPlaces("0.01000000"), 2, "Trailing zeroes must not inflate quantity precision.")
+  assert.equal(decimalPlaces("0.00010000"), 4, "Fractional increments must retain their effective scale.")
+  assert.throws(() => decimalPlaces("0"), /must be positive/i, "A zero exchange increment must be rejected.")
+  assert.throws(() => decimalPlaces("not-a-number"), /positive decimal string/i, "Malformed increments must be rejected.")
+})
+
+test("rejects malformed Binance metadata before constructing a market specification", () => {
+  assert.throws(() => createMarketSpecification({ metadata: null }), /metadata must be an object/i)
+  assert.throws(() => createMarketSpecification({ metadata: metadata({ symbol: "bad" }) }), /metadata.symbol/i)
+  assert.throws(() => createMarketSpecification({ metadata: metadata({ baseAsset: "" }) }), /baseAsset and quoteAsset/i)
+  assert.throws(() => createMarketSpecification({ metadata: metadata({ stepSize: "0" }) }), /must be positive/i)
+})
+
+test("validates registry root, token entries, market metadata, and precision values", () => {
+  assert.throws(() => validateTokenSpecifications(null), /JSON object keyed by base asset/i)
+  assert.throws(
+    () => validateTokenSpecifications({ LINK: { baseAsset: "LINK" } }),
+    /must contain a markets object/i,
+    "Every token entry must contain its market map."
+  )
+  assert.throws(
+    () => validateTokenSpecifications({
+      LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "", pricePrecision: 3, quantityPrecision: 2 } } },
+    }),
+    /malformed market metadata/i,
+    "Every market must declare a normalized quote asset."
+  )
+  assert.throws(
+    () => validateTokenSpecifications({
+      LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: -1, quantityPrecision: 2 } } },
+    }),
+    /pricePrecision.*non-negative integer/i,
+    "Precision values must be non-negative integers."
+  )
 })
 
 test("derives market precision from the actual exchange increments", () => {
