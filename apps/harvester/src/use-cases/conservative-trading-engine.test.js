@@ -796,14 +796,9 @@ test("does not submit an order when its durable intent flush fails", async () =>
   assert.ok(harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"))
 })
 
-test("waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event", async () => {
-  let releaseFills
-  let signalFillsStarted
-  const acknowledgedFillsGate = {
-    promise: new Promise((resolve) => { releaseFills = resolve }),
-  }
-  const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
-  const strategyPolicy = {
+
+function createImmediateFillAcknowledgementPolicy() {
+  return {
     evaluate: ({ lastBuyPrice }) => ({
       strategy: "TEST_POLICY",
       symbol: "DOGEUSDT",
@@ -817,11 +812,24 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
     }),
     evaluateTrailingBuyRepricing: () => ({
       shouldReplace: false,
-      adjustmentThreshold: "0"
+      adjustmentThreshold: "0",
     }),
   }
+}
+
+async function createImmediateFillAcknowledgementRace() {
+  let releaseFills
+  let signalFillsStarted
+  const acknowledgedFillsGate = {
+    promise: new Promise((resolve) => {
+      releaseFills = resolve
+    }),
+  }
+  const fillsStarted = new Promise((resolve) => {
+    signalFillsStarted = resolve
+  })
   const harness = await createHarness({
-    strategyPolicy,
+    strategyPolicy: createImmediateFillAcknowledgementPolicy(),
     immediateFilledAcknowledgement: true,
     acknowledgedFillsGate,
     getAcknowledgedFills: ({ order }) => {
@@ -846,36 +854,57 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
       ]
     },
   })
+  return {
+    harness,
+    fillsStarted,
+    releaseFills,
+  }
+}
 
-  const firstPrice = harness.engine.processMarketPrice({
+function assertImmediateFillAcknowledgementQueued({ harness, firstResult, secondResult }) {
+  assert.equal(firstResult.ok, true, firstResult.errors?.[0]?.message)
+  assert.equal(secondResult.ok, true, secondResult.errors?.[0]?.message)
+  assert.equal(harness.orders.length, 1)
+  assert.deepEqual(harness.accountedFills.map((fill) => fill.tradeId), [
+    "immediate-ack-fill-1",
+    "immediate-ack-fill-2",
+  ])
+  assert.equal(harness.engine.getPausedMarkets().length, 0)
+}
+
+
+test("waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event", async () => {
+  const race = await createImmediateFillAcknowledgementRace()
+  const firstPrice = race.harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
-  await fillsStarted
-  const secondPrice = harness.engine.processMarketPrice({
+  await race.fillsStarted
+  const secondPrice = race.harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "101",
-      timestamp: 2
+      timestamp: 2,
     },
   })
 
-  assert.equal(harness.orders.length, 1)
-  assert.equal(harness.accountedFills.length, 0)
-
-  releaseFills()
-  const [firstResult, secondResult] = await Promise.all([firstPrice, secondPrice])
-
-  assert.equal(firstResult.ok, true, firstResult.errors?.[0]?.message)
-  assert.equal(secondResult.ok, true, secondResult.errors?.[0]?.message)
-  assert.equal(harness.orders.length, 1)
-  assert.deepEqual(harness.accountedFills.map((fill) => fill.tradeId), ["immediate-ack-fill-1", "immediate-ack-fill-2"])
-  assert.equal(harness.engine.getPausedMarkets().length, 0)
+  assert.equal(race.harness.orders.length, 1)
+  assert.equal(race.harness.accountedFills.length, 0)
+  race.releaseFills()
+  const [firstResult, secondResult] = await Promise.all([
+    firstPrice,
+    secondPrice,
+  ])
+  assertImmediateFillAcknowledgementQueued({
+    harness: race.harness,
+    firstResult,
+    secondResult,
+  })
 })
 
 test("pauses an immediately FILLED acknowledged order when execution history is incomplete", async () => {
