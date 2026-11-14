@@ -361,7 +361,7 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
 
 function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
   void dependencies
-  const { preflightOnly, decision, operatorSuppressedActions, symbol } = context
+  const { preflightOnly, decision, operatorSuppressedActions } = context
   const { deferredActions, executableActions } = allocation
   if (executableActions.length !== 0) {return null}
   if (preflightOnly) {
@@ -443,8 +443,8 @@ async function validatePreflightDecision({ dependencies, context, executableDeci
 }
 
 async function submitExecutableDecision({ dependencies, context, executableDecision, balances } = {}) {
-  const { submit, setShutdownRecoverySubmissionAllowed, logger, state } = dependencies
-  const { evaluationId, symbol, decision, marketPrice } = context
+  const { submit, setShutdownRecoverySubmissionAllowed, logger } = dependencies
+  const { evaluationId, symbol, decision } = context
   const { accountSnapshot, quoteCashFlow, portfolioQuoteCashFlow, quoteCashFlowBaseline, committedQuote, committedQuoteBalance, committedBase, committedBaseBalance, portfolioBaseBalance } = balances
   logger?.debug?.({
     message: "Harvester Conservative executable intents",
