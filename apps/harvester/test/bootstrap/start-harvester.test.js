@@ -93,7 +93,9 @@ test('loads configuration before returning the startup context', async () => {
   });
 
   assert.deepEqual(calls, [configSource]);
-  assert.equal(context.appConfig, appConfig);
+  assert.notEqual(context.appConfig, appConfig, "Runtime resolution must build a separate effective config rather than mutating the loaded source config.");
+  assert.equal(Object.hasOwn(context.appConfig.strategies.CG_coinGrabber.pairs.ZROUSDT, "tradingEnvironment"), false, "The effective runtime pair must not expose its source selector.");
+  assert.equal(Object.hasOwn(appConfig.strategies.CG_coinGrabber.pairs.ZROUSDT, "tradingEnvironment"), true, "The loaded source config must retain the selector for validation.");
   assert.equal(Object.isFrozen(context), true);
 });
 
