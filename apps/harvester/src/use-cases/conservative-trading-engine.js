@@ -1578,8 +1578,10 @@ export function makeConservativeTradingEngine({
         metadata,
         position: positionBySymbol,
         activeSells: activeSellsForSymbol,
-        errorReason: positionBySymbol || activeSellsForSymbol.length > 0 ? "MARKET_METADATA_UNAVAILABLE" : null,
-        noRecoveryRequired: !positionBySymbol && activeSellsForSymbol.length === 0,
+        errorReason: positionBySymbol || activeSellsForSymbol.length > 0 || pairs[symbol]?.enabled === true
+          ? "MARKET_METADATA_UNAVAILABLE"
+          : null,
+        noRecoveryRequired: !positionBySymbol && activeSellsForSymbol.length === 0 && pairs[symbol]?.enabled !== true,
       }
     }
     const position = portfolio.getPosition({ marketId: metadata.market.id }) ?? positionBySymbol
