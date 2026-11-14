@@ -6321,11 +6321,10 @@ async function runResidualRecoverySellScenario() {
     scenario,
     harness,
   })
-  return {
-    ...scenario,
+  return Object.assign(scenario, {
     harness,
     ...result,
-  }
+  })
 }
 
 function assertResidualRecoverySellAccounting({ scenario }) {
