@@ -4,9 +4,9 @@ const isRecord = (value) => value !== null && typeof value === "object" && !Arra
 const isAssetCode = (value) => typeof value === "string" && /^[A-Z0-9]{1,20}$/.test(value)
 const isMarketSymbol = (value) => typeof value === "string" && /^[A-Z0-9]{5,20}$/.test(value)
 
-function requirePrecision(value, field) {
+function requirePrecision({ value, field }) {
   if (!Number.isInteger(value) || value < 0) {
-    throw new TypeError(field + " must be a non-negative integer")
+    throw new TypeError(`${field} must be a non-negative integer`)
   }
 }
 
@@ -48,7 +48,7 @@ export function createMarketSpecification({ metadata } = {}) {
     throw new TypeError("metadata must contain normalized baseAsset and quoteAsset codes")
   }
   if (symbol !== baseAsset + quoteAsset) {
-    throw new Error("Binance market symbol " + symbol + " does not match baseAsset + quoteAsset")
+    throw new Error(`Binance market symbol ${symbol} does not match baseAsset + quoteAsset`)
   }
 
   return Object.freeze({
@@ -75,22 +75,22 @@ export function validateTokenSpecifications(tokenSpecifications) {
   const marketOwners = new Map()
   for (const [baseAsset, token] of Object.entries(tokenSpecifications)) {
     if (!isAssetCode(baseAsset) || !isRecord(token) || token.baseAsset !== baseAsset) {
-      throw new TypeError("Token specification key and baseAsset must match: " + baseAsset)
+      throw new TypeError(`Token specification key and baseAsset must match: ${baseAsset}`)
     }
     if (!isRecord(token.markets)) {
-      throw new TypeError("Token specification " + baseAsset + " must contain a markets object")
+      throw new TypeError(`Token specification ${baseAsset} must contain a markets object`)
     }
     for (const [symbol, market] of Object.entries(token.markets)) {
       if (!isMarketSymbol(symbol) || !isRecord(market) || !isAssetCode(market.quoteAsset)) {
-        throw new TypeError("Token specification " + baseAsset + " contains malformed market metadata: " + symbol)
+        throw new TypeError(`Token specification ${baseAsset} contains malformed market metadata: ${symbol}`)
       }
       if (symbol !== baseAsset + market.quoteAsset) {
-        throw new Error("Token specification market " + symbol + " does not match base asset " + baseAsset + " and quote asset " + market.quoteAsset)
+        throw new Error(`Token specification market ${symbol} does not match base asset ${baseAsset} and quote asset ${market.quoteAsset}`)
       }
-      requirePrecision(market.pricePrecision, baseAsset + "." + symbol + ".pricePrecision")
-      requirePrecision(market.quantityPrecision, baseAsset + "." + symbol + ".quantityPrecision")
+      requirePrecision({ value: market.pricePrecision, field: `${baseAsset}.${symbol}.pricePrecision` })
+      requirePrecision({ value: market.quantityPrecision, field: `${baseAsset}.${symbol}.quantityPrecision` })
       if (marketOwners.has(symbol)) {
-        throw new Error("Market " + symbol + " is assigned to multiple token entries")
+        throw new Error(`Market ${symbol} is assigned to multiple token entries`)
       }
       marketOwners.set(symbol, baseAsset)
     }
@@ -113,7 +113,7 @@ export function mergeTokenSpecifications({ tokenSpecifications = {}, metadata } 
   const symbol = metadata.symbol
   const existingToken = tokenSpecifications[baseAsset]
   if (existingToken && existingToken.baseAsset !== baseAsset) {
-    throw new Error("Existing token entry does not match Binance base asset " + baseAsset)
+    throw new Error(`Existing token entry does not match Binance base asset ${baseAsset}`)
   }
 
   const updated = {
@@ -156,11 +156,11 @@ export function resolvePairSpecifications({ pairs, tokenSpecifications } = {}) {
       throw new TypeError("Strategy pair " + symbol + " must be an object")
     }
     if (Object.hasOwn(pair, "pricePrecision") || Object.hasOwn(pair, "quantityPrecision")) {
-      throw new Error("Strategy pair " + symbol + " must not define pricePrecision or quantityPrecision; use token-specification.json")
+      throw new Error(`Strategy pair ${symbol} must not define pricePrecision or quantityPrecision; use token-specification.json`)
     }
     const specification = markets.get(symbol)
     if (!specification) {
-      throw new Error("Missing token specification metadata for configured market " + symbol)
+      throw new Error(`Missing token specification metadata for configured market ${symbol}`)
     }
     resolvedPairs[symbol] = {
       ...pair,
