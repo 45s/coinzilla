@@ -32,7 +32,6 @@ function createConfigSource() {
     "    recovery: { enabled: false },",
     "  },",
     "  pairs: {",
-    "    // BEGIN GENERATED PAIR CONFIGURATION",
     '    "LINKFDUSD": {',
     "      enabled: true,",
     "      enableVolatilityProtection: true,",
@@ -46,7 +45,6 @@ function createConfigSource() {
     "      makerPercent: 0,",
     "      takerPercent: 0.075,",
     "    },",
-    "    // END GENERATED PAIR CONFIGURATION",
     "  },",
     "};",
     "",
@@ -167,19 +165,19 @@ test("rejects malformed JavaScript without replacing the operator's original sou
   })
 })
 
-test("rejects a missing generated-pair marker without changing the source module", async () => {
-  const source = createConfigSource().replace("// BEGIN GENERATED PAIR CONFIGURATION", "// PAIR REGION REMOVED")
+test("rejects an ambiguous pairs object without changing the original source module", async () => {
+  const source = createConfigSource().replace("\n};\n", "\n  pairs: {},\n};\n")
   await withConfigFile(async ({ configPath }) => {
     const before = await readFile(configPath, "utf8")
     await assert.rejects(
       writePairConfigAtomically({ configPath, symbol: "ADAFDUSD", pairConfig: generatedPair }),
-      /marker/i,
-      "The generator must fail closed when the canonical pair-edit region is absent.",
+      /ambiguous|exactly one/i,
+      "The generator must reject multiple strategy pairs objects instead of choosing one arbitrarily.",
     )
     assert.equal(
       await readFile(configPath, "utf8"),
       before,
-      "A missing pair marker must leave the entire configuration source byte-for-byte unchanged.",
+      "An ambiguous configuration must remain byte-for-byte unchanged after the rejected generation.",
     )
   }, { source })
 })
