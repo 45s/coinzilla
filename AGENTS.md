@@ -17,6 +17,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Module boundaries, feature-folder layout and pure-function extraction | [docs/engineering/MODULARITY_STANDARD.md](docs/engineering/MODULARITY_STANDARD.md) |
 | Shared utility search and reuse | [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) |
 | JavaScript and JSDoc | [docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) |
+| ESLint configuration, rule compliance and suppression policy | [ESLint Standard](docs/engineering/ESLINT_STANDARD.md) |
 | Documentation governance, lifecycle, naming, indexes, ADRs and evidence preservation | [docs/DOCUMENTATION_GOVERNANCE.md](docs/DOCUMENTATION_GOVERNANCE.md) |
 | Markdown authoring and CI style rules | [docs/MARKDOWN_STYLE.md](docs/MARKDOWN_STYLE.md) |
 | Repository documentation entry point | [docs/README.md](docs/README.md) |
@@ -35,7 +36,7 @@ JavaScript control-flow style (including braces on all control statements and no
 **Every AI agent and automated contributor MUST complete this preflight before starting any task.** This applies to every task type: code, tests, configuration, documentation, investigation, debugging, refactoring, and operational work.
 
 1. **Inventory the documentation before acting.** Identify the repository-wide governance and engineering documents, the applicable task checklist, the owning domain's instructions and roadmap, and every specification, architecture document, ADR/design note, runbook, API/contract document, configuration guide, test guide, and other requirement that governs the task or affected code.
-2. **Read all applicable documents in full.** Read the complete contents, not just titles, search snippets, summaries, or selected excerpts. Follow links and references recursively until the applicable requirements are covered. For a domain task, this includes all applicable documentation in that domain and affected packages, plus repository-wide policies. Do not read unrelated domains' private implementation documentation unless the task crosses into them.
+2. **Read all applicable documents in full.** Read the complete contents, not just titles, search snippets, summaries, or selected excerpts. For every JavaScript change, read [ESLint Standard](docs/engineering/ESLINT_STANDARD.md) and inspect the effective root eslint.config.js rules before editing. Follow links and references recursively until the applicable requirements are covered. For a domain task, this includes all applicable documentation in that domain and affected packages, plus repository-wide policies. Do not read unrelated domains' private implementation documentation unless the task crosses into them.
 3. **Inspect the actual task surface.** Read the relevant implementation, callers/consumers, tests, configuration, and current roadmap status. Documentation review does not replace code/test inspection.
 4. **Resolve the requirements before work.** Understand and record the task goal, owning domain, constraints, dependencies, acceptance criteria, required tests/checks, and documentation impact. Check for conflicts between requirements and current implementation or between documents. The canonical policy wins only where it explicitly defines precedence; otherwise stop and report the conflict.
 5. **Demonstrate readiness.** Before implementation or any state-changing action, provide a concise preflight summary identifying the documents reviewed, the applicable requirements, the acceptance criteria, and any unresolved questions/blockers. For a multi-agent task, each agent must independently complete this review; one agent's summary does not count as another agent having read the documents.
@@ -63,6 +64,7 @@ All agents must follow the canonical [visual documentation and workflow schemas 
 - Select the smallest applicable checklist from `docs/engineering/TASK_WORKFLOWS.md`.
 - For every refactoring or code-audit task, read and follow the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md); the applicable task checklist links to it.
 - Identify the owning domain and its roadmap before editing. Local instructions may add domain-specific constraints but must not redefine repository-wide policy.
+- For every JavaScript change, study and follow [ESLint Standard](docs/engineering/ESLINT_STANDARD.md) before editing; do not wait for CI to reveal predictable lint violations.
 - For a new generic helper or cross-cutting capability, follow the shared-utility policy before implementing it.
 - Follow the [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) whenever adding or materially changing errors; adopt it incrementally in new functionality and bug fixes.
 - Keep default unit tests deterministic, offline, and credential-free. Broker tests that place orders must use TESTNET only.
