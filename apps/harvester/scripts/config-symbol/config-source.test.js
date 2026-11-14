@@ -1,69 +1,59 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { replacePairConfiguration } from "./config-source.js"
+import { insertTradingPairConfiguration } from "./config-source.js"
 
-const pairs = {
-  ADAFDUSD: {
-    enabled: true,
-    investment: 100,
-  },
+const pairConfig = {
+  enabled: true,
+  tradingEnvironment: "both",
+  enableVolatilityProtection: true,
+  investment: 100,
+  orderQuantity: 20,
+  keepQuantity: 0.1,
+  minProfit: 0.01,
+  priceStepPercent: 0.05,
+  pricePrecision: 4,
+  quantityPrecision: 1,
+  makerPercent: 0,
+  takerPercent: 0.1,
 }
-
 const source = [
-  'import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";',
-  "// Keep this comment outside the generated region.",
-  "export const appConfig = {",
-  "  strategies: {",
-  "    CG_coinGrabber: {",
-  "      pairs: {",
-  "        // BEGIN GENERATED PAIR CONFIGURATION",
-  "        // END GENERATED PAIR CONFIGURATION",
-  "      },",
-  "    },",
-  "  },",
+  "// Operator-maintained external pair configuration.",
+  "export const tradingPairs = {",
+  "  LINKFDUSD: { enabled: true },",
   "};",
   "",
 ].join("\n")
 
-test("replaces only the marked pair entries and preserves all surrounding JavaScript source", () => {
-  const updated = replacePairConfiguration({ source, pairs })
-
-  assert.ok(updated.includes('import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";'), "The source transformer must preserve imports outside the pair region.")
-  assert.ok(updated.includes("// Keep this comment outside the generated region."), "The source transformer must preserve operator comments outside the pair region.")
-  assert.ok(updated.includes('"ADAFDUSD": {'), "The generated pair key must be serialized as a valid JavaScript object property.")
-  assert.ok(updated.includes('"investment": 100'), "The generated pair values must be serialized without changing their values.")
-  assert.equal(updated.split("// BEGIN GENERATED PAIR CONFIGURATION").length - 1, 1, "The transformed source must retain exactly one opening marker.")
-  assert.equal(updated.split("// END GENERATED PAIR CONFIGURATION").length - 1, 1, "The transformed source must retain exactly one closing marker.")
+test("inserts a pair into the external tradingPairs map and preserves surrounding source", () => {
+  const updated = insertTradingPairConfiguration({ source, symbol: "ADAFDUSD", pairConfig })
+  assert.ok(updated.includes("export const tradingPairs = {"), "The external config must keep its named tradingPairs export.")
+  assert.ok(updated.includes("LINKFDUSD: { enabled: true }"), "Existing pair source must remain unchanged.")
+  assert.ok(updated.includes('"ADAFDUSD": {'), "The new symbol must be inserted into the external map.")
+  assert.ok(updated.includes("// Operator-maintained external pair configuration."), "Operator comments must survive pair insertion.")
 })
 
-test("rejects missing, duplicated, or reversed pair-region markers", () => {
+test("fails closed when the external tradingPairs export is missing or ambiguous", () => {
   assert.throws(
-    () => replacePairConfiguration({ source: source.replace("// BEGIN GENERATED PAIR CONFIGURATION", "// marker removed"), pairs }),
-    /marker/i,
-    "A missing opening marker must fail closed instead of guessing where to edit source.",
+    () => insertTradingPairConfiguration({ source: "export const other = {};", symbol: "ADAFDUSD", pairConfig }),
+    /exactly one tradingPairs object/,
+    "The generator must not guess a target when the external pair map is missing.",
   )
   assert.throws(
-    () => replacePairConfiguration({ source: source + source, pairs }),
-    /marker/i,
-    "Duplicated markers must be rejected because the intended source region would be ambiguous.",
-  )
-  const reversed = source
-    .replace("// BEGIN GENERATED PAIR CONFIGURATION", "// TEMPORARY")
-    .replace("// END GENERATED PAIR CONFIGURATION", "// BEGIN GENERATED PAIR CONFIGURATION")
-    .replace("// TEMPORARY", "// END GENERATED PAIR CONFIGURATION")
-  assert.throws(
-    () => replacePairConfiguration({ source: reversed, pairs }),
-    /marker/i,
-    "Reversed pair-region markers must be rejected rather than rewriting an unrelated section.",
+    () => insertTradingPairConfiguration({ source: "export const tradingPairs = {};\nexport const tradingPairs = {};", symbol: "ADAFDUSD", pairConfig }),
+    /exactly one tradingPairs object/,
+    "The generator must reject multiple target maps instead of selecting one arbitrarily.",
   )
 })
 
-test("rejects invalid pair maps before changing source", () => {
-  for (const invalidPairs of [null, [], {}]) {
-    assert.throws(
-      () => replacePairConfiguration({ source, pairs: invalidPairs }),
-      /non-empty pair map/i,
-      "The source transformer must require a non-empty object of generated pair entries.",
-    )
-  }
+test("rejects invalid symbols and pair values before changing source", () => {
+  assert.throws(
+    () => insertTradingPairConfiguration({ source, symbol: "ada-fdusd", pairConfig }),
+    /symbol/,
+    "Generated symbols must use the canonical uppercase Binance symbol format.",
+  )
+  assert.throws(
+    () => insertTradingPairConfiguration({ source, symbol: "ADAFDUSD", pairConfig: null }),
+    /pair config/,
+    "The generator must reject an empty pair configuration before editing source.",
+  )
 })
