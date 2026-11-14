@@ -29,7 +29,7 @@ function matchesCoverage({ coverage, evidence }) {
  * Existing coverage for the symbol is never silently replaced or narrowed.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore - ADR-0001 durable-fact read/append port.
+ * @param {object} options.operationalStateStore - ADR-0001 Operational State Store record read/append port.
  * @param {string} options.symbol - Canonical uppercase target market symbol.
  * @param {number} options.coveredFromTime - Earliest operator-reviewed history timestamp (Unix ms).
  * @param {number} options.verifiedAt - Operator verification timestamp (Unix ms).
@@ -39,7 +39,7 @@ function matchesCoverage({ coverage, evidence }) {
  * @returns {Promise<object>} Confirmation outcome; no fact is appended unless reconciliation is ready.
  */
 export async function confirmMarketHistoryCoverage({
-  durableFactsStore,
+  operationalStateStore,
   symbol,
   coveredFromTime,
   verifiedAt,
@@ -48,9 +48,9 @@ export async function confirmMarketHistoryCoverage({
   reconcileMarketState,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.readAll !== "function" ||
-        typeof durableFactsStore?.append !== "function") {
-      throw new TypeError("confirmMarketHistoryCoverage requires the ADR-0001 durable-facts read/append port")
+    if (typeof operationalStateStore?.readAll !== "function" ||
+        typeof operationalStateStore?.append !== "function") {
+      throw new TypeError("confirmMarketHistoryCoverage requires the ADR-0001 Operational State Store records read/append port")
     }
     if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
@@ -80,22 +80,22 @@ export async function confirmMarketHistoryCoverage({
       verifiedBy,
     }
 
-    const ledgerResult = await durableFactsStore.readAll()
+    const ledgerResult = await operationalStateStore.readAll()
     if (ledgerResult?.ok !== true) {
       return toResult({
-        errors: ledgerResult?.errors ?? [new Error("Durable-fact ledger could not be verified")],
+        errors: ledgerResult?.errors ?? [new Error("Operational State Store could not be verified")],
       })
     }
     const records = ledgerResult.data?.records
     if (!Array.isArray(records)) {
-      throw new TypeError("Durable-fact read result must contain a records array")
+      throw new TypeError("Operational State Store record read result must contain a records array")
     }
     const existingCoverage = records.filter((record) =>
       record?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
       record.data?.symbol === symbol
     )
     if (existingCoverage.length > 0) {
-      const currentResult = await readMarketHistoryCoverage({ durableFactsStore, symbol })
+      const currentResult = await readMarketHistoryCoverage({ operationalStateStore, symbol })
       if (currentResult?.ok !== true) {
         return toResult({
           errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
@@ -156,7 +156,7 @@ export async function confirmMarketHistoryCoverage({
     }
 
     const appendResult = await recordMarketHistoryCoverage({
-      durableFactsStore,
+      operationalStateStore,
       factId,
       symbol,
       coveredFromTime,
@@ -170,7 +170,7 @@ export async function confirmMarketHistoryCoverage({
         : toResult({ error: new Error("Market-history coverage fact was not durably committed") })
     }
 
-    const readback = await readMarketHistoryCoverage({ durableFactsStore, symbol })
+    const readback = await readMarketHistoryCoverage({ operationalStateStore, symbol })
     if (readback?.ok !== true) {
       return toResult({
         errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],

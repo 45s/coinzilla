@@ -1,12 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
-  canonicalizeDurableFactValue,
-  canonicalStringifyDurableFactValue,
-  digestDurableFactRecord,
-  normalizeDurableFactRecordedAt,
+  canonicalizeOperationalStateValue,
+  canonicalStringifyOperationalStateValue,
+  digestOperationalStateRecord,
+  normalizeOperationalStateRecordedAt,
   requireNonEmptyString,
-} from "./durable-facts-canonical.js"
+} from "./operational-state-canonical.js"
 
 test("canonicalizes nested object keys while preserving array order and exact decimal strings", () => {
   const value = {
@@ -16,12 +16,12 @@ test("canonicalizes nested object keys while preserving array order and exact de
   }
 
   assert.equal(
-    canonicalStringifyDurableFactValue(value),
+    canonicalStringifyOperationalStateValue(value),
     '{"entries":[{"left":"1.00","right":"2.00"},"tail"],"nested":{"first":1,"second":2},"z":"0.0100"}',
     "Canonical JSON must sort object keys recursively, preserve array order, and retain exact decimal strings.",
   )
   assert.deepEqual(
-    canonicalizeDurableFactValue(value),
+    canonicalizeOperationalStateValue(value),
     {
       entries: [{ left: "1.00", right: "2.00" }, "tail"],
       nested: { first: 1, second: 2 },
@@ -34,13 +34,13 @@ test("canonicalizes nested object keys while preserving array order and exact de
 test("rejects negative zero and every non-safe-integer number", () => {
   for (const value of [-0, 0.01, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.throws(
-      () => canonicalizeDurableFactValue(value),
+      () => canonicalizeOperationalStateValue(value),
       TypeError,
-      "Durable-fact numeric values must be safe integers and must not include negative zero.",
+      "Operational State Store record numeric values must be safe integers and must not include negative zero.",
     )
   }
   assert.throws(
-    () => canonicalizeDurableFactValue(-0),
+    () => canonicalizeOperationalStateValue(-0),
     /negative zero/i,
     "Negative zero needs a specific diagnostic because JSON would otherwise normalize it to zero.",
   )
@@ -69,7 +69,7 @@ test("rejects unsupported JSON graphs and unsafe object properties", () => {
     [{ apiKey: "secret" }, "Credential-bearing keys must not enter durable JSON records."],
   ]) {
     assert.throws(
-      () => canonicalizeDurableFactValue(value),
+      () => canonicalizeOperationalStateValue(value),
       { name: "TypeError" },
       description,
     )
@@ -80,24 +80,24 @@ test("normalizes Date and canonical ISO timestamp string values", () => {
   const timestamp = "2026-11-13T00:00:00.000Z"
 
   assert.equal(
-    normalizeDurableFactRecordedAt(new Date(timestamp)),
+    normalizeOperationalStateRecordedAt(new Date(timestamp)),
     timestamp,
     "Date clock values must normalize to canonical UTC ISO-8601.",
   )
   assert.equal(
-    normalizeDurableFactRecordedAt(timestamp),
+    normalizeOperationalStateRecordedAt(timestamp),
     timestamp,
     "Already-canonical ISO timestamp strings must be accepted unchanged.",
   )
   assert.throws(
-    () => normalizeDurableFactRecordedAt("2026-11-13T02:00:00+02:00"),
+    () => normalizeOperationalStateRecordedAt("2026-11-13T02:00:00+02:00"),
     /canonical ISO-8601/,
-    "Equivalent timestamps with offsets are not canonical durable-fact timestamps.",
+    "Equivalent timestamps with offsets are not canonical Operational State Store record timestamps.",
   )
   assert.throws(
-    () => normalizeDurableFactRecordedAt(new Date("invalid")),
+    () => normalizeOperationalStateRecordedAt(new Date("invalid")),
     RangeError,
-    "An invalid Date must not be converted into a durable-fact timestamp.",
+    "An invalid Date must not be converted into a Operational State Store record timestamp.",
   )
 })
 
@@ -106,8 +106,8 @@ test("computes the same record digest regardless of input object key order", () 
   const reordered = { sequence: "1", data: { a: "1.00", z: "2.00" }, factId: "fact-1" }
 
   assert.equal(
-    digestDurableFactRecord(first),
-    digestDurableFactRecord(reordered),
+    digestOperationalStateRecord(first),
+    digestOperationalStateRecord(reordered),
     "Record digests must depend on canonical content, not JavaScript object insertion order.",
   )
 })
@@ -132,22 +132,22 @@ test("requires canonical bounded non-empty strings", () => {
 
 test("rejects negative zero and oversized values at every canonical JSON depth", () => {
   assert.throws(
-    () => canonicalizeDurableFactValue({ nested: [{ amount: -0 }] }),
+    () => canonicalizeOperationalStateValue({ nested: [{ amount: -0 }] }),
     /negative zero/i,
     "Negative zero must be rejected recursively before serialization can erase its sign.",
   )
   assert.throws(
-    () => canonicalizeDurableFactValue({ nested: { value: "x".repeat(8193) } }),
+    () => canonicalizeOperationalStateValue({ nested: { value: "x".repeat(8193) } }),
     RangeError,
     "The maximum string length must apply recursively.",
   )
   assert.throws(
-    () => canonicalizeDurableFactValue({ nested: new Array(1025).fill(0) }),
+    () => canonicalizeOperationalStateValue({ nested: new Array(1025).fill(0) }),
     RangeError,
     "The maximum array length must apply recursively.",
   )
   assert.throws(
-    () => canonicalizeDurableFactValue(Object.fromEntries(
+    () => canonicalizeOperationalStateValue(Object.fromEntries(
       Array.from({ length: 129 }, (_, index) => ["key" + index, index]),
     )),
     RangeError,
@@ -158,7 +158,7 @@ test("rejects negative zero and oversized values at every canonical JSON depth",
     deeplyNested = { value: deeplyNested }
   }
   assert.throws(
-    () => canonicalizeDurableFactValue(deeplyNested),
+    () => canonicalizeOperationalStateValue(deeplyNested),
     RangeError,
     "The maximum nesting depth must be enforced.",
   )

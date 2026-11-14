@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import { recordSafetyBlockerResolved } from "./record-safety-control-facts.js"
-import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { reconcileRecoveredMarketState } from "./reconcile-recovered-market-state.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 
@@ -38,8 +38,8 @@ const createReconciliationEvidenceDigest = ({ targetMarket, historyRetentionEvid
     })))
     .digest("hex")
 
-export async function reconcileHarvesterDurableFactsCandidate({
-  durableFactsStore,
+export async function reconcileHarvesterOperationalStateCandidate({
+  operationalStateStore,
   marketMetadata,
   markets,
   targetMarket,
@@ -51,13 +51,13 @@ export async function reconcileHarvesterDurableFactsCandidate({
   auditAccountState,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.readAll !== "function") {
+    if (typeof operationalStateStore?.readAll !== "function") {
       throw new TypeError("Durable-fact candidate reconciliation requires an initialized read port")
     }
     if (typeof reconcileOwnedOrders !== "function" || typeof getRecoveredState !== "function") {
       throw new TypeError("Durable-fact candidate reconciliation requires a candidate-bound owned-order reconciler and state reader")
     }
-    const read = await durableFactsStore.readAll()
+    const read = await operationalStateStore.readAll()
     if (read?.ok !== true || read.data?.durableWriteSupported !== true || !Array.isArray(read.data.records)) {
       return toResult({
         errors: read?.errors?.length
@@ -65,7 +65,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
           : [new Error("Durable-fact stream is not verified and durably readable")],
       })
     }
-    const projection = projectHarvesterDurableFacts({ records: read.data.records })
+    const projection = projectHarvesterOperationalState({ records: read.data.records })
     if (projection?.ok !== true) { return projection }
     const candidate = restoreHarvesterJournalState({ projection, marketMetadata })
     if (candidate?.ok !== true) { return candidate }
@@ -118,7 +118,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
         })
         for (const blocker of blockersToResolve) {
           const resolution = await recordSafetyBlockerResolved({
-            durableFactsStore,
+            operationalStateStore,
             blockerId: blocker.blockerId,
             resolvedBy: "reconciliation:market-audit:" + targetMarket.symbol,
             resolution: "AUTHORITATIVE_RECONCILIATION",
@@ -136,7 +136,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
 
     let unresolvedSafetyBlockers = projection.data.stickySafetyBlockers ?? []
     if (resolvedSafetyBlockerIds.length > 0) {
-      const readback = await durableFactsStore.readAll()
+      const readback = await operationalStateStore.readAll()
       if (readback?.ok !== true || readback.data?.durableWriteSupported !== true || !Array.isArray(readback.data.records)) {
         return toResult({
           errors: readback?.errors?.length
@@ -144,7 +144,7 @@ export async function reconcileHarvesterDurableFactsCandidate({
             : [new Error("Resolved safety blockers could not be verified in the Operational State Store")],
         })
       }
-      const verifiedProjection = projectHarvesterDurableFacts({ records: readback.data.records })
+      const verifiedProjection = projectHarvesterOperationalState({ records: readback.data.records })
       if (verifiedProjection?.ok !== true) { return verifiedProjection }
       unresolvedSafetyBlockers = verifiedProjection.data.stickySafetyBlockers
     }

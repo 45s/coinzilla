@@ -12,11 +12,17 @@ const DEFAULT_LIMITS = Object.freeze({
 })
 const PROCESS_SESSION_DIRECTORY_PATTERN = /^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})-(.+)$/
 
+function getSessionOrdering({ sessionCount }) {
+  if (sessionCount > 1) { return "VALIDATED" }
+  if (sessionCount === 1) { return "SINGLE_SESSION" }
+  return "EMPTY_SCAN"
+}
+
 function createHistoryError({ code, message, details, cause }) {
   const error = new Error(message)
   error.code = code
-  if (details !== undefined) error.details = details
-  if (cause !== undefined) error.cause = cause
+  if (details !== undefined) { error.details = details }
+  if (cause !== undefined) { error.cause = cause }
   return error
 }
 
@@ -39,7 +45,7 @@ function toRelativePath({ rootDirectory, absolutePath }) {
 }
 
 function parseTimestamp(value) {
-  if (typeof value !== "string" || value.trim() === "") return undefined
+  if (typeof value !== "string" || value.trim() === "") { return undefined }
   const timestamp = Date.parse(value)
   return Number.isFinite(timestamp) ? timestamp : undefined
 }
@@ -53,7 +59,7 @@ function parseProcessStarted({ records, directory }) {
       details: { directory, count: startedRecords.length },
     })
   }
-  if (startedRecords.length === 0) return undefined
+  if (startedRecords.length === 0) { return undefined }
 
   const processStartedEvent = startedRecords[0].payload
   const data = processStartedEvent?.data
@@ -359,7 +365,7 @@ async function discoverSessionDirectories({
 /**
  * Read legacy flat Journal sessions and nested per-process session folders.
  *
- * This is a forensic history reader, not an ADR-0001 durable-fact reader.
+ * This is a forensic history reader, not an Operational State Store reader.
  * It validates every discovered session before returning a flattened sequence.
  * When several sessions exist, their order must be established by unique
  * process-start metadata or unique first-record timestamps for legacy files;
@@ -472,7 +478,7 @@ export async function readHarvesterJournalHistory({
         maxRecordBytes,
       })
       if (result?.ok !== true) {
-        if (result?.ok === false) return result
+        if (result?.ok === false) { return result }
         return toResult({ error: new TypeError("Harvester Journal history read returned an invalid result") })
       }
       if (
@@ -586,7 +592,7 @@ export async function readHarvesterJournalHistory({
       bytesRead,
       directoriesVisited,
       discoveryComplete: true,
-      ordering: sessionMetadata.length > 1 ? "VALIDATED" : sessionMetadata.length === 1 ? "SINGLE_SESSION" : "EMPTY_SCAN",
+      ordering: getSessionOrdering({ sessionCount: sessionMetadata.length }),
     })
   } catch (error) {
     if (error?.code === "ENOENT") {

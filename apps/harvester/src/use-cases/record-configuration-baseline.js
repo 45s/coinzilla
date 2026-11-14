@@ -21,9 +21,9 @@ function canonicalize(value) {
 }
 
 /** Persist a deterministic, non-secret fingerprint of all strategy decision settings. */
-export async function recordConfigurationBaseline({ durableFactsStore, appConfig } = {}) {
+export async function recordConfigurationBaseline({ operationalStateStore, appConfig } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordConfigurationBaseline requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordConfigurationBaseline requires a Operational State Store append capability") }
     const strategies = appConfig?.strategies
     if (!strategies || typeof strategies !== "object" || Array.isArray(strategies)) {
       throw new TypeError("Configuration baseline requires the validated strategies object")
@@ -35,7 +35,7 @@ export async function recordConfigurationBaseline({ durableFactsStore, appConfig
     const markets = Object.keys(strategies[strategyName]?.pairs ?? {}).sort()
     if (markets.length === 0) { throw new TypeError("Configuration baseline requires at least one configured market") }
     const fingerprint = createHash("sha256").update(JSON.stringify({ schemaVersion: 1, strategyName, strategy })).digest("hex")
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "configuration-baseline:" + fingerprint,
       factType: "CONFIGURATION_BASELINE",
       data: { schemaVersion: 1, strategyName, markets, fingerprint },

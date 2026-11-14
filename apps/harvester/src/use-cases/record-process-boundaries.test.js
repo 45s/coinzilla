@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordConfigurationBaseline } from "./record-configuration-baseline.js"
 import { recordProcessStarted } from "./record-process-started.js"
 import { recordProcessStopped } from "./record-process-stopped.js"
@@ -11,7 +11,7 @@ import path from "node:path"
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-facts-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "process-facts-test-session",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -33,9 +33,9 @@ const appConfig = {
 }
 
 test("records a deterministic non-secret configuration fingerprint and market set", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const first = await recordConfigurationBaseline({ durableFactsStore, appConfig })
-  const duplicate = await recordConfigurationBaseline({ durableFactsStore, appConfig })
+  const operationalStateStore = await createStore(t)
+  const first = await recordConfigurationBaseline({ operationalStateStore, appConfig })
+  const duplicate = await recordConfigurationBaseline({ operationalStateStore, appConfig })
 
   assert.equal(first.ok, true, first.errors?.[0]?.message)
   assert.equal(first.data.durable, true)
@@ -46,23 +46,23 @@ test("records a deterministic non-secret configuration fingerprint and market se
 
   const changedConfig = structuredClone(appConfig)
   changedConfig.strategies.CG_coinGrabber.pairs.BTCUSDT.investment = 300
-  const changed = await recordConfigurationBaseline({ durableFactsStore, appConfig: changedConfig })
+  const changed = await recordConfigurationBaseline({ operationalStateStore, appConfig: changedConfig })
   assert.equal(changed.ok, true)
   assert.notEqual(changed.data.fingerprint, first.data.fingerprint, "A decision-affecting configuration change must produce a new immutable baseline.")
 })
 
 test("binds process start and clean/unclean stop facts to the durable store runtime session", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const baseline = await recordConfigurationBaseline({ durableFactsStore, appConfig })
+  const operationalStateStore = await createStore(t)
+  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
   const started = await recordProcessStarted({
-    durableFactsStore,
+    operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
     tradingEnabled: true,
   })
   const stopped = await recordProcessStopped({
-    durableFactsStore,
+    operationalStateStore,
     reason: "SHUTDOWN_COMPLETED",
     clean: true,
   })
@@ -71,7 +71,7 @@ test("binds process start and clean/unclean stop facts to the durable store runt
   assert.equal(started.data.durable, true)
   assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
   assert.equal(stopped.data.durable, true)
-  const all = await durableFactsStore.readAll()
+  const all = await operationalStateStore.readAll()
   const processFacts = all.data.records.filter(({ factType }) => factType.startsWith("PROCESS_"))
   assert.deepEqual(processFacts.map(({ factType }) => factType), ["PROCESS_STARTED", "PROCESS_STOPPED"])
   assert.ok(processFacts.every(({ runtimeSessionId }) => runtimeSessionId === "process-facts-test-session"))
@@ -79,7 +79,7 @@ test("binds process start and clean/unclean stop facts to the durable store runt
 })
 
 test("rejects malformed process-boundary and configuration-baseline facts", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const fingerprint = "a".repeat(64)
   const invalidFacts = [
     {
@@ -104,15 +104,15 @@ test("rejects malformed process-boundary and configuration-baseline facts", asyn
     },
   ]
   for (const fact of invalidFacts) {
-    const result = await durableFactsStore.append(fact)
+    const result = await operationalStateStore.append(fact)
     assert.equal(result.ok, false, "Malformed or mismatched process facts must fail closed.")
   }
 })
 
 test("rejects process boundaries that are not tied to the store runtime session", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const result = await recordProcessStopped({
-    durableFactsStore: { ...durableFactsStore, runtimeSessionId: "another-session" },
+    operationalStateStore: { ...operationalStateStore, runtimeSessionId: "another-session" },
     reason: "SHUTDOWN_COMPLETED",
     clean: true,
   })

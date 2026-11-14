@@ -109,11 +109,11 @@ test("offline context adapter rejects history that starts after the reviewed cov
   assert.match(result.errors[0].message, /coverage start/i, "The evidence mismatch must identify the unproven coverage boundary.")
 })
 
-test("offline context adapter refuses confirmation without a durable-fact store", async () => {
+test("offline context adapter refuses confirmation without a Operational State Store", async () => {
   const result = await runOfflineMarketRecovery({ context, confirm: true })
 
-  assert.equal(result.ok, false, "Coverage confirmation must require the existing durable-fact store.")
-  assert.match(result.errors[0].message, /durable.fact/i, "The missing durable-fact dependency must be actionable.")
+  assert.equal(result.ok, false, "Coverage confirmation must require the existing Operational State Store.")
+  assert.match(result.errors[0].message, /Operational State Store/i, "The missing Operational State Store record dependency must be actionable.")
 })
 
 test("offline context adapter rejects malformed evidence before reconciliation", async () => {
@@ -127,7 +127,7 @@ test("offline context adapter rejects malformed evidence before reconciliation",
 
 test("offline context confirmation never initializes or appends coverage for a skipped audit", async () => {
   const calls = []
-  const durableFactsStore = {
+  const operationalStateStore = {
     readAll: async () => {
       calls.push("readAll")
       return { ok: true, data: { records: [] } }
@@ -140,7 +140,7 @@ test("offline context confirmation never initializes or appends coverage for a s
   const result = await runOfflineMarketRecovery({
     context,
     confirm: true,
-    durableFactsStore,
+    operationalStateStore,
   })
 
   assert.equal(result.ok, true, "A valid but skipped offline audit must return an inspectable confirmation outcome.")

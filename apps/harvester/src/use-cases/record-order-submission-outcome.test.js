@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -28,7 +28,7 @@ const makeOrder = ({ brokerOrderId, status = "PENDING", executedQuantity = "0" }
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-order-outcome-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "order-outcome-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -38,10 +38,10 @@ const createStore = async (t) => {
 }
 
 test("records the broker acknowledgement and canonical execution state as a durable outcome", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const order = makeOrder({ brokerOrderId: "broker-1", status: "PARTIALLY_FILLED", executedQuantity: "12.5" })
   const result = await recordOrderSubmissionOutcome({
-    durableFactsStore,
+    operationalStateStore,
     order,
     outcome: "ACKNOWLEDGED",
     purpose: "RECOVERY_SELL",
@@ -71,10 +71,10 @@ test("records the broker acknowledgement and canonical execution state as a dura
 })
 
 test("records unknown submission outcomes without inventing a broker order identity", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const order = makeOrder()
   const result = await recordOrderSubmissionOutcome({
-    durableFactsStore,
+    operationalStateStore,
     order,
     outcome: "UNKNOWN",
     purpose: null,
@@ -89,18 +89,18 @@ test("records unknown submission outcomes without inventing a broker order ident
 
 test("rejects outcome classifications that contradict canonical broker acknowledgement state", async () => {
   let appendCalls = 0
-  const durableFactsStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
+  const operationalStateStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
   const pendingOrder = makeOrder()
   const acknowledgedOrder = makeOrder({ brokerOrderId: "broker-1", status: "OPEN" })
 
   const falseAcknowledgement = await recordOrderSubmissionOutcome({
-    durableFactsStore,
+    operationalStateStore,
     order: pendingOrder,
     outcome: "ACKNOWLEDGED",
     purpose: null,
   })
   const falseUnknown = await recordOrderSubmissionOutcome({
-    durableFactsStore,
+    operationalStateStore,
     order: acknowledgedOrder,
     outcome: "UNKNOWN",
     purpose: null,
@@ -113,7 +113,7 @@ test("rejects outcome classifications that contradict canonical broker acknowled
 
 test("requires a durable store acknowledgement for every submission outcome", async () => {
   const result = await recordOrderSubmissionOutcome({
-    durableFactsStore: { append: async () => ({ ok: true, data: { durable: false } }) },
+    operationalStateStore: { append: async () => ({ ok: true, data: { durable: false } }) },
     order: makeOrder(),
     outcome: "REJECTED_OR_UNKNOWN",
     purpose: null,

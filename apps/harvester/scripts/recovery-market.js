@@ -82,7 +82,7 @@ export async function runRecoveryMarketCommand({
     const contextPath = path.resolve(cwd, parsed.contextPath)
     const raw = await readContext(contextPath, "utf8")
     const context = JSON.parse(raw)
-    let durableFactsStore
+    let operationalStateStore
     if (parsed.confirm) {
       let directory
       try {
@@ -93,7 +93,7 @@ export async function runRecoveryMarketCommand({
       if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
         throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
       }
-      durableFactsStore = createFileOperationalStateStore({
+      operationalStateStore = createFileOperationalStateStore({
         directory,
         runtimeSessionId: context.runtimeSessionId,
       })
@@ -102,7 +102,7 @@ export async function runRecoveryMarketCommand({
     const result = await runOfflineMarketRecovery({
       context,
       confirm: parsed.confirm,
-      durableFactsStore,
+      operationalStateStore,
     })
     const summary = summarizeResult({ result })
     writeOutput(JSON.stringify(summary, null, 2))

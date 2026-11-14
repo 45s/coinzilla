@@ -1,5 +1,5 @@
 import { toResult } from "@coinzilla/utils"
-import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 
 /**
@@ -8,16 +8,16 @@ import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.
  * and never marks the candidate ready for strategy evaluation.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore Initialized store with verified readAll().
+ * @param {object} options.operationalStateStore Initialized store with verified readAll().
  * @param {Map|Array} options.marketMetadata Canonical exchange market metadata.
  * @returns {Promise<object>} Candidate Portfolio, RecoveryLedger map, and OrderRegistry.
  */
-export async function restoreHarvesterDurableFactsState({ durableFactsStore, marketMetadata } = {}) {
+export async function restoreHarvesterOperationalState({ operationalStateStore, marketMetadata } = {}) {
   try {
-    if (typeof durableFactsStore?.readAll !== "function") {
-      throw new TypeError("restoreHarvesterDurableFactsState requires an initialized durable-fact read port")
+    if (typeof operationalStateStore?.readAll !== "function") {
+      throw new TypeError("restoreHarvesterOperationalState requires an initialized durable-fact read port")
     }
-    const read = await durableFactsStore.readAll()
+    const read = await operationalStateStore.readAll()
     if (read?.ok !== true || read.data?.durableWriteSupported !== true || !Array.isArray(read.data.records)) {
       return toResult({
         errors: read?.errors?.length
@@ -25,7 +25,7 @@ export async function restoreHarvesterDurableFactsState({ durableFactsStore, mar
           : [new Error("Durable-fact stream is not verified and durably readable")],
       })
     }
-    const projection = projectHarvesterDurableFacts({ records: read.data.records })
+    const projection = projectHarvesterOperationalState({ records: read.data.records })
     if (projection?.ok !== true) { return projection }
     const restored = restoreHarvesterJournalState({ projection, marketMetadata })
     if (restored?.ok !== true) { return restored }

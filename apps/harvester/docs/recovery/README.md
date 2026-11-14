@@ -156,6 +156,6 @@ This fixture represents a trading-enabled Journal session with a complete PREFLI
 
 **Status: IMPLEMENTED AND MERGED — offline CLI/context composition and the production-audit evidence matrix merged in [PR #1053](https://github.com/45s/coinzilla/pull/1053). All required core CI workflows passed on exact code head `2c3a48442f893521403d53e4816631a9de4b0878`; optional read-only TESTNET integration was skipped. Step 7 implementation is complete.**
 
-PR #1047 delivered the read-only orchestration and guarded confirmation use cases. PR #1053 adds the offline JSON context adapter, explicit audit-only/confirmation CLI modes, canonical entity construction, and end-to-end tests using the production account audit and filesystem durable-fact store. No exchange write, broker connection, startup replay, Telegram command or runtime readiness wiring is introduced.
+PR #1047 delivered the read-only orchestration and guarded confirmation use cases. PR #1053 adds the offline JSON context adapter, explicit audit-only/confirmation CLI modes, canonical entity construction, and end-to-end tests using the production account audit and filesystem Operational State Store. No exchange write, broker connection, startup replay, Telegram command or runtime readiness wiring is introduced.
 
 Steps 8 and 9 remain separate gates: candidate-state restoration behind closed readiness, then crash/restart and restart-twice verification. Unattended restart readiness remains disabled.

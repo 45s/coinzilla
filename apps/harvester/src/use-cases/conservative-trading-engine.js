@@ -79,11 +79,11 @@ export function makeConservativeTradingEngine({
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   getVolatilityData,
-  onDurableSubmissionIntent,
-  onDurableSubmissionOutcome,
-  onDurableCancellationIntent,
-  onDurableCancellationOutcome,
-  onDurableStrategyMarketPaused,
+  onOperationalStateSubmissionIntent,
+  onOperationalStateSubmissionOutcome,
+  onOperationalStateCancellationIntent,
+  onOperationalStateCancellationOutcome,
+  onOperationalStateStrategyMarketPaused,
   logger,
   initialState = {},
 } = {}) {
@@ -109,17 +109,17 @@ export function makeConservativeTradingEngine({
     if (typeof callback !== "function") {throw new TypeError(name + " must be a function")}
   }
   if (typeof isMarketPriceFresh !== "function") {throw new TypeError("isMarketPriceFresh must be a function")}
-  if (onDurableCancellationIntent !== undefined && typeof onDurableCancellationIntent !== "function") {
-    throw new TypeError("onDurableCancellationIntent must be a function")
+  if (onOperationalStateCancellationIntent !== undefined && typeof onOperationalStateCancellationIntent !== "function") {
+    throw new TypeError("onOperationalStateCancellationIntent must be a function")
   }
-  if (onDurableCancellationOutcome !== undefined && typeof onDurableCancellationOutcome !== "function") {
-    throw new TypeError("onDurableCancellationOutcome must be a function")
+  if (onOperationalStateCancellationOutcome !== undefined && typeof onOperationalStateCancellationOutcome !== "function") {
+    throw new TypeError("onOperationalStateCancellationOutcome must be a function")
   }
-  if ((onDurableCancellationIntent === undefined) !== (onDurableCancellationOutcome === undefined)) {
-    throw new TypeError("onDurableCancellationIntent and onDurableCancellationOutcome must be provided together")
+  if ((onOperationalStateCancellationIntent === undefined) !== (onOperationalStateCancellationOutcome === undefined)) {
+    throw new TypeError("onOperationalStateCancellationIntent and onOperationalStateCancellationOutcome must be provided together")
   }
-  if (onDurableStrategyMarketPaused !== undefined && typeof onDurableStrategyMarketPaused !== "function") {
-    throw new TypeError("onDurableStrategyMarketPaused must be a function")
+  if (onOperationalStateStrategyMarketPaused !== undefined && typeof onOperationalStateStrategyMarketPaused !== "function") {
+    throw new TypeError("onOperationalStateStrategyMarketPaused must be a function")
   }
   if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
@@ -377,11 +377,11 @@ export function makeConservativeTradingEngine({
 
   const pause = async ({ symbol, reason, error }) => {
     const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
-    if (!wasDurablyPaused && onDurableStrategyMarketPaused) {
-      const durable = await onDurableStrategyMarketPaused({ symbol, reason })
+    if (!wasDurablyPaused && onOperationalStateStrategyMarketPaused) {
+      const durable = await onOperationalStateStrategyMarketPaused({ symbol, reason })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         logger?.error?.({
-          message: "strategy pause could not be committed to the durable-fact ledger",
+          message: "strategy pause could not be committed to the Operational State Store",
           symbol,
           reason,
           errors: durable?.errors,
@@ -542,11 +542,11 @@ export function makeConservativeTradingEngine({
     return result
   }
 
-  const cancelOrderWithDurableFacts = async ({ order, reason } = {}) => {
-    if (onDurableCancellationIntent) {
+  const cancelOrderWithOperationalState = async ({ order, reason } = {}) => {
+    if (onOperationalStateCancellationIntent) {
       let intentResult
       try {
-        intentResult = await onDurableCancellationIntent({ order, reason })
+        intentResult = await onOperationalStateCancellationIntent({ order, reason })
       } catch (error) {
         return { ok: false, cancellationOutcome: "NOT_SENT", errors: [error] }
       }
@@ -562,10 +562,10 @@ export function makeConservativeTradingEngine({
     try {
       cancelResult = await broker.cancelOrder({ order })
     } catch (error) {
-      if (onDurableCancellationOutcome) {
+      if (onOperationalStateCancellationOutcome) {
         let outcomeResult
         try {
-          outcomeResult = await onDurableCancellationOutcome({ order, reason, outcome: "OUTCOME_UNKNOWN" })
+          outcomeResult = await onOperationalStateCancellationOutcome({ order, reason, outcome: "OUTCOME_UNKNOWN" })
         } catch (outcomeError) {
           return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [outcomeError] }
         }
@@ -579,7 +579,7 @@ export function makeConservativeTradingEngine({
       }
       return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
     }
-    if (!onDurableCancellationOutcome) {return cancelResult}
+    if (!onOperationalStateCancellationOutcome) {return cancelResult}
     let outcome
     let canceledOrder
     if (cancelResult?.ok === true && cancelResult.data instanceof CanonicalOrder) {
@@ -608,7 +608,7 @@ export function makeConservativeTradingEngine({
     }
     let outcomeResult
     try {
-      outcomeResult = await onDurableCancellationOutcome({ order, canceledOrder, reason, outcome })
+      outcomeResult = await onOperationalStateCancellationOutcome({ order, canceledOrder, reason, outcome })
     } catch (error) {
       return { ok: false, cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
     }
@@ -631,8 +631,8 @@ export function makeConservativeTradingEngine({
 
   const submit = makeExecuteStrategyDecision({
     broker,
-    onDurableSubmissionIntent,
-    onDurableSubmissionOutcome,
+    onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome,
     canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
       const defer = (reason, details = {}) => ({
@@ -836,7 +836,7 @@ export function makeConservativeTradingEngine({
       }
       let cancelResult
       try {
-        cancelResult = await cancelOrderWithDurableFacts({ order, reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL" })
+        cancelResult = await cancelOrderWithOperationalState({ order, reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL" })
       } catch (error) {
         return withFailure(
           await markCancellationUnknown({
@@ -999,7 +999,7 @@ export function makeConservativeTradingEngine({
     }
     let cancelResult
     try {
-      cancelResult = await cancelOrderWithDurableFacts({ order, reason: "TRAILING_BUY_REPRICE" })
+      cancelResult = await cancelOrderWithOperationalState({ order, reason: "TRAILING_BUY_REPRICE" })
     } catch (error) {
       return markCancellationUnknown({
         symbol,
@@ -1762,7 +1762,7 @@ export function makeConservativeTradingEngine({
 
         let cancelResult
         try {
-          cancelResult = await cancelOrderWithDurableFacts({ order, reason })
+          cancelResult = await cancelOrderWithOperationalState({ order, reason })
         } catch (error) {
           const failed = await markCancellationUnknown({
             symbol,
@@ -2152,7 +2152,7 @@ export function makeConservativeTradingEngine({
         return toResult({ error })
       }
       if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator pause requires a durable-fact commit callback") })
+        return toResult({ error: new TypeError("Operator pause requires a Operational State Store commit callback") })
       }
       if (state.operatorPausedMarkets.has(symbol)) {
         return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: true } })
@@ -2201,7 +2201,7 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
       }
       if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator resume requires a durable-fact commit callback") })
+        return toResult({ error: new TypeError("Operator resume requires a Operational State Store commit callback") })
       }
       let committed
       try {

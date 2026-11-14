@@ -3,14 +3,14 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js"
 import { readMarketHistoryCoverage } from "./read-market-history-coverage.js"
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-history-coverage-read-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "history-coverage-read-test",
     now: () => new Date("2026-11-11T12:00:00.000Z"),
@@ -30,10 +30,10 @@ const evidence = (overrides = {}) => ({
 })
 
 test("projects the latest durable coverage fact into the exact audit evidence contract", async (t) => {
-  const durableFactsStore = await createStore(t)
-  await recordMarketHistoryCoverage({ durableFactsStore, ...evidence() })
+  const operationalStateStore = await createStore(t)
+  await recordMarketHistoryCoverage({ operationalStateStore, ...evidence() })
   await recordMarketHistoryCoverage({
-    durableFactsStore,
+    operationalStateStore,
     ...evidence({
       factId: "market-history-coverage:BTCUSDT:2",
       coveredFromTime: 1_699_999_900_000,
@@ -41,7 +41,7 @@ test("projects the latest durable coverage fact into the exact audit evidence co
       evidenceDigest: "b".repeat(64),
     }),
   })
-  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+  const result = await readMarketHistoryCoverage({ operationalStateStore, symbol: "BTCUSDT" })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(result.data, {
@@ -56,29 +56,29 @@ test("projects the latest durable coverage fact into the exact audit evidence co
 })
 
 test("does not borrow another market's history coverage", async (t) => {
-  const durableFactsStore = await createStore(t)
-  await recordMarketHistoryCoverage({ durableFactsStore, ...evidence() })
-  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "ETHUSDT" })
+  const operationalStateStore = await createStore(t)
+  await recordMarketHistoryCoverage({ operationalStateStore, ...evidence() })
+  const result = await readMarketHistoryCoverage({ operationalStateStore, symbol: "ETHUSDT" })
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /No durable history-coverage fact exists for ETHUSDT/)
 })
 
-test("refuses a missing or corrupt durable-fact store", async (t) => {
+test("refuses a missing or corrupt Operational State Store", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-history-coverage-read-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const durableFactsStore = createFileDurableFactsStore({
+  const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "history-coverage-read-test",
   })
-  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+  const result = await readMarketHistoryCoverage({ operationalStateStore, symbol: "BTCUSDT" })
 
   assert.equal(result.ok, false)
 })
 
 
 test("rejects a durable history-coverage sequence that narrows prior verified coverage", async () => {
-  const durableFactsStore = {
+  const operationalStateStore = {
     readAll: async () => ({
       ok: true,
       data: {
@@ -109,7 +109,7 @@ test("rejects a durable history-coverage sequence that narrows prior verified co
       },
     }),
   }
-  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+  const result = await readMarketHistoryCoverage({ operationalStateStore, symbol: "BTCUSDT" })
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /narrows the verified history window/)
@@ -117,19 +117,19 @@ test("rejects a durable history-coverage sequence that narrows prior verified co
 
 
 test("rejects invalid read ports, symbols, and malformed record collections", async () => {
-  const missingPort = await readMarketHistoryCoverage({ durableFactsStore: {}, symbol: "BTCUSDT" })
-  assert.equal(missingPort.ok, false, "A missing durable-fact read port must be rejected before history coverage is returned.")
-  assert.match(missingPort.errors[0].message, /durable-fact read port/, "The error must identify the required durable-fact read capability.")
+  const missingPort = await readMarketHistoryCoverage({ operationalStateStore: {}, symbol: "BTCUSDT" })
+  assert.equal(missingPort.ok, false, "A missing Operational State Store read capability must be rejected before history coverage is returned.")
+  assert.match(missingPort.errors[0].message, /Operational State Store read capability/, "The error must identify the required Operational State Store record read capability.")
 
   const invalidSymbol = await readMarketHistoryCoverage({
-    durableFactsStore: { readAll: async () => ({ ok: true, data: { records: [] } }) },
+    operationalStateStore: { readAll: async () => ({ ok: true, data: { records: [] } }) },
     symbol: "btcusdt",
   })
   assert.equal(invalidSymbol.ok, false, "A non-canonical market symbol must not be used to read durable coverage.")
   assert.match(invalidSymbol.errors[0].message, /canonical uppercase/, "The error must identify the canonical market-symbol requirement.")
 
   const malformedRecords = await readMarketHistoryCoverage({
-    durableFactsStore: { readAll: async () => ({ ok: true, data: { records: null } }) },
+    operationalStateStore: { readAll: async () => ({ ok: true, data: { records: null } }) },
     symbol: "BTCUSDT",
   })
   assert.equal(malformedRecords.ok, false, "A malformed durable record collection must fail the coverage read.")
@@ -137,7 +137,7 @@ test("rejects invalid read ports, symbols, and malformed record collections", as
 })
 
 test("rejects a durable history-coverage sequence with a regressing verification timestamp", async () => {
-  const durableFactsStore = {
+  const operationalStateStore = {
     readAll: async () => ({
       ok: true,
       data: {
@@ -168,7 +168,7 @@ test("rejects a durable history-coverage sequence with a regressing verification
       },
     }),
   }
-  const result = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+  const result = await readMarketHistoryCoverage({ operationalStateStore, symbol: "BTCUSDT" })
 
   assert.equal(result.ok, false, "A durable coverage history with a regressing verification time must be rejected.")
   assert.match(result.errors[0].message, /verification timestamp regresses/, "The failure must identify the non-monotonic verification timestamp.")

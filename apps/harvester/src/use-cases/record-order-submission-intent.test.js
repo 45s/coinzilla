@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -24,7 +24,7 @@ const order = new CanonicalOrder({
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-order-intent-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "order-intent-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -34,9 +34,9 @@ const createStore = async (t) => {
 }
 
 test("records the canonical immutable order intent and requires a durable append acknowledgement", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const result = await recordOrderSubmissionIntent({
-    durableFactsStore,
+    operationalStateStore,
     order,
     purpose: "RECOVERY_SELL",
   })
@@ -62,7 +62,7 @@ test("records the canonical immutable order intent and requires a durable append
 
 test("rejects a successful-shaped append that does not confirm durable commitment", async () => {
   const result = await recordOrderSubmissionIntent({
-    durableFactsStore: { append: async () => ({ ok: true, data: { durable: false } }) },
+    operationalStateStore: { append: async () => ({ ok: true, data: { durable: false } }) },
     order,
     purpose: null,
   })
@@ -73,15 +73,15 @@ test("rejects a successful-shaped append that does not confirm durable commitmen
 
 test("rejects non-canonical orders and unsupported strategy purposes before appending", async () => {
   let appendCalls = 0
-  const durableFactsStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
+  const operationalStateStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
 
   const invalidOrder = await recordOrderSubmissionIntent({
-    durableFactsStore,
+    operationalStateStore,
     order: { ...order },
     purpose: null,
   })
   const invalidPurpose = await recordOrderSubmissionIntent({
-    durableFactsStore,
+    operationalStateStore,
     order,
     purpose: "UNRECOGNIZED_PURPOSE",
   })

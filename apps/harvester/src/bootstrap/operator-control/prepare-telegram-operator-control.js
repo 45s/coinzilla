@@ -13,15 +13,15 @@ export class OperatorControlStartupError extends Error {
 
 const disabledLifecycle = Object.freeze({
   enabled: false,
-  durableFactsStore: undefined,
+  operationalStateStore: undefined,
   async start() { return Object.freeze({ started: false, disabled: true }) },
   async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
 })
 
 /** Prepare optional Telegram control after verifying the pre-initialized ADR-0001 store. */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env, runtimeSessionId, durableFactsStore: suppliedDurableFactsStore,
-  createDurableFactsStore = createFileOperationalStateStore,
+  telegramConfig, env = process.env, runtimeSessionId, operationalStateStore: suppliedOperationalStateStore,
+  createOperationalStateStore = createFileOperationalStateStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
@@ -31,8 +31,8 @@ export async function prepareTelegramOperatorControl({
   if (!botToken) {
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
-  let durableFacts = suppliedDurableFactsStore
-  if (durableFacts === undefined) {
+  let operationalStateStore = suppliedOperationalStateStore
+  if (operationalStateStore === undefined) {
     let directory
     try {
       directory = resolveOperationalStateDirectory({ env })
@@ -47,7 +47,7 @@ export async function prepareTelegramOperatorControl({
       throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
     }
     try {
-      durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
+      operationalStateStore = createOperationalStateStore({ directory, runtimeSessionId })
     } catch (cause) {
       throw new OperatorControlStartupError("Unable to construct the configured Operational State Store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
     }
@@ -55,19 +55,19 @@ export async function prepareTelegramOperatorControl({
     throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
   }
   if (runtimeSessionId !== undefined &&
-      durableFacts?.runtimeSessionId !== undefined &&
-      durableFacts.runtimeSessionId !== runtimeSessionId) {
+      operationalStateStore?.runtimeSessionId !== undefined &&
+      operationalStateStore.runtimeSessionId !== runtimeSessionId) {
     throw new OperatorControlStartupError(
       "Telegram operator control must share the current Harvester process-session Operational State Store",
       "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
     )
   }
-  if (typeof durableFacts?.verify !== "function" || typeof durableFacts?.append !== "function") {
+  if (typeof operationalStateStore?.verify !== "function" || typeof operationalStateStore?.append !== "function") {
     throw new OperatorControlStartupError("Configured Operational State Store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
   }
   let verification
   try {
-    verification = await durableFacts.verify()
+    verification = await operationalStateStore.verify()
   } catch (cause) {
     throw new OperatorControlStartupError("Unable to verify the initialized Operational State Store; operator control remains disabled", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
   }
@@ -78,12 +78,12 @@ export async function prepareTelegramOperatorControl({
   let adapter
   return Object.freeze({
     enabled: true,
-    durableFactsStore: durableFacts,
+    operationalStateStore: operationalStateStore,
     async start({ engine, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
       if (adapter) {
         return Object.freeze({ started: true, alreadyStarted: true })
       }
-      const operator = createHarvesterOperator({ engine, durableFacts, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })
+      const operator = createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })
       try {
         adapter = createAdapter({ botToken, allowedUserIds: telegramConfig.allowedUserIds, operator, fetchImpl, logger })
         if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
