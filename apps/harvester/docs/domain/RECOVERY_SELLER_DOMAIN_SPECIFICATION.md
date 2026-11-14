@@ -55,6 +55,23 @@ Hard invariants:
 5. Authorization cannot override profitability, exchange filters, reservations, risk limits, or reconciliation gates.
 6. Revoking/reducing authorization cannot erase fills, reverse accounting, or pretend a submitted order did not exist.
 
+**Configured legacy position and average cost (agreed direction):**
+
+The operator supplies the original aggregate quote investment and the corresponding original base quantity. RS calculates the average historical acquisition cost; the operator does not need to calculate or enter an average price.
+
+Example for ZROUSDT:
+
+- `legacyPosition.invested = 100` USDT
+- `legacyPosition.quantity = 50` ZRO
+- RS-calculated average historical cost = `100 / 50 = 2` USDT per ZRO.
+- `sellQuantity = 0.01` ZRO per successfully completed cycle.
+
+The names above describe the proposed configuration shape, not a runtime schema. The existing recovery-tranche `investment` setting is separate and must not be confused with the legacy position's historical `invested` amount. The configured legacy invested amount and original quantity establish the aggregate historical basis; they do not assert that the full quantity is currently in the Spot wallet.
+
+**Spot custody is separate from logical legacy ownership and cost basis.** The operator may keep only 0.5 ZRO in Spot to support 50 cycles of 0.01 ZRO legacy releases and hold/transfer the remaining 49.5 ZRO to EARN. RS retains the configured logical legacy position and its $2 average cost basis; it must not infer that only 0.5 ZRO was originally acquired merely because that is the amount currently in Spot. Conversely, EARN-held quantity is not Spot-available inventory and must never be counted as immediately sellable or used to satisfy an exchange order's balance check. Each cycle may consume only the configured legacy slice that is actually available and unreserved in Spot, alongside its recovery inventory. Further cycles requiring legacy quantity must wait until the required quantity is again available in Spot (for example, after the operator redeems/transfers it from EARN).
+
+The original configured quantity and invested amount are historical basis inputs; remaining logical legacy quantity, Spot-available quantity, EARN/externally held quantity, and active reservations are distinct facts. A transfer between Spot and EARN changes custody/availability, not historical cost basis or the original acquisition quantity. RS must not assume EARN balances are observable through the Spot broker or silently claim custody of them.
+
 **Owner decision required:** authorization interface and lifecycle: operator confirmation, evidence source/balance baseline, expiry and revocation behavior, durable provenance, and whether authorization survives process restart. Until specified, no runtime authorization mechanism may be invented.
 
 ## 4. Attribution and shared Portfolio accounting
@@ -92,7 +109,7 @@ The current Portfolio is fill-driven and has no general opening-balance/manual-i
 
 Therefore, **RS must not submit a SELL consuming legacy inventory until an owner-approved accounting design represents that authorized opening inventory consistently with the one shared Position and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
 
-**Owner decision required:** choose the opening-inventory/accounting boundary and how legacy cost basis is represented while preserving the one-Position model. Do not add synthetic fills, seed balances from an unproven wallet snapshot, or bypass Portfolio.
+**Owner decision required:** choose the opening-inventory/accounting boundary and how configured legacy inventory is represented in the one shared Position without synthetic fills or balance seeding. The legacy cost-basis input is now agreed at the product level: operator supplies aggregate original quote invested and original base quantity; RS calculates their average. Implementation must still define how that declared historical basis and off-Spot custody are represented without corrupting actual Spot Portfolio quantities. Do not add synthetic fills, seed balances from an unproven wallet snapshot, or bypass Portfolio.
 
 ## 5. Profitability — SELL ONLY IN PROFIT
 
@@ -114,7 +131,7 @@ Legacy inventory has a historical acquisition cost separate from the current rec
 
 Illustration: the recovery tranche earns 0.20 USDT net, but the proposed legacy slice would realize a 0.10 USDT loss against its historical basis. The combined headline result is positive; the legacy sale still fails the legacy-profit gate.
 
-**Owner decisions required:** how legacy cost basis is supplied/verified (including unknown or multiple lots); per-lot versus aggregate basis; allocation of mixed-order proceeds and shared SELL fees; minimum recovery-cycle net profit; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
+**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. **Still unresolved:** how the supplied historical values are verified and represented in accounting; how partial legacy disposals reduce remaining basis; allocation of mixed-order proceeds and shared SELL fees; minimum recovery-cycle net profit; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
 
 ## 6. BUY tranche accumulation and eligibility
 
@@ -213,8 +230,8 @@ These decisions are intentionally not guessed. They block implementation, not do
 | sellQuantity | Exact per-cycle target or maximum cap | Determines legacy amount requested and smaller-remainder eligibility |
 | Smaller/final residual | Sell smaller balance, require explicit final authorization, or retain it | Prevents unintended liquidation |
 | Legacy authorization | Operator interface, evidence source, expiry/revocation, durable/restart behavior | Prevents silent wallet adoption |
-| Legacy accounting | Opening-inventory representation and cost-basis source | Current Portfolio is fill-driven and cannot safely account for an unrepresented legacy SELL |
-| Legacy profit | Per-lot or aggregate basis; mixed-order proceeds/fee allocation | Prevents a profitable recovery tranche hiding a legacy loss |
+| Legacy accounting | Opening-inventory representation in shared Portfolio and verification of configured invested/quantity inputs | Current Portfolio is fill-driven; configured historical basis is agreed, but Spot holdings and off-Spot custody must be represented safely |
+| Legacy profit | Mixed-order proceeds/fee allocation and treatment of remaining aggregate basis after partial legacy sales | Prevents a profitable recovery tranche hiding a legacy loss; input basis is aggregate invested quote / original quantity |
 | Cycle profit | Minimum net profit and precise cost/proceeds inclusion | Prevents omitted fees/costs |
 | BUY cadence | Tranche size, accumulation, next-BUY eligibility, concurrent-order limits | Determines exposure/order lifecycle |
 | Risk policy | Investment, exposure, drawdown, price-movement, and order-count caps | Required before committing capital |
@@ -228,6 +245,8 @@ These decisions are intentionally not guessed. They block implementation, not do
 No executable RS tests are added in this documentation-only phase. Future implementation must add deterministic offline tests for:
 
 - absent, insufficient, reduced, revoked, duplicated, and stale authorization;
+- configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
+- Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - missing/ambiguous legacy cost basis and a profitable cycle paired with a legacy loss;
 - exact sellQuantity, smaller remainder, final residual, and exchange dust after those rules are approved;
 - one/multiple BUY tranches, open/partial/unknown BUYs, and each approved next-BUY boundary;
