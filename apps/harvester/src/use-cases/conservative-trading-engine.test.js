@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
 const test = (name, ...args) => nodeTest("[conservative-trading-engine.test.js] " + name, ...args)
 import assert from "node:assert/strict"
@@ -1217,8 +1218,8 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     commissionStatus: "COMPLETE",
   })
   return {
-    portfolio: new Portfolio().applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio,
-    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger,
+    portfolio: new Portfolio().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio,
+    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger,
   }
 }
 
@@ -1945,8 +1946,8 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: "CG_coinGrabber" })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -2163,8 +2164,8 @@ const runCompleteConservativeCycle = async ({ keepQuantity: configuredKeepQuanti
     getRecoveryLedger: () => currentRecoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
       try {
-        const portfolioResult = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" })
-        const ledgerResult = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" })
+        const portfolioResult = currentPortfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
+        const ledgerResult = currentRecoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
         if (portfolioResult.applied !== ledgerResult.applied ||
             portfolioResult.duplicate !== ledgerResult.duplicate) {
           throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
@@ -2203,11 +2204,11 @@ const runCompleteConservativeCycle = async ({ keepQuantity: configuredKeepQuanti
         if (compareDecimal({ left: result.freeQuantity, right: "0" }) > 0) {
           currentPortfolio = currentPortfolio.allocateFreeQuantity({
             marketId,
-            quantity: result.freeQuantity, strategyId: "CG_coinGrabber"
+            quantity: result.freeQuantity, strategyId: StrategyId.COIN_GRABBER
           })
           allocationCount += 1
         }
-        currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId, strategyId: "CG_coinGrabber" })
+        currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId, strategyId: StrategyId.COIN_GRABBER })
         currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit, spent: position.spent })
         resetCount += 1
       }
@@ -2908,8 +2909,8 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
       getRecoveryLedger: () => currentRecoveryLedger,
       getTerminalFills: ({ orderId }) => sellFill?.brokerOrderId === orderId ? [sellFill] : [],
       updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
+        currentPortfolio = currentPortfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger
         accountedFills.push(fill)
         return { ok: true, data: { applied: true, duplicate: false } }
       },
@@ -3048,8 +3049,8 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
         })] : []
       },
       updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
+        currentPortfolio = currentPortfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger
         return { ok: true, data: { applied: true, duplicate: false } }
       },
     })
@@ -3569,8 +3570,8 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   const harness = await createHarness({
     strategyPolicy,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: "CG_coinGrabber" })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -3635,8 +3636,8 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: "CG_coinGrabber" })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -4062,8 +4063,8 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     getPortfolio: () => currentPortfolio,
     getRecoveryLedger: () => currentRecoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" })
-      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const portfolioUpdate = currentPortfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
+      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
       currentPortfolio = portfolioUpdate.portfolio
       currentRecoveryLedger = ledgerUpdate.ledger
       return {
@@ -4090,7 +4091,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
       if (completion.eligible) {
         currentPortfolio = currentPortfolio.allocateFreeQuantity({
           marketId,
-          quantity: completion.freeQuantity, strategyId: "CG_coinGrabber"
+          quantity: completion.freeQuantity, strategyId: StrategyId.COIN_GRABBER
         })
         currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit: "0.01", spent: position.spent })
       }
