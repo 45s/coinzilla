@@ -47,6 +47,7 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 Legacy inventory is a specifically identified quantity of a market's base asset that existed before RS was authorized to manage it. It must not be inferred from an exchange free balance, Portfolio total/free quantity, manual/external order, prior process state, or unowned execution.
 
 Hard invariants:
+
 1. Without explicit authorization, RS-authorized legacy quantity is zero.
 2. Authorization is market-scoped and denominated in the canonical base asset.
 3. RS never silently adopts the whole wallet balance or an external/manual order.
@@ -63,6 +64,7 @@ Hard invariants:
 Harvester has one shared Position per market. Portfolio.applyFill applies canonical fills to that Position; updateTradingAccounting commits the Portfolio and Conservative RecoveryLedger projections together. Position quantities, quote cash flow, and spent basis are fill-driven. Applied-fill IDs and fingerprints prevent duplicate or conflicting executions.
 
 RS must preserve these facts:
+
 - One actual Position per market, not one Position per strategy or inventory category.
 - Every canonical fill changes actual Portfolio accounting exactly once, using actual execution and commission facts.
 - RS attribution is an additional strategy projection; it does not replace, fork, or double-apply Portfolio accounting.
@@ -74,6 +76,7 @@ RS must preserve these facts:
 ### 4.2 Required attribution facts
 
 The RS attribution projection must distinguish:
+
 - authorized legacy quantity and its approved historical cost-basis evidence;
 - recovery BUY quantity and quote cost attributed to each cycle;
 - actual base, quote, and third-asset commissions for each canonical fill;
@@ -130,6 +133,7 @@ Hard invariants:
 ## 7. Risk limits
 
 RS must fail closed when a required risk limit is absent, invalid, exceeded, or cannot be calculated from authoritative facts. The eventual contract must define:
+
 - per-tranche quote investment cap;
 - maximum cumulative recovery investment per market;
 - maximum total RS exposure, including unfilled BUY commitments;
@@ -145,6 +149,7 @@ RS must fail closed when a required risk limit is absent, invalid, exceeded, or 
 The exact sellQuantity contract remains unresolved.
 
 **Owner decisions required:**
+
 1. Is sellQuantity an exact per-cycle target or a maximum per-cycle cap?
 2. If remaining authorized legacy inventory is smaller, may RS sell the smaller remainder, or is explicit final-liquidation authorization required?
 3. What happens to positive residuals smaller than the configured amount, below exchange minimum quantity/notional, or otherwise unsellable?
@@ -152,6 +157,7 @@ The exact sellQuantity contract remains unresolved.
 5. Does RS stop when authorized legacy quantity is exhausted, only dust remains, or the operator disables it?
 
 Until decided:
+
 - Never sell more legacy quantity than the operator-authorized, unreserved amount.
 - Never round a requested quantity upward if that could consume unauthorized inventory.
 - Never silently classify ordinary residual inventory as dust or sold.
@@ -176,6 +182,7 @@ Until decided:
 ## 10. Cycle lifecycle and strategy disable
 
 Final RS lifecycle states/transitions are not approved. Mandatory safety behavior:
+
 - Pause, disable, or loss of readiness prevents new RS BUYs.
 - Disabling RS does not silently cancel, replace, abandon, or market-sell resting orders or inventory.
 - Existing orders may fill after pause/disable; fills and commissions continue through canonical accounting and reconciliation.
@@ -218,6 +225,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 ## 13. Required test contract before implementation
 
 No executable RS tests are added in this documentation-only phase. Future implementation must add deterministic offline tests for:
+
 - absent, insufficient, reduced, revoked, duplicated, and stale authorization;
 - missing/ambiguous legacy cost basis and a profitable cycle paired with a legacy loss;
 - exact sellQuantity, smaller remainder, final residual, and exchange dust after those rules are approved;
@@ -260,6 +268,7 @@ The prose is authoritative. The diagram does not authorize a tranche cadence, or
 ## 15. Implementation boundary
 
 Until this specification is accepted and every blocking owner decision is resolved:
+
 - Do not add RS runtime configuration, strategy registration, operator controls, or executable policy.
 - Do not place, cancel, replace, or manage RS orders.
 - Do not seed Portfolio with synthetic fills or treat wallet balances as RS inventory.
