@@ -21,7 +21,7 @@ OPERATIONAL_STATE_DIRECTORY (or the legacy DURABLE_FACTS_DIRECTORY override) and
 `
 
 export function parseRecoveryMarketArguments(args = []) {
-  if (!Array.isArray(args)) throw new TypeError("CLI arguments must be an array")
+  if (!Array.isArray(args)) { throw new TypeError("CLI arguments must be an array") }
   const parsed = { confirm: false, help: false, contextPath: undefined }
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
@@ -30,21 +30,21 @@ export function parseRecoveryMarketArguments(args = []) {
       continue
     }
     if (argument === "--confirm") {
-      if (parsed.confirm) throw new Error("--confirm must not be repeated")
+      if (parsed.confirm) { throw new Error("--confirm must not be repeated") }
       parsed.confirm = true
       continue
     }
     if (argument === "--context") {
-      if (parsed.contextPath !== undefined) throw new Error("--context must not be repeated")
+      if (parsed.contextPath !== undefined) { throw new Error("--context must not be repeated") }
       const value = args[index + 1]
-      if (!value || value.startsWith("--")) throw new Error("--context requires a file path")
+      if (!value || value.startsWith("--")) { throw new Error("--context requires a file path") }
       parsed.contextPath = value
       index += 1
       continue
     }
     throw new Error("Unknown recovery CLI argument: " + argument)
   }
-  if (!parsed.help && !parsed.contextPath) throw new Error("--context is required")
+  if (!parsed.help && !parsed.contextPath) { throw new Error("--context is required") }
   return Object.freeze(parsed)
 }
 
@@ -88,7 +88,7 @@ export async function runRecoveryMarketCommand({
       try {
         directory = resolveOperationalStateDirectory({ env })
       } catch (cause) {
-        throw new Error("--confirm requires a valid Operational State Store directory", { cause })
+        throw new Error("--confirm requires a valid OPERATIONAL_STATE_DIRECTORY (or legacy DURABLE_FACTS_DIRECTORY) directory", { cause })
       }
       if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
         throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
@@ -106,8 +106,8 @@ export async function runRecoveryMarketCommand({
     })
     const summary = summarizeResult({ result })
     writeOutput(JSON.stringify(summary, null, 2))
-    if (!summary.ok) return 1
-    if (parsed.confirm) return summary.data.confirmation?.confirmed === true ? 0 : 2
+    if (!summary.ok) { return 1 }
+    if (parsed.confirm) { return summary.data.confirmation?.confirmed === true ? 0 : 2 }
     return summary.data.reconciliation?.ready === true ? 0 : 2
   } catch (error) {
     writeError(error?.message ?? String(error))
