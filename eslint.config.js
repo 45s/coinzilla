@@ -46,8 +46,8 @@ export default defineConfig([
       ],
 
       // Complexity and function boundaries
-      complexity: ["warn", { max: 20 }],
-      "max-params": ["warn", 1],
+      complexity: ["error", { max: 20 }],
+      "max-params": ["error", 1],
       "max-lines-per-function": [
         "warn",
         {
@@ -60,9 +60,9 @@ export default defineConfig([
       "max-nested-callbacks": ["error", 3],
 
       // Correctness and maintainability
-      "no-duplicate-imports": "warn",
+      "no-duplicate-imports": "error",
       "no-use-before-define": [
-        "warn",
+        "error",
         {
           functions: false,
           classes: true,
@@ -73,19 +73,19 @@ export default defineConfig([
       "no-self-compare": "error",
       "no-throw-literal": "error",
       "preserve-caught-error": "error",
-      "no-shadow": "warn",
-      "consistent-return": "warn",
+      "no-shadow": "error",
+      "consistent-return": "error",
       "default-case": "error",
       "no-else-return": "error",
       "no-implicit-coercion": "warn",
 
       // Modern JavaScript
-      "prefer-template": "warn",
-      "prefer-object-has-own": "warn",
+      "prefer-template": "error",
+      "prefer-object-has-own": "error",
       "prefer-regex-literals": "error",
       "prefer-destructuring": "warn",
       "prefer-arrow-callback": "error",
-      "object-shorthand": "warn",
+      "object-shorthand": "error",
       "no-useless-concat": "error",
       "no-extra-bind": "error",
       "no-multi-assign": "error",
