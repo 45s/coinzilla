@@ -75,6 +75,7 @@ export function createShutdownHandler({
     }
     const isPhaseFailure = (result) =>
       result?.ok === false || (Array.isArray(result) && result.length > 0)
+    // eslint-disable-next-line complexity -- reason fallback chain preserves bounded diagnostics across phase result shapes.
     const getPhaseFailureReason = (result) =>
       result?.failure?.stage ??
       result?.data?.findings?.[0]?.reason ??
@@ -82,7 +83,7 @@ export function createShutdownHandler({
       result?.errors?.[0]?.code ??
       result?.errors?.[0]?.name ??
       "PHASE_RESULT_FAILED"
-    const runPhase = async (...args) => { // eslint-disable-line complexity -- phase runner centralizes ordered timing and failure reporting.
+    const runPhase = async (...args) => {
       const [phase, operation, isFailure = isPhaseFailure] = args
       const startedAt = now()
       logPhase({ phase, status: "STARTED" })
