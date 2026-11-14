@@ -65,6 +65,7 @@ function makeFill({
   })
 }
 
+// eslint-disable-next-line max-lines-per-function -- workflow fixture owns independent fake outcomes and assertions.
 function makeWorkflow({
   updateResult = { applied: true, duplicate: false, stale: false },
   accountingResult = toResult({ data: { applied: true, duplicate: false } }),
