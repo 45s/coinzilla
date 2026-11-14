@@ -150,95 +150,132 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
   assert.equal(state.status, "STOPPED", "Successful shutdown must finish in the STOPPED state.")
 })
 
-test("drains BUY fills arriving during initial reconciliation, BUY cancellation, and user-data draining before recovery repair", async () => {
-  const state = createState()
-  const calls = []
+
+function createBuyFillShutdownRace({ state, calls }) {
   let releaseInitialReconciliation
   let signalInitialReconciliation
-  const initialReconciliationStarted = new Promise((resolve) => { signalInitialReconciliation = resolve })
-  const initialReconciliationGate = new Promise((resolve) => { releaseInitialReconciliation = resolve })
+  const initialReconciliationStarted = new Promise((resolve) => {
+    signalInitialReconciliation = resolve
+  })
+  const initialReconciliationGate = new Promise((resolve) => {
+    releaseInitialReconciliation = resolve
+  })
   let releaseBuyCancellation
   let signalBuyCancellation
-  const buyCancellationStarted = new Promise((resolve) => { signalBuyCancellation = resolve })
-  const buyCancellationGate = new Promise((resolve) => { releaseBuyCancellation = resolve })
+  const buyCancellationStarted = new Promise((resolve) => {
+    signalBuyCancellation = resolve
+  })
+  const buyCancellationGate = new Promise((resolve) => {
+    releaseBuyCancellation = resolve
+  })
   let releaseFinalUserDataDrain
   let signalFinalUserDataDrain
-  const finalUserDataDrainStarted = new Promise((resolve) => { signalFinalUserDataDrain = resolve })
+  const finalUserDataDrainStarted = new Promise((resolve) => {
+    signalFinalUserDataDrain = resolve
+  })
   let appliedBuyFills = 0
   let reconciliationCount = 0
   const engine = {
     reconcileOwnedOrders: async () => {
       reconciliationCount += 1
-      calls.push(`reconcile:${reconciliationCount}`)
+      calls.push("reconcile:" + reconciliationCount)
       if (reconciliationCount === 1) {
         signalInitialReconciliation()
         await initialReconciliationGate
       }
-      return { ok: true }
+      return {
+        ok: true,
+      }
     },
     cancelOwnedBuyOrdersForShutdown: async () => {
       calls.push("buy-cancellation-started")
       signalBuyCancellation()
       await buyCancellationGate
-      return { ok: true }
+      return {
+        ok: true,
+      }
     },
     reconcileRecoverySellsForShutdown: async () => {
       calls.push("recovery-sell-reconciliation")
       assert.equal(appliedBuyFills, 3, "All fills from all shutdown race windows must be drained before SELL replanning.")
       return {
         ok: true,
-        data: { reconciledSymbols: ["DOGEUSDT"] }
+        data: {
+          reconciledSymbols: ["DOGEUSDT"],
+        },
       }
     },
     auditShutdownRecoverySellCoverage: async () => ({
       ok: true,
       data: {
         covered: true,
-        findings: []
+        findings: [],
       },
     }),
     getOrders: () => [],
   }
+  const stopUserDataIntake = async () => {
+    state.eventQueue = new Promise((resolve) => {
+      signalFinalUserDataDrain()
+      releaseFinalUserDataDrain = () => {
+        appliedBuyFills += 1
+        calls.push("fill-during-final-user-data-drain")
+        resolve()
+      }
+    })
+    return []
+  }
+  return {
+    engine,
+    stopUserDataIntake,
+    initialReconciliationStarted,
+    releaseInitialReconciliation,
+    buyCancellationStarted,
+    releaseBuyCancellation,
+    finalUserDataDrainStarted,
+    releaseFinalUserDataDrain: () => releaseFinalUserDataDrain(),
+    applyInitialFill: () => {
+      appliedBuyFills += 1
+      calls.push("fill-during-initial-reconciliation")
+    },
+    applyCancellationFill: () => {
+      appliedBuyFills += 1
+      calls.push("fill-during-buy-cancellation")
+    },
+  }
+}
+
+
+test("drains BUY fills arriving during initial reconciliation, BUY cancellation, and user-data draining before recovery repair", async () => {
+  const state = createState()
+  const calls = []
+  const race = createBuyFillShutdownRace({
+    state,
+    calls,
+  })
   const fixture = createShutdown({
     state,
     calls,
     tradingEnabled: true,
-    engine,
-    stopUserDataIntake: async () => {
-      state.eventQueue = new Promise((resolve) => {
-        signalFinalUserDataDrain()
-        releaseFinalUserDataDrain = () => {
-          appliedBuyFills += 1
-          calls.push("fill-during-final-user-data-drain")
-          resolve()
-        }
-      })
-      return []
-    },
+    engine: race.engine,
+    stopUserDataIntake: race.stopUserDataIntake,
   })
 
   const stopping = fixture.stop()
-  await initialReconciliationStarted
-  state.eventQueue = Promise.resolve().then(() => {
-    appliedBuyFills += 1
-    calls.push("fill-during-initial-reconciliation")
-  })
-  releaseInitialReconciliation()
+  await race.initialReconciliationStarted
+  state.eventQueue = Promise.resolve().then(race.applyInitialFill)
+  race.releaseInitialReconciliation()
 
-  await buyCancellationStarted
-  state.eventQueue = Promise.resolve().then(() => {
-    appliedBuyFills += 1
-    calls.push("fill-during-buy-cancellation")
-  })
-  releaseBuyCancellation()
+  await race.buyCancellationStarted
+  state.eventQueue = Promise.resolve().then(race.applyCancellationFill)
+  race.releaseBuyCancellation()
 
-  await finalUserDataDrainStarted
-  releaseFinalUserDataDrain()
+  await race.finalUserDataDrainStarted
+  race.releaseFinalUserDataDrain()
   await stopping
 
-  assert.equal(appliedBuyFills, 3)
-  assert.ok(calls.indexOf("recovery-sell-reconciliation") > calls.indexOf("fill-during-final-user-data-drain"))
   assert.equal(state.status, "STOPPED")
+  assert.ok(calls.indexOf("recovery-sell-reconciliation") > calls.indexOf("fill-during-final-user-data-drain"))
 })
 
 test("concurrent stop callers share one in-flight shutdown promise", async () => {
