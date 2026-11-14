@@ -1,7 +1,5 @@
 import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 
-const SUPPORTED_ENVIRONMENTS = new Set(Object.values(TRADING_ENVIRONMENTS))
-
 /**
  * Normalize and validate an operator-entered Binance Spot market symbol.
  *
