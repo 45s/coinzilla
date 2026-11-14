@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { performance } from "node:perf_hooks"
+import { createHarvesterStop } from "./create-harvester-stop.js"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -725,115 +726,15 @@ export async function startHarvester({
     now: () => performance.now(),
     runtimeSessionId,
   })
-  let stopPromise
-  const stop = () => {
-    if (stopPromise) {return stopPromise}
-    stopPromise = (async () => {
-    const shutdownRequestedAt = performance.now()
-    const shutdownCorrelationId = runtimeSessionId ?? null
-    const logShutdownPhase = ({
-      phase,
-      status,
-      startedAt,
-      failureReason
-    } = {}) => {
-      const observedAt = performance.now()
-      const write = typeof logger.system === "function" ? logger.system.bind(logger) : logger.info?.bind(logger)
-      write?.({
-        message: `Harvester shutdown phase ${status.toLowerCase()}`,
-        shutdownPhase: phase,
-        phaseStatus: status,
-        shutdownCorrelationId,
-        elapsedMs: Math.max(0, observedAt - shutdownRequestedAt),
-        ...(startedAt === undefined ? {} : { durationMs: Math.max(0, observedAt - startedAt) }),
-        ...(failureReason ? { failureReason } : {}),
-      })
-    }
-    // Stop new market work and disable trading before operator-control cleanup.
-    userDataState.shutdownRequested = true
-    userDataState.ready = false
-    logShutdownPhase({
-      phase: "SHUTDOWN_REQUESTED",
-      status: "COMPLETED"
-    })
-    logShutdownPhase({
-      phase: "STOP_STATE_ESTABLISHED",
-      status: "COMPLETED",
-      startedAt: shutdownRequestedAt,
-    })
-
-    let operatorStopError
-    const operatorStopStartedAt = performance.now()
-    logShutdownPhase({
-      phase: "OPERATOR_CONTROL_STOP",
-      status: "STARTED"
-    })
-    try {
-      await operatorControlLifecycle.stop()
-      logShutdownPhase({
-        phase: "OPERATOR_CONTROL_STOP",
-        status: "COMPLETED",
-        startedAt: operatorStopStartedAt
-      })
-    } catch (error) {
-      operatorStopError = error
-      logShutdownPhase({
-        phase: "OPERATOR_CONTROL_STOP",
-        status: "FAILED",
-        startedAt: operatorStopStartedAt,
-        failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "OPERATOR_CONTROL_STOP_FAILED",
-      })
-    }
-    await stopRuntime({
-      requestedAt: shutdownRequestedAt,
-      requestLogged: true,
-      stopStateEstablishedLogged: true,
-      preShutdownErrors: operatorStopError ? [operatorStopError] : [],
-    })
-    if (operationalStateStore) {
-      const processStopStartedAt = performance.now()
-      logShutdownPhase({
-        phase: "PROCESS_STOP_DURABILITY",
-        status: "STARTED"
-      })
-      try {
-        const stopped = await recordProcessStopped({
-          operationalStateStore,
-          reason: "SHUTDOWN_COMPLETED",
-          clean: true,
-        })
-        if (stopped?.ok !== true || stopped.data?.durable !== true) {
-          throw new Error(`Harvester shutdown completed but its clean process-stop boundary was not durable: ${stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
-        }
-        logShutdownPhase({
-          phase: "PROCESS_STOP_DURABILITY",
-          status: "COMPLETED",
-          startedAt: processStopStartedAt
-        })
-      } catch (error) {
-        userDataState.status = "SHUTDOWN_INCOMPLETE"
-        logShutdownPhase({
-          phase: "PROCESS_STOP_DURABILITY",
-          status: "FAILED",
-          startedAt: processStopStartedAt,
-          failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "PROCESS_STOP_DURABILITY_FAILED",
-        })
-        logShutdownPhase({
-          phase: "SHUTDOWN_FAILED",
-          status: "FAILED",
-          failureReason: "PROCESS_STOP_DURABILITY_FAILED",
-        })
-        throw error
-      }
-    }
-    logShutdownPhase({
-      phase: "SHUTDOWN_COMPLETED",
-      status: "COMPLETED",
-      startedAt: shutdownRequestedAt,
-    })
-    })()
-    return stopPromise
-  }
+  const stop = createHarvesterStop({
+    userDataState,
+    logger,
+    runtimeSessionId,
+    operatorControlLifecycle,
+    stopRuntime,
+    operationalStateStore,
+    recordProcessStopped,
+  })
 
   return Object.freeze({
     appConfig,
