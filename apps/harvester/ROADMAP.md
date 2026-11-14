@@ -29,6 +29,22 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ---
 
+## Proposed strategy — Recovery Seller (RS)
+
+**Status: [~] INITIALIZATION DOCUMENTED; awaiting owner review.** The initial product concept is recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy). RS is a proposed, non-executable strategy; this roadmap entry does not authorize runtime configuration, strategy registration, or exchange activity.
+
+- **Goal:** progressively reduce an existing spot position through repeated recovery cycles, using newly acquired inventory together with a controlled portion of the pre-existing inventory when a cycle can be closed under the eventual profitability rules.
+- **Relationship:** separate strategy policy; do not change Coin Grabber or the canonical Conservative specification. Reuse Harvester's existing Portfolio, fill, broker, order-lifecycle, reconciliation and safety boundaries.
+- **Current scope:** concept initialization and owner review only. No formulas, code, tests, runtime configuration, strategy registration or exchange operations are included.
+- **Next phases after review:**
+  1. Define and approve the RS domain language, inventory ownership/attribution, profitability meaning, cycle lifecycle and risk boundaries.
+  2. Write the canonical RS domain specification and explicit accounting/order invariants.
+  3. Implement pure strategy decisions test-first, with deterministic offline domain and application tests.
+  4. Integrate RS as an independently selected strategy without changing Coin Grabber behavior; verify shared-position and order-ownership safety.
+  5. Complete offline lifecycle/reconciliation coverage before any separately authorized TESTNET validation.
+- **Not decided:** what exactly qualifies as profit for the cycle versus the historical cost basis of liquidated inventory; liquidation quantity per cycle; additional-BUY policy and exposure limits; inventory attribution; cycle termination; configuration and strategy coexistence.
+- **Safety:** RS remains unavailable for trading until its specification, implementation, tests, configuration and operator controls are reviewed and accepted. Existing strategy defaults and runtime behavior remain unchanged.
+
 ## P0 — Telegram Command Center (CC) — delivered
 
 **Status: [x] COMPLETE — CC-4 merged into `develop` in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; CC-1 through CC-3 were previously merged in PRs #1079, #1081, #1086 and #1087. Required exact-head CI and external documentation links passed.** The initial engine/application foundation remains in [PR #1045](https://github.com/45s/coinzilla/pull/1045), disabled-by-default runtime wiring in [PR #1067](https://github.com/45s/coinzilla/pull/1067), and process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065). ADR-0001 process-restart recovery Steps 8–9 remain explicitly deferred and are not implied by CC completion.
