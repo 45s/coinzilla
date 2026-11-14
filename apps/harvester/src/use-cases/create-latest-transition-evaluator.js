@@ -638,7 +638,11 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
         result,
         deferredActions: allocation.deferredActions })
     } catch (error) {
-      return handleEvaluationFailure({ dependencies, symbol, error })
+      return handleEvaluationFailure({
+        dependencies,
+        symbol,
+        error,
+      })
     }
   }
 }
