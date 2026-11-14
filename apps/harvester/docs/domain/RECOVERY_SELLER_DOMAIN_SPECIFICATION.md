@@ -121,6 +121,7 @@ Illustration: the recovery tranche earns 0.20 USDT net, but the proposed legacy 
 The proposal uses orderQuantity as an illustrative recovery BUY tranche size. It does not define whether this means every tranche, the first tranche only, or a maximum.
 
 Hard invariants:
+
 - Only confirmed canonical BUY fills create recovery inventory or recovery cost.
 - A submitted/acknowledged BUY creates no inventory; partial fills contribute only actual executed quantity and fees.
 - Every BUY commitment counts toward exposure before execution; a fill transfers the corresponding amount from commitment to actual exposure without double counting.
