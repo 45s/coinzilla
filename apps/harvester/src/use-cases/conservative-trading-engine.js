@@ -1017,6 +1017,233 @@ async function cancelAndReconcileTrailingBuyTransition({ context, symbol, order 
   })
 }
 
+
+function getTrailingBuyContext({ context, symbol }) {
+  const metadata = context.getCurrentMarketMetadata({
+    symbol,
+  })
+  const pairConfig = context.pairs[symbol]
+  const activeBuy = context.state.registry.getActiveOrders({
+    marketId: metadata.market.id,
+  }).find((order) => order.side === "BUY")
+  return {
+    metadata,
+    pairConfig,
+    activeBuy,
+  }
+}
+
+function logTrailingBuyActivePosition({ context, symbol, metadata, position, activePositionQuantity }) {
+  context.logger?.debug?.({
+    message: "Harvester trailing BUY repricing skipped",
+    symbol,
+    reason: "ACTIVE_POSITION_EXISTS",
+    marketId: metadata.market.id,
+    activePositionQuantity,
+    freeBaseQuantity: position?.freeBaseQuantity.amount ?? "0",
+  })
+}
+
+function evaluateTrailingBuyTrigger({ context, symbol, marketPrice, pairConfig, activeBuy }) {
+  const referencePrice = context.state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
+  const trigger = context.strategyPolicy.evaluateTrailingBuyRepricing({
+    marketPrice: marketPrice.price,
+    referencePrice,
+    priceStepPercent: String(pairConfig.priceStepPercent),
+  })
+  context.logger?.debug?.({
+    message: "Harvester trailing BUY repricing evaluated",
+    marketEventId: context.state.marketPriceEventIds.get(symbol) ?? null,
+    symbol,
+    activeBuy: activeBuy.value,
+    marketPrice: marketPrice.price,
+    referencePrice,
+    lastBuyPrice: context.state.lastBuyPrices.get(symbol) ?? null,
+    buyReferenceOverride: context.state.buyReferenceOverrides.get(symbol) ?? null,
+    lastAdjustmentPrice: context.state.lastAdjustmentPrices.get(symbol) ?? null,
+    priceStepPercent: String(pairConfig.priceStepPercent),
+    trigger,
+  })
+  return trigger
+}
+
+async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, metadata }) {
+  try {
+    const result = await context.broker.getSymbolFilters({
+      symbol,
+    })
+    if (!result?.ok || !result.data) {
+      throw result?.errors?.[0] ?? new Error("Fresh Binance exchange metadata is unavailable for " + symbol)
+    }
+    const refreshed = validateMarketTradingReadiness({
+      symbol,
+      pairConfig,
+      marketMetadata: result.data,
+    })
+    if (refreshed.market.id !== metadata.market.id || refreshed.market.symbol !== symbol) {
+      throw new Error("Fresh exchange metadata does not match the active market " + symbol)
+    }
+    context.refreshedMarketMetadata.set(symbol, refreshed)
+    return {
+      ok: true,
+      data: refreshed,
+    }
+  } catch (error) {
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE",
+      error,
+    })
+    return toResult({
+      error,
+    })
+  }
+}
+
+async function preflightTrailingBuyReplacement({ context, symbol, activeBuy, marketPrice }) {
+  const result = await context.evaluateLatestTransition({
+    symbol,
+    preflightOnly: true,
+    excludedActiveOrderClientId: activeBuy.clientOrderId,
+    referencePriceOverride: marketPrice.price,
+  })
+  if (!result.ok) {
+    await context.pause({
+      symbol,
+      reason: "TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED",
+      error: result.errors?.[0],
+    })
+  }
+  return result
+}
+
+async function replaceTrailingBuy({ context, symbol, activeBuy, marketPrice, trigger }) {
+  const cancellation = await context.cancelAndReconcileTrailingBuy({
+    symbol,
+    order: activeBuy,
+  })
+  if (!cancellation.ok) {
+    return cancellation
+  }
+  context.state.buyReferenceOverrides.set(symbol, marketPrice.price)
+  if (!context.canTrade({
+    symbol,
+  }) || context.isStopping?.()) {
+    return toResult({
+      data: {
+        canceled: true,
+        waitingForTradingReadiness: true,
+      },
+    })
+  }
+  const result = await context.evaluateLatestTransition({
+    symbol,
+  })
+  if (!result.ok) {
+    return result
+  }
+  return toResult({
+    data: {
+      ...result.data,
+      trailingBuyReplaced: result.data.submittedOrders?.some((order) => order.side === "BUY") ?? false,
+      previousOrderId: activeBuy.brokerOrderId,
+      adjustmentThreshold: trigger.adjustmentThreshold,
+    },
+  })
+}
+
+async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
+  const {
+    metadata,
+    pairConfig,
+    activeBuy,
+  } = getTrailingBuyContext({
+    context,
+    symbol,
+  })
+  if (!activeBuy || context.state.trailingBuy.get(symbol) === false) {
+    return context.evaluateLatestTransition({
+      symbol,
+    })
+  }
+  const position = context.getPortfolio().getPosition({
+    marketId: metadata.market.id,
+  })
+  const activePositionQuantity = position?.baseQuantity.amount ?? "0"
+  if (compareDecimal({
+    left: activePositionQuantity,
+    right: "0",
+  }) > 0) {
+    logTrailingBuyActivePosition({
+      context,
+      symbol,
+      metadata,
+      position,
+      activePositionQuantity,
+    })
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "ACTIVE_POSITION_EXISTS",
+      },
+    })
+  }
+  const trigger = evaluateTrailingBuyTrigger({
+    context,
+    symbol,
+    marketPrice,
+    pairConfig,
+    activeBuy,
+  })
+  if (!trigger.shouldReplace) {
+    return context.evaluateLatestTransition({
+      symbol,
+    })
+  }
+  if (context.isStopping?.()) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "STOPPING",
+      },
+    })
+  }
+  const refreshed = await refreshTrailingBuyMarketMetadata({
+    context,
+    symbol,
+    pairConfig,
+    metadata,
+  })
+  if (!refreshed.ok) {
+    return refreshed
+  }
+  const preflight = await preflightTrailingBuyReplacement({
+    context,
+    symbol,
+    activeBuy,
+    marketPrice,
+  })
+  if (!preflight.ok) {
+    return preflight
+  }
+  if (preflight.data?.preflightValid !== true) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: preflight.data?.reason ?? "TRAILING_BUY_REPLACEMENT_NOT_ADMISSIBLE",
+        previousOrderId: activeBuy.brokerOrderId,
+      },
+    })
+  }
+  return replaceTrailingBuy({
+    context,
+    symbol,
+    activeBuy,
+    marketPrice,
+    trigger,
+  })
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -1800,138 +2027,24 @@ export function makeConservativeTradingEngine({
     ...options,
   })
 
-  const maybeReplaceTrailingBuy = async ({
-    symbol,
-    marketPrice
-  } = {}) => {
-    const metadata = getCurrentMarketMetadata({ symbol })
-    const pairConfig = pairs[symbol]
-    const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
-      .find((order) => order.side === "BUY")
-    if (!activeBuy || state.trailingBuy.get(symbol) === false) {return evaluateLatestTransition({ symbol })}
-
-    // Portfolio is authoritative: retained free inventory is excluded because
-    // only baseQuantity represents active strategy inventory. This check runs
-    // inside the serialized transition immediately before any repricing work.
-    const position = getPortfolio().getPosition({ marketId: metadata.market.id })
-    const activePositionQuantity = position?.baseQuantity.amount ?? "0"
-    if (compareDecimal({
-      left: activePositionQuantity,
-      right: "0"
-    }) > 0) {
-      logger?.debug?.({
-        message: "Harvester trailing BUY repricing skipped",
-        symbol,
-        reason: "ACTIVE_POSITION_EXISTS",
-        marketId: metadata.market.id,
-        activePositionQuantity,
-        freeBaseQuantity: position?.freeBaseQuantity.amount ?? "0",
-      })
-      return toResult({ data: {
-        skipped: true,
-        reason: "ACTIVE_POSITION_EXISTS"
-      } })
-    }
-
-    const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
-    const trigger = strategyPolicy.evaluateTrailingBuyRepricing({
-      marketPrice: marketPrice.price,
-      referencePrice,
-      priceStepPercent: String(pairConfig.priceStepPercent),
-    })
-    logger?.debug?.({
-      message: "Harvester trailing BUY repricing evaluated",
-      marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
-      symbol,
-      activeBuy: activeBuy.value,
-      marketPrice: marketPrice.price,
-      referencePrice,
-      lastBuyPrice: state.lastBuyPrices.get(symbol) ?? null,
-      buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
-      lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
-      priceStepPercent: String(pairConfig.priceStepPercent),
-      trigger,
-    })
-    if (!trigger.shouldReplace) {return evaluateLatestTransition({ symbol })}
-    if (isStopping?.()) {return toResult({ data: {
-      skipped: true,
-      reason: "STOPPING"
-    } })}
-
-    let refreshedMetadata
-    try {
-      const refreshedMetadataResult = await broker.getSymbolFilters({ symbol })
-      if (!refreshedMetadataResult?.ok || !refreshedMetadataResult.data) {
-        throw refreshedMetadataResult?.errors?.[0] ??
-          new Error("Fresh Binance exchange metadata is unavailable for " + symbol)
-      }
-      refreshedMetadata = validateMarketTradingReadiness({
-        symbol,
-        pairConfig,
-        marketMetadata: refreshedMetadataResult.data,
-      })
-      if (refreshedMetadata.market.id !== metadata.market.id ||
-          refreshedMetadata.market.symbol !== symbol) {
-        throw new Error("Fresh exchange metadata does not match the active market " + symbol)
-      }
-    } catch (error) {
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE",
-        error
-      })
-      return toResult({ error })
-    }
-    refreshedMarketMetadata.set(symbol, refreshedMetadata)
-
-    const preflight = await evaluateLatestTransition({
-      symbol,
-      preflightOnly: true,
-      excludedActiveOrderClientId: activeBuy.clientOrderId,
-      referencePriceOverride: marketPrice.price,
-    })
-    if (!preflight.ok) {
-      await pause({
-        symbol,
-        reason: "TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED",
-        error: preflight.errors?.[0],
-      })
-      return preflight
-    }
-    if (preflight.data?.preflightValid !== true) {
-      return toResult({
-        data: {
-          skipped: true,
-          reason: preflight.data?.reason ?? "TRAILING_BUY_REPLACEMENT_NOT_ADMISSIBLE",
-          previousOrderId: activeBuy.brokerOrderId,
-        },
-      })
-    }
-
-    const cancellation = await cancelAndReconcileTrailingBuy({
-      symbol,
-      order: activeBuy
-    })
-    if (!cancellation.ok) {return cancellation}
-    state.buyReferenceOverrides.set(symbol, marketPrice.price)
-    if (!canTrade({ symbol }) || isStopping?.()) {
-      return toResult({ data: {
-        canceled: true,
-        waitingForTradingReadiness: true
-      } })
-    }
-
-    const result = await evaluateLatestTransition({ symbol })
-    if (!result.ok) {return result}
-    return toResult({
-      data: {
-        ...result.data,
-        trailingBuyReplaced: result.data.submittedOrders?.some((order) => order.side === "BUY") ?? false,
-        previousOrderId: activeBuy.brokerOrderId,
-        adjustmentThreshold: trigger.adjustmentThreshold,
-      },
-    })
-  }
+  const maybeReplaceTrailingBuy = (options = {}) => maybeReplaceTrailingBuyTransition({
+    context: {
+      getCurrentMarketMetadata,
+      pairs,
+      state,
+      logger,
+      strategyPolicy,
+      getPortfolio,
+      broker,
+      refreshedMarketMetadata,
+      pause,
+      evaluateLatestTransition,
+      cancelAndReconcileTrailingBuy,
+      canTrade,
+      isStopping,
+    },
+    ...options,
+  })
 
   // This existing single-market state transition intentionally keeps its ordered gates together.
   const evaluateLatestTransition = async ({
