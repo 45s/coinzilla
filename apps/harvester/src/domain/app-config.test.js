@@ -190,7 +190,7 @@ test("rejects every TRADING_MODE value except exact testnet and live", () => {
     assert.throws(
       () => resolveRuntimeConfig({ config: createAppConfig(), tradingMode }),
       /TRADING_MODE must be set to "testnet" or "live"/,
-      "An invalid exchange mode must fail startup instead of falling back to another environment: " + JSON.stringify(tradingMode),
+      `An invalid exchange mode must fail startup instead of falling back to another environment: ${JSON.stringify(tradingMode)}`,
     )
   }
 })
@@ -303,7 +303,7 @@ test("rejects malformed or duplicate Telegram operator user IDs", () => {
       () => validateAppConfig(config),
       (error) => error instanceof ConfigValidationError &&
         error.path === "operatorControl.telegram.allowedUserIds",
-      "Operator allowlists must contain unique canonical positive decimal string IDs: " + JSON.stringify(allowedUserIds),
+      `Operator allowlists must contain unique canonical positive decimal string IDs: ${JSON.stringify(allowedUserIds)}`,
     )
   }
 })

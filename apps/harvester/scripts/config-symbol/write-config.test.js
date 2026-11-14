@@ -42,11 +42,11 @@ const createConfigSource = () => {
     .replace('"tradingEnvironment": "both"', "tradingEnvironment: TRADING_ENVIRONMENTS.BOTH")
     .replace('"externalOrdersPolicy": "ignore"', "externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE")
   return [
-    'import { TRADING_ENVIRONMENTS } from "' + environmentImport + '"' ,
-    'import { EXTERNAL_ORDERS_POLICIES } from "' + policyImport + '"' ,
+    `import { TRADING_ENVIRONMENTS } from "${environmentImport}"`,
+    `import { EXTERNAL_ORDERS_POLICIES } from "${policyImport}"`,
     "// This operator-maintained comment must survive pair generation.",
     "export const tradingPairs = {",
-    "  LINKFDUSD: " + existingPairSource.replaceAll("\n", "\n  ") + ",",
+    `  LINKFDUSD: ${existingPairSource.replaceAll("\n", "\n  ")},`,
     "};",
     "",
   ].join("\n")
@@ -98,7 +98,7 @@ test("refuses to overwrite an existing symbol without changing the external conf
 
 test("fails closed when another generator owns the configuration lock", async () => {
   await withConfigFile(async ({ directory, configPath }) => {
-    const lockPath = configPath + ".config-symbol.lock"
+    const lockPath = `${configPath}.config-symbol.lock`
     await writeFile(lockPath, "owned", "utf8")
     const before = await readFile(configPath, "utf8")
     await assert.rejects(

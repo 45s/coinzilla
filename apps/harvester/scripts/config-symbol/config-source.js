@@ -1,7 +1,7 @@
 import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
 import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 
-function skipQuotedValue(source, startIndex) {
+function skipQuotedValue({ source, startIndex }) {
   const quote = source[startIndex]
   let index = startIndex + 1
   while (index < source.length) {
@@ -20,7 +20,7 @@ function skipQuotedValue(source, startIndex) {
   throw new TypeError("CG coin-grabber pairs config contains an unterminated string")
 }
 
-function skipComment(source, startIndex) {
+function skipComment({ source, startIndex }) {
   if (source[startIndex + 1] === "/") {
     let index = startIndex + 2
     while (index < source.length && source[index] !== "\n" && source[index] !== "\r") {
@@ -38,7 +38,7 @@ function skipComment(source, startIndex) {
   return startIndex
 }
 
-function skipTrivia(source, startIndex) {
+function skipTrivia({ source, startIndex }) {
   let index = startIndex
   while (index < source.length) {
     if (/\s/.test(source[index])) {
@@ -46,7 +46,7 @@ function skipTrivia(source, startIndex) {
       continue
     }
     if (source[index] === "/" && (source[index + 1] === "/" || source[index + 1] === "*")) {
-      index = skipComment(source, index)
+      index = skipComment({ source, startIndex: index })
       continue
     }
     break
@@ -60,11 +60,11 @@ function findTradingPairsObject(source) {
   while (index < source.length) {
     const character = source[index]
     if (character === "'" || character === '"' || character === "`") {
-      index = skipQuotedValue(source, index)
+      index = skipQuotedValue({ source, startIndex: index })
       continue
     }
     if (character === "/" && (source[index + 1] === "/" || source[index + 1] === "*")) {
-      index = skipComment(source, index)
+      index = skipComment({ source, startIndex: index })
       continue
     }
     if (/[A-Za-z_$]/.test(character)) {
@@ -76,11 +76,11 @@ function findTradingPairsObject(source) {
       if (source.slice(identifierStart, index) !== "tradingPairs") {
         continue
       }
-      const assignmentIndex = skipTrivia(source, index)
+      const assignmentIndex = skipTrivia({ source, startIndex: index })
       if (source[assignmentIndex] !== "=") {
         continue
       }
-      const objectStartIndex = skipTrivia(source, assignmentIndex + 1)
+      const objectStartIndex = skipTrivia({ source, startIndex: assignmentIndex + 1 })
       if (source[objectStartIndex] === "{") {
         matches.push({ identifierStart, objectStartIndex })
       }
@@ -95,17 +95,17 @@ function findTradingPairsObject(source) {
   return matches[0]
 }
 
-function findMatchingObjectEnd(source, objectStartIndex) {
+function findMatchingObjectEnd({ source, objectStartIndex }) {
   let depth = 0
   let index = objectStartIndex
   while (index < source.length) {
     const character = source[index]
     if (character === "'" || character === '"' || character === "`") {
-      index = skipQuotedValue(source, index)
+      index = skipQuotedValue({ source, startIndex: index })
       continue
     }
     if (character === "/" && (source[index + 1] === "/" || source[index + 1] === "*")) {
-      index = skipComment(source, index)
+      index = skipComment({ source, startIndex: index })
       continue
     }
     if (character === "{") {
@@ -139,43 +139,46 @@ export function insertTradingPairConfiguration({ source, symbol, pairConfig } = 
   }
 
   const { identifierStart, objectStartIndex } = findTradingPairsObject(source)
-  const objectEndIndex = findMatchingObjectEnd(source, objectStartIndex)
+  const objectEndIndex = findMatchingObjectEnd({ source, objectStartIndex })
   const lineStartIndex = source.lastIndexOf("\n", identifierStart - 1) + 1
   const propertyPrefix = source.slice(lineStartIndex, identifierStart)
   if (!/^[\t ]*export const $/.test(propertyPrefix)) {
     throw new TypeError("tradingPairs must be declared as an exported const on its own line")
   }
-  const propertyIndent = propertyPrefix.match(/^[\t ]*/)[0]
+  const [propertyIndent] = propertyPrefix.match(/^[\t ]*/)
   const entryIndent = propertyIndent + "  "
   let serialized
   try {
-    serialized = JSON.stringify({ [symbol]: pairConfig }, (key, value) => {
-      if (key === "tradingEnvironment") {
-        const member = Object.entries(TRADING_ENVIRONMENTS).find(([, environment]) => environment === value)?.[0]
-        if (!member) {
-          throw new TypeError("pair tradingEnvironment must use a supported TRADING_ENVIRONMENTS value")
-        }
-        return "__TRADING_ENVIRONMENT_" + member + "__"
+    const environmentMember = Object.entries(TRADING_ENVIRONMENTS)
+      .find(([, environment]) => environment === pairConfig.tradingEnvironment)?.[0]
+    if (!environmentMember) {
+      throw new TypeError("pair tradingEnvironment must use a supported TRADING_ENVIRONMENTS value")
+    }
+    const serializedPairConfig = {
+      ...pairConfig,
+      tradingEnvironment: `__TRADING_ENVIRONMENT_${environmentMember}__`,
+    }
+    if (pairConfig.externalOrdersPolicy !== undefined) {
+      const policyMember = Object.entries(EXTERNAL_ORDERS_POLICIES)
+        .find(([, policy]) => policy === pairConfig.externalOrdersPolicy)?.[0]
+      if (!policyMember) {
+        throw new TypeError("pair externalOrdersPolicy must use a supported EXTERNAL_ORDERS_POLICIES value")
       }
-      if (key === "externalOrdersPolicy" && value !== undefined) {
-        const member = Object.entries(EXTERNAL_ORDERS_POLICIES).find(([, policy]) => policy === value)?.[0]
-        if (!member) {
-          throw new TypeError("pair externalOrdersPolicy must use a supported EXTERNAL_ORDERS_POLICIES value")
-        }
-        return "__EXTERNAL_ORDERS_POLICY_" + member + "__"
-      }
-      return value
-    }, 2)
-    .replace(/"__TRADING_ENVIRONMENT_(BOTH|TESTNET|LIVE)__"/g, "TRADING_ENVIRONMENTS.$1")
-    .replace(/"__EXTERNAL_ORDERS_POLICY_(IGNORE|BLOCK)__"/g, "EXTERNAL_ORDERS_POLICIES.$1")
-    .replace(/"(tradingEnvironment|externalOrdersPolicy)": /g, "$1: ")
+      serializedPairConfig.externalOrdersPolicy = `__EXTERNAL_ORDERS_POLICY_${policyMember}__`
+    }
+    serialized = JSON.stringify({ [symbol]: serializedPairConfig }, null, 2)
+      .replace(/"__TRADING_ENVIRONMENT_(BOTH|TESTNET|LIVE)__"/g, "TRADING_ENVIRONMENTS.$1")
+      .replace(/"__EXTERNAL_ORDERS_POLICY_(IGNORE|BLOCK)__"/g, "EXTERNAL_ORDERS_POLICIES.$1")
+      .replace(/"(tradingEnvironment|externalOrdersPolicy)": /g, "$1: ")
   } catch (cause) {
-    throw new TypeError("pair config must be JSON-serializable: " + cause.message, { cause })
+    throw new TypeError(`pair config must be JSON-serializable: ${cause.message}`, { cause })
   }
   const generatedLines = serialized.split("\n").slice(1, -1).map((line) => entryIndent + line.slice(2))
   generatedLines[generatedLines.length - 1] += ","
-  const insertion = "\n" + generatedLines.join("\n")
-    + (source[objectStartIndex + 1] === "\n" || source[objectStartIndex + 1] === "\r" ? "" : "\n" + propertyIndent)
+  const closingIndent = source[objectStartIndex + 1] === "\n" || source[objectStartIndex + 1] === "\r"
+    ? ""
+    : `\n${propertyIndent}`
+  const insertion = `\n${generatedLines.join("\n")}${closingIndent}`
   return source.slice(0, objectStartIndex + 1)
     + insertion
     + source.slice(objectStartIndex + 1, objectEndIndex + 1)

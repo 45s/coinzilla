@@ -85,7 +85,7 @@ if (isDirectExecution) {
   try {
     await main()
   } catch (error) {
-    stderr.write("config:symbol failed: " + (error?.message ?? String(error)) + "\n")
+    stderr.write(`config:symbol failed: ${error?.message ?? String(error)}\n`)
     process.exitCode = 1
   }
 }

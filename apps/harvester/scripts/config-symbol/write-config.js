@@ -70,7 +70,7 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
     throw new TypeError("configPath must be a non-empty file path")
   }
   const absoluteConfigPath = path.resolve(configPath)
-  const lockPath = absoluteConfigPath + ".config-symbol.lock"
+  const lockPath = `${absoluteConfigPath}.config-symbol.lock`
   const directory = path.dirname(absoluteConfigPath)
   const configFileName = path.basename(absoluteConfigPath)
   const temporaryPath = path.join(directory, "." + configFileName + "." + randomUUID() + ".tmp.mjs")

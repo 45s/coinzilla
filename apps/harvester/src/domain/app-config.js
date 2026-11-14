@@ -71,18 +71,18 @@ function validateTelegramNotificationConfig(config) {
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 export function validateAppConfig(config) {
   requireRecord(config, "root")
-function validateTelegramOperatorControlConfig(config) {
-  if (config.operatorControl === undefined) {
+function validateTelegramOperatorControlConfig(appConfig) {
+  if (appConfig.operatorControl === undefined) {
     return
   }
   const path = "operatorControl"
-  requireRecord(config.operatorControl, path)
-  for (const key of Object.keys(config.operatorControl)) {
+  requireRecord(appConfig.operatorControl, path)
+  for (const key of Object.keys(appConfig.operatorControl)) {
     if (key !== "telegram") {
       fail(path + "." + key, "a supported operator-control configuration field")
     }
   }
-  const telegram = config.operatorControl.telegram
+  const telegram = appConfig.operatorControl.telegram
   requireRecord(telegram, path + ".telegram")
   for (const key of Object.keys(telegram)) {
     if (key !== "enabled" && key !== "allowedUserIds") {

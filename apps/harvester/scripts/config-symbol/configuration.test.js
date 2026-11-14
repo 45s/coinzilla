@@ -114,7 +114,7 @@ test("validates every strategy-owned setting before making an exchange request",
 })
 
 test("accepts only Binance testnet and live environment names", () => {
-  assert.equal(normalizeTradingEnvironment(" " + TRADING_ENVIRONMENTS.TESTNET + " "), TRADING_ENVIRONMENTS.TESTNET, "The testnet environment must normalize safely.")
+  assert.equal(normalizeTradingEnvironment(` ${TRADING_ENVIRONMENTS.TESTNET} `), TRADING_ENVIRONMENTS.TESTNET, "The testnet environment must normalize safely.")
   assert.equal(normalizeTradingEnvironment(TRADING_ENVIRONMENTS.LIVE.toUpperCase()), TRADING_ENVIRONMENTS.LIVE, "The live environment must normalize case-insensitively.")
   for (const value of ["", "paper", "production", null, 42]) {
     assert.throws(
@@ -127,13 +127,13 @@ test("accepts only Binance testnet and live environment names", () => {
 
 test("requires one explicit pair tradingEnvironment value without a default", () => {
   for (const value of Object.values(TRADING_ENVIRONMENTS)) {
-    assert.equal(normalizePairTradingEnvironment(value), value, "The pair selector must accept exactly the supported value: " + value)
+    assert.equal(normalizePairTradingEnvironment(value), value, `The pair selector must accept exactly the supported value: ${value}`)
   }
   for (const value of ["", "production", "TESTNET", null, 42]) {
     assert.throws(
       () => normalizePairTradingEnvironment(value),
       /tradingEnvironment.*testnet.*live.*both/i,
-      "Unsupported pair eligibility must be rejected instead of falling back: " + String(value),
+      `Unsupported pair eligibility must be rejected instead of falling back: ${String(value)}`,
     )
   }
   assert.throws(
