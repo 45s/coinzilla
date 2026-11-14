@@ -862,3 +862,6 @@ Transition and submission-gate helpers accept a single context object, keeping d
 
 
 The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders now use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
+
+
+The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
