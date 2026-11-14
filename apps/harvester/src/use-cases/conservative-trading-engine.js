@@ -2272,7 +2272,7 @@ export function makeConservativeTradingEngine({
           continue
         }
 
-        const fills = [...fillsById.values()].sort((left, right) => {
+        const fills = [...fillsById.values()].sort((left, right) => { // eslint-disable-line max-params -- Array#sort comparators require both adjacent values.
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
               left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
           return left.tradeId.localeCompare(right.tradeId)
