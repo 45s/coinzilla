@@ -297,78 +297,42 @@ async function createHarness(options = {}) {
   return createHarnessFromOptions(resolvedOptions)
 }
 
-async function createHarnessFromOptions({
-  strategyPolicy,
-  hasUnownedOpenOrdersForSymbol,
-  hasUnresolvedHarvesterOpenOrdersForSymbol,
-  appConfig: suppliedAppConfig,
-  isMarketPriceFresh,
-  isMarketBookFresh,
-  initialBook,
-  marketMetadata: suppliedMarketMetadata,
-  getMarketMetadata: getMarketMetadataOverride,
-  getSymbolFilters: getSymbolFiltersOverride,
-  placeOrderFailureAfterFirst,
-  placeOrderFailureAfterCount,
-  placeOrderFailureError,
-  placeOrderFailureCount,
-  cancelWithFill,
-  cancelExecutedQuantity,
-  cancelOrderStatus,
-  cancelOrderGate,
-  onCancelOrderStarted,
-  eventPublisher,
-  placeOrderFailure,
-  placeOrderThrow,
-  cancelFailure,
-  cancelThrow,
-  cancelNotSent,
-  cancelNotSentOnSuccess,
-  onPlaceOrder,
-  placeOrderGate,
-  deferOrderSide,
-  onPlaceOrderStarted,
-  initialPortfolio,
-  initialRecoveryLedger,
-  getPortfolio: getPortfolioOverride,
-  getRecoveryLedger: getRecoveryLedgerOverride,
-  updateTradingAccounting: updateTradingAccountingOverride,
-  completeRecoveryCycle: completeRecoveryCycleOverride,
-  baseFreeBalance,
-  quoteFreeBalance,
-  quoteCashFlowBaseline,
-  portfolioBaseQuantityBaseline,
-  committedQuoteBalanceBaseline,
-  committedBaseBalanceBaseline,
-  accountingApplied,
-  accountingFailure,
-  immediateFilledAcknowledgement,
-  getAcknowledgedFills,
-  acknowledgedFillsGate,
-  getTerminalFills,
-  recoveryCompletion,
-  getVolatilityData: getVolatilityDataOverride,
-  onOperationalStateCancellationIntent,
-  onOperationalStateCancellationOutcome,
-  onOperationalStateStrategyMarketPaused,
-  canTrade: canTradeOverride,
-  isStopping: isStoppingOverride,
-  initialState,
-}) {
-  const effectiveCancelExecutedQuantity = getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuantity })
+function createHarnessBrokerState({ options } = {}) {
   const {
-    orders,
-    pauses,
-    accountedFills,
-    accountedFillIds,
-    completedCycles,
-    cancellationIds,
-    acknowledgedFillsByOrder,
-    acknowledgedOrdersById,
-    canonicalOrdersByClientId,
-    broker,
-    accountSnapshot,
-  } = createHarnessBroker({
+    marketMetadata: suppliedMarketMetadata,
+    getMarketMetadata: getMarketMetadataOverride,
+    getSymbolFilters: getSymbolFiltersOverride,
+    placeOrderFailure,
+    placeOrderFailureCount,
+    placeOrderFailureAfterCount,
+    placeOrderFailureError,
+    placeOrderFailureAfterFirst,
+    cancelWithFill,
+    cancelExecutedQuantity,
+    cancelOrderStatus,
+    cancelOrderGate,
+    onCancelOrderStarted,
+    placeOrderThrow,
+    cancelFailure,
+    cancelThrow,
+    cancelNotSent,
+    cancelNotSentOnSuccess,
+    onPlaceOrder,
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrderStarted,
+    immediateFilledAcknowledgement,
+    getAcknowledgedFills,
+    acknowledgedFillsGate,
+    getTerminalFills,
+    baseFreeBalance,
+    quoteFreeBalance,
+    quoteCashFlowBaseline,
+    portfolioBaseQuantityBaseline,
+    committedQuoteBalanceBaseline,
+    committedBaseBalanceBaseline,
+  } = options
+  return createHarnessBroker({
     market,
     baseAsset,
     quoteAsset,
@@ -382,7 +346,7 @@ async function createHarnessFromOptions({
     placeOrderFailureError,
     placeOrderFailureAfterFirst,
     cancelWithFill,
-    cancelExecutedQuantity: effectiveCancelExecutedQuantity,
+    cancelExecutedQuantity: getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuantity }),
     cancelOrderStatus,
     cancelOrderGate,
     onCancelOrderStarted,
@@ -406,17 +370,45 @@ async function createHarnessFromOptions({
     committedQuoteBalanceBaseline,
     committedBaseBalanceBaseline,
   })
-  const state = {
-    currentPortfolio: initialPortfolio ?? new Portfolio(),
-    currentRecoveryLedger: initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
+}
+
+function createHarnessMutableState({ options } = {}) {
+  return {
+    currentPortfolio: options.initialPortfolio ?? new Portfolio(),
+    currentRecoveryLedger: options.initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
   }
+}
+
+function createHarnessEngine({ options, brokerState, state } = {}) {
+  const {
+    strategyPolicy,
+    hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
+    appConfig: suppliedAppConfig,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+    marketMetadata: suppliedMarketMetadata,
+    getMarketMetadata: getMarketMetadataOverride,
+    eventPublisher,
+    updateTradingAccounting: updateTradingAccountingOverride,
+    completeRecoveryCycle: completeRecoveryCycleOverride,
+    getPortfolio: getPortfolioOverride,
+    getRecoveryLedger: getRecoveryLedgerOverride,
+    getVolatilityData: getVolatilityDataOverride,
+    onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused,
+    canTrade: canTradeOverride,
+    isStopping: isStoppingOverride,
+    accountingFailure,
+    accountingApplied,
+    recoveryCompletion,
+    initialState,
+  } = options
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
-  // The synthetic seeded portfolio below is built from a completed BUY fill at 100.
-  // The engine intentionally does not infer a reconciled VWAP from portfolio totals,
-  // so expose that known fixture evidence to the policy in seeded-position tests.
-  const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio })
-  const engine = makeConservativeTradingEngine({
-    broker,
+  const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio: options.initialPortfolio })
+  return makeConservativeTradingEngine({
+    broker: brokerState.broker,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -434,42 +426,51 @@ async function createHarnessFromOptions({
       getMarketMetadataOverride,
       suppliedMarketMetadata,
       marketMetadataFallback: suppliedMarketMetadata ?? marketMetadata,
-      accountSnapshot,
+      accountSnapshot: brokerState.accountSnapshot,
       state,
-      pauses,
+      pauses: brokerState.pauses,
     }),
     updateTradingAccounting: updateTradingAccountingOverride ?? createHarnessTradingAccounting({
       accountingFailure,
-      accountedFills,
-      accountedFillIds,
+      accountedFills: brokerState.accountedFills,
+      accountedFillIds: brokerState.accountedFillIds,
       accountingApplied,
     }),
     completeRecoveryCycle: completeRecoveryCycleOverride ?? createHarnessRecoveryCycleCompletion({
-      completedCycles,
+      completedCycles: brokerState.completedCycles,
       recoveryCompletion,
     }),
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
     initialState,
   })
-  await processHarnessInitialBook({ engine, initialBook })
+}
+
+function createHarnessResult({ engine, brokerState, state } = {}) {
   return {
     engine,
-    broker,
-    orders,
-    pauses,
-    accountedFills,
-    completedCycles,
-    cancellationIds,
+    broker: brokerState.broker,
+    orders: brokerState.orders,
+    pauses: brokerState.pauses,
+    accountedFills: brokerState.accountedFills,
+    completedCycles: brokerState.completedCycles,
+    cancellationIds: brokerState.cancellationIds,
     ...createHarnessControlApi({
       state,
-      canonicalOrdersByClientId,
-      acknowledgedOrdersById,
-      acknowledgedFillsByOrder,
+      canonicalOrdersByClientId: brokerState.canonicalOrdersByClientId,
+      acknowledgedOrdersById: brokerState.acknowledgedOrdersById,
+      acknowledgedFillsByOrder: brokerState.acknowledgedFillsByOrder,
     }),
   }
 }
 
+async function createHarnessFromOptions(options = {}) {
+  const brokerState = createHarnessBrokerState({ options })
+  const state = createHarnessMutableState({ options })
+  const engine = createHarnessEngine({ options, brokerState, state })
+  await processHarnessInitialBook({ engine, initialBook: options.initialBook })
+  return createHarnessResult({ engine, brokerState, state })
+}
 
 
 test("ignores manual external open orders under the default per-pair policy", async () => {
