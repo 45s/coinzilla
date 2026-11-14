@@ -1556,6 +1556,8 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const shutdownRecoveryError = (code, message) => Object.assign(new Error(message), { code })
+
   const getShutdownRecoveryInventory = ({ symbol } = {}) => {
     let metadata
     try {
@@ -1769,7 +1771,7 @@ export function makeConservativeTradingEngine({
     if (["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)) {
       return {
         ok: false,
-        error: new Error(`Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}`),
+        error: shutdownRecoveryError("SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", `Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}`),
       }
     }
     const metadata = getCurrentMarketMetadata({ symbol })
@@ -1784,7 +1786,7 @@ export function makeConservativeTradingEngine({
         return {
           ok: false,
           error: cancellation?.errors?.[0] ??
-            new Error(`Shutdown recovery SELL cancellation is unresolved for ${symbol}`),
+            shutdownRecoveryError("SHUTDOWN_RECOVERY_CANCELLATION_UNRESOLVED", `Shutdown recovery SELL cancellation is unresolved for ${symbol}`),
         }
       }
       assessment = assessShutdownRecoverySellCoverage({ symbol })
@@ -1795,7 +1797,7 @@ export function makeConservativeTradingEngine({
     if (state.paused.has(symbol) || hasBlockingOpenOrdersForSymbol({ symbol })) {
       return {
         ok: false,
-        error: new Error(`Shutdown recovery SELL replacement is blocked for ${symbol}`),
+        error: shutdownRecoveryError("SHUTDOWN_RECOVERY_REPLACEMENT_BLOCKED", `Shutdown recovery SELL replacement is blocked for ${symbol}`),
       }
     }
     const replacement = await evaluateLatestTransition({
@@ -1808,14 +1810,14 @@ export function makeConservativeTradingEngine({
       return {
         ok: false,
         error: replacement?.errors?.[0] ??
-          new Error(`Shutdown recovery SELL replacement was not confirmed for ${symbol}`),
+          shutdownRecoveryError("SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED", `Shutdown recovery SELL replacement was not confirmed for ${symbol}`),
       }
     }
     assessment = assessShutdownRecoverySellCoverage({ symbol })
     if (!assessment.covered) {
       return {
         ok: false,
-        error: new Error(`Shutdown recovery SELL coverage remains incomplete for ${symbol}: ${assessment.reason}`),
+        error: shutdownRecoveryError("SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE", `Shutdown recovery SELL coverage remains incomplete for ${symbol}: ${assessment.reason}`),
       }
     }
     return { ok: true, assessment, replacedStaleSell: true }
@@ -1824,7 +1826,7 @@ export function makeConservativeTradingEngine({
   const reconcileRecoverySellsForShutdown = () => runTransition({
     task: async () => {
       if (isStopping?.() !== true) {
-        return toResult({ error: new Error("Shutdown recovery SELL reconciliation requires the stopping state") })
+        return toResult({ error: shutdownRecoveryError("SHUTDOWN_RECOVERY_REQUIRES_STOPPING_STATE", "Shutdown recovery SELL reconciliation requires the stopping state") })
       }
       const reconciledSymbols = []
       const failures = []
