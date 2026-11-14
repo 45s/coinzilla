@@ -40,6 +40,150 @@ function logSystem(logger, data) {
   logger?.info?.(data)
 }
 
+function createAccountSnapshotAuditPayload({ phase, snapshot, allowedAssetCodes, auditStatus, auditReasons }) {
+  let dataResult
+  try {
+    dataResult = mapAccountSnapshotCapturedData({
+      phase,
+      snapshot,
+      allowedAssetCodes,
+      auditStatus,
+      auditReasons,
+    })
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
+  }
+  if (!dataResult?.ok) {
+    throw withRecoveryFailure(
+      dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
+      false,
+    )
+  }
+  return dataResult
+}
+
+async function persistAccountSnapshotAudit({ operationalStateStore, data }) {
+  if (!operationalStateStore) {
+    return
+  }
+  const durable = await recordAccountSnapshotCaptured({ operationalStateStore, data })
+  if (durable?.ok !== true || durable.data?.durable !== true) {
+    const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
+    throw withRecoveryFailure(
+      new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }),
+      "DURABILITY",
+      "ACCOUNT_SNAPSHOT_DURABLE_FACT",
+      false,
+    )
+  }
+}
+
+function logClosingJournalBarrier({
+  logger,
+  runtimeSessionId,
+  monotonicNow,
+  startedAt,
+  phaseStatus,
+  failureReason,
+}) {
+  logSystem(logger, {
+    message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
+    shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+    phaseStatus,
+    phase: "CLOSING",
+    shutdownCorrelationId: runtimeSessionId ?? null,
+    ...(startedAt === undefined ? {} : { durationMs: Math.max(0, monotonicNow() - startedAt) }),
+    ...(failureReason ? { failureReason } : {}),
+  })
+}
+
+async function flushAccountSnapshotAudit({
+  eventPublisher,
+  phase,
+  logger,
+  runtimeSessionId,
+  monotonicNow,
+}) {
+  if (typeof eventPublisher?.flush !== "function") {
+    if (phase === "CLOSING") {
+      logSystem(logger, {
+        message: "Harvester shutdown phase failed",
+        shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+        phaseStatus: "FAILED",
+        phase: "CLOSING",
+        shutdownCorrelationId: runtimeSessionId ?? null,
+        failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
+      })
+    }
+    throw withRecoveryFailure(
+      new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY",
+      false,
+    )
+  }
+
+  const startedAt = monotonicNow()
+  const isClosing = phase === "CLOSING"
+  if (isClosing) {
+    logSystem(logger, {
+      message: "Harvester shutdown phase started",
+      shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+      phaseStatus: "STARTED",
+      phase: "CLOSING",
+      shutdownCorrelationId: runtimeSessionId ?? null,
+    })
+  }
+
+  let flushed
+  try {
+    flushed = await eventPublisher.flush()
+  } catch (error) {
+    if (isClosing) {
+      logClosingJournalBarrier({
+        logger,
+        runtimeSessionId,
+        monotonicNow,
+        startedAt,
+        phaseStatus: "FAILED",
+        failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED",
+      })
+    }
+    throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
+  }
+
+  if (flushed?.ok !== true || flushed?.durable !== true) {
+    if (isClosing) {
+      logClosingJournalBarrier({
+        logger,
+        runtimeSessionId,
+        monotonicNow,
+        startedAt,
+        phaseStatus: "FAILED",
+        failureReason: flushed?.recoveryFailure?.stage ?? "JOURNAL_FLUSH_NOT_DURABLE",
+      })
+    }
+    const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw createAuditFlushError({
+      flushed,
+      message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
+      stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+    })
+  }
+
+  if (isClosing) {
+    logClosingJournalBarrier({
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+      phaseStatus: "COMPLETED",
+    })
+  }
+}
+
 /**
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *
@@ -59,7 +203,6 @@ function logSystem(logger, data) {
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
-// eslint-disable-next-line max-lines-per-function -- lifecycle manager composes ordered account-wide audit barriers.
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
   getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
@@ -331,7 +474,7 @@ export function createAccountSnapshotManager({
     auditReasons = [],
     snapshot: suppliedSnapshot,
     allowedAssetCodes: suppliedAllowedAssetCodes,
-  } = {}) => { // eslint-disable-line complexity, max-lines-per-function -- account snapshot publication preserves ordered durability gates.
+  } = {}) => {
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot({
       capturePreflightBaseline: phase === "PREFLIGHT",
     })
@@ -341,94 +484,44 @@ export function createAccountSnapshotManager({
       ...configuredAssetCodes,
       ...commissionBaselineAssetIds.keys(),
     ])]
-    let dataResult
-    try {
-      dataResult = mapAccountSnapshotCapturedData({ phase, snapshot, allowedAssetCodes, auditStatus, auditReasons })
-    } catch (error) {
-      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
-    }
-    if (!dataResult?.ok) {
-      throw withRecoveryFailure(
-        dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
-        "ACCOUNTING_INTEGRITY",
-        "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
-        false,
-      )
-    }
-    if (operationalStateStore) {
-      const durable = await recordAccountSnapshotCaptured({ operationalStateStore, data: dataResult.data })
-      if (durable?.ok !== true || durable.data?.durable !== true) {
-        const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
-        throw withRecoveryFailure(new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_SNAPSHOT_DURABLE_FACT", false)
-      }
-    }
-    const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED, dataResult })
+    const dataResult = createAccountSnapshotAuditPayload({
+      phase,
+      snapshot,
+      allowedAssetCodes,
+      auditStatus,
+      auditReasons,
+    })
+    await persistAccountSnapshotAudit({
+      operationalStateStore,
+      data: dataResult.data,
+    })
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+      dataResult,
+    })
     if (!published?.ok) {
       throw withRecoveryFailure(
         new Error("Unable to publish " + phase + " account snapshot audit event"),
-        "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION", true,
+        "DURABILITY",
+        "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
+        true,
       )
     }
-    if (typeof eventPublisher?.flush === "function") {
-      const barrierStartedAt = monotonicNow()
-      const isClosingBarrier = phase === "CLOSING"
-      const logClosingBarrier = (phaseStatus, failureReason) => { // eslint-disable-line max-params -- logger callback receives phase and optional reason.
-        if (!isClosingBarrier) {return}
-        logSystem(logger, {
-          message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
-          shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
-          phaseStatus,
-          phase: "CLOSING",
-          shutdownCorrelationId: runtimeSessionId ?? null,
-          durationMs: Math.max(0, monotonicNow() - barrierStartedAt),
-          ...(failureReason ? { failureReason } : {}),
-        })
-      }
-      if (isClosingBarrier) {
-        logSystem(logger, {
-          message: "Harvester shutdown phase started",
-          shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
-          phaseStatus: "STARTED",
-          phase: "CLOSING",
-          shutdownCorrelationId: runtimeSessionId ?? null,
-        })
-      }
-      let flushed
-      try {
-        flushed = await eventPublisher.flush()
-      } catch (error) {
-        logClosingBarrier("FAILED", error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED")
-        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
-      }
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        logClosingBarrier("FAILED", flushed?.recoveryFailure?.stage ?? "JOURNAL_FLUSH_NOT_DURABLE")
-        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw createAuditFlushError({
-          flushed,
-          message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
-          stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
-        })
-      }
-      logClosingBarrier("COMPLETED")
-    } else {
-      if (phase === "CLOSING") {
-        logSystem(logger, {
-          message: "Harvester shutdown phase failed",
-          shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
-          phaseStatus: "FAILED",
-          phase: "CLOSING",
-          shutdownCorrelationId: runtimeSessionId ?? null,
-          failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
-        })
-      }
-      throw withRecoveryFailure(
-        new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
-        "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY", false,
-      )
-    }
+    await flushAccountSnapshotAudit({
+      eventPublisher,
+      phase,
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+    })
     logSystem(logger, {
       message: "Account snapshot captured and durably journaled",
-      phase, auditStatus, assetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
+      phase,
+      auditStatus,
+      assetCount: snapshot.balances.length,
+      sourceTime: snapshot.sourceTime,
+      auditReasons,
     })
     return snapshot
   }
