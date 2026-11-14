@@ -119,14 +119,14 @@ test("CLI requires an absolute existing durable-fact directory only for explicit
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],
     cwd: "/offline",
-    env: { DURABLE_FACTS_DIRECTORY: "relative/ledger" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "relative/ledger" },
     readContext: async () => JSON.stringify(context),
     writeOutput: () => assert.fail("Confirmation with a relative ledger path must not run."),
     writeError: (value) => errors.push(value),
   })
 
   assert.equal(exitCode, 1, "Confirmation with a relative durable-fact directory must fail.")
-  assert.match(errors[0], /absolute DURABLE_FACTS_DIRECTORY/)
+  assert.match(errors[0], /OPERATIONAL_STATE_DIRECTORY/)
 })
 
 test("CLI help is available without reading evidence or touching the durable-fact store", async () => {
@@ -187,3 +187,26 @@ test("CLI never initializes a missing durable-fact directory during confirmation
   await assert.rejects(access(directory), { code: "ENOENT" }, "The CLI must not create the missing ledger directory.")
 })
 
+
+test("CLI accepts the canonical Operational State Store directory override", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-operational-state-cli-"))
+  try {
+    const store = createFileDurableFactsStore({
+      directory,
+      runtimeSessionId: readyContext.runtimeSessionId,
+    })
+    await store.initialize()
+    const output = []
+    const exitCode = await runRecoveryMarketCommand({
+      args: ["--context", "evidence.json", "--confirm"],
+      env: { OPERATIONAL_STATE_DIRECTORY: directory },
+      readContext: async () => JSON.stringify(readyContext),
+      writeOutput: (value) => output.push(value),
+      writeError: (value) => assert.fail(value),
+    })
+    assert.equal(exitCode, 0)
+    assert.equal(JSON.parse(output[0]).data.confirmation.confirmed, true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
