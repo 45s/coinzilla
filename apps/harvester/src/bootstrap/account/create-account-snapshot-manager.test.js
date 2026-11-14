@@ -648,10 +648,10 @@ test("retains the first recovery account audit publication after a transient flu
 
 
 test("commits account balance and open-order facts before publishing their Journal audit events", async () => {
-  const operationalStateStore = []
+  const appendedRecords = []
   const operationalStateStore = {
     append: async (fact) => {
-      operationalStateStore.push(fact)
+      appendedRecords.push(fact)
       return { ok: true, data: { durable: true, record: fact } }
     },
   }
@@ -665,7 +665,7 @@ test("commits account balance and open-order facts before publishing their Journ
   await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT", orders: [] })
 
   assert.deepEqual(
-    operationalStateStore.map(({ factType }) => factType),
+    appendedRecords.map(({ factType }) => factType),
     ["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED"],
     "Both recovery-critical account snapshots must be committed to the Operational State Store record stream.",
   )
