@@ -26,7 +26,7 @@ export async function runConfigSymbol({
 
   const symbol = normalizeSymbolInput(await ask("Binance Spot market symbol (for example POLUSDT): "))
   const environment = normalizeTradingEnvironment(defaultEnvironment)
-  writeLine("Fetching public Binance Spot exchange information from " + environment + "...")
+  writeLine(`Fetching public Binance Spot exchange information from ${environment}...`)
 
   const metadata = await metadataFetcher({ symbol, environment, fetchImpl })
   if (metadata?.symbol !== symbol || metadata?.environment !== environment) {
@@ -56,7 +56,7 @@ export async function runConfigSymbol({
   }
 
   const writtenPath = await writeSpecification({ specificationPath, metadata })
-  writeLine("Token specification updated successfully: " + writtenPath)
+  writeLine(`Token specification updated successfully: ${writtenPath}`)
   writeLine("Strategy pair configuration was not changed.")
   return Object.freeze({ written: true, symbol, baseAsset, marketSpecification: market, path: writtenPath })
 }
@@ -69,7 +69,7 @@ async function main() {
   try {
     await runConfigSymbol({
       ask: (question) => terminal.question(question),
-      writeLine: (line) => stdout.write(line + "\n"),
+      writeLine: (line) => stdout.write(`${line}\n`),
     })
   } finally {
     terminal.close()
