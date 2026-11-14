@@ -1,3 +1,4 @@
+import { StrategyId } from "../strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -42,12 +43,12 @@ function makeOrder({ market, clientOrderId, side, originalQuantity, executedQuan
 
 test("aggregates Portfolio and active-order baselines by shared exchange asset", () => {
   const portfolio = new Portfolio()
-    .applyFill({ fill: makeBuyFill({ market: btcMarket, tradeId: "btc-buy", quantity: "10", quoteQuantity: "100" }), strategyId: "CG_coinGrabber" }).portfolio
-    .applyFill({ fill: makeBuyFill({ market: ethMarket, tradeId: "eth-buy", quantity: "5", quoteQuantity: "50" }), strategyId: "CG_coinGrabber" }).portfolio
-    .applyFill({ fill: makeBuyFill({ market: btcFdusdMarket, tradeId: "btc-fdusd-buy", quantity: "5", quoteQuantity: "25" }), strategyId: "CG_coinGrabber" }).portfolio
+    .applyFill({ fill: makeBuyFill({ market: btcMarket, tradeId: "btc-buy", quantity: "10", quoteQuantity: "100" }), strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: makeBuyFill({ market: ethMarket, tradeId: "eth-buy", quantity: "5", quoteQuantity: "50" }), strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: makeBuyFill({ market: btcFdusdMarket, tradeId: "btc-fdusd-buy", quantity: "5", quoteQuantity: "25" }), strategyId: StrategyId.COIN_GRABBER }).portfolio
   const portfolioWithRetainedFreeBase = portfolio.allocateFreeQuantity({
     marketId: btcMarket.id,
-    quantity: "2", strategyId: "CG_coinGrabber"
+    quantity: "2", strategyId: StrategyId.COIN_GRABBER
   })
   const activeOrders = [
     makeOrder({ market: btcMarket, clientOrderId: "btc-buy-open", side: "BUY", originalQuantity: "3", executedQuantity: "1", limitPrice: "10" }),
@@ -146,12 +147,12 @@ test("aggregates same-market strategy Positions into one actual account custody 
   const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
     fill: makeBuyFill({ market: btcMarket, tradeId: "cg-btc-buy", quantity: "10", quoteQuantity: "100" }),
     positionId: "position:cg:btcusdt",
-    strategyId: "CG_coinGrabber",
+    strategyId: StrategyId.COIN_GRABBER,
   })
   const { portfolio } = coinGrabberPortfolio.applyFill({
     fill: makeBuyFill({ market: btcMarket, tradeId: "rs-btc-buy", quantity: "3", quoteQuantity: "60" }),
     positionId: "position:rs:btcusdt",
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   })
 
   const result = calculateAccountSnapshotBaselines({ portfolio, activeOrders: [] })
