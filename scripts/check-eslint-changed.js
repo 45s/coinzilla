@@ -30,39 +30,71 @@ function selectChangedJavaScriptFiles(paths) {
     .sort();
 }
 
-function getChangedFiles({ baseSha }) {
+function parseChangedFileNames(output) {
+  const fields = output.split("\0");
+  const changes = [];
+
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index];
+    index += 1;
+    if (!status) {
+      continue;
+    }
+
+    if (status.startsWith("R") || status.startsWith("C")) {
+      const previousPath = fields[index];
+      const currentPath = fields[index + 1];
+      index += 2;
+      changes.push({ path: currentPath, basePath: previousPath });
+    } else {
+      const path = fields[index];
+      index += 1;
+      if (status[0] !== "D") {
+        changes.push({ path, basePath: status[0] === "A" ? null : path });
+      }
+    }
+  }
+
+  return changes.filter((change) => change.path);
+}
+
+function getChangedFileChanges({ baseSha }) {
   const result = spawnSync(
     "git",
-    ["diff", "--name-only", "--diff-filter=ACMR", "-z", baseSha, "HEAD"],
+    ["diff", "--name-status", "--find-renames", "-z", baseSha, "HEAD"],
     { encoding: "utf8" },
   );
 
   if (result.error) {
-    throw new Error(`Could not inspect changed files: ${result.error.message}`);
+    throw new Error(\`Could not inspect changed files: \${result.error.message}\`);
   }
 
   if (result.status !== 0) {
     throw new Error(
-      result.stderr || `Git diff exited with status ${result.status}.`,
+      result.stderr || \`Git diff exited with status \${result.status}.\`,
     );
   }
 
-  return result.stdout.split("\0").filter(Boolean);
+  return parseChangedFileNames(result.stdout);
+}
+
+function getChangedFiles({ baseSha }) {
+  return getChangedFileChanges({ baseSha }).map((change) => change.path);
 }
 
 function findingKey(message) {
-  return [
-    message.ruleId,
-    message.messageId,
+  return JSON.stringify([
+    message.ruleId ?? "fatal",
+    message.messageId ?? null,
     message.message,
-    message.source?.split("\n")[0]?.trim() ?? "",
-  ].join("|");
+    message.nodeType ?? null,
+    message.source?.trim() ?? "",
+  ]);
 }
 
 function countFindings(messages) {
   const counts = new Map();
   for (const message of messages) {
-    if (!message.ruleId) continue;
     const key = findingKey(message);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
@@ -70,43 +102,57 @@ function countFindings(messages) {
 }
 
 async function lintChangedFiles({ baseSha }) {
-  const changedFiles = selectChangedJavaScriptFiles(getChangedFiles({ baseSha }));
-  if (changedFiles.length === 0) {
-    console.log("No changed JavaScript files require ESLint.");
+  const changes = getChangedFileChanges({ baseSha }).filter((change) => (
+    selectChangedJavaScriptFiles([change.path]).length > 0
+  ));
+  if (changes.length === 0) {
+    process.stdout.write("No changed JavaScript files require ESLint.\n");
     return 0;
   }
 
   const eslint = new ESLint();
   const introduced = [];
-  for (const filePath of changedFiles) {
-    const currentResults = await eslint.lintFiles([filePath]);
+  for (const change of changes) {
+    const currentResults = await eslint.lintFiles([change.path]);
     const currentMessages = currentResults.flatMap((result) => result.messages);
-    const baseResult = spawnSync("git", ["show", `${baseSha}:${filePath}`], { encoding: "utf8" });
-    const baseMessages = baseResult.status === 0
-      ? (await eslint.lintText(baseResult.stdout, { filePath }))[0].messages
+    const baseResult = change.basePath
+      ? spawnSync("git", ["show", \`\${baseSha}:\${change.basePath}\`], { encoding: "utf8" })
+      : null;
+    if (baseResult?.error) {
+      throw new Error(\`Could not read baseline for \${change.path}: \${baseResult.error.message}\`);
+    }
+    const baseMessages = baseResult?.status === 0
+      ? (await eslint.lintText(baseResult.stdout, { filePath: change.path }))[0].messages
       : [];
     const baseline = countFindings(baseMessages);
+
     for (const message of currentMessages) {
-      if (!message.ruleId) continue;
       const key = findingKey(message);
       const remaining = baseline.get(key) ?? 0;
       if (remaining > 0) {
         baseline.set(key, remaining - 1);
       } else {
-        introduced.push({ filePath, message });
+        introduced.push({ filePath: change.path, message });
       }
     }
   }
 
   if (introduced.length > 0) {
     for (const { filePath, message } of introduced) {
-      console.error(`${filePath}:${message.line ?? 0}:${message.column ?? 0} ${message.severity === 2 ? "error" : "warning"} ${message.message} ${message.ruleId}`);
+      const severity = message.severity === 2 ? "error" : "warning";
+      process.stderr.write(
+        \`\${filePath}:\${message.line ?? 0}:\${message.column ?? 0} \${severity} \${message.message} \${message.ruleId ?? "fatal"}\n\`,
+      );
     }
-    console.error(`ESLint found ${introduced.length} new violation(s); pre-existing findings are baselined.`);
+    process.stderr.write(
+      \`ESLint found \${introduced.length} new violation(s); unchanged baseline findings are tolerated.\n\`,
+    );
     return 1;
   }
 
-  console.log("Changed JavaScript files introduce no ESLint violations; pre-existing findings are baselined.");
+  process.stdout.write(
+    "Changed JavaScript files introduce no ESLint violations; unchanged baseline findings are tolerated.\n",
+  );
   return 0;
 }
 
@@ -118,16 +164,24 @@ if (isMainModule) {
   const baseSha = process.env.BASE_SHA ?? process.argv[2];
 
   if (!baseSha) {
-    console.error("Set BASE_SHA to the exact pull-request base commit SHA.");
+    process.stderr.write("Set BASE_SHA to the exact pull-request base commit SHA.\n");
     process.exitCode = 1;
   } else {
     try {
       process.exitCode = await lintChangedFiles({ baseSha });
     } catch (error) {
-      console.error(error.message);
+      process.stderr.write(\`\${error.message}\n\`);
       process.exitCode = 1;
     }
   }
 }
 
-export { getChangedFiles, lintChangedFiles, selectChangedJavaScriptFiles };
+export {
+  countFindings,
+  findingKey,
+  getChangedFileChanges,
+  getChangedFiles,
+  lintChangedFiles,
+  parseChangedFileNames,
+  selectChangedJavaScriptFiles,
+};
