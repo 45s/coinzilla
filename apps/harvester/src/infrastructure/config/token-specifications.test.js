@@ -130,7 +130,7 @@ test("fails closed for missing markets, malformed token metadata, and duplicate 
       pairs: { LINKUSDT: {} },
       tokenSpecifications: {
         LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 } } },
-        LINK2: { baseAsset: "LINK2", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 } } },
+        LIN: { baseAsset: "LIN", markets: { LINKUSDT: { quoteAsset: "KUSDT", pricePrecision: 3, quantityPrecision: 2 } } },
       },
     }),
     /multiple token entries/i,
