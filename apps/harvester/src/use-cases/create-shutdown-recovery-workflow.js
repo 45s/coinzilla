@@ -396,7 +396,7 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
     symbol,
     assessment })
   if (!cancellation.ok) {return cancellation}
-  assessment = cancellation.assessment
+  ({ assessment } = cancellation)
   if (assessment.covered) {
     return {
       ok: true,
