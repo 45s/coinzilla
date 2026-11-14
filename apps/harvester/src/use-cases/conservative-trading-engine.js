@@ -2884,16 +2884,20 @@ export function makeConservativeTradingEngine({
           continue
         }
 
-        const fills = [...fillsById.values()].sort((left, right) => { // eslint-disable-line max-params -- Array#sort comparators require both adjacent values.
+        const fills = [...fillsById.values()].sort((...adjacentFills) => {
+          const [left, right] = adjacentFills
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
               left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
           return left.tradeId.localeCompare(right.tradeId)
         })
         const reconciledQuantity = fills.reduce(
-          (total, fill) => addDecimal({
-            left: total,
-            right: fill.quantity.amount
-          }), // eslint-disable-line max-params -- Array#reduce supplies accumulator and item.
+          (...reductionValues) => {
+            const [total, fill] = reductionValues
+            return addDecimal({
+              left: total,
+              right: fill.quantity.amount,
+            })
+          },
           "0",
         )
         if (compareDecimal({
