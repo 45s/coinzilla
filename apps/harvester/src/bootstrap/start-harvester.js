@@ -39,6 +39,7 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
+// eslint-disable-next-line max-lines-per-function, max-statements -- bootstrap composes runtime ports and lifecycle boundaries.
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -581,7 +582,7 @@ export async function startHarvester({
   let stopPromise
   const stop = () => {
     if (stopPromise) {return stopPromise}
-    // eslint-disable-next-line complexity -- process shutdown is an explicit ordered state machine with fail-closed boundaries.
+    // eslint-disable-next-line complexity, max-lines-per-function -- process shutdown is an explicit ordered state machine with fail-closed boundaries.
     stopPromise = (async () => {
     const shutdownRequestedAt = performance.now()
     const shutdownCorrelationId = runtimeSessionId ?? null
