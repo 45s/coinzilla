@@ -1,3 +1,6 @@
+import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
+
 function skipQuotedValue(source, startIndex) {
   const quote = source[startIndex]
   let index = startIndex + 1
@@ -146,9 +149,27 @@ export function insertTradingPairConfiguration({ source, symbol, pairConfig } = 
   const entryIndent = propertyIndent + "  "
   let serialized
   try {
-    serialized = JSON.stringify({ [symbol]: pairConfig }, null, 2)
+    serialized = JSON.stringify({ [symbol]: pairConfig }, (key, value) => {
+      if (key === "tradingEnvironment") {
+        const member = Object.entries(TRADING_ENVIRONMENTS).find(([, environment]) => environment === value)?.[0]
+        if (!member) {
+          throw new TypeError("pair tradingEnvironment must use a supported TRADING_ENVIRONMENTS value")
+        }
+        return "__TRADING_ENVIRONMENT_" + member + "__"
+      }
+      if (key === "externalOrdersPolicy" && value !== undefined) {
+        const member = Object.entries(EXTERNAL_ORDERS_POLICIES).find(([, policy]) => policy === value)?.[0]
+        if (!member) {
+          throw new TypeError("pair externalOrdersPolicy must use a supported EXTERNAL_ORDERS_POLICIES value")
+        }
+        return "__EXTERNAL_ORDERS_POLICY_" + member + "__"
+      }
+      return value
+    }, 2)
+    .replace(/"__TRADING_ENVIRONMENT_(BOTH|TESTNET|LIVE)__"/g, "TRADING_ENVIRONMENTS.$1")
+    .replace(/"__EXTERNAL_ORDERS_POLICY_(IGNORE|BLOCK)__"/g, "EXTERNAL_ORDERS_POLICIES.$1")
   } catch (cause) {
-    throw new TypeError("pair config must be JSON-serializable", { cause })
+    throw new TypeError("pair config must be JSON-serializable: " + cause.message, { cause })
   }
   const generatedLines = serialized.split("\n").slice(1, -1).map((line) => entryIndent + line.slice(2))
   generatedLines[generatedLines.length - 1] += ","

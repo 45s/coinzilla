@@ -5,6 +5,7 @@ import { normalizeSymbolInput, normalizeTradingEnvironment, normalizePairTrading
 import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
 import { writePairConfigAtomically } from "./config-symbol/write-config.js"
 import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
+import { TRADING_ENVIRONMENTS } from "../src/domain/trading-environment.js"
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(new URL("../cg-coin-grabber.js", import.meta.url))
 
@@ -14,7 +15,7 @@ export async function runConfigSymbol({
   fetchImpl = globalThis.fetch,
   metadataFetcher = fetchBinanceSpotMetadata,
   configPath = DEFAULT_CONFIG_PATH,
-  defaultEnvironment = process.env.TRADING_MODE ?? "testnet",
+  defaultEnvironment = process.env.TRADING_MODE ?? TRADING_ENVIRONMENTS.TESTNET,
   loadConfig = loadAppConfig,
   writeConfig = writePairConfigAtomically,
 } = {}) {

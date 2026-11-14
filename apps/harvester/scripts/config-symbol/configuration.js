@@ -6,6 +6,7 @@ import {
 } from "@coinzilla/utils"
 import { validateAppConfig } from "../../src/domain/app-config.js"
 import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 
 const ZERO = "0"
 const HUNDRED = "100"
@@ -66,7 +67,7 @@ export function normalizeTradingEnvironment(value) {
     throw new TypeError("environment must be either testnet or live")
   }
   const environment = value.trim().toLowerCase()
-  if (environment !== "testnet" && environment !== "live") {
+  if (environment !== TRADING_ENVIRONMENTS.TESTNET && environment !== TRADING_ENVIRONMENTS.LIVE) {
     throw new TypeError("environment must be either testnet or live")
   }
   return environment
@@ -82,7 +83,7 @@ export function normalizeTradingEnvironment(value) {
  * @throws {TypeError} If no supported explicit value is supplied.
  */
 export function normalizePairTradingEnvironment(value) {
-  if (typeof value !== "string" || !["testnet", "live", "both"].includes(value.trim())) {
+  if (typeof value !== "string" || !Object.values(TRADING_ENVIRONMENTS).includes(value.trim())) {
     throw new TypeError("tradingEnvironment must be one of testnet, live, or both")
   }
   return value.trim()

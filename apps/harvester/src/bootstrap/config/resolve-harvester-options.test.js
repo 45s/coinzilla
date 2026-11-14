@@ -1,6 +1,7 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
+import { TRADING_ENVIRONMENTS } from "../../domain/trading-environment.js"
 import { resolveHarvesterOptions } from "./resolve-harvester-options.js"
 
 const test = (name, ...args) => nodeTest("[resolve-harvester-options.test.js] " + name, ...args)
@@ -16,7 +17,7 @@ const config = ({
       settings: { conservative: { enabled: conservative },
         aggressive: { enabled: aggressive },
       },
-      pairs: Object.fromEntries(enabledSymbols.map((symbol) => [symbol, { enabled: true, tradingEnvironment: "both" }])),
+      pairs: Object.fromEntries(enabledSymbols.map((symbol) => [symbol, { enabled: true, tradingEnvironment: TRADING_ENVIRONMENTS.BOTH }])),
     },
   },
 })
@@ -53,14 +54,14 @@ test("adds the validated TELEGRAM_USER_ID to the resolved operator allowlist", a
     ...config(),
     operatorControl: { telegram: { enabled: true, allowedUserIds: [] } },
   }
-  const fixture = createFixture({ cfg, env: { TRADING_MODE: "testnet", TELEGRAM_USER_ID: "123456789" } })
+  const fixture = createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET, TELEGRAM_USER_ID: "123456789" } })
   const result = await resolveHarvesterOptions(fixture.input)
   assert.deepEqual(result.appConfig.operatorControl.telegram.allowedUserIds, ["123456789"])
   assert.deepEqual(cfg.operatorControl.telegram.allowedUserIds, [], "Resolving the environment ID must not mutate loaded configuration.")
 })
 
 test("rejects invalid TELEGRAM_USER_ID before publishing validated configuration", async () => {
-  const fixture = createFixture({ env: { TRADING_MODE: "testnet", TELEGRAM_USER_ID: "not-a-number" } })
+  const fixture = createFixture({ env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET, TELEGRAM_USER_ID: "not-a-number" } })
   await assert.rejects(
     resolveHarvesterOptions(fixture.input),
     (error) => error.code === "TELEGRAM_USER_ID_INVALID" && error.message.includes("TELEGRAM_USER_ID"),
@@ -69,20 +70,20 @@ test("rejects invalid TELEGRAM_USER_ID before publishing validated configuration
 })
 
 test("selects TESTNET and enables trading even when NODE_ENV is production", async () => {
-  const fixture = createFixture({ env: { NODE_ENV: "production", TRADING_MODE: "testnet" } })
+  const fixture = createFixture({ env: { NODE_ENV: "production", TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
   const result = await resolveHarvesterOptions(fixture.input)
   assert.equal(result.tradingEnabled, true, "An explicit TESTNET mode must enable trading.")
   assert.equal(result.brokerName, "binance", "Binance must be selected without a broker selector.")
-  assert.equal(result.tradingMode, "testnet", "NODE_ENV must not override TRADING_MODE.")
+  assert.equal(result.tradingMode, TRADING_ENVIRONMENTS.TESTNET, "NODE_ENV must not override TRADING_MODE.")
   assert.deepEqual(result.enabledSymbols, ["BTCUSDT"], "Only enabled market symbols must be returned.")
   assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.CONFIG_VALIDATED, "Successful validation must publish the lifecycle event.")
 })
 
 test("selects LIVE and enables trading even when NODE_ENV is development", async () => {
-  const fixture = createFixture({ env: { NODE_ENV: "development", TRADING_MODE: "live" } })
+  const fixture = createFixture({ env: { NODE_ENV: "development", TRADING_MODE: TRADING_ENVIRONMENTS.LIVE } })
   const result = await resolveHarvesterOptions(fixture.input)
   assert.equal(result.brokerName, "binance", "LIVE mode must use the fixed Binance broker.")
-  assert.equal(result.tradingMode, "live", "NODE_ENV must not override the explicit LIVE mode.")
+  assert.equal(result.tradingMode, TRADING_ENVIRONMENTS.LIVE, "NODE_ENV must not override the explicit LIVE mode.")
   assert.equal(result.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
 
@@ -98,19 +99,19 @@ test("rejects an invalid TRADING_MODE", async () => {
 test("selects only matching pairs and strips tradingEnvironment before runtime", async () => {
   const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT", "DOGEUSDT"] })
   const pairs = cfg.strategies.CG_coinGrabber.pairs
-  pairs.BTCUSDT.tradingEnvironment = "testnet"
-  pairs.ETHUSDT.tradingEnvironment = "live"
-  pairs.DOGEUSDT.tradingEnvironment = "both"
+  pairs.BTCUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.TESTNET
+  pairs.ETHUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.LIVE
+  pairs.DOGEUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.BOTH
   pairs.DOGEUSDT.enabled = false
 
-  const testnet = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "testnet" } }).input)
+  const testnet = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } }).input)
   assert.deepEqual(Object.keys(testnet.pairs), ["BTCUSDT", "DOGEUSDT"], "TESTNET must include testnet-only and both pairs, but exclude live-only pairs.")
   assert.deepEqual(testnet.enabledSymbols, ["BTCUSDT"], "The enabled flag must remain independent of environment eligibility.")
   assert.equal(Object.hasOwn(testnet.pairs.BTCUSDT, "tradingEnvironment"), false, "The selector must be removed from runtime pair settings.")
   assert.equal(Object.hasOwn(testnet.appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, "tradingEnvironment"), false, "The effective appConfig must expose only the existing runtime pair shape.")
   assert.deepEqual(testnet.appConfig.strategies.CG_coinGrabber.pairs, testnet.pairs, "The effective appConfig and returned pairs must use the same filtered runtime map.")
 
-  const live = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "live" } }).input)
+  const live = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.LIVE } }).input)
   assert.deepEqual(Object.keys(live.pairs), ["ETHUSDT", "DOGEUSDT"], "LIVE must include live-only and both pairs, but exclude testnet-only pairs.")
   assert.deepEqual(live.enabledSymbols, ["ETHUSDT"], "Disabled both-environment pairs must remain configured but not become enabled.")
   assert.equal(Object.hasOwn(live.pairs.ETHUSDT, "tradingEnvironment"), false, "LIVE runtime pair settings must also omit the selector.")
@@ -118,9 +119,9 @@ test("selects only matching pairs and strips tradingEnvironment before runtime",
 
 test("does not fall back when no pair matches TRADING_MODE", async () => {
   const cfg = config()
-  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.tradingEnvironment = "live"
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.LIVE
   await assert.rejects(
-    resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "testnet" } }).input),
+    resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } }).input),
     /No CG_coinGrabber pairs configured for TRADING_MODE=testnet/i,
     "A mode with no eligible pairs must fail instead of falling back to the other environment.",
   )
@@ -130,14 +131,14 @@ test("rejects a pair without an explicit tradingEnvironment before startup", asy
   const cfg = config()
   delete cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.tradingEnvironment
   await assert.rejects(
-    resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: "testnet" } }).input),
+    resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } }).input),
     /tradingEnvironment/i,
     "Runtime pair selection must not infer an environment for an incomplete supplied config.",
   )
 })
 
 test("rejects configurations without an enabled pair", async () => {
-  const fixture = createFixture({ cfg: config({ enabledSymbols: [] }), env: { TRADING_MODE: "testnet" } })
+  const fixture = createFixture({ cfg: config({ enabledSymbols: [] }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
   await assert.rejects(
     resolveHarvesterOptions(fixture.input),
     /requires at least one enabled pair/,
@@ -146,8 +147,8 @@ test("rejects configurations without an enabled pair", async () => {
 })
 
 test("rejects invalid strategy flags", async () => {
-  const aggressive = createFixture({ cfg: config({ aggressive: true }), env: { TRADING_MODE: "testnet" } })
+  const aggressive = createFixture({ cfg: config({ aggressive: true }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
   await assert.rejects(resolveHarvesterOptions(aggressive.input), /Aggressive strategy is disabled and deferred/)
-  const conservative = createFixture({ cfg: config({ conservative: false }), env: { TRADING_MODE: "testnet" } })
+  const conservative = createFixture({ cfg: config({ conservative: false }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
   await assert.rejects(resolveHarvesterOptions(conservative.input), /Conservative strategy must remain enabled/)
 })

@@ -6,6 +6,7 @@ import {
   validateAppConfig,
 } from "./app-config.js"
 import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "./trading-environment.js"
 import { OPERATOR_CONTROL_CONFIG } from "../../config/operator-control.js"
 import { appConfig } from "../../config/index.js"
 
@@ -20,7 +21,7 @@ const createAppConfig = () => ({
       pairs: {
         ZROFDUSD: {
           enabled: true,
-          tradingEnvironment: "both",
+          tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
           enableVolatilityProtection: true,
           investment: 100,
           orderQuantity: 5,
@@ -37,8 +38,13 @@ const createAppConfig = () => ({
   },
 })
 
+test("exposes stable named trading-environment values", () => {
+  assert.deepEqual(TRADING_ENVIRONMENTS, { BOTH: "both", TESTNET: "testnet", LIVE: "live" })
+  assert.equal(Object.isFrozen(TRADING_ENVIRONMENTS), true, "The shared environment constants must not be mutable.")
+})
+
 test("requires an explicit supported tradingEnvironment on every pair", () => {
-  for (const tradingEnvironment of ["testnet", "live", "both"]) {
+  for (const tradingEnvironment of Object.values(TRADING_ENVIRONMENTS)) {
     const config = createAppConfig()
     config.strategies.CG_coinGrabber.pairs.ZROFDUSD.tradingEnvironment = tradingEnvironment
     assert.equal(validateAppConfig(config), config, "Each documented pair environment must be accepted explicitly: " + tradingEnvironment)
@@ -92,9 +98,9 @@ test("accepts only ignore or block for each pair's external-order policy", () =>
   const pair = config.strategies.CG_coinGrabber.pairs.ZROFDUSD
 
   assert.equal(validateAppConfig(config), config, "Omitted policy must retain the default ignore behavior.")
-  pair.externalOrdersPolicy = "ignore"
+  pair.externalOrdersPolicy = EXTERNAL_ORDERS_POLICIES.IGNORE
   assert.equal(validateAppConfig(config), config)
-  pair.externalOrdersPolicy = "block"
+  pair.externalOrdersPolicy = EXTERNAL_ORDERS_POLICIES.BLOCK
   assert.equal(validateAppConfig(config), config)
   pair.externalOrdersPolicy = "adopt"
   assert.throws(
@@ -158,16 +164,16 @@ test("accepts independent minimum-profit thresholds for each market", () => {
 })
 
 test("selects Binance TESTNET from TRADING_MODE even when NODE_ENV says production", () => {
-  const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: "testnet", environment: "production" })
+  const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: TRADING_ENVIRONMENTS.TESTNET, environment: "production" })
   assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for TESTNET.")
-  assert.equal(runtime.tradingMode, "testnet", "TRADING_MODE must select TESTNET independently of NODE_ENV.")
+  assert.equal(runtime.tradingMode, TRADING_ENVIRONMENTS.TESTNET, "TRADING_MODE must select TESTNET independently of NODE_ENV.")
   assert.equal(runtime.tradingEnabled, true, "Trading must be enabled when TESTNET is explicitly selected.")
 })
 
 test("selects Binance LIVE from TRADING_MODE even when NODE_ENV says development", () => {
-  const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: "live", environment: "development" })
+  const runtime = resolveRuntimeConfig({ config: createAppConfig(), tradingMode: TRADING_ENVIRONMENTS.LIVE, environment: "development" })
   assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for LIVE.")
-  assert.equal(runtime.tradingMode, "live", "TRADING_MODE must select LIVE independently of NODE_ENV.")
+  assert.equal(runtime.tradingMode, TRADING_ENVIRONMENTS.LIVE, "TRADING_MODE must select LIVE independently of NODE_ENV.")
   assert.equal(runtime.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
 

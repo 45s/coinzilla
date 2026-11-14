@@ -1,15 +1,18 @@
+import { EXTERNAL_ORDERS_POLICIES } from "./src/domain/external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js"
+
 /**
  * Operator-maintained CG coin-grabber market configuration.
  *
  * Keep one entry per symbol. TRADING_MODE selects entries by tradingEnvironment:
- * testnet includes "testnet" and "both"; live includes "live" and "both".
+ * TESTNET includes TRADING_ENVIRONMENTS.TESTNET and BOTH; LIVE includes LIVE and BOTH.
  */
 export const tradingPairs = {
   LINKUSDT: {
     enabled: false,
-    tradingEnvironment: "testnet",
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 200,
     orderQuantity: 2,
     keepQuantity: 0.01,
@@ -22,9 +25,9 @@ export const tradingPairs = {
   },
   LINKFDUSD: {
     enabled: true,
-    tradingEnvironment: "both",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: false,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 200,
     orderQuantity: 2,
     keepQuantity: 0.01,
@@ -37,9 +40,9 @@ export const tradingPairs = {
   },
   DOGEUSDT: {
     enabled: false,
-    tradingEnvironment: "live",
+    tradingEnvironment: TRADING_ENVIRONMENTS.LIVE,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 400,
     keepQuantity: 1,
@@ -52,9 +55,9 @@ export const tradingPairs = {
   },
   SOLFDUSD: {
     enabled: false,
-    tradingEnvironment: "both",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 1,
     keepQuantity: 0.01,
@@ -67,9 +70,9 @@ export const tradingPairs = {
   },
   ZROUSDT: {
     enabled: false,
-    tradingEnvironment: "both",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 5,
     keepQuantity: 0.01,
@@ -82,9 +85,9 @@ export const tradingPairs = {
   },
   ZROFDUSD: {
     enabled: true,
-    tradingEnvironment: "both",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 120,
     orderQuantity: 5,
     keepQuantity: 0.01,
@@ -97,9 +100,9 @@ export const tradingPairs = {
   },
   ADAFDUSD: {
     enabled: false,
-    tradingEnvironment: "both",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: false,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 120,
     orderQuantity: 30,
     keepQuantity: 0.1,
@@ -112,9 +115,9 @@ export const tradingPairs = {
   },
   WLDFDUSD: {
     enabled: true,
-    tradingEnvironment: "both",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 20,
     keepQuantity: 0.1,

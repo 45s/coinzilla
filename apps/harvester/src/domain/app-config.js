@@ -1,8 +1,10 @@
 import { NOTIFICATIONS_TG_PROFILES } from "../../config/notifications-tg-profiles.js"
 import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "./trading-environment.js"
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
-const TRADING_ENVIRONMENTS = new Set(["testnet", "live", "both"])
+const TRADING_ENVIRONMENT_VALUES = Object.values(TRADING_ENVIRONMENTS)
+const TRADING_ENVIRONMENT_SET = new Set(TRADING_ENVIRONMENT_VALUES)
 export class ConfigValidationError extends TypeError {
   constructor(path, expected) {
     super(`Invalid app config at "${path}": expected ${expected}`)
@@ -136,7 +138,7 @@ function validateTelegramOperatorControlConfig(config) {
     if (!symbol.trim()) {fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")}
     requireRecord(pair, pairPath)
     requireBoolean(pair.enabled, `${pairPath}.enabled`)
-    if (!TRADING_ENVIRONMENTS.has(pair.tradingEnvironment)) {
+    if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
       fail(`${pairPath}.tradingEnvironment`, "testnet, live, or both")
     }
     requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
@@ -167,7 +169,7 @@ function validateTelegramOperatorControlConfig(config) {
  * @throws {ConfigValidationError} If any pair has a missing or unsupported selector.
  */
 export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
-  if (tradingMode !== "testnet" && tradingMode !== "live") {
+  if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {
     fail("TRADING_MODE", "testnet or live")
   }
   requireRecord(pairs, "strategies.CG_coinGrabber.pairs")
@@ -176,10 +178,10 @@ export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
     const pairPath = `strategies.CG_coinGrabber.pairs.${symbol}`
     if (!symbol.trim()) {fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")}
     requireRecord(pair, pairPath)
-    if (!TRADING_ENVIRONMENTS.has(pair.tradingEnvironment)) {
+    if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
       fail(`${pairPath}.tradingEnvironment`, "testnet, live, or both")
     }
-    if (pair.tradingEnvironment !== "both" && pair.tradingEnvironment !== tradingMode) {
+    if (pair.tradingEnvironment !== TRADING_ENVIRONMENTS.BOTH && pair.tradingEnvironment !== tradingMode) {
       continue
     }
     const runtimePair = { ...pair }
@@ -191,6 +193,6 @@ export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
 
 /** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
 export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
-  if (tradingMode !== "testnet" && tradingMode !== "live") {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
+  if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
   return Object.freeze({ environment: environment ?? "unspecified", brokerName: "binance", tradingMode, tradingEnabled: true })
 }
