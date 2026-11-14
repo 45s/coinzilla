@@ -838,7 +838,7 @@ function publishTrailingBuyCancellationOutcome({ context, canceledOrder }) {
   })
 }
 
-function applyTrailingBuyCancellationToRegistry({ context, symbol, order, canceledOrder }) {
+async function applyTrailingBuyCancellationToRegistry({ context, symbol, order, canceledOrder }) {
   const update = context.state.registry.applyUpdate({
     order: canceledOrder,
   })
@@ -849,7 +849,7 @@ function applyTrailingBuyCancellationToRegistry({ context, symbol, order, cancel
       outcome: "NOT_REGISTERED",
       error,
     })
-    void context.pause({
+    await context.pause({
       symbol,
       reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED",
     })
