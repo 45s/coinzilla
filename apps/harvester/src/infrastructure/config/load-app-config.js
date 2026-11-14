@@ -40,8 +40,7 @@ async function readTokenSpecifications(specificationPath) {
  * registry is apps/harvester/token-specification.json. Precision is resolved
  * by exact market symbol; strategy-owned pair files never duplicate it.
  *
- * @param {URL|string} [source] - ESM config module URL or filesystem path.
- * @param {{tokenSpecificationsPath?: string}} [options] - Optional token registry path for isolated deployments/tests.
+ * @param {URL|string|{source?: URL|string, tokenSpecificationsPath?: string}} [sourceOrOptions] - ESM source or loader options.
  * @returns {Promise<object>} Validated effective application configuration.
  * @throws {TypeError|SyntaxError|Error} If either source is missing, malformed, or inconsistent.
  */
