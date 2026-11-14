@@ -97,29 +97,28 @@ test("reports invalid session identity and factory dependencies", async () => {
   )
 })
 
-test("retains the legacy DURABLE_FACTS_DIRECTORY override for existing installations", async () => {
+test("ignores the removed DURABLE_FACTS_DIRECTORY override", async () => {
   let options
-  const legacyDirectory = path.resolve("legacy-recovery-facts")
   await prepareProcessOperationalStateStore({
     appConfig: config({ operator: true }),
-    env: { DURABLE_FACTS_DIRECTORY: legacyDirectory },
+    env: { DURABLE_FACTS_DIRECTORY: path.resolve("legacy-recovery-facts") },
     runtimeSessionId: "session",
     createOperationalStateStore: (value) => { options = value; return store() },
   })
-  assert.equal(options.directory, legacyDirectory)
+  assert.equal(options.directory, DEFAULT_OPERATIONAL_STATE_DIRECTORY)
 })
 
-test("rejects conflicting canonical and legacy directory overrides", async () => {
-  await assert.rejects(
-    prepareProcessOperationalStateStore({
-      appConfig: config({ operator: true }),
-      env: {
-        OPERATIONAL_STATE_DIRECTORY: path.resolve("new-store"),
-        DURABLE_FACTS_DIRECTORY: path.resolve("old-store"),
-      },
-      runtimeSessionId: "session",
-      createOperationalStateStore: () => store(),
-    }),
-    (error) => error.code === "PROCESS_OPERATIONAL_STATE_DIRECTORY_INVALID",
-  )
+test("uses the canonical override and ignores the removed legacy variable", async () => {
+  let options
+  const canonicalDirectory = path.resolve("new-store")
+  await prepareProcessOperationalStateStore({
+    appConfig: config({ operator: true }),
+    env: {
+      OPERATIONAL_STATE_DIRECTORY: canonicalDirectory,
+      DURABLE_FACTS_DIRECTORY: path.resolve("old-store"),
+    },
+    runtimeSessionId: "session",
+    createOperationalStateStore: (value) => { options = value; return store() },
+  })
+  assert.equal(options.directory, canonicalDirectory)
 })
