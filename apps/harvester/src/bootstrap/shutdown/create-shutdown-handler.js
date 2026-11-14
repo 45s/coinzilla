@@ -167,17 +167,63 @@ export function createShutdownHandler({
         })
       }
 
-      const marketIntakeErrors = await runPhase("MARKET_INTAKE_STOP", () =>
-        stopMarketIntake({ subscriptions, bookSubscriptions }))
-      if (marketIntakeErrors.length > 0) auditReasons.push("MARKET_INTAKE_SHUTDOWN_FAILED")
+      const runPhaseSafely = async ({
+        phase,
+        operation,
+        stage,
+        message,
+        auditReason,
+        isFailure,
+      } = {}) => {
+        try {
+          const result = await runPhase(phase, operation, isFailure)
+          const failed = isFailure ? isFailure(result) : isPhaseFailure(result)
+          if (failed) {
+            if (auditReason && !auditReasons.includes(auditReason)) auditReasons.push(auditReason)
+            const errors = Array.isArray(result)
+              ? result.flatMap((entry) => entry?.status === "rejected" ? [entry.reason] : [entry])
+              : result?.errors ?? []
+            logShutdownFailure({
+              message,
+              stage,
+              result: { errors },
+            })
+          }
+          return result
+        } catch (error) {
+          if (auditReason && !auditReasons.includes(auditReason)) auditReasons.push(auditReason)
+          logShutdownFailure({ message, stage, error })
+          return { ok: false, errors: [error] }
+        }
+      }
 
+      const marketIntakeErrors = await runPhaseSafely({
+        phase: "MARKET_INTAKE_STOP",
+        operation: () => stopMarketIntake({ subscriptions, bookSubscriptions }),
+        stage: "MARKET_INTAKE_STOP",
+        message: "Shutdown market-intake stop failed",
+        auditReason: "MARKET_INTAKE_SHUTDOWN_FAILED",
+      })
       // Unsubscribing prevents new callbacks; accepted market work must finish
       // before the first owned-order reconciliation or BUY cancellation.
       const pendingMarketTasks = [...marketPriceIntake.values()]
         .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
         .filter(Boolean)
-      await runPhase("MARKET_WORK_DRAIN", () => Promise.all(pendingMarketTasks))
-      await runPhase("USER_DATA_DRAIN_INITIAL", () => state.eventQueue)
+      await runPhaseSafely({
+        phase: "MARKET_WORK_DRAIN",
+        operation: () => Promise.allSettled(pendingMarketTasks),
+        stage: "MARKET_WORK_DRAIN",
+        message: "Shutdown market-work drain failed",
+        auditReason: "MARKET_WORK_DRAIN_FAILED",
+        isFailure: (results) => results.some((result) => result.status === "rejected"),
+      })
+      await runPhaseSafely({
+        phase: "USER_DATA_DRAIN_INITIAL",
+        operation: () => state.eventQueue,
+        stage: "USER_DATA_DRAIN_INITIAL",
+        message: "Initial shutdown user-data drain failed",
+        auditReason: "USER_DATA_DRAIN_FAILED",
+      })
 
       if (tradingEnabled && tradingEngine) {
         try {
@@ -222,12 +268,28 @@ export function createShutdownHandler({
       }
 
       // Fills racing BUY cancellation are applied before user-data intake stops.
-      await runPhase("USER_DATA_DRAIN", () => state.eventQueue)
-      const userDataIntakeErrors = await runPhase("USER_DATA_INTAKE_STOP", () =>
-        stopUserDataIntake({ userDataSubscription }))
+      await runPhaseSafely({
+        phase: "USER_DATA_DRAIN",
+        operation: () => state.eventQueue,
+        stage: "USER_DATA_DRAIN",
+        message: "Shutdown user-data drain failed",
+        auditReason: "USER_DATA_DRAIN_FAILED",
+      })
+      const userDataIntakeErrors = await runPhaseSafely({
+        phase: "USER_DATA_INTAKE_STOP",
+        operation: () => stopUserDataIntake({ userDataSubscription }),
+        stage: "USER_DATA_INTAKE_STOP",
+        message: "Shutdown user-data intake stop failed",
+        auditReason: "USER_DATA_INTAKE_SHUTDOWN_FAILED",
+      })
       state.intakeStopped = true
-      if (userDataIntakeErrors.length > 0) auditReasons.push("USER_DATA_INTAKE_SHUTDOWN_FAILED")
-      await runPhase("USER_DATA_DRAIN_FINAL", () => state.eventQueue)
+      await runPhaseSafely({
+        phase: "USER_DATA_DRAIN_FINAL",
+        operation: () => state.eventQueue,
+        stage: "USER_DATA_DRAIN_FINAL",
+        message: "Final shutdown user-data drain failed",
+        auditReason: "USER_DATA_DRAIN_FAILED",
+      })
 
       if (tradingEnabled && tradingEngine) {
         try {
@@ -333,36 +395,34 @@ export function createShutdownHandler({
         }
       }
 
-      try {
-        if (tradingEnabled) {
-          await runPhase("CLOSING_AUDIT", () => publishAccountSnapshot({
+      if (tradingEnabled) {
+        const closingAuditResult = await runPhaseSafely({
+          phase: "CLOSING_AUDIT",
+          operation: () => publishAccountSnapshot({
             phase: "CLOSING",
             auditStatus: auditReasons.length === 0 ? "COMPLETE" : "INCOMPLETE",
             auditReasons,
-          }))
-        }
-      } catch (error) {
-        snapshotError = error
-        auditReasons.push("CLOSING_ACCOUNT_SNAPSHOT_FAILED")
-        logger.error?.({
-          message: "closing account snapshot failed",
-          failureReason: getSafeFailureReason(error),
-          shutdownCorrelationId,
+          }),
+          stage: "CLOSING_AUDIT",
+          message: "Closing account snapshot failed",
+          auditReason: "CLOSING_ACCOUNT_SNAPSHOT_FAILED",
+          isFailure: (result) => result?.ok === false,
         })
+        if (closingAuditResult?.ok === false) {
+          snapshotError = closingAuditResult.errors?.[0] ?? new Error("Closing account snapshot failed")
+        }
       }
 
-      const disconnectErrors = await runPhase("BROKER_DISCONNECT", () =>
-        disconnectBroker({ broker, brokerName, eventPublisher, logger }))
-      const shutdownAuditFailed = tradingEnabled && auditReasons.some((reason) =>
-        [
-          "OPERATOR_CONTROL_SHUTDOWN_FAILED",
-          "OWNED_BUY_CANCELLATION_FAILED",
-          "OWNED_ORDER_RECONCILIATION_FAILED",
-          "SHUTDOWN_RECOVERY_SELL_RECONCILIATION_FAILED",
-          "SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE",
-          "USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE",
-        ].includes(reason) || reason.startsWith("UNRESOLVED_OWNED_ORDERS:") ||
-          reason.startsWith("SHUTDOWN_RECOVERY_SELL_COVERAGE:"))
+      const disconnectResult = await runPhaseSafely({
+        phase: "BROKER_DISCONNECT",
+        operation: () => disconnectBroker({ broker, brokerName, eventPublisher, logger }),
+        stage: "BROKER_DISCONNECT",
+        message: "Broker disconnect failed",
+      })
+      const disconnectErrors = Array.isArray(disconnectResult)
+        ? disconnectResult
+        : disconnectResult?.ok === false ? disconnectResult.errors ?? [new Error("Broker disconnect failed")] : []
+      const shutdownAuditFailed = tradingEnabled && auditReasons.length > 0
       const auditError = shutdownAuditFailed
         ? new Error(`CLOSING account audit is incomplete: ${auditReasons.join(", ")}`)
         : undefined
