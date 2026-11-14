@@ -1763,6 +1763,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
         pairs: {
       BTCUSDT: {
         enabled: true,
+          tradingEnvironment: "both",
         investment: 2000,
         orderQuantity: 0.01,
         keepQuantity: 0.001,
