@@ -4764,7 +4764,8 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
 })
 
 
-async function runRecoverySellCancellationFillReplayScenario() {
+
+async function createRecoverySellCancellationRaceFixture() {
   let releaseCancel
   let signalCancelStarted
   const cancelOrderGate = {
@@ -4797,14 +4798,25 @@ async function runRecoverySellCancellationFillReplayScenario() {
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(buyOrder)
   assert.ok(sellOrder)
-  const buyTransition = harness.engine.processUserDataEvent({
+  return {
+    harness,
+    buyOrder,
+    sellOrder,
+    cancelStarted,
+    releaseCancel,
+  }
+}
+
+async function runRecoverySellCancellationFillReplayScenario() {
+  const fixture = await createRecoverySellCancellationRaceFixture()
+  const buyTransition = fixture.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({
-        order: buyOrder,
+        order: fixture.buyOrder,
       }),
       fill: makeBuyFill({
-        order: buyOrder,
+        order: fixture.buyOrder,
         tradeId: "buy-triggering-recovery-sell-cancel",
         price: "99.95",
         quantity: "1",
@@ -4812,37 +4824,37 @@ async function runRecoverySellCancellationFillReplayScenario() {
       }),
     },
   })
-  await cancelStarted
+  await fixture.cancelStarted
   const sellFill = makeSellFill({
-    order: sellOrder,
+    order: fixture.sellOrder,
     tradeId: "recovery-cancel-fill-sell",
     quantity: "0.1",
     quoteQuantity: multiplyDecimal({
-      left: sellOrder.limitPrice.amount,
+      left: fixture.sellOrder.limitPrice.amount,
       right: "0.1",
     }),
   })
-  const lateSellEvent = harness.engine.processUserDataEvent({
+  const lateSellEvent = fixture.harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
-        order: sellOrder,
+        order: fixture.sellOrder,
         executedQuantity: "0.1",
         updatedAt: 2,
       }),
       fill: sellFill,
     },
   })
-  releaseCancel()
+  fixture.releaseCancel()
   const [buyResult, lateResult] = await Promise.all([
     buyTransition,
     lateSellEvent,
   ])
   return {
-    harness,
+    harness: fixture.harness,
     buyResult,
     lateResult,
-    sellOrder,
+    sellOrder: fixture.sellOrder,
   }
 }
 
