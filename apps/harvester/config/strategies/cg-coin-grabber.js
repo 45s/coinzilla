@@ -14,7 +14,6 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
   },
   pairs: {
-    // BEGIN GENERATED PAIR CONFIGURATION
     LINKUSDT: {
       enabled: false,
       enableVolatilityProtection: true,
@@ -127,6 +126,5 @@ export const CG_COIN_GRABBER_CONFIG = {
       makerPercent: 0,
       takerPercent: 0.075,
     },
-    // END GENERATED PAIR CONFIGURATION
   },
 };

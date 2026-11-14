@@ -5,7 +5,7 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { validateAppConfig } from "../../src/domain/app-config.js"
 import { addPairToAppConfig } from "./configuration.js"
-import { replacePairConfiguration } from "./config-source.js"
+import { insertPairConfiguration } from "./config-source.js"
 
 async function removeIfPresent(filePath) {
   try {
@@ -49,11 +49,11 @@ async function importAppConfig(configPath) {
 }
 
 /**
- * Merge a new pair into the marked pair region in the CG coin-grabber strategy module and atomically replace it.
+ * Insert a new pair into the CG coin-grabber strategy pairs object and atomically replace the strategy module.
  *
  * @param {{configPath: string, symbol: string, pairConfig: object}} options - Target config and generated pair.
  * @returns {Promise<string>} Absolute path of the updated config module.
- * @throws {Error|TypeError} If the module, pair, marker region, lock, or write is invalid.
+ * @throws {Error|TypeError} If the module, pair, insertion target, lock, or write is invalid.
  */
 export async function writePairConfigAtomically({ configPath, symbol, pairConfig } = {}) {
   if (typeof configPath !== "string" || !configPath.trim()) {
@@ -99,9 +99,10 @@ export async function writePairConfigAtomically({ configPath, symbol, pairConfig
       symbol,
       pairConfig,
     })
-    const updatedSource = replacePairConfiguration({
+    const updatedSource = insertPairConfiguration({
       source: currentConfigText,
-      pairs: updatedConfig.strategies.CG_coinGrabber.pairs,
+      symbol,
+      pairConfig,
     })
     const originalMode = (await stat(absoluteConfigPath)).mode & 0o777
 
