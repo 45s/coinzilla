@@ -56,7 +56,7 @@ export function createShutdownHandler({
   runtimeSessionId,
 } = {}) {
   let shutdownPromise
-  return function stop({ requestedAt, requestLogged = false } = {}) {
+  return function stop({ requestedAt, requestLogged = false, preShutdownErrors = [] } = {}) {
     if (shutdownPromise) return shutdownPromise
     if (state.stopped) return Promise.resolve()
 
@@ -119,7 +119,7 @@ export function createShutdownHandler({
     shutdownPromise = (async () => {
       const tradingEngine = getTradingEngine()
       const userDataSubscription = getUserDataSubscription()
-      const auditReasons = []
+      const auditReasons = preShutdownErrors.length > 0 ? ["OPERATOR_CONTROL_SHUTDOWN_FAILED"] : []
       const stageFailures = []
       let snapshotError
       let unresolvedOrders = []
@@ -345,6 +345,7 @@ export function createShutdownHandler({
         disconnectBroker({ broker, brokerName, eventPublisher, logger }))
       const shutdownAuditFailed = tradingEnabled && auditReasons.some((reason) =>
         [
+          "OPERATOR_CONTROL_SHUTDOWN_FAILED",
           "OWNED_BUY_CANCELLATION_FAILED",
           "OWNED_ORDER_RECONCILIATION_FAILED",
           "SHUTDOWN_RECOVERY_SELL_RECONCILIATION_FAILED",
@@ -356,6 +357,7 @@ export function createShutdownHandler({
         ? new Error("CLOSING account audit is incomplete: " + auditReasons.join(", "))
         : undefined
       const cleanupErrors = [
+        ...preShutdownErrors,
         ...marketIntakeErrors,
         ...userDataIntakeErrors,
         ...disconnectErrors,
