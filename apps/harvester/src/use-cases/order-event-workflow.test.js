@@ -96,6 +96,7 @@ function makeWorkflow({
     reconciledTerminalOrderClientIds: new Set(),
     unrequestedTerminalOrderClientIds: new Set(),
     completedOrderTransitions: new Set(),
+    shutdownRecoveryReplanSymbols: new Set(),
     completedRecoverySellSymbols: new Set(),
     completedRecoverySellOrdersBySymbol: new Map(),
     replacementIntents: new Set(),
@@ -304,14 +305,9 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
   const result = await workflow.processUserDataEventTransition({ event })
 
   assert.equal(result.ok, true, "A fully reconciled BUY fill during shutdown must remain accounted.")
-  assert.deepEqual(calls.cancellations, [{
-    symbol: market.symbol,
-    marketId: market.id,
-  }], "Shutdown must cancel and reconcile the now-stale owned recovery SELL.")
-  assert.deepEqual(calls.evaluations, [{
-    symbol: market.symbol,
-    shutdownRecoveryOnly: true,
-  }], "Shutdown may re-plan a recovery SELL but must not run the ordinary BUY-producing evaluation.")
+  assert.deepEqual(calls.cancellations, [], "Recovery SELL cancellation waits until the shutdown event queue has drained.")
+  assert.deepEqual(calls.evaluations, [], "A BUY fill during shutdown must not trigger an ordinary strategy evaluation.")
+  assert.equal(state.shutdownRecoveryReplanSymbols.has(market.symbol), true, "The shutdown coordinator must receive a durable in-memory replan request.")
   assert.equal(state.lastBuyPrices.get(market.symbol), "100", "The final BUY VWAP must be retained for the final recovery plan.")
   assert.equal(state.trailingBuy.get(market.symbol), false, "A shutdown fill must not re-enable trailing BUY.")
   assert.equal(calls.accounting.length, 1, "The canonical BUY fill must be applied once.")
@@ -320,5 +316,5 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
 
   assert.equal(duplicate.ok, true, "A duplicate shutdown fill notification must be harmless.")
   assert.equal(calls.accounting.length, 1, "A duplicate fill must not be applied twice.")
-  assert.equal(calls.cancellations.length, 1, "A duplicate fill must not trigger another recovery SELL replacement.")
+  assert.equal(state.shutdownRecoveryReplanSymbols.size, 1, "A duplicate fill must not schedule another recovery replan.")
 })
