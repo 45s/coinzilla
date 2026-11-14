@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[conservative-trading-engine.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[conservative-trading-engine.test.js] ${name}`, ...args)
 import assert from "node:assert/strict"
 import {
   Asset,
@@ -120,7 +120,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
       }
       const acknowledgedOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
-        brokerOrderId: "broker-" + order.clientOrderId,
+        brokerOrderId: `broker-${order.clientOrderId}`,
         market,
         side: order.side,
         type: order.type,
@@ -194,7 +194,7 @@ async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = (
         : cancelExecutedQuantity)
       const cancelFill = cancelWithFill && canceledOrder
         ? [new Fill({
-            tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase() + "-" + orderId,
+            tradeId: `recovery-cancel-fill-${canceledOrder.side.toLowerCase()}-${orderId}`,
             brokerOrderId: orderId,
             clientOrderId: canceledOrder.clientOrderId,
             market,
@@ -472,7 +472,7 @@ test("durably journals the submission intent before calling the broker", async (
   const harness = await createHarness({
     eventPublisher: {
       publish: (event) => {
-        sequence.push("publish:" + event.name)
+        sequence.push(`publish:${event.name}`)
         return { ok: true }
       },
       flush: async () => {
@@ -725,7 +725,7 @@ test("publishes actionable decisions and order submission facts around broker I/
     onPlaceOrder: () => timeline.push("broker.placeOrder"),
     eventPublisher: { publish: (event) => {
       events.push(event)
-      timeline.push("event:" + event.name)
+      timeline.push(`event:${event.name}`)
       if (event.name === "order.submission_requested") {
         assert.equal(harness.engine.getOrders()[0].status, "PENDING")
       }
@@ -771,7 +771,7 @@ test("publishes actionable decisions and order submission facts around broker I/
   const clientOrderId = events[1].data.clientOrderId
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
-  assert.equal(events[2].data.brokerOrderId, "broker-" + clientOrderId)
+  assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
 })
 
 test("order intent publication failure prevents a broker order", async () => {
@@ -2571,7 +2571,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
 
   const acknowledgedSell = new CanonicalOrder({
     clientOrderId: pendingSell.clientOrderId,
-    brokerOrderId: "broker-" + pendingSell.clientOrderId,
+    brokerOrderId: `broker-${pendingSell.clientOrderId}`,
     market,
     side: "SELL",
     type: pendingSell.type,
@@ -2788,10 +2788,10 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     cancelOrderStatus: ({ order }) => order.side === "BUY" ? "FILLED" : "CANCELED",
     cancelExecutedQuantity: ({ order }) => order.side === "BUY" ? order.originalQuantity.amount : "0",
     onCancelOrderStarted: ({ order }) => {
-      sequence.push("cancel:" + order.side)
+      sequence.push(`cancel:${order.side}`)
       if (order.side === "BUY") {signalCancelStarted()}
     },
-    onPlaceOrder: ({ order }) => sequence.push("submit:" + order.side),
+    onPlaceOrder: ({ order }) => sequence.push(`submit:${order.side}`),
   })
 
   await harness.engine.processMarketPrice({
@@ -2944,7 +2944,7 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
 
     const fill = makeBuyFill({
       order: buyOrder,
-      tradeId: "shutdown-unresolved-" + scenario.name,
+      tradeId: `shutdown-unresolved-${scenario.name}`,
       price: buyOrder.limitPrice.amount,
       quantity: buyOrder.originalQuantity.amount,
       quoteQuantity: multiplyDecimal({
@@ -2963,7 +2963,7 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
     assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
 
     const reconciliation = await harness.engine.reconcileRecoverySellsForShutdown()
-    assert.equal(reconciliation.ok, false, "An unresolved " + scenario.name + " outcome must fail shutdown recovery.")
+    assert.equal(reconciliation.ok, false, `An unresolved ${scenario.name} outcome must fail shutdown recovery.`)
     const audit = await harness.engine.auditShutdownRecoverySellCoverage()
     assert.equal(audit.ok, true)
     assert.equal(audit.data.covered, false, "Unresolved recovery SELL lifecycle state must never pass final coverage.")
@@ -3148,7 +3148,7 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     const quoteQuantity = multiplyDecimal({ left: sellOrder.limitPrice.amount, right: "0.2" })
     const sellFill = makeSellFill({
       order: sellOrder,
-      tradeId: "terminal-recovery-sell-" + status.toLowerCase(),
+      tradeId: `terminal-recovery-sell-${status.toLowerCase()}`,
       quantity: "0.2",
       quoteQuantity,
       commissionAmount: "0.01",
@@ -3287,7 +3287,7 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
     const sellOrder = sellOrderRef
     sellFillRef.current = makeSellFill({
       order: sellOrder,
-      tradeId: "invalid-terminal-sell-" + (fillHistory === "conflicting" ? "conflict" : "missing"),
+      tradeId: `invalid-terminal-sell-${fillHistory === "conflicting" ? "conflict" : "missing"}`,
       quantity: "0.2",
       quoteQuantity: "20",
     })
@@ -3380,7 +3380,7 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
   assert.equal(lateResult.ok, true)
   assert.equal(lateResult.data.ignored, true)
   assert.deepEqual(cancellationIds, [sellOrder.brokerOrderId])
-  const canceledSellTradeId = "recovery-cancel-fill-sell-" + sellOrder.brokerOrderId
+  const canceledSellTradeId = `recovery-cancel-fill-sell-${sellOrder.brokerOrderId}`
   assert.equal(accountedFills.filter((fill) => fill.tradeId === canceledSellTradeId).length, 1)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), [
     "buy-triggering-recovery-sell-cancel",
@@ -4243,7 +4243,7 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
     accountingApplied: true,
     getAcknowledgedFills: ({ order }) => [makeBuyFill({
       order,
-      tradeId: "sequential-buy-" + order.clientOrderId,
+      tradeId: `sequential-buy-${order.clientOrderId}`,
       price: order.limitPrice.amount,
       quantity: order.originalQuantity.amount,
       quoteQuantity: multiplyDecimal({
@@ -5856,57 +5856,57 @@ function assertMalformedRestEnvelopeFailsClosed({
   assert.equal(
     result.ok,
     false,
-    scenario + ": malformed broker REST data must fail owned-order reconciliation rather than being accepted.",
+    `${scenario}: malformed broker REST data must fail owned-order reconciliation rather than being accepted.`,
   )
   assert.match(
     result.errors?.[0]?.message ?? "",
     expectedError,
-    scenario + ": the failure must identify the malformed REST snapshot stage.",
+    `${scenario}: the failure must identify the malformed REST snapshot stage.`,
   )
   assert.deepEqual(
     harness.accountedFills,
     [],
-    scenario + ": no execution may be applied before every owned-order REST envelope is validated.",
+    `${scenario}: no execution may be applied before every owned-order REST envelope is validated.`,
   )
   assert.deepEqual(
     harness.engine.getPausedMarkets(),
     ["DOGEUSDT"],
-    scenario + ": the affected market must remain paused after malformed authoritative REST data.",
+    `${scenario}: the affected market must remain paused after malformed authoritative REST data.`,
   )
   assert.equal(
     harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).status,
     "UNKNOWN",
-    scenario + ": malformed REST data must not advance the registered owned order from UNKNOWN.",
+    `${scenario}: malformed REST data must not advance the registered owned order from UNKNOWN.`,
   )
   assert.equal(
     harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).executedQuantity.amount,
     "0",
-    scenario + ": malformed REST data must not apply a partial or inferred executed quantity.",
+    `${scenario}: malformed REST data must not apply a partial or inferred executed quantity.`,
   )
   assert.deepEqual(
     harness.cancellationIds,
     [],
-    scenario + ": reconciliation failure must not issue an exchange cancellation.",
+    `${scenario}: reconciliation failure must not issue an exchange cancellation.`,
   )
   assert.deepEqual(
     harness.orders,
     [],
-    scenario + ": reconciliation failure must not submit a replacement or any other exchange order.",
+    `${scenario}: reconciliation failure must not submit a replacement or any other exchange order.`,
   )
   assert.equal(
     brokerReadCounts.openOrders,
     1,
-    scenario + ": reconciliation must make exactly one account-symbol open-order read.",
+    `${scenario}: reconciliation must make exactly one account-symbol open-order read.`,
   )
   assert.equal(
     brokerReadCounts.canonicalOrderHistory,
     expectedCanonicalOrderHistoryReads,
-    scenario + ": canonical order history must be read only after open-order envelope validation.",
+    `${scenario}: canonical order history must be read only after open-order envelope validation.`,
   )
   assert.equal(
     brokerReadCounts.fills,
     expectedFillHistoryReads,
-    scenario + ": fill history must be read only after canonical order history validation.",
+    `${scenario}: fill history must be read only after canonical order history validation.`,
   )
 }
 
@@ -6240,27 +6240,27 @@ function assertBrokerRestFailurePreservesOriginalCause({ result, timeout, scenar
   assert.equal(
     result.ok,
     false,
-    scenario + ": a failed broker REST result must fail owned-order reconciliation.",
+    `${scenario}: a failed broker REST result must fail owned-order reconciliation.`,
   )
   const failure = result.errors?.[0]
   assert.ok(
     failure instanceof Error,
-    scenario + ": reconciliation must return the contextual Error wrapper for the failed REST stage.",
+    `${scenario}: reconciliation must return the contextual Error wrapper for the failed REST stage.`,
   )
   assert.equal(
     failure.message,
     expectedMessage,
-    scenario + ": preserving the cause must not change the existing contextual reconciliation message.",
+    `${scenario}: preserving the cause must not change the existing contextual reconciliation message.`,
   )
   assert.equal(
     failure.cause,
     timeout,
-    scenario + ": the contextual reconciliation Error must retain the exact original broker Error as native cause.",
+    `${scenario}: the contextual reconciliation Error must retain the exact original broker Error as native cause.`,
   )
   assert.equal(
     failure.cause?.name,
     "RpcTimeoutError",
-    scenario + ": the native cause must preserve the broker's typed timeout name for diagnosis.",
+    `${scenario}: the native cause must preserve the broker's typed timeout name for diagnosis.`,
   )
 }
 
