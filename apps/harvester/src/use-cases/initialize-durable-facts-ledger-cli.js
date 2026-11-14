@@ -1,5 +1,5 @@
-import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
+import { resolveOperationalStateDirectory } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { initializeHarvesterDurableFactsLedger } from "./initialize-durable-facts-ledger.js"
 
 /**
@@ -21,35 +21,32 @@ export async function runInitializeDurableFactsLedger({
 } = {}) {
   if (!Array.isArray(args) || args.length !== 1 || args[0] !== "--confirm-initialize") {
     logger.error?.({
-      message: "Durable-facts genesis requires exactly --confirm-initialize; unknown arguments are not accepted.",
+      message: "Operational State Store initialization requires exactly --confirm-initialize; unknown arguments are not accepted.",
     })
     return 1
   }
-  const directory = env?.DURABLE_FACTS_DIRECTORY
-  if (typeof directory !== "string" ||
-      !directory.trim() ||
-      directory !== directory.trim() ||
-      !path.isAbsolute(directory)) {
-    logger.error?.({
-      message: "DURABLE_FACTS_DIRECTORY must be set to an absolute local filesystem path before genesis initialization.",
-    })
+  let directory
+  try {
+    directory = resolveOperationalStateDirectory({ env })
+  } catch (error) {
+    logger.error?.({ message: error.message })
     return 1
   }
   let result
   try {
-    result = await initialize({ confirmed: true, directory: path.resolve(directory) })
+    result = await initialize({ confirmed: true, directory })
   } catch (error) {
     result = { ok: false, errors: [error] }
   }
   if (result?.ok === true && result.data?.durable === true) {
     logger.system?.(
-      "Harvester recovery-facts genesis initialized at " + result.data.directory +
+      "Harvester Operational State Store initialized at " + result.data.directory +
       " (sequence " + result.data.sequence + ").",
     )
     return 0
   }
   logger.error?.({
-    message: "Harvester recovery-facts genesis was not initialized.",
+    message: "Harvester Operational State Store was not initialized.",
     errors: result?.errors ?? [new Error("Genesis initialization did not confirm a durable commit")],
   })
   return 1
