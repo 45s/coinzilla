@@ -153,7 +153,6 @@ Rotate a potentially exposed bot token with BotFather and update the deployment 
 
 The package unit suite also runs ESLint against every JavaScript source file, test, and script under packages/notifiers, using the repository's root ESLint configuration. The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Behavioral tests use Node's built-in test runner and injected transport boundaries; the ESLint regression test uses the repository's installed ESLint development dependency. Tests require no credentials or live network access.
 
-
 ## Manual live Telegram smoke test
 
 The default unit and coverage suites never contact Telegram. For an operator-controlled check of real credentials and chat permissions, run the explicit smoke-test command from a trusted environment where `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` have been injected by your approved secret manager:
