@@ -420,9 +420,9 @@ export function createAccountSnapshotManager({
         (expectedPrice === undefined
           ? actualPrice !== undefined
           : actualPrice === undefined || compareDecimal({
-            left: expectedPrice,
-            right: String(actualPrice),
-          }) !== 0)
+              left: expectedPrice,
+              right: String(actualPrice),
+            }) !== 0)
       ) { return true }
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
