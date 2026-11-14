@@ -127,10 +127,7 @@ export function createUserDataEventTransition(dependencies = {}) {
 
   const reconcileEventFills = async ({ order, event, terminalFillsReconciled } = {}) => {
     if (event.executionType === "TRADE") {
-      const fillResult = await processExecutionFillTransition({
-        order,
-        fill: event.fill,
-      })
+      const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
       if (!fillResult.ok) {return fillResult}
     }
     if (!terminalFillsReconciled &&
@@ -187,47 +184,6 @@ if (update.duplicate || update.stale) {
 
   const handleOpenSellReplacement = async ({ order, symbol, recoveryMode } = {}) => {
 if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
-              order.brokerOrderId && state.replacementIntents.has(symbol)) {
-            const cancellation = await cancelAndReconcileRecoverySells({
-              symbol,
-              marketId: order.market.id
-            })
-            if (!cancellation.ok) {return withFailure(cancellation, {
-              category: "ORDER_TRANSITION",
-              stage: "RECOVERY_SELL_CANCELLATION",
-              retryable: true
-            })}
-            if (cancellation.data?.deferred === true) {
-              return toResult({ data: {
-                ignored: true,
-                replacementDeferred: true
-              } })
-            }
-            state.replacementIntents.delete(symbol)
-            const replacement = await evaluateLatestTransition({ symbol })
-            if (!replacement.ok) {return withFailure(replacement, {
-              category: "ORDER_TRANSITION",
-              stage: "RECOVERY_SELL_REPLACEMENT",
-              retryable: true
-            })}
-            return toResult({ data: {
-              ignored: true,
-              recoverySellReplaced: true,
-              ...replacement.data
-            } })
-          }
-          return toResult({ data: { ignored: true } })
-        }
-      }
-
-      if (order.status === "FILLED") {
-        if (state.completedOrderTransitions.has(order.clientOrderId)) {
-          return toResult({ data: { ignored: true } })
-        }
-        state.completedOrderTransitions.add(order.clientOrderId)
-      }
-
-      if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
           state.replacementIntents.has(symbol)) {
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
