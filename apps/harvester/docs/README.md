@@ -7,7 +7,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
 
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
-- [Interactive pair configuration generator](../README.md#generate-a-new-trading-pair) — create a validated, enabled-by-default Binance Spot pair through `pnpm run config:symbol`
+- [Shared token specification generator](../README.md#generate-or-refresh-market-metadata) — retrieve and maintain exchange-derived market precision through `pnpm run config:symbol`; strategy pairs remain operator-owned
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
