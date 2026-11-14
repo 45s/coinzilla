@@ -20,7 +20,9 @@ function createEventBus({ failAt, throwOnUnsubscribe = [] } = {}) {
     handlers,
     unsubscribed,
     subscribe({ name, handler }) {
-      if (name === failAt) return { ok: false }
+      if (name === failAt) {
+        return { ok: false }
+      }
       handlers.set(name, handler)
       return {
         ok: true,
@@ -73,7 +75,9 @@ test("serializes accepted sends and drains them on close", async () => {
     notifier: {
       async sendMessage(message) {
         sent.push(message)
-        if (sent.length === 1) await gate.promise
+        if (sent.length === 1) {
+          await gate.promise
+        }
       },
     },
   })
@@ -175,7 +179,9 @@ test("reports delivery failures once and continues processing later events", asy
     notifier: {
       async sendMessage() {
         calls += 1
-        if (calls === 1) throw new Error("network down")
+        if (calls === 1) {
+          throw new Error("network down")
+        }
       },
     },
     logger: { error(entry) { errors.push(entry) } },
@@ -198,7 +204,9 @@ test("leaves failures observable to the event bus when no logger is configured",
     notifier: {
       async sendMessage() {
         calls += 1
-        if (calls === 1) throw new Error("no logger path")
+        if (calls === 1) {
+          throw new Error("no logger path")
+        }
       },
     },
   })

@@ -46,7 +46,7 @@ function validateDependencies({ eventBus, notifier, formatMessage, logger, maxPe
   return validateEventNames(eventNames)
 }
 
-function emitWarningSafely(message, error) {
+function emitWarningSafely({ message, error }) {
   try {
     process.emitWarning(message, { detail: error })
   } catch {
@@ -54,8 +54,10 @@ function emitWarningSafely(message, error) {
   }
 }
 
-function reportDeliveryFailure(logger, eventName, error) {
-  if (typeof logger?.error !== "function") return false
+function reportDeliveryFailure({ logger, eventName, error }) {
+  if (typeof logger?.error !== "function") {
+    return false
+  }
 
   try {
     logger.error({
@@ -65,10 +67,10 @@ function reportDeliveryFailure(logger, eventName, error) {
     })
     return true
   } catch (loggingError) {
-    emitWarningSafely(
-      "Telegram notification error logger failed",
-      loggingError,
-    )
+    emitWarningSafely({
+      message: "Telegram notification error logger failed",
+      error: loggingError,
+    })
     return false
   }
 }
@@ -90,6 +92,51 @@ function unsubscribeAll(subscriptions) {
   return errors
 }
 
+function createDeliveryHandler({
+  eventName,
+  state,
+  notifier,
+  logger,
+  maxPending,
+  formatMessage,
+}) {
+  return (event) => {
+    if (state.isClosed) {
+      return Promise.resolve()
+    }
+    if (state.pendingCount >= maxPending) {
+      state.overflowCount += 1
+      const error = new Error(
+        `Telegram notification queue capacity exceeded (maxPending=${maxPending})`,
+      )
+      if (reportDeliveryFailure({ logger, eventName, error })) {
+        return Promise.resolve()
+      }
+      return Promise.reject(error)
+    }
+    state.pendingCount += 1
+    state.acceptedCount += 1
+    const delivery = state.deliveryTail.then(async () => {
+      const message = formatMessage(event)
+      if (message) {
+        await notifier.sendMessage(message)
+        state.deliveredCount += 1
+      }
+    })
+    const observedDelivery = delivery.catch((error) => {
+      state.failedCount += 1
+      if (!reportDeliveryFailure({ logger, eventName, error })) {
+        throw error
+      }
+    })
+    const completedDelivery = observedDelivery.finally(() => {
+      state.pendingCount -= 1
+    })
+    state.deliveryTail = completedDelivery.catch(() => undefined)
+    return completedDelivery
+  }
+}
+
 /**
  * Deliver application-formatted messages for application-selected events through Telegram.
  * Sends are serialized and admission-controlled; flush the event bus before close().
@@ -104,13 +151,15 @@ export function subscribeTelegramNotifications({
 } = {}) {
   const selectedEventNames = validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames })
 
-  let deliveryTail = Promise.resolve()
-  let pendingCount = 0
-  let acceptedCount = 0
-  let deliveredCount = 0
-  let failedCount = 0
-  let overflowCount = 0
-  let isClosed = false
+  const state = {
+    deliveryTail: Promise.resolve(),
+    pendingCount: 0,
+    acceptedCount: 0,
+    deliveredCount: 0,
+    failedCount: 0,
+    overflowCount: 0,
+    isClosed: false,
+  }
   let closePromise
   const subscriptions = []
 
@@ -118,50 +167,14 @@ export function subscribeTelegramNotifications({
     for (const eventName of selectedEventNames) {
       const result = eventBus.subscribe({
         name: eventName,
-        handler: (event) => {
-          // EventBus may already have scheduled a handler when unsubscribe occurs.
-          // Do not accept newly-started callbacks after close has begun.
-          if (isClosed) return Promise.resolve()
-
-          if (pendingCount >= maxPending) {
-            overflowCount += 1
-            const error = new Error(
-              `Telegram notification queue capacity exceeded (maxPending=${maxPending})`,
-            )
-            if (reportDeliveryFailure(logger, eventName, error)) {
-              return Promise.resolve()
-            }
-            return Promise.reject(error)
-          }
-
-          pendingCount += 1
-          acceptedCount += 1
-
-          const delivery = deliveryTail.then(async () => {
-            const message = formatMessage(event)
-            if (message) {
-              await notifier.sendMessage(message)
-              deliveredCount += 1
-            }
-          })
-
-          const observedDelivery = delivery.catch((error) => {
-            failedCount += 1
-            if (!reportDeliveryFailure(logger, eventName, error)) {
-              throw error
-            }
-          })
-
-          const completedDelivery = observedDelivery.finally(() => {
-            pendingCount -= 1
-          })
-
-          // Keep the internal queue usable after a failed send. When no logger is
-          // supplied, the returned rejection is left for EventBus.onError/logger.
-          deliveryTail = completedDelivery.catch(() => undefined)
-          return completedDelivery
-        },
-      })
+        handler: createDeliveryHandler({
+          eventName,
+          state,
+          notifier,
+          logger,
+          maxPending,
+          formatMessage,
+        }),
 
       if (!result?.ok || typeof result.subscription?.unsubscribe !== "function") {
         throw new Error(`Unable to subscribe to event: ${eventName}`)
@@ -170,7 +183,7 @@ export function subscribeTelegramNotifications({
       subscriptions.push(result.subscription)
     }
   } catch (error) {
-    isClosed = true
+    state.isClosed = true
     const cleanupErrors = unsubscribeAll(subscriptions)
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
@@ -186,22 +199,24 @@ export function subscribeTelegramNotifications({
     /** Return a frozen snapshot of queue and delivery counters. */
     getDiagnostics() {
       return Object.freeze({
-        acceptedCount,
-        deliveredCount,
-        failedCount,
-        overflowCount,
-        pendingCount,
-        closed: isClosed,
+        acceptedCount: state.acceptedCount,
+        deliveredCount: state.deliveredCount,
+        failedCount: state.failedCount,
+        overflowCount: state.overflowCount,
+        pendingCount: state.pendingCount,
+        closed: state.isClosed,
       })
     },
     close() {
-      if (closePromise) return closePromise
+      if (closePromise) {
+        return closePromise
+      }
 
-      isClosed = true
+      state.isClosed = true
       const cleanupErrors = unsubscribeAll(subscriptions)
 
       closePromise = (async () => {
-        await deliveryTail
+        await state.deliveryTail
         if (cleanupErrors.length > 0) {
           throw new AggregateError(
             cleanupErrors,

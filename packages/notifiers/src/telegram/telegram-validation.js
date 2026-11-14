@@ -6,7 +6,7 @@ const MAX_MESSAGE_LENGTH = 4096
  * Validate and normalize Telegram client configuration.
  * All environment-dependent defaults are passed explicitly by the caller.
  */
-export function validateTelegramOptions(options, defaultFetchImpl) {
+export function validateTelegramOptions({ options, defaultFetchImpl }) {
   if (!options || typeof options !== "object" || Array.isArray(options)) {
     throw new TypeError("TelegramNotifier options must be an object")
   }

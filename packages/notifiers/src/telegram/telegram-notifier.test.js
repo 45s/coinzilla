@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { TelegramNotifier } from "./telegram-notifier.js"
 
-const response = (body, ok = true, status = 200) => ({
+const response = ({ body, ok = true, status = 200 }) => ({
   ok,
   status,
   async json() { return body },
@@ -20,7 +20,9 @@ test("constructor validates required options and bounds", () => {
     { token: "x", chatId: "y", fetchImpl: 1 },
     { token: "x", chatId: "y", timeoutMs: 0 },
     { token: "x", chatId: "y", timeoutMs: 2_147_483_648 },
-  ]) assert.throws(() => new TelegramNotifier(options))
+  ]) {
+    assert.throws(() => new TelegramNotifier(options))
+  }
 
   assert.doesNotThrow(() => new TelegramNotifier({ token: "123:secret", chatId: -100 }))
 })
@@ -31,9 +33,10 @@ test("normalizes whitespace around credentials and sends a bounded request", asy
     token: " 123:secret-token ",
     chatId: " -100123 ",
     timeoutMs: 1500,
-    fetchImpl: async (url, options) => {
+    fetchImpl: async (...args) => {
+      const [url, options] = args
       captured = { url, options }
-      return response({ ok: true, result: { message_id: 7 } })
+      return response({ body: { ok: true, result: { message_id: 7 } } })
     },
   })
 
@@ -64,9 +67,13 @@ test("reports HTTP status and Telegram rejection description without exposing to
     token: "123456:secret-token",
     chatId: "y",
     fetchImpl: async () => response({
+      body: {
+        ok: false,
+        description: "Forbidden: bot was blocked by the user",
+      },
       ok: false,
-      description: "Forbidden: bot was blocked by the user",
-    }, false, 403),
+      status: 403,
+    }),
   })
 
   await assert.rejects(
@@ -78,9 +85,13 @@ test("reports HTTP status and Telegram rejection description without exposing to
     token: "123456:secret-token",
     chatId: "y",
     fetchImpl: async () => response({
+      body: {
+        ok: false,
+        description: "request rejected for 123456:secret-token",
+      },
       ok: false,
-      description: "request rejected for 123456:secret-token",
-    }, false, 403),
+      status: 403,
+    }),
   })
   await assert.rejects(reflectedToken.sendMessage("hello"), (error) => {
     assert.match(error.message, /status 403: request rejected for \[REDACTED\]/)
@@ -91,7 +102,7 @@ test("reports HTTP status and Telegram rejection description without exposing to
   const unknownStatus = new TelegramNotifier({
     token: "x",
     chatId: "y",
-    fetchImpl: async () => response({}, false, null),
+    fetchImpl: async () => response({ body: {}, ok: false, status: null }),
   })
   await assert.rejects(unknownStatus.sendMessage("hello"), /status unknown/)
 })
@@ -117,8 +128,10 @@ test("reports Telegram API errors and redacts reflected credentials", async () =
     token: "123456:secret-token",
     chatId: "y",
     fetchImpl: async () => response({
-      ok: false,
-      description: "invalid token 123456:secret-token",
+      body: {
+        ok: false,
+        description: "invalid token 123456:secret-token",
+      },
     }),
   })
 
@@ -131,7 +144,7 @@ test("reports Telegram API errors and redacts reflected credentials", async () =
   const unknown = new TelegramNotifier({
     token: "x",
     chatId: "y",
-    fetchImpl: async () => response(null),
+    fetchImpl: async () => response({ body: null }),
   })
   await assert.rejects(unknown.sendMessage("hello"), /unknown Telegram API error/)
 })
@@ -158,7 +171,7 @@ test("rejects malformed HTTP responses and malformed successful Bot API payloads
     const notifier = new TelegramNotifier({
       token: "x",
       chatId: "y",
-      fetchImpl: async () => response(payload),
+      fetchImpl: async () => response({ body: payload }),
     })
     await assert.rejects(notifier.sendMessage("hello"), /without a valid message_id/)
   }
@@ -175,7 +188,7 @@ test("sanitizes transport and JSON parsing errors", async () => {
   await assert.rejects(transport.sendMessage("hello"), (error) => {
     assert.match(error.message, /request failed/)
     assert.doesNotMatch(error.message, /123456:secret-token/)
-    assert.equal(error.cause, undefined)
+    assert.equal(error.cause.message, "request failed for [REDACTED]")
     return true
   })
 
@@ -192,6 +205,7 @@ test("sanitizes transport and JSON parsing errors", async () => {
   await assert.rejects(invalidJson.sendMessage("hello"), (error) => {
     assert.match(error.message, /bad JSON/)
     assert.doesNotMatch(error.message, /123456:secret-token/)
+    assert.equal(error.cause.message, "bad JSON for [REDACTED]")
     return true
   })
 })
@@ -199,8 +213,8 @@ test("sanitizes transport and JSON parsing errors", async () => {
 test("rejects array-shaped HTTP and Telegram success responses", async () => {
   const malformedResponses = [
     async () => [],
-    async () => response([], true),
-    async () => response({ ok: true, result: [] }),
+    async () => response({ body: [] }),
+    async () => response({ body: { ok: true, result: [] } }),
   ]
 
   for (const fetchImpl of malformedResponses) {
