@@ -38,13 +38,15 @@ import { mapUserDataReadinessChangedData } from "../application/events/user-data
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
 
-async function verifyOperationalStateStore({ operationalStateStore } = {}) {
-  if (operationalStateStore === undefined) return
+function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
       typeof operationalStateStore?.verify !== "function" ||
       typeof operationalStateStore?.readAll !== "function") {
     throw new TypeError("operationalStateStore must provide append(), verify(), and readAll() when supplied")
   }
+}
+
+async function verifyOperationalStateStoreDurability({ operationalStateStore } = {}) {
   const verification = await operationalStateStore.verify()
   if (verification?.ok !== true ||
       verification.data?.valid !== true ||
@@ -54,6 +56,9 @@ async function verifyOperationalStateStore({ operationalStateStore } = {}) {
     error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
     throw error
   }
+}
+
+async function readVerifiedOperationalStateHistory({ operationalStateStore } = {}) {
   const existingFacts = await operationalStateStore.readAll()
   if (existingFacts?.ok !== true ||
       existingFacts.data?.durableWriteSupported !== true ||
@@ -66,15 +71,31 @@ async function verifyOperationalStateStore({ operationalStateStore } = {}) {
     const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
     throw new Error("Harvester cannot restart from an unprojectable Operational State Store history: " + (cause.message ?? String(cause)), { cause })
   }
-  if (existingProjection.data.sessions.length > 0) {
+  return existingProjection
+}
+
+function assertOperationalStateCanStart({ projection } = {}) {
+  if (projection.data.sessions.length > 0) {
     throw new Error(
       "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
     )
   }
 }
 
+async function verifyOperationalStateStore({ operationalStateStore } = {}) {
+  if (operationalStateStore === undefined) {
+    return
+  }
+  assertOperationalStateStoreInterface({ operationalStateStore })
+  await verifyOperationalStateStoreDurability({ operationalStateStore })
+  const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
+  assertOperationalStateCanStart({ projection })
+}
+
 async function persistHarvesterProcessStart({ operationalStateStore, appConfig, tradingEnabled } = {}) {
-  if (!operationalStateStore) return
+  if (!operationalStateStore) {
+    return
+  }
   const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
   if (baseline?.ok !== true || baseline.data?.durable !== true) {
     throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
@@ -90,6 +111,28 @@ async function persistHarvesterProcessStart({ operationalStateStore, appConfig, 
   if (started?.ok !== true || started.data?.durable !== true) {
     throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
       (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+  }
+}
+
+function publishInitialUserDataReadiness({ lastReportedUserDataReady, eventPublisher, brokerName, userDataState } = {}) {
+  if (!lastReportedUserDataReady) {
+    return
+  }
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
+    dataResult: mapUserDataReadinessChangedData({
+      broker: brokerName,
+      ready: true,
+      status: userDataState.status,
+      trigger: "startup-preflight-completed",
+    }),
+  })
+}
+
+function startPendingUserDataRecovery({ userDataState, startUserDataRecovery } = {}) {
+  if (userDataState.pendingRecovery) {
+    startUserDataRecovery()
   }
 }
 
@@ -424,19 +467,12 @@ export async function startHarvester({
     userDataSubscription = await subscribeToUserData({
       broker,
       brokerName,
+      eve    publishInitialUserDataReadiness({
+      lastReportedUserDataReady,
       eventPublisher,
-      logger,
-      state: userDataState,
-      tradingMode,
-      tradingEnabled,
-      enabledSymbols,
-      onEvent: handleUserDataEvent,
-      onStatus: handleUserDataStatus,
-      onSubscriptionEstablished: (subscription) => { userDataSubscription = subscription },
-      publishAccountSnapshot,
-      publishOpenOrdersSnapshot,
-      getAccountSnapshot,
-      resumeDeferredStrategyEvaluations,
+      brokerName,
+      userDataState,
+    })eDeferredStrategyEvaluations,
     })
     // The initial PREFLIGHT/user-data gate is reported after its authoritative
     // snapshots pass. Later reconnect/reconciliation transitions use the same event.
@@ -520,7 +556,7 @@ export async function startHarvester({
   }
 
   userDataState.startupComplete = true
-  if (userDataState.pendingRecovery) {startUserDataRecovery()}
+  startPendingUserDataRecovery({ userDataState, startUserDataRecovery })
 
   const stopRuntime = createShutdownHandler({
     state: userDataState,
