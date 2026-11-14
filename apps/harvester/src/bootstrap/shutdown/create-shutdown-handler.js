@@ -135,11 +135,14 @@ export function createShutdownHandler({
       let recoverySellReconciliation
 
       const logShutdownFailure = ({ message, stage, result, error } = {}) => {
-        const errors = error
-          ? [error]
-          : result?.errors?.length
-            ? result.errors
-            : [new Error(message)]
+        let errors
+        if (error) {
+          errors = [error]
+        } else if (result?.errors?.length) {
+          errors = result.errors
+        } else {
+          errors = [new Error(message)]
+        }
         const failure = result?.failure ?? error?.recoveryFailure ??
           errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
         const failureMetadata = failure
