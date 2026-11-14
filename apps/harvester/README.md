@@ -116,6 +116,7 @@ Example shape:
 ```
 
 `quantityPrecision` is the number of decimal places needed to express the market's `LOT_SIZE.stepSize` (for example, a step of `0.01` means precision `2`). It is not the step size itself and does not replace runtime exchange-filter validation.
+The `app-config.test.js` validation fixture mirrors these registry precision values for every operator-configured pair so direct validator tests remain deterministic.
 
 For each market, `pricePrecision` is derived from `PRICE_FILTER.tickSize` and `quantityPrecision` from `LOT_SIZE.stepSize`. These values are precision counts, not exchange filters and not substitutes for the actual tick/step/notional constraints that Harvester validates at startup and before order submission. The registry is the only source for these precision fields; do not add them to `cg-coin-grabber.js`.
 
@@ -166,7 +167,7 @@ export const appConfig = {
 };
 ```
 
-`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed `config/index.js` currently enables `LINKFDUSD` and `ZROFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. Disabled `LINKUSDT` has configured maker/taker assumptions of 0.075% / 0.075%; enabled `LINKFDUSD` has maker 0% and taker 0.075%; enabled `ZROFDUSD` has maker 0% and taker 0.1%. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed pair configuration has enabled TESTNET markets `LINKUSDT`, `ZROUSDT`, `DOGEUSDT`, and `ADAUSDT`, plus enabled LIVE markets `LINKFDUSD`, `ZROFDUSD`, and `WLDFDUSD`; `SOLFDUSD` and `ADAFDUSD` remain disabled. This configuration is not authorization for a TESTNET or LIVE session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. Configured maker/taker assumptions are 0.075% / 0.075% for `LINKUSDT` and `ADAUSDT`, 0.1% / 0.1% for `ZROUSDT` and `DOGEUSDT`, 0% / 0.075% for `LINKFDUSD` and `WLDFDUSD`, and 0% / 0.1% for `ZROFDUSD`. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
 The named `appConfig` export in `config/index.js` contains strategy configuration under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 
