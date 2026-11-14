@@ -28,7 +28,6 @@ export default defineConfig([
       globals: globals.nodeBuiltin,
     },
     rules: {
-      // Existing project rules
       eqeqeq: ["error", "always", { null: "ignore" }],
       curly: ["error", "all"],
       "no-nested-ternary": "error",
@@ -72,7 +71,7 @@ export default defineConfig([
       ],
       "no-unreachable-loop": "error",
       "no-self-compare": "error",
-      "only-throw-error": "error",
+      "no-throw-literal": "error",
       "preserve-caught-error": "error",
       "no-shadow": "error",
       "consistent-return": "error",
