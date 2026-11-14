@@ -56,6 +56,11 @@
         "quoteAsset": "FDUSD",
         "pricePrecision": 4,
         "quantityPrecision": 1
+      },
+      "ADAUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 4,
+        "quantityPrecision": 1
       }
     }
   },
