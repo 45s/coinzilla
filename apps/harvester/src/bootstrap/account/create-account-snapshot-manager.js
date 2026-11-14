@@ -129,6 +129,58 @@ function logClosingJournalBarrier({
   })
 }
 
+function throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSessionId }) {
+  if (phase === "CLOSING") {
+    logSystem(logger, {
+      message: "Harvester shutdown phase failed",
+      shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
+      phaseStatus: "FAILED",
+      phase: "CLOSING",
+      shutdownCorrelationId: runtimeSessionId ?? null,
+      failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
+    })
+  }
+  throw withRecoveryFailure(
+    new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
+    "ACCOUNTING_INTEGRITY",
+    "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY",
+    false,
+  )
+}
+
+function throwAccountSnapshotFlushException({ error, isClosing, logger, runtimeSessionId, monotonicNow, startedAt }) {
+  if (isClosing) {
+    logClosingJournalBarrier({
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+      phaseStatus: "FAILED",
+      failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED",
+    })
+  }
+  throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
+}
+
+function throwNonDurableAccountSnapshotFlush({ flushed, phase, isClosing, logger, runtimeSessionId, monotonicNow, startedAt }) {
+  if (isClosing) {
+    logClosingJournalBarrier({
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+      phaseStatus: "FAILED",
+      failureReason: flushed?.recoveryFailure?.stage ?? "JOURNAL_FLUSH_NOT_DURABLE",
+    })
+  }
+  const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+  throw createAuditFlushError({
+    flushed,
+    message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
+    stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+  })
+}
+
 async function flushAccountSnapshotAudit({
   eventPublisher,
   phase,
@@ -137,22 +189,7 @@ async function flushAccountSnapshotAudit({
   monotonicNow,
 }) {
   if (typeof eventPublisher?.flush !== "function") {
-    if (phase === "CLOSING") {
-      logSystem(logger, {
-        message: "Harvester shutdown phase failed",
-        shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
-        phaseStatus: "FAILED",
-        phase: "CLOSING",
-        shutdownCorrelationId: runtimeSessionId ?? null,
-        failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
-      })
-    }
-    throw withRecoveryFailure(
-      new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY",
-      false,
-    )
+    throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSessionId })
   }
 
   const startedAt = monotonicNow()
@@ -171,35 +208,25 @@ async function flushAccountSnapshotAudit({
   try {
     flushed = await eventPublisher.flush()
   } catch (error) {
-    if (isClosing) {
-      logClosingJournalBarrier({
-        logger,
-        runtimeSessionId,
-        monotonicNow,
-        startedAt,
-        phaseStatus: "FAILED",
-        failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED",
-      })
-    }
-    throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
+    throwAccountSnapshotFlushException({
+      error,
+      isClosing,
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
+    })
   }
 
   if (flushed?.ok !== true || flushed?.durable !== true) {
-    if (isClosing) {
-      logClosingJournalBarrier({
-        logger,
-        runtimeSessionId,
-        monotonicNow,
-        startedAt,
-        phaseStatus: "FAILED",
-        failureReason: flushed?.recoveryFailure?.stage ?? "JOURNAL_FLUSH_NOT_DURABLE",
-      })
-    }
-    const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw createAuditFlushError({
+    throwNonDurableAccountSnapshotFlush({
       flushed,
-      message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
-      stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
+      phase,
+      isClosing,
+      logger,
+      runtimeSessionId,
+      monotonicNow,
+      startedAt,
     })
   }
 
