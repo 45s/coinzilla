@@ -12,6 +12,8 @@ created: 2026-11-11
 
 **Accepted — target architecture contract.** This decision freezes the recovery boundary and minimum durable-fact guarantees. It does not implement startup restoration, enable replay, or authorize unattended process restart.
 
+> **Terminology note (2026-11-14):** This ADR retains its original title and durable-fact vocabulary as part of the accepted architectural record. The current application-facing component name is **Operational State Store**; current setup instructions and commands are maintained in the implementation section below and the Harvester operator documentation.
+
 **Owner:** Harvester
 
 **Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626)
