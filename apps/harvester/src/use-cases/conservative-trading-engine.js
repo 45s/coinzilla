@@ -1463,7 +1463,7 @@ async function prepareOwnedBuyCancellation({ context, order, reason, reasonPrefi
   }
   return createBuyCancellationFailure({
     error,
-    errors: intent.errors,
+    errors: intent.errors?.length ? intent.errors : [error],
   })
 }
 
@@ -1784,7 +1784,7 @@ async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix,
 }
 
 async function cancelOwnedBuyOrdersTransition({ context, options }) {
-  const reason = options.reason ?? "PROCESS_SHUTDOWN"
+  const reason = options.reason === undefined ? "PROCESS_SHUTDOWN" : options.reason
   const reasonPrefix = getBuyCancellationReasonPrefix({
     reason,
   })
@@ -1801,7 +1801,7 @@ async function cancelOwnedBuyOrdersTransition({ context, options }) {
       order,
       reason,
       reasonPrefix,
-      pauseOnFailure: options.pauseOnFailure !== false,
+      pauseOnFailure: options.pauseOnFailure === undefined ? true : options.pauseOnFailure,
     })
     if (!result?.ok) {
       errors.push(...(result.errors ?? [new Error("Owned BUY cancellation failed")]))
