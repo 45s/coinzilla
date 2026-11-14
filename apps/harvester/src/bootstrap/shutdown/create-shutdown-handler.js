@@ -73,33 +73,34 @@ export function createShutdownHandler({
         ...(failureReason ? { failureReason } : {}),
       })
     }
-    const runPhase = async (phase, operation, isFailure = (result) =>
-      result?.ok === false || (Array.isArray(result) && result.length > 0)) => {
+    const isPhaseFailure = (result) =>
+      result?.ok === false || (Array.isArray(result) && result.length > 0)
+    const getPhaseFailureReason = (result) =>
+      result?.failure?.stage ??
+      result?.data?.findings?.[0]?.reason ??
+      result?.errors?.[0]?.recoveryFailure?.stage ??
+      result?.errors?.[0]?.code ??
+      result?.errors?.[0]?.name ??
+      "PHASE_RESULT_FAILED"
+    const runPhase = async (...args) => {
+      const [phase, operation, isFailure = isPhaseFailure] = args
       const startedAt = now()
       logPhase({ phase, status: "STARTED" })
       try {
         const result = await operation()
-        const durationMs = Math.max(0, now() - startedAt)
         const failed = isFailure(result)
-        const phaseFailureReason = result?.failure?.stage ??
-          result?.data?.findings?.[0]?.reason ??
-          result?.errors?.[0]?.recoveryFailure?.stage ??
-          result?.errors?.[0]?.code ??
-          result?.errors?.[0]?.name ??
-          (failed ? "PHASE_RESULT_FAILED" : null)
         logPhase({
           phase,
           status: failed ? "FAILED" : "COMPLETED",
-          durationMs,
-          ...(failed ? { failureReason: phaseFailureReason } : {}),
+          durationMs: Math.max(0, now() - startedAt),
+          ...(failed ? { failureReason: getPhaseFailureReason(result) } : {}),
         })
         return result
       } catch (error) {
-        const durationMs = Math.max(0, now() - startedAt)
         logPhase({
           phase,
           status: "FAILED",
-          durationMs,
+          durationMs: Math.max(0, now() - startedAt),
           failureReason: getSafeFailureReason(error),
         })
         throw error
@@ -122,6 +123,7 @@ export function createShutdownHandler({
       })
     }
 
+    // eslint-disable-next-line complexity -- this is the ordered shutdown state machine; phase order is the safety contract.
     shutdownPromise = (async () => {
       const tradingEngine = getTradingEngine()
       const userDataSubscription = getUserDataSubscription()
@@ -298,9 +300,7 @@ export function createShutdownHandler({
             auditReasons.push("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE")
             for (const finding of recoverySellFindings) {
               auditReasons.push(
-                "SHUTDOWN_RECOVERY_SELL_COVERAGE:" + finding.symbol + ":" + finding.reason +
-                ":required=" + (finding.requiredQuantity ?? "unknown") +
-                ":committed=" + (finding.committedQuantity ?? "unknown"),
+                `SHUTDOWN_RECOVERY_SELL_COVERAGE:${finding.symbol}:${finding.reason}:required=${finding.requiredQuantity ?? "unknown"}:committed=${finding.committedQuantity ?? "unknown"}`,
               )
             }
             logShutdownFailure({
@@ -324,7 +324,7 @@ export function createShutdownHandler({
           if (order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)) return false
           return true
         })
-        if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
+        if (unresolvedOrders.length > 0) auditReasons.push(`UNRESOLVED_OWNED_ORDERS:${unresolvedOrders.length}`)
         if (state.accountingFailed || state.requiresReconciliation || state.safetyHaltRequired) {
           auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
         }
@@ -361,7 +361,7 @@ export function createShutdownHandler({
         ].includes(reason) || reason.startsWith("UNRESOLVED_OWNED_ORDERS:") ||
           reason.startsWith("SHUTDOWN_RECOVERY_SELL_COVERAGE:"))
       const auditError = shutdownAuditFailed
-        ? new Error("CLOSING account audit is incomplete: " + auditReasons.join(", "))
+        ? new Error(`CLOSING account audit is incomplete: ${auditReasons.join(", ")}`)
         : undefined
       const cleanupErrors = [
         ...preShutdownErrors,
