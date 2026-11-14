@@ -4700,18 +4700,20 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
   }
 })
 
-test("accounts a recovery SELL fill during cancellation once when its late stream event is replayed", async () => {
+
+async function runRecoverySellCancellationFillReplayScenario() {
   let releaseCancel
   let signalCancelStarted
-  const cancelOrderGate = { promise: new Promise((resolve) => { releaseCancel = resolve }) }
-  const cancelStarted = new Promise((resolve) => { signalCancelStarted = resolve })
+  const cancelOrderGate = {
+    promise: new Promise((resolve) => {
+      releaseCancel = resolve
+    }),
+  }
+  const cancelStarted = new Promise((resolve) => {
+    signalCancelStarted = resolve
+  })
   const seeded = makeSeededRecoveryState()
-  const {
-    engine,
-    accountedFills,
-    pauses,
-    cancellationIds
-  } = await createHarness({
+  const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -4720,24 +4722,24 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
     onCancelOrderStarted: () => signalCancelStarted(),
     accountingApplied: true,
   })
-
-  await engine.processMarketPrice({
+  await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
-  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(buyOrder)
   assert.ok(sellOrder)
-
-  const buyTransition = engine.processUserDataEvent({
+  const buyTransition = harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: buyOrder }),
+      executedOrder: makeFilledOrder({
+        order: buyOrder,
+      }),
       fill: makeBuyFill({
         order: buyOrder,
         tradeId: "buy-triggering-recovery-sell-cancel",
@@ -4748,17 +4750,16 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
     },
   })
   await cancelStarted
-
   const sellFill = makeSellFill({
     order: sellOrder,
     tradeId: "recovery-cancel-fill-sell",
     quantity: "0.1",
     quoteQuantity: multiplyDecimal({
       left: sellOrder.limitPrice.amount,
-      right: "0.1"
+      right: "0.1",
     }),
   })
-  const lateSellEvent = engine.processUserDataEvent({
+  const lateSellEvent = harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
@@ -4769,24 +4770,39 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
       fill: sellFill,
     },
   })
-
   releaseCancel()
-  const [buyResult, lateResult] = await Promise.all([buyTransition, lateSellEvent])
+  const [buyResult, lateResult] = await Promise.all([
+    buyTransition,
+    lateSellEvent,
+  ])
+  return {
+    harness,
+    buyResult,
+    lateResult,
+    sellOrder,
+  }
+}
 
+function assertRecoverySellCancellationFillAppliedOnce({ harness, buyResult, lateResult, sellOrder }) {
   assert.equal(buyResult.ok, true)
   assert.equal(buyResult.data.reevaluate, true)
   assert.equal(lateResult.ok, true)
   assert.equal(lateResult.data.ignored, true)
-  assert.deepEqual(cancellationIds, [sellOrder.brokerOrderId])
-  const canceledSellTradeId = `recovery-cancel-fill-sell-${sellOrder.brokerOrderId}`
-  assert.equal(accountedFills.filter((fill) => fill.tradeId === canceledSellTradeId).length, 1)
-  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), [
+  assert.deepEqual(harness.cancellationIds, [sellOrder.brokerOrderId])
+  const canceledSellTradeId = "recovery-cancel-fill-sell-" + sellOrder.brokerOrderId
+  assert.equal(harness.accountedFills.filter((fill) => fill.tradeId === canceledSellTradeId).length, 1)
+  assert.deepEqual(harness.accountedFills.map((fill) => fill.tradeId), [
     "buy-triggering-recovery-sell-cancel",
     canceledSellTradeId,
   ])
-  assert.deepEqual(pauses, [])
-})
+  assert.deepEqual(harness.pauses, [])
+}
 
+
+test("accounts a recovery SELL fill during cancellation once when its late stream event is replayed", async () => {
+  const scenario = await runRecoverySellCancellationFillReplayScenario()
+  assertRecoverySellCancellationFillAppliedOnce(scenario)
+})
 
 function makeOpenOrder({
   order,
