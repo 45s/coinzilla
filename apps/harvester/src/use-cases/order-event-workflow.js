@@ -41,21 +41,14 @@ export function makeOrderEventWorkflow({
   publishRecoveryCycleNotCompleted,
   isStopping,
 } = {}) {
-  const processExecutionFillTransition = async ({
-    order,
-    fill
-  } = {}) => {
+  const processExecutionFillTransition = async ({ order, fill } = {}) => {
     try {
       if (!(fill instanceof Fill)) {
         const error = new TypeError("TRADE event requires a canonical Fill")
         publishLifecycleEvent({
           eventPublisher,
           eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
-          dataResult: mapExecutionInvalidFillData({
-            order,
-            reason: "MISSING_FILL",
-            error
-          }),
+          dataResult: mapExecutionInvalidFillData({ order, reason: "MISSING_FILL", error }),
         })
         return failureResult({
           error,
@@ -80,18 +73,9 @@ export function makeOrderEventWorkflow({
         publishLifecycleEvent({
           eventPublisher,
           eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
-          dataResult: mapExecutionInvalidFillData({
-            order,
-            fill,
-            reason: "IDENTITY_MISMATCH",
-            error
-          }),
+          dataResult: mapExecutionInvalidFillData({ order, fill, reason: "IDENTITY_MISMATCH", error }),
         })
-        await pause({
-          symbol,
-          reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH",
-          error
-        })
+        await pause({ symbol, reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH", error })
         return failureResult({
           error,
           category: "OWNERSHIP_INTEGRITY",
@@ -105,17 +89,9 @@ export function makeOrderEventWorkflow({
         publishLifecycleEvent({
           eventPublisher,
           eventName: HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED,
-          dataResult: mapExecutionAccountingFailedData({
-            order,
-            fill,
-            error
-          }),
+          dataResult: mapExecutionAccountingFailedData({ order, fill, error }),
         })
-        await pause({
-          symbol,
-          reason: "EXECUTION_ACCOUNTING_FAILED",
-          error
-        })
+        await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
         return failureResult({
           errors: accounting?.errors ?? [error],
           category: "ACCOUNTING_INTEGRITY",
@@ -142,10 +118,7 @@ export function makeOrderEventWorkflow({
           dataResult: mapDuplicateFillData({ fill }),
         })
       }
-      return toResult({ data: {
-        applied: accounting.data?.applied === true,
-        duplicate: accounting.data?.duplicate === true
-      } })
+      return toResult({ data: { applied: accounting.data?.applied === true, duplicate: accounting.data?.duplicate === true } })
     } catch (error) {
       return failureResult({
         error,
@@ -170,11 +143,7 @@ export function makeOrderEventWorkflow({
   } = {}) => { // eslint-disable-line complexity, max-lines-per-function, max-statements -- serialized event transition preserves fill and order-state invariants.
     try {
       if (event?.eventType === "executionReport" && event?.brokerEvidence) {
-        publishLifecycleEvent({
-          eventPublisher,
-          eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT,
-          dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence })
-        })
+        publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT, dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence }) })
       }
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
@@ -203,15 +172,9 @@ export function makeOrderEventWorkflow({
         ].some(isHarvesterClientOrderId)
         const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
         if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
-          return toResult({ data: {
-            ignored: true,
-            externalOrder: true
-          } })
+          return toResult({ data: { ignored: true, externalOrder: true } })
         }
-        await pause({
-          symbol,
-          reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT"
-        })
+        await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
         return failureResult({
           error: new Error("Order update does not belong to a Harvester order"),
           category: "OWNERSHIP_INTEGRITY",
@@ -221,32 +184,17 @@ export function makeOrderEventWorkflow({
       }
       state.registry = update.registry
       if (update.applied === true) {
-        publishLifecycleEvent({
-          eventPublisher,
-          eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
-          dataResult: mapOrderUpdatedData({
-          order,
-          executionType: event.executionType,
-          evidence: event.brokerEvidence
-        })
-        })
+        publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED, dataResult: mapOrderUpdatedData({ order, executionType: event.executionType, evidence: event.brokerEvidence }) })
       }
 
       if (state.reconciledTerminalOrderClientIds.delete(order.clientOrderId)) {
-        return toResult({ data: {
-          ignored: true,
-          terminalStateAlreadyReconciled: true
-        } })
+        return toResult({ data: { ignored: true, terminalStateAlreadyReconciled: true } })
       }
 
       if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
         const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
-        await pause({
-          symbol,
-          reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY",
-          error
-        })
+        await pause({ symbol, reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY", error })
         return failureResult({
           error,
           category: "OWNERSHIP_INTEGRITY",
@@ -256,20 +204,14 @@ export function makeOrderEventWorkflow({
       }
 
       if (recoveryMode && order.status === "CANCELED" &&
-          compareDecimal({
-            left: order.executedQuantity.amount,
-            right: "0"
-          }) === 0) {
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
         if (resolveRecoveryManagedCancellation({ order })) {
           state.deferredEvaluations.add(symbol)
         }
       }
 
       if (event.executionType === "TRADE") {
-        const fillResult = await processExecutionFillTransition({
-          order,
-          fill: event.fill
-        })
+        const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
         if (!fillResult.ok) {return fillResult}
       }
 
@@ -287,33 +229,15 @@ export function makeOrderEventWorkflow({
         if (!isUnprocessedFill) {
           if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
-            const cancellation = await cancelAndReconcileRecoverySells({
-              symbol,
-              marketId: order.market.id
-            })
-            if (!cancellation.ok) {return withFailure(cancellation, {
-              category: "ORDER_TRANSITION",
-              stage: "RECOVERY_SELL_CANCELLATION",
-              retryable: true
-            })}
+            const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
+            if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
             if (cancellation.data?.deferred === true) {
-              return toResult({ data: {
-                ignored: true,
-                replacementDeferred: true
-              } })
+              return toResult({ data: { ignored: true, replacementDeferred: true } })
             }
             state.replacementIntents.delete(symbol)
             const replacement = await evaluateLatestTransition({ symbol })
-            if (!replacement.ok) {return withFailure(replacement, {
-              category: "ORDER_TRANSITION",
-              stage: "RECOVERY_SELL_REPLACEMENT",
-              retryable: true
-            })}
-            return toResult({ data: {
-              ignored: true,
-              recoverySellReplaced: true,
-              ...replacement.data
-            } })
+            if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
+            return toResult({ data: { ignored: true, recoverySellReplaced: true, ...replacement.data } })
           }
           return toResult({ data: { ignored: true } })
         }
@@ -332,29 +256,14 @@ export function makeOrderEventWorkflow({
           symbol,
           marketId: order.market.id,
         })
-        if (!cancellation.ok) {return withFailure(cancellation, {
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_CANCELLATION",
-          retryable: true
-        })}
+        if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
         if (cancellation.data?.deferred === true) {
-          return toResult({ data: {
-            order,
-            replacementDeferred: true
-          } })
+          return toResult({ data: { order, replacementDeferred: true } })
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) {return withFailure(replacement, {
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_REPLACEMENT",
-          retryable: true
-        })}
-        return toResult({ data: {
-          order,
-          recoverySellReplaced: true,
-          ...replacement.data
-        } })
+        if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
+        return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
       }
       if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
           isStopping?.()) {
@@ -374,25 +283,13 @@ export function makeOrderEventWorkflow({
           symbol,
           marketId: order.market.id,
         })
-        if (!cancellation.ok) {return withFailure(cancellation, {
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_CANCELLATION",
-          retryable: true
-        })}
+        if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
         if (cancellation.data?.deferred === true) {
-          return toResult({ data: {
-            order,
-            replacementDeferred: true,
-            waitingForFullFill: true
-          } })
+          return toResult({ data: { order, replacementDeferred: true, waitingForFullFill: true } })
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) {return withFailure(replacement, {
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_REPLACEMENT",
-          retryable: true
-        })}
+        if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
         return toResult({
           data: {
             ...replacement.data,
@@ -403,22 +300,13 @@ export function makeOrderEventWorkflow({
         })
       }
       if (order.status === "PARTIALLY_FILLED") {
-        return toResult({ data: {
-          order,
-          waitingForFullFill: true
-        } })
+        return toResult({ data: { order, waitingForFullFill: true } })
       }
       if (order.side === "BUY" &&
           ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
-          compareDecimal({
-            left: order.executedQuantity.amount,
-            right: "0"
-          }) > 0) {
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0) {
         if (isStopping?.()) {state.shutdownRecoveryReplanSymbols.add(symbol)}
-        await pause({
-          symbol,
-          reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
-        })
+        await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
         return failureResult({
           error: new Error("Partially filled order canceled; pair paused for review"),
           category: "ACCOUNTING_INTEGRITY",
@@ -427,10 +315,7 @@ export function makeOrderEventWorkflow({
         })
       }
       if (!["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
-        return toResult({ data: {
-          order,
-          waitingForTerminalState: true
-        } })
+        return toResult({ data: { order, waitingForTerminalState: true } })
       }
       if (order.status === "FILLED" && order.side === "BUY") {
         if (recoveryMode) {resolveRecoveryManagedCancellation({ order })}
@@ -440,11 +325,7 @@ export function makeOrderEventWorkflow({
           try {
             executionPrice = getReconciledBuyExecutionPrice({ order })
           } catch (error) {
-            await pause({
-              symbol,
-              reason: "BUY_FILL_RECONCILIATION_FAILED",
-              error
-            })
+            await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
             return failureResult({
               error,
               category: "ACCOUNTING_INTEGRITY",
@@ -468,11 +349,7 @@ export function makeOrderEventWorkflow({
         try {
           executionPrice = getReconciledBuyExecutionPrice({ order })
         } catch (error) {
-          await pause({
-            symbol,
-            reason: "BUY_FILL_RECONCILIATION_FAILED",
-            error
-          })
+          await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
           return failureResult({
             error,
             category: "ACCOUNTING_INTEGRITY",
@@ -485,11 +362,7 @@ export function makeOrderEventWorkflow({
             symbol,
             marketId: order.market.id,
           })
-          if (!cancellation.ok) {return withFailure(cancellation, {
-            category: "ORDER_TRANSITION",
-            stage: "RECOVERY_SELL_CANCELLATION",
-            retryable: true
-          })}
+          if (!cancellation.ok) {return withFailure(cancellation, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_CANCELLATION", retryable: true })}
         }
         state.trailingBuy.set(symbol, false)
         state.buyReferenceOverrides.delete(symbol)
@@ -497,14 +370,8 @@ export function makeOrderEventWorkflow({
         state.buyExecutionTotals.delete(order.brokerOrderId)
       }
       if (order.status === "REJECTED") {
-        await pause({
-          symbol,
-          reason: "ORDER_REJECTED"
-        })
-        return toResult({ data: {
-          order,
-          paused: true
-        } })
+        await pause({ symbol, reason: "ORDER_REJECTED" })
+        return toResult({ data: { order, paused: true } })
       }
       if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
         if (recoveryMode) {
@@ -522,11 +389,7 @@ export function makeOrderEventWorkflow({
         }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
-        if (!replacement.ok) {return withFailure(replacement, {
-          category: "ORDER_TRANSITION",
-          stage: "RECOVERY_SELL_REPLACEMENT",
-          retryable: true
-        })}
+        if (!replacement.ok) {return withFailure(replacement, { category: "ORDER_TRANSITION", stage: "RECOVERY_SELL_REPLACEMENT", retryable: true })}
         return toResult({
           data: {
             ...replacement.data,
@@ -548,11 +411,7 @@ export function makeOrderEventWorkflow({
         try {
           assertReconciledSellExecution({ order })
         } catch (error) {
-          await pause({
-            symbol,
-            reason: "SELL_FILL_RECONCILIATION_FAILED",
-            error
-          })
+          await pause({ symbol, reason: "SELL_FILL_RECONCILIATION_FAILED", error })
           return failureResult({
             error,
             category: "ACCOUNTING_INTEGRITY",
@@ -567,11 +426,7 @@ export function makeOrderEventWorkflow({
           sellOrder: order,
         })
         if (!completion?.ok) {
-          await pause({
-            symbol,
-            reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED",
-            error: completion?.errors?.[0]
-          })
+          await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return failureResult({
             errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")],
             category: "ACCOUNTING_INTEGRITY",
@@ -580,10 +435,7 @@ export function makeOrderEventWorkflow({
           })
         }
         if (!completion.data?.eligible) {
-          publishRecoveryCycleNotCompleted({
-            order,
-            completion
-          })
+          publishRecoveryCycleNotCompleted({ order, completion })
           if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
               completion.data?.pause === false) {
             // Keep the original cost/proceeds basis. The next serialized
@@ -600,10 +452,7 @@ export function makeOrderEventWorkflow({
               },
             })
           }
-          await pause({
-            symbol,
-            reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED"
-          })
+          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED" })
           return failureResult({
             error: new Error("Recovery cycle did not meet completion conditions"),
             category: "ACCOUNTING_INTEGRITY",
@@ -632,10 +481,7 @@ export function makeOrderEventWorkflow({
       if (recoveryMode) {
         state.deferredEvaluations.add(symbol)
       }
-      return toResult({ data: {
-        order,
-        reevaluate: true
-      } })
+      return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
       return failureResult({
         error,
