@@ -661,6 +661,20 @@ async function finishFilledRecoverySell({ context, order, symbol }) {
   })
 }
 
+function publishRecoverySellCancellationOutcome({ context, order, canceledOrder }) {
+  if (canceledOrder.status === "CANCELED") {
+    context.publishOrderCancelled({
+      order: canceledOrder,
+    })
+    return
+  }
+  context.publishOrderCancelFailed({
+    order: canceledOrder,
+    outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
+    error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
+  })
+}
+
 async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
   const update = context.state.registry.applyUpdate({
     order: canceledOrder,
@@ -699,17 +713,11 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
       error: new Error("Recovery SELL cancellation did not reach a terminal state"),
     })
   }
-  if (canceledOrder.status === "CANCELED") {
-    context.publishOrderCancelled({
-      order: canceledOrder,
-    })
-  } else {
-    context.publishOrderCancelFailed({
-      order: canceledOrder,
-      outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
-      error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
-    })
-  }
+  publishRecoverySellCancellationOutcome({
+    context,
+    order,
+    canceledOrder,
+  })
   const terminalReconciliation = await context.reconcileTerminalOrderFills({
     order: canceledOrder,
   })
@@ -816,6 +824,20 @@ async function cancelRecoverySells({ context, symbol, marketId }) {
 }
 
 
+function publishTrailingBuyCancellationOutcome({ context, canceledOrder }) {
+  if (canceledOrder.status === "CANCELED") {
+    context.publishOrderCancelled({
+      order: canceledOrder,
+    })
+    return
+  }
+  context.publishOrderCancelFailed({
+    order: canceledOrder,
+    outcome: "NOT_CANCELED",
+    error: new Error("Trailing BUY completed instead of being canceled"),
+  })
+}
+
 async function cancelTrailingBuyOrder({ context, symbol, order }) {
   const eligibility = await context.ensureCancellationEligible({
     symbol,
@@ -888,17 +910,10 @@ async function cancelTrailingBuyOrder({ context, symbol, order }) {
     })
   }
   context.state.registry = update.registry
-  if (canceledOrder.status === "CANCELED") {
-    context.publishOrderCancelled({
-      order: canceledOrder,
-    })
-  } else {
-    context.publishOrderCancelFailed({
-      order: canceledOrder,
-      outcome: "NOT_CANCELED",
-      error: new Error("Trailing BUY completed instead of being canceled"),
-    })
-  }
+  publishTrailingBuyCancellationOutcome({
+    context,
+    canceledOrder,
+  })
   return toResult({
     data: {
       canceledOrder,
