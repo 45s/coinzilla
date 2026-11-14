@@ -45,6 +45,10 @@ export async function runConfigSymbol({
   writeLine("")
   writeLine("Token specification preview — apps/harvester/token-specification.json:")
   writeLine(JSON.stringify(preview, null, 2))
+  if (Array.isArray(metadata.unvalidatedConstraints) && metadata.unvalidatedConstraints.length > 0) {
+    writeLine("Public exchange constraints not evaluated by the generator (diagnostic only):")
+    writeLine(JSON.stringify(metadata.unvalidatedConstraints, null, 2))
+  }
   const confirmation = (await ask("Add or refresh this market in the shared token specification? [Y/n]: ")).trim().toLowerCase()
   if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
     writeLine("Cancelled. No token specification file was changed.")
