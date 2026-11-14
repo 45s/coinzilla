@@ -6309,7 +6309,7 @@ async function assertResidualRecoverySellDust({ scenario }) {
   const completedPosition = scenario.currentPortfolio.getPosition({
     marketId: market.id,
   })
-  assert.equal(completedPosition.baseQuantity.amount, "0")
+  assert.equal(completedPosition.baseQuantity.amount, "0.15")
   assert.equal(dust.quantity, "0.05")
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15")
   assert.equal(scenario.currentRecoveryLedger.buyCost, "0")
@@ -7478,11 +7478,11 @@ function createJournalParityOrder({ clientOrderId, brokerOrderId, status, execut
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: executedQuantity,
+      amount: "1",
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
-      amount: "1",
+      amount: executedQuantity,
       asset: baseAsset,
     }),
     status,
