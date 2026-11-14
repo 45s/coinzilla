@@ -56,7 +56,7 @@ test("inserts a pair into an empty pairs object", () => {
 
 test("rejects a missing or ambiguous pairs object instead of guessing where to write", () => {
   const missingPairsSource = source.replace("  pairs: {", "  markets: {")
-  const duplicatePairsSource = source.replace("  },\n};", "  },\n  pairs: {},\n};")
+  const duplicatePairsSource = source.replace("  pairs: {", "  pairs: {},\n  pairs: {")
 
   assert.throws(
     () => insertPairConfiguration({ source: missingPairsSource, symbol: "ADAFDUSD", pairConfig }),

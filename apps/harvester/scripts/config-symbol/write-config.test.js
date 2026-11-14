@@ -169,7 +169,7 @@ test("rejects malformed JavaScript without replacing the operator's original sou
 })
 
 test("rejects an ambiguous pairs object without changing the original source module", async () => {
-  const source = createConfigSource().replace("\n};\n", "\n  pairs: {},\n};\n")
+  const source = createConfigSource().replace("  pairs: {", "  pairs: {},\n  pairs: {")
   await withConfigFile(async ({ configPath }) => {
     const before = await readFile(configPath, "utf8")
     await assert.rejects(
