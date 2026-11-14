@@ -19,7 +19,7 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
 2. [x] **RS-2a — Shared Portfolio foundation:** merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118). One Portfolio now supports multiple independently owned Positions per market and multiple Positions per strategy; canonical fill ownership/deduplication, aggregate market inventory, centralized custody/reservation boundaries and CG ownership-scoped consumers are covered.
-3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, configured historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. The operator-config-before-start authorization model, additive per-cycle `sellQuantity`, smaller-legacy-remainder behavior, recovery-only continuation after legacy exhaustion, Conservative-aligned BUY cadence/investment limit/third-asset fee valuation, and FITDIB deferral of advanced lifecycle features are agreed. Remaining accounting and shared-resource implementation requirements must be completed before policy integration.
+3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, one fixed original average cost, decreasing remaining legacy quantity, recovery tranches, custody and independent recovery/legacy profitability gates. The operator-config-before-start authorization model, additive per-cycle `sellQuantity`, smaller-legacy-remainder behavior, recovery-only continuation after legacy exhaustion, Conservative-aligned BUY cadence/investment limit/third-asset fee valuation, and FITDIB deferral of advanced lifecycle features are agreed. Remaining accounting and shared-resource implementation requirements must be completed before policy integration.
 4. Implement the pure RS strategy policy.
 5. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
 6. Prove the full lifecycle with deterministic offline tests and exact-head CI.
@@ -166,7 +166,7 @@ Required test families:
 - Spot/EARN custody separation, transfers and insufficient Spot quantity.
 - Recovery BUY fills, partial fills, actual commissions and cost basis.
 - Profitable recovery tranche paired with a loss-making legacy slice.
-- Mixed SELL execution must identify the actual legacy quantity disposed so it can be deducted exactly once; do not recalculate legacy average cost.
+- After each successful cycle, deduct the actual legacy quantity sold from the remaining legacy quantity exactly once; never recalculate the original average cost.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
 - Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries, including remaining legacy quantity below `sellQuantity`; verify smaller remainder is sold only when both profitability gates and exchange filters pass, otherwise retained. Constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
