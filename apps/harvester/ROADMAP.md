@@ -23,9 +23,9 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 All items remain open. A documentation PR or a clean offline audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
-## P3 — Operational State Store source naming — in progress
+## P3 — Operational State Store source naming — COMPLETE
 
-- [~] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Rename the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; update all consumers and current architecture documentation. Preserve the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation is part of this refactor. Implemented in [PR #1108](https://github.com/45s/coinzilla/pull/1108); awaiting exact-head CI and review.
+- [x] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Renamed the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; updated consumers and current architecture documentation. Preserved the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation was performed. Merged in [PR #1108](https://github.com/45s/coinzilla/pull/1108) as `c94a5489c1cc9de721b37879701a96cedc6ae399`; all eight exact-head GitHub Actions workflows passed.
 
 ---
 
