@@ -34,7 +34,7 @@ OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \
 On Windows PowerShell:
 
 ```powershell
-$env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
+$env:OPERATIONAL_STATE_DIRECTORY = "C:\coinzilla-data\operational-state"
 pnpm run recovery:market -- --context .\recovery-evidence\linkusdt.json --confirm
 ```
 
