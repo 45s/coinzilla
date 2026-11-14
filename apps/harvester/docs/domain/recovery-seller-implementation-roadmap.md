@@ -38,7 +38,7 @@ Concurrent operation is a product requirement, not an optional future optimizati
 - A pause/disable for one strategy does not implicitly pause/disable the other; existing orders remain owned and reconcilable by their originating strategy.
 - Same-market concurrent tests must prove multiple independent Positions can coexist, no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to multiple Positions or strategies.
 
-The shared Portfolio is actual-accounting truth. Strategy-owned Positions are independent accounting allocations inside that one Portfolio, not separate wallets or duplicated exchange custody. Their aggregate remains bounded by authoritative exchange balances and centrally aggregated reservations. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-4, but mutual exclusion is not an acceptable shortcut.
+The shared Portfolio is actual-accounting truth. Strategy-owned Positions are independent accounting allocations inside that one Portfolio, not separate wallets or duplicated exchange custody. Their aggregate remains bounded by authoritative exchange balances and centrally aggregated reservations. RS-2 now implements stable Position identity, strategy ownership, portfolio-wide fill attribution/deduplication, aggregate market inventory and CG ownership-scoped Portfolio consumers; RS-specific legacy/cycle accounting remains in progress and exact priority/fairness remain RS-4 decisions.
 
 ## RS-1 — Conservative source audit and reuse map
 
@@ -188,7 +188,7 @@ Reuse the existing Trading Engine, broker port/adapter, canonical order/fill ide
 - They may operate on different markets or on the same market when both pair configurations enable them.
 - Do not introduce a global or per-market exclusive strategy lock or require a handoff before RS can run.
 - Each strategy owns its own policy state, cycle attribution and submitted order identities.
-- The shared Portfolio remains the only actual Position per market. Each canonical fill updates it exactly once and is attributed to the originating strategy.
+- The shared Portfolio is the only actual Portfolio aggregate, not one Position per market. It may contain multiple independent Positions for the same market; each canonical fill updates exactly one correctly identified Position and the aggregate Portfolio exactly once and is attributed to the originating strategy.
 - The Trading Engine serializes intent allocation, broker submission and fill/accounting commits. Aggregate quote and base reservations across all active strategies before accepting another intent.
 - Competing intents must have deterministic allocation/priority behavior. Insufficient shared inventory or quote commitment defers/rejects the relevant intent with its strategy identity preserved.
 - One strategy's pause/disable does not implicitly pause/disable the other. Existing orders remain owned by their originating strategy and are reconciled normally.
@@ -236,7 +236,7 @@ flowchart TB
   end
   subgraph app["Existing Harvester application"]
     ENGINE["Shared Trading Engine / serialized workflows"]
-    PORTFOLIO["One actual Portfolio Position per market"]
+    PORTFOLIO["One shared Portfolio; multiple strategy-owned Positions per market"]
     ATTRIBUTION["Independent strategy attribution"]
     RESERVATIONS["Central quote/base reservations across strategies"]
     BROKER["Shared broker port and adapter"]

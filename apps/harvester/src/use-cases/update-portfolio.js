@@ -7,11 +7,11 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
  * Portfolio owns the state transition; this use case coordinates validation
  * and translates expected workflow failures into the shared result shape.
  */
-export function updatePortfolio({ portfolio, fill } = {}) {
+export function updatePortfolio({ portfolio, fill, positionId, strategyId } = {}) {
   try {
     if (!(portfolio instanceof Portfolio)) throw new TypeError("updatePortfolio requires a Portfolio")
     if (!(fill instanceof Fill)) throw new TypeError("updatePortfolio requires a canonical Fill")
-    const result = portfolio.applyFill({ fill })
+    const result = portfolio.applyFill({ fill, positionId, strategyId })
     return toResult({
       data: {
         portfolio: result.portfolio,

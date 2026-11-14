@@ -253,7 +253,7 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const portfolio = new Portfolio().applyFill({ fill: priorDogeBuy }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: priorDogeBuy, strategyId: "CG_coinGrabber" }).portfolio
   const { engine, orders } = await createHarness({
     quoteFreeBalance: "150",
     portfolio,
@@ -591,8 +591,8 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const portfolio = new Portfolio().applyFill({ fill: recoveryFill }).portfolio
-  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill }).ledger
+  const portfolio = new Portfolio().applyFill({ fill: recoveryFill, strategyId: "CG_coinGrabber" }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill, strategyId: "CG_coinGrabber" }).ledger
   const strategyPolicy = {
     evaluate: ({ marketPrice }) => {
       const buy = {

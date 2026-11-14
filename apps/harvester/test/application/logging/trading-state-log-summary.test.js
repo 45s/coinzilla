@@ -132,3 +132,33 @@ test("Portfolio Stats contains only Portfolio inventory and accounting values", 
     },
   })
 })
+
+
+test("portfolio log summary selects one Position when a strategy owns multiple Positions for the market", () => {
+  const selectedPosition = {
+    ...position,
+    positionId: "position:rs:cycle-2",
+    strategyId: "RS_recoverySeller",
+  }
+  const portfolio = {
+    appliedFillIds: ["fill-1"],
+    getPosition: (selection) => {
+      assert.deepEqual(selection, {
+        positionId: "position:rs:cycle-2",
+        marketId: position.market.id,
+        strategyId: "RS_recoverySeller",
+      })
+      return selectedPosition
+    },
+  }
+
+  const summary = createPortfolioLogSummary({
+    portfolio,
+    marketId: position.market.id,
+    positionId: selectedPosition.positionId,
+    strategyId: selectedPosition.strategyId,
+  })
+
+  assert.equal(summary.position.positionId, selectedPosition.positionId)
+  assert.equal(summary.position.strategyId, selectedPosition.strategyId)
+})

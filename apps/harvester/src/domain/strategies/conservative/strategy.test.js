@@ -47,8 +47,8 @@ function makeBoughtState({ quoteCommission = "0" } = {}) {
     ],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio().applyFill({ fill }).portfolio
-  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({ fill }).ledger
+  const portfolio = new Portfolio().applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
   return { portfolio, recoveryLedger }
 }
 
@@ -346,8 +346,8 @@ function makeProfitableResidualState({
     commissionStatus: "COMPLETE",
   })
   return {
-    portfolio: bought.portfolio.applyFill({ fill }).portfolio,
-    recoveryLedger: bought.recoveryLedger.applyFill({ fill }).ledger,
+    portfolio: bought.portfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio,
+    recoveryLedger: bought.recoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger,
   }
 }
 
@@ -429,8 +429,8 @@ test("combines exchange-constrained dust with a later BUY and preserves the full
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = dustState.portfolio.applyFill({ fill: laterBuy }).portfolio
-  const recoveryLedger = dustState.recoveryLedger.applyFill({ fill: laterBuy }).ledger
+  const portfolio = dustState.portfolio.applyFill({ fill: laterBuy, strategyId: "CG_coinGrabber" }).portfolio
+  const recoveryLedger = dustState.recoveryLedger.applyFill({ fill: laterBuy, strategyId: "CG_coinGrabber" }).ledger
   const position = portfolio.getPosition({ symbol: market.symbol })
 
   assert.equal(position.quantity.amount, "101.05")
@@ -806,8 +806,8 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
   let portfolio = new Portfolio()
   let recoveryLedger = RecoveryLedger.empty({ market: dogeMarket })
   const apply = (fill) => {
-    portfolio = portfolio.applyFill({ fill }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({ fill }).ledger
+    portfolio = portfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
+    recoveryLedger = recoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
   }
 
   for (const [tradeId, price, quote] of [
@@ -914,8 +914,8 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
   let portfolio = new Portfolio()
   let recoveryLedger = RecoveryLedger.empty({ market: zroMarket })
   const apply = (fill) => {
-    portfolio = portfolio.applyFill({ fill }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({ fill }).ledger
+    portfolio = portfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
+    recoveryLedger = recoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
   }
 
   for (const [tradeId, price, quote] of [

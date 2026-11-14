@@ -20,21 +20,21 @@ const fill = new Fill({
 })
 
 test("returns an updated Portfolio after applying a normalized Fill", () => {
-  const result = updatePortfolio({ portfolio: new Portfolio(), fill })
+  const result = updatePortfolio({ strategyId: "CG_coinGrabber", portfolio: new Portfolio(), fill })
   assert.equal(result.ok, true)
   assert.equal(result.data.applied, true)
   assert.equal(result.data.portfolio.getPosition({ symbol: "XUSD" }).baseQuantity.amount, "2")
 })
 
 test("returns duplicate status without applying the same Fill twice", () => {
-  const first = updatePortfolio({ portfolio: new Portfolio(), fill })
-  const second = updatePortfolio({ portfolio: first.data.portfolio, fill })
+  const first = updatePortfolio({ strategyId: "CG_coinGrabber", portfolio: new Portfolio(), fill })
+  const second = updatePortfolio({ strategyId: "CG_coinGrabber", portfolio: first.data.portfolio, fill })
   assert.equal(second.ok, true)
   assert.equal(second.data.duplicate, true)
   assert.equal(second.data.portfolio.getPosition({ symbol: "XUSD" }).baseQuantity.amount, "2")
 })
 
 test("returns explicit failures for invalid portfolio or fill inputs", () => {
-  assert.equal(updatePortfolio({ portfolio: {}, fill }).ok, false)
-  assert.equal(updatePortfolio({ portfolio: new Portfolio(), fill: {} }).ok, false)
+  assert.equal(updatePortfolio({ strategyId: "CG_coinGrabber", portfolio: {}, fill }).ok, false)
+  assert.equal(updatePortfolio({ strategyId: "CG_coinGrabber", portfolio: new Portfolio(), fill: {} }).ok, false)
 })

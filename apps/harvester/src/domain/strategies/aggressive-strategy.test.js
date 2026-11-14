@@ -32,7 +32,7 @@ test("is the active Aggressive policy and blocks unsafe initial grid assumptions
 })
 
 test("exposes the current Position and blocks unresolved SELL pricing", () => {
-  const portfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).portfolio
   const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },
@@ -45,9 +45,9 @@ test("exposes the current Position and blocks unresolved SELL pricing", () => {
 
 test("treats zero active quantity with retained free inventory as no active Position", () => {
   const portfolioWithFreeInventory = new Portfolio()
-    .applyFill({ fill: buyFill })
+    .applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" })
     .portfolio
-    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5", strategyId: "CG_coinGrabber" })
 
   const decision = evaluateAggressiveStrategy({
     marketPrice,
@@ -63,9 +63,9 @@ test("treats zero active quantity with retained free inventory as no active Posi
 
 test("uses exact decimal active-quantity comparison for Aggressive inventory gating", () => {
   const zeroQuantityPosition = new Portfolio()
-    .applyFill({ fill: buyFill })
+    .applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" })
     .portfolio
-    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5", strategyId: "CG_coinGrabber" })
   const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },

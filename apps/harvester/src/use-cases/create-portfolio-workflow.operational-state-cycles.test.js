@@ -27,8 +27,8 @@ const makeFill = ({ tradeId, side, price, quantity, quoteQuantity }) => new Fill
 })
 const buyFill = makeFill({ tradeId: "cycle-buy", side: "BUY", price: "100", quantity: "2", quoteQuantity: "200" })
 const sellFill = makeFill({ tradeId: "cycle-sell", side: "SELL", price: "210", quantity: "1", quoteQuantity: "210" })
-const initialPortfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio.applyFill({ fill: sellFill }).portfolio
-const initialLedger = RecoveryLedger.empty({ market }).applyFill({ fill: buyFill }).ledger.applyFill({ fill: sellFill }).ledger
+const initialPortfolio = new Portfolio().applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).portfolio.applyFill({ fill: sellFill, strategyId: "CG_coinGrabber" }).portfolio
+const initialLedger = RecoveryLedger.empty({ market }).applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).ledger.applyFill({ fill: sellFill, strategyId: "CG_coinGrabber" }).ledger
 const sellOrder = new CanonicalOrder({
   clientOrderId: "client-cycle-sell",
   brokerOrderId: "broker-cycle-sell",

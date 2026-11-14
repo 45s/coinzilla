@@ -104,7 +104,7 @@ The current Aggressive model uses one shared inventory pool inside the CG-owned 
 
 All strategy Positions share the same underlying exchange account. For a market, aggregate tracked base quantity is the sum of each Position's `totalBaseQuantity`; account-level snapshots aggregate all Positions by canonical asset ID. A separate strategy Position must never increase the balance available for a SELL.
 
-The Trading Engine and `allocate-order-commitments` remain responsible for shared quote/base commitments. They aggregate active and in-flight BUY/SELL reservations across CG, RS, and other active strategies before accepting another intent. Pair/strategy-specific investment and active-inventory limits are additional constraints, not substitutes for shared account availability.
+The Trading Engine and `allocate-order-commitments` remain responsible for shared quote/base commitments. They aggregate active and in-flight BUY/SELL reservations across CG, RS, and other active strategies before accepting another intent. A regression verifies that the combined CG and RS SELL reservations exhaust the same shared market/account inventory and reject an additional overcommitting SELL because combined reservations leave only one unit of active market inventory, below the requested SELL quantity. Pair/strategy-specific investment and active-inventory limits are additional constraints, not substitutes for shared account availability.
 
 Snapshot-relative account reconciliation continues to use total Portfolio base quantity, quote cash flow, and active-order commitments by asset. It adjusts exchange free balances only by post-snapshot deltas so existing exchange locks are not subtracted twice. This behavior is covered by the account snapshot baseline implementation and [PR #968](https://github.com/45s/coinzilla/pull/968); [issue #955](https://github.com/45s/coinzilla/issues/955) is closed.
 
@@ -117,7 +117,7 @@ A Fill is an execution fact, not an order intention. It carries normalized infor
 - actual commission amount and asset, when charged;
 - stable canonical execution identity (market ID plus exchange trade ID).
 
-The application supplies the originating `positionId` and `strategyId` from the order's ownership record. These attribution facts are not inferred from the market symbol or the Fill's quantity. The same canonical Fill ID can belong to only one Position/strategy attribution in a Portfolio.
+The application supplies the originating `positionId` and `strategyId` from the order's ownership record. When a strategy has one Position per market, `createPositionId({ marketId, strategyId })` provides its stable default identity; strategies with multiple Positions supply the explicit ID. These attribution facts are not inferred from the market symbol or the Fill's quantity. The same canonical Fill ID can belong to only one Position/strategy attribution in a Portfolio.
 
 The broker adapter translates exchange-specific payloads into the canonical Fill shape and validates them at the boundary. Strategy ownership remains an application/domain fact, not a raw Binance message field.
 
@@ -153,7 +153,7 @@ Use object-input/object-output functions and `toResult` for use-case outcomes. K
 - Deduplicate canonical Fill IDs portfolio-wide and retain the accepted `positionId`/`strategyId` attribution. Identical replays for the same owner are ignored; changed facts or a different owner fail closed.
 - Reject unknown Position IDs, market/owner mismatches, invalid quantities, unsupported commission assets, and impossible Position transitions.
 - Use exact decimal arithmetic for all quantities and quote/commission calculations.
-- A market-only Position lookup must fail closed when multiple Positions match; callers must specify enough identity to select exactly one.
+- A market-only Position lookup must fail closed when multiple Positions match; callers must specify enough identity to select exactly one. Position log summaries accept an explicit `positionId` so multiple same-market Positions owned by one strategy remain individually observable.
 - Do not mutate shared Portfolio state concurrently without an explicit serialization/consistency policy.
 - Keep durable persistence and process-restart recovery separate from the in-memory domain model. Runtime restoration remains disabled under ADR-0001 until its separate acceptance gates pass.
 

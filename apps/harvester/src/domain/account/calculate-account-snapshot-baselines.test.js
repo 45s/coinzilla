@@ -42,12 +42,12 @@ function makeOrder({ market, clientOrderId, side, originalQuantity, executedQuan
 
 test("aggregates Portfolio and active-order baselines by shared exchange asset", () => {
   const portfolio = new Portfolio()
-    .applyFill({ fill: makeBuyFill({ market: btcMarket, tradeId: "btc-buy", quantity: "10", quoteQuantity: "100" }) }).portfolio
-    .applyFill({ fill: makeBuyFill({ market: ethMarket, tradeId: "eth-buy", quantity: "5", quoteQuantity: "50" }) }).portfolio
-    .applyFill({ fill: makeBuyFill({ market: btcFdusdMarket, tradeId: "btc-fdusd-buy", quantity: "5", quoteQuantity: "25" }) }).portfolio
+    .applyFill({ fill: makeBuyFill({ market: btcMarket, tradeId: "btc-buy", quantity: "10", quoteQuantity: "100" }), strategyId: "CG_coinGrabber" }).portfolio
+    .applyFill({ fill: makeBuyFill({ market: ethMarket, tradeId: "eth-buy", quantity: "5", quoteQuantity: "50" }), strategyId: "CG_coinGrabber" }).portfolio
+    .applyFill({ fill: makeBuyFill({ market: btcFdusdMarket, tradeId: "btc-fdusd-buy", quantity: "5", quoteQuantity: "25" }), strategyId: "CG_coinGrabber" }).portfolio
   const portfolioWithRetainedFreeBase = portfolio.allocateFreeQuantity({
     marketId: btcMarket.id,
-    quantity: "2",
+    quantity: "2", strategyId: "CG_coinGrabber"
   })
   const activeOrders = [
     makeOrder({ market: btcMarket, clientOrderId: "btc-buy-open", side: "BUY", originalQuantity: "3", executedQuantity: "1", limitPrice: "10" }),
@@ -143,17 +143,16 @@ test("rejects non-Portfolio and non-canonical active-order inputs", () => {
 
 
 test("aggregates same-market strategy Positions into one actual account custody baseline", () => {
-  const portfolio = new Portfolio()
-    .applyFill({
-      fill: makeBuyFill({ market: btcMarket, tradeId: "cg-btc-buy", quantity: "10", quoteQuantity: "100" }),
-      positionId: "position:cg:btcusdt",
-      strategyId: "CG_coinGrabber",
-    }).portfolio
-    .applyFill({
-      fill: makeBuyFill({ market: btcMarket, tradeId: "rs-btc-buy", quantity: "3", quoteQuantity: "60" }),
-      positionId: "position:rs:btcusdt",
-      strategyId: "RS_recoverySeller",
-    }).portfolio
+  const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
+    fill: makeBuyFill({ market: btcMarket, tradeId: "cg-btc-buy", quantity: "10", quoteQuantity: "100" }),
+    positionId: "position:cg:btcusdt",
+    strategyId: "CG_coinGrabber",
+  })
+  const { portfolio } = coinGrabberPortfolio.applyFill({
+    fill: makeBuyFill({ market: btcMarket, tradeId: "rs-btc-buy", quantity: "3", quoteQuantity: "60" }),
+    positionId: "position:rs:btcusdt",
+    strategyId: "RS_recoverySeller",
+  })
 
   const result = calculateAccountSnapshotBaselines({ portfolio, activeOrders: [] })
 

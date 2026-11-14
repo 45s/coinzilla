@@ -224,11 +224,11 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   await applyFill({ store, fill: sellFill })
 
   const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).portfolio
+    .applyFill({ fill: sellFill, strategyId: "CG_coinGrabber" }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).ledger
+    .applyFill({ fill: sellFill, strategyId: "CG_coinGrabber" }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
@@ -318,11 +318,11 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
   await applyFill({ store, fill: sellFill })
 
   const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).portfolio
+    .applyFill({ fill: sellFill, strategyId: "CG_coinGrabber" }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: "CG_coinGrabber" }).ledger
+    .applyFill({ fill: sellFill, strategyId: "CG_coinGrabber" }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,

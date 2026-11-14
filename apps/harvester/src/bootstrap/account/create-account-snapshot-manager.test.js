@@ -190,7 +190,7 @@ test("captures Portfolio and active-order baselines at the account snapshot boun
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio().applyFill({ fill: portfolioFill }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: portfolioFill, strategyId: "CG_coinGrabber" }).portfolio
   const activeBuyOrder = new CanonicalOrder({
     clientOrderId: "snapshot-baseline-active-buy",
     brokerOrderId: "snapshot-baseline-active-buy-broker",

@@ -13,7 +13,8 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
-import { Position } from "../domain/portfolio/position.js"
+import { createPositionId, Position } from "../domain/portfolio/position.js"
+import { CG_STRATEGY_ID } from "../domain/strategies/strategy-ids.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
@@ -415,6 +416,8 @@ test("subtracts only shared BUY commitments created after the account snapshot",
 
 test("does not double-count historical quote cash flow already reflected in a refreshed account snapshot", async () => {
   const position = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: CG_STRATEGY_ID }),
+    strategyId: CG_STRATEGY_ID,
     market,
     baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
@@ -439,6 +442,8 @@ test("does not double-count historical quote cash flow already reflected in a re
 
 test("adds only quote cash flow accrued after the latest account snapshot baseline", async () => {
   const position = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: CG_STRATEGY_ID }),
+    strategyId: CG_STRATEGY_ID,
     market,
     baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
@@ -1212,8 +1217,8 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     commissionStatus: "COMPLETE",
   })
   return {
-    portfolio: new Portfolio().applyFill({ fill }).portfolio,
-    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ fill }).ledger,
+    portfolio: new Portfolio().applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio,
+    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger,
   }
 }
 
@@ -1940,8 +1945,8 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: "CG_coinGrabber" })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -2087,7 +2092,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
 
 
 
-const runCompleteConservativeCycle = async ({ keepQuantity }) => {
+const runCompleteConservativeCycle = async ({ keepQuantity: configuredKeepQuantity }) => {
   let currentPortfolio = new Portfolio()
   let currentRecoveryLedger = RecoveryLedger.empty({ market })
   const events = []
@@ -2141,7 +2146,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
           ...appConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
             ...appConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
-            keepQuantity,
+            keepQuantity: configuredKeepQuantity,
             makerPercent: 0,
             takerPercent: 0,
           },
@@ -2158,8 +2163,8 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
     getRecoveryLedger: () => currentRecoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
       try {
-        const portfolioResult = currentPortfolio.applyFill({ fill })
-        const ledgerResult = currentRecoveryLedger.applyFill({ fill })
+        const portfolioResult = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" })
+        const ledgerResult = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" })
         if (portfolioResult.applied !== ledgerResult.applied ||
             portfolioResult.duplicate !== ledgerResult.duplicate) {
           throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
@@ -2198,11 +2203,11 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         if (compareDecimal({ left: result.freeQuantity, right: "0" }) > 0) {
           currentPortfolio = currentPortfolio.allocateFreeQuantity({
             marketId,
-            quantity: result.freeQuantity,
+            quantity: result.freeQuantity, strategyId: "CG_coinGrabber"
           })
           allocationCount += 1
         }
-        currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId })
+        currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId, strategyId: "CG_coinGrabber" })
         currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit, spent: position.spent })
         resetCount += 1
       }
@@ -2221,7 +2226,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         events.push(event)
         if (event.name === "recovery.cycle_completed") {
           assert.equal(completionCalls.length, 1)
-          assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
+          assert.equal(allocationCount, configuredKeepQuantity === "0" ? 0 : 1)
           assert.equal(resetCount, 1)
         }
         return { ok: true }
@@ -2414,15 +2419,15 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   })
   assert.equal(recoverySellCompleted.ok, true, recoverySellCompleted.errors?.[0]?.message)
   assert.equal(completionCalls.length, 1)
-  assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
+  assert.equal(allocationCount, configuredKeepQuantity === "0" ? 0 : 1)
   assert.equal(resetCount, 1)
   assert.ok(completionSnapshot)
   assert.ok(compareDecimal({ left: completionSnapshot.spent, right: "0" }) > 0)
   assert.ok(compareDecimal({ left: completionSnapshot.netSellProceeds, right: "0" }) > 0)
   assert.ok(compareDecimal({ left: completionSnapshot.realizedNetProfit, right: "0.01" }) >= 0)
 
-  const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
-  assert.equal(completedPosition.freeBaseQuantity.amount, keepQuantity)
+  const completedPosition = currentPortfolio.getPosition({ marketId: market.id, strategyId: CG_STRATEGY_ID })
+  assert.equal(completedPosition.freeBaseQuantity.amount, configuredKeepQuantity)
   assert.equal(completedPosition.baseQuantity.amount, "0")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
@@ -2454,11 +2459,11 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   assert.equal(replayedTerminalFill.ok, true)
   assert.equal(replayedTerminalFill.data.ignored, true)
   assert.equal(completionCalls.length, 1)
-  assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
+  assert.equal(allocationCount, configuredKeepQuantity === "0" ? 0 : 1)
   assert.equal(resetCount, 1)
   assert.equal(events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
   assert.equal(harness.orders.length, beforeReplay.orderCount)
-  const afterReplayPosition = currentPortfolio.getPosition({ marketId: market.id })
+  const afterReplayPosition = currentPortfolio.getPosition({ marketId: market.id, strategyId: CG_STRATEGY_ID })
   assert.equal(afterReplayPosition.baseQuantity.amount, beforeReplay.activeQuantity)
   assert.equal(afterReplayPosition.freeBaseQuantity.amount, beforeReplay.freeQuantity)
   assert.equal(currentRecoveryLedger.buyCost, beforeReplay.buyCost)
@@ -2903,8 +2908,8 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
       getRecoveryLedger: () => currentRecoveryLedger,
       getTerminalFills: ({ orderId }) => sellFill?.brokerOrderId === orderId ? [sellFill] : [],
       updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
+        currentPortfolio = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
         accountedFills.push(fill)
         return { ok: true, data: { applied: true, duplicate: false } }
       },
@@ -3043,8 +3048,8 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
         })] : []
       },
       updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
+        currentPortfolio = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" }).ledger
         return { ok: true, data: { applied: true, duplicate: false } }
       },
     })
@@ -3564,8 +3569,8 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   const harness = await createHarness({
     strategyPolicy,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: "CG_coinGrabber" })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -3603,7 +3608,7 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
     event: { executionType: "TRADE", executedOrder: partialOrder, fill },
   })
   assert.equal(applied.ok, true, applied.errors?.[0]?.message)
-  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.1")
+  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id, strategyId: CG_STRATEGY_ID }).baseQuantity.amount, "0.1")
 
   const update = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -3630,8 +3635,8 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill, strategyId: "CG_coinGrabber" })
       harness.setCurrentPortfolio(portfolioUpdate.portfolio)
       harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
@@ -3672,7 +3677,7 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     event: { executionType: "TRADE", executedOrder: partialSell, fill },
   })
   assert.equal(applied.ok, true, applied.errors?.[0]?.message)
-  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.9")
+  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id, strategyId: CG_STRATEGY_ID }).baseQuantity.amount, "0.9")
 
   const update = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -3758,6 +3763,8 @@ test("reprices an active BUY normally when no Position exists", async () => {
 test("allows trailing BUY repricing when only retained free inventory exists", async () => {
   const portfolio = new Portfolio({
     positions: [new Position({
+      positionId: createPositionId({ marketId: market.id, strategyId: CG_STRATEGY_ID }),
+      strategyId: CG_STRATEGY_ID,
       market,
       baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
       freeBaseQuantity: new Quantity({ amount: "1", asset: baseAsset }),
@@ -4055,8 +4062,8 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
     getPortfolio: () => currentPortfolio,
     getRecoveryLedger: () => currentRecoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = currentPortfolio.applyFill({ fill })
-      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill })
+      const portfolioUpdate = currentPortfolio.applyFill({ fill, strategyId: "CG_coinGrabber" })
+      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill, strategyId: "CG_coinGrabber" })
       currentPortfolio = portfolioUpdate.portfolio
       currentRecoveryLedger = ledgerUpdate.ledger
       return {
@@ -4083,7 +4090,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
       if (completion.eligible) {
         currentPortfolio = currentPortfolio.allocateFreeQuantity({
           marketId,
-          quantity: completion.freeQuantity,
+          quantity: completion.freeQuantity, strategyId: "CG_coinGrabber"
         })
         currentRecoveryLedger = currentRecoveryLedger.resetCycle({ minProfit: "0.01", spent: position.spent })
       }
@@ -4120,7 +4127,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
   assert.equal(currentRecoveryLedger.buyCost, "105")
   assert.ok(Number(currentRecoveryLedger.netSellProceeds) > 105.01)
-  const position = currentPortfolio.getPosition({ marketId: market.id })
+  const position = currentPortfolio.getPosition({ marketId: market.id, strategyId: CG_STRATEGY_ID })
   assert.equal(position.freeBaseQuantity.amount, "0")
   assert.ok(Number(position.baseQuantity.amount) > 0.1)
   const sellOrders = harness.engine.getOrders().filter((order) => order.side === "SELL")
@@ -4131,7 +4138,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(nextEvaluation.data.decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
   assert.equal(nextEvaluation.data.decision.inventoryDisposition.reason, "QUANTITY_INCREMENT")
   const dust = nextEvaluation.data.decision.inventoryDisposition
-  const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
+  const completedPosition = currentPortfolio.getPosition({ marketId: market.id, strategyId: CG_STRATEGY_ID })
   assert.equal(completedPosition.baseQuantity.amount, "0")
   assert.equal(dust.quantity, "0.05", "The quantity-step-constrained residual must be exactly 0.05 above the 0.1 keepQuantity.")
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
@@ -5400,8 +5407,11 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
 })
 
 
+// eslint-disable-next-line max-lines-per-function -- this regression exercises the full recovery/engine handoff as one scenario.
 test("defers a recovered BUY fill evaluation until application recovery is acknowledged", async () => {
   const initialPosition = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: CG_STRATEGY_ID }),
+    strategyId: CG_STRATEGY_ID,
     market,
     baseQuantity: new Quantity({ amount: "2", asset: baseAsset }),
     freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
@@ -6827,6 +6837,8 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
 
 test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
   const position = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: CG_STRATEGY_ID }),
+    strategyId: CG_STRATEGY_ID,
     market,
     baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
     freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
@@ -6859,6 +6871,8 @@ test("explicit recovery SELL intent may submit while volatility protection block
 
 test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
   const position = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: CG_STRATEGY_ID }),
+    strategyId: CG_STRATEGY_ID,
     market,
     baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
     freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),

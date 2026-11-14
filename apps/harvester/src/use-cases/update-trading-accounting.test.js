@@ -283,7 +283,7 @@ test("rejects a wrong-market fill atomically when Portfolio accepts but Recovery
   const recoveryLedger = RecoveryLedger.empty({ market })
   const fill = makeFill({ fillMarket: otherMarket })
 
-  assert.equal(portfolio.applyFill({ fill }).applied, true)
+  assert.equal(portfolio.applyFill({ fill, strategyId: "CG_coinGrabber" }).applied, true)
   const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
 
   assert.equal(result.ok, false)
