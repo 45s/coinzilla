@@ -494,77 +494,76 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
 });
 
 
-test("subscribes every enabled market and fail-closes BUYs until its volatility history is ready", async () => {
-  const createMetadata = ({
+
+function createVolatilityTestMetadata({ symbol, baseCode } = {}) {
+  const baseAsset = new Asset({
+    id: "asset-" + baseCode.toLowerCase(),
+    code: baseCode,
+  })
+  const quoteAsset = new Asset({
+    id: "asset-usdt",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
     symbol,
-    baseCode
-  } = {}) => {
-    const baseAsset = new Asset({
-      id: "asset-" + baseCode.toLowerCase(),
-      code: baseCode
-    })
-    const quoteAsset = new Asset({
-      id: "asset-usdt",
-      code: "USDT"
-    })
-    const market = new Market({
-      venue: "binance",
-      symbol,
-      baseAsset,
-      quoteAsset
-    })
-    const tradingRules = new TradingRules({
-      market,
-      constraints: [
-        {
-          type: "PRICE_INCREMENT",
-          status: "SUPPORTED",
-          value: new Money({
+    baseAsset,
+    quoteAsset,
+  })
+  const tradingRules = new TradingRules({
+    market,
+    constraints: [
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: new Money({
           amount: "0.001",
-          asset: quoteAsset
-        })
-        },
-        {
-          type: "QUANTITY_INCREMENT",
-          status: "SUPPORTED",
-          value: new Quantity({
+          asset: quoteAsset,
+        }),
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: new Quantity({
           amount: "0.01",
-          asset: baseAsset
-        })
-        },
-        {
-          type: "MIN_QUANTITY",
-          status: "SUPPORTED",
-          value: new Quantity({
+          asset: baseAsset,
+        }),
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: new Quantity({
           amount: "0.01",
-          asset: baseAsset
-        })
-        },
-        {
-          type: "MIN_NOTIONAL",
-          status: "SUPPORTED",
-          value: new Money({
+          asset: baseAsset,
+        }),
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: new Money({
           amount: "1",
-          asset: quoteAsset
-        })
-        },
-      ],
-    })
-    return {
-      market,
-      tradingRules,
-      supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
-      unvalidatedConstraints: []
-    }
+          asset: quoteAsset,
+        }),
+      },
+    ],
+  })
+  return {
+    market,
+    tradingRules,
+    supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+    unvalidatedConstraints: [],
   }
+}
+
+function createVolatilityTestMarkets() {
   const metadataBySymbol = new Map([
-    ["DOGEUSDT", createMetadata({
+    ["DOGEUSDT", createVolatilityTestMetadata({
       symbol: "DOGEUSDT",
-      baseCode: "DOGE"
+      baseCode: "DOGE",
     })],
-    ["ZROUSDT", createMetadata({
+    ["ZROUSDT", createVolatilityTestMetadata({
       symbol: "ZROUSDT",
-      baseCode: "ZRO"
+      baseCode: "ZRO",
     })],
   ])
   const markets = [...metadataBySymbol.values()].map(({ market }) => market)
@@ -573,30 +572,43 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     ...markets.map((market) => new Balance({
       free: new Quantity({
         amount: "100",
-        asset: market.baseAsset
+        asset: market.baseAsset,
       }),
       locked: new Quantity({
         amount: "0",
-        asset: market.baseAsset
+        asset: market.baseAsset,
       }),
     })),
     new Balance({
       free: new Quantity({
         amount: "1000",
-        asset: quoteAsset
+        asset: quoteAsset,
       }),
       locked: new Quantity({
         amount: "0",
-        asset: quoteAsset
+        asset: quoteAsset,
       }),
     }),
   ]
-  const appConfig = {
+  return {
+    metadataBySymbol,
+    markets,
+    balances,
+  }
+}
+
+function createVolatilityTestConfig() {
+  return {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { conservative: { enabled: true },
-          aggressive: { enabled: false },
+        settings: {
+          conservative: {
+            enabled: true,
+          },
+          aggressive: {
+            enabled: false,
+          },
         },
         pairs: {
           DOGEUSDT: {
@@ -629,47 +641,57 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
       },
     },
   }
-  const priceSubscriptions = new Map()
-  const candleSubscriptions = new Map()
-  const candleHistoryRequests = []
-  const candleUnsubscriptions = []
-  const bookSubscriptions = []
-  const submittedSymbols = []
-  const diagnosticLogs = []
-  let orderSequence = 0
-  let snapshotSequence = 0
-  const canonicalOrders = new Map()
-  const broker = {
+}
+
+function createVolatilityTestState() {
+  return {
+    priceSubscriptions: new Map(),
+    candleSubscriptions: new Map(),
+    candleHistoryRequests: [],
+    candleUnsubscriptions: [],
+    bookSubscriptions: [],
+    submittedSymbols: [],
+    diagnosticLogs: [],
+    orderSequence: 0,
+    snapshotSequence: 0,
+    canonicalOrders: new Map(),
+  }
+}
+
+function createVolatilityOrderLifecycleBroker({ metadataBySymbol, state }) {
+  return {
     connect: async () => {},
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
       const { market } = metadataBySymbol.get(order.symbol)
-      submittedSymbols.push(order.symbol)
+      state.submittedSymbols.push(order.symbol)
       const submitted = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
-        brokerOrderId: String(++orderSequence),
+        brokerOrderId: String(++state.orderSequence),
         market,
         side: order.side,
         type: order.type,
         limitPrice: new Money({
           amount: order.price,
-          asset: market.quoteAsset
+          asset: market.quoteAsset,
         }),
         originalQuantity: new Quantity({
           amount: order.quantity,
-          asset: market.baseAsset
+          asset: market.baseAsset,
         }),
         executedQuantity: new Quantity({
           amount: "0",
-          asset: market.baseAsset
+          asset: market.baseAsset,
         }),
         status: "OPEN",
         createdAt: 10,
         acknowledgedAt: 10,
         updatedAt: 10,
       })
-      canonicalOrders.set(submitted.brokerOrderId, submitted)
-      return toResult({ data: submitted })
+      state.canonicalOrders.set(submitted.brokerOrderId, submitted)
+      return toResult({
+        data: submitted,
+      })
     },
     cancelOrder: async ({ order } = {}) => {
       const canceled = new CanonicalOrder({
@@ -687,72 +709,89 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
         updatedAt: 11,
         completedAt: 11,
       })
-      canonicalOrders.set(canceled.brokerOrderId, canceled)
-      return toResult({ data: canceled })
+      state.canonicalOrders.set(canceled.brokerOrderId, canceled)
+      return toResult({
+        data: canceled,
+      })
     },
     getOpenOrders: async ({ symbol } = {}) => toResult({
-      data: [...canonicalOrders.values()]
+      data: [...state.canonicalOrders.values()]
         .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
         .filter((order) => !symbol || order.market.symbol === symbol)
-        .map((order) => createOpenOrderSnapshot({ order })),
+        .map((order) => createOpenOrderSnapshot({
+          order,
+        })),
     }),
-    getFills: async () => toResult({ data: [] }),
-    getCanonicalOrderHistory: async ({
-      orderId,
-      symbol
-    } = {}) => toResult({
-      data: [...canonicalOrders.values()].filter((order) =>
+    getFills: async () => toResult({
+      data: [],
+    }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
+      data: [...state.canonicalOrders.values()].filter((order) =>
         (!orderId || order.brokerOrderId === String(orderId)) &&
         (!symbol || order.market.symbol === symbol)),
     }),
-    getCanonicalOrder: async () => toResult({ data: null }),
-    getAccountSnapshot: async () => toResult({ data: {
-      balances,
-      sourceTime: ++snapshotSequence
-    } }),
-    getSymbolFilters: async ({ symbol } = {}) => toResult({ data: metadataBySymbol.get(symbol) }),
-    getExchangeMarkets: async () => toResult({ data: markets }),
+    getCanonicalOrder: async () => toResult({
+      data: null,
+    }),
+  }
+}
+
+function createVolatilityAccountBroker({ metadataBySymbol, markets, balances, state }) {
+  return {
+    getAccountSnapshot: async () => toResult({
+      data: {
+        balances,
+        sourceTime: ++state.snapshotSequence,
+      },
+    }),
+    getSymbolFilters: async ({ symbol } = {}) => toResult({
+      data: metadataBySymbol.get(symbol),
+    }),
+    getExchangeMarkets: async () => toResult({
+      data: markets,
+    }),
     getPrices: async ({ symbol } = {}) => toResult({
       data: {
         symbol,
-        price: symbol === "DOGEUSDT" ? "0.1" : "1"
+        price: symbol === "DOGEUSDT" ? "0.1" : "1",
       },
     }),
-    getCandles: async ({
-      symbol,
-      interval,
-      limit
-    } = {}) => {
-      candleHistoryRequests.push({
+  }
+}
+
+function createVolatilityMarketDataBroker({ state }) {
+  return {
+    getCandles: async ({ symbol, interval, limit } = {}) => {
+      state.candleHistoryRequests.push({
         symbol,
         interval,
-        limit
+        limit,
       })
-      return toResult({ data: [] })
+      return toResult({
+        data: [],
+      })
     },
-    subscribeForCandles: async ({
-      symbol,
-      interval,
-      onCandle
-    } = {}) => {
-      candleSubscriptions.set(symbol, {
+    subscribeForCandles: async ({ symbol, interval, onCandle } = {}) => {
+      state.candleSubscriptions.set(symbol, {
         interval,
-        onCandle
+        onCandle,
       })
-      return toResult({ data: { unsubscribe: async () => candleUnsubscriptions.push(symbol) } })
+      return toResult({
+        data: {
+          unsubscribe: async () => state.candleUnsubscriptions.push(symbol),
+        },
+      })
     },
-    subscribeForPrices: async ({
-      symbol,
-      onPrice
-    } = {}) => {
-      priceSubscriptions.set(symbol, onPrice)
-      return toResult({ data: { unsubscribe: async () => {} } })
+    subscribeForPrices: async ({ symbol, onPrice } = {}) => {
+      state.priceSubscriptions.set(symbol, onPrice)
+      return toResult({
+        data: {
+          unsubscribe: async () => {},
+        },
+      })
     },
-    subscribeForBookTicker: async ({
-      symbol,
-      onBookTicker
-    } = {}) => {
-      bookSubscriptions.push(symbol)
+    subscribeForBookTicker: async ({ symbol, onBookTicker } = {}) => {
+      state.bookSubscriptions.push(symbol)
       const price = symbol === "DOGEUSDT" ? "0.1" : "1"
       await onBookTicker({
         symbol,
@@ -762,12 +801,44 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
         bestAskQuantity: "100",
         timestamp: 10,
       })
-      return toResult({ data: { unsubscribe: async () => {} } })
+      return toResult({
+        data: {
+          unsubscribe: async () => {},
+        },
+      })
     },
-    subscribeForUserData: async () => toResult({ data: { disconnect: async () => {} } }),
+    subscribeForUserData: async () => toResult({
+      data: {
+        disconnect: async () => {},
+      },
+    }),
   }
+}
 
-  const context = await startHarvesterForTest({
+function createVolatilityTestBroker({ markets, state }) {
+  const marketData = createVolatilityTestMarkets()
+  const lifecycle = createVolatilityOrderLifecycleBroker({
+    metadataBySymbol: marketData.metadataBySymbol,
+    state,
+  })
+  const account = createVolatilityAccountBroker({
+    metadataBySymbol: marketData.metadataBySymbol,
+    markets,
+    balances: marketData.balances,
+    state,
+  })
+  const streams = createVolatilityMarketDataBroker({
+    state,
+  })
+  return {
+    ...lifecycle,
+    ...account,
+    ...streams,
+  }
+}
+
+async function startVolatilityTestHarvester({ appConfig, broker, state }) {
+  return startHarvesterForTest({
     loadConfig: async () => appConfig,
     brokerAdapterFactory: () => broker,
     env: {
@@ -778,25 +849,37 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     },
     now: () => 10,
     logger: {
-      debug(entry) { diagnosticLogs.push(entry) },
-      info(entry) { diagnosticLogs.push(entry) },
-      error(entry) { diagnosticLogs.push(entry) },
+      debug(entry) {
+        state.diagnosticLogs.push(entry)
+      },
+      info(entry) {
+        state.diagnosticLogs.push(entry)
+      },
+      error(entry) {
+        state.diagnosticLogs.push(entry)
+      },
     },
   })
+}
 
+function assertVolatilityTestStartup({ context, state }) {
   assert.equal(context.userDataReady, true)
-  assert.deepEqual([...priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
-  assert.deepEqual([...candleSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"], "The candle service must subscribe every enabled pair independently.")
-  assert.deepEqual(candleHistoryRequests, [
+  assert.deepEqual([...state.priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual(
+    [...state.candleSubscriptions.keys()],
+    ["DOGEUSDT", "ZROUSDT"],
+    "The candle service must subscribe every enabled pair independently.",
+  )
+  assert.deepEqual(state.candleHistoryRequests, [
     {
       symbol: "DOGEUSDT",
       interval: "1m",
-      limit: 101
+      limit: 101,
     },
     {
       symbol: "ZROUSDT",
       interval: "1m",
-      limit: 101
+      limit: 101,
     },
   ], "Startup must request one-minute history for each enabled market after candle subscriptions are established.")
   assert.deepEqual(
@@ -804,14 +887,22 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     ["DOGEUSDT", "ZROUSDT"],
     "Adding candle streams must not duplicate market symbols in the existing runtime subscription summary.",
   )
-  const dogeVolatilityData = context.getVolatilityData({ symbol: "DOGEUSDT" })
-  assert.equal(dogeVolatilityData.ok, true)
-  assert.equal(dogeVolatilityData.data.status.reason, "INSUFFICIENT_HISTORY", "Missing candle history must remain explicitly unavailable for the later fail-closed gate.")
-  assert.deepEqual(bookSubscriptions, ["DOGEUSDT", "ZROUSDT"])
-  assert.deepEqual(submittedSymbols, [], "Neither market may submit a BUY while its own candle history is insufficient.")
-  assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
-  assert.equal(typeof priceSubscriptions.get("ZROUSDT"), "function")
+  const volatility = context.getVolatilityData({
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(volatility.ok, true)
+  assert.equal(
+    volatility.data.status.reason,
+    "INSUFFICIENT_HISTORY",
+    "Missing candle history must remain explicitly unavailable for the later fail-closed gate.",
+  )
+  assert.deepEqual(state.bookSubscriptions, ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual(state.submittedSymbols, [], "Neither market may submit a BUY while its own candle history is insufficient.")
+  assert.equal(typeof state.priceSubscriptions.get("DOGEUSDT"), "function")
+  assert.equal(typeof state.priceSubscriptions.get("ZROUSDT"), "function")
+}
 
+async function assertVolatilityTestShutdown({ context, state }) {
   let shutdownError
   try {
     await context.stop()
@@ -822,13 +913,49 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
     shutdownError,
     undefined,
     "multi-market shutdown must reconcile both canceled BUY orders successfully; diagnostic logs: " +
-      JSON.stringify(diagnosticLogs.filter(({ message }) =>
+      JSON.stringify(state.diagnosticLogs.filter(({ message }) =>
         message === "Shutdown order reconciliation failed" ||
         message === "paused a trading pair")),
   )
   assert.deepEqual(
-    candleUnsubscriptions.sort(),
+    state.candleUnsubscriptions.sort(),
     ["DOGEUSDT", "ZROUSDT"],
     "Harvester shutdown must unsubscribe each live candle stream as part of market-data cleanup.",
   )
+}
+
+
+test("subscribes every enabled market and fail-closes BUYs until its volatility history is ready", async () => {
+  const marketData = createVolatilityTestMarkets()
+  const state = createVolatilityTestState()
+  const appConfig = createVolatilityTestConfig()
+  const broker = {
+    ...createVolatilityOrderLifecycleBroker({
+      metadataBySymbol: marketData.metadataBySymbol,
+      state,
+    }),
+    ...createVolatilityAccountBroker({
+      metadataBySymbol: marketData.metadataBySymbol,
+      markets: marketData.markets,
+      balances: marketData.balances,
+      state,
+    }),
+    ...createVolatilityMarketDataBroker({
+      state,
+    }),
+  }
+  const context = await startVolatilityTestHarvester({
+    appConfig,
+    broker,
+    state,
+  })
+
+  assertVolatilityTestStartup({
+    context,
+    state,
+  })
+  await assertVolatilityTestShutdown({
+    context,
+    state,
+  })
 })
