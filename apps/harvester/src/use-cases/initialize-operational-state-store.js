@@ -16,7 +16,7 @@ export async function initializeHarvesterOperationalStateStore({
   processLockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
   runtimeSessionId = generateUUID(),
   acquireProcessLock = acquireHarvesterProcessLocks,
-  createStore = createFileDurableFactsStore,
+  createStore = createFileOperationalStateStore,
 } = {}) {
   if (confirmed !== true) {
     return toResult({
