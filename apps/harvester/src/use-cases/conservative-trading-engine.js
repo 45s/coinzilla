@@ -1888,11 +1888,17 @@ function validatePendingOrderLookup({ pendingOrder, lookupResult }) {
     )
   }
   const acknowledgedOrder = lookupResult.data
-  if (!(acknowledgedOrder instanceof CanonicalOrder) ||
-      typeof acknowledgedOrder.brokerOrderId !== "string" ||
-      !acknowledgedOrder.brokerOrderId.trim()) {
+  if (!(acknowledgedOrder instanceof CanonicalOrder)) {
     throw recoveryFailureError(
-      new Error("Canonical order lookup did not return an acknowledged CanonicalOrder with brokerOrderId"),
+      new Error("Canonical order lookup did not return a CanonicalOrder"),
+      "ACCOUNTING_INTEGRITY",
+      "PENDING_ORDER_LOOKUP_SHAPE",
+      false,
+    )
+  }
+  if (typeof acknowledgedOrder.brokerOrderId !== "string" || !acknowledgedOrder.brokerOrderId.trim()) {
+    throw recoveryFailureError(
+      new Error("Canonical order lookup returned an order without a brokerOrderId"),
       "ACCOUNTING_INTEGRITY",
       "PENDING_ORDER_LOOKUP_SHAPE",
       false,
@@ -2119,7 +2125,7 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
     context,
     ownedOrders,
     symbols,
-    recoveryMode: options.recoveryMode ?? false,
+    recoveryMode: options.recoveryMode === undefined ? false : options.recoveryMode,
     beforeApply: options.beforeApply,
   })
 }
