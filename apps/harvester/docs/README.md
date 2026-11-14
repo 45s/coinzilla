@@ -22,6 +22,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
 - [One-market recovery reconciliation](recovery/README.md) — Step 7 offline evidence bundle, audit-only CLI and guarded coverage confirmation.
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
+- [Recovery Seller Domain Specification](domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md) — draft RS contract; owner decisions block executable implementation
 - [Domain glossary](domain/DOMAIN_GLOSSARY.md)
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
