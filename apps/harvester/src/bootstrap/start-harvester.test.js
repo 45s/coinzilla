@@ -3773,8 +3773,8 @@ test("fails closed before market subscriptions when the account-wide open-order 
 })
 
  
-test("captures and durably journals balances and account-wide open orders on trading startup", async () => {
-  const calls = []
+
+function createDurableStartupAuditFixture({ calls }) {
   const broker = createBroker(calls)
   let accountReads = 0
   let openOrderReads = 0
@@ -3787,16 +3787,16 @@ test("captures and durably journals balances and account-wide open orders on tra
         balances: ["BTC", "ETH", "USDT"].map((code) => {
           const asset = new Asset({
             id: "asset:" + code,
-            code
+            code,
           })
           return new Balance({
             free: new Quantity({
               amount: "12.5",
-              asset
+              asset,
             }),
             locked: new Quantity({
               amount: "0.5",
-              asset
+              asset,
             }),
           })
         }),
@@ -3810,42 +3810,44 @@ test("captures and durably journals balances and account-wide open orders on tra
     assert.deepEqual(input, {})
     return {
       ok: true,
-      data: []
+      data: [],
     }
   }
   const events = []
   let flushCount = 0
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => appConfig,
-    env: binanceEnv,
-    brokerAdapterFactory: () => broker,
-    eventPublisher: {
-      publish: (event) => {
-        events.push(event)
-        calls.push("publish:" + event.name)
-        return { ok: true }
-      },
-      flush: async () => {
-        flushCount += 1
-        calls.push("journal:flush:" + flushCount)
-        return {
-          ok: true,
-          durable: true
-        }
-      },
+  const eventPublisher = {
+    publish: (event) => {
+      events.push(event)
+      calls.push("publish:" + event.name)
+      return {
+        ok: true,
+      }
     },
-    logger: {
-      info() {},
-      error() {},
-      debug() {}
+    flush: async () => {
+      flushCount += 1
+      calls.push("journal:flush:" + flushCount)
+      return {
+        ok: true,
+        durable: true,
+      }
     },
-  })
+  }
+  return {
+    broker,
+    events,
+    eventPublisher,
+    getAccountReads: () => accountReads,
+    getOpenOrderReads: () => openOrderReads,
+    getFlushCount: () => flushCount,
+  }
+}
 
-  assert.equal(accountReads, 1)
-  assert.equal(openOrderReads, 1)
-  assert.equal(flushCount, 2)
-  const balances = events.filter((event) => event.name === "account.snapshot_captured")
-  const openOrders = events.filter((event) => event.name === "account.open_orders_captured")
+function assertDurableStartupAudit({ fixture, calls }) {
+  assert.equal(fixture.getAccountReads(), 1)
+  assert.equal(fixture.getOpenOrderReads(), 1)
+  assert.equal(fixture.getFlushCount(), 2)
+  const balances = fixture.events.filter((event) => event.name === "account.snapshot_captured")
+  const openOrders = fixture.events.filter((event) => event.name === "account.open_orders_captured")
   assert.equal(balances.length, 1)
   assert.equal(openOrders.length, 1)
   assert.equal(balances[0].data.phase, "PREFLIGHT")
@@ -3856,7 +3858,30 @@ test("captures and durably journals balances and account-wide open orders on tra
   const marketSubscription = calls.findIndex((call) => call === "subscribe:BTCUSDT")
   assert.ok(lastAuditFlush >= 0)
   assert.ok(marketSubscription > lastAuditFlush)
+}
 
+
+test("captures and durably journals balances and account-wide open orders on trading startup", async () => {
+  const calls = []
+  const fixture = createDurableStartupAuditFixture({
+    calls,
+  })
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => fixture.broker,
+    eventPublisher: fixture.eventPublisher,
+    logger: {
+      info() {},
+      error() {},
+      debug() {},
+    },
+  })
+
+  assertDurableStartupAudit({
+    fixture,
+    calls,
+  })
   await runtime.stop()
 })
 
