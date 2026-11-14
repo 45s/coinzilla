@@ -1725,7 +1725,7 @@ test("does not construct, verify, or inject durable facts even when a stale ledg
   let journalCreated = false
   let runtimeStarted = false
   await runMain({
-    env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     createOperationalStateStore: () => {
       storeCreated = true
       throw new Error("restart recovery is disabled")
