@@ -51,11 +51,12 @@ const createTestCandle = ({ symbol, openTime, isClosed = true } = {}) => ({
   isClosed,
 })
 const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? input.env?.NODE_ENV === "development" && typeof input.eventPublisher.flush !== "function"
-      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
-      : input.eventPublisher
-    : testEventPublisher
+  let eventPublisher = input.eventPublisher
+  if (!eventPublisher) {
+    eventPublisher = testEventPublisher
+  } else if (input.env?.NODE_ENV === "development" && typeof eventPublisher.flush !== "function") {
+    eventPublisher = { ...eventPublisher, flush: testEventPublisher.flush }
+  }
   return startHarvester({ ...input, eventPublisher })
 }
 
