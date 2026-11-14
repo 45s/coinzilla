@@ -56,7 +56,7 @@ export function createShutdownHandler({
   runtimeSessionId,
 } = {}) {
   let shutdownPromise
-  return function stop({ requestedAt, requestLogged = false, preShutdownErrors = [] } = {}) {
+  return function stop({ requestedAt, requestLogged = false, stopStateEstablishedLogged = false, preShutdownErrors = [] } = {}) {
     if (shutdownPromise) return shutdownPromise
     if (state.stopped) return Promise.resolve()
 
@@ -83,7 +83,6 @@ export function createShutdownHandler({
         logPhase({
           phase,
           status: isFailure(result) ? "FAILED" : "COMPLETED",
-          startedAt,
           durationMs,
           ...(isFailure(result) ? { failureReason: "PHASE_RESULT_FAILED" } : {}),
         })
@@ -109,12 +108,13 @@ export function createShutdownHandler({
     state.stopped = true
     state.ready = false
     state.status = "STOPPING"
-    logPhase({
-      phase: "STOP_STATE_ESTABLISHED",
-      status: "COMPLETED",
-      startedAt: shutdownRequestedAt,
-      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
-    })
+    if (!stopStateEstablishedLogged) {
+      logPhase({
+        phase: "STOP_STATE_ESTABLISHED",
+        status: "COMPLETED",
+        durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
+      })
+    }
 
     shutdownPromise = (async () => {
       const tradingEngine = getTradingEngine()

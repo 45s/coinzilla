@@ -601,6 +601,11 @@ export async function startHarvester({
     userDataState.shutdownRequested = true
     userDataState.ready = false
     logShutdownPhase({ phase: "SHUTDOWN_REQUESTED", status: "COMPLETED" })
+    logShutdownPhase({
+      phase: "STOP_STATE_ESTABLISHED",
+      status: "COMPLETED",
+      startedAt: shutdownRequestedAt,
+    })
 
     let operatorStopError
     const operatorStopStartedAt = performance.now()
@@ -620,6 +625,7 @@ export async function startHarvester({
     await stopRuntime({
       requestedAt: shutdownRequestedAt,
       requestLogged: true,
+      stopStateEstablishedLogged: true,
       preShutdownErrors: operatorStopError ? [operatorStopError] : [],
     })
     if (operationalStateStore) {
