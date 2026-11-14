@@ -34,10 +34,14 @@ test("uses the app-local default directory and rejects relative overrides or unk
     initialize,
     logger: createLogger(),
   })
-  const missing = await runInitializeDurableFactsLedger({
+  let defaultDirectory
+  const defaulted = await runInitializeDurableFactsLedger({
     env: {},
     args: ["--confirm-initialize"],
-    initialize,
+    initialize: async (input) => {
+      defaultDirectory = input.directory
+      return { ok: true, data: { directory: input.directory, sequence: "0", durable: true } }
+    },
     logger: createLogger(),
   })
   const unknown = await runInitializeDurableFactsLedger({
@@ -46,7 +50,8 @@ test("uses the app-local default directory and rejects relative overrides or unk
     initialize,
     logger: createLogger(),
   })
-  assert.deepEqual([relative, missing, unknown], [1, 1, 1])
+  assert.deepEqual([relative, defaulted, unknown], [1, 0, 1])
+  assert.equal(defaultDirectory, DEFAULT_OPERATIONAL_STATE_DIRECTORY)
   assert.equal(initializeCalls, 0)
 })
 
