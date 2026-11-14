@@ -475,6 +475,91 @@ function createMarketPriceTransitionHandler({
   }
 }
 
+function createOperatorMarketPauseHandler({ state, pairs, runTransition } = {}) {
+  return ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
+        const error = new TypeError("Operator pause requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      if (typeof beforeApply !== "function") {
+        return toResult({ error: new TypeError("Operator pause requires a Operational State Store commit callback") })
+      }
+      if (state.operatorPausedMarkets.has(symbol)) {
+        return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: true } })
+      }
+      let committed
+      try {
+        committed = await beforeApply({ symbol, action: "PAUSE" })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (committed?.ok !== true || committed?.data?.durable !== true) {
+        return committed?.ok === false
+          ? committed
+          : toResult({ error: new Error("Operator pause fact was not durably committed") })
+      }
+      state.operatorPausedMarkets.add(symbol)
+      return toResult({ data: { symbol, paused: true, alreadyPaused: false, durable: true } })
+    },
+  })
+}
+
+function createOperatorMarketResumeHandler({
+  state,
+  pairs,
+  volatilityProtectionEnabled,
+  hasPendingRecoveryManagedCancellation,
+  runTransition,
+} = {}) {
+  return ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
+        const error = new TypeError("Operator resume requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      const volatilityState = state.volatilityProtection.get(symbol)
+      const volatilityBlocked = volatilityProtectionEnabled &&
+        volatilityState !== undefined &&
+        volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
+      const safetyBlocked =
+        state.paused.has(symbol) ||
+        state.durablePausedMarkets.has(symbol) ||
+        state.recoveryManagedPausedMarkets.has(symbol) ||
+        state.replacementIntents.has(symbol) ||
+        state.trailingBuyRepriceIntents.has(symbol) ||
+        hasPendingRecoveryManagedCancellation({ symbol }) ||
+        volatilityBlocked
+      if (safetyBlocked) {
+        const error = new Error("Market cannot be resumed while a safety or recovery blocker is active")
+        error.code = "SAFETY_BLOCKER_ACTIVE"
+        return toResult({ error })
+      }
+      if (!state.operatorPausedMarkets.has(symbol)) {
+        return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
+      }
+      if (typeof beforeApply !== "function") {
+        return toResult({ error: new TypeError("Operator resume requires a Operational State Store commit callback") })
+      }
+      let committed
+      try {
+        committed = await beforeApply({ symbol, action: "RESUME" })
+      } catch (error) {
+        return toResult({ error })
+      }
+      if (committed?.ok !== true || committed?.data?.durable !== true) {
+        return committed?.ok === false
+          ? committed
+          : toResult({ error: new Error("Operator resume fact was not durably committed") })
+      }
+      state.operatorPausedMarkets.delete(symbol)
+      return toResult({ data: { symbol, resumed: true, durable: true } })
+    },
+  })
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -1050,109 +1135,13 @@ export function makeConservativeTradingEngine({
     logger,
   })
 
-  const pauseMarket = ({
-    symbol,
-    beforeApply
-  } = {}) => runTransition({
-    task: async () => {
-      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
-        const error = new TypeError("Operator pause requires a configured market symbol")
-        error.code = "INVALID_OPERATOR_MARKET"
-        return toResult({ error })
-      }
-      if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator pause requires a Operational State Store commit callback") })
-      }
-      if (state.operatorPausedMarkets.has(symbol)) {
-        return toResult({ data: {
-          symbol,
-          paused: true,
-          alreadyPaused: true,
-          durable: true
-        } })
-      }
-      let committed
-      try {
-        committed = await beforeApply({
-          symbol,
-          action: "PAUSE"
-        })
-      } catch (error) {
-        return toResult({ error })
-      }
-      if (committed?.ok !== true || committed?.data?.durable !== true) {
-        return committed?.ok === false
-          ? committed
-          : toResult({ error: new Error("Operator pause fact was not durably committed") })
-      }
-      state.operatorPausedMarkets.add(symbol)
-      return toResult({ data: {
-        symbol,
-        paused: true,
-        alreadyPaused: false,
-        durable: true
-      } })
-    },
-  })
-
-  const resumeMarket = ({
-    symbol,
-    beforeApply
-  } = {}) => runTransition({
-    task: async () => {
-      if (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol)) {
-        const error = new TypeError("Operator resume requires a configured market symbol")
-        error.code = "INVALID_OPERATOR_MARKET"
-        return toResult({ error })
-      }
-      const volatilityState = state.volatilityProtection.get(symbol)
-      const volatilityBlocked = volatilityProtectionEnabled &&
-        volatilityState !== undefined &&
-        volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
-      const safetyBlocked =
-        state.paused.has(symbol) ||
-        state.durablePausedMarkets.has(symbol) ||
-        state.recoveryManagedPausedMarkets.has(symbol) ||
-        state.replacementIntents.has(symbol) ||
-        state.trailingBuyRepriceIntents.has(symbol) ||
-        hasPendingRecoveryManagedCancellation({ symbol }) ||
-        volatilityBlocked
-      if (safetyBlocked) {
-        const error = new Error("Market cannot be resumed while a safety or recovery blocker is active")
-        error.code = "SAFETY_BLOCKER_ACTIVE"
-        return toResult({ error })
-      }
-      if (!state.operatorPausedMarkets.has(symbol)) {
-        return toResult({ data: {
-          symbol,
-          resumed: false,
-          reason: "NOT_OPERATOR_PAUSED"
-        } })
-      }
-      if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator resume requires a Operational State Store commit callback") })
-      }
-      let committed
-      try {
-        committed = await beforeApply({
-          symbol,
-          action: "RESUME"
-        })
-      } catch (error) {
-        return toResult({ error })
-      }
-      if (committed?.ok !== true || committed?.data?.durable !== true) {
-        return committed?.ok === false
-          ? committed
-          : toResult({ error: new Error("Operator resume fact was not durably committed") })
-      }
-      state.operatorPausedMarkets.delete(symbol)
-      return toResult({ data: {
-        symbol,
-        resumed: true,
-        durable: true
-      } })
-    },
+  const pauseMarket = createOperatorMarketPauseHandler({ state, pairs, runTransition })
+  const resumeMarket = createOperatorMarketResumeHandler({
+    state,
+    pairs,
+    volatilityProtectionEnabled,
+    hasPendingRecoveryManagedCancellation,
+    runTransition,
   })
 
   const processMarketPrice = async ({
