@@ -61,7 +61,7 @@ The current Conservative execution path submits ordinary `LIMIT` or `LIMIT_MAKER
 
 These constraints are retained as immutable `unvalidatedConstraints` diagnostics (`type`, `scope`, `sourceFilterType`). They are not claimed to have passed local validation. Binance evaluates them when an order is submitted and can definitively reject an order. A definite filter rejection is handled as `DEFINITE_EXCHANGE_FILTER_REJECTED`; it must not become an ambiguous/UNKNOWN order or a phantom reservation. This avoids a false safety claim while also avoiding a blanket startup/configuration outage for constraints the application cannot independently evaluate. Supported static price/quantity/notional rules, required metadata completeness, and supported order types remain locally validated and fail closed.
 
-The credential-free `pnpm run config:symbol` generator reads public `exchangeInfo` and ticker data only. It cannot query authenticated `myFilters`, so account-specific constraints are checked by Harvester during authenticated startup. Its preview must disclose public unvalidated-filter diagnostics. See the [generator instructions](../README.md#generate-a-new-trading-pair).
+The credential-free `pnpm run config:symbol` generator reads public `exchangeInfo` and ticker data only. It cannot query authenticated `myFilters`, so account-specific constraints are checked by Harvester during authenticated startup. The command updates only `token-specification.json`; its preview shows the derived per-market precision and retains public unvalidated-filter diagnostics. It does not create strategy pairs or persist exchange filters. See the [generator instructions](../README.md#generate-or-refresh-market-metadata).
 
 ## Adding another exchange later
 
