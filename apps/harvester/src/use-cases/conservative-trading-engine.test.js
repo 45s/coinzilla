@@ -3860,11 +3860,7 @@ function createShutdownBuyRaceState({ seeded }) {
       current: undefined,
     },
     buyFills: [],
-    cancelGate: {
-      promise: new Promise((resolve) => {
-        return resolve
-      }),
-    },
+    seeded,
   }
 }
 
@@ -4056,8 +4052,8 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
 
 
 test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
-  const seeded = makeSeededRecoveryState()
   const scenario = await createShutdownBuyRaceScenario()
+  const seeded = scenario.seeded
   const buyOrder = scenario.buyOrder
   const firstQuantity = "0.5"
   const secondQuantity = subtractDecimal({
