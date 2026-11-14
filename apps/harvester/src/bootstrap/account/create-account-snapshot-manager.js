@@ -54,13 +54,13 @@ function logSystem(logger, data) {
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
  * @param {object} options.logger Structured logger.
- * @param {object} [options.durableFactsStore] Optional initialized ADR-0001 durable-fact store.
+ * @param {object} [options.operationalStateStore] Optional initialized ADR-0001 durable-fact store.
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, durableFactsStore,
+  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now, operationalStateStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
@@ -253,8 +253,8 @@ export function createAccountSnapshotManager({
         false,
       )
     }
-    if (durableFactsStore) {
-      const durable = await recordAccountOpenOrdersCaptured({ durableFactsStore, data: dataResult.data })
+    if (operationalStateStore) {
+      const durable = await recordAccountOpenOrdersCaptured({ operationalStateStore, data: dataResult.data })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
         throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
@@ -348,8 +348,8 @@ export function createAccountSnapshotManager({
         false,
       )
     }
-    if (durableFactsStore) {
-      const durable = await recordAccountSnapshotCaptured({ durableFactsStore, data: dataResult.data })
+    if (operationalStateStore) {
+      const durable = await recordAccountSnapshotCaptured({ operationalStateStore, data: dataResult.data })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
         throw withRecoveryFailure(new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_SNAPSHOT_DURABLE_FACT", false)

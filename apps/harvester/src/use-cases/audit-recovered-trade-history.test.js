@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
 import { auditRecoveredTradeHistory } from "./audit-recovered-trade-history.js"
 import { readMarketHistoryCoverage } from "./read-market-history-coverage.js"
 import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js"
@@ -357,15 +357,15 @@ test("rejects a history-coverage fact verified before the requested history star
 test("feeds integrity-verified durable coverage projection into the market history audit", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-market-history-audit-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const durableFactsStore = createFileDurableFactsStore({
+  const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "market-history-audit-test",
     now: () => new Date("2026-11-11T12:00:00.000Z"),
   })
-  const initialized = await durableFactsStore.initialize()
+  const initialized = await operationalStateStore.initialize()
   assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
   const recorded = await recordMarketHistoryCoverage({
-    durableFactsStore,
+    operationalStateStore,
     factId: "coverage:BTCUSDT:audit",
     symbol: "BTCUSDT",
     coveredFromTime: 40,
@@ -374,7 +374,7 @@ test("feeds integrity-verified durable coverage projection into the market histo
     verifiedBy: "operator:trader",
   })
   assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
-  const projected = await readMarketHistoryCoverage({ durableFactsStore, symbol: "BTCUSDT" })
+  const projected = await readMarketHistoryCoverage({ operationalStateStore, symbol: "BTCUSDT" })
   assert.equal(projected.ok, true, projected.errors?.map(({ message }) => message).join("; "))
   const fill = makeFill()
   const result = auditRecoveredTradeHistory({

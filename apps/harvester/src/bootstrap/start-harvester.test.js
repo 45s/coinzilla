@@ -6,7 +6,7 @@ import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
@@ -380,7 +380,7 @@ test("verifies the existing durable-facts store before connecting when Telegram 
       loadConfig: async () => config,
       env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
       runtimeSessionId: "test-runtime-session",
-      createDurableFactsStore: ({ directory, runtimeSessionId }) => {
+      createOperationalStateStore: ({ directory, runtimeSessionId }) => {
         calls.push({ type: "create-store", directory, runtimeSessionId })
         return {
           verify: async () => ({ ok: false, errors: [new Error("ledger genesis is missing")] }),
@@ -410,7 +410,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: () => ({
+    createOperationalStateStore: () => ({
       runtimeSessionId: "test-runtime-session",
       verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
       readAll: async () => ({
@@ -471,7 +471,7 @@ test("keeps inbound operator control disabled without constructing its store or 
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
-    createDurableFactsStore: () => { storeFactoryCalls += 1; throw new Error("Disabled operator control must not open the durable-facts store.") },
+    createOperationalStateStore: () => { storeFactoryCalls += 1; throw new Error("Disabled operator control must not open the durable-facts store.") },
     createTelegramOperatorAdapter: () => { adapterFactoryCalls += 1; throw new Error("Disabled operator control must not construct a Telegram adapter.") },
     logger: { info() {}, error() {} },
   })
@@ -491,7 +491,7 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
   let cancelOrderCalls = 0
   broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
-  const durableFacts = {
+  const operationalStateStore = {
     runtimeSessionId: "test-runtime-session",
     verify: async () => { calls.push("verify-durable-facts"); return { ok: true, data: { valid: true, durableWriteSupported: true } } },
     readAll: async () => ({
@@ -520,11 +520,11 @@ test("verifies durable facts before broker connect and starts/stops Telegram aro
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: ({ directory, runtimeSessionId }) => {
+    createOperationalStateStore: ({ directory, runtimeSessionId }) => {
       calls.push("create-durable-facts-store")
       assert.equal(directory, process.cwd(), "The configured absolute store directory must be passed unchanged to the ADR-0001 adapter.")
       assert.equal(runtimeSessionId, "test-runtime-session", "The current process identity must scope appended durable facts.")
-      return durableFacts
+      return operationalStateStore
     },
     createTelegramOperatorAdapter: ({ botToken, allowedUserIds, operator: suppliedOperator }) => {
       calls.push("create-telegram-adapter")
@@ -559,7 +559,7 @@ test("stops Telegram and broker when Telegram identity verification fails during
     loadConfig: async () => config,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token", OPERATIONAL_STATE_DIRECTORY: process.cwd() },
     runtimeSessionId: "test-runtime-session",
-    createDurableFactsStore: () => ({
+    createOperationalStateStore: () => ({
       runtimeSessionId: "test-runtime-session",
       verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
       readAll: async () => ({
@@ -3072,8 +3072,8 @@ test("blocks trading startup when either account audit query fails", async () =>
 })
 
 test("blocks trading startup when either PREFLIGHT audit event cannot be durably flushed", async () => {
-  for (const scenario of [{ failedFlush: 1, nonDurable: false }, { failedFlush: 1, nonDurable: true }, { failedFlush: 2, nonDurable: true }]) {
-    const { failedFlush, nonDurable } = scenario
+  for (const scenario of [{ failedFlush: 1, nonOperationalState: false }, { failedFlush: 1, nonOperationalState: true }, { failedFlush: 2, nonOperationalState: true }]) {
+    const { failedFlush, nonOperationalState } = scenario
     const calls = []
     const broker = createBroker(calls)
     const events = []
@@ -3087,7 +3087,7 @@ test("blocks trading startup when either PREFLIGHT audit event cannot be durably
         flush: async () => {
           flushCount += 1
           if (flushCount !== failedFlush) {return { ok: true, durable: true }}
-          return nonDurable
+          return nonOperationalState
             ? { ok: true, durable: false }
             : { ok: false, errors: [new Error("journal fsync failed")] }
         },
@@ -3752,7 +3752,7 @@ test("verifies an injected durable-fact ledger before connecting to the broker",
   await assert.rejects(
     () => startHarvesterForTest({
       appConfig,
-      durableFactsStore: {
+      operationalStateStore: {
         append: async () => ({ ok: true, data: { durable: true } }),
         verify: async () => ({ ok: false, errors: [new Error("durable ledger integrity failed")] }),
         readAll: async () => ({ ok: true, data: { records: [] } }),
@@ -3771,15 +3771,15 @@ test("verifies an injected durable-fact ledger before connecting to the broker",
 test("records configuration and process boundaries before broker startup and after shutdown", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-boundaries-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const durableFactsStore = createFileDurableFactsStore({
+  const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "start-harvester-process-boundary-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
   })
-  await durableFactsStore.initialize()
+  await operationalStateStore.initialize()
 
-  const harvester = await startHarvesterForTest({ appConfig, durableFactsStore })
-  const started = await durableFactsStore.readAll()
+  const harvester = await startHarvesterForTest({ appConfig, operationalStateStore })
+  const started = await operationalStateStore.readAll()
   assert.equal(started.ok, true, started.errors?.[0]?.message)
   const configuration = started.data.records.find(({ factType }) => factType === "CONFIGURATION_BASELINE")
   const processStart = started.data.records.find(({ factType }) => factType === "PROCESS_STARTED")
@@ -3792,7 +3792,7 @@ test("records configuration and process boundaries before broker startup and aft
 
   await harvester.stop()
 
-  const stopped = await durableFactsStore.readAll()
+  const stopped = await operationalStateStore.readAll()
   assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
   const processStop = stopped.data.records.find(({ factType }) => factType === "PROCESS_STOPPED")
   assert.ok(processStop, "A clean shutdown must durably close the process boundary.")
@@ -3804,15 +3804,15 @@ test("records configuration and process boundaries before broker startup and aft
 test("blocks even a clean second process start until the restart-recovery gate is accepted", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const firstStore = createFileDurableFactsStore({
+  const firstStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "first-process-session",
   })
   await firstStore.initialize()
-  const baseline = await recordConfigurationBaseline({ durableFactsStore: firstStore, appConfig })
+  const baseline = await recordConfigurationBaseline({ operationalStateStore: firstStore, appConfig })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
-    durableFactsStore: firstStore,
+    operationalStateStore: firstStore,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
@@ -3820,13 +3820,13 @@ test("blocks even a clean second process start until the restart-recovery gate i
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
   const stopped = await recordProcessStopped({
-    durableFactsStore: firstStore,
+    operationalStateStore: firstStore,
     reason: "CLEAN_TEST_SHUTDOWN",
     clean: true,
   })
   assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
 
-  const restartStore = createFileDurableFactsStore({
+  const restartStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "second-process-session",
   })
@@ -3834,7 +3834,7 @@ test("blocks even a clean second process start until the restart-recovery gate i
   await assert.rejects(
     () => startHarvesterForTest({
       appConfig,
-      durableFactsStore: restartStore,
+      operationalStateStore: restartStore,
       brokerAdapterFactory: () => {
         brokerCalls.push("broker-factory")
         return createBroker(brokerCalls)
@@ -3849,15 +3849,15 @@ test("blocks even a clean second process start until the restart-recovery gate i
 test("blocks a second process start after an unclean prior session before broker connection", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const firstStore = createFileDurableFactsStore({
+  const firstStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "crashed-process-session",
   })
   await firstStore.initialize()
-  const baseline = await recordConfigurationBaseline({ durableFactsStore: firstStore, appConfig })
+  const baseline = await recordConfigurationBaseline({ operationalStateStore: firstStore, appConfig })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
-    durableFactsStore: firstStore,
+    operationalStateStore: firstStore,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
@@ -3865,7 +3865,7 @@ test("blocks a second process start after an unclean prior session before broker
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
 
-  const restartStore = createFileDurableFactsStore({
+  const restartStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "post-crash-process-session",
   })
@@ -3873,7 +3873,7 @@ test("blocks a second process start after an unclean prior session before broker
   await assert.rejects(
     () => startHarvesterForTest({
       appConfig,
-      durableFactsStore: restartStore,
+      operationalStateStore: restartStore,
       brokerAdapterFactory: () => {
         brokerCalls.push("broker-factory")
         return createBroker(brokerCalls)
@@ -3889,8 +3889,8 @@ test("reuses the process-owned durable-facts store and preserves operator pause 
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-shared-operator-facts-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
   const runtimeSessionId = "shared-process-operator-session"
-  const durableFactsStore = createFileDurableFactsStore({ directory, runtimeSessionId })
-  await durableFactsStore.initialize()
+  const operationalStateStore = createFileOperationalStateStore({ directory, runtimeSessionId })
+  await operationalStateStore.initialize()
   const broker = createBroker()
   let resolveRecoveryAcknowledgement
   const recoveryAcknowledged = new Promise((resolve) => { resolveRecoveryAcknowledgement = resolve })
@@ -3922,11 +3922,11 @@ test("reuses the process-owned durable-facts store and preserves operator pause 
   }
   const runtime = await startHarvesterForTest({
     appConfig: config,
-    durableFactsStore,
+    operationalStateStore,
     runtimeSessionId,
     env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
     brokerAdapterFactory: () => broker,
-    createDurableFactsStore: () => {
+    createOperationalStateStore: () => {
       secondaryStoreFactoryCalls += 1
       throw new Error("The process must not create a second writer for its durable-facts ledger.")
     },
@@ -3992,7 +3992,7 @@ test("reuses the process-owned durable-facts store and preserves operator pause 
     await runtime.stop()
   }
 
-  const read = await durableFactsStore.readAll()
+  const read = await operationalStateStore.readAll()
   assert.equal(read.ok, true, read.errors?.[0]?.message)
   assert.equal(secondaryStoreFactoryCalls, 0, "Telegram operator control must reuse the exact store that owns process/order/fill facts.")
   const pauseFact = read.data.records.find(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")

@@ -32,7 +32,7 @@ import { recordConfigurationBaseline } from "../use-cases/record-configuration-b
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
-import { projectHarvesterDurableFacts } from "../infrastructure/durable-facts/project-harvester-durable-facts.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-durable-facts.js"
 import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
@@ -58,9 +58,9 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
-  durableFactsStore: suppliedDurableFactsStore,
+  operationalStateStore: suppliedOperationalStateStore,
   runtimeSessionId,
-  createDurableFactsStore,
+  createOperationalStateStore,
   createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
   telegramOperatorFetchImpl,
 } = {}) {
@@ -80,20 +80,20 @@ export async function startHarvester({
     telegramConfig: appConfig.operatorControl?.telegram,
     env,
     runtimeSessionId,
-    durableFactsStore: suppliedDurableFactsStore,
-    createDurableFactsStore,
+    operationalStateStore: suppliedOperationalStateStore,
+    createOperationalStateStore,
     createAdapter: createTelegramOperatorAdapterFactory,
     fetchImpl: telegramOperatorFetchImpl,
     logger,
   })
-  const durableFactsStore = suppliedDurableFactsStore ?? operatorControlLifecycle.durableFactsStore
-  if (durableFactsStore !== undefined) {
-    if (typeof durableFactsStore?.append !== "function" ||
-        typeof durableFactsStore?.verify !== "function" ||
-        typeof durableFactsStore?.readAll !== "function") {
-      throw new TypeError("durableFactsStore must provide append(), verify(), and readAll() when supplied")
+  const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  if (operationalStateStore !== undefined) {
+    if (typeof operationalStateStore?.append !== "function" ||
+        typeof operationalStateStore?.verify !== "function" ||
+        typeof operationalStateStore?.readAll !== "function") {
+      throw new TypeError("operationalStateStore must provide append(), verify(), and readAll() when supplied")
     }
-    const verification = await durableFactsStore.verify()
+    const verification = await operationalStateStore.verify()
     if (verification?.ok !== true ||
         verification.data?.valid !== true ||
         verification.data?.durableWriteSupported !== true) {
@@ -102,12 +102,12 @@ export async function startHarvester({
       error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
       throw error
     }
-    const existingFacts = await durableFactsStore.readAll()
+    const existingFacts = await operationalStateStore.readAll()
     if (existingFacts?.ok !== true || existingFacts.data?.durableWriteSupported !== true || !Array.isArray(existingFacts.data.records)) {
       const cause = existingFacts?.errors?.[0] ?? new Error("Durable-fact history could not be read and verified")
       throw new Error("Harvester cannot connect to the broker without verified durable-fact history: " + (cause.message ?? String(cause)), { cause })
     }
-    const existingProjection = projectHarvesterDurableFacts({ records: existingFacts.data.records })
+    const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
     if (existingProjection?.ok !== true) {
       const cause = existingProjection?.errors?.[0] ?? new Error("Durable-fact history projection failed")
       throw new Error("Harvester cannot restart from an unprojectable durable-fact history: " + (cause.message ?? String(cause)), { cause })
@@ -119,15 +119,15 @@ export async function startHarvester({
     }
   }
   let processConfigurationFingerprint
-  if (durableFactsStore) {
-    const baseline = await recordConfigurationBaseline({ durableFactsStore, appConfig })
+  if (operationalStateStore) {
+    const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
     if (baseline?.ok !== true || baseline.data?.durable !== true) {
       throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
         (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
     }
     processConfigurationFingerprint = baseline.data.fingerprint
     const started = await recordProcessStarted({
-      durableFactsStore,
+      operationalStateStore,
       configurationFingerprint: processConfigurationFingerprint,
       strategyName: baseline.data.strategyName,
       markets: baseline.data.markets,
@@ -138,12 +138,12 @@ export async function startHarvester({
         (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
     }
   }
-  const onDurableExecutionFill = durableFactsStore
-    ? ({ fill }) => recordExecutionFill({ durableFactsStore, fill })
+  const onOperationalStateExecutionFill = operationalStateStore
+    ? ({ fill }) => recordExecutionFill({ operationalStateStore, fill })
     : undefined
-  const onDurableRecoveryCycleCompleted = durableFactsStore
+  const onOperationalStateRecoveryCycleCompleted = operationalStateStore
     ? ({ recoveryLedger, position, sellOrder, completion, minProfit, inventoryDisposition }) => recordRecoveryCycleCompleted({
-        durableFactsStore,
+        operationalStateStore,
         recoveryLedger,
         position,
         sellOrder,
@@ -152,9 +152,9 @@ export async function startHarvester({
         inventoryDisposition,
       })
     : undefined
-  const onDurableRecoveryCycleNotCompleted = durableFactsStore
+  const onOperationalStateRecoveryCycleNotCompleted = operationalStateStore
     ? ({ recoveryLedger, position, sellOrder, completion, minProfit }) => recordRecoveryCycleNotCompleted({
-        durableFactsStore,
+        operationalStateStore,
         recoveryLedger,
         position,
         sellOrder,
@@ -162,37 +162,37 @@ export async function startHarvester({
         minProfit,
       })
     : undefined
-  const onDurableSubmissionIntent = durableFactsStore
-    ? ({ order, purpose }) => recordOrderSubmissionIntent({ durableFactsStore, order, purpose })
+  const onOperationalStateSubmissionIntent = operationalStateStore
+    ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore, order, purpose })
     : undefined
-  const onDurableSubmissionOutcome = durableFactsStore
-    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ durableFactsStore, order, outcome, purpose })
+  const onOperationalStateSubmissionOutcome = operationalStateStore
+    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore, order, outcome, purpose })
     : undefined
-  const onDurableCancellationIntent = durableFactsStore
-    ? ({ order, reason }) => recordOrderCancellationIntent({ durableFactsStore, order, reason })
+  const onOperationalStateCancellationIntent = operationalStateStore
+    ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore, order, reason })
     : undefined
   let strategyPauseTransitionSequence = 0
-  const onDurableStrategyMarketPaused = durableFactsStore
+  const onOperationalStateStrategyMarketPaused = operationalStateStore
     ? ({ symbol, reason }) => recordStrategyMarketControl({
-        durableFactsStore,
+        operationalStateStore,
         action: "PAUSE",
-        transitionId: durableFactsStore.runtimeSessionId + ":" + (++strategyPauseTransitionSequence),
+        transitionId: operationalStateStore.runtimeSessionId + ":" + (++strategyPauseTransitionSequence),
         symbol,
         reason,
       })
     : undefined
-  const onSafetyBlockerRaised = durableFactsStore
+  const onSafetyBlockerRaised = operationalStateStore
     ? ({ scope, symbol, reason, evidence }) => {
         const canonicalEvidence = Object.fromEntries(
           Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right)),
         )
         const evidenceDigest = createHash("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
-        return recordSafetyBlockerRaised({ durableFactsStore, scope, symbol, reason, evidenceDigest })
+        return recordSafetyBlockerRaised({ operationalStateStore, scope, symbol, reason, evidenceDigest })
       }
     : undefined
-  const onDurableCancellationOutcome = durableFactsStore
+  const onOperationalStateCancellationOutcome = operationalStateStore
     ? ({ order, canceledOrder, reason, outcome }) => recordOrderCancellationOutcome({
-        durableFactsStore,
+        operationalStateStore,
         order,
         canceledOrder,
         reason,
@@ -207,7 +207,7 @@ export async function startHarvester({
     }
     return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
   }
-  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted, onDurableRecoveryCycleNotCompleted })
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger, onCommissionAsset, onOperationalStateExecutionFill, onOperationalStateRecoveryCycleCompleted, onOperationalStateRecoveryCycleNotCompleted })
   const recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
@@ -312,7 +312,7 @@ export async function startHarvester({
     getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
     logger,
     now,
-    durableFactsStore,
+    operationalStateStore,
   })
   const {
     refreshAccountSnapshot,
@@ -424,11 +424,11 @@ export async function startHarvester({
       isMarketPriceFresh,
       isMarketBookFresh,
       getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
-      onDurableSubmissionIntent,
-      onDurableSubmissionOutcome,
-      onDurableCancellationIntent,
-      onDurableCancellationOutcome,
-      onDurableStrategyMarketPaused,
+      onOperationalStateSubmissionIntent,
+      onOperationalStateSubmissionOutcome,
+      onOperationalStateCancellationIntent,
+      onOperationalStateCancellationOutcome,
+      onOperationalStateStrategyMarketPaused,
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
@@ -471,9 +471,9 @@ export async function startHarvester({
       evaluateStrategy,
       logger,
       onCommissionAsset,
-      onDurableExecutionFill,
-      onDurableRecoveryCycleCompleted,
-      onDurableRecoveryCycleNotCompleted,
+      onOperationalStateExecutionFill,
+      onOperationalStateRecoveryCycleCompleted,
+      onOperationalStateRecoveryCycleNotCompleted,
     })
 
     userDataSubscription = await subscribeToUserData({
@@ -583,9 +583,9 @@ export async function startHarvester({
     if (operatorStopError) {
       throw operatorStopError
     }
-    if (durableFactsStore) {
+    if (operationalStateStore) {
       const stopped = await recordProcessStopped({
-        durableFactsStore,
+        operationalStateStore,
         reason: "SHUTDOWN_COMPLETED",
         clean: true,
       })

@@ -5,10 +5,10 @@ import * as fsPromises from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileDurableFactsStore } from "./create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
 
 const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-durable-facts-"))
-const createStore = (directory, options = {}) => createFileDurableFactsStore({
+const createStore = (directory, options = {}) => createFileOperationalStateStore({
   directory,
   runtimeSessionId: "runtime-session-1",
   now: () => new Date("2026-11-11T12:00:00.000Z"),

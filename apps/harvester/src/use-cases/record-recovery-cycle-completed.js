@@ -6,7 +6,7 @@ import { compareDecimal, toResult } from "@coinzilla/utils"
 
 /** Persist an eligible recovery-cycle boundary before Portfolio/RecoveryLedger reset is committed. */
 export async function recordRecoveryCycleCompleted({
-  durableFactsStore,
+  operationalStateStore,
   recoveryLedger,
   position,
   sellOrder,
@@ -14,7 +14,7 @@ export async function recordRecoveryCycleCompleted({
   minProfit,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordRecoveryCycleCompleted requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordRecoveryCycleCompleted requires a durable-fact append port") }
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
       throw new TypeError("recordRecoveryCycleCompleted requires canonical RecoveryLedger and Position values")
     }
@@ -58,7 +58,7 @@ export async function recordRecoveryCycleCompleted({
       canonicalInventoryDisposition,
     ])
     const cycleId = createHash("sha256").update(cycleIdentity).digest("hex")
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "recovery-cycle-completed:" + market.id + ":" + cycleId,
       factType: "RECOVERY_CYCLE_COMPLETED",
       data: {

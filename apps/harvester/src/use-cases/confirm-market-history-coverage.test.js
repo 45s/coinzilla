@@ -49,7 +49,7 @@ function createOptions(overrides = {}) {
     store,
     calls,
     options: {
-      durableFactsStore: store,
+      operationalStateStore: store,
       ...evidence,
       reconcileMarketState: async ({ historyRetentionEvidence }) => {
         calls.push(historyRetentionEvidence)
@@ -209,7 +209,7 @@ test("does not report success when the durable append fails", async () => {
 
 test("rejects malformed confirmation evidence before reading the durable ledger", async () => {
   const invalidCases = [
-    [{ durableFactsStore: {} }, /read\/append port/],
+    [{ operationalStateStore: {} }, /read\/append port/],
     [{ symbol: "linkusdt" }, /canonical uppercase/],
     [{ coveredFromTime: -1 }, /non-negative safe integers/],
     [{ coveredFromTime: -0 }, /non-negative safe integers/],

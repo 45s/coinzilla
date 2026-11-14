@@ -11,7 +11,7 @@ const CONTINUE_REASONS = new Set([
 
 /** Persist the explicit non-completion outcome for a reconciled full recovery SELL. */
 export async function recordRecoveryCycleNotCompleted({
-  durableFactsStore,
+  operationalStateStore,
   recoveryLedger,
   position,
   sellOrder,
@@ -19,7 +19,7 @@ export async function recordRecoveryCycleNotCompleted({
   minProfit,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") {
+    if (typeof operationalStateStore?.append !== "function") {
       throw new TypeError("recordRecoveryCycleNotCompleted requires a durable-fact append port")
     }
     if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
@@ -78,7 +78,7 @@ export async function recordRecoveryCycleNotCompleted({
       completion.reason,
     ])
     const evaluationId = createHash("sha256").update(evaluationIdentity).digest("hex")
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "recovery-cycle-not-completed:" + market.id + ":" + evaluationId,
       factType: "RECOVERY_CYCLE_NOT_COMPLETED",
       data: {

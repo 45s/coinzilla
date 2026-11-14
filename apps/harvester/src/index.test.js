@@ -64,7 +64,7 @@ test("does not create or inject durable recovery facts while recovery is disable
     logger: { info() {}, system() {}, error() {} },
   })
   assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
-  assert.equal(startupInput.durableFactsStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
+  assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
 })
 
 test("injects the shared default Operational State Store when Telegram operator control is enabled without recovery", async () => {
@@ -85,19 +85,19 @@ test("injects the shared default Operational State Store when Telegram operator 
       },
     },
   }
-  const durableFactsStore = {
+  const operationalStateStore = {
     verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
     append: async () => ({ ok: true, data: { durable: true } }),
     readAll: async () => ({ ok: true, data: { durableWriteSupported: true, records: [] } }),
   }
-  let durableFactsStoreOptions
+  let operationalStateStoreOptions
   let startupInput
 
   await runMain({
     loadConfig: async () => configuredApp,
     createOperationalStateStore: (options) => {
-      durableFactsStoreOptions = options
-      return durableFactsStore
+      operationalStateStoreOptions = options
+      return operationalStateStore
     },
     start: async (input) => {
       startupInput = input
@@ -107,7 +107,7 @@ test("injects the shared default Operational State Store when Telegram operator 
   })
 
   assert.deepEqual(
-    durableFactsStoreOptions,
+    operationalStateStoreOptions,
     {
       directory: DEFAULT_OPERATIONAL_STATE_DIRECTORY,
       runtimeSessionId: startupInput.runtimeSessionId,
@@ -115,8 +115,8 @@ test("injects the shared default Operational State Store when Telegram operator 
     "Enabling Telegram operator control without restart recovery must select the documented default ADR-0001 directory and current process identity.",
   )
   assert.strictEqual(
-    startupInput.durableFactsStore,
-    durableFactsStore,
+    startupInput.operationalStateStore,
+    operationalStateStore,
     "The production composition must pass the exact shared Operational State Store to Harvester when Telegram operator control is enabled independently of recovery.",
   )
 })
@@ -1736,7 +1736,7 @@ test("does not construct, verify, or inject durable facts even when a stale ledg
     },
     start: async (input) => {
       runtimeStarted = true
-      assert.equal(input.durableFactsStore, undefined)
+      assert.equal(input.operationalStateStore, undefined)
       return { connected: false }
     },
     logger: { info() {}, system() {}, error() {} },

@@ -8,7 +8,7 @@ import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../../src/domain/account/account-snapshot.js"
 import { OrderRegistry } from "../../src/domain/orders/order-registry.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
-import { createFileDurableFactsStore } from "../../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
 import { confirmMarketHistoryCoverage } from "../../src/use-cases/confirm-market-history-coverage.js"
 import { reconcileRecoveredMarketState } from "../../src/use-cases/reconcile-recovered-market-state.js"
 
@@ -125,7 +125,7 @@ function createReconciliationOptions(overrides = {}) {
 async function withDurableFactsStore(callback) {
   const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-step7-"))
   try {
-    const store = createFileDurableFactsStore({
+    const store = createFileOperationalStateStore({
       directory,
       runtimeSessionId: "step7-offline-e2e",
     })
@@ -237,7 +237,7 @@ test("production durable-fact confirmation is idempotent and rejects a conflicti
       })
     }
     const confirmation = {
-      durableFactsStore: store,
+      operationalStateStore: store,
       symbol: evidence.symbol,
       coveredFromTime: evidence.coveredFromTime,
       verifiedAt: evidence.verifiedAt,
@@ -269,13 +269,13 @@ test("production durable-fact confirmation is idempotent and rejects a conflicti
 
 test("production confirmation fails closed when the durable-fact ledger is missing", async () => {
   const directory = path.join(tmpdir(), "coinzilla-missing-recovery-ledger-" + process.pid)
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "step7-missing-ledger",
   })
   let reconciliationCalled = false
   const result = await confirmMarketHistoryCoverage({
-    durableFactsStore: store,
+    operationalStateStore: store,
     symbol: evidence.symbol,
     coveredFromTime: evidence.coveredFromTime,
     verifiedAt: evidence.verifiedAt,
@@ -303,7 +303,7 @@ test("production confirmation fails closed when the durable-fact commit checkpoi
         return nodeFileSystem.open(filePath, flags, mode)
       },
     }
-    const store = createFileDurableFactsStore({
+    const store = createFileOperationalStateStore({
       directory,
       runtimeSessionId: "step7-commit-failure",
       fileSystem,
@@ -312,7 +312,7 @@ test("production confirmation fails closed when the durable-fact commit checkpoi
     assert.equal(initialized.ok, true, "The failure fixture must start from a valid initialized ledger.")
     const { options } = createReconciliationOptions()
     const result = await confirmMarketHistoryCoverage({
-      durableFactsStore: store,
+      operationalStateStore: store,
       symbol: evidence.symbol,
       coveredFromTime: evidence.coveredFromTime,
       verifiedAt: evidence.verifiedAt,

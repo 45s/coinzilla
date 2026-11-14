@@ -91,7 +91,7 @@ function canonicalize(value, depth = 0) {
  * @returns {unknown}
  * @throws {TypeError|RangeError} When the value is outside the durable JSON contract.
  */
-export function canonicalizeDurableFactValue(value) {
+export function canonicalizeOperationalStateValue(value) {
   return canonicalize(value)
 }
 
@@ -101,8 +101,8 @@ export function canonicalizeDurableFactValue(value) {
  * @param {unknown} value
  * @returns {string}
  */
-export function canonicalStringifyDurableFactValue(value) {
-  return JSON.stringify(canonicalizeDurableFactValue(value))
+export function canonicalStringifyOperationalStateValue(value) {
+  return JSON.stringify(canonicalizeOperationalStateValue(value))
 }
 
 /**
@@ -111,7 +111,7 @@ export function canonicalStringifyDurableFactValue(value) {
  * @param {string} value
  * @returns {string}
  */
-export function sha256DurableFactValue(value) {
+export function sha256OperationalStateValue(value) {
   return createHash("sha256").update(value, "utf8").digest("hex")
 }
 
@@ -121,9 +121,9 @@ export function sha256DurableFactValue(value) {
  * @param {object} record
  * @returns {string}
  */
-export function digestDurableFactRecord(record) {
+export function digestOperationalStateRecord(record) {
   const body = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "digest"))
-  return sha256DurableFactValue(canonicalStringifyDurableFactValue(body))
+  return sha256OperationalStateValue(canonicalStringifyOperationalStateValue(body))
 }
 
 /**
@@ -133,7 +133,7 @@ export function digestDurableFactRecord(record) {
  * @returns {string}
  * @throws {TypeError|RangeError} When the value is not a canonical ISO-8601 timestamp.
  */
-export function normalizeDurableFactRecordedAt(value) {
+export function normalizeOperationalStateRecordedAt(value) {
   const recordedAt = value instanceof Date ? value.toISOString() : String(value)
   const parsed = new Date(recordedAt)
   if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== recordedAt) {

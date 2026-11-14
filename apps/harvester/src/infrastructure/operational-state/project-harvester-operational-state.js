@@ -270,7 +270,7 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
  * @param {object[]} options.records Verified, globally ordered durable-fact records.
  * @returns {object} Candidate recovery projection.
  */
-export function projectHarvesterDurableFacts({ records } = {}) {
+export function projectHarvesterOperationalState({ records } = {}) {
   try {
     if (!Array.isArray(records)) { throw new TypeError("Durable-fact projection requires a verified records array") }
     const configurationBaselines = new Map()

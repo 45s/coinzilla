@@ -23,6 +23,12 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 All items remain open. A documentation PR or a clean offline audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
+## P3 — Operational State Store source naming — in progress
+
+- [~] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Rename the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; update all consumers and current architecture documentation. Preserve the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation is part of this refactor. The implementation is being prepared in a focused PR targeting `develop`.
+
+---
+
 ## P0 — Telegram Command Center (CC) — delivered
 
 **Status: [x] COMPLETE — CC-4 merged into `develop` in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; CC-1 through CC-3 were previously merged in PRs #1079, #1081, #1086 and #1087. Required exact-head CI and external documentation links passed.** The initial engine/application foundation remains in [PR #1045](https://github.com/45s/coinzilla/pull/1045), disabled-by-default runtime wiring in [PR #1067](https://github.com/45s/coinzilla/pull/1067), and process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065). ADR-0001 process-restart recovery Steps 8–9 remain explicitly deferred and are not implied by CC completion.

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-durable-facts-store.js"
 import {
   recordAccountOpenOrdersCaptured,
   recordAccountSnapshotCaptured,
@@ -12,7 +12,7 @@ import {
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-account-recorders-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "account-recorder-test-session",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -55,9 +55,9 @@ const openOrders = (overrides = {}) => ({
 })
 
 test("records complete account snapshots with deterministic idempotent identities", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const first = await recordAccountSnapshotCaptured({ durableFactsStore, data: balances() })
-  const duplicate = await recordAccountSnapshotCaptured({ durableFactsStore, data: balances() })
+  const operationalStateStore = await createStore(t)
+  const first = await recordAccountSnapshotCaptured({ operationalStateStore, data: balances() })
+  const duplicate = await recordAccountSnapshotCaptured({ operationalStateStore, data: balances() })
 
   assert.equal(first.ok, true, first.errors?.map(({ message }) => message).join("; "))
   assert.equal(first.data.durable, true, "The account balance snapshot must be committed before reconciliation consumes it.")
@@ -68,10 +68,10 @@ test("records complete account snapshots with deterministic idempotent identitie
 })
 
 test("rejects a conflicting account snapshot that reuses the same phase and source timestamp", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const first = await recordAccountSnapshotCaptured({ durableFactsStore, data: balances() })
+  const operationalStateStore = await createStore(t)
+  const first = await recordAccountSnapshotCaptured({ operationalStateStore, data: balances() })
   const conflict = await recordAccountSnapshotCaptured({
-    durableFactsStore,
+    operationalStateStore,
     data: balances({
       balances: [
         { asset: "BTC", free: "0.2", locked: "0", total: "0.2" },
@@ -85,8 +85,8 @@ test("rejects a conflicting account snapshot that reuses the same phase and sour
 })
 
 test("records blocked account-wide open orders without fabricating external ownership", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const result = await recordAccountOpenOrdersCaptured({ durableFactsStore, data: openOrders() })
+  const operationalStateStore = await createStore(t)
+  const result = await recordAccountOpenOrdersCaptured({ operationalStateStore, data: openOrders() })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.durable, true, "The external-order observation must be committed before readiness is evaluated.")
@@ -96,10 +96,10 @@ test("records blocked account-wide open orders without fabricating external owne
 })
 
 test("rejects a conflicting open-order snapshot that reuses the same phase and observation timestamp", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const first = await recordAccountOpenOrdersCaptured({ durableFactsStore, data: openOrders() })
+  const operationalStateStore = await createStore(t)
+  const first = await recordAccountOpenOrdersCaptured({ operationalStateStore, data: openOrders() })
   const conflict = await recordAccountOpenOrdersCaptured({
-    durableFactsStore,
+    operationalStateStore,
     data: openOrders({
       orders: [{ ...openOrders().orders[0], price: "65100" }],
     }),
@@ -112,11 +112,11 @@ test("rejects a conflicting open-order snapshot that reuses the same phase and o
 test("does not initialize a missing durable-fact store", async (t) => {
   const directory = path.join(os.tmpdir(), "harvester-account-recorders-missing-" + process.pid + "-" + Date.now())
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const durableFactsStore = createFileDurableFactsStore({
+  const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "account-recorder-test-session",
   })
-  const result = await recordAccountSnapshotCaptured({ durableFactsStore, data: balances() })
+  const result = await recordAccountSnapshotCaptured({ operationalStateStore, data: balances() })
 
   assert.equal(result.ok, false, "A recorder must never create or initialize a missing production fact ledger.")
 })
@@ -124,7 +124,7 @@ test("does not initialize a missing durable-fact store", async (t) => {
 
 test("rejects negative-zero account snapshot and open-order timestamps before append", async () => {
   const appendCalls = []
-  const durableFactsStore = {
+  const operationalStateStore = {
     append: async (fact) => {
       appendCalls.push(fact)
       return { ok: true, data: { durable: true } }
@@ -132,11 +132,11 @@ test("rejects negative-zero account snapshot and open-order timestamps before ap
   }
 
   const snapshot = await recordAccountSnapshotCaptured({
-    durableFactsStore,
+    operationalStateStore,
     data: balances({ sourceTime: -0 }),
   })
   const openOrdersResult = await recordAccountOpenOrdersCaptured({
-    durableFactsStore,
+    operationalStateStore,
     data: openOrders({ observedAt: -0 }),
   })
 

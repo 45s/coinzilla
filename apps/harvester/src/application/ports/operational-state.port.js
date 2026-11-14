@@ -8,12 +8,12 @@
  * implementation of this port.
  *
  * @param {object} options
- * @param {object} options.durableFacts - Application-owned durable-facts adapter.
+ * @param {object} options.operationalStateStore - Application-owned durable-facts adapter.
  * @returns {object} The validated durable-facts adapter.
  */
-export function assertDurableFactsPort({ durableFacts } = {}) {
-  if (typeof durableFacts?.append !== "function") {
+export function assertOperationalStatePort({ operationalStateStore } = {}) {
+  if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("Harvester operator control requires the ADR-0001 Operational State Store append capability")
   }
-  return durableFacts
+  return operationalStateStore
 }

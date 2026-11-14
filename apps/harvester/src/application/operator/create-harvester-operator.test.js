@@ -10,7 +10,7 @@ const actor = Object.freeze({
 
 function createHarness({ appendResult = { ok: true, data: { durable: true, duplicate: false } } } = {}) {
   const calls = []
-  const durableFacts = {
+  const operationalStateStore = {
     append: async (fact) => {
       calls.push({ type: "append", fact })
       return appendResult
@@ -32,12 +32,12 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
       return { ok: true, data: { symbol, resumed: true, durable: true } }
     },
   }
-  return { calls, durableFacts, engine }
+  return { calls, operationalStateStore, engine }
 }
 
 test("creates an immutable Harvester operator facade without a generic command dispatcher", () => {
-  const { durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket"])
   assert.equal(Object.isFrozen(operator), true)
@@ -46,8 +46,8 @@ test("creates an immutable Harvester operator facade without a generic command d
 })
 
 test("pause authorizes the actor and commits an ADR-0001 durable fact inside the engine transition", async () => {
-  const { calls, durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.pauseMarket({
     actor,
@@ -73,8 +73,8 @@ test("pause authorizes the actor and commits an ADR-0001 durable fact inside the
 })
 
 test("pause rejects an actor without the trading-operator role before touching the engine or store", async () => {
-  const { calls, durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.pauseMarket({
     actor: { id: "telegram-user:untrusted", roles: [] },
@@ -88,8 +88,8 @@ test("pause rejects an actor without the trading-operator role before touching t
 })
 
 test("pause rejects a missing or oversized idempotency request ID before touching the engine", async () => {
-  const { calls, durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const missing = await operator.pauseMarket({ actor, symbol: "LINKUSDT" })
   const oversized = await operator.pauseMarket({
@@ -104,10 +104,10 @@ test("pause rejects a missing or oversized idempotency request ID before touchin
 })
 
 test("pause propagates a failed durable-fact commit without applying the operator state", async () => {
-  const { calls, durableFacts, engine } = createHarness({
+  const { calls, operationalStateStore, engine } = createHarness({
     appendResult: { ok: false, errors: [new Error("durable commit failed")] },
   })
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.pauseMarket({
     actor,
@@ -120,8 +120,8 @@ test("pause propagates a failed durable-fact commit without applying the operato
 })
 
 test("resume records a distinct durable fact through the same application facade", async () => {
-  const { calls, durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.resumeMarket({
     actor,
@@ -147,8 +147,8 @@ test("resume records a distinct durable fact through the same application facade
 })
 
 test("resume rejects an unauthorized actor before touching the engine or store", async () => {
-  const { calls, durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.resumeMarket({
     actor: { id: "telegram-user:untrusted", roles: [] },
@@ -162,8 +162,8 @@ test("resume rejects an unauthorized actor before touching the engine or store",
 })
 
 test("rejects a non-canonical actor identity before touching the engine or store", async () => {
-  const { calls, durableFacts, engine } = createHarness()
-  const operator = createHarvesterOperator({ durableFacts, engine })
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.pauseMarket({
     actor: { id: " telegram-user:12345 ", roles: ["trading-operator"] },

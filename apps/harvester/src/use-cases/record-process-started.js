@@ -1,15 +1,15 @@
 import { toResult } from "@coinzilla/utils"
 
 export async function recordProcessStarted({
-  durableFactsStore,
+  operationalStateStore,
   configurationFingerprint,
   strategyName,
   markets,
   tradingEnabled,
 } = {}) {
   try {
-    const sessionId = durableFactsStore?.runtimeSessionId
-    if (typeof durableFactsStore?.append !== "function" ||
+    const sessionId = operationalStateStore?.runtimeSessionId
+    if (typeof operationalStateStore?.append !== "function" ||
         typeof sessionId !== "string" || !sessionId.trim()) {
       throw new TypeError("recordProcessStarted requires an initialized store runtime session")
     }
@@ -21,7 +21,7 @@ export async function recordProcessStarted({
         markets.some((market) => typeof market !== "string" || !/^[A-Z0-9]{3,30}$/.test(market))) {
       throw new TypeError("recordProcessStarted requires a strategy name and canonical configured markets")
     }
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "process-started:" + sessionId,
       factType: "PROCESS_STARTED",
       data: { configurationFingerprint, strategyName, markets: [...markets].sort(), tradingEnabled },

@@ -4,7 +4,7 @@ import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { restoreHarvesterDurableFactsState } from "./restore-harvester-durable-facts-state.js"
+import { restoreHarvesterOperationalState } from "./restore-harvester-operational-state.js"
 
 const market = new Market({
   venue: "binance",
@@ -107,8 +107,8 @@ const makeStore = (recordsValue) => ({
 })
 
 test("restores an offline candidate Portfolio, RecoveryLedger map, and UNKNOWN owned order", async () => {
-  const result = await restoreHarvesterDurableFactsState({
-    durableFactsStore: makeStore(records()),
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: makeStore(records()),
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 
@@ -132,8 +132,8 @@ test("restores an offline candidate Portfolio, RecoveryLedger map, and UNKNOWN o
 })
 
 test("expands an account-scoped blocker to every configured market in the candidate pause set", async () => {
-  const result = await restoreHarvesterDurableFactsState({
-    durableFactsStore: makeStore(records({ accountBlocker: true })),
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: makeStore(records({ accountBlocker: true })),
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 
@@ -144,8 +144,8 @@ test("expands an account-scoped blocker to every configured market in the candid
 })
 
 test("fails closed when an account blocker cannot be expanded to canonical configured markets", async () => {
-  const result = await restoreHarvesterDurableFactsState({
-    durableFactsStore: makeStore(records({ accountBlocker: true })),
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: makeStore(records({ accountBlocker: true })),
     marketMetadata: new Map(),
   })
 
@@ -153,8 +153,8 @@ test("fails closed when an account blocker cannot be expanded to canonical confi
 })
 
 test("refuses an unreadable or non-durable fact stream", async () => {
-  const result = await restoreHarvesterDurableFactsState({
-    durableFactsStore: { readAll: async () => ({ ok: true, data: { records: [], durableWriteSupported: false } }) },
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: { readAll: async () => ({ ok: true, data: { records: [], durableWriteSupported: false } }) },
     marketMetadata: new Map(),
   })
 
@@ -163,8 +163,8 @@ test("refuses an unreadable or non-durable fact stream", async () => {
 
 
 test("preserves external account-wide open orders as evidence without adopting them into OrderRegistry", async () => {
-  const result = await restoreHarvesterDurableFactsState({
-    durableFactsStore: makeStore(records({ externalOpenOrder: true })),
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: makeStore(records({ externalOpenOrder: true })),
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 
@@ -292,8 +292,8 @@ test("replays a completed recovery cycle before later-session fills when non-pro
       executedAt: 2000, commissionStatus: "COMPLETE", commissions: [],
     }, "execution-fill-applied:" + secondBuyFillId, secondSessionId),
   ]
-  const result = await restoreHarvesterDurableFactsState({
-    durableFactsStore: makeStore(cycleEvidence),
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: makeStore(cycleEvidence),
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 

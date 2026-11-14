@@ -7,14 +7,14 @@ const isReason = (reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,63
 
 /** Persist the classified broker cancellation result before local order state advances. */
 export async function recordOrderCancellationOutcome({
-  durableFactsStore,
+  operationalStateStore,
   order,
   canceledOrder,
   reason,
   outcome,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordOrderCancellationOutcome requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationOutcome requires a durable-fact append port") }
     if (!(order instanceof CanonicalOrder)) { throw new TypeError("recordOrderCancellationOutcome requires the original canonical order") }
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
       throw new TypeError("Cancellation outcome requires the original active acknowledged order")
@@ -39,7 +39,7 @@ export async function recordOrderCancellationOutcome({
       throw new TypeError("Unconfirmed cancellation outcome must not include an untrusted canonical response")
     }
     const market = order.market
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "order-cancellation-outcome:" + order.clientOrderId + ":" + reason + ":" + outcome,
       factType: "ORDER_CANCELLATION_OUTCOME",
       data: {

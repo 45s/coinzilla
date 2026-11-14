@@ -11,14 +11,14 @@ import { createReadOperatorTradingState } from "../../use-cases/operator-control
  *
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
- * @param {object} options.durableFacts - ADR-0001 application-owned durable-facts port.
+ * @param {object} options.operationalStateStore - ADR-0001 application-owned durable-facts port.
  * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */
-export function createHarvesterOperator({ engine, durableFacts, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
+export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
   const operator = {
-    pauseMarket: createPauseMarket({ engine, durableFacts }),
-    resumeMarket: createResumeMarket({ engine, durableFacts }),
+    pauseMarket: createPauseMarket({ engine, operationalStateStore }),
+    resumeMarket: createResumeMarket({ engine, operationalStateStore }),
   }
   if (getRuntimeSnapshot !== undefined) {
     const readState = createReadOperatorState({ engine, getRuntimeSnapshot })

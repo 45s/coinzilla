@@ -9,7 +9,7 @@ import { toResult } from "@coinzilla/utils"
  * append acknowledgement to the ADR-0001 durable-fact store.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore - ADR-0001 durable-fact port.
+ * @param {object} options.operationalStateStore - ADR-0001 durable-fact port.
  * @param {string} options.factId - Stable identity for this coverage confirmation.
  * @param {string} options.symbol - Canonical market symbol.
  * @param {number} options.coveredFromTime - Earliest verified history timestamp (Unix ms).
@@ -19,7 +19,7 @@ import { toResult } from "@coinzilla/utils"
  * @returns {Promise<object>} Durable append result.
  */
 export async function recordMarketHistoryCoverage({
-  durableFactsStore,
+  operationalStateStore,
   factId,
   symbol,
   coveredFromTime,
@@ -28,7 +28,7 @@ export async function recordMarketHistoryCoverage({
   verifiedBy,
 } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") {
+    if (typeof operationalStateStore?.append !== "function") {
       throw new TypeError("recordMarketHistoryCoverage requires a durable-fact append port")
     }
     if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
@@ -45,7 +45,7 @@ export async function recordMarketHistoryCoverage({
     if (typeof verifiedBy !== "string" || !verifiedBy.trim() || verifiedBy !== verifiedBy.trim()) {
       throw new TypeError("Market-history coverage verifiedBy must be a canonical non-empty string")
     }
-    return await durableFactsStore.append({
+    return await operationalStateStore.append({
       factId,
       factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
       data: {

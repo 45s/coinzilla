@@ -4,9 +4,9 @@ import { toResult } from "@coinzilla/utils"
 const isReason = (reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(reason)
 
 /** Persist the exact expected owned-order state before a broker cancellation RPC. */
-export async function recordOrderCancellationIntent({ durableFactsStore, order, reason } = {}) {
+export async function recordOrderCancellationIntent({ operationalStateStore, order, reason } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordOrderCancellationIntent requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationIntent requires a durable-fact append port") }
     if (!(order instanceof CanonicalOrder)) { throw new TypeError("recordOrderCancellationIntent requires a canonical order") }
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
       throw new TypeError("Cancellation intent requires an active acknowledged canonical order")
@@ -16,7 +16,7 @@ export async function recordOrderCancellationIntent({ durableFactsStore, order, 
       throw new TypeError("Cancellation intent order side or type is unsupported")
     }
     const market = order.market
-    const result = await durableFactsStore.append({
+    const result = await operationalStateStore.append({
       factId: "order-cancellation-intent:" + order.clientOrderId + ":" + reason + ":" + order.status + ":" + order.executedQuantity.amount,
       factType: "ORDER_CANCELLATION_INTENT",
       data: {

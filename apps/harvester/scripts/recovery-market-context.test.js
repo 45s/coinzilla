@@ -127,7 +127,7 @@ test("offline context adapter rejects malformed evidence before reconciliation",
 
 test("offline context confirmation never initializes or appends coverage for a skipped audit", async () => {
   const calls = []
-  const durableFactsStore = {
+  const operationalStateStore = {
     readAll: async () => {
       calls.push("readAll")
       return { ok: true, data: { records: [] } }
@@ -140,7 +140,7 @@ test("offline context confirmation never initializes or appends coverage for a s
   const result = await runOfflineMarketRecovery({
     context,
     confirm: true,
-    durableFactsStore,
+    operationalStateStore,
   })
 
   assert.equal(result.ok, true, "A valid but skipped offline audit must return an inspectable confirmation outcome.")

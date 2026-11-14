@@ -1,6 +1,6 @@
 import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
-import { assertDurableFactsPort } from "../../application/ports/durable-facts.port.js"
+import { assertOperationalStatePort } from "../../application/ports/operational-state.port.js"
 
 /**
  * Create the transport-independent use case for pausing one configured market.
@@ -10,14 +10,14 @@ import { assertDurableFactsPort } from "../../application/ports/durable-facts.po
  *
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
- * @param {object} options.durableFacts - ADR-0001 application-owned durable-facts port.
+ * @param {object} options.operationalStateStore - ADR-0001 application-owned durable-facts port.
  * @returns {(request: object) => Promise<object>} Pause-market use case.
  */
-export function createPauseMarket({ engine, durableFacts } = {}) {
+export function createPauseMarket({ engine, operationalStateStore } = {}) {
   if (typeof engine?.pauseMarket !== "function") {
     throw new TypeError("createPauseMarket requires the trading engine pauseMarket boundary")
   }
-  assertDurableFactsPort({ durableFacts })
+  assertOperationalStatePort({ operationalStateStore })
 
   return async ({ actor, requestId, symbol } = {}) => {
     try {
@@ -36,7 +36,7 @@ export function createPauseMarket({ engine, durableFacts } = {}) {
       const normalizedRequestId = requestId.trim()
       return await engine.pauseMarket({
         symbol: normalizedSymbol,
-        beforeApply: () => durableFacts.append({
+        beforeApply: () => operationalStateStore.append({
           factId: "operator-control:" + normalizedRequestId,
           factType: "OPERATOR_MARKET_PAUSED",
           data: {

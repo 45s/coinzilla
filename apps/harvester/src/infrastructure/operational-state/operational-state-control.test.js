@@ -4,12 +4,12 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileDurableFactsStore } from "./create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-control-facts-"))
   t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "control-facts-test-session",
     now: () => new Date("2026-11-12T00:00:00.000Z"),

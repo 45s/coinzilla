@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { access, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
 import {
   parseRecoveryMarketArguments,
   runRecoveryMarketCommand,
@@ -146,7 +146,7 @@ test("CLI help is available without reading evidence or touching the durable-fac
 test("CLI explicitly confirms a READY offline audit against an already initialized durable ledger", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-cli-confirm-"))
   try {
-    const store = createFileDurableFactsStore({
+    const store = createFileOperationalStateStore({
       directory,
       runtimeSessionId: readyContext.runtimeSessionId,
     })
@@ -191,7 +191,7 @@ test("CLI never initializes a missing durable-fact directory during confirmation
 test("CLI accepts the canonical Operational State Store directory override", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-operational-state-cli-"))
   try {
-    const store = createFileDurableFactsStore({
+    const store = createFileOperationalStateStore({
       directory,
       runtimeSessionId: readyContext.runtimeSessionId,
     })
