@@ -234,9 +234,18 @@ async function flushAccountSnapshotAudit({
  * @returns {object} Account snapshot read and durable audit operations.
  */
 export function createAccountSnapshotManager({
-  broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
-  getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
-  monotonicNow = () => performance.now(), runtimeSessionId, operationalStateStore,
+  broker,
+  eventPublisher,
+  marketMetadata,
+  getPortfolio,
+  getTradingEngine,
+  getRecoveredState,
+  getHasCanonicalOwnershipReconciliation,
+  logger,
+  now = Date.now,
+  monotonicNow = () => performance.now(),
+  runtimeSessionId,
+  operationalStateStore,
 } = {}) {
   let accountSnapshot
   let preflightSourceTime
