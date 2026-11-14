@@ -1,4 +1,6 @@
 import test from "node:test"
+import { EXTERNAL_ORDERS_POLICIES } from "../../src/domain/external-orders-policy.js"
+import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 import assert from "node:assert/strict"
 import {
   addPairToAppConfig,
@@ -7,6 +9,7 @@ import {
   decimalPlaces,
   normalizeSymbolInput,
   normalizeTradingEnvironment,
+  normalizePairTradingEnvironment,
   normalizePairInputs,
   parseDecimalInput,
 } from "./configuration.js"
@@ -23,6 +26,7 @@ const createAppConfig = () => ({
       pairs: {
         LINKFDUSD: {
           enabled: true,
+          tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
           enableVolatilityProtection: true,
           investment: 200,
           orderQuantity: 2,
@@ -84,6 +88,7 @@ test("parses financial input as exact decimal text and rejects invalid values", 
 
 test("validates every strategy-owned setting before making an exchange request", () => {
   const validInputs = {
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     investment: "100",
     orderQuantity: "20",
     keepQuantity: "0.1",
@@ -109,8 +114,8 @@ test("validates every strategy-owned setting before making an exchange request",
 })
 
 test("accepts only Binance testnet and live environment names", () => {
-  assert.equal(normalizeTradingEnvironment(" testnet "), "testnet", "The testnet environment must normalize safely.")
-  assert.equal(normalizeTradingEnvironment("LIVE"), "live", "The live environment must normalize case-insensitively.")
+  assert.equal(normalizeTradingEnvironment(` ${TRADING_ENVIRONMENTS.TESTNET} `), TRADING_ENVIRONMENTS.TESTNET, "The testnet environment must normalize safely.")
+  assert.equal(normalizeTradingEnvironment(TRADING_ENVIRONMENTS.LIVE.toUpperCase()), TRADING_ENVIRONMENTS.LIVE, "The live environment must normalize case-insensitively.")
   for (const value of ["", "paper", "production", null, 42]) {
     assert.throws(
       () => normalizeTradingEnvironment(value),
@@ -118,6 +123,27 @@ test("accepts only Binance testnet and live environment names", () => {
       "Unsupported exchange environments must be rejected before any network request.",
     )
   }
+})
+
+test("requires one explicit pair tradingEnvironment value without a default", () => {
+  for (const value of Object.values(TRADING_ENVIRONMENTS)) {
+    assert.equal(normalizePairTradingEnvironment(value), value, `The pair selector must accept exactly the supported value: ${value}`)
+  }
+  for (const value of ["", "production", "TESTNET", null, 42]) {
+    assert.throws(
+      () => normalizePairTradingEnvironment(value),
+      /tradingEnvironment.*testnet.*live.*both/i,
+      `Unsupported pair eligibility must be rejected instead of falling back: ${String(value)}`,
+    )
+  }
+  assert.throws(
+    () => normalizePairInputs({
+      investment: "100", orderQuantity: "20", keepQuantity: "0.1",
+      makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05",
+    }),
+    /tradingEnvironment/i,
+    "A missing pair selector must not silently default to both.",
+  )
 })
 
 test("derives effective decimal precision from exchange increments, ignoring trailing zeroes", () => {
@@ -160,6 +186,7 @@ test("rejects per-order quantities that violate Binance limits or cannot split t
 test("creates a runtime-valid enabled pair using exchange-derived precision and operator fee assumptions", () => {
   const pair = createPairConfig({
     inputs: {
+      tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
       investment: "100",
       orderQuantity: "20",
       keepQuantity: "0.1",
@@ -172,8 +199,9 @@ test("creates a runtime-valid enabled pair using exchange-derived precision and 
   })
   assert.deepEqual(pair, {
     enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: true,
-    externalOrdersPolicy: "ignore",
+    externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
     investment: 100,
     orderQuantity: 20,
     keepQuantity: 0.1,
@@ -189,7 +217,7 @@ test("creates a runtime-valid enabled pair using exchange-derived precision and 
 test("rejects keepQuantity that is not aligned to the exchange quantity step", () => {
   assert.throws(
     () => createPairConfig({
-      inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.15", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+      inputs: { tradingEnvironment: TRADING_ENVIRONMENTS.BOTH, investment: "100", orderQuantity: "20", keepQuantity: "0.15", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
       metadata,
     }),
     /keepQuantity.*stepSize/i,
@@ -200,7 +228,7 @@ test("rejects keepQuantity that is not aligned to the exchange quantity step", (
 test("rejects exchange metadata whose required order type is unsupported", () => {
   assert.throws(
     () => createPairConfig({
-      inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+      inputs: { tradingEnvironment: TRADING_ENVIRONMENTS.BOTH, investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
       metadata: { ...metadata, supportedOrderTypes: ["LIMIT"] },
     }),
     /LIMIT_MAKER/i,
@@ -211,7 +239,7 @@ test("rejects exchange metadata whose required order type is unsupported", () =>
 test("adds a new pair without mutating or replacing existing application configuration", () => {
   const original = createAppConfig()
   const pair = createPairConfig({
-    inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+    inputs: { tradingEnvironment: TRADING_ENVIRONMENTS.BOTH, investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
     metadata,
   })
   const updated = addPairToAppConfig({ appConfig: original, symbol: "ADAFDUSD", pairConfig: pair })
@@ -251,6 +279,7 @@ test("refuses to overwrite an existing symbol", () => {
 test("requires only the limit order type selected by the configured maker policy", () => {
   const limitOnlyMetadata = { ...metadata, supportedOrderTypes: ["LIMIT"] }
   const inputs = {
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     investment: "100",
     orderQuantity: "20",
     keepQuantity: "0.1",
@@ -273,6 +302,7 @@ test("requires only the limit order type selected by the configured maker policy
 test("preserves small exchange-aligned quantities represented with JavaScript exponent notation", () => {
   const pair = createPairConfig({
     inputs: {
+      tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
       investment: "200",
       orderQuantity: "1",
       keepQuantity: "0.0000001",

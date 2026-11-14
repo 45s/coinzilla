@@ -1,4 +1,4 @@
-export { TelegramNotifier } from "./telegram-notifier.js"
+export { TelegramNotifier } from "./notifier.js"
 export {
   subscribeTelegramNotifications,
-} from "./telegram-event-subscriber.js"
+} from "./event-subscriber.js"

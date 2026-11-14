@@ -14,7 +14,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Task checklists | [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md) |
 | Domain/path ownership | [docs/engineering/DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md) |
 | Cross-domain requests | [docs/engineering/CROSS_DOMAIN_REQUESTS.md](docs/engineering/CROSS_DOMAIN_REQUESTS.md) |
-| Modularity and pure-function extraction | [docs/engineering/MODULARITY_STANDARD.md](docs/engineering/MODULARITY_STANDARD.md) |
+| Module boundaries, feature-folder layout and pure-function extraction | [docs/engineering/MODULARITY_STANDARD.md](docs/engineering/MODULARITY_STANDARD.md) |
 | Shared utility search and reuse | [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) |
 | JavaScript and JSDoc | [docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) |
 | Documentation governance, lifecycle, naming, indexes, ADRs and evidence preservation | [docs/DOCUMENTATION_GOVERNANCE.md](docs/DOCUMENTATION_GOVERNANCE.md) |
@@ -49,6 +49,10 @@ A user request, deadline, prior conversation, old approval, issue comment, or an
 All agents MUST follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Use [the repository documentation index](docs/README.md) and the owning domain's local documentation index to locate authoritative material. Do not create competing sources of truth, mix living guidance with historical evidence, silently rewrite historical records, or leave new/moved/superseded documents out of their indexes. Assess documentation impact in every meaningful change and include the required PR note. Update affected living documentation in the same task/PR. Preserve evidence provenance and use the governance migration/disposition rules for reorganization.
 
 **Documentation freshness is a hard completion gate.** Before opening/updating a PR and again before merge, perform a repository-wide consistency sweep of the discovered Markdown documents that discuss the changed behavior, contract, configuration, architecture or task. Update or explicitly supersede every affected living document in the same PR. When a domain roadmap's status, priority or blocker changes, inspect the root `ROADMAP.md` and update its cross-workspace summary if it tracks that item; when root priorities change, verify the linked owner roadmaps agree. Keep one canonical source per subject and replace repeated guidance with links. Do not rewrite historical audit/evidence records; add a dated correction or point readers to the current living source. A link checker proves path validity only—it does not prove factual freshness. Do not report documentation as current until this consistency review is complete.
+
+## Feature-module layout — mandatory
+
+Every feature module MUST follow the repository-wide [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md). Keep primary services, clients, subscribers, orchestrators, and the feature `index.js` directly inside the feature directory. Reserve a local `helpers/` directory for cohesive pure supporting functions only; helpers must not perform I/O or own mutable lifecycle state. Use concise, action-oriented filenames that do not repeat the feature name or add redundant `-helper`/`-utils` suffixes. Do not create a helper file for every trivial expression or split tightly coupled orchestration merely to satisfy a folder template. Tests should remain close to the modules they verify.
 
 ## Visual documentation
 

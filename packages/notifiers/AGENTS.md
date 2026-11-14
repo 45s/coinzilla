@@ -11,7 +11,7 @@ Keep notification delivery independent from trading strategy, broker execution, 
 ## Source layout
 
 - src/index.js is the stable package entry point. Keep it to intentional public re-exports.
-- Each transport owns a dedicated folder: src/telegram/, src/email/, src/discord/, etc.
+- Each transport owns a dedicated feature folder: src/telegram/, src/email/, src/discord/, etc. Follow the repository-wide [feature-module layout rule](../../docs/engineering/MODULARITY_STANDARD.md#feature-module-layout): primary components stay at the transport root and `helpers/` is reserved for pure supporting functions.
 - A transport folder owns its client/adapter, provider-specific formatting, event integration (if needed), local exports, and tests.
 - Do not put provider-specific logic directly under src/.
 - Do not create empty folders or placeholder implementations for future transports. Add a provider folder when implementation work begins.

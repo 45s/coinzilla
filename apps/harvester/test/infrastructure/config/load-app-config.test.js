@@ -25,6 +25,7 @@ function createValidConfig() {
         pairs: {
           LINKFDUSD: {
             enabled: true,
+            tradingEnvironment: "both",
             enableVolatilityProtection: true,
             investment: 200,
             orderQuantity: 2,
@@ -61,6 +62,7 @@ function assertAppConfigStructure(config) {
   for (const pair of Object.values(strategy.pairs)) {
     assert.ok(pair && typeof pair === "object" && !Array.isArray(pair), "Each market pair must be an object.")
     assert.equal(typeof pair.enabled, "boolean", "Each pair must expose its enabled state.")
+    assert.ok(["testnet", "live", "both"].includes(pair.tradingEnvironment), "Each pair must declare its explicit trading environment.")
     for (const key of [
       "investment",
       "orderQuantity",
