@@ -29,6 +29,16 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ---
 
+## Recovery Seller (RS) — domain specification
+
+**Status: [~] DRAFT DOMAIN CONTRACT DOCUMENTED; owner decisions block executable implementation.** The proposal remains in [PR #1110](https://github.com/45s/coinzilla/pull/1110) (open, unmerged). The canonical draft is [Recovery Seller Domain Specification](./docs/domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md).
+
+- RS is independent of CG_coinGrabber and must reuse shared Portfolio, canonical fills, Trading Engine, broker, reservations and reconciliation boundaries.
+- The draft records hard safety invariants for explicit legacy authorization, separate recovery/legacy profitability, exact-once attribution, partial fills, fees, unknown outcomes, risk limits, lifecycle and strategy ownership.
+- **SELL ONLY IN PROFIT:** a profitable recovery tranche cannot subsidize a loss on the legacy quantity. Legacy historical cost basis and mixed-order proceeds/fee allocation must be explicit.
+- **Implementation is blocked** by unresolved owner choices: sellQuantity target versus cap; smaller/final residual behavior; legacy authorization and opening-inventory accounting; legacy cost-basis allocation; recovery minProfit; BUY cadence; risk-limit values; pause/disable/abandon/resume; and CG/Aggressive handoff.
+- No RS runtime configuration, strategy registration, trading logic, or TESTNET/LIVE operation is included or authorized.
+
 ## P0 — Telegram Command Center (CC) — delivered
 
 **Status: [x] COMPLETE — CC-4 merged into `develop` in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; CC-1 through CC-3 were previously merged in PRs #1079, #1081, #1086 and #1087. Required exact-head CI and external documentation links passed.** The initial engine/application foundation remains in [PR #1045](https://github.com/45s/coinzilla/pull/1045), disabled-by-default runtime wiring in [PR #1067](https://github.com/45s/coinzilla/pull/1067), and process-lifetime scope clarification in [PR #1065](https://github.com/45s/coinzilla/pull/1065). ADR-0001 process-restart recovery Steps 8–9 remain explicitly deferred and are not implied by CC completion.
