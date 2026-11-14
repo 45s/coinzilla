@@ -184,7 +184,7 @@ Only an exchange-filter-constrained quantity qualifies. The exact residual quant
 
 1. If remaining authorized legacy inventory is smaller than `sellQuantity`, may RS sell the smaller remainder, or is explicit final-liquidation authorization required?
 2. May a final residual be sold in a separate cycle without a new recovery BUY? If so, what profit basis applies?
-3. Does RS stop when authorized legacy quantity is exhausted, only dust remains, or the operator disables it?
+3. **Agreed — pause for operator decision when authorized legacy inventory is exhausted.** RS stops initiating new recovery BUYs and enters a paused/reconfiguration-required state. It must not silently continue recovery-only BUY/SELL cycles or automatically liquidate remaining inventory. The operator must explicitly reconfigure/reauthorize RS before new BUY activity can resume. Existing orders, fills, reservations, and accounting remain owned and must continue through canonical reconciliation; pausing does not cancel or erase them.
 
 Until decided:
 
@@ -213,7 +213,7 @@ Until decided:
 
 Final RS lifecycle states/transitions are not approved. Mandatory safety behavior:
 
-- Pause, disable, or loss of readiness prevents new RS BUYs.
+- Pause, disable, loss of readiness, or exhaustion of the authorized legacy inventory prevents new RS BUYs. Exhaustion of authorized legacy inventory specifically places RS in a paused/reconfiguration-required state pending an explicit operator decision and configuration/authorization update; RS must not automatically switch to recovery-only cycles or liquidate residual inventory.
 - Disabling RS does not silently cancel, replace, abandon, or market-sell resting orders or inventory.
 - Existing orders may fill after pause/disable; fills and commissions continue through canonical accounting and reconciliation.
 - In-flight/unknown orders remain owned and reconcilable by their original identities; disable does not erase ownership or reservations.
@@ -260,7 +260,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 | BUY cadence | Tranche size, accumulation, next-BUY eligibility, concurrent-order limits | Determines exposure/order lifecycle |
 | Risk policy | Investment, exposure, drawdown, price-movement, and order-count caps | Required before committing capital |
 | Residual/dust | **Agreed:** only exact exchange-filter-constrained residual after fully reconciled successful cycle is retained as bonus dust and excluded permanently from future RS calculations, matching Conservative's constrained-dust principle. Ordinary sellable residual is not dust. Final residual/no-new-BUY liquidation remains open. | Prevents guessed disposal, repeated counting, or hidden sellable inventory |
-| Lifecycle | Pause, disable, abandon, resume, restart semantics | Prevents loss of order ownership/accounting |
+| Lifecycle | **Agreed:** when authorized legacy inventory is exhausted, pause RS and require explicit operator reconfiguration/reauthorization before new BUYs; do not auto-switch to recovery-only trading or auto-liquidate. Active orders/fills remain owned and reconciled. Other pause/disable/abandon/resume/restart semantics remain open. | Prevents unapproved continuation after the legacy objective is exhausted while preserving in-flight accounting |
 | Concurrent strategies | Shared Portfolio, independent attribution, centralized reservations and deterministic intent allocation across CG/RS/Aggressive | Prevents double-spend, duplicate attribution and overselling without mutual exclusion |
 | Fee valuation | Third-asset valuation failure and proceeds allocation | Prevents fees being treated as zero |
 
