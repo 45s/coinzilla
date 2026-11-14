@@ -13,7 +13,7 @@
  */
 export function assertDurableFactsPort({ durableFacts } = {}) {
   if (typeof durableFacts?.append !== "function") {
-    throw new TypeError("Harvester operator control requires the ADR-0001 durable-facts append port")
+    throw new TypeError("Harvester operator control requires the ADR-0001 Operational State Store append capability")
   }
   return durableFacts
 }
