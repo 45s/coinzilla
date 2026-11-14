@@ -17,7 +17,7 @@ const metadata = (overrides = {}) => ({
 async function withSpecification({ run, initial = {} }) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-token-specification-"))
   const specificationPath = path.join(directory, "token-specification.json")
-  await writeFile(specificationPath, JSON.stringify(initial, null, 2) + "\n", "utf8")
+  await writeFile(specificationPath, `${JSON.stringify(initial, null, 2)}\n`, "utf8")
   try {
     await run({ directory, specificationPath })
   } finally {
