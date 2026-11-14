@@ -27,6 +27,7 @@ const appConfig = {
       pairs: {
         DOGEUSDT: {
           enabled: true,
+          tradingEnvironment: "both",
           enableVolatilityProtection: true,
           investment: 200,
           orderQuantity: 400,
