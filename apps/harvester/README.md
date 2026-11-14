@@ -93,6 +93,30 @@ pnpm --filter @coinzilla/harvester config:symbol
 
 The generator asks only for a Binance market symbol and confirmation. It uses `TRADING_MODE` to select the public metadata endpoint (defaulting to TESTNET when unset), fetches the market's exchange metadata, and atomically updates `apps/harvester/token-specification.json`. The file is grouped by base asset (`LINK`, `POL`, `APE`, etc.); each token contains a `markets` map keyed by exact market symbol. This lets quote markets share one token entry without incorrectly assuming that their price or quantity increments are identical.
 
+Example shape:
+
+```json
+{
+  "LINK": {
+    "baseAsset": "LINK",
+    "markets": {
+      "LINKUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 3,
+        "quantityPrecision": 2
+      },
+      "LINKFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 2,
+        "quantityPrecision": 3
+      }
+    }
+  }
+}
+```
+
+`quantityPrecision` is the number of decimal places needed to express the market's `LOT_SIZE.stepSize` (for example, a step of `0.01` means precision `2`). It is not the step size itself and does not replace runtime exchange-filter validation.
+
 For each market, `pricePrecision` is derived from `PRICE_FILTER.tickSize` and `quantityPrecision` from `LOT_SIZE.stepSize`. These values are precision counts, not exchange filters and not substitutes for the actual tick/step/notional constraints that Harvester validates at startup and before order submission. The registry is the only source for these precision fields; do not add them to `cg-coin-grabber.js`.
 
 **The generator does not add or modify strategy pairs.** After generating metadata, add the market's strategy settings to the single `tradingPairs` map in `apps/harvester/cg-coin-grabber.js` when you want Harvester to consider that market. Do not include `pricePrecision` or `quantityPrecision` in that pair entry. At runtime, `loadAppConfig` resolves the exact market specification and enriches the effective pair config. A missing, malformed, or multiply assigned market specification fails configuration loading before broker startup.
