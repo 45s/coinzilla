@@ -154,18 +154,21 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 - If work is deferred, superseded, or blocked by another domain, record the reason and link the request.
 - Keep the root roadmap for repository-wide engineering and release work; do not duplicate every domain backlog there.
 
-## 8. Required verification
+## 8. Required verification — GitHub executes the work
 
-Run the narrowest relevant checks first, then the applicable broader checks. **GitHub Actions is the authoritative execution environment for PR verification.**
+**GitHub is both the source-control interface and the required remote execution environment. A missing local terminal is never, by itself, a blocker.** Agents are expected to use GitHub repository operations and GitHub Actions to implement, test, lint, build, inspect failures, and iterate.
 
-- When a working local checkout and toolchain are available, run the relevant package test, coverage, syntax, and quality commands locally for fast feedback.
-- When local execution is unavailable, do not pause implementation, ask the user to run commands, or report local-environment limitations as blockers. Commit the actual source changes, strong tests, and documentation; open/update the PR and let GitHub Actions execute the required checks.
-- Inspect check conclusions for the exact current PR head SHA. A green run on an earlier SHA does not count.
-- Fix failed checks by correcting source, tests, or workflow defects without weakening assertions, skipping tests, reducing coverage, or masking failures. Push the fix and wait for GitHub to rerun.
-- Merge only after every required check passes on the exact head SHA and branch freshness is verified.
+- Local checkout, shell, package manager, and local test execution are optional conveniences. Do not use their absence, a failed `git clone`, or lack of a local workflow runner as an excuse to stop, hand commands to the user, or leave the requested implementation undone.
+- Use GitHub to create/update the task branch and commit the actual source, tests, and documentation. Open or update a Draft PR targeting `develop`; its pull-request workflows are the default remote execution trigger. If an applicable workflow is manual-only, dispatch it through GitHub Actions. Do not wait for the user to trigger routine CI.
+- **Remote TDD is mandatory when local execution is unavailable.** First commit the regression test without the production fix and let the applicable GitHub Actions workflow execute it. Inspect the job log and verify that the test itself fails for the expected behavioral reason. A workflow/setup failure, missing test discovery, syntax error, timeout, or unrelated failure is not valid RED evidence. Then commit the smallest implementation and let GitHub Actions run the same test again for GREEN. Repeat this cycle for meaningful behavior increments. Keep the test-first commit/evidence in branch history; do not squash away the only evidence before review.
+- If no existing workflow executes the relevant test or check, add or extend a narrowly scoped GitHub Actions workflow in the task PR so GitHub can run it. Keep it deterministic, least-privilege, and safe for pull-request code. Do not add credentials, live exchange access, production side effects, or privileged write permissions to make tests run. Never dispatch TESTNET or LIVE operations without the separate authorization required by the broker safety policy.
+- Use the GitHub Actions run, job, and step logs to diagnose failures. Fix the source, tests, or genuine workflow defect; commit the correction and allow GitHub to run it again. Do not skip, weaken, delete, loosen, or mask tests, coverage, lint, security checks, or required status contexts to obtain green.
+- Verify every required check against the **exact current PR head SHA**. Record the SHA and the relevant Actions run/check evidence in the PR. A green run on an earlier commit, a workflow that merely started, or a locally inferred result does not count.
+- If an Actions run fails for infrastructure reasons, retry only the failed job/run when appropriate and safe; distinguish infrastructure failure from a product/test failure. If the workflow itself is broken, repair it in the same task or a focused supporting PR. Do not report the work as verified until the required checks pass.
+- If GitHub permissions or repository services prevent a specific GitHub operation, continue with every other safe implementation and repository step possible. Report the exact denied operation and its effect; do not convert a missing local terminal into a blocker or ask the user to run routine commands.
+- Merge the task PR into `develop` only after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never claim a test/check passed unless GitHub reports success for the relevant commit.
 
-For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only. Never claim a check passed unless GitHub (or an actually executed local runner when GitHub is not the applicable runner) reports success.
-
+For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only, and only under explicit authorization. Never use production credentials or trigger LIVE broker actions as part of CI verification.
 ## 9. Final release: one human review
 
 The purpose of `develop` is to accumulate independently implemented, automatically validated work. Do not ask the user to review every task PR.
