@@ -59,6 +59,7 @@ function logSystem(logger, data) {
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
+// eslint-disable-next-line max-lines-per-function -- lifecycle manager composes ordered account-wide audit barriers.
 export function createAccountSnapshotManager({
   broker, eventPublisher, marketMetadata, getPortfolio, getTradingEngine,
   getRecoveredState, getHasCanonicalOwnershipReconciliation, logger, now = Date.now,
@@ -330,7 +331,7 @@ export function createAccountSnapshotManager({
     auditReasons = [],
     snapshot: suppliedSnapshot,
     allowedAssetCodes: suppliedAllowedAssetCodes,
-  } = {}) => { // eslint-disable-line complexity -- account snapshot publication preserves its ordered durability gates.
+  } = {}) => { // eslint-disable-line complexity, max-lines-per-function -- account snapshot publication preserves ordered durability gates.
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot({
       capturePreflightBaseline: phase === "PREFLIGHT",
     })
