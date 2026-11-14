@@ -83,7 +83,7 @@ test("fails closed when another metadata generator owns the registry lock", asyn
       const before = await readFile(specificationPath, "utf8")
       await assert.rejects(
         writeTokenSpecificationAtomically({ specificationPath, metadata: metadata() }),
-        /configuration lock/i,
+        /token specification lock/i,
         "Concurrent token registry updates must not race.",
       )
       assert.equal(await readFile(specificationPath, "utf8"), before, "A lock conflict must not change the registry.")
