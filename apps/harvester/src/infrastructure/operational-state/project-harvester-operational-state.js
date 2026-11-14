@@ -272,7 +272,7 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
  */
 export function projectHarvesterOperationalState({ records } = {}) {
   try {
-    if (!Array.isArray(records)) { throw new TypeError("Operational State Store record projection requires a verified records array") }
+    if (!Array.isArray(records)) { throw new TypeError("Operational State Store projection requires a verified records array") }
     const configurationBaselines = new Map()
     const sessions = new Map()
     const seenFactIds = new Set()
@@ -410,7 +410,7 @@ export function projectHarvesterOperationalState({ records } = {}) {
         throw new Error("Durable trading fact is outside an active process session: " + record.factType)
       }
       if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED", "RECOVERY_CYCLE_NOT_COMPLETED"].includes(record.factType)) {
-        throw new Error("Unsupported Operational State Store record projection type: " + record.factType)
+        throw new Error("Unsupported Operational State Store projection type: " + record.factType)
       }
       if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
         orderSubmissionOutcomes.push(Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence }))

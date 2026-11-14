@@ -97,19 +97,19 @@ export async function startHarvester({
     if (verification?.ok !== true ||
         verification.data?.valid !== true ||
         verification.data?.durableWriteSupported !== true) {
-      const cause = verification?.errors?.[0] ?? new Error("Operational State Store record ledger verification was not confirmed")
+      const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification was not confirmed")
       const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 Operational State Store: " + (cause.message ?? String(cause)), { cause })
       error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
       throw error
     }
     const existingFacts = await operationalStateStore.readAll()
     if (existingFacts?.ok !== true || existingFacts.data?.durableWriteSupported !== true || !Array.isArray(existingFacts.data.records)) {
-      const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store record history could not be read and verified")
+      const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
       throw new Error("Harvester cannot connect to the broker without verified Operational State Store history: " + (cause.message ?? String(cause)), { cause })
     }
     const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
     if (existingProjection?.ok !== true) {
-      const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store record history projection failed")
+      const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
       throw new Error("Harvester cannot restart from an unprojectable Operational State Store history: " + (cause.message ?? String(cause)), { cause })
     }
     if (existingProjection.data.sessions.length > 0) {

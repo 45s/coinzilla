@@ -83,7 +83,7 @@ export async function confirmMarketHistoryCoverage({
     const ledgerResult = await operationalStateStore.readAll()
     if (ledgerResult?.ok !== true) {
       return toResult({
-        errors: ledgerResult?.errors ?? [new Error("Operational State Store record ledger could not be verified")],
+        errors: ledgerResult?.errors ?? [new Error("Operational State Store could not be verified")],
       })
     }
     const records = ledgerResult.data?.records
