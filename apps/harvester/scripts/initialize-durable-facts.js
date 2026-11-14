@@ -13,7 +13,7 @@ export async function runInitializeDurableFacts({
 } = {}) {
   void stdout
   stderr("Legacy durable-facts initialization is disabled because it bypasses the required process lock.")
-  stderr("Use: pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize")
+  stderr("Use: pnpm --filter @coinzilla/harvester operational-state:init -- --confirm-initialize")
   return 1
 }
 
