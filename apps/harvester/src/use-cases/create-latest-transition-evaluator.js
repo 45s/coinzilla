@@ -557,6 +557,15 @@ function finalizeSubmissionResult({ dependencies, context, result, deferredActio
   })
 }
 
+async function handleEvaluationFailure({ dependencies, symbol, error } = {}) {
+  await dependencies.pause({
+    symbol,
+    reason: "STRATEGY_EVALUATION_FAILED",
+    error,
+  })
+  return toResult({ error })
+}
+
 export function createLatestTransitionEvaluator(dependencies = {}) {
   return async function evaluateLatestTransition({
     symbol,
@@ -629,12 +638,7 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
         result,
         deferredActions: allocation.deferredActions })
     } catch (error) {
-      await dependencies.pause({
-        symbol,
-        reason: "STRATEGY_EVALUATION_FAILED",
-        error,
-      })
-      return toResult({ error })
+      return handleEvaluationFailure({ dependencies, symbol, error })
     }
   }
 }
