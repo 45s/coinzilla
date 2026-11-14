@@ -438,22 +438,35 @@ async function readAccountOpenOrders({ broker, suppliedOrders }) {
 }
 
 
+function isNonEmptyOrderIdentity(value) {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+function readOpenOrderSnapshotPrice(order) {
+  return order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
+}
+
+function readOpenOrderSnapshotQuantity(order) {
+  return order.originalQuantity?.amount ?? order.originalQuantity
+}
+
 function readOpenOrderSnapshotIdentity(order) {
   const clientOrderId = order?.clientOrderId
   const brokerOrderId = order?.brokerOrderId ?? order?.id
   const symbol = order?.market?.symbol ?? order?.symbol
-  const validClientOrderId = typeof clientOrderId === "string" && clientOrderId.trim().length > 0
-  const validBrokerOrderId = typeof brokerOrderId === "string" && brokerOrderId.trim().length > 0
-  const validSymbol = typeof symbol === "string" && symbol.trim().length > 0
-  if (!validClientOrderId || !validBrokerOrderId || !validSymbol) {
+  if (
+    !isNonEmptyOrderIdentity(clientOrderId) ||
+    !isNonEmptyOrderIdentity(brokerOrderId) ||
+    !isNonEmptyOrderIdentity(symbol)
+  ) {
     return undefined
   }
   return {
     clientOrderId,
     brokerOrderId,
     symbol,
-    actualPrice: order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price,
-    actualQuantity: order.originalQuantity?.amount ?? order.originalQuantity,
+    actualPrice: readOpenOrderSnapshotPrice(order),
+    actualQuantity: readOpenOrderSnapshotQuantity(order),
   }
 }
 
