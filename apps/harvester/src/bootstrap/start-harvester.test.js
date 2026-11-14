@@ -1047,56 +1047,10 @@ test("keeps external open orders audit-blocked but does not block startup or can
   assert.deepEqual(cancellationRequests, [], "Startup and shutdown must never cancel a manually placed external order.")
 })
 
-test("subscribes every enabled market before waiting for the first market's REST ticker seed", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  let resolveFirstTicker
-  const firstTicker = new Promise((resolve) => { resolveFirstTicker = resolve })
-  broker.getPrices = async ({ symbol }) => {
-    calls.push("prices:" + symbol)
-    if (symbol === "BTCUSDT") {return firstTicker}
-    return {
-      ok: true,
-      data: {
-      symbol,
-      price: "65000"
-    }
-    }
-  }
-  let accountSnapshotTime = 0
-  broker.getAccountSnapshot = async () => {
-    accountSnapshotTime += 1
-    const balances = ["BTC", "ETH", "USDT"].map((code) => {
-      const asset = new Asset({
-        id: "asset:" + code,
-        code
-      })
-      return new Balance({
-        free: new Quantity({
-          amount: "0",
-          asset
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset
-        }),
-      })
-    })
-    return {
-      ok: true,
-      data: {
-      balances,
-      sourceTime: accountSnapshotTime
-    }
-    }
-  }
-  let placeOrderCalls = 0
-  broker.placeOrder = async () => {
-    placeOrderCalls += 1
-    return { ok: true }
-  }
+
+function createTwoMarketStartupConfig() {
   const strategy = appConfig.strategies.CG_coinGrabber
-  const config = {
+  return {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
@@ -1106,35 +1060,86 @@ test("subscribes every enabled market before waiting for the first market's REST
           ...strategy.pairs,
           ETHUSDT: {
             ...strategy.pairs.ETHUSDT,
-            enabled: true
+            enabled: true,
           },
         },
       },
     },
   }
-  const startup = startHarvesterForTest({
-    loadConfig: async () => config,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development",
-    },
-    brokerAdapterFactory: () => broker,
-    logger: {
-      info() {},
-      error() {},
-      debug() {}
-    },
-  })
+}
 
+function createDelayedFirstTickerBroker({ broker, calls }) {
+  let resolveFirstTicker
+  const firstTicker = new Promise((resolve) => {
+    resolveFirstTicker = resolve
+  })
+  broker.getPrices = async ({ symbol }) => {
+    calls.push("prices:" + symbol)
+    if (symbol === "BTCUSDT") {
+      return firstTicker
+    }
+    return {
+      ok: true,
+      data: {
+        symbol,
+        price: "65000",
+      },
+    }
+  }
+  let accountSnapshotTime = 0
+  broker.getAccountSnapshot = async () => {
+    accountSnapshotTime += 1
+    const balances = ["BTC", "ETH", "USDT"].map((code) => {
+      const asset = new Asset({
+        id: "asset:" + code,
+        code,
+      })
+      return new Balance({
+        free: new Quantity({
+          amount: "0",
+          asset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset,
+        }),
+      })
+    })
+    return {
+      ok: true,
+      data: {
+        balances,
+        sourceTime: accountSnapshotTime,
+      },
+    }
+  }
+  let placeOrderCalls = 0
+  broker.placeOrder = async () => {
+    placeOrderCalls += 1
+    return {
+      ok: true,
+    }
+  }
   let resolveSecondSubscription
-  const secondSubscription = new Promise((resolve) => { resolveSecondSubscription = resolve })
+  const secondSubscription = new Promise((resolve) => {
+    resolveSecondSubscription = resolve
+  })
   const subscribeForPrices = broker.subscribeForPrices
   broker.subscribeForPrices = async (input) => {
     const result = await subscribeForPrices(input)
-    if (input.symbol === "ETHUSDT") {resolveSecondSubscription()}
+    if (input.symbol === "ETHUSDT") {
+      resolveSecondSubscription()
+    }
     return result
   }
+  return {
+    secondSubscription,
+    resolveFirstTicker,
+    getPlaceOrderCalls: () => placeOrderCalls,
+  }
+}
 
+async function assertSecondMarketSubscribedBeforeTicker({ calls, secondSubscription }) {
   await waitForTestSignal(
     secondSubscription,
     "second enabled market subscription",
@@ -1144,17 +1149,44 @@ test("subscribes every enabled market before waiting for the first market's REST
   assert.ok(calls.indexOf("subscribe:ETHUSDT") < calls.indexOf("prices:BTCUSDT"))
   assert.ok(calls.includes("subscribe:book:BTCUSDT"))
   assert.ok(calls.includes("subscribe:book:ETHUSDT"))
+}
 
-  resolveFirstTicker({
+
+test("subscribes every enabled market before waiting for the first market's REST ticker seed", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const race = createDelayedFirstTickerBroker({
+    broker,
+    calls,
+  })
+  const startup = startHarvesterForTest({
+    loadConfig: async () => createTwoMarketStartupConfig(),
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      error() {},
+      debug() {},
+    },
+  })
+
+  await assertSecondMarketSubscribedBeforeTicker({
+    calls,
+    secondSubscription: race.secondSubscription,
+  })
+  race.resolveFirstTicker({
     ok: true,
     data: {
-    symbol: "BTCUSDT",
-    price: "65000"
-  }
+      symbol: "BTCUSDT",
+      price: "65000",
+    },
   })
   const runtime = await startup
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
-  assert.equal(placeOrderCalls, 0)
+  assert.equal(race.getPlaceOrderCalls(), 0)
   await runtime.stop()
 })
 
