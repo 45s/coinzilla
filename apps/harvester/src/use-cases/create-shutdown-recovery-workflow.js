@@ -20,7 +20,8 @@ function getShutdownRecoveryOrders({ dependencies, symbol, portfolio } = {}) {
     ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
   return {
     activeSellsForSymbol: activeOrdersForSymbol.filter((order) => order.side === "SELL"),
-    positionBySymbol: portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER, symbol }),
+    positionBySymbol: portfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
+      symbol }),
   }
 }
 
@@ -87,7 +88,8 @@ function buildShutdownRecoveryInventory({
   const keepQuantity = String(pairs[symbol].keepQuantity ?? "0")
   const sellableQuantity = maxDecimal({
     left: "0",
-    right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
+    right: subtractDecimal({ left: activeQuantity,
+      right: keepQuantity }),
   })
   // Position.spent is authoritative accumulated BUY cost, including actual commissions.
   // RecoveryLedger.buyCost is only a consistency mirror; the ledger contributes confirmed net SELL proceeds.
@@ -100,7 +102,8 @@ function buildShutdownRecoveryInventory({
     }),
   })
   const committedQuantity = activeSells.reduce((total, order) =>
-    addDecimal({ left: total, right: order.remainingQuantity.amount }), "0")
+    addDecimal({ left: total,
+      right: order.remainingQuantity.amount }), "0")
   const common = {
     symbol,
     activeQuantity,
@@ -110,8 +113,10 @@ function buildShutdownRecoveryInventory({
     activeSellCount: activeSells.length,
     committedQuantity,
   }
-  const requiresSell = compareDecimal({ left: sellableQuantity, right: "0" }) > 0 ||
-    compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) > 0
+  const requiresSell = compareDecimal({ left: sellableQuantity,
+    right: "0" }) > 0 ||
+    compareDecimal({ left: outstandingRecoveryAmount,
+      right: "0" }) > 0
   return {
     symbol,
     metadata,
@@ -125,8 +130,17 @@ function buildShutdownRecoveryInventory({
   }
 }
 
+function sumRemainingSellQuantity({ orders } = {}) {
+  let total = "0"
+  for (const order of orders) {
+    total = addDecimal({ left: total, right: order.remainingQuantity.amount })
+  }
+  return total
+}
+
 function getShutdownRecoveryInventory({ dependencies, symbol } = {}) {
-  const metadata = getShutdownRecoveryMetadata({ dependencies, symbol })
+  const metadata = getShutdownRecoveryMetadata({ dependencies,
+    symbol })
   const portfolio = dependencies.getPortfolio()
   const { activeSellsForSymbol, positionBySymbol } = getShutdownRecoveryOrders({ dependencies,
     symbol,
@@ -170,7 +184,8 @@ function getShutdownRecoverySellPlan({ dependencies, symbol, inventory } = {}) {
       inventoryDisposition: decision.inventoryDisposition?.status ?? null,
     }
   } catch (error) {
-    return { reason: "RECOVERY_SELL_PLAN_UNAVAILABLE", error }
+    return { reason: "RECOVERY_SELL_PLAN_UNAVAILABLE",
+      error }
   }
 }
 
@@ -240,7 +255,8 @@ function compareShutdownRecoverySell({ inventory, plannedSell } = {}) {
 
 function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
   const { pairs } = dependencies
-  const inventory = getShutdownRecoveryInventory({ dependencies, symbol })
+  const inventory = getShutdownRecoveryInventory({ dependencies,
+    symbol })
   if (inventory.errorReason) {
     return {
       covered: false,
@@ -262,14 +278,21 @@ function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
     }
   }
   if (!inventory.metadata?.market) {
-    return { covered: false, symbol, reason: "MARKET_METADATA_UNAVAILABLE" }
+    return { covered: false,
+      symbol,
+      reason: "MARKET_METADATA_UNAVAILABLE" }
   }
   if (!inventory.requiresSell) {
     return inventory.activeSells.length === 0
-      ? { covered: true, ...inventory.common }
-      : { covered: false, ...inventory.common, reason: "RECOVERY_SELL_UNNECESSARY" }
+      ? { covered: true,
+        ...inventory.common }
+      : { covered: false,
+        ...inventory.common,
+        reason: "RECOVERY_SELL_UNNECESSARY" }
   }
-  const plan = getShutdownRecoverySellPlan({ dependencies, symbol, inventory })
+  const plan = getShutdownRecoverySellPlan({ dependencies,
+    symbol,
+    inventory })
   if (plan.reason) {
     return {
       covered: false,
@@ -279,7 +302,8 @@ function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
     }
   }
   return compareShutdownRecoverySell({
-    inventory: { ...inventory, inventoryDisposition: plan.inventoryDisposition },
+    inventory: { ...inventory,
+      inventoryDisposition: plan.inventoryDisposition },
     plannedSell: plan.plannedSell,
   })
 }
@@ -294,7 +318,9 @@ async function cancelStaleShutdownRecoverySells({ dependencies, symbol, assessme
   const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
     .filter((order) => order.side === "SELL")
   if (activeSells.length === 0) {
-    return { ok: true, assessment, canceledStaleSell: false }
+    return { ok: true,
+      assessment,
+      canceledStaleSell: false }
   }
   const cancellation = await cancelAndReconcileRecoverySells({
     symbol,
@@ -312,7 +338,8 @@ async function cancelStaleShutdownRecoverySells({ dependencies, symbol, assessme
   }
   return {
     ok: true,
-    assessment: assessShutdownRecoverySellCoverage({ dependencies, symbol }),
+    assessment: assessShutdownRecoverySellCoverage({ dependencies,
+      symbol }),
     canceledStaleSell: true,
   }
 }
@@ -327,8 +354,10 @@ function getShutdownRecoveryReplacementBlocker({ dependencies, symbol } = {}) {
 }
 
 async function submitShutdownRecoveryReplacement({ dependencies, symbol } = {}) {
-  const blocker = getShutdownRecoveryReplacementBlocker({ dependencies, symbol })
-  if (blocker) {return { ok: false, error: blocker }}
+  const blocker = getShutdownRecoveryReplacementBlocker({ dependencies,
+    symbol })
+  if (blocker) {return { ok: false,
+    error: blocker }}
   const replacement = await dependencies.evaluateLatestTransition({
     symbol,
     shutdownRecoveryOnly: true,
@@ -349,8 +378,10 @@ async function submitShutdownRecoveryReplacement({ dependencies, symbol } = {}) 
 }
 
 async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } = {}) {
-  let assessment = assessShutdownRecoverySellCoverage({ dependencies, symbol })
-  if (assessment.covered) {return { ok: true, assessment }}
+  let assessment = assessShutdownRecoverySellCoverage({ dependencies,
+    symbol })
+  if (assessment.covered) {return { ok: true,
+    assessment }}
   if (isShutdownRecoveryInputUnavailable({ assessment })) {
     return {
       ok: false,
@@ -360,7 +391,9 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
       }),
     }
   }
-  const cancellation = await cancelStaleShutdownRecoverySells({ dependencies, symbol, assessment })
+  const cancellation = await cancelStaleShutdownRecoverySells({ dependencies,
+    symbol,
+    assessment })
   if (!cancellation.ok) {return cancellation}
   assessment = cancellation.assessment
   if (assessment.covered) {
@@ -370,9 +403,11 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
       canceledStaleSell: cancellation.canceledStaleSell,
     }
   }
-  const replacement = await submitShutdownRecoveryReplacement({ dependencies, symbol })
+  const replacement = await submitShutdownRecoveryReplacement({ dependencies,
+    symbol })
   if (!replacement.ok) {return replacement}
-  assessment = assessShutdownRecoverySellCoverage({ dependencies, symbol })
+  assessment = assessShutdownRecoverySellCoverage({ dependencies,
+    symbol })
   if (!assessment.covered) {
     return {
       ok: false,
@@ -402,7 +437,8 @@ async function reconcileRecoverySellsForShutdown(dependencies) {
       const reconciledSymbols = []
       const failures = []
       for (const symbol of Object.keys(pairs)) {
-        const result = await reconcileRecoverySellForShutdownSymbol({ dependencies, symbol })
+        const result = await reconcileRecoverySellForShutdownSymbol({ dependencies,
+          symbol })
         if (!result.ok) {
           failures.push(result.error)
           continue
@@ -431,7 +467,8 @@ async function auditShutdownRecoverySellCoverage(dependencies) {
     task: async () => {
       const findings = []
       for (const symbol of Object.keys(pairs)) {
-        const assessment = assessShutdownRecoverySellCoverage({ dependencies, symbol })
+        const assessment = assessShutdownRecoverySellCoverage({ dependencies,
+          symbol })
         if (!assessment.covered) {
           findings.push(Object.freeze({
             symbol,
