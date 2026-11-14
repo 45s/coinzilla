@@ -193,21 +193,24 @@ const createOpenOrderSnapshot = ({ order }) => {
   openOrder.status = order.status === "OPEN" ? "NEW" : "PARTIALLY_FILLED"
   return openOrder
 }
-const createBroker = (calls = [], {
-  subscribeResult,
-  subscribeResultBySymbol = {},
-  externalOpenOrders = [],
-} = {}) => {
-  const subscriptions = new Map()
-  const bookSubscriptions = new Map()
-  const fillHistoryByOrder = new Map()
-  const canonicalOrdersByBrokerId = new Map()
-  let userDataHandlers
-  let accountSnapshotTime = 0
+
+function createBrokerTestState({ externalOpenOrders }) {
   return {
-    connect: async () => calls.push("connect"),
-    disconnect: async () => calls.push("disconnect"),
-    placeOrder: async () => ({ ok: true }),
+    subscriptions: new Map(),
+    bookSubscriptions: new Map(),
+    fillHistoryByOrder: new Map(),
+    canonicalOrdersByBrokerId: new Map(),
+    externalOpenOrders,
+    userDataHandlers: undefined,
+    accountSnapshotTime: 0,
+  }
+}
+
+function createBrokerOrderPorts({ state }) {
+  return {
+    placeOrder: async () => ({
+      ok: true,
+    }),
     cancelOrder: async ({ order } = {}) => {
       const canceledOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -224,55 +227,59 @@ const createBroker = (calls = [], {
         updatedAt: Date.now(),
         completedAt: Date.now(),
       })
-      canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
+      state.canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
       return {
         ok: true,
-        data: canceledOrder
+        data: canceledOrder,
       }
     },
     getOpenOrders: async ({ symbol } = {}) => ({
       ok: true,
       data: [
-        ...externalOpenOrders.filter((order) => !symbol || order.symbol === symbol),
-        ...[...canonicalOrdersByBrokerId.values()]
+        ...state.externalOpenOrders.filter((order) => !symbol || order.symbol === symbol),
+        ...[...state.canonicalOrdersByBrokerId.values()]
           .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
           .filter((order) => !symbol || order.market.symbol === symbol)
-          .map((order) => createOpenOrderSnapshot({ order })),
+          .map((order) => createOpenOrderSnapshot({
+            order,
+          })),
       ],
     }),
     getFills: async ({ orderId }) => ({
       ok: true,
-      data: fillHistoryByOrder.get(String(orderId)) ?? []
+      data: state.fillHistoryByOrder.get(String(orderId)) ?? [],
     }),
-    getCanonicalOrderHistory: async ({
-      orderId,
-      symbol
-    } = {}) => ({
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
       ok: true,
-      data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+      data: [...state.canonicalOrdersByBrokerId.values()].filter((order) =>
         (!orderId || order.brokerOrderId === String(orderId)) &&
         (!symbol || order.market.symbol === symbol)),
     }),
     getCanonicalOrder: async () => ({
       ok: false,
-      errors: [new Error("order not found")]
+      errors: [new Error("order not found")],
     }),
+  }
+}
+
+function createBrokerAccountPorts({ calls, state }) {
+  return {
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
-      accountSnapshotTime += 1
+      state.accountSnapshotTime += 1
       const balances = ["BTC", "ETH", "USDT"].map((code) => {
         const asset = new Asset({
           id: "asset:" + code,
-          code
+          code,
         })
         return new Balance({
           free: new Quantity({
             amount: "1000",
-            asset
+            asset,
           }),
           locked: new Quantity({
             amount: "0",
-            asset
+            asset,
           }),
         })
       })
@@ -280,73 +287,90 @@ const createBroker = (calls = [], {
         ok: true,
         data: {
           balances,
-          sourceTime: accountSnapshotTime
+          sourceTime: state.accountSnapshotTime,
         },
       }
     },
     getExchangeMarkets: async () => ({
       ok: true,
-      data: []
+      data: [],
     }),
     getSymbolFilters: async ({ symbol }) => {
       calls.push("filters:" + symbol)
       return {
         ok: true,
-        data: createMarketMetadata(symbol)
+        data: createMarketMetadata(symbol),
       }
     },
     getPrices: async ({ symbol }) => ({
       ok: true,
       data: {
-      symbol,
-      price: "65000"
-    }
+        symbol,
+        price: "65000",
+      },
     }),
+  }
+}
+
+function createBrokerCandlePorts() {
+  return {
     getCandles: async () => ({
       ok: true,
-      data: []
+      data: [],
     }),
     subscribeForCandles: async () => ({
       ok: true,
-      data: { unsubscribe: async () => {} }
+      data: {
+        unsubscribe: async () => {},
+      },
     }),
-    subscribeForPrices: async ({
-      symbol,
-      onPrice
-    }) => {
+  }
+}
+
+function createBrokerPriceStreamPorts({ calls, state, subscribeResult, subscribeResultBySymbol }) {
+  return {
+    subscribeForPrices: async ({ symbol, onPrice }) => {
       calls.push("subscribe:" + symbol)
-      subscriptions.set(symbol, onPrice)
+      state.subscriptions.set(symbol, onPrice)
       return subscribeResultBySymbol[symbol] ?? subscribeResult ?? {
         ok: true,
-        data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) },
+        data: {
+          unsubscribe: async () => calls.push("unsubscribe:" + symbol),
+        },
       }
     },
-    subscribeForBookTicker: async ({
-      symbol,
-      onBookTicker
-    }) => {
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
       calls.push("subscribe:book:" + symbol)
-      bookSubscriptions.set(symbol, onBookTicker)
+      state.bookSubscriptions.set(symbol, onBookTicker)
       return {
         ok: true,
-        data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) }
+        data: {
+          unsubscribe: async () => calls.push("unsubscribe:book:" + symbol),
+        },
       }
     },
+    emitPrice: (symbol, priceEvent) => state.subscriptions.get(symbol)?.(priceEvent),
+    emitBookTicker: (symbol, bookTicker) => state.bookSubscriptions.get(symbol)?.(bookTicker),
+  }
+}
+
+function createBrokerUserDataPorts({ calls, state }) {
+  return {
     subscribeForUserData: async (handlers) => {
       calls.push("subscribe:user-data")
-      userDataHandlers = {
+      state.userDataHandlers = {
         ...handlers,
         onEvent: (message) => {
           const event = message?.event
           const executedOrder = event?.executedOrder
           if (executedOrder?.brokerOrderId) {
-            canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+            state.canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
           }
           const fill = event?.fill
           if (fill instanceof Fill) {
-            const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+            const existing = state.fillHistoryByOrder.get(fill.brokerOrderId) ?? []
             if (!existing.some((item) => item.id === fill.id)) {
-              fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+              state.fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
             }
           }
           return handlers.onEvent(message)
@@ -354,22 +378,56 @@ const createBroker = (calls = [], {
       }
       return {
         ok: true,
-        data: { disconnect: async () => calls.push("unsubscribe:user-data") },
+        data: {
+          disconnect: async () => calls.push("unsubscribe:user-data"),
+        },
       }
     },
     emitUserDataEvent: (event) => {
       const fill = event?.fill
       if (fill instanceof Fill) {
-        const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+        const existing = state.fillHistoryByOrder.get(fill.brokerOrderId) ?? []
         if (!existing.some((item) => item.id === fill.id)) {
-          fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+          state.fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
         }
       }
-      return userDataHandlers?.onEvent({ event })
+      return state.userDataHandlers?.onEvent({
+        event,
+      })
     },
-    emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
-    emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
-    emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
+    emitUserDataStatus: (status) => state.userDataHandlers?.onStatus(status),
+  }
+}
+
+const createBroker = (calls = [], {
+  subscribeResult,
+  subscribeResultBySymbol = {},
+  externalOpenOrders = [],
+} = {}) => {
+  const state = createBrokerTestState({
+    externalOpenOrders,
+  })
+  return {
+    connect: async () => calls.push("connect"),
+    disconnect: async () => calls.push("disconnect"),
+    ...createBrokerOrderPorts({
+      state,
+    }),
+    ...createBrokerAccountPorts({
+      calls,
+      state,
+    }),
+    ...createBrokerCandlePorts(),
+    ...createBrokerPriceStreamPorts({
+      calls,
+      state,
+      subscribeResult,
+      subscribeResultBySymbol,
+    }),
+    ...createBrokerUserDataPorts({
+      calls,
+      state,
+    }),
   }
 }
 
