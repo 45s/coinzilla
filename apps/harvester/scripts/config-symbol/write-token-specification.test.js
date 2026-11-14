@@ -92,6 +92,33 @@ test("fails closed when another metadata generator owns the registry lock", asyn
   })
 })
 
+test("creates a missing registry and removes stale temporary files while holding the lock", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-token-specification-"))
+  const specificationPath = path.join(directory, "token-specification.json")
+  const staleTemporaryPath = path.join(directory, ".token-specification.json.stale.tmp.json")
+  try {
+    await writeFile(staleTemporaryPath, "stale", "utf8")
+    await writeTokenSpecificationAtomically({ specificationPath, metadata: metadata() })
+    const written = JSON.parse(await readFile(specificationPath, "utf8"))
+    assert.deepEqual(written.LINK.markets.LINKUSDT, {
+      quoteAsset: "USDT",
+      pricePrecision: 3,
+      quantityPrecision: 2,
+    }, "The writer must create a valid registry when the target file does not exist.")
+    assert.deepEqual(await readdir(directory), ["token-specification.json"], "Stale temporary files and the active lock must be removed after an atomic write.")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("rejects an empty specification path before acquiring a lock", async () => {
+  await assert.rejects(
+    writeTokenSpecificationAtomically({ specificationPath: " ", metadata: metadata() }),
+    /specificationPath.*non-empty/i,
+    "The writer must reject an invalid destination before filesystem changes."
+  )
+})
+
 test("rejects malformed existing JSON without replacing the operator's file", async () => {
   await withSpecification({
     run: async ({ specificationPath }) => {
