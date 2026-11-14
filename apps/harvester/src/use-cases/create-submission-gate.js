@@ -26,15 +26,20 @@ function getSubmissionStateBlocker({
   canTrade,
   isMarketPriceFresh,
 } = {}) {
-  if (state.paused.has(symbol) && !shutdownRecoverySubmission) {return defer({ symbol, reason: "MARKET_PAUSED" })}
+  if (state.paused.has(symbol) && !shutdownRecoverySubmission) {return defer({ symbol,
+    reason: "MARKET_PAUSED" })}
   if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
-    return defer({ symbol, reason: "OPERATOR_MARKET_PAUSED" })
+    return defer({ symbol,
+      reason: "OPERATOR_MARKET_PAUSED" })
   }
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
-    return defer({ symbol, reason: "UNOWNED_OPEN_ORDERS_PRESENT" })
+    return defer({ symbol,
+      reason: "UNOWNED_OPEN_ORDERS_PRESENT" })
   }
-  if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {return defer({ symbol, reason: "TRADING_DISABLED" })}
-  if (!marketPrice) {return defer({ symbol, reason: "MARKET_PRICE_UNAVAILABLE" })}
+  if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {return defer({ symbol,
+    reason: "TRADING_DISABLED" })}
+  if (!marketPrice) {return defer({ symbol,
+    reason: "MARKET_PRICE_UNAVAILABLE" })}
   if (!isMarketPriceFresh(marketPrice)) {
     return defer({
       symbol,
@@ -117,7 +122,8 @@ function getMarketBookSubmissionBlocker({
       },
     })
   }
-  if (isPostOnlyOrderCrossing({ order, marketBook })) {
+  if (isPostOnlyOrderCrossing({ order,
+    marketBook })) {
     return defer({
       symbol,
       reason: "POST_ONLY_WOULD_CROSS",
