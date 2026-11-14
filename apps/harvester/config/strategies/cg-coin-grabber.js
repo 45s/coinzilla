@@ -16,6 +16,7 @@ export const CG_COIN_GRABBER_CONFIG = {
   pairs: {
     LINKUSDT: {
       enabled: false,
+      tradingEnvironment: "testnet",
       enableVolatilityProtection: true,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 200,
@@ -30,6 +31,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     LINKFDUSD: {
       enabled: true,
+      tradingEnvironment: "both",
       enableVolatilityProtection: false,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 200,
@@ -44,6 +46,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     DOGEUSDT: {
       enabled: false,
+      tradingEnvironment: "live",
       enableVolatilityProtection: true,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 100,
@@ -58,6 +61,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     SOLFDUSD: {
       enabled: false,
+      tradingEnvironment: "both",
       enableVolatilityProtection: true,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 100,
@@ -72,6 +76,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     ZROUSDT: {
       enabled: false,
+      tradingEnvironment: "both",
       enableVolatilityProtection: true,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 100,
@@ -86,6 +91,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     ZROFDUSD: {
       enabled: true,
+      tradingEnvironment: "both",
       enableVolatilityProtection: true,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 120,
@@ -100,6 +106,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     ADAFDUSD: {
       enabled: false,
+      tradingEnvironment: "both",
       enableVolatilityProtection: false,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 120,
@@ -114,6 +121,7 @@ export const CG_COIN_GRABBER_CONFIG = {
     },
     WLDFDUSD: {
       enabled: true,
+      tradingEnvironment: "both",
       enableVolatilityProtection: true,
       externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
       investment: 100,

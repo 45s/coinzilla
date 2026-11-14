@@ -142,6 +142,7 @@ export const appConfig = {
       pairs: {
         ZROUSDT: {
           enabled: true,
+          tradingEnvironment: "both",
           enableVolatilityProtection: true,
           investment: 100,
           orderQuantity: 5,
@@ -159,7 +160,7 @@ export const appConfig = {
 };
 ```
 
-`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed `config/index.js` currently enables `LINKFDUSD` and `ZROFDUSD`; this is configuration, not authorization for a TESTNET session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. Disabled `LINKUSDT` has configured maker/taker assumptions of 0.075% / 0.075%; enabled `LINKFDUSD` has maker 0% and taker 0.075%; enabled `ZROFDUSD` has maker 0% and taker 0.1%. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The strategy module `config/strategies/cg-coin-grabber.js` currently enables `LINKFDUSD`, `ZROFDUSD`, and `WLDFDUSD`; all three are explicitly eligible in both environments. `LINKUSDT` is TESTNET-only and `DOGEUSDT` is LIVE-only, and both remain disabled. This is configuration, not authorization for a TESTNET or LIVE session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. Disabled `LINKUSDT` has configured maker/taker assumptions of 0.075% / 0.075%; enabled `LINKFDUSD` has maker 0% and taker 0.075%; enabled `ZROFDUSD` has maker 0% and taker 0.1%. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
 The named `appConfig` export in `config/index.js` contains strategy configuration under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 

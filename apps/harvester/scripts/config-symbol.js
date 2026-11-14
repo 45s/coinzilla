@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout, stderr } from "node:process"
 import { pathToFileURL, fileURLToPath } from "node:url"
-import { normalizeSymbolInput, normalizeTradingEnvironment, parseDecimalInput, normalizePairInputs, createPairConfig } from "./config-symbol/configuration.js"
+import { normalizeSymbolInput, normalizeTradingEnvironment, normalizePairTradingEnvironment, parseDecimalInput, normalizePairInputs, createPairConfig } from "./config-symbol/configuration.js"
 import { fetchBinanceSpotMetadata } from "./config-symbol/binance-client.js"
 import { writePairConfigAtomically } from "./config-symbol/write-config.js"
 import { loadAppConfig } from "../src/infrastructure/config/load-app-config.js"
@@ -40,7 +40,9 @@ export async function runConfigSymbol({
   writeLine("Exchange filters and precision are fetched automatically. This command never places or cancels orders.")
   const symbol = normalizeSymbolInput(await ask("Trading symbol (for example ADAFDUSD): "))
   const environment = normalizeTradingEnvironment(defaultEnvironment)
+  const tradingEnvironment = normalizePairTradingEnvironment(await ask("Pair trading environment (testnet/live/both): "))
   const inputs = normalizePairInputs({
+    tradingEnvironment,
     investment: parseDecimalInput(await ask("Total investment / quote budget for this pair: "), "investment", { exclusiveMin: true }),
     orderQuantity: parseDecimalInput(await ask("Quantity per individual order (base asset): "), "orderQuantity", { exclusiveMin: true }),
     keepQuantity: parseDecimalInput(await ask("keepQuantity (base asset): "), "keepQuantity"),
@@ -83,7 +85,7 @@ export async function runConfigSymbol({
 
   const writtenPath = await writeConfig({ configPath, symbol, pairConfig })
   writeLine("Pair configuration added successfully: " + writtenPath)
-  writeLine("The pair was added with enabled: true.")
+  writeLine("The pair was added with enabled: true and tradingEnvironment: " + pairConfig.tradingEnvironment + ".")
   return Object.freeze({ written: true, symbol, pairConfig, path: writtenPath })
 }
 
