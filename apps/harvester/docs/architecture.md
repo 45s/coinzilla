@@ -847,3 +847,6 @@ Harvester bootstrap composition delegates runtime state, candle-history setup, o
 
 
 Operational-state callback construction is centralized and each callback retains the same durable record payload, deterministic transition ID and evidence digest.
+
+
+User-data event transition handlers remain serialized through the workflow entry point; each extracted handler now owns a complete, independently testable status branch.

@@ -162,6 +162,7 @@ async function handleDuplicateOrStaleUpdate(dependencies, { order, symbol, updat
         }
 }
 
+}
 async function handleOpenSellReplacement(dependencies, { order, symbol, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
@@ -195,6 +196,7 @@ async function handleOpenSellReplacement(dependencies, { order, symbol, recovery
         } })
 }
 
+}
 function handlePartialBuyDuringShutdown(dependencies, { order, symbol, recoveryMode } = {}) {
   const { state, isStopping } = dependencies
    if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
@@ -210,6 +212,7 @@ function handlePartialBuyDuringShutdown(dependencies, { order, symbol, recoveryM
         })
 }
 
+}
 async function handlePartialBuyWithActiveSell(dependencies, { order, symbol, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
@@ -247,6 +250,7 @@ async function handlePartialBuyWithActiveSell(dependencies, { order, symbol, rec
         })
 }
 
+}
 function handlePartialBuyWaiting(dependencies, { order } = {}) {
   void dependencies
    if (order.status === "PARTIALLY_FILLED") {
@@ -256,6 +260,7 @@ function handlePartialBuyWaiting(dependencies, { order } = {}) {
         } })
 }
 
+}
 async function handlePartialBuyTerminal(dependencies, { order, symbol } = {}) {
   const { state, pause, isStopping } = dependencies
    if (order.side === "BUY" &&
@@ -277,6 +282,7 @@ async function handlePartialBuyTerminal(dependencies, { order, symbol } = {}) {
         })
 }
 
+}
 function handleNonterminalOrder(dependencies, { order } = {}) {
   void dependencies
    if (!["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
@@ -286,6 +292,7 @@ function handleNonterminalOrder(dependencies, { order } = {}) {
         } })
 }
 
+}
 async function handleBuyFilled(dependencies, { order, symbol, recoveryMode } = {}) {
   const { state, pause, cancelAndReconcileRecoverySells, getReconciledBuyExecutionPrice, isStopping, resolveRecoveryManagedCancellation } = dependencies
    if (order.status === "FILLED" && order.side === "BUY") {
@@ -353,6 +360,7 @@ async function handleBuyFilled(dependencies, { order, symbol, recoveryMode } = {
         state.buyExecutionTotals.delete(order.brokerOrderId)
 }
 
+}
 async function handleRejectedOrder(dependencies, { order, symbol } = {}) {
   const { pause } = dependencies
    if (order.status === "REJECTED") {
@@ -366,6 +374,7 @@ async function handleRejectedOrder(dependencies, { order, symbol } = {}) {
         } })
 }
 
+}
 async function handleSellCanceled(dependencies, { order, symbol, recoveryMode } = {}) {
   const { state, evaluateLatestTransition } = dependencies
    if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
@@ -400,6 +409,7 @@ async function handleSellCanceled(dependencies, { order, symbol, recoveryMode } 
         })
 }
 
+}
 async function completeSellRecoveryCycle(dependencies, { order, symbol } = {}) {
   const {
     pause,
