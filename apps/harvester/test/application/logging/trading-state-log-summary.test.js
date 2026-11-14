@@ -1,3 +1,4 @@
+import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
@@ -138,7 +139,7 @@ test("portfolio log summary selects one Position when a strategy owns multiple P
   const selectedPosition = {
     ...position,
     positionId: "position:rs:cycle-2",
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   }
   const portfolio = {
     appliedFillIds: ["fill-1"],
@@ -146,7 +147,7 @@ test("portfolio log summary selects one Position when a strategy owns multiple P
       assert.deepEqual(selection, {
         positionId: "position:rs:cycle-2",
         marketId: position.market.id,
-        strategyId: "RS_recoverySeller",
+        strategyId: StrategyId.RECOVERY_SELLER,
       })
       return selectedPosition
     },
