@@ -6913,57 +6913,54 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
 })
 
 
-test("reconciles recovered orders without canceling or replacing any exchange order", async () => {
-  const makeRecoveredOrder = ({
+
+function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0" }) {
+  return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
+    market,
     side,
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
     status,
-    executedQuantity = "0"
-  }) =>
-    new CanonicalOrder({
-      clientOrderId,
-      brokerOrderId,
-      market,
-      side,
-      type: "LIMIT",
-      limitPrice: new Money({
-        amount: "100",
-        asset: quoteAsset
-      }),
-      originalQuantity: new Quantity({
-        amount: "1",
-        asset: baseAsset
-      }),
-      executedQuantity: new Quantity({
-        amount: executedQuantity,
-        asset: baseAsset
-      }),
-      status,
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 1,
-    })
-  const buyOwnedOrder = makeRecoveredOrder({
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function createRecoveredOrderFixtures() {
+  const buyOwnedOrder = createRecoveredCanonicalOrder({
     clientOrderId: "recovered-buy",
     brokerOrderId: "broker-recovered-buy",
     side: "BUY",
     status: "UNKNOWN",
   })
-  const sellOwnedOrder = makeRecoveredOrder({
+  const sellOwnedOrder = createRecoveredCanonicalOrder({
     clientOrderId: "recovered-sell",
     brokerOrderId: "broker-recovered-sell",
     side: "SELL",
     status: "OPEN",
   })
-  const buyHistory = makeRecoveredOrder({
+  const buyHistory = createRecoveredCanonicalOrder({
     clientOrderId: "recovered-buy",
     brokerOrderId: "broker-recovered-buy",
     side: "BUY",
     status: "FILLED",
     executedQuantity: "1",
   })
-  const sellHistory = makeRecoveredOrder({
+  const sellHistory = createRecoveredCanonicalOrder({
     clientOrderId: "recovered-sell",
     brokerOrderId: "broker-recovered-sell",
     side: "SELL",
@@ -6977,23 +6974,35 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     side: "BUY",
     price: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     quantity: new Quantity({
       amount: "1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     quoteQuantity: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+  return {
+    buyOwnedOrder,
+    sellOwnedOrder,
+    buyHistory,
+    sellHistory,
+    buyFill,
+  }
+}
+
+async function createRecoveredOrderHarness({ fixtures }) {
   const harness = await createHarness({
     initialBook: false,
     initialState: {
-      orderRegistry: new OrderRegistry({ orders: [buyOwnedOrder, sellOwnedOrder] }),
+      orderRegistry: new OrderRegistry({
+        orders: [fixtures.buyOwnedOrder, fixtures.sellOwnedOrder],
+      }),
       replacementIntents: new Set(["DOGEUSDT"]),
       trailingBuyRepriceIntents: new Set(["DOGEUSDT"]),
       recoveryManagedCancellationClientOrderIds: new Set(["recovered-buy"]),
@@ -7002,21 +7011,26 @@ test("reconciles recovered orders without canceling or replacing any exchange or
   harness.broker.getOpenOrders = async () => ({
     ok: true,
     data: [makeOpenOrder({
-      order: sellHistory,
-      executedQuantity: "0"
+      order: fixtures.sellHistory,
+      executedQuantity: "0",
     })],
   })
   harness.broker.getCanonicalOrderHistory = async ({ orderId }) => ({
     ok: true,
-    data: [orderId === buyOwnedOrder.brokerOrderId ? buyHistory : sellHistory],
+    data: [orderId === fixtures.buyOwnedOrder.brokerOrderId
+      ? fixtures.buyHistory
+      : fixtures.sellHistory],
   })
   harness.broker.getFills = async ({ orderId }) => ({
     ok: true,
-    data: orderId === buyOwnedOrder.brokerOrderId ? [buyFill] : [],
+    data: orderId === fixtures.buyOwnedOrder.brokerOrderId
+      ? [fixtures.buyFill]
+      : [],
   })
+  return harness
+}
 
-  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
-
+function assertRecoveredOrderState({ harness, result }) {
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.deepEqual(harness.cancellationIds, [])
   assert.deepEqual(harness.orders, [])
@@ -7024,6 +7038,21 @@ test("reconciles recovered orders without canceling or replacing any exchange or
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-sell").status, "OPEN")
   assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, ["DOGEUSDT"])
   assert.deepEqual(harness.engine.getRecoveryIntents().trailingBuyRepriceIntents, [])
+}
+
+
+test("reconciles recovered orders without canceling or replacing any exchange order", async () => {
+  const fixtures = createRecoveredOrderFixtures()
+  const harness = await createRecoveredOrderHarness({
+    fixtures,
+  })
+  const result = await harness.engine.reconcileOwnedOrders({
+    recoveryMode: true,
+  })
+  assertRecoveredOrderState({
+    harness,
+    result,
+  })
 })
 
 test("clears a recovered replacement intent only after canonical history confirms cancellation", async () => {
