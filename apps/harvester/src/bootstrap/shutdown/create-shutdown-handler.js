@@ -92,6 +92,54 @@ function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelati
   }
 }
 
+async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure, options }) {
+  const {
+    phase,
+    operation,
+    stage,
+    message,
+    auditReason,
+    isFailure,
+  } = options
+  try {
+    const result = await phaseRunner.runPhase({
+      phase,
+      operation,
+      isFailure,
+    })
+    const failed = isFailure
+      ? isFailure(result)
+      : phaseRunner.isPhaseFailure(result)
+    if (failed) {
+      if (auditReason && !context.auditReasons.includes(auditReason)) {
+        context.auditReasons.push(auditReason)
+      }
+      const errors = Array.isArray(result)
+        ? result.flatMap((entry) => entry?.status === "rejected" ? [entry.reason] : [entry])
+        : result?.errors ?? []
+      logShutdownFailure({
+        message,
+        stage,
+        result: { errors },
+      })
+    }
+    return result
+  } catch (error) {
+    if (auditReason && !context.auditReasons.includes(auditReason)) {
+      context.auditReasons.push(auditReason)
+    }
+    logShutdownFailure({
+      message,
+      stage,
+      error,
+    })
+    return {
+      ok: false,
+      errors: [error],
+    }
+  }
+}
+
 function createFailureRecorder({ context, phaseRunner }) {
   const logShutdownFailure = ({ message, stage, result, error } = {}) => {
     let errors
@@ -130,52 +178,12 @@ function createFailureRecorder({ context, phaseRunner }) {
     })
   }
 
-  const runPhaseSafely = async ({
-    phase,
-    operation,
-    stage,
-    message,
-    auditReason,
-    isFailure,
-  } = {}) => {
-    try {
-      const result = await phaseRunner.runPhase({
-        phase,
-        operation,
-        isFailure,
-      })
-      const failed = isFailure
-        ? isFailure(result)
-        : phaseRunner.isPhaseFailure(result)
-      if (failed) {
-        if (auditReason && !context.auditReasons.includes(auditReason)) {
-          context.auditReasons.push(auditReason)
-        }
-        const errors = Array.isArray(result)
-          ? result.flatMap((entry) => entry?.status === "rejected" ? [entry.reason] : [entry])
-          : result?.errors ?? []
-        logShutdownFailure({
-          message,
-          stage,
-          result: { errors },
-        })
-      }
-      return result
-    } catch (error) {
-      if (auditReason && !context.auditReasons.includes(auditReason)) {
-        context.auditReasons.push(auditReason)
-      }
-      logShutdownFailure({
-        message,
-        stage,
-        error,
-      })
-      return {
-        ok: false,
-        errors: [error],
-      }
-    }
-  }
+  const runPhaseSafely = (options = {}) => runShutdownPhaseSafely({
+    context,
+    phaseRunner,
+    logShutdownFailure,
+    options,
+  })
 
   return {
     logShutdownFailure,
