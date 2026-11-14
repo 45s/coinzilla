@@ -19,8 +19,10 @@ function createShutdownPhaseLogger({ logger, runtimeSessionId, shutdownRequested
 
 async function stopOperatorControl({ operatorControlLifecycle, logShutdownPhase } = {}) {
   const startedAt = performance.now()
-  logShutdownPhase({ phase: "OPERATOR_CONTROL_STOP",
-                     status: "STARTED" })
+  logShutdownPhase({
+    phase: "OPERATOR_CONTROL_STOP",
+    status: "STARTED",
+  })
   try {
     await operatorControlLifecycle.stop()
     logShutdownPhase({
@@ -47,8 +49,10 @@ async function recordDurableProcessStop({
   logShutdownPhase,
 } = {}) {
   const startedAt = performance.now()
-  logShutdownPhase({ phase: "PROCESS_STOP_DURABILITY",
-                     status: "STARTED" })
+  logShutdownPhase({
+    phase: "PROCESS_STOP_DURABILITY",
+    status: "STARTED",
+  })
   try {
     const stopped = await recordProcessStopped({
       operationalStateStore,
