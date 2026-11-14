@@ -198,6 +198,7 @@ function logSuccessfulOrderEvent({ processed, event, logger }) {
 async function notifyUserDataObserver({
   event,
   recoveryMode,
+  onUserDataEvent,
   getPortfolio,
   getRecoveryLedger,
   updatePortfolio,
@@ -252,14 +253,22 @@ async function processOrderUpdate({
         onSafetyBlockerRaised,
         logger,
       })
-      return undefined
+      return {
+        shouldNotifyObserver: false,
+        reevaluateSymbol: undefined,
+      }
     }
     logSuccessfulOrderEvent({
       processed,
       event,
       logger,
     })
-    return processed.data?.reevaluate === true ? event.executedOrder.market.symbol : undefined
+    return {
+      shouldNotifyObserver: true,
+      reevaluateSymbol: processed.data?.reevaluate === true
+        ? event.executedOrder.market.symbol
+        : undefined,
+    }
   }
   if (isOrderUpdate && tradingEnabled) {
     state.accountingFailed = true
@@ -270,8 +279,15 @@ async function processOrderUpdate({
       symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
       brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
     })
+    return {
+      shouldNotifyObserver: false,
+      reevaluateSymbol: undefined,
+    }
   }
-  return undefined
+  return {
+    shouldNotifyObserver: true,
+    reevaluateSymbol: undefined,
+  }
 }
 
 async function processQueuedUserDataEvent({
@@ -288,7 +304,7 @@ async function processQueuedUserDataEvent({
   logger,
 }) {
   const recoveryMode = state.requiresReconciliation || state.recoveryTask !== null
-  const reevaluateSymbol = await processOrderUpdate({
+  const orderUpdate = await processOrderUpdate({
     event,
     recoveryMode,
     tradingEngine,
@@ -297,7 +313,7 @@ async function processQueuedUserDataEvent({
     onSafetyBlockerRaised,
     logger,
   })
-  if (state.status === "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY") {
+  if (!orderUpdate.shouldNotifyObserver) {
     return undefined
   }
   await notifyUserDataObserver({
@@ -310,7 +326,7 @@ async function processQueuedUserDataEvent({
     updateTradingAccounting,
     logger,
   })
-  return reevaluateSymbol
+  return orderUpdate.reevaluateSymbol
 }
 
 function handleUserDataQueueFailure({ error, state, logger }) {
