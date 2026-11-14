@@ -2748,7 +2748,7 @@ class TestnetTradingRecoveryScenario {
   
     this.recoveryReminderCount = 254
   
-    for (let reminderNumber = 0; reminderNumber < recoveryReminderCount; reminderNumber += 1) {
+    for (let reminderNumber = 0; reminderNumber < this.recoveryReminderCount; reminderNumber += 1) {
       this.userDataHandlers.onStatus({
         type: "recovered",
         subscriptionId: 17,
