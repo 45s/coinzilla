@@ -66,12 +66,12 @@ function getChangedFileChanges({ baseSha }) {
   );
 
   if (result.error) {
-    throw new Error(\`Could not inspect changed files: \${result.error.message}\`);
+    throw new Error(`Could not inspect changed files: ${result.error.message}`);
   }
 
   if (result.status !== 0) {
     throw new Error(
-      result.stderr || \`Git diff exited with status \${result.status}.\`,
+      result.stderr || `Git diff exited with status ${result.status}.`,
     );
   }
 
@@ -116,10 +116,10 @@ async function lintChangedFiles({ baseSha }) {
     const currentResults = await eslint.lintFiles([change.path]);
     const currentMessages = currentResults.flatMap((result) => result.messages);
     const baseResult = change.basePath
-      ? spawnSync("git", ["show", \`\${baseSha}:\${change.basePath}\`], { encoding: "utf8" })
+      ? spawnSync("git", ["show", `${baseSha}:${change.basePath}`], { encoding: "utf8" })
       : null;
     if (baseResult?.error) {
-      throw new Error(\`Could not read baseline for \${change.path}: \${baseResult.error.message}\`);
+      throw new Error(`Could not read baseline for ${change.path}: ${baseResult.error.message}`);
     }
     const baseMessages = baseResult?.status === 0
       ? (await eslint.lintText(baseResult.stdout, { filePath: change.path }))[0].messages
@@ -141,11 +141,11 @@ async function lintChangedFiles({ baseSha }) {
     for (const { filePath, message } of introduced) {
       const severity = message.severity === 2 ? "error" : "warning";
       process.stderr.write(
-        \`\${filePath}:\${message.line ?? 0}:\${message.column ?? 0} \${severity} \${message.message} \${message.ruleId ?? "fatal"}\n\`,
+        `${filePath}:${message.line ?? 0}:${message.column ?? 0} ${severity} ${message.message} ${message.ruleId ?? "fatal"}\n`,
       );
     }
     process.stderr.write(
-      \`ESLint found \${introduced.length} new violation(s); unchanged baseline findings are tolerated.\n\`,
+      `ESLint found ${introduced.length} new violation(s); unchanged baseline findings are tolerated.\n`,
     );
     return 1;
   }
@@ -170,7 +170,7 @@ if (isMainModule) {
     try {
       process.exitCode = await lintChangedFiles({ baseSha });
     } catch (error) {
-      process.stderr.write(\`\${error.message}\n\`);
+      process.stderr.write(`${error.message}\n`);
       process.exitCode = 1;
     }
   }
