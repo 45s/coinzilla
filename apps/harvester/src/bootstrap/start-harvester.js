@@ -147,7 +147,7 @@ function startPendingUserDataRecovery({ userDataState, startUserDataRecovery } =
 }
 
 
-function createHarvesterStartupContext({ options } = {}) {
+async function createHarvesterStartupContext({ options } = {}) {
   const {
     configSource,
     appConfig: suppliedAppConfig,
