@@ -197,9 +197,9 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     brokerName,
     eventPublisher,
     publishAccountSnapshot,
-    stopMarketIntake,
-    stopUserDataIntake,
-    disconnectBroker,
+    stopMarketIntake = stopMarketIntakeDefault,
+    stopUserDataIntake = stopUserDataIntakeDefault,
+    disconnectBroker = disconnectBrokerDefault,
     now,
     runtimeSessionId,
   } = options
@@ -250,7 +250,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
   return context
 }
 
-function getResultErrors(result, fallbackMessage) {
+function getResultErrors({ result, fallbackMessage }) {
   if (Array.isArray(result)) {
     return result
   }
@@ -307,7 +307,10 @@ async function stopMarketIntakeAndDrain(context) {
     message: "Shutdown market-intake stop failed",
     auditReason: "MARKET_INTAKE_SHUTDOWN_FAILED",
   })
-  context.marketIntakeErrors = getResultErrors(result, "Shutdown market-intake stop failed")
+  context.marketIntakeErrors = getResultErrors({
+    result,
+    fallbackMessage: "Shutdown market-intake stop failed",
+  })
   const pendingMarketTasks = [...context.marketPriceIntake.values()]
     .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
     .filter(Boolean)
@@ -367,7 +370,10 @@ async function stopUserDataIntakeAndDrain(context) {
     message: "Shutdown user-data intake stop failed",
     auditReason: "USER_DATA_INTAKE_SHUTDOWN_FAILED",
   })
-  context.userDataIntakeErrors = getResultErrors(result, "Shutdown user-data intake stop failed")
+  context.userDataIntakeErrors = getResultErrors({
+    result,
+    fallbackMessage: "Shutdown user-data intake stop failed",
+  })
   context.state.intakeStopped = true
   await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_DRAIN_FINAL",
@@ -509,10 +515,13 @@ async function disconnectBroker(context) {
     stage: "BROKER_DISCONNECT",
     message: "Broker disconnect failed",
   })
-  context.disconnectErrors = getResultErrors(result, "Broker disconnect failed")
+  context.disconnectErrors = getResultErrors({
+    result,
+    fallbackMessage: "Broker disconnect failed",
+  })
 }
 
-function createShutdownDiagnostics(context, cleanupErrors) {
+function createShutdownDiagnostics({ context, cleanupErrors }) {
   return Object.freeze({
     previousStatus: context.shutdownStartedFromStatus ?? null,
     shutdownCorrelationId: context.shutdownCorrelationId,
@@ -576,8 +585,11 @@ function buildCleanupErrors(context) {
   ]
 }
 
-function finalizeShutdown(context, cleanupErrors) {
-  const shutdownDiagnostics = createShutdownDiagnostics(context, cleanupErrors)
+function finalizeShutdown({ context, cleanupErrors }) {
+  const shutdownDiagnostics = createShutdownDiagnostics({
+    context,
+    cleanupErrors,
+  })
   if (cleanupErrors.length > 0) {
     context.state.status = "SHUTDOWN_INCOMPLETE"
     context.logger.error?.({
@@ -609,7 +621,10 @@ async function runShutdownLifecycle(context) {
   await reconcileRecoveryAndAuditCoverage(context)
   await publishClosingAudit(context)
   await disconnectBroker(context)
-  finalizeShutdown(context, buildCleanupErrors(context))
+  finalizeShutdown({
+    context,
+    cleanupErrors: buildCleanupErrors(context),
+  })
 }
 
 /**
