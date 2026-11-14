@@ -280,7 +280,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
   })
-  return {
+  const resources = {
     broker,
     subscriptions: [],
     marketPriceIntake: new Map(),
@@ -288,16 +288,17 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     userDataSubscription: undefined,
     lastReportedUserDataReady: undefined,
     userDataState: createHarvesterUserDataState(),
-    candleHistoryService: createHarvesterCandleHistoryService({
-      createCandleHistoryService,
-      broker,
-      logger: startup.logger,
-      now: startup.now,
-      getTradingEngine: () => resources.tradingEngine,
-    }),
     tradingEngine: undefined,
     hasCanonicalOwnershipReconciliation: false,
   }
+  resources.candleHistoryService = createHarvesterCandleHistoryService({
+    createCandleHistoryService,
+    broker,
+    logger: startup.logger,
+    now: startup.now,
+    getTradingEngine: () => resources.tradingEngine,
+  })
+  return resources
 }
 
 function createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources } = {}) {
