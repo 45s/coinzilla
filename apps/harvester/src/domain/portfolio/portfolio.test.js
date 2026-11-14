@@ -1,3 +1,4 @@
+import { StrategyId } from "../strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -20,7 +21,7 @@ const makeFill = ({ tradeId = "trade-1", quantity = "1", quoteQuantity = "100", 
 
 test("creates a Position from a fill without mutating the original Portfolio", () => {
   const original = new Portfolio()
-  const result = original.applyFill({ fill: makeFill(), strategyId: "CG_coinGrabber" })
+  const result = original.applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER })
   assert.equal(result.applied, true)
   assert.equal(original.positions.length, 0)
   assert.equal(result.portfolio.positions.length, 1)
@@ -28,8 +29,8 @@ test("creates a Position from a fill without mutating the original Portfolio", (
 })
 
 test("deduplicates a fill by canonical market-scoped identity", () => {
-  const portfolio = new Portfolio().applyFill({ fill: makeFill(), strategyId: "CG_coinGrabber" }).portfolio
-  const duplicate = portfolio.applyFill({ fill: makeFill(), strategyId: "CG_coinGrabber" })
+  const portfolio = new Portfolio().applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const duplicate = portfolio.applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER })
   assert.equal(duplicate.duplicate, true)
   assert.equal(duplicate.applied, false)
   assert.equal(duplicate.portfolio, portfolio)
@@ -57,8 +58,8 @@ test("keeps exact fill accounting isolated when different markets reuse the same
     commissionStatus: "COMPLETE",
   })
   const portfolio = new Portfolio()
-    .applyFill({ fill: ethFill, strategyId: "CG_coinGrabber" }).portfolio
-    .applyFill({ fill: solFill, strategyId: "CG_coinGrabber" }).portfolio
+    .applyFill({ fill: ethFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: solFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const ethPosition = portfolio.getPosition({ symbol: "ETHUSDT" })
   const solPosition = portfolio.getPosition({ symbol: "SOLUSDT" })
 
@@ -111,11 +112,11 @@ test("keeps exact fill accounting isolated when different markets reuse the same
 
 test("allocates free inventory through the matching shared Position only", () => {
   const initial = new Portfolio().applyFill({
-    fill: makeFill({ quantity: "100" }), strategyId: "CG_coinGrabber"
+    fill: makeFill({ quantity: "100" }), strategyId: StrategyId.COIN_GRABBER
   }).portfolio
   const allocated = initial.allocateFreeQuantity({
     marketId: market.id,
-    quantity: "1", strategyId: "CG_coinGrabber"
+    quantity: "1", strategyId: StrategyId.COIN_GRABBER
   })
   const position = allocated.getPosition({ marketId: market.id })
 
@@ -129,7 +130,7 @@ test("does not permit free allocation for an unknown market", () => {
   assert.throws(
     () => new Portfolio().allocateFreeQuantity({
       marketId: "missing-market",
-      quantity: "1", strategyId: "CG_coinGrabber"
+      quantity: "1", strategyId: StrategyId.COIN_GRABBER
     }),
     /no Position/,
   )
@@ -137,11 +138,11 @@ test("does not permit free allocation for an unknown market", () => {
 
 test("rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting", () => {
   const originalFill = makeFill({ tradeId: "reused-trade", quantity: "1" })
-  const portfolio = new Portfolio().applyFill({ fill: originalFill, strategyId: "CG_coinGrabber" }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: originalFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
 
   assert.throws(
     () => portfolio.applyFill({
-      fill: makeFill({ tradeId: "reused-trade", quantity: "2" }), strategyId: "CG_coinGrabber"
+      fill: makeFill({ tradeId: "reused-trade", quantity: "2" }), strategyId: StrategyId.COIN_GRABBER
     }),
     /Conflicting execution facts reused Fill ID/,
     "Reusing one canonical fill identity with different execution facts must be rejected.",
@@ -166,7 +167,7 @@ test("rejects a reused Fill ID when commission amount differs without mutating P
       new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
     ],
   })
-  const portfolio = new Portfolio().applyFill({ fill: acceptedFill, strategyId: "CG_coinGrabber" }).portfolio
+  const portfolio = new Portfolio().applyFill({ fill: acceptedFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const originalState = portfolio.value
   const conflictingFill = makeFill({
     tradeId: "commission-conflict",
@@ -176,7 +177,7 @@ test("rejects a reused Fill ID when commission amount differs without mutating P
   })
 
   assert.throws(
-    () => portfolio.applyFill({ fill: conflictingFill, strategyId: "CG_coinGrabber" }),
+    () => portfolio.applyFill({ fill: conflictingFill, strategyId: StrategyId.COIN_GRABBER }),
     /Conflicting execution facts reused Fill ID/,
     "A reused execution identity with a different actual quote commission must be rejected.",
   )
@@ -191,14 +192,14 @@ test("deduplicates equivalent history-response and user-data stream fills in eit
   const historyResponseDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
   const userDataStreamDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
 
-  const historyThenStream = new Portfolio().applyFill({ fill: historyResponseDelivery, strategyId: "CG_coinGrabber" }).portfolio
-  const duplicateStream = historyThenStream.applyFill({ fill: userDataStreamDelivery, strategyId: "CG_coinGrabber" })
+  const historyThenStream = new Portfolio().applyFill({ fill: historyResponseDelivery, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const duplicateStream = historyThenStream.applyFill({ fill: userDataStreamDelivery, strategyId: StrategyId.COIN_GRABBER })
   assert.equal(duplicateStream.applied, false)
   assert.equal(duplicateStream.duplicate, true)
   assert.equal(duplicateStream.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
 
-  const streamThenHistory = new Portfolio().applyFill({ fill: userDataStreamDelivery, strategyId: "CG_coinGrabber" }).portfolio
-  const duplicateHistory = streamThenHistory.applyFill({ fill: historyResponseDelivery, strategyId: "CG_coinGrabber" })
+  const streamThenHistory = new Portfolio().applyFill({ fill: userDataStreamDelivery, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const duplicateHistory = streamThenHistory.applyFill({ fill: historyResponseDelivery, strategyId: StrategyId.COIN_GRABBER })
   assert.equal(duplicateHistory.applied, false)
   assert.equal(duplicateHistory.duplicate, true)
   assert.equal(duplicateHistory.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
@@ -222,22 +223,22 @@ test("keeps independent strategy-owned Positions for the same market", () => {
   const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
     fill: coinGrabberFill,
     positionId: coinGrabberPositionId,
-    strategyId: "CG_coinGrabber",
+    strategyId: StrategyId.COIN_GRABBER,
   })
   const { portfolio } = coinGrabberPortfolio.applyFill({
     fill: recoverySellerFill,
     positionId: recoverySellerPositionId,
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   })
 
   assert.equal(portfolio.positions.length, 2, "Two strategies trading ETHUSDT must create two independent Positions inside the one shared Portfolio.")
   const coinGrabberPosition = portfolio.getPosition({ positionId: coinGrabberPositionId })
   const recoverySellerPosition = portfolio.getPosition({ positionId: recoverySellerPositionId })
 
-  assert.equal(coinGrabberPosition.strategyId, "CG_coinGrabber", "The first Position must retain its Coin Grabber strategy owner.")
+  assert.equal(coinGrabberPosition.strategyId, StrategyId.COIN_GRABBER, "The first Position must retain its Coin Grabber strategy owner.")
   assert.equal(coinGrabberPosition.baseQuantity.amount, "10", "Coin Grabber accounting must contain only its ten executed ETH.")
   assert.equal(coinGrabberPosition.spent.amount, "1000", "Coin Grabber recovery basis must contain only its 1,000 USDT execution cost.")
-  assert.equal(recoverySellerPosition.strategyId, "RS_recoverySeller", "The second Position must retain its Recovery Seller strategy owner.")
+  assert.equal(recoverySellerPosition.strategyId, StrategyId.RECOVERY_SELLER, "The second Position must retain its Recovery Seller strategy owner.")
   assert.equal(recoverySellerPosition.baseQuantity.amount, "3", "Recovery Seller accounting must contain only its three executed ETH.")
   assert.equal(recoverySellerPosition.spent.amount, "600", "Recovery Seller recovery basis must contain only its 600 USDT execution cost.")
   assert.equal(portfolio.getTotalBaseQuantity({ market }).amount, "13", "Aggregate ETH custody must sum both strategy Positions without duplicating or hiding actual inventory.")
@@ -256,7 +257,7 @@ test("rejects applying one canonical fill to a different strategy Position", () 
   const { portfolio } = new Portfolio().applyFill({
     fill,
     positionId: "position:cg:ethusdt",
-    strategyId: "CG_coinGrabber",
+    strategyId: StrategyId.COIN_GRABBER,
   })
   const originalState = portfolio.value
 
@@ -264,7 +265,7 @@ test("rejects applying one canonical fill to a different strategy Position", () 
     () => portfolio.applyFill({
       fill,
       positionId: "position:rs:ethusdt",
-      strategyId: "RS_recoverySeller",
+      strategyId: StrategyId.RECOVERY_SELLER,
     }),
     /Conflicting strategy attribution/,
     "A duplicate canonical execution must not be reassigned from its original strategy Position to another strategy.",
@@ -276,16 +277,16 @@ test("rejects ambiguous market lookup when multiple strategy Positions exist", (
   const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
     fill: makeFill({ tradeId: "ambiguous-cg", quantity: "10", quoteQuantity: "1000" }),
     positionId: "position:cg:ethusdt",
-    strategyId: "CG_coinGrabber",
+    strategyId: StrategyId.COIN_GRABBER,
   })
   const { portfolio } = coinGrabberPortfolio.applyFill({
     fill: makeFill({ tradeId: "ambiguous-rs", quantity: "3", quoteQuantity: "600" }),
     positionId: "position:rs:ethusdt",
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   })
 
   assert.equal(
-    portfolio.getPosition({ marketId: market.id, strategyId: "CG_coinGrabber" }).id,
+    portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }).id,
     "position:cg:ethusdt",
     "A strategy-scoped market lookup must return that strategy's independent Position.",
   )
@@ -302,18 +303,18 @@ test("allocates retained inventory only from the explicitly selected strategy Po
   const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
     fill: makeFill({ tradeId: "allocation-cg", quantity: "10", quoteQuantity: "1000" }),
     positionId: coinGrabberPositionId,
-    strategyId: "CG_coinGrabber",
+    strategyId: StrategyId.COIN_GRABBER,
   })
   const { portfolio } = coinGrabberPortfolio.applyFill({
     fill: makeFill({ tradeId: "allocation-rs", quantity: "3", quoteQuantity: "600" }),
     positionId: recoverySellerPositionId,
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   })
 
   const allocated = portfolio.allocateFreeQuantity({
     positionId: recoverySellerPositionId,
     marketId: market.id,
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
     quantity: "1",
   })
 
@@ -329,12 +330,12 @@ test("keeps legacy and recovery acquisition tranches as separate same-market Pos
   const { portfolio: legacyPortfolio } = new Portfolio().applyFill({
     fill: makeFill({ tradeId: "rs-legacy-buy", quantity: "50", quoteQuantity: "100" }),
     positionId: firstPositionId,
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   })
   const { portfolio } = legacyPortfolio.applyFill({
     fill: makeFill({ tradeId: "rs-cycle-buy", quantity: "10", quoteQuantity: "20" }),
     positionId: secondPositionId,
-    strategyId: "RS_recoverySeller",
+    strategyId: StrategyId.RECOVERY_SELLER,
   })
 
   assert.equal(portfolio.positions.length, 2, "One strategy must be able to retain distinct same-market accounting Positions when its domain needs separate legacy and cycle exposure.")
