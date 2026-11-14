@@ -30,13 +30,13 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 Concurrent operation is a product requirement, not an optional future optimization. RS and CG may be enabled at the same time, including for the same market.
 
 - Each strategy evaluates its own policy and maintains its own cycle/accounting attribution.
-- Both use the one shared actual Portfolio Position for a market; neither owns a private copy of actual holdings.
-- Orders retain their originating strategy identity through canonical order/fill processing.
+- Both use the shared Portfolio, which may contain multiple independently owned Positions for the same market. Neither strategy owns a private wallet or a duplicate copy of actual exchange custody.
+- Each Position and order retains stable strategy ownership through canonical order/fill processing; fills are attributed to exactly one Position and its owning strategy.
 - The shared Trading Engine serializes order submission and accounting transitions.
-- Quote and base reservations are aggregated centrally across CG, RS and other active strategies before any new order is accepted.
+- Actual quote/base availability and reservations are aggregated centrally across all Positions, CG, RS and other active strategies before any new order is accepted. Multiple Positions do not multiply the underlying exchange balance.
 - When both strategies emit intents for the same scarce resource, deterministic allocation/fairness rules decide which intent can proceed. Deferred intents retain strategy identity and an actionable reason.
 - A pause/disable for one strategy does not implicitly pause/disable the other; existing orders remain owned and reconcilable by their originating strategy.
-- Same-market concurrent tests must prove no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to both strategies.
+- Same-market concurrent tests must prove multiple independent Positions can coexist, no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to multiple Positions or strategies.
 
 The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-4, but mutual exclusion is not an acceptable shortcut.
 
@@ -91,7 +91,7 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 - `updateTradingAccounting()` in `src/use-cases/update-trading-accounting.js` commits Portfolio and the Conservative `RecoveryLedger` together. It is not a strategy-neutral accounting function.
 - `createPortfolioWorkflow()` in `src/use-cases/create-portfolio-workflow.js` owns serialized fill processing and Conservative recovery-cycle completion/free-inventory behavior. RS should integrate through an explicit application workflow that coordinates shared Portfolio and RS attribution; do not fork or bypass the shared Portfolio.
-- The current Portfolio is one actual Position per market. RS attribution must remain a separate projection and must commit consistently with the single Portfolio fill application.
+- The shared Portfolio must support multiple independent Positions for the same market, including strategy-owned Positions. It remains one authoritative accounting aggregate over shared exchange custody; fills update the one correctly identified Position and aggregate Portfolio exactly once. RS must not fork Portfolio or create duplicate custody.
 
 **RS-1 acceptance:** source paths and public exports are identified; existing shared capabilities are separated from extraction candidates; CG-specific behavior is explicitly retained; relevant tests are located; no speculative shared abstraction is approved. RS-1 is complete as an audit only. RS-2 is the first code-changing phase.
 
@@ -103,6 +103,7 @@ Before implementing each rule, add a focused test that expresses the agreed busi
 
 Model only the concepts required by the approved RS contract:
 
+- Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
 - Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
 - Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
@@ -179,7 +180,7 @@ Do not copy CG trailing BUY, next-BUY cadence, retained-inventory or recovery-co
 
 **Deliverable:** RS lifecycle integrated through existing Harvester application workflows, with CG and RS able to run concurrently.
 
-Reuse the existing Trading Engine, broker port/adapter, canonical order/fill identities, one actual Portfolio Position per market, reservations, reconciliation and safety gates. Keep RS and CG strategy attribution separate from actual Portfolio accounting; all projections must advance consistently for each canonical fill.
+Reuse the existing Trading Engine, broker port/adapter, canonical order/fill identities, multiple independently owned Positions per market within one shared Portfolio, centrally aggregated custody/reservations, reconciliation and safety gates. Keep RS and CG strategy attribution separate from actual Portfolio accounting; all projections must advance consistently for each canonical fill.
 
 **Concurrency is required, not optional:**
 
