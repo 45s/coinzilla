@@ -3133,105 +3133,160 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   await runtime.stop()
 })
 
-test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
-  const client = {
+
+function createPostOnlyAdapterClient() {
+  return {
     connect: async () => {},
     disconnect: async () => {},
-    createOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }),
+    createOrder: async () => ({
+      ok: true,
+    }),
+    cancelOrder: async () => ({
+      ok: true,
+    }),
     getOpenOrders: async () => ({
       ok: true,
-      data: []
+      data: [],
     }),
-    getFills: async () => ({ ok: true }),
-    getCanonicalOrderHistory: async () => ({ ok: true }),
+    getFills: async () => ({
+      ok: true,
+    }),
+    getCanonicalOrderHistory: async () => ({
+      ok: true,
+    }),
     getCanonicalOrder: async () => ({
       ok: false,
-      errors: [new Error("order not found")]
+      errors: [new Error("order not found")],
     }),
-    getAccountSnapshot: async () => ({ ok: true }),
-    getSymbolFilters: async () => ({ ok: true }),
+    getAccountSnapshot: async () => ({
+      ok: true,
+    }),
+    getSymbolFilters: async () => ({
+      ok: true,
+    }),
     getExchangeMarkets: async () => ({
       ok: true,
-      data: []
+      data: [],
     }),
-    getPrices: async () => ({ ok: true }),
+    getPrices: async () => ({
+      ok: true,
+    }),
     getCandles: async () => ({
       ok: true,
-      data: []
+      data: [],
     }),
-    subscribeForPrices: async () => ({ ok: true }),
+    subscribeForPrices: async () => ({
+      ok: true,
+    }),
     subscribeForCandles: async () => ({
       ok: true,
-      data: { unsubscribe: async () => {} }
+      data: {
+        unsubscribe: async () => {},
+      },
     }),
-    subscribeForBookTicker: async () => ({ ok: true }),
-    subscribeForUserData: async () => ({ ok: true }),
+    subscribeForBookTicker: async () => ({
+      ok: true,
+    }),
+    subscribeForUserData: async () => ({
+      ok: true,
+    }),
   }
-  const broker = createBinanceBrokerAdapter({
+}
+
+function createPostOnlyTestBroker({ client }) {
+  return createBinanceBrokerAdapter({
     config: {
       apiKey: "test-key",
       apiSecret: "test-secret",
-      tradingMode: "testnet"
+      tradingMode: "testnet",
     },
     brokerFactory: () => client,
   })
-  const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })
+}
+
+async function assertPostOnlyRejectionClassification({ broker, client }) {
+  const rejection = Object.assign(new Error("Order would immediately match and take."), {
+    code: -2010,
+  })
   client.createCanonicalOrder = async () => ({
     ok: false,
-    errors: [rejection]
+    errors: [rejection],
   })
-  const result = await broker.placeOrder({ order: {
-    symbol: "BTCUSDT",
-    type: "LIMIT_MAKER"
-  } })
+  const result = await broker.placeOrder({
+    order: {
+      symbol: "BTCUSDT",
+      type: "LIMIT_MAKER",
+    },
+  })
   assert.equal(result.errors[0].code, "POST_ONLY_WOULD_TAKE")
-  const unrelated = Object.assign(new Error("insufficient balance"), { code: -2010 })
+
+  const unrelated = Object.assign(new Error("insufficient balance"), {
+    code: -2010,
+  })
   client.createCanonicalOrder = async () => ({
     ok: false,
-    errors: [unrelated]
+    errors: [unrelated],
   })
-  const other = await broker.placeOrder({ order: {
-    symbol: "BTCUSDT",
-    type: "LIMIT_MAKER"
-  } })
+  const other = await broker.placeOrder({
+    order: {
+      symbol: "BTCUSDT",
+      type: "LIMIT_MAKER",
+    },
+  })
   assert.equal(other.errors[0], unrelated)
 
-  const unknownOutcome = Object.assign(
-    new Error("Order would immediately match and take."),
-    {
-      code: -2010,
-      outcomeUnknown: true
-    },
-  )
+  const unknownOutcome = Object.assign(new Error("Order would immediately match and take."), {
+    code: -2010,
+    outcomeUnknown: true,
+  })
   client.createCanonicalOrder = async () => ({
     ok: false,
-    errors: [unknownOutcome]
+    errors: [unknownOutcome],
   })
-  const unknown = await broker.placeOrder({ order: {
-    symbol: "BTCUSDT",
-    type: "LIMIT_MAKER"
-  } })
+  const unknown = await broker.placeOrder({
+    order: {
+      symbol: "BTCUSDT",
+      type: "LIMIT_MAKER",
+    },
+  })
   assert.equal(unknown.errors[0], unknownOutcome)
+}
 
+async function assertBookTickerCallbackForwarded({ broker, client }) {
   let forwardedSubscription
   const onBookTicker = () => {}
   client.subscribeForBookTicker = async (input) => {
     forwardedSubscription = input
     return {
       ok: true,
-      data: { unsubscribe: async () => {} }
+      data: {
+        unsubscribe: async () => {},
+      },
     }
   }
   await broker.subscribeForBookTicker({
     symbol: "BTCUSDT",
-    onBookTicker
+    onBookTicker,
   })
   assert.equal(forwardedSubscription.symbol, "BTCUSDT")
   assert.equal(forwardedSubscription.onBookTicker, onBookTicker)
+}
+
+
+test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
+  const client = createPostOnlyAdapterClient()
+  const broker = createPostOnlyTestBroker({
+    client,
+  })
+  await assertPostOnlyRejectionClassification({
+    broker,
+    client,
+  })
+  await assertBookTickerCallbackForwarded({
+    broker,
+    client,
+  })
 })
-
-
 
 test("emits per-execution debug audit records with commission and before/after accounting", async () => {
   const debugRecords = []
