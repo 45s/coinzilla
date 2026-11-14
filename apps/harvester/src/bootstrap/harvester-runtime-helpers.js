@@ -275,20 +275,20 @@ function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl
     ? ({ symbol, reason }) => recordStrategyMarketControl({
       operationalStateStore: store,
       action: "PAUSE",
-      transitionId: store.runtimeSessionId + ":" + (++sequence.value),
+      transitionId: `${store.runtimeSessionId}:${++sequence.value}`,
       symbol,
       reason,
     })
     : undefined
 }
 
-function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createHash } = {}) {
+function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createHash: hashFactory } = {}) {
   return store
     ? ({ scope, symbol, reason, evidence }) => {
       const canonicalEvidence = Object.fromEntries(
         Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right)),
       )
-      const evidenceDigest = createHash("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
+      const evidenceDigest = hashFactory("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
       return recordSafetyBlockerRaised({
         operationalStateStore: store,
         scope,
