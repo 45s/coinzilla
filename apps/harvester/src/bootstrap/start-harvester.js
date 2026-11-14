@@ -515,7 +515,7 @@ export async function startHarvester({
       eventPublisher,
       logger,
       tradingEnabled,
-      pairs,
+      pairs: resolveStrategyMarketDataPairs({ pairs, strategyPolicy: conservativeStrategyPolicy, hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol, logger }),
       settings,
       processMarketPrice,
       processMarketBook,
@@ -528,7 +528,7 @@ export async function startHarvester({
       marketPriceIntake,
     })
 
-    await candleHistoryService.start({ pairs, subscriptions })
+    await candleHistoryService.start({ pairs: resolveStrategyMarketDataPairs({ pairs, strategyPolicy: conservativeStrategyPolicy, hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol }), subscriptions })
   } catch (error) {
     logger.error?.({
       message: "Broker startup step failed",
@@ -620,3 +620,24 @@ export async function startHarvester({
     stop,
   })
 }
+function resolveStrategyMarketDataPairs({ pairs, strategyPolicy, hasUnownedOpenOrdersForSymbol, logger } = {}) {
+  const marketDataSubscriptionSymbols = new Set(strategyPolicy.getMarketDataSubscriptionSymbols({
+    pairs,
+    hasUnownedOpenOrdersForSymbol,
+  }))
+  const strategyBlockedMarketSymbols = Object.entries(pairs)
+    .filter(([symbol, pairConfig]) => pairConfig.enabled === true && !marketDataSubscriptionSymbols.has(symbol))
+    .map(([symbol]) => symbol)
+  if (logger && strategyBlockedMarketSymbols.length > 0) {
+    logger.info?.({
+      message: "Market data subscriptions skipped for strategy-blocked markets",
+      strategy: "CG_coinGrabber",
+      symbols: strategyBlockedMarketSymbols,
+      reason: "EXTERNAL_ORDERS_POLICY_BLOCK",
+    })
+  }
+  return Object.fromEntries(
+    Object.entries(pairs).filter(([symbol]) => marketDataSubscriptionSymbols.has(symbol)),
+  )
+}
+
