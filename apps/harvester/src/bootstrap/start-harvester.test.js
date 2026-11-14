@@ -354,6 +354,7 @@ test("uses the app-local Operational State Store default and fails closed when i
     startHarvesterForTest({
       loadConfig: async () => config,
       env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+      runtimeSessionId: "telegram-default-directory-session",
       brokerAdapterFactory: () => {
         brokerFactoryCalled = true
         throw new Error("Broker connection must not start before the Operational State Store is verified.")
