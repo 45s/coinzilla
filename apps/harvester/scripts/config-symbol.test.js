@@ -13,6 +13,7 @@ const createAppConfig = () => ({
       pairs: {
         LINKFDUSD: {
           enabled: true,
+          tradingEnvironment: "both",
           enableVolatilityProtection: true,
           investment: 200,
           orderQuantity: 2,
@@ -44,8 +45,8 @@ const metadata = {
   supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
 }
 
-const createAsk = (answers, prompts = []) => {
-  const remaining = [...answers]
+const createAsk = (answers, prompts = [], pairTradingEnvironment = "both") => {
+  const remaining = [answers[0], pairTradingEnvironment, ...answers.slice(1)]
   return async (question) => {
     prompts.push(question)
     assert.ok(remaining.length > 0, "The CLI must not ask for more values than the documented interactive flow.")
@@ -76,10 +77,11 @@ test("prompts for strategy values, fetches metadata, previews the pair, and writ
   assert.equal(metadataCalls.length, 1, "Valid operator input must trigger one public exchange metadata lookup.")
   assert.equal(metadataCalls[0].symbol, "ADAFDUSD", "The normalized symbol must be sent to Binance.")
   assert.equal(metadataCalls[0].environment, "testnet", "Exchange metadata must be fetched from the selected trading environment.")
-  assert.ok(!prompts.some((question) => /environment/i.test(question)), "The CLI must not ask the operator to select a Binance environment.")
+  assert.ok(prompts.some((question) => /pair trading environment/i.test(question)), "The CLI must require a pair-level tradingEnvironment selection.")
   assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
   assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
   assert.equal(writes[0].pairConfig.enabled, true, "The generated pair must match the enabled config entry expected by the operator.")
+  assert.equal(writes[0].pairConfig.tradingEnvironment, "both", "The generated pair must retain the explicitly selected environment eligibility.")
   assert.equal(writes[0].pairConfig.orderQuantity, 20, "The operator-selected quantity must be used for each individual order.")
   assert.equal(writes[0].pairConfig.minProfit, 0.01, "The operator-supplied minimum profit must be preserved.")
   assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The operator-supplied price step must be preserved.")
@@ -152,11 +154,11 @@ test("detects a case-insensitive existing pair before calling Binance", async ()
   assert.equal(metadataCalls, 0, "Case-insensitive duplicates must be rejected before contacting Binance.")
 })
 
-test("uses the existing TRADING_MODE value without prompting for an environment", async () => {
+test("uses TRADING_MODE for metadata and separately asks for pair eligibility", async () => {
   const metadataCalls = []
-  await runConfigSymbol({
+  const result = await runConfigSymbol({
     defaultEnvironment: "live",
-    ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"]),
+    ask: createAsk(["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"], [], "testnet"),
     loadConfig: async () => createAppConfig(),
     metadataFetcher: async (args) => {
       metadataCalls.push(args)
@@ -164,7 +166,8 @@ test("uses the existing TRADING_MODE value without prompting for an environment"
     },
   })
   assert.equal(metadataCalls.length, 1)
-  assert.equal(metadataCalls[0].environment, "live")
+  assert.equal(metadataCalls[0].environment, "live", "TRADING_MODE must continue to select the Binance metadata host independently of pair eligibility.")
+  assert.equal(result.pairConfig.tradingEnvironment, "testnet", "The pair selector must preserve the separately selected TESTNET eligibility.")
 })
 
 test("cancels safely when the operator declines the configuration preview", async () => {

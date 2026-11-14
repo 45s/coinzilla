@@ -9,6 +9,7 @@ import { writePairConfigAtomically } from "./write-config.js"
 
 const generatedPair = {
   enabled: true,
+  tradingEnvironment: "both",
   enableVolatilityProtection: true,
   investment: 100,
   orderQuantity: 20,
@@ -34,6 +35,7 @@ function createConfigSource() {
     "  pairs: {",
     '    "LINKFDUSD": {',
     "      enabled: true,",
+    '      tradingEnvironment: "both",',
     "      enableVolatilityProtection: true,",
     "      investment: 200,",
     "      orderQuantity: 2,",
@@ -81,6 +83,7 @@ test("atomically merges a pair while preserving imports, comments, unrelated set
       written.pairs.LINKFDUSD,
       {
         enabled: true,
+        tradingEnvironment: "both",
         enableVolatilityProtection: true,
         investment: 200,
         orderQuantity: 2,

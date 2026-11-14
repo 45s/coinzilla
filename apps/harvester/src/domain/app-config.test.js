@@ -20,6 +20,7 @@ const createAppConfig = () => ({
       pairs: {
         ZROFDUSD: {
           enabled: true,
+          tradingEnvironment: "both",
           enableVolatilityProtection: true,
           investment: 100,
           orderQuantity: 5,
@@ -34,6 +35,30 @@ const createAppConfig = () => ({
       },
     },
   },
+})
+
+test("requires an explicit supported tradingEnvironment on every pair", () => {
+  for (const tradingEnvironment of ["testnet", "live", "both"]) {
+    const config = createAppConfig()
+    config.strategies.CG_coinGrabber.pairs.ZROFDUSD.tradingEnvironment = tradingEnvironment
+    assert.equal(validateAppConfig(config), config, "Each documented pair environment must be accepted explicitly: " + tradingEnvironment)
+  }
+  const missingEnvironment = createAppConfig()
+  delete missingEnvironment.strategies.CG_coinGrabber.pairs.ZROFDUSD.tradingEnvironment
+  assert.throws(
+    () => validateAppConfig(missingEnvironment),
+    (error) => error instanceof ConfigValidationError && error.path === "strategies.CG_coinGrabber.pairs.ZROFDUSD.tradingEnvironment",
+    "A pair without tradingEnvironment must fail instead of receiving an implicit default.",
+  )
+  for (const invalidValue of ["production", "TESTNET", "", null]) {
+    const config = createAppConfig()
+    config.strategies.CG_coinGrabber.pairs.ZROFDUSD.tradingEnvironment = invalidValue
+    assert.throws(
+      () => validateAppConfig(config),
+      (error) => error instanceof ConfigValidationError && error.path === "strategies.CG_coinGrabber.pairs.ZROFDUSD.tradingEnvironment",
+      "Unsupported pair environments must fail validation: " + JSON.stringify(invalidValue),
+    )
+  }
 })
 
 test("validates strategy-owned pairs without requiring exchange-mode configuration in JSON", () => {

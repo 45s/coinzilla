@@ -4,6 +4,7 @@ import { insertPairConfiguration } from "./config-source.js"
 
 const pairConfig = {
   enabled: true,
+  tradingEnvironment: "both",
   investment: 100,
   settings: {
     pricePrecision: 4,
@@ -23,7 +24,7 @@ const source = [
   "  },",
   "  pairs: {",
   "    // This manually maintained pair and its source formatting must remain unchanged.",
-  '    LINKFDUSD: { enabled: true, externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE },',
+  '    LINKFDUSD: { enabled: true, tradingEnvironment: "both", externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE },',
   "  },",
   "};",
   "",
@@ -35,7 +36,7 @@ test("inserts one new pair into the pairs object without generated markers", () 
   assert.ok(updated.includes('    "ADAFDUSD": {'), "The generated pair must be inserted directly into the strategy pairs object.")
   assert.ok(updated.includes('      "investment": 100'), "The generated pair must retain its validated investment value.")
   assert.ok(updated.includes('        "pricePrecision": 4'), "Nested generated pair settings must be serialized completely.")
-  assert.ok(updated.includes("LINKFDUSD: { enabled: true, externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE },"), "Existing pair source, including enum expressions, must remain byte-for-byte unchanged.")
+  assert.ok(updated.includes("LINKFDUSD: { enabled: true, tradingEnvironment: \"both\", externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE },"), "Existing pair source, including enum expressions, must remain byte-for-byte unchanged.")
   assert.ok(updated.includes("// This manually maintained pair and its source formatting must remain unchanged."), "Comments inside the pairs object must remain intact.")
   assert.ok(updated.includes("// Keep this strategy-level comment unchanged."), "Comments outside the pairs object must remain intact.")
   assert.equal(updated.includes("GENERATED PAIR"), false, "The updated configuration must not require or introduce generated-region markers.")
