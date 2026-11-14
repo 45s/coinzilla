@@ -560,6 +560,125 @@ function createOperatorMarketResumeHandler({
   })
 }
 
+function createSubmissionLifecycleCallbacks({
+  state,
+  publishDurableIntent,
+  pause,
+  eventPublisher,
+  reconcileFilledAcknowledgement,
+} = {}) {
+  return {
+    onSubmissionDeferred: ({ order, registered } = {}) => {
+      if (registered) {
+        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+        if (!removal.removed) {
+          throw new Error("Cannot remove a pending order deferred before broker submission")
+        }
+        state.registry = removal.registry
+      }
+      state.deferredEvaluations.add(order.market.symbol)
+    },
+    onPendingOrder: async ({ order }) => {
+      if (order.side === "SELL") {
+        state.completedRecoverySellSymbols.delete(order.market.symbol)
+        state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
+      }
+      state.registry = state.registry.registerPending({ order }).registry
+      const persisted = await publishDurableIntent({
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
+        dataResult: mapOrderSubmissionRequestedData({ order }),
+      })
+      if (!persisted.ok) {
+        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+        if (removal.removed) {
+          state.registry = removal.registry
+        }
+        const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
+        await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
+        throw error
+      }
+    },
+    onAcknowledgedOrder: async ({ order }) => {
+      if (order.status === "FILLED") {
+        const registered = state.registry.orders.some(
+          (item) => item.clientOrderId === order.clientOrderId,
+        )
+        if (!registered) {
+          throw new Error("Broker acknowledged an unregistered Harvester order")
+        }
+        state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
+      } else {
+        const update = state.registry.applyUpdate({ order })
+        if (update.unknown) {
+          throw new Error("Broker acknowledged an unregistered Harvester order")
+        }
+        state.registry = update.registry
+      }
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+        dataResult: mapOrderSubmittedData({ order }),
+      })
+      const reconciliation = await reconcileFilledAcknowledgement({ order })
+      if (!reconciliation.ok) {
+        throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
+      }
+    },
+    onOrderValidationFailure: async ({ order, error }) => {
+      await pause({
+        symbol: order.market.symbol,
+        reason: "STRATEGY_ORDER_VALIDATION_FAILED",
+        error,
+      })
+    },
+  }
+}
+
+function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {}) {
+  return {
+    onSubmissionFailure: async ({ order, error, errors, outcome }) => {
+      const submissionError = error ?? errors?.[0]
+      const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
+        submissionError?.code === "POST_ONLY_WOULD_TAKE"
+      const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
+        submissionError?.outcomeUnknown !== true
+      const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
+      const failureOutcome = definiteRejection ? "REJECTED" : outcome
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
+        dataResult: mapOrderSubmissionFailedData({
+          order,
+          outcome: failureOutcome,
+          error: submissionError,
+        }),
+      })
+      if (definiteRejection) {
+        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+        if (!removal.removed) {
+          throw new Error("Cannot remove a definitively rejected pending order")
+        }
+        state.registry = removal.registry
+        if (definitePostOnlyRejection) {
+          state.books.delete(order.market.symbol)
+        }
+        state.deferredEvaluations.add(order.market.symbol)
+        return
+      }
+      const unknownResult = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
+      if (!unknownResult.ok) {
+        throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
+      }
+      state.registry = unknownResult.data.registry
+      await pause({
+        symbol: order.market.symbol,
+        reason: `ORDER_SUBMISSION_${outcome}`,
+        error: submissionError,
+      })
+    },
+  }
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -819,110 +938,14 @@ export function makeConservativeTradingEngine({
     onOperationalStateSubmissionIntent,
     onOperationalStateSubmissionOutcome,
     canSubmit,
-    onSubmissionDeferred: ({
-      order,
-      registered
-    } = {}) => {
-      if (registered) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) {throw new Error("Cannot remove a pending order deferred before broker submission")}
-        state.registry = removal.registry
-      }
-      state.deferredEvaluations.add(order.market.symbol)
-    },
-    onPendingOrder: async ({ order }) => {
-      if (order.side === "SELL") {
-        state.completedRecoverySellSymbols.delete(order.market.symbol)
-        state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
-      }
-      state.registry = state.registry.registerPending({ order }).registry
-      const persisted = await publishDurableIntent({
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
-        dataResult: mapOrderSubmissionRequestedData({ order }),
-      })
-      if (!persisted.ok) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (removal.removed) {state.registry = removal.registry}
-        const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
-        await pause({
-          symbol: order.market.symbol,
-          reason: "ORDER_INTENT_NOT_DURABLE",
-          error
-        })
-        throw error
-      }
-    },
-    onAcknowledgedOrder: async ({ order }) => {
-      if (order.status === "FILLED") {
-        const registered = state.registry.orders.some(
-          (item) => item.clientOrderId === order.clientOrderId,
-        )
-        if (!registered) {throw new Error("Broker acknowledged an unregistered Harvester order")}
-        state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
-      } else {
-        const update = state.registry.applyUpdate({ order })
-        if (update.unknown) {throw new Error("Broker acknowledged an unregistered Harvester order")}
-        state.registry = update.registry
-      }
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-        dataResult: mapOrderSubmittedData({ order }),
-      })
-      const reconciliation = await reconcileFilledAcknowledgement({ order })
-      if (!reconciliation.ok) {throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")}
-    },
-    onOrderValidationFailure: async ({
-      order,
-      error
-    }) => {
-      await pause({
-        symbol: order.market.symbol,
-        reason: "STRATEGY_ORDER_VALIDATION_FAILED",
-        error,
-      })
-    },
-    onSubmissionFailure: async ({
-      order,
-      error,
-      errors,
-      outcome
-    }) => {
-      const submissionError = error ?? errors?.[0]
-      const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
-        submissionError?.code === "POST_ONLY_WOULD_TAKE"
-      const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
-        submissionError?.outcomeUnknown !== true
-      const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
-      const failureOutcome = definiteRejection ? "REJECTED" : outcome
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
-        dataResult: mapOrderSubmissionFailedData({
-          order,
-          outcome: failureOutcome,
-          error: submissionError
-        }),
-      })
-      if (definiteRejection) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) {throw new Error("Cannot remove a definitively rejected pending order")}
-        state.registry = removal.registry
-        if (definitePostOnlyRejection) {state.books.delete(order.market.symbol)}
-        state.deferredEvaluations.add(order.market.symbol)
-        return
-      }
-      const unknownResult = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
-      if (!unknownResult.ok) {
-        throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
-      }
-      state.registry = unknownResult.data.registry
-      await pause({
-        symbol: order.market.symbol,
-        reason: `ORDER_SUBMISSION_${outcome}`,
-        error: submissionError
-      })
-    },
+    ...createSubmissionLifecycleCallbacks({
+      state,
+      publishDurableIntent,
+      pause,
+      eventPublisher,
+      reconcileFilledAcknowledgement,
+    }),
+    ...createSubmissionFailureCallbacks({ state, pause, eventPublisher }),
   })
 
   const cancelAndReconcileRecoverySells = (options = {}) => cancelRecoverySells({
