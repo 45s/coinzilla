@@ -8,8 +8,8 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Implementation Roadmap
 
-**Status:** RS-2 domain accounting is in progress; RS policy and runtime execution remain unimplemented.
-**Tracking:** [PR #1118](https://github.com/45s/coinzilla/pull/1118) — RS-2 multi-position accounting foundation.
+**Status:** RS-2a shared Portfolio/multi-Position foundation is COMPLETE and merged; RS-2b RS-specific domain accounting remains in progress. RS policy and runtime execution remain unimplemented.
+**Tracking:** [issue #1127](https://github.com/45s/coinzilla/issues/1127) tracks the remaining RS work. [PR #1118](https://github.com/45s/coinzilla/pull/1118) is merged and delivered the RS-2a foundation.
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
@@ -18,10 +18,11 @@ created: 2026-11-14
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
 
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
-2. [~] TDD RS domain accounting, custody, attribution and profitability. The shared Portfolio contract now supports independent strategy-owned Positions per market; RS-specific accounting remains in this phase.
-3. Implement the pure RS strategy policy.
-4. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
-5. Prove the full lifecycle with deterministic offline tests and exact-head CI.
+2. [x] **RS-2a — Shared Portfolio foundation:** merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118). One Portfolio now supports multiple independently owned Positions per market and multiple Positions per strategy; canonical fill ownership/deduplication, aggregate market inventory, centralized custody/reservation boundaries and CG ownership-scoped consumers are covered.
+3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation/authorization, historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. Resolve owner decisions before implementing policy.
+4. Implement the pure RS strategy policy.
+5. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
+6. Prove the full lifecycle with deterministic offline tests and exact-head CI.
 
 **Ongoing reuse rule:** whenever RS needs an existing CG capability, first characterize its current behavior with tests. If its contract is genuinely strategy-neutral, extract the smallest cohesive function into the appropriate shared domain location, add direct shared tests, and retain CG regression coverage in the same change. If it embeds CG policy, keep it in CG and implement an RS-specific rule. Do not create abstractions solely because they might be reusable later.
 
@@ -212,7 +213,8 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 | PR | Scope | Exit gate |
 |---|---|---|
 | RS-1 | CG source audit and reuse map | Evidence-backed inventory and reuse decisions |
-| RS-2 | RS domain model and TDD; opportunistic shared extraction only when required | Accounting, custody and profitability invariants proven; CG behavior preserved |
+| RS-2a | Shared Portfolio/multi-Position accounting foundation | **COMPLETE** — merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); exact-head required CI passed |
+| RS-2b | RS-specific domain accounting, custody and profitability | Remaining owner decisions resolved; TDD invariants proven; CG behavior preserved |
 | RS-3 | RS pure policy | Deterministic decisions proven |
 | RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
 | RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
