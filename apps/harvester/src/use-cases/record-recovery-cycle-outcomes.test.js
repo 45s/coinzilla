@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -53,11 +54,11 @@ const makeCycle = () => {
   const buyFill = makeFill({ tradeId: "cycle-buy", side: "BUY", quantity: "2", quoteQuantity: "130000", price: "65000" })
   const sellFill = makeFill({ tradeId: "cycle-sell", side: "SELL", quantity: "1", quoteQuantity: "130005", price: "130005" })
   const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   return {
     portfolio,
     recoveryLedger,
@@ -77,11 +78,11 @@ const makeNotCompletedCycle = () => {
   const buyFill = makeFill({ tradeId: "cycle-not-completed-buy", side: "BUY", quantity: "0.42", quoteQuantity: "39.75", price: "94.642857142857142857" })
   const sellFill = makeFill({ tradeId: "cycle-not-completed-sell", side: "SELL", quantity: "0.4", quoteQuantity: "40", price: "100" })
   const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   return {
     portfolio,
     recoveryLedger,

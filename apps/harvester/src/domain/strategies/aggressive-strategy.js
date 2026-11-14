@@ -1,5 +1,6 @@
 import { compareDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../portfolio/portfolio.js"
+import { StrategyId } from "./strategy-ids.js"
 
 /**
  * Evaluate the currently specified Aggressive policy without side effects.
@@ -21,7 +22,7 @@ export function evaluateAggressiveStrategy({
     throw new TypeError("Aggressive strategy requires a Portfolio")
   }
 
-  const position = portfolio.getPosition({ symbol: marketPrice.symbol })
+  const position = portfolio.getPosition({ symbol: marketPrice.symbol, strategyId: StrategyId.COIN_GRABBER })
   // Active strategy inventory is the only inventory that blocks a new BUY
   // cycle. Retained freeBaseQuantity is deliberately excluded. Any future
   // Aggressive grid repricing must apply this same Portfolio gate before

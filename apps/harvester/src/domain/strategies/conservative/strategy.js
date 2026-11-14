@@ -1,5 +1,6 @@
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../../portfolio/portfolio.js"
+import { StrategyId } from "../strategy-ids.js"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
@@ -95,7 +96,7 @@ export function evaluateConservativeStrategy({
   const maxPrice = getOptionalRuleAmount({ type: "MAX_PRICE" })
   const maxQuantity = getOptionalRuleAmount({ type: "MAX_QUANTITY" })
   const maxNotional = getOptionalRuleAmount({ type: "MAX_NOTIONAL" })
-  const position = portfolio.getPosition({ symbol: marketPrice.symbol })
+  const position = portfolio.getPosition({ symbol: marketPrice.symbol, strategyId: StrategyId.COIN_GRABBER })
   const activeQuantity = position?.quantity.amount ?? "0"
   const positionSpent = position?.spent.amount ?? "0"
   const ledger = recoveryLedger ?? {
