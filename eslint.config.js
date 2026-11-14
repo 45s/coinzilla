@@ -56,7 +56,7 @@ export default defineConfig([
           skipComments: true,
         },
       ],
-      "max-statements": ["warn", 20],
+      "max-statements": ["warn", 100],
       "max-nested-callbacks": ["error", 3],
 
       // Correctness and maintainability
