@@ -59,14 +59,17 @@ Harvester bootstrap prepares the **Operational State Store**, backed by the ADR-
 
 Telegram operator control uses this same Operational State Store even when `recovery.enabled` is false. It records process, order, cancellation, fill, recovery and operator-control events. Operator-pause records are audit-only: the in-memory market pause set starts empty on each successful process start and is never restored from these records. Enabling operator control does not enable process-restart restoration. The store is never created or initialized automatically.
 
-For a new installation, initialize the Operational State Store once while Harvester is stopped. The existing initializer has no directory default: it requires the legacy `DURABLE_FACTS_DIRECTORY` setting to be an absolute local-filesystem path. Use that exact path for runtime as well. If the legacy setting is omitted at runtime, Harvester keeps its existing default `~/.coinzilla/harvester/recovery-facts`; to initialize that location, explicitly set the variable to `$HOME/.coinzilla/harvester/recovery-facts` for the initializer. This naming cleanup does not change the storage location or on-disk record format.
+The default Operational State Store directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester application package (not the shell's current working directory). This directory is created only by the explicit initializer and is ignored by Git because it contains private runtime data. The initializer and runtime use the same resolver.
+
+For a new installation, stop Harvester and run the one-time initializer without setting any directory variable:
 
 ```sh
-export DURABLE_FACTS_DIRECTORY="$HOME/.coinzilla/harvester/recovery-facts"
-pnpm --filter @coinzilla/harvester durable-facts:init -- --confirm-initialize
+pnpm --filter @coinzilla/harvester operational-state:init -- --confirm-initialize
 ```
 
-The command requires exactly `--confirm-initialize`, rejects unknown arguments and non-absolute directories, acquires the same broker-wide and Journal process locks as Harvester, creates the selected private directory (0700) and its fact/manifest files (0600), and refuses to overwrite any existing ledger. The runtime reads the same legacy `DURABLE_FACTS_DIRECTORY` setting; do not initialize one directory and run against another. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
+To select another absolute local-filesystem directory, set `OPERATIONAL_STATE_DIRECTORY` for both the initializer and runtime. The old `DURABLE_FACTS_DIRECTORY` variable remains accepted as a legacy compatibility alias; if both are set, they must resolve to the same directory. Existing installations that still have records under the former `~/.coinzilla/harvester/recovery-facts` default can continue using that location by setting `OPERATIONAL_STATE_DIRECTORY` to its absolute path. No data is moved or deleted automatically.
+
+The command requires exactly `--confirm-initialize`, rejects unknown arguments and invalid directory overrides, acquires the same broker-wide and Journal process locks as Harvester, creates the selected private directory (0700) and its record/manifest files (0600), and refuses to overwrite any existing store. The runtime resolves the same directory; do not initialize one directory and run against another. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
 
 The Operational State Store currently supports append-only operational record production and offline candidate projection only. Acknowledged orders remain UNKNOWN until exchange reconciliation. Any second process start is deliberately blocked after a prior PROCESS_STARTED fact—even after a clean shutdown—until the complete Step 8 reconciliation and Step 9 crash/restart proof are accepted. The first start is permitted only when the verified store contains no prior PROCESS_STARTED session (a pre-start configuration-baseline record may remain after an aborted preflight). Automatic restoration and READY publication from recovered state remain disabled. The initialization command does not connect to Binance or place/cancel orders.
 
