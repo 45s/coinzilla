@@ -129,7 +129,7 @@ Recovery-tranche cost must include gross executed BUY quote notional, actual quo
 
 Cycle SELL proceeds must use actual confirmed SELL fills, less actual quote-asset SELL commissions and reliably valued third-asset SELL commissions. Base-asset SELL commissions change the base quantity consumed. Configured maker/taker rates are planning estimates only, never substitutes for actual commission facts.
 
-The owner must specify the cycle's minimum net profit and exact proceeds/cost allocation rule. A profitable recovery tranche does not prove that the legacy units in the same exchange order are profitable.
+The recovery cycle must satisfy the existing pair-level `minProfit` configuration value, measured as net profit in the pair's quote asset after applicable commissions. RS must reuse this configured threshold rather than introduce a duplicate minimum-profit setting or ask the operator to choose it again. A profitable recovery tranche does not prove that the legacy units in the same exchange order are profitable. Exact proceeds/cost allocation remains a separate implementation requirement.
 
 ### 5.2 Legacy historical cost basis
 
@@ -139,7 +139,7 @@ Legacy inventory has a historical acquisition cost separate from the current rec
 
 Illustration: the recovery tranche earns 0.20 USDT net, but the proposed legacy slice would realize a 0.10 USDT loss against its historical basis. The combined headline result is positive; the legacy sale still fails the legacy-profit gate.
 
-**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. **Still unresolved:** how the supplied historical values are verified and represented in accounting; how partial legacy disposals reduce remaining basis; allocation of mixed-order proceeds and shared SELL fees; minimum recovery-cycle net profit; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
+**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. The existing pair-level `minProfit` setting governs minimum net recovery-cycle profit; it does not replace the independent legacy rule that each legacy slice must recover its own historical basis and applicable selling costs. **Still unresolved:** how the supplied historical values are represented in accounting; how partial legacy disposals reduce remaining basis; allocation of mixed-order proceeds and shared SELL fees; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
 
 ## 6. BUY tranche accumulation and eligibility
 
