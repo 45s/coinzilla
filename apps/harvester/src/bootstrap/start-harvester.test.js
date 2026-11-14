@@ -4827,11 +4827,9 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
   })
 })
 
-test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
-  const snapshotConfig = {
+
+function createConfiguredAssetSnapshotConfig() {
+  return {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
@@ -4885,6 +4883,10 @@ test("account snapshots include every configured pair asset, including disabled 
       },
     },
   }
+}
+
+function createConfiguredAssetSnapshotFixture({ broker }) {
+  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
   const assetsByCode = new Map()
   for (const symbol of configuredMarkets) {
     const { market } = createMarketMetadata(symbol)
@@ -4893,52 +4895,32 @@ test("account snapshots include every configured pair asset, including disabled 
   }
   const unrelatedAsset = new Asset({
     id: "asset:XRP",
-    code: "XRP"
+    code: "XRP",
   })
   const sourceBalances = [...assetsByCode.values(), unrelatedAsset].map((asset) => new Balance({
     free: new Quantity({
       amount: "10",
-      asset
+      asset,
     }),
     locked: new Quantity({
       amount: "0",
-      asset
+      asset,
     }),
   }))
   broker.getAccountSnapshot = async () => ({
     ok: true,
     data: {
       balances: sourceBalances,
-      sourceTime: 1
+      sourceTime: 1,
     },
   })
+  return {
+    config: createConfiguredAssetSnapshotConfig(),
+    expectedAssetCodes: ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"],
+  }
+}
 
-  const events = []
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => snapshotConfig,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development"
-    },
-    brokerAdapterFactory: () => broker,
-    eventPublisher: {
-      publish: (event) => {
-        events.push(event)
-        return { ok: true }
-      },
-      flush: async () => ({
-        ok: true,
-        durable: true
-      }),
-    },
-    logger: {
-      info() {},
-      error() {},
-      debug() {}
-    },
-  })
-
-  const expectedAssetCodes = ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"]
+function assertConfiguredAssetPreflight({ events, runtime, calls, expectedAssetCodes }) {
   const preflight = events.find((event) =>
     event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT")
   assert.ok(preflight, "trading-enabled startup must durably capture its configured-asset PREFLIGHT snapshot")
@@ -4953,18 +4935,16 @@ test("account snapshots include every configured pair asset, including disabled 
     "the in-memory account snapshot must use the same configured-asset allowlist rather than retaining unrelated wallet assets",
   )
   for (const symbol of ["ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]) {
-    assert.ok(
-      calls.includes("filters:" + symbol),
-      "startup must resolve base/quote metadata for disabled configured pair " + symbol + " so its assets are included in the audit snapshot",
-    )
+    assert.ok(calls.includes("filters:" + symbol))
     assert.equal(
       calls.includes("subscribe:" + symbol) || calls.includes("subscribe:book:" + symbol),
       false,
       "resolving disabled configured pair " + symbol + " must not enable market subscriptions or trading",
     )
   }
+}
 
-  await runtime.stop()
+function assertConfiguredAssetClosing({ events, expectedAssetCodes }) {
   const closing = events.find((event) =>
     event.name === "account.snapshot_captured" && event.data.phase === "CLOSING")
   assert.ok(closing, "shutdown must retain a CLOSING account snapshot")
@@ -4973,8 +4953,54 @@ test("account snapshots include every configured pair asset, including disabled 
     expectedAssetCodes,
     "CLOSING Journal snapshot must preserve the same configured-asset allowlist as PREFLIGHT",
   )
-})
+}
 
+
+test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const fixture = createConfiguredAssetSnapshotFixture({
+    broker,
+  })
+  const events = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => fixture.config,
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return {
+          ok: true,
+        }
+      },
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+    logger: {
+      info() {},
+      error() {},
+      debug() {},
+    },
+  })
+
+  assertConfiguredAssetPreflight({
+    events,
+    runtime,
+    calls,
+    expectedAssetCodes: fixture.expectedAssetCodes,
+  })
+  await runtime.stop()
+  assertConfiguredAssetClosing({
+    events,
+    expectedAssetCodes: fixture.expectedAssetCodes,
+  })
+})
 
 test("identifies user-data events received during application recovery as recovery-mode work", async () => {
   const broker = createBroker()
