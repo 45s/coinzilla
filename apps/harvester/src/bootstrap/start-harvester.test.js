@@ -4010,3 +4010,81 @@ test("reuses the process-owned Operational State Store and preserves operator pa
   assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STARTED").length, 1)
   assert.equal(read.data.records.filter(({ factType }) => factType === "PROCESS_STOPPED").length, 1)
 })
+
+test("does not subscribe to a market blocked by this strategy's external-order policy", async () => {
+  const { market } = createMarketMetadata("BTCUSDT")
+  const externalCanonicalOrder = new CanonicalOrder({
+    clientOrderId: "manual-client-order",
+    brokerOrderId: "manual-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "64000", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const { market: ignoredMarket } = createMarketMetadata("ETHUSDT")
+  const ignoredExternalOrder = new CanonicalOrder({
+    clientOrderId: "manual-eth-client-order",
+    brokerOrderId: "manual-eth-broker-order",
+    market: ignoredMarket,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "2400", asset: ignoredMarket.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1", asset: ignoredMarket.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: ignoredMarket.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const config = withExternalOrdersPolicy("BTCUSDT", "block")
+  config.strategies.CG_coinGrabber.pairs.ETHUSDT = {
+    ...appConfig.strategies.CG_coinGrabber.pairs.ETHUSDT,
+    enabled: true,
+    externalOrdersPolicy: "ignore",
+  }
+  const calls = []
+  const broker = createBroker(calls, {
+    externalOpenOrders: [
+      createOpenOrderSnapshot({ order: externalCanonicalOrder }),
+      createOpenOrderSnapshot({ order: ignoredExternalOrder }),
+    ],
+  })
+  const candleSubscriptions = []
+  const { subscribeForCandles } = broker
+  broker.subscribeForCandles = async (input) => {
+    candleSubscriptions.push(input.symbol)
+    return subscribeForCandles(input)
+  }
+  const logs = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {
+      info: (entry) => logs.push(entry),
+      error: (entry) => logs.push(entry),
+    },
+  })
+
+  try {
+    assert.equal(runtime.userDataReady, true, "An external order must not block account/user-data readiness globally.")
+    assert.deepEqual(runtime.subscriptions, ["ETHUSDT"], "Only this strategy's unblocked market should own a price subscription.")
+    assert.ok(calls.includes("subscribe:ETHUSDT"), "An unaffected enabled market must remain subscribed.")
+    assert.equal(calls.includes("subscribe:BTCUSDT"), false, "A market blocked by this strategy's external-order policy must not subscribe to prices.")
+    assert.ok(calls.includes("subscribe:book:ETHUSDT"), "An unaffected enabled market must retain its book stream.")
+    assert.equal(calls.includes("subscribe:book:BTCUSDT"), false, "A blocked market must not subscribe to a book stream.")
+    assert.deepEqual(candleSubscriptions, ["ETHUSDT"], "Volatility candle history must use the same strategy-scoped market-data eligibility.")
+    const audit = logs.find((entry) =>
+      entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
+    assert.equal(audit?.readiness, "BLOCKED", "The account-wide audit remains BLOCKED without suppressing unrelated markets.")
+  } finally {
+    await runtime.stop()
+  }
+})
