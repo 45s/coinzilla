@@ -9,7 +9,7 @@ created: 2026-11-14
 # Recovery Seller (RS) — Implementation Roadmap
 
 **Status:** RS-2 domain accounting is in progress; RS policy and runtime execution remain unimplemented.
-**Tracking:** [PR #1115](https://github.com/45s/coinzilla/pull/1115).
+**Tracking:** [PR #1118](https://github.com/45s/coinzilla/pull/1118) — RS-2 multi-position accounting foundation.
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
