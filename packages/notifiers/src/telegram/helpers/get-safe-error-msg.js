@@ -15,7 +15,7 @@ function errorToMessage(error) {
  * Convert an arbitrary failure into bounded text without reflecting a bot token.
  * This helper is pure: token and error are explicit inputs.
  */
-export function safeErrorMessage(error, token) {
+export function safeErrorMessage({ error, token }) {
   let message = errorToMessage(error)
 
   // Real Telegram bot tokens are long. Avoid replacing short test/example tokens

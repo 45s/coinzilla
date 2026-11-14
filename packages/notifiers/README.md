@@ -10,12 +10,17 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
       src/
         index.js
         telegram/
+          event-subscriber.js
+          notifier.js
           index.js
-          telegram-notifier.js
-          telegram-validation.js
-          safe-error-message.js
-          telegram-event-subscriber.js
-          *.test.js
+          notifier.test.js
+          event-subscriber.test.js
+          helpers/
+            run-validation.js
+            run-validation.test.js
+            run-response-validation.js
+            get-safe-error-msg.js
+            get-safe-error-msg.test.js
         email/    (future; create when implemented)
         discord/  (future; create when implemented)
 
@@ -119,7 +124,7 @@ The notifier package does not define application event names, trading semantics,
 ## Reliability and security contract
 
 - **Transport isolation:** Telegram is an event-bus side effect. It must never control trading state, order placement, reconciliation, or strategy decisions.
-- **No secret leakage:** the Telegram bot token is redacted from thrown transport errors. The consuming application formatter must include only explicitly selected fields and sanitize/bound free-form text before sending. Never forward raw errors, stack traces, credentials, API keys, raw exchange payloads, or arbitrary event fields.
+- **No secret leakage:** the Telegram bot token is redacted from thrown transport error messages and sanitized causes. The consuming application formatter must include only explicitly selected fields and sanitize/bound free-form text before sending. Never forward raw errors, stack traces, credentials, API keys, raw exchange payloads, or arbitrary event fields.
 - **Bounded input:** the consuming application is responsible for normalizing fields, removing control characters, and length-limiting dynamic content before calling the notifier.
 - **Response validation:** HTTP response shape, Telegram's `ok` flag, and the returned `message_id` are validated. Non-2xx responses include Telegram's bounded, token-redacted `description` when available; malformed error bodies retain the HTTP status. Array-shaped or otherwise malformed success responses are failures, not false positives.
 - **Validation isolation:** configuration validation, message validation, and bounded credential-redacting error sanitization are pure functions in focused modules, independently testable without network access.
@@ -151,8 +156,7 @@ Rotate a potentially exposed bot token with BotFather and update the deployment 
     pnpm --filter @coinzilla/notifiers test
     pnpm --filter @coinzilla/notifiers test:coverage
 
-The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Tests use Node's built-in test runner and injected transport boundaries; they require no credentials, external packages, or live network access.
-
+The package unit suite also runs ESLint against every JavaScript source file, test, and script under packages/notifiers, using the repository's root ESLint configuration. The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Behavioral tests use Node's built-in test runner and injected transport boundaries; the ESLint regression test uses the repository's installed ESLint development dependency. Tests require no credentials or live network access.
 
 ## Manual live Telegram smoke test
 

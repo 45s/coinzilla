@@ -2,22 +2,12 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { TelegramNotifier } from "../src/index.js"
 
-/**
- * Send one explicitly requested live Telegram test message.
- * This is intentionally separate from the default test suite and CI.
- */
-export async function runTelegramSmokeTest({
-  env = process.env,
-  createNotifier = (options) => new TelegramNotifier(options),
-  now = () => new Date(),
-} = {}) {
+function validateSmokeTestEnvironment(env) {
   if (!env || typeof env !== "object" || Array.isArray(env)) {
     throw new TypeError("env must be an object")
   }
-
   const token = env.TELEGRAM_BOT_TOKEN
   const chatId = env.TELEGRAM_CHAT_ID
-
   if (
     typeof token !== "string" ||
     token.trim() === "" ||
@@ -31,6 +21,19 @@ export async function runTelegramSmokeTest({
       "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must both be configured for the live smoke test",
     )
   }
+  return { token, chatId }
+}
+
+/**
+ * Send one explicitly requested live Telegram test message.
+ * This is intentionally separate from the default test suite and CI.
+ */
+export async function runTelegramSmokeTest({
+  env = process.env,
+  createNotifier = (options) => new TelegramNotifier(options),
+  now = () => new Date(),
+} = {}) {
+  const { token, chatId } = validateSmokeTestEnvironment(env)
 
   const timestamp = now()
   if (!(timestamp instanceof Date) || !Number.isFinite(timestamp.getTime())) {
@@ -67,12 +70,12 @@ const isDirectExecution =
 if (isDirectExecution) {
   try {
     const { messageId } = await runTelegramSmokeTest()
-    console.info(
-      `Telegram smoke test accepted by Telegram (message_id=${messageId}).`,
+    process.stdout.write(
+      `Telegram smoke test accepted by Telegram (message_id=${messageId}).\n`,
     )
   } catch (error) {
-    console.error(
-      `Telegram smoke test failed: ${error instanceof Error ? error.message : String(error)}`,
+    process.stderr.write(
+      `Telegram smoke test failed: ${error instanceof Error ? error.message : String(error)}\n`,
     )
     process.exitCode = 1
   }
