@@ -73,6 +73,121 @@ export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
 }
 
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
+function createRecoveryManagedCancellationState({ state } = {}) {
+  const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
+    [...state.recoveryManagedCancellationClientOrderIds].some((clientOrderId) => {
+      const order = state.registry.getOrder({ clientOrderId })
+      return order?.market.symbol === symbol && (side === undefined || order.side === side)
+    })
+  const releaseRecoveryManagedPause = ({ symbol } = {}) => {
+    if (
+      !state.recoveryManagedPausedMarkets.has(symbol) ||
+      hasPendingRecoveryManagedCancellation({ symbol }) ||
+      state.durablePausedMarkets.has(symbol) ||
+      state.replacementIntents.has(symbol) ||
+      state.trailingBuyRepriceIntents.has(symbol)
+    ) {
+      return false
+    }
+    state.recoveryManagedPausedMarkets.delete(symbol)
+    state.paused.delete(symbol)
+    return true
+  }
+  const resolveRecoveryManagedCancellation = ({ order } = {}) => {
+    if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) {
+      return false
+    }
+    const { market: { symbol } } = order
+    if (order.side === "SELL" &&
+        !hasPendingRecoveryManagedCancellation({ symbol, side: "SELL" })) {
+      state.replacementIntents.delete(symbol)
+    }
+    if (order.side === "BUY" &&
+        !hasPendingRecoveryManagedCancellation({ symbol, side: "BUY" })) {
+      state.trailingBuyRepriceIntents.delete(symbol)
+    }
+    releaseRecoveryManagedPause({ symbol })
+    return true
+  }
+  return {
+    hasPendingRecoveryManagedCancellation,
+    releaseRecoveryManagedPause,
+    resolveRecoveryManagedCancellation,
+  }
+}
+
+function createProcessedFillTracker({ state } = {}) {
+  return ({ fill }) => {
+    const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
+    if (fillIds.has(fill.id)) {
+      return false
+    }
+    fillIds.add(fill.id)
+    state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
+    const fills = state.processedFillsByOrder.get(fill.brokerOrderId) ?? new Map()
+    fills.set(fill.id, fill)
+    state.processedFillsByOrder.set(fill.brokerOrderId, fills)
+    return true
+  }
+}
+
+function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
+  const recordBuyExecutionFill = ({ fill }) => {
+    if (!rememberProcessedFill({ fill })) {
+      return
+    }
+    const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
+      quantity: "0",
+      quoteQuantity: "0",
+      fillIds: new Set(),
+    }
+    current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
+    current.quoteQuantity = addDecimal({ left: current.quoteQuantity, right: fill.quoteQuantity.amount })
+    current.fillIds.add(fill.id)
+    state.buyExecutionTotals.set(fill.brokerOrderId, current)
+  }
+  const getReconciledBuyExecutionPrice = ({ order }) => {
+    const totals = state.buyExecutionTotals.get(order.brokerOrderId)
+    if (!totals ||
+        compareDecimal({ left: totals.quantity, right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+      throw new Error("Completed BUY execution history does not reconcile with the filled order quantity")
+    }
+    return divideDecimal({
+      left: totals.quoteQuantity,
+      right: totals.quantity,
+      scale: 18,
+      rounding: "half-up",
+    })
+  }
+  const recordSellExecutionFill = ({ fill }) => {
+    if (!rememberProcessedFill({ fill })) {
+      return
+    }
+    const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
+      quantity: "0",
+      fillIds: new Set(),
+    }
+    current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
+    current.fillIds.add(fill.id)
+    state.sellExecutionTotals.set(fill.brokerOrderId, current)
+  }
+  const assertReconciledSellExecution = ({ order }) => {
+    const totals = state.sellExecutionTotals.get(order.brokerOrderId)
+    if (!totals ||
+        compareDecimal({ left: totals.quantity, right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+      throw new Error("Completed recovery SELL execution history does not reconcile with the filled order quantity")
+    }
+  }
+  return {
+    recordBuyExecutionFill,
+    getReconciledBuyExecutionPrice,
+    recordSellExecutionFill,
+    assertReconciledSellExecution,
+  }
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -227,125 +342,20 @@ export function makeConservativeTradingEngine({
     volatilityCancellationAttemptBySymbol: new Map(),
     volatilitySnapshotSignatureBySymbol: new Map(),
   }
-  const hasPendingRecoveryManagedCancellation = ({
-    symbol,
-    side
-  } = {}) =>
-    [...state.recoveryManagedCancellationClientOrderIds].some((clientOrderId) => {
-      const order = state.registry.getOrder({ clientOrderId })
-      return order?.market.symbol === symbol && (side === undefined || order.side === side)
-    })
-  const releaseRecoveryManagedPause = ({ symbol } = {}) => {
-    if (
-      !state.recoveryManagedPausedMarkets.has(symbol) ||
-      hasPendingRecoveryManagedCancellation({ symbol }) ||
-      state.durablePausedMarkets.has(symbol) ||
-      state.replacementIntents.has(symbol) ||
-      state.trailingBuyRepriceIntents.has(symbol)
-    ) {return false}
-    state.recoveryManagedPausedMarkets.delete(symbol)
-    state.paused.delete(symbol)
-    return true
-  }
-  const resolveRecoveryManagedCancellation = ({ order } = {}) => {
-    if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) {return false}
-    const { market: { symbol } } = order
-    if (order.side === "SELL" &&
-        !hasPendingRecoveryManagedCancellation({
-          symbol,
-          side: "SELL"
-        })) {
-      state.replacementIntents.delete(symbol)
-    }
-    if (order.side === "BUY" &&
-        !hasPendingRecoveryManagedCancellation({
-          symbol,
-          side: "BUY"
-        })) {
-      state.trailingBuyRepriceIntents.delete(symbol)
-    }
-    releaseRecoveryManagedPause({ symbol })
-    return true
-  }
-  const rememberProcessedFill = ({ fill }) => {
-    const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
-    if (fillIds.has(fill.id)) {return false}
-    fillIds.add(fill.id)
-    state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
-    const fills = state.processedFillsByOrder.get(fill.brokerOrderId) ?? new Map()
-    fills.set(fill.id, fill)
-    state.processedFillsByOrder.set(fill.brokerOrderId, fills)
-    return true
-  }
-
-  const recordBuyExecutionFill = ({ fill }) => {
-    if (!rememberProcessedFill({ fill })) {return}
-    const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
-      quantity: "0",
-      quoteQuantity: "0",
-      fillIds: new Set(),
-    }
-    current.quantity = addDecimal({
-      left: current.quantity,
-      right: fill.quantity.amount
-    })
-    current.quoteQuantity = addDecimal({
-      left: current.quoteQuantity,
-      right: fill.quoteQuantity.amount
-    })
-    current.fillIds.add(fill.id)
-    state.buyExecutionTotals.set(fill.brokerOrderId, current)
-  }
-
-  const getReconciledBuyExecutionPrice = ({ order }) => {
-    const totals = state.buyExecutionTotals.get(order.brokerOrderId)
-    if (!totals ||
-        compareDecimal({
-          left: totals.quantity,
-          right: order.executedQuantity.amount
-        }) !== 0 ||
-        compareDecimal({
-          left: order.executedQuantity.amount,
-          right: order.originalQuantity.amount
-        }) !== 0) {
-      throw new Error("Completed BUY execution history does not reconcile with the filled order quantity")
-    }
-    return divideDecimal({
-      left: totals.quoteQuantity,
-      right: totals.quantity,
-      scale: 18,
-      rounding: "half-up",
-    })
-  }
-
-  const recordSellExecutionFill = ({ fill }) => {
-    if (!rememberProcessedFill({ fill })) {return}
-    const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
-      quantity: "0",
-      fillIds: new Set(),
-    }
-    current.quantity = addDecimal({
-      left: current.quantity,
-      right: fill.quantity.amount
-    })
-    current.fillIds.add(fill.id)
-    state.sellExecutionTotals.set(fill.brokerOrderId, current)
-  }
-
-  const assertReconciledSellExecution = ({ order }) => {
-    const totals = state.sellExecutionTotals.get(order.brokerOrderId)
-    if (!totals ||
-        compareDecimal({
-          left: totals.quantity,
-          right: order.executedQuantity.amount
-        }) !== 0 ||
-        compareDecimal({
-          left: order.executedQuantity.amount,
-          right: order.originalQuantity.amount
-        }) !== 0) {
-      throw new Error("Completed recovery SELL execution history does not reconcile with the filled order quantity")
-    }
-  }
+  const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
+  const {
+    hasPendingRecoveryManagedCancellation,
+    releaseRecoveryManagedPause,
+    resolveRecoveryManagedCancellation,
+  } = recoveryCancellationState
+  const rememberProcessedFill = createProcessedFillTracker({ state })
+  const executionFillAccounting = createExecutionFillAccounting({ state, rememberProcessedFill })
+  const {
+    recordBuyExecutionFill,
+    getReconciledBuyExecutionPrice,
+    recordSellExecutionFill,
+    assertReconciledSellExecution,
+  } = executionFillAccounting
 
   const publishDurableIntent = async ({
     eventName,
