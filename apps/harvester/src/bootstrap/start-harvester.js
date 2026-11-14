@@ -146,6 +146,104 @@ function startPendingUserDataRecovery({ userDataState, startUserDataRecovery } =
   }
 }
 
+function createHarvesterUserDataEventRuntime({
+  userDataState,
+  getTradingEngine,
+  isTradingEnabled,
+  isStopped,
+  logger,
+  onUserDataEvent,
+  getPortfolio,
+  getRecoveryLedger,
+  updatePortfolio,
+  updateTradingAccounting,
+  cancelOwnedBuysAfterAccountingFailure,
+  resumeDeferredStrategyEvaluations,
+  onSafetyBlockerRaised,
+  getUserDataSubscription,
+  tradingEnabled,
+  broker,
+  setCanonicalOwnershipReconciled,
+  refreshAccountSnapshot,
+  publishAccountSnapshot,
+  publishOpenOrdersSnapshot,
+} = {}) {
+  const handleUserDataEvent = createUserDataEventHandler({
+    state: userDataState,
+    getTradingEngine,
+    isTradingEnabled,
+    isStopped,
+    logger,
+    onUserDataEvent,
+    getPortfolio,
+    getRecoveryLedger,
+    updatePortfolio,
+    updateTradingAccounting,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+    onSafetyBlockerRaised,
+  })
+  const drainUserDataEvents = () => drainHarvesterUserDataEvents({ userDataState })
+  const startUserDataRecovery = createUserDataRecoveryHandler({
+    state: userDataState,
+    isStopped,
+    getUserDataSubscription,
+    getTradingEngine,
+    tradingEnabled,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled,
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
+  })
+  return { handleUserDataEvent, startUserDataRecovery }
+}
+
+function createHarvesterUserDataStatusRuntime({
+  userDataState,
+  isStopped,
+  eventPublisher,
+  brokerName,
+  logger,
+  tradingEnabled,
+  startUserDataRecovery,
+  cancelOwnedBuysAfterAccountingFailure,
+  resumeDeferredStrategyEvaluations,
+  onUserDataStatus,
+  now,
+  getLastReportedUserDataReady,
+  setLastReportedUserDataReady,
+} = {}) {
+  const handleUserDataStatusTransition = createUserDataStatusHandler({
+    state: userDataState,
+    isStopped,
+    eventPublisher,
+    brokerName,
+    logger,
+    tradingEnabled,
+    startUserDataRecovery,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+    onUserDataStatus,
+  })
+  const handleUserDataStatus = (status = {}) => handleHarvesterUserDataStatus({
+    status,
+    userDataState,
+    now,
+    getLastReportedUserDataReady,
+    setLastReportedUserDataReady,
+    handleUserDataStatusTransition,
+    eventPublisher,
+    brokerName,
+    eventNames: HARVESTER_EVENT_NAMES,
+    mapUserDataReadinessChangedData,
+    publishLifecycleEvent,
+  })
+  return { handleUserDataStatus }
+}
+
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -272,62 +370,48 @@ export async function startHarvester({
     skipped: true,
     reason: "TRADING_ENGINE_NOT_READY"
   } })
-  const updatePortfolio = (...args) => portfolioWorkflow.updatePortfolio(...args)
-  const updateTradingAccounting = (...args) => portfolioWorkflow.updateTradingAccounting(...args)
-  const getPortfolio = (...args) => portfolioWorkflow.getPortfolio(...args)
-  const getRecoveryLedger = (...args) => portfolioWorkflow.getRecoveryLedger(...args)
-  const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
-  const marketMetadata = new Map()
-  const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
-  const getAccountSnapshot = () => accountSnapshotManagerRef.current?.getAccountSnapshot()
-  let tradingEngine
-  let hasCanonicalOwnershipReconciliation = false
-
-  const broker = await connectBroker({
-    brokerAdapterFactory,
-    env,
-    brokerName,
-    tradingMode,
-    eventPublisher,
-    logger
-  })
-
-  const subscriptions = []
-  const marketPriceIntake = new Map()
-  const bookSubscriptions = []
-  let userDataSubscription
-  let lastReportedUserDataReady
-  const candleHistoryService = createHarvesterCandleHistoryService({
-    createCandleHistoryService,
-    broker,
-    logger,
-    now,
-    getTradingEngine: () => tradingEngine,
-  })
-  // One explicit state object makes user-data readiness and queue ownership visible.
-  const userDataState = createHarvesterUserDataState()
-
-  const getOperatorRuntimeSnapshot = () => getHarvesterOperatorRuntimeSnapshot({
-    now,
-    runtimeStartedAt,
+  const updatePortf  const isStopped = () => userDataState.stopped || userDataState.shutdownRequested
+  const userDataEventRuntime = createHarvesterUserDataEventRuntime({
     userDataState,
-    brokerName,
-    tradingEnabled,
-    tradingMode,
-  })
-  accountSnapshotManagerRef.current = createAccountSnapshotManager({
-    broker,
-    eventPublisher,
-    marketMetadata,
-    getPortfolio,
     getTradingEngine: () => tradingEngine,
-    getRecoveredState: () => recoveredState,
-    getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
+    isTradingEnabled: () => tradingEnabled,
+    isStopped,
     logger,
+    onUserDataEvent,
+    getPortfolio,
+    getRecoveryLedger,
+    updatePortfolio,
+    updateTradingAccounting,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+    onSafetyBlockerRaised,
+    getUserDataSubscription: () => userDataSubscription,
+    tradingEnabled,
+    broker,
+    setCanonicalOwnershipReconciled: (value) => { hasCanonicalOwnershipReconciliation = value },
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+  })
+  const { handleUserDataEvent, startUserDataRecovery } = userDataEventRuntime
+  const userDataStatusRuntime = createHarvesterUserDataStatusRuntime({
+    userDataState,
+    isStopped,
+    eventPublisher,
+    brokerName,
+    logger,
+    tradingEnabled,
+    startUserDataRecovery,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+    onUserDataStatus,
     now,
-    monotonicNow: () => globalThis.performance.now(),
-    runtimeSessionId,
-    operationalStateStore,
+    getLastReportedUserDataReady: () => lastReportedUserDataReady,
+    setLastReportedUserDataReady: (value) => { lastReportedUserDataReady = value },
+  })
+  const { handleUserDataStatus } = userDataStatusRuntime
+
+tore,
   })
   const {
     refreshAccountSnapshot,
