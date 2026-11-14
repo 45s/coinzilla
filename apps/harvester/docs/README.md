@@ -27,6 +27,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive remains deferred; Recovery Seller (RS) is a proposed, non-executable strategy with an illustrative per-pair sellQuantity configuration awaiting owner review
+- [Recovery Seller Domain Specification](domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md) — draft RS contract, accounting invariants, safety boundaries, and owner decisions blocking implementation
 
 ## Operations and safety
 
