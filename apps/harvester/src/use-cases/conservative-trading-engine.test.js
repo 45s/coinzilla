@@ -80,6 +80,7 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
   },
 })
 
+// eslint-disable-next-line complexity -- test harness centralizes independent fake-broker outcomes for deterministic coverage.
 async function createHarness({ strategyPolicy, hasUnownedOpenOrdersForSymbol = () => false, hasUnresolvedHarvesterOpenOrdersForSymbol = () => false, appConfig: suppliedAppConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureAfterCount, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderStatus = "CANCELED", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, cancelNotSent = false, cancelNotSentOnSuccess = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", portfolioBaseQuantityBaseline = "0", committedQuoteBalanceBaseline = "0", committedBaseBalanceBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, getVolatilityData: getVolatilityDataOverride, onOperationalStateCancellationIntent, onOperationalStateCancellationOutcome, onOperationalStateStrategyMarketPaused, canTrade: canTradeOverride = () => true, isStopping: isStoppingOverride = () => false, initialState } = {}) {
   const orders = []
   const pauses = []
@@ -2758,7 +2759,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   const appliedFillIds = new Set()
   const appliedFills = []
   const sequence = []
-  let buyOrder
+  const buyOrderRef = { current: undefined }
   let buyFills = []
   let releaseCancel
   let signalCancelStarted
@@ -2782,7 +2783,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
       ledgerRef.current = ledgerRef.current.applyFill({ fill }).ledger
       return { ok: true, data: { applied: true, duplicate: false } }
     },
-    getTerminalFills: ({ orderId }) => orderId === buyOrder?.brokerOrderId ? buyFills : [],
+    getTerminalFills: ({ orderId }) => orderId === buyOrderRef.current?.brokerOrderId ? buyFills : [],
     cancelOrderGate,
     cancelOrderStatus: ({ order }) => order.side === "BUY" ? "FILLED" : "CANCELED",
     cancelExecutedQuantity: ({ order }) => order.side === "BUY" ? order.originalQuantity.amount : "0",
@@ -2798,7 +2799,8 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   const originalRecoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
-  buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  buyOrderRef.current = buyOrder
   assert.ok(originalRecoverySell)
   assert.ok(buyOrder)
 
@@ -2914,7 +2916,6 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
     const stopping = { value: false }
     const portfolioRef = { current: seeded.portfolio }
     const ledgerRef = { current: seeded.recoveryLedger }
-    let buyOrder
     const harness = await createHarness({
       initialPortfolio: seeded.portfolio,
       initialRecoveryLedger: seeded.recoveryLedger,
@@ -2938,7 +2939,7 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
       symbol: "DOGEUSDT",
       priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
-    buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+    const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
     assert.ok(buyOrder)
 
     const fill = makeBuyFill({
