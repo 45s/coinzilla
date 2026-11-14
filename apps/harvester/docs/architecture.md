@@ -853,3 +853,6 @@ User-data event transition handlers remain serialized through the workflow entry
 
 
 The bootstrap keeps the account snapshot manager behind an explicitly initialized mutable reference so runtime callbacks can access the same manager before and after trading-engine activation.
+
+
+Bootstrap extraction retains the complete initialization order: broker connection, account snapshot manager creation, portfolio workflow setup, recovered-state construction, subscriptions, trading-engine activation and shutdown registration. The helpers replace only local composition, not lifecycle ordering.
