@@ -2,9 +2,9 @@ import os from "node:os"
 import path from "node:path"
 import { generateUUID, toResult } from "@coinzilla/utils"
 import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { acquireHarvesterProcessLocks } from "../infrastructure/process-lock/acquire-harvester-process-locks.js"
 
-const defaultRoot = path.join(os.homedir(), ".coinzilla", "harvester")
 
 /**
  * Explicit, one-time creation of the application-owned recovery-facts genesis.
@@ -12,8 +12,8 @@ const defaultRoot = path.join(os.homedir(), ".coinzilla", "harvester")
  */
 export async function initializeHarvesterDurableFactsLedger({
   confirmed = false,
-  directory = path.join(defaultRoot, "recovery-facts"),
-  processLockDirectory = path.join(defaultRoot, "process-locks"),
+  directory = DEFAULT_OPERATIONAL_STATE_DIRECTORY,
+  processLockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
   runtimeSessionId = generateUUID(),
   acquireProcessLock = acquireHarvesterProcessLocks,
   createStore = createFileDurableFactsStore,
