@@ -193,7 +193,6 @@ async function createHarness({
     accountedFillIds,
     completedCycles,
     cancellationIds,
-    canceledOrders,
     acknowledgedFillsByOrder,
     acknowledgedOrdersById,
     canonicalOrdersByClientId,
