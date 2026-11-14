@@ -50,49 +50,93 @@ function getOrderIdentityDiagnostics({ event, tradingEngine }) {
   }
 }
 
-async function persistStickySafetyBlocker({ failure, event, identity, onSafetyBlockerRaised, logger }) {
-  const eventSymbol = identity.rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol
-  const isUnownedExecution = event.executionType === "TRADE" || event.fill instanceof Fill
-  const requiresStickyBlocker = failure.category === "ACCOUNTING_INTEGRITY" ||
-    (failure.category === "OWNERSHIP_INTEGRITY" && isUnownedExecution)
-  if (!requiresStickyBlocker || typeof onSafetyBlockerRaised !== "function") {
-    return
-  }
 
-  const evidence = {
+function getUserDataEventSymbol({ event, identity }) {
+  return identity.rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol
+}
+
+function requiresStickySafetyBlocker({ failure, event, onSafetyBlockerRaised }) {
+  const isUnownedExecution = event.executionType === "TRADE" || event.fill instanceof Fill
+  const terminalAccountingFailure = failure.category === "ACCOUNTING_INTEGRITY"
+  const unownedExecutionFailure = failure.category === "OWNERSHIP_INTEGRITY" && isUnownedExecution
+  return typeof onSafetyBlockerRaised === "function" &&
+    (terminalAccountingFailure || unownedExecutionFailure)
+}
+
+function createStickySafetyBlockerRequest({ failure, event, identity, eventSymbol }) {
+  return {
+    scope: eventSymbol ? "MARKET" : "ACCOUNT",
+    symbol: eventSymbol ?? null,
+    reason: failure.stage,
+    evidence: {
+      failureCategory: failure.category,
+      failureStage: failure.stage,
+      eventType: event.eventType ?? null,
+      executionType: event.executionType ?? null,
+      symbol: eventSymbol ?? null,
+      brokerOrderId: identity.brokerOrderId ?? null,
+      clientOrderId: identity.clientOrderId ?? null,
+      executionId: event.fill?.id ?? event.executionId ?? null,
+      orderStatus: identity.rejectedOrder?.status ?? null,
+    },
+  }
+}
+
+function logStickySafetyBlockerFailure({ logger, blocker, eventSymbol, failure }) {
+  const { errors } = blocker ?? {}
+  logger.error?.({
+    message: "terminal user-data safety blocker could not be durably committed",
+    symbol: eventSymbol,
     failureCategory: failure.category,
     failureStage: failure.stage,
-    eventType: event.eventType ?? null,
-    executionType: event.executionType ?? null,
-    symbol: eventSymbol ?? null,
-    brokerOrderId: identity.brokerOrderId ?? null,
-    clientOrderId: identity.clientOrderId ?? null,
-    executionId: event.fill?.id ?? event.executionId ?? null,
-    orderStatus: identity.rejectedOrder?.status ?? null,
+    errors,
+  })
+}
+
+function logStickySafetyBlockerException({ logger, error, eventSymbol, failure }) {
+  logger.error?.({
+    message: "terminal user-data safety blocker append failed",
+    symbol: eventSymbol,
+    failureCategory: failure.category,
+    failureStage: failure.stage,
+    error,
+  })
+}
+
+async function persistStickySafetyBlocker({ failure, event, identity, onSafetyBlockerRaised, logger }) {
+  if (!requiresStickySafetyBlocker({
+    failure,
+    event,
+    onSafetyBlockerRaised,
+  })) {
+    return
   }
+  const eventSymbol = getUserDataEventSymbol({
+    event,
+    identity,
+  })
+  const request = createStickySafetyBlockerRequest({
+    failure,
+    event,
+    identity,
+    eventSymbol,
+  })
   try {
-    const blocker = await onSafetyBlockerRaised({
-      scope: eventSymbol ? "MARKET" : "ACCOUNT",
-      symbol: eventSymbol ?? null,
-      reason: failure.stage,
-      evidence,
-    })
+    const blocker = await onSafetyBlockerRaised(request)
     if (blocker?.ok !== true || blocker.data?.durable !== true) {
-      logger.error?.({
-        message: "terminal user-data safety blocker could not be durably committed",
-        symbol: eventSymbol,
-        failureCategory: failure.category,
-        failureStage: failure.stage,
-        errors: blocker?.errors,
+      logStickySafetyBlockerFailure({
+        logger,
+        blocker,
+        eventSymbol,
+        failure,
       })
     }
   } catch (error) {
-    logger.error?.({
-      message: "terminal user-data safety blocker append failed",
-      symbol: eventSymbol,
-      failureCategory: failure.category,
-      failureStage: failure.stage,
+    logStickySafetyBlockerException({
+      logger,
       error,
+      eventSymbol,
+      failure,
     })
   }
 }
@@ -175,24 +219,33 @@ async function handleFailedOrderEvent({ processed, event, tradingEngine, state, 
   })
 }
 
-function logSuccessfulOrderEvent({ processed, event, logger }) {
-  logger.info?.({
+function createSuccessfulOrderEventLog({ processed, event }) {
+  const { executedOrder, fill } = event
+  const ignored = processed.data?.ignored === true
+  return {
     message: "Order update processed",
     eventType: event.eventType ?? "UNKNOWN",
     executionType: event.executionType,
-    symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
-    brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
-    clientOrderId: event.executedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId,
+    symbol: executedOrder?.market?.symbol ?? fill?.market?.symbol,
+    brokerOrderId: executedOrder?.brokerOrderId ?? fill?.brokerOrderId,
+    clientOrderId: executedOrder?.clientOrderId ?? event.clientOrderId ?? fill?.clientOrderId,
     originalClientOrderId: event.originalClientOrderId,
-    side: event.executedOrder?.side ?? event.fill?.side,
-    price: event.executedOrder?.limitPrice?.amount ?? null,
-    quantity: event.executedOrder?.originalQuantity?.amount,
-    orderStatus: event.executedOrder?.status,
-    executionId: event.fill?.id,
-    outcome: processed.data?.ignored === true ? "IGNORED" : "ACCEPTED",
-    ignored: processed.data?.ignored === true,
-    fillApplied: event.executionType === "TRADE" && processed.data?.ignored !== true,
-  })
+    side: executedOrder?.side ?? fill?.side,
+    price: executedOrder?.limitPrice?.amount ?? null,
+    quantity: executedOrder?.originalQuantity?.amount,
+    orderStatus: executedOrder?.status,
+    executionId: fill?.id,
+    outcome: ignored ? "IGNORED" : "ACCEPTED",
+    ignored,
+    fillApplied: event.executionType === "TRADE" && !ignored,
+  }
+}
+
+function logSuccessfulOrderEvent({ processed, event, logger }) {
+  logger.info?.(createSuccessfulOrderEventLog({
+    processed,
+    event,
+  }))
 }
 
 async function notifyUserDataObserver({
