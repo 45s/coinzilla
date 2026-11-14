@@ -850,3 +850,6 @@ Operational-state callback construction is centralized and each callback retains
 
 
 User-data event transition handlers remain serialized through the workflow entry point; each extracted handler now owns a complete, independently testable status branch.
+
+
+The bootstrap keeps the account snapshot manager behind an explicitly initialized mutable reference so runtime callbacks can access the same manager before and after trading-engine activation.

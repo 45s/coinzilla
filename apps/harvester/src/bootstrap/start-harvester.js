@@ -174,6 +174,7 @@ export async function startHarvester({
     recordSafetyBlockerRaised,
     recordOrderCancellationOutcome,
   })
+  const accountSnapshotManagerRef = { current: null }
   accountSnapshotManagerRef.current = createAccountSnapshotManager({
     broker,
     eventPublisher,
