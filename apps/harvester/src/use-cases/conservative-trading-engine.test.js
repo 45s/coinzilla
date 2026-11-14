@@ -207,7 +207,7 @@ function createHarnessEngineCallbacks({
   getRecoveryLedgerOverride,
   getMarketMetadataOverride,
   suppliedMarketMetadata,
-  marketMetadata,
+  marketMetadata: marketMetadataFallback,
   accountSnapshot,
   state,
   pauses,
@@ -217,8 +217,9 @@ function createHarnessEngineCallbacks({
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => state.currentRecoveryLedger),
     getMarketMetadata: () => getMarketMetadataOverride
       ? getMarketMetadataOverride()
-      : (suppliedMarketMetadata ?? marketMetadata),
+      : (suppliedMarketMetadata ?? marketMetadataFallback),
     getAccountSnapshot: () => accountSnapshot,
+    onPause: async ({ reason }) => pauses.push(reason),
   }
 }
 
@@ -249,36 +250,83 @@ function getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuanti
   return cancelWithFill ? "0.1" : "0"
 }
 
-async function createHarness({
+const DEFAULT_HARNESS_OPTIONS = {
+  hasUnownedOpenOrdersForSymbol: noOpenOrders,
+  hasUnresolvedHarvesterOpenOrdersForSymbol: noOpenOrders,
+  isMarketPriceFresh: marketDataFresh,
+  isMarketBookFresh: marketDataFresh,
+  initialBook: true,
+  placeOrderFailureAfterFirst: false,
+  placeOrderFailureCount: 0,
+  cancelWithFill: false,
+  cancelOrderStatus: "CANCELED",
+  placeOrderFailure: false,
+  placeOrderThrow: false,
+  cancelFailure: false,
+  cancelThrow: false,
+  cancelNotSent: false,
+  cancelNotSentOnSuccess: false,
+  deferOrderSide: "SELL",
+  baseFreeBalance: "0",
+  quoteFreeBalance: "1000",
+  quoteCashFlowBaseline: "0",
+  portfolioBaseQuantityBaseline: "0",
+  committedQuoteBalanceBaseline: "0",
+  committedBaseBalanceBaseline: "0",
+  accountingApplied: false,
+  accountingFailure: false,
+  immediateFilledAcknowledgement: false,
+  getAcknowledgedFills: emptyHarnessFills,
+  getTerminalFills: emptyHarnessFills,
+  recoveryCompletion: {
+    eligible: true,
+    freeQuantity: "0.1",
+    realizedNetProfit: "1.5",
+  },
+  canTrade: canTradeByDefault,
+  isStopping: stoppingByDefault,
+}
+
+async function createHarness(options = {}) {
+  const resolvedOptions = { ...DEFAULT_HARNESS_OPTIONS }
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined) {
+      resolvedOptions[key] = value
+    }
+  }
+  return createHarnessFromOptions(resolvedOptions)
+}
+
+async function createHarnessFromOptions({
   strategyPolicy,
-  hasUnownedOpenOrdersForSymbol = noOpenOrders,
-  hasUnresolvedHarvesterOpenOrdersForSymbol = noOpenOrders,
+  hasUnownedOpenOrdersForSymbol,
+  hasUnresolvedHarvesterOpenOrdersForSymbol,
   appConfig: suppliedAppConfig,
-  isMarketPriceFresh = marketDataFresh,
-  isMarketBookFresh = marketDataFresh,
-  initialBook = true,
+  isMarketPriceFresh,
+  isMarketBookFresh,
+  initialBook,
   marketMetadata: suppliedMarketMetadata,
   getMarketMetadata: getMarketMetadataOverride,
   getSymbolFilters: getSymbolFiltersOverride,
-  placeOrderFailureAfterFirst = false,
+  placeOrderFailureAfterFirst,
   placeOrderFailureAfterCount,
   placeOrderFailureError,
-  placeOrderFailureCount = 0,
-  cancelWithFill = false,
+  placeOrderFailureCount,
+  cancelWithFill,
   cancelExecutedQuantity,
-  cancelOrderStatus = "CANCELED",
+  cancelOrderStatus,
   cancelOrderGate,
   onCancelOrderStarted,
   eventPublisher,
-  placeOrderFailure = false,
-  placeOrderThrow = false,
-  cancelFailure = false,
-  cancelThrow = false,
-  cancelNotSent = false,
-  cancelNotSentOnSuccess = false,
+  placeOrderFailure,
+  placeOrderThrow,
+  cancelFailure,
+  cancelThrow,
+  cancelNotSent,
+  cancelNotSentOnSuccess,
   onPlaceOrder,
   placeOrderGate,
-  deferOrderSide = "SELL",
+  deferOrderSide,
   onPlaceOrderStarted,
   initialPortfolio,
   initialRecoveryLedger,
@@ -286,31 +334,28 @@ async function createHarness({
   getRecoveryLedger: getRecoveryLedgerOverride,
   updateTradingAccounting: updateTradingAccountingOverride,
   completeRecoveryCycle: completeRecoveryCycleOverride,
-  baseFreeBalance = "0",
-  quoteFreeBalance = "1000",
-  quoteCashFlowBaseline = "0",
-  portfolioBaseQuantityBaseline = "0",
-  committedQuoteBalanceBaseline = "0",
-  committedBaseBalanceBaseline = "0",
-  accountingApplied = false,
-  accountingFailure = false,
-  immediateFilledAcknowledgement = false,
-  getAcknowledgedFills = emptyHarnessFills,
+  baseFreeBalance,
+  quoteFreeBalance,
+  quoteCashFlowBaseline,
+  portfolioBaseQuantityBaseline,
+  committedQuoteBalanceBaseline,
+  committedBaseBalanceBaseline,
+  accountingApplied,
+  accountingFailure,
+  immediateFilledAcknowledgement,
+  getAcknowledgedFills,
   acknowledgedFillsGate,
-  getTerminalFills = emptyHarnessFills,
-  recoveryCompletion = {
-  eligible: true,
-  freeQuantity: "0.1",
-  realizedNetProfit: "1.5"
-},
+  getTerminalFills,
+  recoveryCompletion,
   getVolatilityData: getVolatilityDataOverride,
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
-  canTrade: canTradeOverride = canTradeByDefault,
-  isStopping: isStoppingOverride = stoppingByDefault,
-  initialState
-} = {}) {
+  canTrade: canTradeOverride,
+  isStopping: isStoppingOverride,
+  initialState,
+}) {
+  const effectiveCancelExecutedQuantity = getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuantity })
   const {
     orders,
     pauses,
@@ -365,7 +410,6 @@ async function createHarness({
     currentPortfolio: initialPortfolio ?? new Portfolio(),
     currentRecoveryLedger: initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
   }
-  const effectiveCancelExecutedQuantity = getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuantity })
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
   // The synthetic seeded portfolio below is built from a completed BUY fill at 100.
   // The engine intentionally does not infer a reconciled VWAP from portfolio totals,
@@ -389,7 +433,7 @@ async function createHarness({
       getRecoveryLedgerOverride,
       getMarketMetadataOverride,
       suppliedMarketMetadata,
-      marketMetadata,
+      marketMetadataFallback: suppliedMarketMetadata ?? marketMetadata,
       accountSnapshot,
       state,
       pauses,
