@@ -12,6 +12,8 @@ created: 2026-11-12
 
 **Accepted.** This decision narrows the initial operator-control rollout defined by [ADR-0002](./0002-transport-independent-operator-control.md). It supersedes only the requirement that full ADR-0001 restart recovery must be complete before the initial operator-pause capability can be enabled.
 
+> **Terminology note (2026-11-14):** This accepted ADR retains the original durable-fact vocabulary as historical architectural terminology. The current application-facing name for the shared persistence component is **Operational State Store**; see the current [operator-control documentation](../../operator-control/README.md) for supported configuration and commands.
+
 ## Context
 
 The operator-pause capability and process-restart trading recovery solve different problems.
