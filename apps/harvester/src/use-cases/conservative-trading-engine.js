@@ -1196,7 +1196,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     pause: context.pause,
     resolveRecoveryManagedCancellation: context.resolveRecoveryManagedCancellation,
     cancelAndReconcileRecoverySells: context.cancelAndReconcileRecoverySells,
-    evaluateLatest: context.evaluateLatestTransition,
+    evaluateLatestTransition: context.evaluateLatestTransition,
     getReconciledBuyExecutionPrice: context.getReconciledBuyExecutionPrice,
     assertReconciledSellExecution: context.assertReconciledSellExecution,
     completeRecoveryCycle: dependencies.completeRecoveryCycle,
