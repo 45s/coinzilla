@@ -59,9 +59,11 @@ export function resumeHarvesterDeferredStrategyEvaluations({
 } = {}) {
   if (!tradingEngine || !userDataState.ready || userDataState.stopped || userDataState.shutdownRequested) {return}
   void tradingEngine.resumeDeferredEvaluations().then((result) => {
-    if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })}
+    if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed",
+      errors: result.errors })}
   }).catch((error) => {
-    logger.error?.({ message: "deferred strategy evaluation failed", error })
+    logger.error?.({ message: "deferred strategy evaluation failed",
+      error })
   })
 }
 
@@ -106,11 +108,13 @@ export function handleHarvesterUserDataStatus({
 }
 
 export function isHarvesterMarketPriceFresh({ marketPrice, isMarketDataFresh, now } = {}) {
-  return isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
+  return isMarketDataFresh({ timestamp: marketPrice.timestamp,
+    now: now() })
 }
 
 export function isHarvesterMarketBookFresh({ marketBook, isMarketDataFresh, now } = {}) {
-  return isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
+  return isMarketDataFresh({ timestamp: marketBook.timestamp,
+    now: now() })
 }
 
 export function createHarvesterCandleHistoryService({
@@ -125,7 +129,8 @@ export function createHarvesterCandleHistoryService({
     logger,
     now,
     onSnapshot: async ({ symbol, snapshot } = {}) => {
-      const result = await getTradingEngine()?.processVolatilitySnapshot({ symbol, snapshot })
+      const result = await getTradingEngine()?.processVolatilitySnapshot({ symbol,
+        snapshot })
       if (result && !result.ok) {
         logger.error?.({
           message: "Harvester volatility protection update failed",
@@ -201,14 +206,18 @@ export function createHarvesterTradingEngine({
     },
     isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
     onPause: async ({ symbol, reason, error } = {}) => {
-      logger.error?.({ message: "paused a trading pair", symbol, reason, error })
+      logger.error?.({ message: "paused a trading pair",
+        symbol,
+        reason,
+        error })
     },
   })
 }
 
 
 function createExecutionFillCallback({ store, recordExecutionFill } = {}) {
-  return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store, fill }) : undefined
+  return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store,
+    fill }) : undefined
 }
 
 function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted } = {}) {
@@ -241,17 +250,24 @@ function createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNot
 }
 
 function createSubmissionIntentCallback({ store, recordOrderSubmissionIntent } = {}) {
-  return store ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store, order, purpose }) : undefined
+  return store ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
+    order,
+    purpose }) : undefined
 }
 
 function createSubmissionOutcomeCallback({ store, recordOrderSubmissionOutcome } = {}) {
   return store
-    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store, order, outcome, purpose })
+    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
+      order,
+      outcome,
+      purpose })
     : undefined
 }
 
 function createCancellationIntentCallback({ store, recordOrderCancellationIntent } = {}) {
-  return store ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore: store, order, reason }) : undefined
+  return store ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore: store,
+    order,
+    reason }) : undefined
 }
 
 function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl, sequence } = {}) {
@@ -287,7 +303,11 @@ function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createH
 function createCancellationOutcomeCallback({ store, recordOrderCancellationOutcome } = {}) {
   return store
     ? ({ order, canceledOrder, reason, outcome }) =>
-      recordOrderCancellationOutcome({ operationalStateStore: store, order, canceledOrder, reason, outcome })
+      recordOrderCancellationOutcome({ operationalStateStore: store,
+        order,
+        canceledOrder,
+        reason,
+        outcome })
     : undefined
 }
 
@@ -295,15 +315,26 @@ export function createOperationalStateCallbacks(dependencies = {}) {
   const { operationalStateStore: store } = dependencies
   const sequence = { value: 0 }
   return {
-    onOperationalStateExecutionFill: createExecutionFillCallback({ store, recordExecutionFill: dependencies.recordExecutionFill }),
-    onOperationalStateRecoveryCycleCompleted: createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted: dependencies.recordRecoveryCycleCompleted }),
-    onOperationalStateRecoveryCycleNotCompleted: createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNotCompleted: dependencies.recordRecoveryCycleNotCompleted }),
-    onOperationalStateSubmissionIntent: createSubmissionIntentCallback({ store, recordOrderSubmissionIntent: dependencies.recordOrderSubmissionIntent }),
-    onOperationalStateSubmissionOutcome: createSubmissionOutcomeCallback({ store, recordOrderSubmissionOutcome: dependencies.recordOrderSubmissionOutcome }),
-    onOperationalStateCancellationIntent: createCancellationIntentCallback({ store, recordOrderCancellationIntent: dependencies.recordOrderCancellationIntent }),
-    onOperationalStateStrategyMarketPaused: createStrategyMarketPausedCallback({ store, recordStrategyMarketControl: dependencies.recordStrategyMarketControl, sequence }),
-    onSafetyBlockerRaised: createSafetyBlockerCallback({ store, recordSafetyBlockerRaised: dependencies.recordSafetyBlockerRaised, createHash: dependencies.createHash ?? createHash }),
-    onOperationalStateCancellationOutcome: createCancellationOutcomeCallback({ store, recordOrderCancellationOutcome: dependencies.recordOrderCancellationOutcome }),
+    onOperationalStateExecutionFill: createExecutionFillCallback({ store,
+      recordExecutionFill: dependencies.recordExecutionFill }),
+    onOperationalStateRecoveryCycleCompleted: createRecoveryCycleCompletedCallback({ store,
+      recordRecoveryCycleCompleted: dependencies.recordRecoveryCycleCompleted }),
+    onOperationalStateRecoveryCycleNotCompleted: createRecoveryCycleNotCompletedCallback({ store,
+      recordRecoveryCycleNotCompleted: dependencies.recordRecoveryCycleNotCompleted }),
+    onOperationalStateSubmissionIntent: createSubmissionIntentCallback({ store,
+      recordOrderSubmissionIntent: dependencies.recordOrderSubmissionIntent }),
+    onOperationalStateSubmissionOutcome: createSubmissionOutcomeCallback({ store,
+      recordOrderSubmissionOutcome: dependencies.recordOrderSubmissionOutcome }),
+    onOperationalStateCancellationIntent: createCancellationIntentCallback({ store,
+      recordOrderCancellationIntent: dependencies.recordOrderCancellationIntent }),
+    onOperationalStateStrategyMarketPaused: createStrategyMarketPausedCallback({ store,
+      recordStrategyMarketControl: dependencies.recordStrategyMarketControl,
+      sequence }),
+    onSafetyBlockerRaised: createSafetyBlockerCallback({ store,
+      recordSafetyBlockerRaised: dependencies.recordSafetyBlockerRaised,
+      createHash: hashFactory }),
+    onOperationalStateCancellationOutcome: createCancellationOutcomeCallback({ store,
+      recordOrderCancellationOutcome: dependencies.recordOrderCancellationOutcome }),
   }
 }
 
