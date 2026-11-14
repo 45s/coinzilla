@@ -542,7 +542,7 @@ test("verifies Operational State Store records before broker connect and starts/
     const pauseResult = await operator.pauseMarket({ actor: { id: "telegram-user:12345", roles: ["trading-operator"] }, requestId: "telegram:9001", symbol: "BTCUSDT" })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
     const operatorPauseFacts = appendedFacts.filter(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
-    assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one durable fact.")
+    assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one Operational State Store record.")
     assert.equal(operatorPauseFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
     assert.ok(calls.indexOf("append-operator-fact") > calls.indexOf("start-telegram-poller"), "A pause fact is appended only after the adapter is running and a request is received.")
     assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")

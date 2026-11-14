@@ -152,7 +152,7 @@ test("fails closed when an account blocker cannot be expanded to canonical confi
   assert.equal(result.ok, false, "An account-level blocker must not disappear when configured markets are unavailable.")
 })
 
-test("refuses an unreadable or non-durable fact stream", async () => {
+test("refuses an unreadable or unverified Operational State Store record stream", async () => {
   const result = await restoreHarvesterOperationalState({
     operationalStateStore: { readAll: async () => ({ ok: true, data: { records: [], durableWriteSupported: false } }) },
     marketMetadata: new Map(),
