@@ -47,6 +47,14 @@ function inventoryWithoutMarketMetadata({
   }
 }
 
+function sumRemainingSellQuantity({ orders } = {}) {
+  let total = "0"
+  for (const order of orders) {
+    total = addDecimal({ left: total, right: order.remainingQuantity.amount })
+  }
+  return total
+}
+
 function buildShutdownRecoveryInventory({
   dependencies,
   symbol,
@@ -101,9 +109,7 @@ function buildShutdownRecoveryInventory({
       right: recoveryLedger?.netSellProceeds ?? "0",
     }),
   })
-  const committedQuantity = activeSells.reduce((total, order) =>
-    addDecimal({ left: total,
-      right: order.remainingQuantity.amount }), "0")
+  const committedQuantity = sumRemainingSellQuantity({ orders: activeSells })
   const common = {
     symbol,
     activeQuantity,
