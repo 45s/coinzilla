@@ -359,7 +359,7 @@ async function discoverSessionDirectories({
 /**
  * Read legacy flat Journal sessions and nested per-process session folders.
  *
- * This is a forensic history reader, not an ADR-0001 durable-fact reader.
+ * This is a forensic history reader, not an Operational State Store reader.
  * It validates every discovered session before returning a flattened sequence.
  * When several sessions exist, their order must be established by unique
  * process-start metadata or unique first-record timestamps for legacy files;
