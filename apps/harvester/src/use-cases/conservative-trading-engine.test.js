@@ -5523,7 +5523,6 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     "the affected market must retain a deferred strategy evaluation so the BUY fill is not lost when the recovery gate closes",
   )
 })
-})
 
 
 test("does not apply partial REST reconciliation after a fill-history timeout and permits a later retry", async () => {
