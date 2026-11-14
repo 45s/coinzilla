@@ -40,20 +40,26 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       reason: "MISSING_FILL",
       error,
     })
-    return failureResult({
-      error,
-      category: "REST_RECONCILIATION",
-      stage: "STREAM_FILL_MISSING",
-      retryable: true,
-    })
+    return {
+      ok: false,
+      result: failureResult({
+        error,
+        category: "REST_RECONCILIATION",
+        stage: "STREAM_FILL_MISSING",
+        retryable: true,
+      }),
+    }
   }
   if (!(order instanceof CanonicalOrder)) {
-    return failureResult({
-      error: new TypeError("Execution fill requires its registered canonical order"),
-      category: "OWNERSHIP_INTEGRITY",
-      stage: "FILL_ORDER_REGISTRY",
-      retryable: false,
-    })
+    return {
+      ok: false,
+      result: failureResult({
+        error: new TypeError("Execution fill requires its registered canonical order"),
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "FILL_ORDER_REGISTRY",
+        retryable: false,
+      }),
+    }
   }
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
@@ -176,14 +182,15 @@ async function processExecutionFill({ dependencies, order, fill }) {
         pause,
         validation,
       })
-      return validation.failure
-        ? failureResult({
-          error: validation.error,
-          category: validation.failure.category,
-          stage: validation.failure.stage,
-          retryable: validation.failure.retryable,
-        })
-        : validation
+      if (validation.result) {
+        return validation.result
+      }
+      return failureResult({
+        error: validation.error,
+        category: validation.failure.category,
+        stage: validation.failure.stage,
+        retryable: validation.failure.retryable,
+      })
     }
     const accounting = await updateTradingAccounting({
       fill,
