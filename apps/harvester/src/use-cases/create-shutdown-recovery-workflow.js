@@ -136,14 +136,6 @@ function buildShutdownRecoveryInventory({
   }
 }
 
-function sumRemainingSellQuantity({ orders } = {}) {
-  let total = "0"
-  for (const order of orders) {
-    total = addDecimal({ left: total, right: order.remainingQuantity.amount })
-  }
-  return total
-}
-
 function getShutdownRecoveryInventory({ dependencies, symbol } = {}) {
   const metadata = getShutdownRecoveryMetadata({ dependencies,
     symbol })
