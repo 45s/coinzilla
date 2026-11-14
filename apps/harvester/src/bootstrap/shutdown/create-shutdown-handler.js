@@ -40,7 +40,7 @@ function getSafeFailureReason(error) {
 function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelationId }) {
   const logPhase = ({ phase, status, durationMs, failureReason } = {}) => {
     logSystem(logger, {
-      message: "Harvester shutdown phase " + status.toLowerCase(),
+      message: `Harvester shutdown phase ${status.toLowerCase()}`,
       shutdownPhase: phase,
       phaseStatus: status,
       shutdownCorrelationId,
@@ -51,13 +51,17 @@ function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelati
   }
   const isPhaseFailure = (result) =>
     result?.ok === false || (Array.isArray(result) && result.length > 0)
-  const getPhaseFailureReason = (result) =>
-    result?.failure?.stage ??
-    result?.data?.findings?.[0]?.reason ??
-    result?.errors?.[0]?.recoveryFailure?.stage ??
-    result?.errors?.[0]?.code ??
-    result?.errors?.[0]?.name ??
-    "PHASE_RESULT_FAILED"
+  const getPhaseFailureReason = (result) => {
+    const firstFinding = result?.data?.findings?.[0]
+    const firstError = result?.errors?.[0]
+    const recoveryStage = firstError?.recoveryFailure?.stage
+    return result?.failure?.stage ??
+      firstFinding?.reason ??
+      recoveryStage ??
+      firstError?.code ??
+      firstError?.name ??
+      "PHASE_RESULT_FAILED"
+  }
 
   const runPhase = async ({ phase, operation, isFailure = isPhaseFailure }) => {
     const startedAt = now()
@@ -146,7 +150,8 @@ function createFailureRecorder({ context, phaseRunner }) {
     if (error) {
       errors = [error]
     } else if (result?.errors?.length) {
-      errors = result.errors
+      const { errors: resultErrors } = result
+      errors = resultErrors
     } else {
       errors = [new Error(message)]
     }
@@ -207,7 +212,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     publishAccountSnapshot,
     stopMarketIntake = stopMarketIntakeDefault,
     stopUserDataIntake = stopUserDataIntakeDefault,
-    disconnectBroker = disconnectBrokerDefault,
+    disconnectBroker: disconnectBrokerOperation = disconnectBrokerDefault,
     now,
     runtimeSessionId,
   } = options
@@ -227,7 +232,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     publishAccountSnapshot,
     stopMarketIntake,
     stopUserDataIntake,
-    disconnectBroker,
+    disconnectBroker: disconnectBrokerOperation,
     now,
     shutdownRequestedAt,
     shutdownCorrelationId,
@@ -462,7 +467,7 @@ function collectUnresolvedOrders(context) {
     return true
   })
   if (context.unresolvedOrders.length > 0) {
-    context.auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + context.unresolvedOrders.length)
+    context.auditReasons.push(`UNRESOLVED_OWNED_ORDERS:${context.unresolvedOrders.length}`)
   }
   if (context.state.accountingFailed || context.state.requiresReconciliation || context.state.safetyHaltRequired) {
     context.auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
@@ -571,7 +576,7 @@ function createShutdownDiagnostics({ context, cleanupErrors }) {
 function buildCleanupErrors(context) {
   const shutdownAuditFailed = context.tradingEnabled && context.auditReasons.length > 0
   const auditError = shutdownAuditFailed
-    ? new Error("CLOSING account audit is incomplete: " + context.auditReasons.join(", "))
+    ? new Error(`CLOSING account audit is incomplete: ${context.auditReasons.join(", ")}`)
     : undefined
   return [
     ...context.preShutdownErrors,
@@ -668,6 +673,7 @@ export function createShutdownHandler(options = {}) {
         durationMs: 0,
       })
     }
+    const shutdownStartedFromStatus = state.status
     const stateEstablishedAt = now()
     state.stopped = true
     state.ready = false
@@ -688,6 +694,7 @@ export function createShutdownHandler(options = {}) {
       },
       stopOptions: {
         preShutdownErrors,
+        shutdownStartedFromStatus,
       },
       shutdownRequestedAt,
     })
