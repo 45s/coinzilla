@@ -220,7 +220,10 @@ function handleNoEffectiveActions({ dependencies, context } = {}) {
 function sumDecimalValues({ items, getValue } = {}) {
   let total = "0"
   for (const item of items) {
-    total = addDecimal({ left: total, right: getValue(item) })
+    total = addDecimal({
+      left: total,
+      right: getValue(item),
+    })
   }
   return total
 }
