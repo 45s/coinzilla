@@ -1,6 +1,6 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
@@ -23,7 +23,6 @@ import {
   mapOrderSubmittedData,
   mapRecoveryCycleCompletedData,
   mapRecoveryCycleNotCompletedData,
-  mapStrategyDecisionData,
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
@@ -33,7 +32,6 @@ import { validateMarketTradingReadiness } from "../domain/market/validate-market
 import {
   createVolatilityProtectionState,
   VOLATILITY_PROTECTION_MODES,
-  VOLATILITY_PROTECTION_THRESHOLDS,
 } from "../domain/market/volatility-protection-state.js"
 
 export function createMarketBook({ bookTicker } = {}) {
