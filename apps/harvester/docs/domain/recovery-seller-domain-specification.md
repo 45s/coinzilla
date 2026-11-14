@@ -80,7 +80,7 @@ RS must not infer authorization from a wallet balance, Portfolio quantity, depos
 
 **Decision recorded — legacy evidence/configuration (Question 2, accepted):** the operator will declare the legacy position directly in configuration by supplying its original aggregate quote investment and original base quantity. No exchange trade-history import or other historical proof is required. These configured values are the operator's declared historical basis, not proof of current ownership, Spot custody, Portfolio quantity, or sellable balance. Current Spot availability and reservations must still be independently verified before execution.
 
-**Still unresolved owner decisions:** configuration validation and any confirmation flow; expiry and revocation behavior; durable provenance; and whether/how authorization survives process restart. No runtime authorization lifecycle may be invented before these are specified.
+**Agreed configuration/authorization workflow:** the operator manually enters the legacy position's original quote investment and original base quantity in the RS configuration before starting the application. This explicit configuration is the operator's authorization; RS does not need an exchange trade-history import, a runtime authorization UI, or a separate approval step. The configuration is loaded at application startup. These values establish declared historical basis and authorization only—not proof of current Spot custody, Portfolio quantity, or sellable balance. Current Spot availability and reservations must still be authoritatively verified before every SELL. Invalid/missing configuration must fail closed. Advanced runtime authorization editing, revocation workflows, expiry, and durable authorization lifecycle are deferred under FITDIB; do not invent them for the first implementation.
 
 ## 4. Attribution and shared Portfolio accounting
 
@@ -117,7 +117,7 @@ The current Portfolio is fill-driven and has no general opening-balance/manual-i
 
 Therefore, **RS must not submit a SELL consuming legacy inventory until an owner-approved accounting design represents that authorized opening inventory consistently within the shared multi-Position Portfolio and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
 
-**Owner decision required:** choose the opening-inventory/accounting boundary and how configured legacy inventory is represented in the appropriate strategy-owned Position(s) within the shared Portfolio, without synthetic fills or balance seeding. The legacy cost-basis input is now agreed at the product level: operator supplies aggregate original quote invested and original base quantity; RS calculates their average. Implementation must still define how that declared historical basis and off-Spot custody are represented without corrupting actual Spot Portfolio quantities. Do not add synthetic fills, seed balances from an unproven wallet snapshot, or bypass Portfolio.
+**Implementation requirement (not an owner question):** represent the manually configured legacy opening inventory and its historical basis within the appropriate RS-owned accounting model and shared Portfolio without synthetic fills, unverified wallet seeding, duplicate custody, or bypassing Portfolio. The operator fills `legacyPosition.invested` and `legacyPosition.quantity` manually before application startup; RS calculates average cost. Actual Spot holdings and off-Spot custody remain separately verified facts. The implementation must define a safe opening-inventory accounting boundary while preserving exact-once canonical fill accounting.
 
 ## 5. Profitability — SELL ONLY IN PROFIT
 
@@ -139,7 +139,7 @@ Legacy inventory has a historical acquisition cost separate from the current rec
 
 Illustration: the recovery tranche earns 0.20 USDT net, but the proposed legacy slice would realize a 0.10 USDT loss against its historical basis. The combined headline result is positive; the legacy sale still fails the legacy-profit gate.
 
-**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. The existing pair-level `minProfit` setting governs minimum net recovery-cycle profit; it does not replace the independent legacy rule that each legacy slice must recover its own historical basis and applicable selling costs. **Still unresolved:** how the supplied historical values are represented in accounting; how partial legacy disposals reduce remaining basis; allocation of mixed-order proceeds and shared SELL fees; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
+**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. The existing pair-level `minProfit` setting governs minimum net recovery-cycle profit; it does not replace the independent legacy rule that each legacy slice must recover its own historical basis and applicable selling costs. **Still implementation work:** how the supplied historical values are represented in accounting; how partial legacy disposals reduce remaining basis; and allocation of mixed-order proceeds and shared SELL fees. For third-asset commissions, RS must use the same rule as Conservative: accept a commission only when its asset, amount, and reliable quote-currency valuation are available; if any are missing, stale, ambiguous, or unavailable, do not treat the fee as zero—fail closed before committing either accounting projection.
 
 ## 6. BUY tranche accumulation and eligibility
 
@@ -154,7 +154,7 @@ Hard invariants:
 - An unknown submission retains its commitment and blocks replacement until the original identity is reconciled.
 - No new BUY when a risk limit is reached, reconciliation is incomplete, the market is paused, or an order/attribution invariant is unresolved.
 
-**Owner decisions required:** whether multiple recovery tranches accumulate before SELL; when another BUY is allowed; maximum concurrent BUY orders; and whether each tranche uses orderQuantity or a separate setting. Conservative BUY cadence must not be copied into RS by assumption.
+**Implementation follows Conservative where applicable:** reuse Conservative's established BUY cadence, tranche sizing/configuration, and pending-order safeguards rather than inventing a second policy. Any RS-specific difference must be justified by the approved RS contract and tested. The existing hard invariants above still apply: only canonical BUY fills create inventory, commitments count before execution, and unknown submissions block replacement until reconciled.
 
 ## 7. Risk limits
 
@@ -168,7 +168,7 @@ RS must fail closed when a required risk limit is absent, invalid, exceeded, or 
 - maximum authorized legacy inventory and legacy quantity released per cycle;
 - account-wide quote/base commitment boundary shared with other markets.
 
-**Owner decisions required:** exact values, per-market versus account-wide scope, open-commitment reservation, and behavior when a limit is reached while orders rest. No PR #1115 example value is an approved risk limit.
+**Agreed risk policy:** reuse the existing Conservative strategy's configured investment-limit model and its configuration source; do not introduce a second RS-only investment-limit setting or invent new limits. When the configured investment limit is reached, RS must stop placing new BUY orders. Any already-open recovery SELL remains live and untouched—do not cancel, replace, or reprice it merely because the BUY limit was reached. Continue canonical fill/order reconciliation and wait for that SELL to reach its terminal filled state before considering another cycle. The exact Conservative configuration field and accounting boundary must be confirmed from source during implementation; no example value is an approved default.
 
 ## 8. sellQuantity, residuals, and exchange constraints
 
@@ -211,17 +211,17 @@ Until decided:
 
 ## 10. Cycle lifecycle and strategy disable
 
-Final RS lifecycle states/transitions are not approved. Mandatory safety behavior:
+Advanced RS lifecycle functionality is deliberately deferred under FITDIB (first implement the safe minimum, then improve it). The first implementation must support the normal repeat-until-operator-stops cycle and the safety blocks defined below; do not add speculative pause/disable/abandon/resume workflows or automatic liquidation. Mandatory safety behavior:
 
-- Operator stop/pause, disable, loss of readiness, or unresolved safety/reconciliation conditions prevent new RS BUYs. Exhaustion of authorized legacy inventory alone does not pause RS: subsequent cycles continue as recovery-only BUY/SELL cycles, subject to the recovery `minProfit` gate and all normal risk, order, and reconciliation controls.
-- Disabling RS does not silently cancel, replace, abandon, or market-sell resting orders or inventory.
+- The operator's stop of RS and any normal readiness, investment-limit, order-safety, or reconciliation block prevent new BUYs. Exhaustion of authorized legacy inventory alone does not pause RS: subsequent cycles continue as recovery-only BUY/SELL cycles, subject to the recovery `minProfit` gate and all normal risk, order, and reconciliation controls. Reaching the configured investment limit blocks new BUYs but does not cancel, replace, or reprice an already-open recovery SELL; keep it alive and reconcile until filled/terminal.
+- The first implementation must not cancel, replace, abandon, or market-sell resting orders or inventory as a side effect of the operator stopping RS or a safety block.
 - Existing orders may fill after pause/disable; fills and commissions continue through canonical accounting and reconciliation.
 - In-flight/unknown orders remain owned and reconcilable by their original identities; disable does not erase ownership or reservations.
-- Resume cannot create an order until orders, fills, reservations, legacy authorization, accounting, and risk limits are reconciled.
-- Abandon cannot erase actual cost, proceeds, fills, or inventory. Remaining recovery/legacy inventory treatment must be specified before an abandon operation exists.
+- Advanced resume/restart lifecycle semantics are deferred; no new order may be created while existing orders, fills, reservations, authorization, accounting, or risk state are unresolved.
+- No abandon operation or automatic final liquidation is part of the first implementation.
 - No automatic loss-making liquidation is permitted as a disable, pause, abandon, or strategy-switch side effect.
 
-**Owner decisions required:** lifecycle states; pause versus disable; cancellation policy for resting orders; abandon behavior; resume preconditions; persistence/restart behavior; and operator-confirmed final liquidation.
+**Deferred under FITDIB:** advanced lifecycle states, pause-versus-disable semantics, user-facing resume, abandon, persistence/restart lifecycle, and final-residual liquidation without a new BUY. Implement the minimal safe cycle first; improve these workflows only after the initial end-to-end behavior is proven.
 
 ## 11. Concurrent strategies and external orders
 
@@ -253,14 +253,14 @@ These decisions are intentionally not guessed. They block implementation, not do
 |---|---|---|
 | sellQuantity | **Agreed:** additive legacy quantity per cycle, added to actual net recovery quantity while authorized legacy inventory remains; not a total quantity or cap. Smaller-remainder behavior is agreed. Once legacy inventory is exhausted, continue recovery-only cycles governed by `minProfit`. | Defines both mixed recovery/legacy and recovery-only cycle SELL targets |
 | Smaller/final residual | **Agreed:** sell the smaller remaining authorized legacy quantity within the current cycle if it is Spot-available/unreserved and passes both independent profitability gates and exchange filters; otherwise retain it. Separate final-residual liquidation without a new BUY remains unresolved. | Prevents unintended liquidation or forced loss-making disposal |
-| Legacy authorization | **Explicit operator authorization agreed**; interface, evidence source/balance baseline, expiry/revocation, durable provenance and restart behavior remain open | Prevents silent wallet adoption and loss of authorization provenance |
-| Legacy accounting | Opening-inventory representation in shared Portfolio and verification of configured invested/quantity inputs | Current Portfolio is fill-driven; configured historical basis is agreed, but Spot holdings and off-Spot custody must be represented safely |
+| Legacy authorization | **Agreed:** operator manually configures original quote investment and original base quantity before application startup; this configuration is the explicit authorization and historical-basis declaration. Runtime authorization UI, exchange-history import, expiry/revocation workflow and advanced provenance lifecycle are deferred under FITDIB. Spot availability remains independently verified. | Prevents silent wallet adoption while keeping first implementation simple |
+| Legacy accounting | **Implementation requirement:** safely represent configured opening inventory and historical basis in RS/shared Portfolio accounting without synthetic fills or unverified balance seeding; verify actual Spot custody separately. | Prevents overselling, double counting, and corrupted fill-driven accounting |
 | Legacy profit | Mixed-order proceeds/fee allocation and treatment of remaining aggregate basis after partial legacy sales | Prevents a profitable recovery tranche hiding a legacy loss; input basis is aggregate invested quote / original quantity |
-| Cycle profit | Minimum net profit and precise cost/proceeds inclusion | Prevents omitted fees/costs |
-| BUY cadence | Tranche size, accumulation, next-BUY eligibility, concurrent-order limits | Determines exposure/order lifecycle |
-| Risk policy | Investment, exposure, drawdown, price-movement, and order-count caps | Required before committing capital |
+| Cycle profit | Reuse the existing pair-level `minProfit`; implement exact cost/proceeds and commission accounting. Third-asset valuation failures follow Conservative and fail closed before either accounting projection commits. | Prevents omitted fees/costs or treating unknown fees as zero |
+| BUY cadence | Reuse Conservative's established cadence, tranche sizing/configuration, and pending-order safeguards where applicable; verify exact source contract during implementation. | Avoids inventing a second BUY policy |
+| Risk policy | **Agreed:** use Conservative's configured investment-limit logic. At the limit, stop new BUYs; keep any active recovery SELL alive and unchanged until filled/terminal. | Prevents additional investment without disrupting an existing recovery SELL |
 | Residual/dust | **Agreed:** only exact exchange-filter-constrained residual after fully reconciled successful cycle is retained as bonus dust and excluded permanently from future RS calculations, matching Conservative's constrained-dust principle. Ordinary sellable residual is not dust. Final residual/no-new-BUY liquidation remains open. | Prevents guessed disposal, repeated counting, or hidden sellable inventory |
-| Lifecycle | **Agreed:** cycles continue after legacy inventory is exhausted; only an operator stop/pause or normal safety/readiness/reconciliation block stops new BUYs. Recovery-only cycles must meet the existing `minProfit`; active orders/fills remain owned and reconciled. Other pause/disable/abandon/resume/restart semantics remain open. | Prevents legacy-inventory exhaustion from incorrectly terminating recovery trading |
+| Lifecycle | **Agreed:** repeat cycles until operator stop; legacy exhaustion switches to recovery-only cycles. Investment-limit/safety/readiness/reconciliation blocks prevent new BUYs while existing SELLs remain live and reconciled. Advanced pause/disable/abandon/resume/restart behavior and separate final-residual liquidation are deferred under FITDIB. | Keeps the first implementation safe and focused |
 | Concurrent strategies | Shared Portfolio, independent attribution, centralized reservations and deterministic intent allocation across CG/RS/Aggressive | Prevents double-spend, duplicate attribution and overselling without mutual exclusion |
 | Fee valuation | Third-asset valuation failure and proceeds allocation | Prevents fees being treated as zero |
 
