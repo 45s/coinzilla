@@ -13,8 +13,8 @@ async function removeIfPresent(filePath) {
   }
 }
 
-async function removeStaleTemporaryFiles(directory, fileName) {
-  const prefix = "." + fileName + "."
+async function removeStaleTemporaryFiles({ directory, fileName }) {
+  const prefix = `.${fileName}.`
   const entries = await readdir(directory)
   for (const entry of entries) {
     if (entry.startsWith(prefix) && entry.endsWith(".tmp.json")) {
@@ -31,14 +31,14 @@ async function readCurrentSpecifications(specificationPath) {
     if (error?.code === "ENOENT") {
       return {}
     }
-    throw new Error("Unable to read token specification at " + specificationPath + ": " + error.message, { cause: error })
+    throw new Error(`Unable to read token specification at ${specificationPath}: ${error.message}`, { cause: error })
   }
 
   let specifications
   try {
     specifications = JSON.parse(source)
   } catch (cause) {
-    throw new Error("Token specification at " + specificationPath + " is not valid JSON", { cause })
+    throw new Error(`Token specification at ${specificationPath} is not valid JSON`, { cause })
   }
   return validateTokenSpecifications(specifications)
 }
@@ -54,10 +54,10 @@ export async function writeTokenSpecificationAtomically({ specificationPath, met
     throw new TypeError("specificationPath must be a non-empty file path")
   }
   const absolutePath = path.resolve(specificationPath)
-  const lockPath = absolutePath + ".config-symbol.lock"
+  const lockPath = `${absolutePath}.config-symbol.lock`
   const directory = path.dirname(absolutePath)
   const fileName = path.basename(absolutePath)
-  const temporaryPath = path.join(directory, "." + fileName + "." + randomUUID() + ".tmp.json")
+  const temporaryPath = path.join(directory, `.${fileName}.${randomUUID()}.tmp.json`)
   let lockHandle
   let temporaryCreated = false
 
@@ -71,7 +71,7 @@ export async function writeTokenSpecificationAtomically({ specificationPath, met
       throw error
     }
     await lockHandle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }) + "\n", "utf8")
-    await removeStaleTemporaryFiles(directory, fileName)
+    await removeStaleTemporaryFiles({ directory, fileName })
 
     const currentSpecifications = await readCurrentSpecifications(absolutePath)
     const updatedSpecifications = mergeTokenSpecifications({
