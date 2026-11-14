@@ -156,6 +156,10 @@ Hard invariants:
 
 **Implementation follows Conservative where applicable:** reuse Conservative's established BUY cadence, tranche sizing/configuration, and pending-order safeguards rather than inventing a second policy. Any RS-specific difference must be justified by the approved RS contract and tested. The existing hard invariants above still apply: only canonical BUY fills create inventory, commitments count before execution, and unknown submissions block replacement until reconciled.
 
+**Owner decision — independent strategy investment allocations:** each strategy has its own configured investment budget and tracks its own used/committed investment. CG spending is charged only to the CG allocation; RS spending is charged only to the RS allocation. One strategy cannot consume unused budget from the other. Example: CG budget 500 USDT with 300 used has 200 available; RS budget 1,000 USDT with 700 used has 300 available. A CG BUY requiring 250 USDT is blocked by CG's 200 remaining even though RS has 300; an RS BUY requiring 250 USDT is allowed. RS reaching its own investment limit stops new RS BUYs while any already-open RS recovery SELL remains alive and unchanged until fill/terminal reconciliation. No cross-strategy budget priority or fairness policy is needed.
+
+**Shared custody remains account-wide:** separate strategy budgets are accounting/risk limits, not separate wallets. Actual exchange free quote/base balances and active order reservations are shared physical resources. The shared allocator must aggregate reservations across CG and RS and prevent either strategy from spending the same quote balance or selling the same base inventory twice. An intent must pass both its originating strategy's remaining budget and the shared account's actual available-balance/reservation checks. Preserve originating strategy ownership when an intent is deferred or rejected.
+
 ## 7. Risk limits
 
 RS must fail closed when a required risk limit is absent, invalid, exceeded, or cannot be calculated from authoritative facts. The eventual contract must define:
