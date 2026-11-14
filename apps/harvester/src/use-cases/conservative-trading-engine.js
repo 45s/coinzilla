@@ -12,6 +12,7 @@ import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workfl
 import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
+import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
@@ -960,11 +961,8 @@ export function makeConservativeTradingEngine({
   if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
     throw new TypeError("getVolatilityData must be a function when provided")
   }
-  if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
-      typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
-    throw new TypeError("strategyPolicy must provide evaluate and evaluateTrailingBuyRepricing functions")
-  }
-  for (const [name, callback] of Object.entries({
+  validateConservativeTradingEngineOptions({
+    strategyPolicy,
     getPortfolio,
     getRecoveryLedger,
     getMarketMetadata,
@@ -974,36 +972,20 @@ export function makeConservativeTradingEngine({
     canTrade,
     onPause,
     isStopping,
-  })) {
-    if (typeof callback !== "function") {throw new TypeError(name + " must be a function")}
-  }
-  if (typeof isMarketPriceFresh !== "function") {throw new TypeError("isMarketPriceFresh must be a function")}
-  if (onOperationalStateCancellationIntent !== undefined && typeof onOperationalStateCancellationIntent !== "function") {
-    throw new TypeError("onOperationalStateCancellationIntent must be a function")
-  }
-  if (onOperationalStateCancellationOutcome !== undefined && typeof onOperationalStateCancellationOutcome !== "function") {
-    throw new TypeError("onOperationalStateCancellationOutcome must be a function")
-  }
-  if ((onOperationalStateCancellationIntent === undefined) !== (onOperationalStateCancellationOutcome === undefined)) {
-    throw new TypeError("onOperationalStateCancellationIntent and onOperationalStateCancellationOutcome must be provided together")
-  }
-  if (onOperationalStateStrategyMarketPaused !== undefined && typeof onOperationalStateStrategyMarketPaused !== "function") {
-    throw new TypeError("onOperationalStateStrategyMarketPaused must be a function")
-  }
-  if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
-    throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
-  }
-  if (typeof hasUnresolvedHarvesterOpenOrdersForSymbol !== "function") {
-    throw new TypeError("hasUnresolvedHarvesterOpenOrdersForSymbol must be a function")
-  }
-  if (typeof isMarketBookFresh !== "function") {throw new TypeError("isMarketBookFresh must be a function")}
-  if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
-    throw new TypeError("initialState must be an object")
-  }
+    getVolatilityData,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+    onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused,
+    hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
+    initialState,
+  })
   const initialRegistry = validateInitialEngineState({ initialState, pairs })
   const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
   const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
-  const { journalFillsById, state } = createInitialEngineState({ initialState, pairs, initialRegistry })
+  const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
   const runTransition = createSerializedTransitionQueue()
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
@@ -1011,7 +993,6 @@ export function makeConservativeTradingEngine({
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
   const {
     hasPendingRecoveryManagedCancellation,
-    releaseRecoveryManagedPause,
     resolveRecoveryManagedCancellation,
   } = recoveryCancellationState
   const rememberProcessedFill = createProcessedFillTracker({ state })
@@ -1060,7 +1041,6 @@ export function makeConservativeTradingEngine({
   })
   const {
     markCancellationUnknown,
-    markCancellationNotSent,
     markCancellationFailure,
   } = cancellationFailureHandlers
 
@@ -1285,8 +1265,6 @@ export function makeConservativeTradingEngine({
     runTransition,
   })
   const {
-    collectOwnedOrderSnapshots,
-    applyOwnedOrderSnapshotsTransition,
     cancelOwnedBuyOrders,
     cancelOwnedBuyOrdersForShutdown,
     cancelOwnedBuyOrdersForSafetyHalt,
