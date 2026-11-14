@@ -24,6 +24,10 @@ This page intentionally does not restate Conservative BUY/SELL rules, accounting
 
 Implementation code is under src/domain/strategies/conservative/ and src/use-cases/conservative-trading-engine.js. Its behavior is implementation evidence, not an alternate rule source. Current blockers and verification status are tracked in [ROADMAP](../ROADMAP.md).
 
+### Recovery Seller (RS)
+
+RS is an independent, proposed strategy for progressively reducing explicitly authorized legacy spot inventory through profitable recovery cycles. Its canonical draft contract, accounting boundaries, hard safety invariants, examples, and owner decisions are maintained in the [Recovery Seller Domain Specification](./domain/RECOVERY_SELLER_DOMAIN_SPECIFICATION.md). RS is not executable; do not infer runtime configuration or unresolved business rules from this overview. PR [#1110](https://github.com/45s/coinzilla/pull/1110) records the original proposal and remains separate/unmerged.
+
 ### Shared commission and order-type policy — Conservative and Aggressive
 
 For Conservative, the canonical specification is authoritative. This section does not define or override Conservative fee reserves or order selection. Aggressive is not currently executable; any future Aggressive fee policy requires its own approved specification before implementation.
