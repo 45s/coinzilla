@@ -635,6 +635,8 @@ export function makeConservativeTradingEngine({
     broker,
     onOperationalStateSubmissionIntent,
     onOperationalStateSubmissionOutcome,
+    // This is the single fail-closed submission gate; keep each independent blocker explicit.
+    // eslint-disable-next-line complexity
     canSubmit: ({ order, purpose } = {}) => {
       const symbol = order.market.symbol
       const defer = (reason, details = {}) => ({
@@ -1191,6 +1193,8 @@ export function makeConservativeTradingEngine({
     })
   }
 
+  // This existing single-market state transition intentionally keeps its ordered gates together.
+  // eslint-disable-next-line complexity
   const evaluateLatestTransition = async ({
     symbol,
     preflightOnly = false,
@@ -1552,7 +1556,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const assessShutdownRecoverySellCoverage = ({ symbol } = {}) => {
+  const getShutdownRecoveryInventory = ({ symbol } = {}) => {
     let metadata
     try {
       metadata = getCurrentMarketMetadata({ symbol })
@@ -1566,30 +1570,36 @@ export function makeConservativeTradingEngine({
     const activeSellsForSymbol = activeOrdersForSymbol.filter((order) => order.side === "SELL")
     const positionBySymbol = portfolio.getPosition({ symbol })
     if (!metadata?.market) {
-      if (!positionBySymbol && activeSellsForSymbol.length === 0) {
-        return { covered: true, symbol, activeQuantity: "0", keepQuantity: String(pairs[symbol].keepQuantity), sellableQuantity: "0", outstandingRecoveryAmount: "0", activeSellCount: 0, committedQuantity: "0" }
+      return {
+        symbol,
+        portfolio,
+        metadata,
+        position: positionBySymbol,
+        activeSells: activeSellsForSymbol,
+        errorReason: positionBySymbol || activeSellsForSymbol.length > 0 ? "MARKET_METADATA_UNAVAILABLE" : null,
+        noRecoveryRequired: !positionBySymbol && activeSellsForSymbol.length === 0,
       }
-      return { covered: false, symbol, reason: "MARKET_METADATA_UNAVAILABLE", activeSellCount: activeSellsForSymbol.length }
     }
     const position = portfolio.getPosition({ marketId: metadata.market.id }) ?? positionBySymbol
     const recoveryLedger = getRecoveryLedger({ marketId: metadata.market.id })
+    const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      .filter((order) => order.side === "SELL")
     const activeQuantity = position?.quantity.amount ?? "0"
     const keepQuantity = String(pairs[symbol].keepQuantity)
     const sellableQuantity = maxDecimal({
       left: "0",
       right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
     })
-    // Position.spent and RecoveryLedger.netSellProceeds include the actual
-    // commissions from applied fills; the policy reserves fees on future SELLs.
+    // The ledger's buyCost and netSellProceeds include actual commissions from
+    // all applied fills, including cycles where the Position is now empty.
+    const recoveryCost = recoveryLedger?.buyCost ?? position?.spent.amount ?? "0"
     const outstandingRecoveryAmount = maxDecimal({
       left: "0",
       right: subtractDecimal({
-        left: position?.spent.amount ?? "0",
+        left: recoveryCost,
         right: recoveryLedger?.netSellProceeds ?? "0",
       }),
     })
-    const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
-      .filter((order) => order.side === "SELL")
     const committedQuantity = activeSells.reduce((total, order) =>
       addDecimal({ left: total, right: order.remainingQuantity.amount }), "0")
     const common = {
@@ -1601,39 +1611,55 @@ export function makeConservativeTradingEngine({
       activeSellCount: activeSells.length,
       committedQuantity,
     }
-    if (compareDecimal({ left: sellableQuantity, right: "0" }) <= 0 &&
-        compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) <= 0) {
-      return activeSells.length === 0
-        ? { covered: true, ...common }
-        : { covered: false, ...common, reason: "RECOVERY_SELL_UNNECESSARY" }
+    const requiresSell = compareDecimal({ left: sellableQuantity, right: "0" }) > 0 ||
+      compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) > 0
+    return {
+      symbol,
+      metadata,
+      portfolio,
+      position,
+      recoveryLedger,
+      activeSells,
+      common,
+      requiresSell,
+      noRecoveryRequired: !requiresSell && activeSells.length === 0,
     }
+  }
+
+  const getShutdownRecoverySellPlan = ({ symbol, inventory } = {}) => {
     const marketPrice = state.prices.get(symbol)
     if (!marketPrice) {
-      return { covered: false, ...common, reason: "MARKET_PRICE_UNAVAILABLE" }
+      return { reason: "MARKET_PRICE_UNAVAILABLE" }
     }
-    let decision
     try {
-      decision = strategyPolicy.evaluate({
+      const decision = strategyPolicy.evaluate({
         marketPrice,
         pairConfig: pairs[symbol],
         settings,
-        portfolio,
-        recoveryLedger,
-        marketMetadata: metadata,
+        portfolio: inventory.portfolio,
+        recoveryLedger: inventory.recoveryLedger,
+        marketMetadata: inventory.metadata,
         activeOrders: [],
         // This value only feeds the BUY intent, which shutdown filters out.
         lastBuyPrice: state.lastBuyPrices.get(symbol) ?? marketPrice.price,
       })
+      return {
+        plannedSell: decision.actions.find((action) => action.side === "SELL"),
+        inventoryDisposition: decision.inventoryDisposition?.status ?? null,
+      }
     } catch (error) {
-      return { covered: false, ...common, reason: "RECOVERY_SELL_PLAN_UNAVAILABLE", error }
+      return { reason: "RECOVERY_SELL_PLAN_UNAVAILABLE", error }
     }
-    const plannedSell = decision.actions.find((action) => action.side === "SELL")
+  }
+
+  const compareShutdownRecoverySell = ({ inventory, plannedSell } = {}) => {
+    const { activeSells, common } = inventory
     if (!plannedSell) {
       return {
         covered: false,
         ...common,
         reason: "RECOVERY_SELL_UNAVAILABLE",
-        inventoryDisposition: decision.inventoryDisposition?.status ?? null,
+        inventoryDisposition: inventory.inventoryDisposition ?? null,
       }
     }
     if (activeSells.length === 0) {
@@ -1670,17 +1696,21 @@ export function makeConservativeTradingEngine({
       right: plannedSell.quantity,
     })
     const quantityMatches = quantityComparison === 0
-    const priceSufficient = compareDecimal({ left: outstandingRecoveryAmount, right: "0" }) === 0
-      ? compareDecimal({ left: order.limitPrice?.amount ?? "0", right: "0" }) > 0
-      : compareDecimal({
+    let priceSufficient
+    if (compareDecimal({ left: common.outstandingRecoveryAmount, right: "0" }) === 0) {
+      priceSufficient = compareDecimal({ left: order.limitPrice?.amount ?? "0", right: "0" }) > 0
+    } else {
+      priceSufficient = compareDecimal({
         left: order.limitPrice?.amount ?? "0",
         right: plannedSell.price,
       }) >= 0
-    const reason = !quantityMatches
-      ? quantityComparison < 0 ? "RECOVERY_SELL_UNDERSIZED" : "RECOVERY_SELL_OVERCOMMITTED"
-      : !priceSufficient
-        ? "RECOVERY_SELL_FINANCIALLY_INSUFFICIENT"
-        : null
+    }
+    let reason = null
+    if (!quantityMatches) {
+      reason = quantityComparison < 0 ? "RECOVERY_SELL_UNDERSIZED" : "RECOVERY_SELL_OVERCOMMITTED"
+    } else if (!priceSufficient) {
+      reason = "RECOVERY_SELL_FINANCIALLY_INSUFFICIENT"
+    }
     return {
       covered: reason === null,
       ...common,
@@ -1691,6 +1721,106 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const assessShutdownRecoverySellCoverage = ({ symbol } = {}) => {
+    const inventory = getShutdownRecoveryInventory({ symbol })
+    if (inventory.errorReason) {
+      return {
+        covered: false,
+        symbol,
+        reason: inventory.errorReason,
+        activeSellCount: inventory.activeSells.length,
+      }
+    }
+    if (inventory.noRecoveryRequired) {
+      return {
+        covered: true,
+        symbol,
+        activeQuantity: inventory.position?.quantity.amount ?? "0",
+        keepQuantity: String(pairs[symbol].keepQuantity),
+        sellableQuantity: "0",
+        outstandingRecoveryAmount: "0",
+        activeSellCount: 0,
+        committedQuantity: "0",
+      }
+    }
+    if (!inventory.metadata?.market) {
+      return { covered: false, symbol, reason: "MARKET_METADATA_UNAVAILABLE" }
+    }
+    if (!inventory.requiresSell) {
+      return inventory.activeSells.length === 0
+        ? { covered: true, ...inventory.common }
+        : { covered: false, ...inventory.common, reason: "RECOVERY_SELL_UNNECESSARY" }
+    }
+    const plan = getShutdownRecoverySellPlan({ symbol, inventory })
+    if (plan.reason) {
+      return { covered: false, ...inventory.common, reason: plan.reason, error: plan.error }
+    }
+    return compareShutdownRecoverySell({
+      inventory: { ...inventory, inventoryDisposition: plan.inventoryDisposition },
+      plannedSell: plan.plannedSell,
+    })
+  }
+
+  const reconcileRecoverySellForShutdownSymbol = async ({ symbol } = {}) => {
+    let assessment = assessShutdownRecoverySellCoverage({ symbol })
+    if (assessment.covered) {
+      return { ok: true, assessment }
+    }
+    if (["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)) {
+      return {
+        ok: false,
+        error: new Error(`Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}`),
+      }
+    }
+    const metadata = getCurrentMarketMetadata({ symbol })
+    const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      .filter((order) => order.side === "SELL")
+    if (activeSells.length > 0) {
+      const cancellation = await cancelAndReconcileRecoverySells({
+        symbol,
+        marketId: metadata.market.id,
+      })
+      if (!cancellation?.ok || cancellation.data?.deferred === true) {
+        return {
+          ok: false,
+          error: cancellation?.errors?.[0] ??
+            new Error(`Shutdown recovery SELL cancellation is unresolved for ${symbol}`),
+        }
+      }
+      assessment = assessShutdownRecoverySellCoverage({ symbol })
+      if (assessment.covered) {
+        return { ok: true, assessment, canceledStaleSell: true }
+      }
+    }
+    if (state.paused.has(symbol) || hasBlockingOpenOrdersForSymbol({ symbol })) {
+      return {
+        ok: false,
+        error: new Error(`Shutdown recovery SELL replacement is blocked for ${symbol}`),
+      }
+    }
+    const replacement = await evaluateLatestTransition({
+      symbol,
+      shutdownRecoveryOnly: true,
+    })
+    const submittedSell = replacement?.data?.submittedOrders?.some((order) => order.side === "SELL") === true
+    if (!replacement?.ok || replacement.data?.deferred === true ||
+        replacement.data?.skipped === true || !submittedSell) {
+      return {
+        ok: false,
+        error: replacement?.errors?.[0] ??
+          new Error(`Shutdown recovery SELL replacement was not confirmed for ${symbol}`),
+      }
+    }
+    assessment = assessShutdownRecoverySellCoverage({ symbol })
+    if (!assessment.covered) {
+      return {
+        ok: false,
+        error: new Error(`Shutdown recovery SELL coverage remains incomplete for ${symbol}: ${assessment.reason}`),
+      }
+    }
+    return { ok: true, assessment, replacedStaleSell: true }
+  }
+
   const reconcileRecoverySellsForShutdown = () => runTransition({
     task: async () => {
       if (isStopping?.() !== true) {
@@ -1699,60 +1829,15 @@ export function makeConservativeTradingEngine({
       const reconciledSymbols = []
       const failures = []
       for (const symbol of Object.keys(pairs)) {
-        let assessment = assessShutdownRecoverySellCoverage({ symbol })
-        if (assessment.covered) {
-          state.shutdownRecoveryReplanSymbols.delete(symbol)
-          continue
-        }
-        if (assessment.reason === "MARKET_PRICE_UNAVAILABLE" ||
-            assessment.reason === "MARKET_METADATA_UNAVAILABLE" ||
-            assessment.reason === "RECOVERY_SELL_PLAN_UNAVAILABLE") {
-          failures.push(new Error("Shutdown recovery SELL cannot be safely evaluated for " + symbol + ": " + assessment.reason))
-          continue
-        }
-        const metadata = getCurrentMarketMetadata({ symbol })
-        const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
-          .filter((order) => order.side === "SELL")
-        if (activeSells.length > 0) {
-          const cancellation = await cancelAndReconcileRecoverySells({
-            symbol,
-            marketId: metadata.market.id,
-          })
-          if (!cancellation?.ok || cancellation.data?.deferred === true) {
-            failures.push(cancellation?.errors?.[0] ??
-              new Error("Shutdown recovery SELL cancellation is unresolved for " + symbol))
-            continue
-          }
-          assessment = assessShutdownRecoverySellCoverage({ symbol })
-          if (assessment.covered) {
-            state.shutdownRecoveryReplanSymbols.delete(symbol)
-            reconciledSymbols.push(symbol)
-            continue
-          }
-        }
-        if (state.paused.has(symbol) || hasBlockingOpenOrdersForSymbol({ symbol })) {
-          failures.push(new Error("Shutdown recovery SELL replacement is blocked for " + symbol))
-          continue
-        }
-        const replacement = await evaluateLatestTransition({
-          symbol,
-          shutdownRecoveryOnly: true,
-        })
-        const submittedSell = replacement?.data?.submittedOrders?.some((order) => order.side === "SELL") === true
-        if (!replacement?.ok || replacement.data?.deferred === true ||
-            replacement.data?.skipped === true || !submittedSell) {
-          failures.push(replacement?.errors?.[0] ??
-            new Error("Shutdown recovery SELL replacement was not confirmed for " + symbol))
-          continue
-        }
-        assessment = assessShutdownRecoverySellCoverage({ symbol })
-        if (!assessment.covered) {
-          failures.push(new Error("Shutdown recovery SELL coverage remains incomplete for " +
-            symbol + ": " + assessment.reason))
+        const result = await reconcileRecoverySellForShutdownSymbol({ symbol })
+        if (!result.ok) {
+          failures.push(result.error)
           continue
         }
         state.shutdownRecoveryReplanSymbols.delete(symbol)
-        reconciledSymbols.push(symbol)
+        if (result.canceledStaleSell || result.replacedStaleSell) {
+          reconciledSymbols.push(symbol)
+        }
       }
       if (failures.length > 0) {
         return failureResult({
