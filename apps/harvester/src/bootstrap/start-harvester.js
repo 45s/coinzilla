@@ -670,6 +670,7 @@ tore,
       bookSubscriptions,
       userDataSubscription,
     })
+  }
 
   userDataState.startupComplete = true
   startPendingUserDataRecovery({ userDataState, startUserDataRecovery })
