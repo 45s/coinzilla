@@ -920,6 +920,397 @@ function createOperatorMarketSnapshotsGetter({
   })
 }
 
+
+function createConservativeEngineBaseContext({ dependencies } = {}) {
+  const {
+    appConfig,
+    getMarketMetadata,
+    initialState,
+    getVolatilityData,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
+    hasUnownedOpenOrdersForSymbol,
+  } = dependencies
+  const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
+  const volatilityProtectionEnabled = typeof getVolatilityData === "function"
+  const isVolatilityProtectionEnabledForSymbol = (symbol) =>
+    volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
+  const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
+    hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
+    (pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
+      hasUnownedOpenOrdersForSymbol({ symbol }))
+  const initialRegistry = validateInitialEngineState({ initialState, pairs })
+  const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
+  const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
+  const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
+  const runTransition = createSerializedTransitionQueue()
+  let strategyEvaluationSequence = 0
+  let marketPriceEventSequence = 0
+  const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
+  const rememberProcessedFill = createProcessedFillTracker({ state })
+  const executionFillAccounting = createExecutionFillAccounting({ state, rememberProcessedFill })
+  return {
+    dependencies,
+    settings,
+    pairs,
+    volatilityProtectionEnabled,
+    isVolatilityProtectionEnabledForSymbol,
+    hasBlockingOpenOrdersForSymbol,
+    marketMetadataCache,
+    refreshedMarketMetadata,
+    getCurrentMarketMetadata,
+    state,
+    runTransition,
+    nextEvaluationId: () => ++strategyEvaluationSequence,
+    nextMarketPriceEventId: () => ++marketPriceEventSequence,
+    ...recoveryCancellationState,
+    ...executionFillAccounting,
+  }
+}
+
+function createConservativeEnginePublishingContext({ context } = {}) {
+  const { eventPublisher, getPortfolio, getRecoveryLedger, logger, onPause,
+    onOperationalStateStrategyMarketPaused } = context.dependencies
+  context.publishDurableIntent = createDurableIntentPublisher({ eventPublisher, logger })
+  context.publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
+    eventPublisher,
+    getPortfolio,
+    getRecoveryLedger,
+    pairs: context.pairs,
+  })
+  context.pause = createPauseHandler({
+    state: context.state,
+    onOperationalStateStrategyMarketPaused,
+    logger,
+    eventPublisher,
+    onPause,
+  })
+}
+
+function createConservativeEngineCancellationContext({ context } = {}) {
+  const { broker, eventPublisher, onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome } = context.dependencies
+  context.reconcileFilledAcknowledgement = (options = {}) => reconcileFilledAcknowledgementTransition({
+    ...options,
+    broker,
+    pause: context.pause,
+    processUserDataEventTransition: context.processUserDataEventTransition,
+  })
+  const cancellationEventPublishers = createOrderCancellationEventPublishers({ eventPublisher })
+  context.publishOrderCancelled = cancellationEventPublishers.publishOrderCancelled
+  context.publishOrderCancelFailed = cancellationEventPublishers.publishOrderCancelFailed
+  const cancellationFailureHandlers = createCancellationFailureHandlers({
+    state: context.state,
+    pause: context.pause,
+    publishOrderCancelFailed: context.publishOrderCancelFailed,
+  })
+  context.markCancellationUnknown = cancellationFailureHandlers.markCancellationUnknown
+  context.markCancellationFailure = cancellationFailureHandlers.markCancellationFailure
+  context.ensureCancellationEligible = async ({
+    symbol,
+    order,
+    reason,
+    pauseOnFailure = true,
+  }) => {
+    const result = validateCancellationEligibility({ order })
+    if (result.ok) {return result}
+    const error = result.errors[0]
+    context.publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
+    if (pauseOnFailure) {await context.pause({ symbol, reason, error })}
+    return result
+  }
+  context.cancelOrderWithOperationalState = (options = {}) => cancelOrderWithOperationalStateTransition({
+    dependencies: { broker, onOperationalStateCancellationIntent, onOperationalStateCancellationOutcome },
+    ...options,
+  })
+}
+
+function createConservativeEngineSubmissionContext({ context } = {}) {
+  const dependencies = context.dependencies
+  context.shutdownRecoverySubmission = { allowed: false }
+  context.canSubmit = createSubmissionGate({
+    state: context.state,
+    canTrade: dependencies.canTrade,
+    isStopping: dependencies.isStopping,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    isMarketBookFresh: dependencies.isMarketBookFresh,
+    getVolatilityData: dependencies.getVolatilityData,
+    isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
+    hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
+    isPostOnlyOrderCrossing,
+    isShutdownRecoverySubmissionAllowed: () => context.shutdownRecoverySubmission.allowed,
+  })
+  context.submit = makeExecuteStrategyDecision({
+    broker: dependencies.broker,
+    onOperationalStateSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome: dependencies.onOperationalStateSubmissionOutcome,
+    canSubmit: context.canSubmit,
+    ...createSubmissionLifecycleCallbacks({
+      state: context.state,
+      publishDurableIntent: context.publishDurableIntent,
+      pause: context.pause,
+      eventPublisher: dependencies.eventPublisher,
+      reconcileFilledAcknowledgement: context.reconcileFilledAcknowledgement,
+    }),
+    ...createSubmissionFailureCallbacks({
+      state: context.state,
+      pause: context.pause,
+      eventPublisher: dependencies.eventPublisher,
+    }),
+  })
+}
+
+function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
+  const dependencies = context.dependencies
+  context.cancelAndReconcileRecoverySells = (options = {}) => cancelRecoverySells({
+    context: {
+      state: context.state,
+      logger: dependencies.logger,
+      ensureCancellationEligible: context.ensureCancellationEligible,
+      publishDurableIntent: context.publishDurableIntent,
+      cancelOrderWithOperationalState: context.cancelOrderWithOperationalState,
+      markCancellationUnknown: context.markCancellationUnknown,
+      markCancellationFailure: context.markCancellationFailure,
+      publishOrderCancelFailed: context.publishOrderCancelFailed,
+      publishOrderCancelled: context.publishOrderCancelled,
+      reconcileTerminalOrderFills: context.reconcileTerminalOrderFills,
+      assertReconciledSellExecution: context.assertReconciledSellExecution,
+      completeRecoveryCycle: dependencies.completeRecoveryCycle,
+      publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
+      pause: context.pause,
+      pairs: context.pairs,
+      eventPublisher: dependencies.eventPublisher,
+    },
+    ...options,
+  })
+  context.cancelAndReconcileTrailingBuy = (options = {}) => cancelAndReconcileTrailingBuyTransition({
+    context: {
+      ensureCancellationEligible: context.ensureCancellationEligible,
+      publishDurableIntent: context.publishDurableIntent,
+      cancelOrderWithOperationalState: context.cancelOrderWithOperationalState,
+      markCancellationUnknown: context.markCancellationUnknown,
+      markCancellationFailure: context.markCancellationFailure,
+      publishOrderCancelFailed: context.publishOrderCancelFailed,
+      publishOrderCancelled: context.publishOrderCancelled,
+      state: context.state,
+      broker: dependencies.broker,
+      updateTradingAccounting: dependencies.updateTradingAccounting,
+      pause: context.pause,
+    },
+    ...options,
+  })
+  context.maybeReplaceTrailingBuy = (options = {}) => maybeReplaceTrailingBuyTransition({
+    context: {
+      getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+      pairs: context.pairs,
+      state: context.state,
+      logger: dependencies.logger,
+      strategyPolicy: dependencies.strategyPolicy,
+      getPortfolio: dependencies.getPortfolio,
+      broker: dependencies.broker,
+      refreshedMarketMetadata: context.refreshedMarketMetadata,
+      pause: context.pause,
+      evaluateLatestTransition: (transitionOptions) => context.evaluateLatestTransition(transitionOptions),
+      cancelAndReconcileTrailingBuy: context.cancelAndReconcileTrailingBuy,
+      canTrade: dependencies.canTrade,
+      isStopping: dependencies.isStopping,
+    },
+    ...options,
+  })
+}
+
+function createConservativeEngineEvaluationContext({ context } = {}) {
+  const dependencies = context.dependencies
+  context.evaluateLatestTransition = createLatestTransitionEvaluator({
+    state: context.state,
+    hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
+    isStopping: dependencies.isStopping,
+    canTrade: dependencies.canTrade,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+    nextEvaluationId: context.nextEvaluationId,
+    getPortfolio: dependencies.getPortfolio,
+    getRecoveryLedger: dependencies.getRecoveryLedger,
+    pairs: context.pairs,
+    settings: context.settings,
+    logger: dependencies.logger,
+    strategyPolicy: dependencies.strategyPolicy,
+    pause: context.pause,
+    completeRecoveryCycle: dependencies.completeRecoveryCycle,
+    eventPublisher: dependencies.eventPublisher,
+    publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
+    getAccountSnapshot: dependencies.getAccountSnapshot,
+    allocateOrderCommitments,
+    submit: context.submit,
+    setShutdownRecoverySubmissionAllowed: (value) => { context.shutdownRecoverySubmission.allowed = value },
+    evaluateLatestTransition: (options) => context.evaluateLatestTransition(options),
+  })
+  const workflow = createShutdownRecoveryWorkflow({
+    state: context.state,
+    getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+    getPortfolio: dependencies.getPortfolio,
+    getRecoveryLedger: dependencies.getRecoveryLedger,
+    pairs: context.pairs,
+    strategyPolicy: dependencies.strategyPolicy,
+    settings: context.settings,
+    cancelAndReconcileRecoverySells: context.cancelAndReconcileRecoverySells,
+    hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
+    evaluateLatestTransition: context.evaluateLatestTransition,
+    isStopping: dependencies.isStopping,
+    runTransition: context.runTransition,
+  })
+  context.reconcileRecoverySellsForShutdown = workflow.reconcileRecoverySellsForShutdown
+  context.auditShutdownRecoverySellCoverage = workflow.auditShutdownRecoverySellCoverage
+}
+
+function createConservativeEngineMarketEventContext({ context } = {}) {
+  const dependencies = context.dependencies
+  context.processMarketBookTransition = createMarketBookTransitionHandler({
+    state: context.state,
+    isMarketBookFresh: dependencies.isMarketBookFresh,
+    evaluateLatestTransition: context.evaluateLatestTransition,
+  })
+  context.processMarketPriceTransition = createMarketPriceTransitionHandler({
+    state: context.state,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+    logger: dependencies.logger,
+    getPortfolio: dependencies.getPortfolio,
+    getRecoveryLedger: dependencies.getRecoveryLedger,
+    canTrade: dependencies.canTrade,
+    maybeReplaceTrailingBuy: context.maybeReplaceTrailingBuy,
+    evaluateLatestTransition: context.evaluateLatestTransition,
+    nextMarketPriceEventId: context.nextMarketPriceEventId,
+  })
+}
+
+function createConservativeEngineOrderEventContext({ context } = {}) {
+  const dependencies = context.dependencies
+  const orderEventWorkflow = makeOrderEventWorkflow({
+    state: context.state,
+    broker: dependencies.broker,
+    eventPublisher: dependencies.eventPublisher,
+    pairs: context.pairs,
+    updateTradingAccounting: dependencies.updateTradingAccounting,
+    recordBuyExecutionFill: context.recordBuyExecutionFill,
+    recordSellExecutionFill: context.recordSellExecutionFill,
+    pause: context.pause,
+    resolveRecoveryManagedCancellation: context.resolveRecoveryManagedCancellation,
+    cancelAndReconcileRecoverySells: context.cancelAndReconcileRecoverySells,
+    evaluateLatest: context.evaluateLatestTransition,
+    getReconciledBuyExecutionPrice: context.getReconciledBuyExecutionPrice,
+    assertReconciledSellExecution: context.assertReconciledSellExecution,
+    completeRecoveryCycle: dependencies.completeRecoveryCycle,
+    publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
+    isStopping: dependencies.isStopping,
+  })
+  Object.assign(context, orderEventWorkflow)
+  const ownedOrderManagement = createOwnedOrderManagementHandlers({
+    state: context.state,
+    broker: dependencies.broker,
+    processExecutionFillTransition: context.processExecutionFillTransition,
+    processUserDataEventTransition: context.processUserDataEventTransition,
+    pause: context.pause,
+    ensureCancellationEligible: context.ensureCancellationEligible,
+    publishDurableIntent: context.publishDurableIntent,
+    cancelOrderWithOperationalState: context.cancelOrderWithOperationalState,
+    markCancellationUnknown: context.markCancellationUnknown,
+    markCancellationFailure: context.markCancellationFailure,
+    publishOrderCancelled: context.publishOrderCancelled,
+    publishOrderCancelFailed: context.publishOrderCancelFailed,
+    runTransition: context.runTransition,
+  })
+  Object.assign(context, ownedOrderManagement)
+}
+
+function createConservativeEngineRuntimeApi({ context } = {}) {
+  const dependencies = context.dependencies
+  const volatilityWorkflow = makeVolatilityProtectionWorkflow({
+    state: context.state,
+    isStopping: dependencies.isStopping,
+    isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
+    getVolatilityData: dependencies.getVolatilityData,
+    runTransition: context.runTransition,
+    cancelOwnedBuyOrders: context.cancelOwnedBuyOrders,
+    evaluateLatest: ({ symbol }) => context.evaluateLatestTransition({ symbol }),
+    logger: dependencies.logger,
+  })
+  Object.assign(context, volatilityWorkflow)
+  context.pauseMarket = createOperatorMarketPauseHandler({
+    state: context.state,
+    pairs: context.pairs,
+    runTransition: context.runTransition,
+  })
+  context.resumeMarket = createOperatorMarketResumeHandler({
+    state: context.state,
+    pairs: context.pairs,
+    volatilityProtectionEnabled: context.volatilityProtectionEnabled,
+    hasPendingRecoveryManagedCancellation: context.hasPendingRecoveryManagedCancellation,
+    runTransition: context.runTransition,
+  })
+  context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
+    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+    if (!protection?.ok) {return protection}
+    return context.runTransition({ task: () => context.processMarketPriceTransition({ symbol, priceEvent }) })
+  }
+  context.processBookTicker = async ({ symbol, bookTicker } = {}) => {
+    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+    if (!protection?.ok) {return protection}
+    return context.runTransition({ task: () => context.processMarketBookTransition({ symbol, bookTicker }) })
+  }
+  context.processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
+    context.runTransition({ task: () => context.processUserDataEventTransition({ event, recoveryMode }) })
+  context.evaluateLatest = ({ symbol } = {}) =>
+    context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
+  context.resumeDeferredEvaluations = () => context.runTransition({
+    task: async () => {
+      const results = []
+      for (const symbol of [...context.state.deferredEvaluations]) {
+        const result = await context.evaluateLatestTransition({ symbol })
+        results.push({ symbol, result })
+      }
+      return toResult({ data: { results } })
+    },
+  })
+  context.getOperatorMarketSnapshots = createOperatorMarketSnapshotsGetter({
+    state: context.state,
+    pairs: context.pairs,
+    runTransition: context.runTransition,
+    getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
+    isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
+  })
+  return Object.freeze({
+    processMarketPrice: context.processMarketPrice,
+    processBookTicker: context.processBookTicker,
+    processUserDataEvent: context.processUserDataEvent,
+    reconcileOwnedOrders: context.reconcileOwnedOrders,
+    reconcileRecoverySellsForShutdown: context.reconcileRecoverySellsForShutdown,
+    auditShutdownRecoverySellCoverage: context.auditShutdownRecoverySellCoverage,
+    cancelOwnedBuyOrdersForShutdown: context.cancelOwnedBuyOrdersForShutdown,
+    cancelOwnedBuyOrdersForSafetyHalt: context.cancelOwnedBuyOrdersForSafetyHalt,
+    processVolatilitySnapshot: context.processVolatilitySnapshot,
+    getVolatilityProtectionState: ({ symbol } = {}) => context.state.volatilityProtection.get(symbol),
+    getOperatorMarketSnapshots: context.getOperatorMarketSnapshots,
+    evaluateLatest: context.evaluateLatest,
+    resumeDeferredEvaluations: context.resumeDeferredEvaluations,
+    getOrders: () => context.state.registry.orders,
+    getActiveOrders: () => context.state.registry.getActiveOrders(),
+    getRecoveryIntents: () => Object.freeze({
+      pausedMarkets: Object.freeze([...context.state.paused]),
+      operatorPausedMarkets: Object.freeze([...context.state.operatorPausedMarkets]),
+      replacementIntents: Object.freeze([...context.state.replacementIntents]),
+      trailingBuyRepriceIntents: Object.freeze([...context.state.trailingBuyRepriceIntents]),
+      deferredEvaluations: Object.freeze([...context.state.deferredEvaluations]),
+    }),
+    getPausedMarkets: () => [...context.state.paused],
+    getOperatorPausedMarkets: () => [...context.state.operatorPausedMarkets],
+    pauseMarket: context.pauseMarket,
+    resumeMarket: context.resumeMarket,
+    getLastBuyPrice: ({ symbol } = {}) => context.state.lastBuyPrices.get(symbol),
+  })
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -947,22 +1338,10 @@ export function makeConservativeTradingEngine({
   logger,
   initialState = {},
 } = {}) {
-  const strategyConfig = appConfig.strategies[StrategyId.COIN_GRABBER]
-  const {
-    settings,
-    pairs
-  } = strategyConfig
-  const volatilityProtectionEnabled = typeof getVolatilityData === "function"
-  const isVolatilityProtectionEnabledForSymbol = (symbol) =>
-    volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
-  const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
-    hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
-    (pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK && hasUnownedOpenOrdersForSymbol({ symbol }))
-  if (getVolatilityData !== undefined && !volatilityProtectionEnabled) {
-    throw new TypeError("getVolatilityData must be a function when provided")
-  }
-  validateConservativeTradingEngineOptions({
+  const dependencies = {
+    broker,
     strategyPolicy,
+    appConfig,
     getPortfolio,
     getRecoveryLedger,
     getMarketMetadata,
@@ -972,413 +1351,30 @@ export function makeConservativeTradingEngine({
     canTrade,
     onPause,
     isStopping,
-    getVolatilityData,
+    eventPublisher,
+    hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
+    getVolatilityData,
+    onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
-    hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
+    logger,
     initialState,
-  })
-  const initialRegistry = validateInitialEngineState({ initialState, pairs })
-  const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
-  const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
-  const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
-  const runTransition = createSerializedTransitionQueue()
-  let strategyEvaluationSequence = 0
-  let marketPriceEventSequence = 0
-
-  const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
-  const {
-    hasPendingRecoveryManagedCancellation,
-    resolveRecoveryManagedCancellation,
-  } = recoveryCancellationState
-  const rememberProcessedFill = createProcessedFillTracker({ state })
-  const executionFillAccounting = createExecutionFillAccounting({ state, rememberProcessedFill })
-  const {
-    recordBuyExecutionFill,
-    getReconciledBuyExecutionPrice,
-    recordSellExecutionFill,
-    assertReconciledSellExecution,
-  } = executionFillAccounting
-
-  const publishDurableIntent = createDurableIntentPublisher({ eventPublisher, logger })
-  const publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
-    eventPublisher,
-    getPortfolio,
-    getRecoveryLedger,
-    pairs,
-  })
-
-  const pause = createPauseHandler({
-    state,
-    onOperationalStateStrategyMarketPaused,
-    logger,
-    eventPublisher,
-    onPause,
-  })
-
-  // A FILLED submission acknowledgement is terminal exchange state, but it
-  // is not reconciled strategy state until every execution has been fetched
-  // and applied. Keep this inside the current serialized transition so market
-  // events cannot observe the acknowledgement/fill gap.
-  const reconcileFilledAcknowledgement = (options = {}) => reconcileFilledAcknowledgementTransition({
-    ...options,
-    broker,
-    pause,
-    processUserDataEventTransition,
-  })
-
-  const cancellationEventPublishers = createOrderCancellationEventPublishers({ eventPublisher })
-  const { publishOrderCancelled, publishOrderCancelFailed } = cancellationEventPublishers
-
-  const cancellationFailureHandlers = createCancellationFailureHandlers({
-    state,
-    pause,
-    publishOrderCancelFailed,
-  })
-  const {
-    markCancellationUnknown,
-    markCancellationFailure,
-  } = cancellationFailureHandlers
-
-  const ensureCancellationEligible = async ({
-    symbol,
-    order,
-    reason,
-    pauseOnFailure = true
-  }) => {
-    const result = validateCancellationEligibility({ order })
-    if (result.ok) {return result}
-    const error = result.errors[0]
-    publishOrderCancelFailed({
-      order,
-      outcome: "INVALID_CANCELLATION_REQUEST",
-      error
-    })
-    if (pauseOnFailure) {await pause({
-      symbol,
-      reason,
-      error
-    })}
-    return result
   }
-
-  const cancelOrderWithOperationalState = (options = {}) => cancelOrderWithOperationalStateTransition({
-    dependencies: {
-      broker,
-      onOperationalStateCancellationIntent,
-      onOperationalStateCancellationOutcome,
-    },
-    ...options,
-  })
-
-  let shutdownRecoverySubmissionAllowed = false
-  const canSubmit = createSubmissionGate({
-    state,
-    canTrade,
-    isStopping,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    getVolatilityData,
-    isVolatilityProtectionEnabledForSymbol,
-    hasBlockingOpenOrdersForSymbol,
-    isPostOnlyOrderCrossing,
-    isShutdownRecoverySubmissionAllowed: () => shutdownRecoverySubmissionAllowed,
-  })
-  const submit = makeExecuteStrategyDecision({
-    broker,
-    onOperationalStateSubmissionIntent,
-    onOperationalStateSubmissionOutcome,
-    canSubmit,
-    ...createSubmissionLifecycleCallbacks({
-      state,
-      publishDurableIntent,
-      pause,
-      eventPublisher,
-      reconcileFilledAcknowledgement,
-    }),
-    ...createSubmissionFailureCallbacks({ state, pause, eventPublisher }),
-  })
-
-  const cancelAndReconcileRecoverySells = (options = {}) => cancelRecoverySells({
-    context: {
-      state,
-      logger,
-      ensureCancellationEligible,
-      publishDurableIntent,
-      cancelOrderWithOperationalState,
-      markCancellationUnknown,
-      markCancellationFailure,
-      publishOrderCancelFailed,
-      publishOrderCancelled,
-      reconcileTerminalOrderFills,
-      assertReconciledSellExecution,
-      completeRecoveryCycle,
-      publishRecoveryCycleNotCompleted,
-      pause,
-      pairs,
-      eventPublisher,
-    },
-    ...options,
-  })
-
-  const cancelAndReconcileTrailingBuy = (options = {}) => cancelAndReconcileTrailingBuyTransition({
-    context: {
-      ensureCancellationEligible,
-      publishDurableIntent,
-      cancelOrderWithOperationalState,
-      markCancellationUnknown,
-      markCancellationFailure,
-      publishOrderCancelFailed,
-      publishOrderCancelled,
-      state,
-      broker,
-      updateTradingAccounting,
-      pause,
-    },
-    ...options,
-  })
-
-  const maybeReplaceTrailingBuy = (options = {}) => maybeReplaceTrailingBuyTransition({
-    context: {
-      getCurrentMarketMetadata,
-      pairs,
-      state,
-      logger,
-      strategyPolicy,
-      getPortfolio,
-      broker,
-      refreshedMarketMetadata,
-      pause,
-      evaluateLatestTransition,
-      cancelAndReconcileTrailingBuy,
-      canTrade,
-      isStopping,
-    },
-    ...options,
-  })
-
-  // This existing single-market state transition intentionally keeps its ordered gates together.
-  const evaluateLatestTransition = createLatestTransitionEvaluator({
-    state,
-    hasBlockingOpenOrdersForSymbol,
-    isStopping,
-    canTrade,
-    isMarketPriceFresh,
-    getCurrentMarketMetadata,
-    nextEvaluationId: () => ++strategyEvaluationSequence,
-    getPortfolio,
-    getRecoveryLedger,
-    pairs,
-    settings,
-    logger,
-    strategyPolicy,
-    pause,
-    completeRecoveryCycle,
-    eventPublisher,
-    publishRecoveryCycleNotCompleted,
-    getAccountSnapshot,
-    allocateOrderCommitments,
-    submit,
-    setShutdownRecoverySubmissionAllowed: (value) => {
-      shutdownRecoverySubmissionAllowed = value
-    },
-    evaluateLatestTransition: (options) => evaluateLatestTransition(options),
-  })
-
-  const shutdownRecoveryWorkflow = createShutdownRecoveryWorkflow({
-    state,
-    getCurrentMarketMetadata,
-    getPortfolio,
-    getRecoveryLedger,
-    pairs,
-    strategyPolicy,
-    settings,
-    cancelAndReconcileRecoverySells,
-    hasBlockingOpenOrdersForSymbol,
-    evaluateLatestTransition,
-    isStopping,
-    runTransition,
-  })
-  const {
-    reconcileRecoverySellsForShutdown,
-    auditShutdownRecoverySellCoverage,
-  } = shutdownRecoveryWorkflow
-
-  const processMarketBookTransition = createMarketBookTransitionHandler({
-    state,
-    isMarketBookFresh,
-    evaluateLatestTransition,
-  })
-  const processMarketPriceTransition = createMarketPriceTransitionHandler({
-    state,
-    isMarketPriceFresh,
-    getCurrentMarketMetadata,
-    logger,
-    getPortfolio,
-    getRecoveryLedger,
-    canTrade,
-    maybeReplaceTrailingBuy,
-    evaluateLatestTransition,
-    nextMarketPriceEventId: () => ++marketPriceEventSequence,
-  })
-
-  const {
-    processExecutionFillTransition,
-    reconcileTerminalOrderFills,
-    processUserDataEventTransition,
-  } = makeOrderEventWorkflow({
-    state,
-    broker,
-    eventPublisher,
-    pairs,
-    updateTradingAccounting,
-    recordBuyExecutionFill,
-    recordSellExecutionFill,
-    pause,
-    resolveRecoveryManagedCancellation,
-    cancelAndReconcileRecoverySells,
-    evaluateLatestTransition,
-    getReconciledBuyExecutionPrice,
-    assertReconciledSellExecution,
-    completeRecoveryCycle,
-    publishRecoveryCycleNotCompleted,
-    isStopping,
-  })
-
-  const ownedOrderManagement = createOwnedOrderManagementHandlers({
-    state,
-    broker,
-    processExecutionFillTransition,
-    processUserDataEventTransition,
-    pause,
-    ensureCancellationEligible,
-    publishDurableIntent,
-    cancelOrderWithOperationalState,
-    markCancellationUnknown,
-    markCancellationFailure,
-    publishOrderCancelled,
-    publishOrderCancelFailed,
-    runTransition,
-  })
-  const {
-    cancelOwnedBuyOrders,
-    cancelOwnedBuyOrdersForShutdown,
-    cancelOwnedBuyOrdersForSafetyHalt,
-    reconcileOwnedOrders,
-  } = ownedOrderManagement
-
-  const {
-    processVolatilitySnapshot,
-    refreshVolatilityProtectionIfNeeded,
-  } = makeVolatilityProtectionWorkflow({
-    state,
-    isStopping,
-    isVolatilityProtectionEnabledForSymbol,
-    getVolatilityData,
-    runTransition,
-    cancelOwnedBuyOrders,
-    evaluateLatest: ({ symbol }) => evaluateLatestTransition({ symbol }),
-    logger,
-  })
-
-  const pauseMarket = createOperatorMarketPauseHandler({ state, pairs, runTransition })
-  const resumeMarket = createOperatorMarketResumeHandler({
-    state,
-    pairs,
-    volatilityProtectionEnabled,
-    hasPendingRecoveryManagedCancellation,
-    runTransition,
-  })
-
-  const processMarketPrice = async ({
-    symbol,
-    priceEvent
-  } = {}) => {
-    const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
-    return runTransition({ task: () => processMarketPriceTransition({
-      symbol,
-      priceEvent
-    }) })
-  }
-  const processBookTicker = async ({
-    symbol,
-    bookTicker
-  } = {}) => {
-    const protection = await refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
-    return runTransition({ task: () => processMarketBookTransition({
-      symbol,
-      bookTicker
-    }) })
-  }
-  const processUserDataEvent = ({
-    event,
-    recoveryMode = false
-  } = {}) =>
-    runTransition({ task: () => processUserDataEventTransition({
-      event,
-      recoveryMode
-    }) })
-  const evaluateLatest = ({ symbol } = {}) =>
-    runTransition({ task: () => evaluateLatestTransition({ symbol }) })
-  const resumeDeferredEvaluations = () => runTransition({
-    task: async () => {
-      const results = []
-      for (const symbol of [...state.deferredEvaluations]) {
-        const result = await evaluateLatestTransition({ symbol })
-        results.push({
-          symbol,
-          result
-        })
-      }
-      return toResult({ data: { results } })
-    },
-  })
-
-  const getOperatorMarketSnapshots = createOperatorMarketSnapshotsGetter({
-    state,
-    pairs,
-    runTransition,
-    getCurrentMarketMetadata,
-    isMarketPriceFresh,
-    hasBlockingOpenOrdersForSymbol,
-    isVolatilityProtectionEnabledForSymbol,
-  })
-
-  return Object.freeze({
-    processMarketPrice,
-    processBookTicker,
-    processUserDataEvent,
-    reconcileOwnedOrders,
-    reconcileRecoverySellsForShutdown,
-    auditShutdownRecoverySellCoverage,
-    cancelOwnedBuyOrdersForShutdown,
-    cancelOwnedBuyOrdersForSafetyHalt,
-    processVolatilitySnapshot,
-    getVolatilityProtectionState: ({ symbol } = {}) => state.volatilityProtection.get(symbol),
-    getOperatorMarketSnapshots,
-    evaluateLatest,
-    resumeDeferredEvaluations,
-    getOrders: () => state.registry.orders,
-    getActiveOrders: () => state.registry.getActiveOrders(),
-    getRecoveryIntents: () => Object.freeze({
-      pausedMarkets: Object.freeze([...state.paused]),
-      operatorPausedMarkets: Object.freeze([...state.operatorPausedMarkets]),
-      replacementIntents: Object.freeze([...state.replacementIntents]),
-      trailingBuyRepriceIntents: Object.freeze([...state.trailingBuyRepriceIntents]),
-      deferredEvaluations: Object.freeze([...state.deferredEvaluations]),
-    }),
-    getPausedMarkets: () => [...state.paused],
-    getOperatorPausedMarkets: () => [...state.operatorPausedMarkets],
-    pauseMarket,
-    resumeMarket,
-    getLastBuyPrice: ({ symbol } = {}) => state.lastBuyPrices.get(symbol),
-  })
+  validateConservativeTradingEngineOptions(dependencies)
+  const context = createConservativeEngineBaseContext({ dependencies })
+  createConservativeEnginePublishingContext({ context })
+  createConservativeEngineCancellationContext({ context })
+  createConservativeEngineSubmissionContext({ context })
+  createConservativeEngineRecoverySubmissionContext({ context })
+  createConservativeEngineEvaluationContext({ context })
+  createConservativeEngineMarketEventContext({ context })
+  createConservativeEngineOrderEventContext({ context })
+  return createConservativeEngineRuntimeApi({ context })
 }
 
 function inspectAcknowledgedFillHistory({ order, fills }) {
