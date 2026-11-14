@@ -235,43 +235,19 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     marketId: metadata.market.id,
   })
   const allPositions = portfolioBefore.positions
-  const portfolioQuoteCashFlow = allPositions
-    .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)
-    .reduce((total, item) => addDecimal({ left: total,
-      right: item.quoteNetCashFlow.amount }), "0")
+  const portfolioQuoteCashFlow = sumDecimalValues({ items: allPositions.filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id), getValue: (item) => item.quoteNetCashFlow.amount })
   const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
     assetId: metadata.market.quoteAsset.id,
   }) ?? "0"
   const quoteCashFlow = subtractDecimal({ left: portfolioQuoteCashFlow,
     right: quoteCashFlowBaseline })
-  const portfolioBaseBalance = allPositions
-    .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
-    .reduce((total, item) => addDecimal({ left: total,
-      right: item.totalBaseQuantity.amount }), "0")
+  const portfolioBaseBalance = sumDecimalValues({ items: allPositions.filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id), getValue: (item) => item.totalBaseQuantity.amount })
   const allActiveOrders = dependencies.state.registry.getActiveOrders()
     .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
-  const committedQuote = activeOrdersBefore
-    .filter((order) => order.side === "BUY")
-    .reduce((total, order) => addDecimal({
-      left: total,
-      right: multiplyDecimal({ left: order.remainingQuantity.amount,
-        right: order.limitPrice.amount }),
-    }), "0")
-  const committedQuoteBalance = allActiveOrders
-    .filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id)
-    .reduce((total, order) => addDecimal({
-      left: total,
-      right: multiplyDecimal({ left: order.remainingQuantity.amount,
-        right: order.limitPrice.amount }),
-    }), "0")
-  const committedBase = activeOrdersBefore
-    .filter((order) => order.side === "SELL")
-    .reduce((total, order) => addDecimal({ left: total,
-      right: order.remainingQuantity.amount }), "0")
-  const committedBaseBalance = allActiveOrders
-    .filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id)
-    .reduce((total, order) => addDecimal({ left: total,
-      right: order.remainingQuantity.amount }), "0")
+  const committedQuote = sumDecimalValues({ items: activeOrdersBefore.filter((order) => order.side === "BUY"), getValue: (order) => multiplyDecimal({ left: order.remainingQuantity.amount, right: order.limitPrice.amount }) })
+  const committedQuoteBalance = sumDecimalValues({ items: allActiveOrders.filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id), getValue: (order) => multiplyDecimal({ left: order.remainingQuantity.amount, right: order.limitPrice.amount }) })
+  const committedBase = sumDecimalValues({ items: activeOrdersBefore.filter((order) => order.side === "SELL"), getValue: (order) => order.remainingQuantity.amount })
+  const committedBaseBalance = sumDecimalValues({ items: allActiveOrders.filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id), getValue: (order) => order.remainingQuantity.amount })
   const quoteBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })
   const baseBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })
   if (!quoteBalance || !baseBalance) {
