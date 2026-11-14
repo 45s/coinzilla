@@ -135,7 +135,6 @@ function restoreOrder({ order, market }) {
  * Every non-rejected order is restored as UNKNOWN/CANCELED and still requires
  * canonical read-only exchange reconciliation before trading can resume.
  */
-// eslint-disable-next-line max-lines-per-function -- recovery rehydration stages all domain projections atomically.
 export function restoreHarvesterJournalState({ projection, marketMetadata } = {}) {
   try {
     if (projection?.ok !== true || !projection.data) {
@@ -237,8 +236,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       let nextPortfolio = portfolio
       if (compareDecimal({ left: item.freeQuantity, right: "0" }) > 0) {
         nextPortfolio = nextPortfolio.allocateFreeQuantity({
-          marketId: market.id,
-          strategyId: StrategyId.COIN_GRABBER,
+          marketId: market.id, strategyId: StrategyId.COIN_GRABBER,
           quantity: item.freeQuantity,
         })
       }
