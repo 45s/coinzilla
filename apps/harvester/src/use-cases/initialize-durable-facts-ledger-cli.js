@@ -3,8 +3,8 @@ import { resolveOperationalStateDirectory } from "../infrastructure/operational-
 import { initializeHarvesterDurableFactsLedger } from "./initialize-durable-facts-ledger.js"
 
 /**
- * Run the one-time genesis command with an explicit absolute directory and
- * exactly one confirmation argument. The runtime uses the same directory.
+ * Run the one-time initializer with exactly one confirmation argument.
+ * The app-local default or the same configured override is used by runtime.
  *
  * @param {object} options
  * @param {NodeJS.ProcessEnv} [options.env]
