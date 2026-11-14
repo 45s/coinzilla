@@ -6,8 +6,25 @@ import { safeErrorMessage } from "./safe-error-message.js"
 
 const TELEGRAM_API_BASE_URL = "https://api.telegram.org"
 
-function createSafeCause({ error, token }) {
-  return new Error(safeErrorMessage({ error, token }))
+function sanitizeCaughtError({ error, token }) {
+  const message = safeErrorMessage({ error, token })
+  if (!(error instanceof Error)) {
+    return new Error(message)
+  }
+
+  try {
+    error.message = message
+    if (typeof error.stack === "string" && typeof token === "string" && token.length >= 6) {
+      error.stack = error.stack.split(token).join("[REDACTED]")
+      const encodedToken = encodeURIComponent(token)
+      if (encodedToken !== token) {
+        error.stack = error.stack.split(encodedToken).join("[REDACTED]")
+      }
+    }
+    return error
+  } catch {
+    return new Error(message)
+  }
 }
 
 function assertHttpResponse(response) {
@@ -30,15 +47,15 @@ async function readResponsePayload({ response, token, status }) {
   try {
     return await response.json()
   } catch (error) {
-    const cause = createSafeCause({ error, token })
+    error = sanitizeCaughtError({ error, token })
     if (!response.ok) {
       throw new Error(
         `Telegram API HTTP request failed with status ${status}`,
-        { cause },
+        { cause: error },
       )
     }
     throw new Error(
-      `Telegram API returned invalid JSON: ${cause.message}`,
+      `Telegram API returned invalid JSON: ${error.message}`,
       { cause },
     )
   }
@@ -121,9 +138,9 @@ export class TelegramNotifier {
         signal: AbortSignal.timeout(this.#timeoutMs),
       })
     } catch (error) {
-      const cause = createSafeCause({ error, token: this.#token })
+      error = sanitizeCaughtError({ error, token: this.#token })
       throw new Error(
-        `Telegram Bot API request failed: ${cause.message}`,
+        `Telegram Bot API request failed: ${error.message}`,
         { cause },
       )
     }
