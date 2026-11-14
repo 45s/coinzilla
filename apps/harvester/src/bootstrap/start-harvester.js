@@ -38,6 +38,61 @@ import { mapUserDataReadinessChangedData } from "../application/events/user-data
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
 
+async function verifyOperationalStateStore({ operationalStateStore } = {}) {
+  if (operationalStateStore === undefined) return
+  if (typeof operationalStateStore?.append !== "function" ||
+      typeof operationalStateStore?.verify !== "function" ||
+      typeof operationalStateStore?.readAll !== "function") {
+    throw new TypeError("operationalStateStore must provide append(), verify(), and readAll() when supplied")
+  }
+  const verification = await operationalStateStore.verify()
+  if (verification?.ok !== true ||
+      verification.data?.valid !== true ||
+      verification.data?.durableWriteSupported !== true) {
+    const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification was not confirmed")
+    const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 Operational State Store: " + (cause.message ?? String(cause)), { cause })
+    error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
+    throw error
+  }
+  const existingFacts = await operationalStateStore.readAll()
+  if (existingFacts?.ok !== true ||
+      existingFacts.data?.durableWriteSupported !== true ||
+      !Array.isArray(existingFacts.data.records)) {
+    const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
+    throw new Error("Harvester cannot connect to the broker without verified Operational State Store history: " + (cause.message ?? String(cause)), { cause })
+  }
+  const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
+  if (existingProjection?.ok !== true) {
+    const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
+    throw new Error("Harvester cannot restart from an unprojectable Operational State Store history: " + (cause.message ?? String(cause)), { cause })
+  }
+  if (existingProjection.data.sessions.length > 0) {
+    throw new Error(
+      "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
+    )
+  }
+}
+
+async function persistHarvesterProcessStart({ operationalStateStore, appConfig, tradingEnabled } = {}) {
+  if (!operationalStateStore) return
+  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
+  if (baseline?.ok !== true || baseline.data?.durable !== true) {
+    throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
+      (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+  }
+  const started = await recordProcessStarted({
+    operationalStateStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled,
+  })
+  if (started?.ok !== true || started.data?.durable !== true) {
+    throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
+      (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+  }
+}
+
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -98,60 +153,8 @@ export async function startHarvester({
     logger,
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
-  if (operationalStateStore !== undefined) {
-    if (typeof operationalStateStore?.append !== "function" ||
-        typeof operationalStateStore?.verify !== "function" ||
-        typeof operationalStateStore?.readAll !== "function") {
-      throw new TypeError("operationalStateStore must provide append(), verify(), and readAll() when supplied")
-    }
-    const verification = await operationalStateStore.verify()
-    if (verification?.ok !== true ||
-        verification.data?.valid !== true ||
-        verification.data?.durableWriteSupported !== true) {
-      const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification was not confirmed")
-      const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 Operational State Store: " + (cause.message ?? String(cause)), { cause })
-      error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
-      throw error
-    }
-    const existingFacts = await operationalStateStore.readAll()
-    if (existingFacts?.ok !== true || existingFacts.data?.durableWriteSupported !== true || !Array.isArray(existingFacts.data.records)) {
-      const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-      throw new Error("Harvester cannot connect to the broker without verified Operational State Store history: " + (cause.message ?? String(cause)), { cause })
-    }
-    const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
-    if (existingProjection?.ok !== true) {
-      const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
-      throw new Error("Harvester cannot restart from an unprojectable Operational State Store history: " + (cause.message ?? String(cause)), { cause })
-    }
-    if (existingProjection.data.sessions.length > 0) {
-      throw new Error(
-        "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
-      )
-    }
-  }
-  let processConfigurationFingerprint
-  if (operationalStateStore) {
-    const baseline = await recordConfigurationBaseline({
-      operationalStateStore,
-      appConfig
-    })
-    if (baseline?.ok !== true || baseline.data?.durable !== true) {
-      throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
-        (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
-    }
-    processConfigurationFingerprint = baseline.data.fingerprint
-    const started = await recordProcessStarted({
-      operationalStateStore,
-      configurationFingerprint: processConfigurationFingerprint,
-      strategyName: baseline.data.strategyName,
-      markets: baseline.data.markets,
-      tradingEnabled,
-    })
-    if (started?.ok !== true || started.data?.durable !== true) {
-      throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
-        (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
-    }
-  }
+  await verifyOperationalStateStore({ operationalStateStore })
+  await persistHarvesterProcessStart({ operationalStateStore, appConfig, tradingEnabled })
   const {
     onOperationalStateExecutionFill,
     onOperationalStateRecoveryCycleCompleted,
