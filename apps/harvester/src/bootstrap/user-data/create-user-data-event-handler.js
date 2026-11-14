@@ -237,7 +237,7 @@ export function createUserDataEventHandler({
     }).finally(async () => {
       if (isStopped()) {
         state.ready = false
-        state.status = "STOPPED"
+        state.status = "STOPPING"
         return
       }
       if (state.accountingFailed || state.safetyHaltRequired) {
