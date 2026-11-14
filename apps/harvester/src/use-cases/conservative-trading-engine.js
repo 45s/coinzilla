@@ -1588,8 +1588,30 @@ export function makeConservativeTradingEngine({
     const recoveryLedger = getRecoveryLedger({ marketId: metadata.market.id })
     const activeSells = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .filter((order) => order.side === "SELL")
+    if (!position && activeSells.length === 0) {
+      return {
+        symbol,
+        metadata,
+        portfolio,
+        position: null,
+        recoveryLedger,
+        activeSells,
+        noRecoveryRequired: true,
+      }
+    }
+    if (position && pairs[symbol].keepQuantity === undefined) {
+      return {
+        symbol,
+        metadata,
+        portfolio,
+        position,
+        recoveryLedger,
+        activeSells,
+        errorReason: "KEEP_QUANTITY_UNAVAILABLE",
+      }
+    }
     const activeQuantity = position?.quantity.amount ?? "0"
-    const keepQuantity = String(pairs[symbol].keepQuantity)
+    const keepQuantity = String(pairs[symbol].keepQuantity ?? "0")
     const sellableQuantity = maxDecimal({
       left: "0",
       right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
@@ -1770,7 +1792,7 @@ export function makeConservativeTradingEngine({
     if (assessment.covered) {
       return { ok: true, assessment }
     }
-    if (["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)) {
+    if (["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "KEEP_QUANTITY_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)) {
       return {
         ok: false,
         error: shutdownRecoveryError("SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", `Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}`),
