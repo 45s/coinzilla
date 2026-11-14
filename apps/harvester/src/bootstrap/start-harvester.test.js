@@ -2665,7 +2665,7 @@ class TestnetTradingRecoveryScenario {
     assert.equal(this.processedOrderLog.quantity, this.submittedOrders[0].quantity)
   
   
-    const submitted = this.calls.find((call) => typeof call === "object")
+    this.submitted = this.calls.find((call) => typeof call === "object")
   
     this.clientOrderId = this.submittedOrders[0].clientOrderId
   
@@ -3224,7 +3224,6 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   await scenario.run()
 })
 
-
 function createLifecycleLogCapture() {
   const calls = []
   return {
@@ -3659,7 +3658,7 @@ function configureOwnedBuyBroker({ broker, calls, market }) {
       }),
     }
   }
-  makeVolatilityReadyBroker(this.broker, ["BTCUSDT"])
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
 }
 
 function createHigherInvestmentConfig() {
@@ -4445,7 +4444,7 @@ function createShutdownBuyCancellationBroker({ calls, gates }) {
       data: canceledOrder,
     }
   }
-  makeVolatilityReadyBroker(this.broker, ["BTCUSDT"])
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   return broker
 }
 
