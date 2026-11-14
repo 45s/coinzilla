@@ -47,17 +47,8 @@ function getSafeFailureReason(error) {
  */
 // eslint-disable-next-line max-lines-per-function -- shutdown coordinator encodes the ordered fail-closed lifecycle.
 export function createShutdownHandler({
-  state,
-  logger,
-  tradingEnabled,
-  getTradingEngine,
-  subscriptions,
-  bookSubscriptions,
-  marketPriceIntake,
-  getUserDataSubscription,
-  broker,
-  brokerName,
-  eventPublisher,
+  state, logger, tradingEnabled, getTradingEngine, subscriptions, bookSubscriptions,
+  marketPriceIntake, getUserDataSubscription, broker, brokerName, eventPublisher,
   publishAccountSnapshot,
   stopMarketIntake = stopMarketIntakeDefault,
   stopUserDataIntake = stopUserDataIntakeDefault,
@@ -66,23 +57,13 @@ export function createShutdownHandler({
   runtimeSessionId,
 } = {}) {
   let shutdownPromise
-  return function stop({
-    requestedAt,
-    requestLogged = false,
-    stopStateEstablishedLogged = false,
-    preShutdownErrors = []
-  } = {}) { // eslint-disable-line max-lines-per-function -- shutdown phases remain serialized in one state machine.
+  return function stop({ requestedAt, requestLogged = false, stopStateEstablishedLogged = false, preShutdownErrors = [] } = {}) { // eslint-disable-line max-lines-per-function -- shutdown phases remain serialized in one state machine.
     if (shutdownPromise) {return shutdownPromise}
     if (state.stopped) {return Promise.resolve()}
 
     const shutdownRequestedAt = requestedAt ?? now()
     const shutdownCorrelationId = runtimeSessionId ?? null
-    const logPhase = ({
-      phase,
-      status,
-      durationMs,
-      failureReason
-    } = {}) => {
+    const logPhase = ({ phase, status, durationMs, failureReason } = {}) => {
       logSystem(logger, {
         message: "Harvester shutdown phase " + status.toLowerCase(),
         shutdownPhase: phase,
@@ -106,10 +87,7 @@ export function createShutdownHandler({
     const runPhase = async (...args) => {
       const [phase, operation, isFailure = isPhaseFailure] = args
       const startedAt = now()
-      logPhase({
-        phase,
-        status: "STARTED"
-      })
+      logPhase({ phase, status: "STARTED" })
       try {
         const result = await operation()
         const failed = isFailure(result)
@@ -132,11 +110,7 @@ export function createShutdownHandler({
     }
 
     if (!requestLogged) {
-      logPhase({
-        phase: "SHUTDOWN_REQUESTED",
-        status: "COMPLETED",
-        durationMs: 0
-      })
+      logPhase({ phase: "SHUTDOWN_REQUESTED", status: "COMPLETED", durationMs: 0 })
     }
     const stateEstablishedAt = now()
     const shutdownStartedFromStatus = state.status
@@ -162,12 +136,7 @@ export function createShutdownHandler({
       let recoverySellFindings = []
       let recoverySellReconciliation
 
-      const logShutdownFailure = ({
-        message,
-        stage,
-        result,
-        error
-      } = {}) => {
+      const logShutdownFailure = ({ message, stage, result, error } = {}) => {
         let errors
         if (error) {
           errors = [error]
@@ -191,11 +160,7 @@ export function createShutdownHandler({
           code: typeof entry?.code === "string" ? entry.code : null,
           failureStage: entry?.recoveryFailure?.stage ?? null,
         }))
-        stageFailures.push({
-          stage: stage ?? "UNKNOWN",
-          failure: failureMetadata,
-          errors: errorDetails
-        })
+        stageFailures.push({ stage: stage ?? "UNKNOWN", failure: failureMetadata, errors: errorDetails })
         logger.error?.({
           message,
           stage,
@@ -230,24 +195,14 @@ export function createShutdownHandler({
           return result
         } catch (error) {
           if (auditReason && !auditReasons.includes(auditReason)) auditReasons.push(auditReason)
-          logShutdownFailure({
-            message,
-            stage,
-            error
-          })
-          return {
-            ok: false,
-            errors: [error]
-          }
+          logShutdownFailure({ message, stage, error })
+          return { ok: false, errors: [error] }
         }
       }
 
       const marketIntakeResult = await runPhaseSafely({
         phase: "MARKET_INTAKE_STOP",
-        operation: () => stopMarketIntake({
-          subscriptions,
-          bookSubscriptions
-        }),
+        operation: () => stopMarketIntake({ subscriptions, bookSubscriptions }),
         stage: "MARKET_INTAKE_STOP",
         message: "Shutdown market-intake stop failed",
         auditReason: "MARKET_INTAKE_SHUTDOWN_FAILED",
@@ -469,12 +424,7 @@ export function createShutdownHandler({
 
       const disconnectResult = await runPhaseSafely({
         phase: "BROKER_DISCONNECT",
-        operation: () => disconnectBroker({
-          broker,
-          brokerName,
-          eventPublisher,
-          logger
-        }),
+        operation: () => disconnectBroker({ broker, brokerName, eventPublisher, logger }),
         stage: "BROKER_DISCONNECT",
         message: "Broker disconnect failed",
       })
@@ -503,10 +453,7 @@ export function createShutdownHandler({
         shutdownCorrelationId,
         auditReasons: Object.freeze([...auditReasons]),
         recoverySellReconciliation: recoverySellReconciliation?.ok === true
-          ? Object.freeze({
-            ok: true,
-            reconciledSymbols: recoverySellReconciliation.data?.reconciledSymbols ?? []
-          })
+          ? Object.freeze({ ok: true, reconciledSymbols: recoverySellReconciliation.data?.reconciledSymbols ?? [] })
           : Object.freeze({ ok: false }),
         recoverySellFindings: Object.freeze(recoverySellFindings.map((finding) => Object.freeze({ ...finding }))),
         failureReasons: Object.freeze(stageFailures.flatMap((entry) =>
