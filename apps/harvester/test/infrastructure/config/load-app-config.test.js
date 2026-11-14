@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { loadAppConfig } from "../../../src/infrastructure/config/load-app-config.js"
 
 function createValidConfig() {
@@ -32,8 +33,6 @@ function createValidConfig() {
             keepQuantity: 0.01,
             minProfit: 0.01,
             priceStepPercent: 0.3,
-            pricePrecision: 3,
-            quantityPrecision: 2,
             makerPercent: 0,
             takerPercent: 0.075,
           },
@@ -44,7 +43,22 @@ function createValidConfig() {
 }
 
 function createConfigModule(config) {
-  return "export const appConfig = " + JSON.stringify(config, null, 2) + ";\n"
+  return `export const appConfig = ${JSON.stringify(config, null, 2)};\n`
+}
+
+function createTokenSpecifications() {
+  return {
+    LINK: {
+      baseAsset: "LINK",
+      markets: {
+        LINKFDUSD: {
+          quoteAsset: "FDUSD",
+          pricePrecision: 3,
+          quantityPrecision: 2,
+        },
+      },
+    },
+  }
 }
 
 function assertAppConfigStructure(config) {
@@ -73,46 +87,123 @@ function assertAppConfigStructure(config) {
       "makerPercent",
       "takerPercent",
     ]) {
-      assert.ok(Object.hasOwn(pair, key), "Each pair must contain the required setting " + key + ".")
+      assert.ok(Object.hasOwn(pair, key), `The effective runtime pair must contain ${key}.`)
     }
   }
 }
 
-test("loads and validates the default named ESM app config export", async () => {
+async function writeTokenSpecifications({ directory, specifications = createTokenSpecifications() }) {
+  const path = join(directory, "token-specification.json")
+  await writeFile(path, `${JSON.stringify(specifications, null, 2)}\n`, "utf8")
+  return path
+}
+
+test("loads the default config and resolves pair precision from the shared token registry", async () => {
   const config = await loadAppConfig()
   assertAppConfigStructure(config)
+  assert.equal(config.strategies.CG_coinGrabber.pairs.LINKFDUSD.pricePrecision, 3, "The default market price precision must come from token-specification.json.")
+  assert.equal(config.strategies.CG_coinGrabber.pairs.LINKFDUSD.quantityPrecision, 2, "The default market quantity precision must come from token-specification.json.")
 })
 
-test("loads a named appConfig export from a supplied JavaScript path", async (t) => {
+test("loads a named appConfig module and applies a supplied token registry", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "config.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await writeFile(path, createConfigModule(createValidConfig()), "utf8")
+  const configPath = join(directory, "config.mjs")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
 
-  const config = await loadAppConfig(path)
+  const config = await loadAppConfig({ source: configPath, tokenSpecificationsPath })
   assertAppConfigStructure(config)
 })
 
-test("loads a named appConfig export from a supplied file URL", async (t) => {
+test("loads a named appConfig module from a file URL", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "config.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await writeFile(path, createConfigModule(createValidConfig()), "utf8")
+  const configPath = join(directory, "config.mjs")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
 
-  const config = await loadAppConfig(new URL("file://" + path))
+  const config = await loadAppConfig({ source: pathToFileURL(configPath), tokenSpecificationsPath })
   assertAppConfigStructure(config)
+})
+
+test("fails closed when a configured market has no token specification", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const configPath = join(directory, "config.mjs")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory, specifications: {} })
+
+  await assert.rejects(
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
+    /missing token specification.*LINKFDUSD/i,
+    "A configured market without authoritative precision metadata must not reach runtime validation.",
+  )
+})
+
+test("rejects malformed token registry JSON with its source path", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const configPath = join(directory, "config.mjs")
+  const tokenSpecificationsPath = join(directory, "token-specification.json")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+  await writeFile(tokenSpecificationsPath, "{", "utf8")
+
+  await assert.rejects(
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
+    (error) => error instanceof Error && error.message.includes(tokenSpecificationsPath),
+    "Malformed token metadata must identify the file that prevented startup.",
+  )
+})
+
+test("preserves the one-argument filesystem path API", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const configPath = join(directory, "config.mjs")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+
+  const config = await loadAppConfig(configPath)
+  assertAppConfigStructure(config)
+})
+
+test("reports a missing token registry path before configuration validation", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const configPath = join(directory, "config.mjs")
+  const tokenSpecificationsPath = join(directory, "missing-token-specification.json")
+  await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
+
+  await assert.rejects(
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
+    (error) => error instanceof Error && error.message.includes(tokenSpecificationsPath),
+    "A missing token registry must identify its expected path."
+  )
+})
+
+test("rejects invalid loader options before importing the config module", async () => {
+  await assert.rejects(
+    loadAppConfig(null),
+    /options.*file URL, path, or options object/i,
+    "Invalid loader input must fail with a clear options error."
+  )
+  await assert.rejects(
+    loadAppConfig({ tokenSpecificationsPath: 42 }),
+    /tokenSpecificationsPath.*non-empty/i,
+    "The registry path must be a non-empty string."
+  )
 })
 
 test("reports the source path and preserves the syntax cause for malformed JavaScript", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "invalid.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await writeFile(path, "export const appConfig = {", "utf8")
+  const configPath = join(directory, "invalid.mjs")
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
+  await writeFile(configPath, "export const appConfig = {", "utf8")
 
   await assert.rejects(
-    loadAppConfig(path),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     (error) => error instanceof SyntaxError
-      && error.message.includes(path)
+      && error.message.includes(configPath)
       && error.cause instanceof SyntaxError,
     "Malformed ESM configuration must identify its source path and preserve the module parser cause.",
   )
@@ -129,25 +220,27 @@ test("reports a useful error when the config module does not exist", async () =>
 
 test("rejects a module that does not export the named appConfig value", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "missing-export.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await writeFile(path, "export const otherConfig = {};", "utf8")
+  const configPath = join(directory, "missing-export.mjs")
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
+  await writeFile(configPath, "export const otherConfig = {};", "utf8")
 
   await assert.rejects(
-    loadAppConfig(path),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     /must export a named appConfig/i,
-    "A module without the required named appConfig export must fail clearly instead of being treated as an empty configuration.",
+    "A module without the required named appConfig value must fail clearly.",
   )
 })
 
 test("rejects structurally invalid named appConfig exports", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-"))
-  const path = join(directory, "invalid-shape.mjs")
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await writeFile(path, createConfigModule({ strategies: {} }), "utf8")
+  const configPath = join(directory, "invalid-shape.mjs")
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
+  await writeFile(configPath, createConfigModule({ strategies: {} }), "utf8")
 
   await assert.rejects(
-    loadAppConfig(path),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     /CG_coinGrabber/,
     "An ESM module with an invalid appConfig shape must fail runtime validation before startup.",
   )

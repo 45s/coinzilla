@@ -1,191 +1,106 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { runConfigSymbol } from "./config-symbol.js"
-import { TRADING_ENVIRONMENTS } from "../src/domain/trading-environment.js"
-
-const createAppConfig = () => ({
-  strategies: {
-    CG_coinGrabber: {
-      enabled: true,
-      settings: {
-        conservative: { enabled: true },
-        aggressive: { enabled: false },
-      },
-      pairs: {
-        LINKFDUSD: {
-          enabled: true,
-          tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
-          enableVolatilityProtection: true,
-          investment: 200,
-          orderQuantity: 2,
-          keepQuantity: 0.01,
-          minProfit: 0.01,
-          priceStepPercent: 0.3,
-          pricePrecision: 3,
-          quantityPrecision: 2,
-          makerPercent: 0,
-          takerPercent: 0.075,
-        },
-      },
-    },
-  },
-})
 
 const metadata = {
-  symbol: "ADAFDUSD",
-  environment: TRADING_ENVIRONMENTS.TESTNET,
-  baseAsset: "ADA",
-  quoteAsset: "FDUSD",
-  price: "0.5",
+  symbol: "POLUSDT",
+  environment: "testnet",
+  baseAsset: "POL",
+  quoteAsset: "USDT",
   tickSize: "0.0001",
-  stepSize: "0.1",
-  minQuantity: "0.1",
-  maxQuantity: "100000",
-  minNotional: "5",
-  maxNotional: "50",
-  supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+  stepSize: "0.01",
+  unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" }],
 }
 
-const createAsk = ({ answers, prompts = [], pairTradingEnvironment = TRADING_ENVIRONMENTS.BOTH }) => {
-  const remaining = [answers[0], pairTradingEnvironment, ...answers.slice(1)]
+function createAsk({ answers, prompts = [] }) {
   return async (question) => {
     prompts.push(question)
-    assert.ok(remaining.length > 0, "The CLI must not ask for more values than the documented interactive flow.")
-    return remaining.shift()
+    assert.ok(answers.length > 0, "The generator must not request strategy settings or other unplanned input.")
+    return answers.shift()
   }
 }
 
-test("prompts for strategy values, fetches metadata, previews the pair, and writes only after confirmation", async () => {
+test("fetches market metadata and writes only the shared token specification after confirmation", async () => {
   const output = []
+  const prompts = []
   const metadataCalls = []
   const writes = []
-  const prompts = []
   const result = await runConfigSymbol({
-    ask: createAsk({ answers: [" adafdusd ", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""], prompts }),
+    ask: createAsk({ answers: [" polusdt ", ""], prompts }),
     writeLine: (line) => output.push(line),
-    loadConfig: async () => createAppConfig(),
+    defaultEnvironment: "testnet",
     metadataFetcher: async (args) => {
       metadataCalls.push(args)
       return metadata
     },
-    writeConfig: async (args) => {
+    writeSpecification: async (args) => {
       writes.push(args)
-      return "/repo/apps/harvester/cg-coin-grabber.js"
+      return "/repo/apps/harvester/token-specification.json"
     },
-    configPath: "/repo/apps/harvester/cg-coin-grabber.js",
+    specificationPath: "/repo/apps/harvester/token-specification.json",
   })
 
-  assert.equal(metadataCalls.length, 1, "Valid operator input must trigger one public exchange metadata lookup.")
-  assert.equal(metadataCalls[0].symbol, "ADAFDUSD", "The normalized symbol must be sent to Binance.")
-  assert.equal(metadataCalls[0].environment, TRADING_ENVIRONMENTS.TESTNET, "Exchange metadata must be fetched from the selected trading environment.")
-  assert.ok(prompts.some((question) => /pair trading environment/i.test(question)), "The CLI must require a pair-level tradingEnvironment selection.")
-  assert.equal(writes.length, 1, "An affirmative default confirmation must write exactly once.")
-  assert.equal(writes[0].symbol, "ADAFDUSD", "The generated configuration must use the normalized symbol.")
-  assert.equal(writes[0].pairConfig.enabled, true, "The generated pair must match the enabled config entry expected by the operator.")
-  assert.equal(writes[0].pairConfig.tradingEnvironment, TRADING_ENVIRONMENTS.BOTH, "The generated pair must retain the explicitly selected environment eligibility.")
-  assert.equal(writes[0].pairConfig.orderQuantity, 20, "The operator-selected quantity must be used for each individual order.")
-  assert.equal(writes[0].pairConfig.minProfit, 0.01, "The operator-supplied minimum profit must be preserved.")
-  assert.equal(writes[0].pairConfig.priceStepPercent, 0.05, "The operator-supplied price step must be preserved.")
-  assert.equal(result.written, true, "The CLI result must report a successful write only after the writer resolves.")
-  assert.ok(output.some((line) => line.includes("Configuration preview")), "The operator must see the generated configuration before confirming.")
-  assert.ok(output.some((line) => line.includes("cg-coin-grabber.js")), "The operator preview must identify the canonical ESM config module.")
-  assert.ok(output.some((line) => line.includes("cg-coin-grabber.js")), "The operator preview must identify the canonical ESM config module.")
-  assert.ok(output.some((line) => line.includes('"ADAFDUSD"')), "The preview must be a copyable symbol-keyed config entry.")
-  assert.ok(output.some((line) => line.includes('"enabled": true')), "The preview must show the generated pair as enabled.")
-  assert.ok(!output.some((line) => line.includes("unvalidatedConstraints") || line.includes("myFilters")), "Internal exchange diagnostics must not clutter the pair-config preview.")
+  assert.equal(prompts.length, 2, "The generator should ask only for a market symbol and confirmation.")
+  assert.match(prompts[0], /market symbol/i, "The first prompt must request the Binance market symbol.")
+  assert.match(prompts[1], /add or refresh.*token specification/i, "The final prompt must confirm a token metadata update.")
+  assert.deepEqual(metadataCalls, [{ symbol: "POLUSDT", environment: "testnet", fetchImpl: globalThis.fetch }], "The generator must fetch metadata for the normalized symbol from the selected public endpoint.")
+  assert.equal(writes.length, 1, "Confirmation must trigger exactly one token-specification write.")
+  assert.equal(writes[0].metadata, metadata, "The writer must receive the original validated exchange metadata.")
+  assert.equal(writes[0].specificationPath, "/repo/apps/harvester/token-specification.json", "The writer must target the shared token metadata file.")
+  assert.equal(result.written, true, "The result must report a write only after the writer succeeds.")
+  assert.equal(result.symbol, "POLUSDT", "The result must retain the normalized market symbol.")
+  assert.equal(result.baseAsset, "POL", "The result must identify the base token returned by Binance.")
+  assert.equal(result.marketSpecification.pricePrecision, 4, "Price precision must be derived from PRICE_FILTER.tickSize.")
+  assert.equal(result.marketSpecification.quantityPrecision, 2, "Quantity precision must be derived from LOT_SIZE.stepSize.")
+  assert.ok(output.some((line) => line.includes("token-specification.json")), "The preview must identify the shared token specification file.")
+  assert.ok(output.some((line) => line.includes('"POL"')), "The preview must be grouped under the base token.")
+  assert.ok(output.some((line) => line.includes("DYNAMIC_PRICE_BAND")), "Public exchange constraints that the generator does not evaluate must remain visible as diagnostics.")
+  assert.ok(!output.some((line) => line.includes("investment") || line.includes("makerPercent")), "The metadata generator must not request or generate strategy settings.")
 })
 
-test("rejects invalid operator input before making any Binance request", async () => {
-  let metadataCalls = 0
-  let writes = 0
-  await assert.rejects(
-    runConfigSymbol({
-      ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "100", "0.1", "0.01", "0.05", ""] }),
-      loadConfig: async () => createAppConfig(),
-      metadataFetcher: async () => {
-        metadataCalls += 1
-        return metadata
-      },
-      writeConfig: async () => {
-        writes += 1
-      },
-    }),
-    /makerPercent.*less than 100/i,
-    "Invalid commission percentages must fail before external metadata is requested.",
-  )
-  assert.equal(metadataCalls, 0, "Invalid input must not make a Binance API request.")
-  assert.equal(writes, 0, "Invalid input must not change the configuration file.")
-})
-
-test("refuses an existing symbol before making an exchange request", async () => {
-  let metadataCalls = 0
-  const config = createAppConfig()
-  config.strategies.CG_coinGrabber.pairs.ADAFDUSD = config.strategies.CG_coinGrabber.pairs.LINKFDUSD
-  await assert.rejects(
-    runConfigSymbol({
-      ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""] }),
-      loadConfig: async () => config,
-      metadataFetcher: async () => {
-        metadataCalls += 1
-        return metadata
-      },
-    }),
-    /already exists/i,
-    "An existing pair must be detected before contacting Binance or offering a replacement.",
-  )
-  assert.equal(metadataCalls, 0, "An existing symbol must not trigger unnecessary external requests.")
-})
-
-test("detects a case-insensitive existing pair before calling Binance", async () => {
-  const config = createAppConfig()
-  config.strategies.CG_coinGrabber.pairs.adafdusd = config.strategies.CG_coinGrabber.pairs.LINKFDUSD
-  let metadataCalls = 0
-  await assert.rejects(
-    runConfigSymbol({
-      ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""] }),
-      loadConfig: async () => config,
-      metadataFetcher: async () => {
-        metadataCalls += 1
-        return metadata
-      },
-    }),
-    /already exists/i,
-    "The CLI must not create a second pair whose symbol differs only by case.",
-  )
-  assert.equal(metadataCalls, 0, "Case-insensitive duplicates must be rejected before contacting Binance.")
-})
-
-test("uses TRADING_MODE for metadata and separately asks for pair eligibility", async () => {
+test("uses TRADING_MODE only to select the public metadata endpoint", async () => {
   const metadataCalls = []
-  const result = await runConfigSymbol({
-    defaultEnvironment: TRADING_ENVIRONMENTS.LIVE,
-    ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"], pairTradingEnvironment: TRADING_ENVIRONMENTS.TESTNET }),
-    loadConfig: async () => createAppConfig(),
+  await runConfigSymbol({
+    ask: createAsk({ answers: ["APEUSDT", "n"] }),
+    defaultEnvironment: "live",
     metadataFetcher: async (args) => {
       metadataCalls.push(args)
-      return { ...metadata, environment: TRADING_ENVIRONMENTS.LIVE }
+      return { ...metadata, symbol: "APEUSDT", baseAsset: "APE", environment: "live" }
     },
   })
-  assert.equal(metadataCalls.length, 1)
-  assert.equal(metadataCalls[0].environment, TRADING_ENVIRONMENTS.LIVE, "TRADING_MODE must continue to select the Binance metadata host independently of pair eligibility.")
-  assert.equal(result.pairConfig.tradingEnvironment, TRADING_ENVIRONMENTS.TESTNET, "The pair selector must preserve the separately selected TESTNET eligibility.")
+  assert.equal(metadataCalls[0].environment, "live", "The current trading mode must select the metadata host.")
 })
 
-test("cancels safely when the operator declines the configuration preview", async () => {
+test("cancels without writing when the operator declines the metadata preview", async () => {
   let writes = 0
   const result = await runConfigSymbol({
-    ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", "n"] }),
-    loadConfig: async () => createAppConfig(),
+    ask: createAsk({ answers: ["POLUSDT", "n"] }),
     metadataFetcher: async () => metadata,
-    writeConfig: async () => {
+    writeSpecification: async () => {
       writes += 1
     },
   })
   assert.equal(result.written, false, "Declining the preview must return an explicit cancelled result.")
-  assert.equal(writes, 0, "Declining the preview must not write or mutate configuration.")
+  assert.equal(writes, 0, "Declining the preview must leave the token specification file unchanged.")
 })
 
-test("refuses metadata for a different symbol or exchange environment", async () => {
+test("rejects invalid symbols before requesting exchange metadata", async () => {
+  let metadataCalls = 0
+  await assert.rejects(
+    runConfigSymbol({
+      ask: createAsk({ answers: ["POL/USDT", ""] }),
+      metadataFetcher: async () => {
+        metadataCalls += 1
+        return metadata
+      },
+    }),
+    /symbol/i,
+    "Malformed symbols must be rejected before a public metadata request.",
+  )
+  assert.equal(metadataCalls, 0, "Invalid input must not contact Binance.")
+})
+
+test("rejects metadata for another symbol or environment without writing", async () => {
   for (const invalidMetadata of [
     { ...metadata, symbol: "OTHER" },
     { ...metadata, environment: "live" },
@@ -193,63 +108,29 @@ test("refuses metadata for a different symbol or exchange environment", async ()
     let writes = 0
     await assert.rejects(
       runConfigSymbol({
-        ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""] }),
-        loadConfig: async () => createAppConfig(),
+        ask: createAsk({ answers: ["POLUSDT", ""] }),
         metadataFetcher: async () => invalidMetadata,
-        writeConfig: async () => {
+        writeSpecification: async () => {
           writes += 1
         },
       }),
       /metadata symbol\/environment does not match/i,
-      "The generator must not combine operator input with exchange metadata for a different symbol or environment.",
+      "Metadata for another market or environment must never enter the registry.",
     )
-    assert.equal(writes, 0, "Mismatched metadata must never be written into cg-coin-grabber.js.")
+    assert.equal(writes, 0, "Mismatched metadata must not be persisted.")
   }
 })
 
-test("does not write configuration when Binance metadata lookup fails", async () => {
+test("surfaces Binance metadata failures and leaves the registry untouched", async () => {
   let writes = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""] }),
-      loadConfig: async () => createAppConfig(),
-      metadataFetcher: async () => {
-        throw new Error("Binance unavailable")
-      },
-      writeConfig: async () => {
-        writes += 1
-      },
+      ask: createAsk({ answers: ["POLUSDT", ""] }),
+      metadataFetcher: async () => { throw new Error("Binance unavailable") },
+      writeSpecification: async () => { writes += 1 },
     }),
     /Binance unavailable/,
-    "An exchange metadata failure must be visible to the operator.",
+    "Public metadata failures must remain visible to the operator.",
   )
-  assert.equal(writes, 0, "An exchange metadata failure must never create a pair configuration.")
-})
-
-
-test("rejects an invalid existing TRADING_MODE instead of silently selecting TESTNET", async () => {
-  const previousTradingMode = process.env.TRADING_MODE
-  process.env.TRADING_MODE = "paper"
-  let metadataCalls = 0
-  try {
-    await assert.rejects(
-      runConfigSymbol({
-        ask: createAsk({ answers: ["ADAFDUSD", "100", "20", "0.1", "0", "0.1", "0.01", "0.05", ""] }),
-        loadConfig: async () => createAppConfig(),
-        metadataFetcher: async () => {
-          metadataCalls += 1
-          return metadata
-        },
-      }),
-      /environment.*testnet or live/i,
-      "An invalid configured runtime mode must not silently generate TESTNET-derived pair settings.",
-    )
-    assert.equal(metadataCalls, 0, "Invalid TRADING_MODE must fail before any Binance metadata request.")
-  } finally {
-    if (previousTradingMode === undefined) {
-      delete process.env.TRADING_MODE
-    } else {
-      process.env.TRADING_MODE = previousTradingMode
-    }
-  }
+  assert.equal(writes, 0, "Failed metadata retrieval must not modify the token registry.")
 })

@@ -75,29 +75,57 @@ The Operational State Store currently supports append-only operational record pr
 
 ## Configuration
 
-Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Strategy-level switches remain in `config/strategies/cg-coin-grabber.js`. All market definitions live in one separate JavaScript module: `apps/harvester/cg-coin-grabber.js`, exported as the flat `tradingPairs` map. A symbol is defined once; do not duplicate markets in source modules or maintain separate TESTNET/LIVE maps.
+Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Strategy-level switches remain in `config/strategies/cg-coin-grabber.js`. All strategy pair definitions live in one separate JavaScript module: `apps/harvester/cg-coin-grabber.js`, exported as the flat `tradingPairs` map. A symbol is defined once; do not duplicate markets in source modules or maintain separate TESTNET/LIVE maps.
 
 Each pair must explicitly use `TRADING_ENVIRONMENTS.TESTNET`, `.LIVE`, or `.BOTH` from `src/domain/trading-environment.js`. `TRADING_MODE=testnet` includes TESTNET and BOTH; `TRADING_MODE=live` includes LIVE and BOTH. The serialized values remain `"testnet"`, `"live"`, and `"both"`. Non-matching pairs are excluded, and `tradingEnvironment` is removed from the effective runtime pair config. There is no default or fallback. If no pair matches (or no matching pair is enabled), startup fails before broker connection. The pair's `enabled` flag remains independent of its environment.
 
-Other pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`, `enableVolatilityProtection`, `externalOrdersPolicy`, `investment`, `orderQuantity`, `keepQuantity`, `minProfit`, precision, and fee settings. The external pair module uses `externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE` (or `.BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values remain `"ignore"` and `"block"`. Validation still allows the policy to be omitted and defaults it to ignore.
+Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`, `enableVolatilityProtection`, `externalOrdersPolicy`, `investment`, `orderQuantity`, `keepQuantity`, `minProfit`, and fee settings. Precision is not operator-owned pair configuration: it is resolved from `token-specification.json` by exact market symbol when `loadAppConfig` builds the effective runtime config. The external pair module uses `externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE` (or `.BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values remain `"ignore"` and `"block"`. Validation still allows the policy to be omitted and defaults it to ignore.
 
 **Runtime environment contract:** `TRADING_MODE` is the only operator-facing Binance environment setting and accepts exactly `testnet` or `live`. It selects both the Binance API/stream endpoints and the eligible pair subset. `NODE_ENV` does not select the exchange environment. The intended environment files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`.
 
-### Generate a new trading pair
+### Generate or refresh market metadata
 
-Use the interactive generator instead of guessing Binance precision and trading filters:
+Use the interactive generator to retrieve Binance precision metadata instead of guessing it:
 
 ```sh
 pnpm --filter @coinzilla/harvester config:symbol
 ```
 
-The generator asks for the symbol, the pair's `tradingEnvironment`, investment and order sizing, retained quantity, fees, minimum profit, and price-step percentage. It uses `TRADING_MODE` only to select the Binance public metadata endpoint (defaulting to TESTNET for this read-only generator when unset); it does not use that value as the pair's eligibility setting. It fetches public exchange metadata, validates the pair against the same application config rules, previews the new entry, and atomically inserts it into the unique `tradingPairs` object in `apps/harvester/cg-coin-grabber.js`. Existing symbols are rejected rather than overwritten. It never places, cancels, or modifies orders and requires no Binance credentials.
+The generator asks only for a Binance market symbol and confirmation. It uses `TRADING_MODE` to select the public metadata endpoint (defaulting to TESTNET when unset), fetches the market's exchange metadata, and atomically updates `apps/harvester/token-specification.json`. The file is grouped by base asset (`LINK`, `POL`, `APE`, etc.); each token contains a `markets` map keyed by exact market symbol. This lets quote markets share one token entry without incorrectly assuming that their price or quantity increments are identical.
 
-The generator preserves the rest of the JavaScript module and its comments. It fails closed if the named `tradingPairs` export is missing, ambiguous, malformed, or already contains the requested symbol. File replacement uses an exclusive lock and an atomic rename; stale locks must be inspected before manual removal.
+Example shape:
+
+```json
+{
+  "LINK": {
+    "baseAsset": "LINK",
+    "markets": {
+      "LINKUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 3,
+        "quantityPrecision": 2
+      },
+      "LINKFDUSD": {
+        "quoteAsset": "FDUSD",
+        "pricePrecision": 2,
+        "quantityPrecision": 3
+      }
+    }
+  }
+}
+```
+
+`quantityPrecision` is the number of decimal places needed to express the market's `LOT_SIZE.stepSize` (for example, a step of `0.01` means precision `2`). It is not the step size itself and does not replace runtime exchange-filter validation.
+
+For each market, `pricePrecision` is derived from `PRICE_FILTER.tickSize` and `quantityPrecision` from `LOT_SIZE.stepSize`. These values are precision counts, not exchange filters and not substitutes for the actual tick/step/notional constraints that Harvester validates at startup and before order submission. The registry is the only source for these precision fields; do not add them to `cg-coin-grabber.js`.
+
+**The generator does not add or modify strategy pairs.** After generating metadata, add the market's strategy settings to the single `tradingPairs` map in `apps/harvester/cg-coin-grabber.js` when you want Harvester to consider that market. Do not include `pricePrecision` or `quantityPrecision` in that pair entry. At runtime, `loadAppConfig` resolves the exact market specification and enriches the effective pair config. A missing, malformed, or multiply assigned market specification fails configuration loading before broker startup.
+
+The generator also prints any public exchange constraints that it does not evaluate as diagnostics; these are not written into the precision registry. It writes only the shared JSON registry, uses an exclusive lock and atomic rename, and requires no Binance credentials. If it reports an existing lock, inspect its PID/timestamp and confirm no generator is running before removing a stale lock. It never places, cancels, or modifies orders.
 
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` is the base-asset size of each individual order; multiple orders can be placed over time while staying within the pair's total investment allocation. `keepQuantity` remains the retained base-asset quantity; `minProfit` is the minimum net profit in that pair's quote asset.
 
-**Important — `keepQuantity` is retained per completed recovery cycle, not a total-balance cap.** Harvester sells all legally sellable strategy inventory above this amount, then retains the configured quantity when that recovery cycle completes. Each later completed cycle retains another `keepQuantity`, so the free/retained balance accumulates. Example: with `keepQuantity = 0.01 LINK`, four completed cycles retain 0.04 LINK in total; 100 cycles retain 1.00 LINK, assuming no dust bonus. Validated exchange-constrained dust is retained in addition to that cycle's `keepQuantity`. See the [canonical Conservative specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for the full rule and completion conditions. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments. All enabled markets are subscribed before startup requests any missing initial ticker snapshot through Binance WebSocket API `ticker.price` or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
+**Important — `keepQuantity` is retained per completed recovery cycle, not a total-balance cap.** Harvester sells all legally sellable strategy inventory above this amount, then retains the configured quantity when that recovery cycle completes. Each later completed cycle retains another `keepQuantity`, so the free/retained balance accumulates. Example: with `keepQuantity = 0.01 LINK`, four completed cycles retain 0.04 LINK in total; 100 cycles retain 1.00 LINK, assuming no dust bonus. Validated exchange-constrained dust is retained in addition to that cycle's `keepQuantity`. See the [canonical Conservative specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for the full rule and completion conditions. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` are derived precision counts only; actual exchange increments and notional limits remain authoritative. All enabled markets are subscribed before startup requests any missing initial ticker snapshot through Binance WebSocket API `ticker.price` or waits for an initial strategy evaluation; a slow first market must not delay market-data intake for later enabled pairs. The bootstrap verifies that every enabled pair has a successful market-price subscription before startup proceeds.
 
 Example (illustrative only; it does not identify the currently enabled default pair):
 
@@ -129,8 +157,6 @@ export const appConfig = {
           keepQuantity: 0.01,
           minProfit: 0.01,
           priceStepPercent: 0.05,
-          pricePrecision: 3,
-          quantityPrecision: 1,
           makerPercent: 0.1,
           takerPercent: 0.1,
         },
