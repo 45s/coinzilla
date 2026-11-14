@@ -26,7 +26,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
-- [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
+- [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive remains deferred; Recovery Seller (RS) is a proposed, non-executable strategy awaiting owner review
 
 ## Operations and safety
 
