@@ -151,7 +151,7 @@ Rotate a potentially exposed bot token with BotFather and update the deployment 
     pnpm --filter @coinzilla/notifiers test
     pnpm --filter @coinzilla/notifiers test:coverage
 
-The package unit suite also runs ESLint against every JavaScript source file, test, and script under packages/notifiers, using the repository's root ESLint configuration. The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Tests use Node's built-in test runner and injected transport boundaries; they require no credentials, external packages, or live network access.
+The package unit suite also runs ESLint against every JavaScript source file, test, and script under packages/notifiers, using the repository's root ESLint configuration. The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Behavioral tests use Node's built-in test runner and injected transport boundaries; the ESLint regression test uses the repository's installed ESLint development dependency. Tests require no credentials or live network access.
 
 
 ## Manual live Telegram smoke test
