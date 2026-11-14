@@ -27,7 +27,7 @@ The default mode is audit-only and never writes the durable-fact ledger. It repo
 Only an explicit confirmation flag can append a coverage fact:
 
 ```sh
-DURABLE_FACTS_DIRECTORY=/absolute/path/to/existing/durable-facts \
+OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \
   pnpm run recovery:market -- --context ./recovery-evidence/linkusdt.json --confirm
 ```
 
@@ -38,7 +38,7 @@ $env:DURABLE_FACTS_DIRECTORY = "C:\coinzilla-data\durable-facts"
 pnpm run recovery:market -- --context .\recovery-evidence\linkusdt.json --confirm
 ```
 
-Confirmation requires an already initialized and verifiable ADR-0001 ledger. The CLI never initializes, repairs or replaces a missing ledger. Do not initialize a production ledger for this Step 7 command; the ADR reserves production genesis for the later runtime-integration gate. The context's `runtimeSessionId` identifies the explicit offline confirmation process.
+Confirmation uses `OPERATIONAL_STATE_DIRECTORY`, or the legacy `DURABLE_FACTS_DIRECTORY` alias, when set; otherwise it resolves the same package-local `apps/harvester/recovery-facts/` directory as the runtime. It requires an already initialized and verifiable ADR-0001 store. The CLI never initializes, repairs or replaces a missing store. Do not initialize a production ledger for this Step 7 command; the ADR reserves production genesis for the later runtime-integration gate. The context's `runtimeSessionId` identifies the explicit offline confirmation process.
 
 ### Evidence bundle contract
 
