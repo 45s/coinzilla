@@ -845,29 +845,20 @@ Harvester operator control is an application capability, not a domain entity, st
 
 Harvester bootstrap composition delegates runtime state, candle-history setup, operator snapshots, user-data readiness, operational-state callbacks and shutdown stop orchestration to focused helpers. These helpers preserve the existing startup sequence, serialized user-data queue and durable process-stop boundary.
 
-
 Operational-state callback construction is centralized and each callback retains the same durable record payload, deterministic transition ID and evidence digest.
-
 
 User-data event transition handlers remain serialized through the workflow entry point; each extracted handler now owns a complete, independently testable status branch.
 
-
 The bootstrap keeps the account snapshot manager behind an explicitly initialized mutable reference so runtime callbacks can access the same manager before and after trading-engine activation.
-
 
 Bootstrap extraction retains the complete initialization order: broker connection, account snapshot manager creation, portfolio workflow setup, recovered-state construction, subscriptions, trading-engine activation and shutdown registration. The helpers replace only local composition, not lifecycle ordering.
 
-
 Transition and submission-gate helpers accept a single context object, keeping dependencies explicit while preserving the original serialized event and exchange-submission decisions.
-
 
 The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders now use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
 
-
 The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
 
-
 The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
-
 
 Completed SELL recovery-cycle publication receives the same injected workflow dependencies as the completion audit, preserving durable lifecycle evidence and state cleanup.
