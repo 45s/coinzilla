@@ -2082,7 +2082,7 @@ export function makeConservativeTradingEngine({
         const eligibility = await ensureCancellationEligible({
           symbol,
           order,
-          reason: reasonPrefix + "_BUY_CANCELLATION_INELIGIBLE",
+          reason: `${reasonPrefix}_BUY_CANCELLATION_INELIGIBLE`,
           pauseOnFailure,
         })
         if (!eligibility.ok) {
@@ -2098,8 +2098,8 @@ export function makeConservativeTradingEngine({
           }),
         })
         if (!cancelIntent.ok) {
-          const error = cancelIntent.errors?.[0] ?? new Error("BUY cancellation intent was not durably journaled during " + reasonPrefix)
-          if (pauseOnFailure) {await pause({ symbol, reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE", error })}
+          const error = cancelIntent.errors?.[0] ?? new Error(`BUY cancellation intent was not durably journaled during ${reasonPrefix}`)
+          if (pauseOnFailure) {await pause({ symbol, reason: `${reasonPrefix}_BUY_CANCEL_INTENT_NOT_DURABLE`, error })}
           errors.push(error)
           continue
         }
@@ -2111,7 +2111,7 @@ export function makeConservativeTradingEngine({
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
             error,
             pauseOnFailure,
           })
@@ -2120,11 +2120,11 @@ export function makeConservativeTradingEngine({
         }
 
         if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
-          const error = cancelResult?.errors?.[0] ?? new Error("Broker did not confirm a canonical BUY cancellation during " + reasonPrefix)
+          const error = cancelResult?.errors?.[0] ?? new Error(`Broker did not confirm a canonical BUY cancellation during ${reasonPrefix}`)
           const failed = await markCancellationFailure({
             symbol,
             order,
-            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
             error,
             cancellationResultOk: cancelResult?.ok,
             cancellationOutcome: cancelResult?.cancellationOutcome,
@@ -2141,11 +2141,11 @@ export function makeConservativeTradingEngine({
           cancellation.market.id !== order.market.id ||
           cancellation.side !== "BUY"
         ) {
-          const error = new Error("BUY cancellation response does not match the owned order during " + reasonPrefix)
+          const error = new Error(`BUY cancellation response does not match the owned order during ${reasonPrefix}`)
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: reasonPrefix + "_BUY_CANCELLATION_IDENTITY_MISMATCH",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_IDENTITY_MISMATCH`,
             error,
             pauseOnFailure,
           })
@@ -2154,11 +2154,11 @@ export function makeConservativeTradingEngine({
         }
 
         if (!["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(cancellation.status)) {
-          const error = new Error("BUY cancellation did not return a terminal order state during " + reasonPrefix)
+          const error = new Error(`BUY cancellation did not return a terminal order state during ${reasonPrefix}`)
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
             error,
             pauseOnFailure,
           })
@@ -2173,7 +2173,7 @@ export function makeConservativeTradingEngine({
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: reasonPrefix + "_BUY_CANCELLATION_RECONCILIATION_FAILED",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_RECONCILIATION_FAILED`,
             error,
             pauseOnFailure,
           })
@@ -2185,7 +2185,7 @@ export function makeConservativeTradingEngine({
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: reasonPrefix + "_BUY_CANCELLATION_NOT_REGISTERED",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_NOT_REGISTERED`,
             error,
             pauseOnFailure,
           })
@@ -2199,7 +2199,7 @@ export function makeConservativeTradingEngine({
           const failed = await markCancellationUnknown({
             symbol,
             order: reconciledOrder,
-            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -2216,8 +2216,8 @@ export function makeConservativeTradingEngine({
           fillsResult = toResult({ error })
         }
         if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
-          const error = fillsResult?.errors?.[0] ?? new Error("Unable to reconcile BUY execution history during " + reasonPrefix)
-          await pause({ symbol, reason: reasonPrefix + "_BUY_FILL_RECONCILIATION_FAILED", error })
+          const error = fillsResult?.errors?.[0] ?? new Error(`Unable to reconcile BUY execution history during ${reasonPrefix}`)
+          await pause({ symbol, reason: `${reasonPrefix}_BUY_FILL_RECONCILIATION_FAILED`, error })
           errors.push(error)
           continue
         }
@@ -2230,22 +2230,23 @@ export function makeConservativeTradingEngine({
               fill.side !== "BUY" ||
               fill.brokerOrderId !== order.brokerOrderId ||
               (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
-            invalidFill = new Error("BUY execution history contains a fill for a different order during " + reasonPrefix)
+            invalidFill = new Error(`BUY execution history contains a fill for a different order during ${reasonPrefix}`)
             break
           }
           const previous = fillsById.get(fill.id)
           if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
-            invalidFill = new Error("BUY execution history contains conflicting duplicate fill facts during " + reasonPrefix)
+            invalidFill = new Error(`BUY execution history contains conflicting duplicate fill facts during ${reasonPrefix}`)
             break
           }
           if (!previous) {fillsById.set(fill.id, fill)}
         }
         if (invalidFill) {
-          await pause({ symbol, reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH", error: invalidFill })
+          await pause({ symbol, reason: `${reasonPrefix}_BUY_FILL_IDENTITY_MISMATCH`, error: invalidFill })
           errors.push(invalidFill)
           continue
         }
 
+        // eslint-disable-next-line max-params -- Array#sort comparators require both adjacent values.
         const fills = [...fillsById.values()].sort((left, right) => {
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
               left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
@@ -2259,8 +2260,8 @@ export function makeConservativeTradingEngine({
           left: reconciledQuantity,
           right: reconciledOrder.executedQuantity.amount,
         }) !== 0) {
-          const error = new Error("BUY execution history does not match the terminal order executed quantity during " + reasonPrefix)
-          await pause({ symbol, reason: reasonPrefix + "_BUY_EXECUTED_QUANTITY_MISMATCH", error })
+          const error = new Error(`BUY execution history does not match the terminal order executed quantity during ${reasonPrefix}`)
+          await pause({ symbol, reason: `${reasonPrefix}_BUY_EXECUTED_QUANTITY_MISMATCH`, error })
           errors.push(error)
           continue
         }
@@ -2272,7 +2273,7 @@ export function makeConservativeTradingEngine({
             fill,
           })
           if (!processed.ok) {
-            errors.push(...(processed.errors ?? [new Error("BUY fill accounting failed during " + reasonPrefix)]))
+            errors.push(...(processed.errors ?? [new Error(`BUY fill accounting failed during ${reasonPrefix}`)]))
             fillFailed = true
             break
           }
@@ -2286,8 +2287,8 @@ export function makeConservativeTradingEngine({
         } else {
           publishOrderCancelFailed({
             order: reconciledOrder,
-            outcome: reconciledOrder.status + "_DURING_" + reasonPrefix,
-            error: new Error("The BUY order reached " + reconciledOrder.status + " before " + reasonPrefix + " cancellation completed"),
+            outcome: `${reconciledOrder.status}_DURING_${reasonPrefix}`,
+            error: new Error(`The BUY order reached ${reconciledOrder.status} before ${reasonPrefix} cancellation completed`),
           })
         }
       }

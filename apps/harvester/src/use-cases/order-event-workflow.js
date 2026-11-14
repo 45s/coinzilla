@@ -135,6 +135,7 @@ export function makeOrderEventWorkflow({
     processExecutionFillTransition,
   })
 
+  // eslint-disable-next-line complexity -- serialized order-event state machine; preserve exact transition ordering.
   const processUserDataEventTransition = async ({
     event,
     recoveryMode = false,
