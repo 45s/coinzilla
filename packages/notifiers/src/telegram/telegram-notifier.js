@@ -7,23 +7,21 @@ import { safeErrorMessage } from "./safe-error-message.js"
 const TELEGRAM_API_BASE_URL = "https://api.telegram.org"
 
 function sanitizeCaughtError({ error, token }) {
-  const message = safeErrorMessage({ error, token })
-  if (!(error instanceof Error)) {
-    return new Error(message)
+  error.message = safeErrorMessage({ error, token })
+  if (typeof token !== "string" || token.length < 6) {
+    return
   }
 
   try {
-    error.message = message
-    if (typeof error.stack === "string" && typeof token === "string" && token.length >= 6) {
+    if (typeof error.stack === "string") {
       error.stack = error.stack.split(token).join("[REDACTED]")
       const encodedToken = encodeURIComponent(token)
       if (encodedToken !== token) {
         error.stack = error.stack.split(encodedToken).join("[REDACTED]")
       }
     }
-    return error
   } catch {
-    return new Error(message)
+    // A diagnostic stack must not replace the original transport failure.
   }
 }
 
@@ -47,16 +45,24 @@ async function readResponsePayload({ response, token, status }) {
   try {
     return await response.json()
   } catch (error) {
-    error = sanitizeCaughtError({ error, token })
-    if (!response.ok) {
+    if (error instanceof Error) {
+      sanitizeCaughtError({ error, token })
+      if (!response.ok) {
+        throw new Error(
+          `Telegram API HTTP request failed with status ${status}`,
+          { cause: error },
+        )
+      }
       throw new Error(
-        `Telegram API HTTP request failed with status ${status}`,
+        `Telegram API returned invalid JSON: ${error.message}`,
         { cause: error },
       )
     }
+
+    const message = safeErrorMessage({ error, token })
+    const detail = response.ok ? `: ${message}` : ""
     throw new Error(
-      `Telegram API returned invalid JSON: ${error.message}`,
-      { cause: error },
+      `Telegram API HTTP request failed with status ${status}${detail}`,
     )
   }
 }
@@ -138,10 +144,15 @@ export class TelegramNotifier {
         signal: AbortSignal.timeout(this.#timeoutMs),
       })
     } catch (error) {
-      error = sanitizeCaughtError({ error, token: this.#token })
+      if (error instanceof Error) {
+        sanitizeCaughtError({ error, token: this.#token })
+        throw new Error(
+          `Telegram Bot API request failed: ${error.message}`,
+          { cause: error },
+        )
+      }
       throw new Error(
-        `Telegram Bot API request failed: ${error.message}`,
-        { cause: error },
+        `Telegram Bot API request failed: ${safeErrorMessage({ error, token: this.#token })}`,
       )
     }
 
