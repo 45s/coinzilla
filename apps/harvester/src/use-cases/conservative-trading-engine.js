@@ -1408,6 +1408,421 @@ async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryM
   }
 }
 
+
+function getBuyCancellationReasonPrefix({ reason }) {
+  if (reason === "PROCESS_SHUTDOWN") {
+    return "SHUTDOWN"
+  }
+  if (reason === "HIGH_VOLATILITY_PROTECTION") {
+    return "VOLATILITY_PROTECTION"
+  }
+  return "ACCOUNT_INTEGRITY_HALT"
+}
+
+function getActiveBuyOrdersToCancel({ state, onlySymbol }) {
+  return state.registry.getActiveOrders().filter((order) =>
+    order.side === "BUY" &&
+    (!onlySymbol || order.market.symbol === onlySymbol) &&
+    ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+}
+
+function createBuyCancellationFailure({ error, errors }) {
+  return toResult({
+    errors: errors ?? [error],
+  })
+}
+
+async function prepareOwnedBuyCancellation({ context, order, reason, reasonPrefix, pauseOnFailure }) {
+  const symbol = order.market.symbol
+  const eligibility = await context.ensureCancellationEligible({
+    symbol,
+    order,
+    reason: reasonPrefix + "_BUY_CANCELLATION_INELIGIBLE",
+    pauseOnFailure,
+  })
+  if (!eligibility.ok) {
+    return eligibility
+  }
+  const intent = await context.publishDurableIntent({
+    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
+    dataResult: mapOrderCancellationRequestedData({
+      order,
+      reason,
+    }),
+  })
+  if (intent.ok) {
+    return undefined
+  }
+  const error = intent.errors?.[0] ?? new Error("BUY cancellation intent was not durably journaled during " + reasonPrefix)
+  if (pauseOnFailure) {
+    await context.pause({
+      symbol,
+      reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE",
+      error,
+    })
+  }
+  return createBuyCancellationFailure({
+    error,
+    errors: intent.errors,
+  })
+}
+
+async function invokeOwnedBuyCancellation({ context, order, reason, reasonPrefix, pauseOnFailure }) {
+  try {
+    return await context.cancelOrderWithOperationalState({
+      order,
+      reason,
+    })
+  } catch (error) {
+    return context.markCancellationUnknown({
+      symbol: order.market.symbol,
+      order,
+      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      error,
+      pauseOnFailure,
+    })
+  }
+}
+
+async function validateOwnedBuyCancellationResponse({ context, order, result, reasonPrefix, pauseOnFailure }) {
+  const symbol = order.market.symbol
+  if (!result?.ok || !(result.data instanceof CanonicalOrder)) {
+    const error = result?.errors?.[0] ?? new Error("Broker did not confirm a canonical BUY cancellation during " + reasonPrefix)
+    return context.markCancellationFailure({
+      symbol,
+      order,
+      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      error,
+      cancellationResultOk: result?.ok,
+      cancellationOutcome: result?.cancellationOutcome,
+      pauseOnFailure,
+    })
+  }
+  const cancellation = result.data
+  const identityMatches = cancellation.clientOrderId === order.clientOrderId &&
+    cancellation.brokerOrderId === order.brokerOrderId &&
+    cancellation.market.id === order.market.id &&
+    cancellation.side === "BUY"
+  if (!identityMatches) {
+    const error = new Error("BUY cancellation response does not match the owned order during " + reasonPrefix)
+    return context.markCancellationUnknown({
+      symbol,
+      order,
+      reason: reasonPrefix + "_BUY_CANCELLATION_IDENTITY_MISMATCH",
+      error,
+      pauseOnFailure,
+    })
+  }
+  if (!["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(cancellation.status)) {
+    const error = new Error("BUY cancellation did not return a terminal order state during " + reasonPrefix)
+    return context.markCancellationUnknown({
+      symbol,
+      order,
+      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      error,
+      pauseOnFailure,
+    })
+  }
+  return {
+    ok: true,
+    data: cancellation,
+  }
+}
+
+async function applyOwnedBuyCancellationToRegistry({ context, order, cancellation, reasonPrefix, pauseOnFailure }) {
+  let update
+  try {
+    update = context.state.registry.applyUpdate({
+      order: cancellation,
+    })
+  } catch (error) {
+    return context.markCancellationUnknown({
+      symbol: order.market.symbol,
+      order,
+      reason: reasonPrefix + "_BUY_CANCELLATION_RECONCILIATION_FAILED",
+      error,
+      pauseOnFailure,
+    })
+  }
+  if (update.unknown) {
+    const error = new Error("BUY cancellation response is not registered as a Harvester-owned order")
+    return context.markCancellationUnknown({
+      symbol: order.market.symbol,
+      order,
+      reason: reasonPrefix + "_BUY_CANCELLATION_NOT_REGISTERED",
+      error,
+      pauseOnFailure,
+    })
+  }
+  context.state.registry = update.registry
+  const reconciledOrder = context.state.registry.getOrder({
+    clientOrderId: order.clientOrderId,
+  })
+  if (update.stale && !["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(reconciledOrder.status)) {
+    const error = new Error("BUY cancellation response is stale and the owned order remains open")
+    return context.markCancellationUnknown({
+      symbol: order.market.symbol,
+      order: reconciledOrder,
+      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      error,
+    })
+  }
+  return {
+    ok: true,
+    data: {
+      reconciledOrder,
+    },
+  }
+}
+
+async function readOwnedBuyExecutionHistory({ context, order, reasonPrefix }) {
+  try {
+    return await context.broker.getFills({
+      symbol: order.market.symbol,
+      orderId: order.brokerOrderId,
+    })
+  } catch (error) {
+    return toResult({
+      error,
+    })
+  }
+}
+
+function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) {
+  if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+    return {
+      ok: false,
+      error: fillsResult?.errors?.[0] ?? new Error("Unable to reconcile BUY execution history during " + reasonPrefix),
+    }
+  }
+  const fillsById = new Map()
+  for (const fill of fillsResult.data) {
+    const identityMatches = fill instanceof Fill &&
+      fill.market.id === order.market.id &&
+      fill.side === "BUY" &&
+      fill.brokerOrderId === order.brokerOrderId &&
+      (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+    if (!identityMatches) {
+      return {
+        ok: false,
+        error: new Error("BUY execution history contains a fill for a different order during " + reasonPrefix),
+        reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH",
+      }
+    }
+    const previous = fillsById.get(fill.id)
+    if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+      return {
+        ok: false,
+        error: new Error("BUY execution history contains conflicting duplicate fill facts during " + reasonPrefix),
+        reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH",
+      }
+    }
+    if (!previous) {
+      fillsById.set(fill.id, fill)
+    }
+  }
+  const fills = [...fillsById.values()].sort((left, right) => {
+    if (left.executedAt !== undefined && right.executedAt !== undefined &&
+        left.executedAt !== right.executedAt) {
+      return left.executedAt - right.executedAt
+    }
+    return left.tradeId.localeCompare(right.tradeId)
+  })
+  return {
+    ok: true,
+    fills,
+  }
+}
+
+function getOwnedBuyReconciledQuantity({ fills }) {
+  return fills.reduce((total, fill) => addDecimal({
+    left: total,
+    right: fill.quantity.amount,
+  }), "0")
+}
+
+async function applyOwnedBuyExecutionFills({ context, order, fills, reasonPrefix }) {
+  let reconciled = 0
+  for (const fill of fills) {
+    const processed = await context.processExecutionFillTransition({
+      order,
+      fill,
+    })
+    if (!processed.ok) {
+      const errors = processed.errors ?? [new Error("BUY fill accounting failed during " + reasonPrefix)]
+      return {
+        ok: false,
+        errors,
+      }
+    }
+    reconciled += 1
+  }
+  return {
+    ok: true,
+    data: {
+      reconciled,
+    },
+  }
+}
+
+async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOrder, reasonPrefix }) {
+  const fillsResult = await readOwnedBuyExecutionHistory({
+    context,
+    order,
+    reasonPrefix,
+  })
+  const validation = validateOwnedBuyExecutionHistory({
+    order,
+    fillsResult,
+    reasonPrefix,
+  })
+  if (!validation.ok) {
+    await context.pause({
+      symbol: order.market.symbol,
+      reason: validation.reason ?? reasonPrefix + "_BUY_FILL_RECONCILIATION_FAILED",
+      error: validation.error,
+    })
+    return createBuyCancellationFailure({
+      error: validation.error,
+    })
+  }
+  const reconciledQuantity = getOwnedBuyReconciledQuantity({
+    fills: validation.fills,
+  })
+  if (compareDecimal({
+    left: reconciledQuantity,
+    right: reconciledOrder.executedQuantity.amount,
+  }) !== 0) {
+    const error = new Error("BUY execution history does not match the terminal order executed quantity during " + reasonPrefix)
+    await context.pause({
+      symbol: order.market.symbol,
+      reason: reasonPrefix + "_BUY_EXECUTED_QUANTITY_MISMATCH",
+      error,
+    })
+    return createBuyCancellationFailure({
+      error,
+    })
+  }
+  return applyOwnedBuyExecutionFills({
+    context,
+    order: reconciledOrder,
+    fills: validation.fills,
+    reasonPrefix,
+  })
+}
+
+async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix, pauseOnFailure }) {
+  const prepared = await prepareOwnedBuyCancellation({
+    context,
+    order,
+    reason,
+    reasonPrefix,
+    pauseOnFailure,
+  })
+  if (prepared) {
+    return prepared
+  }
+  const result = await invokeOwnedBuyCancellation({
+    context,
+    order,
+    reason,
+    reasonPrefix,
+    pauseOnFailure,
+  })
+  const validated = await validateOwnedBuyCancellationResponse({
+    context,
+    order,
+    result,
+    reasonPrefix,
+    pauseOnFailure,
+  })
+  if (!validated?.ok) {
+    return validated
+  }
+  const registryResult = await applyOwnedBuyCancellationToRegistry({
+    context,
+    order,
+    cancellation: validated.data,
+    reasonPrefix,
+    pauseOnFailure,
+  })
+  if (!registryResult?.ok) {
+    return registryResult
+  }
+  const reconciledOrder = registryResult.data.reconciledOrder
+  const fills = await reconcileOwnedBuyCancellationFills({
+    context,
+    order,
+    reconciledOrder,
+    reasonPrefix,
+  })
+  if (!fills.ok) {
+    return fills
+  }
+  if (reconciledOrder.status === "CANCELED") {
+    context.publishOrderCancelled({
+      order: reconciledOrder,
+    })
+    return toResult({
+      data: {
+        canceled: 1,
+        reconciled: fills.data?.reconciled ?? 0,
+      },
+    })
+  }
+  context.publishOrderCancelFailed({
+    order: reconciledOrder,
+    outcome: reconciledOrder.status + "_DURING_" + reasonPrefix,
+    error: new Error("The BUY order reached " + reconciledOrder.status + " before " + reasonPrefix + " cancellation completed"),
+  })
+  return toResult({
+    data: {
+      canceled: 0,
+      reconciled: fills.data?.reconciled ?? 0,
+    },
+  })
+}
+
+async function cancelOwnedBuyOrdersTransition({ context, options }) {
+  const reason = options.reason ?? "PROCESS_SHUTDOWN"
+  const reasonPrefix = getBuyCancellationReasonPrefix({
+    reason,
+  })
+  const activeBuyOrders = getActiveBuyOrdersToCancel({
+    state: context.state,
+    onlySymbol: options.symbol,
+  })
+  const errors = []
+  let canceled = 0
+  let reconciled = 0
+  for (const order of activeBuyOrders) {
+    const result = await cancelSingleOwnedBuyOrder({
+      context,
+      order,
+      reason,
+      reasonPrefix,
+      pauseOnFailure: options.pauseOnFailure !== false,
+    })
+    if (!result?.ok) {
+      errors.push(...(result.errors ?? [new Error("Owned BUY cancellation failed")]))
+      continue
+    }
+    canceled += result.data?.canceled ?? 0
+    reconciled += result.data?.reconciled ?? 0
+  }
+  if (errors.length > 0) {
+    return toResult({
+      errors,
+    })
+  }
+  return toResult({
+    data: {
+      canceled,
+      reconciled,
+    },
+  })
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 // eslint-disable-next-line max-lines-per-function, max-statements -- engine factory wires the domain workflows and safety gates.
 export function makeConservativeTradingEngine({
@@ -3187,274 +3602,23 @@ export function makeConservativeTradingEngine({
     ...options,
   })
 
-  const cancelOwnedBuyOrders = ({
-    reason = "PROCESS_SHUTDOWN",
-    symbol: onlySymbol,
-    pauseOnFailure = true
-  } = {}) => runTransition({
-    task: async () => {
-      let reasonPrefix = "ACCOUNT_INTEGRITY_HALT"
-      if (reason === "PROCESS_SHUTDOWN") {
-        reasonPrefix = "SHUTDOWN"
-      } else if (reason === "HIGH_VOLATILITY_PROTECTION") {
-        reasonPrefix = "VOLATILITY_PROTECTION"
-      }
-      const activeBuyOrders = state.registry.getActiveOrders()
-        .filter((order) =>
-          order.side === "BUY" && (!onlySymbol || order.market.symbol === onlySymbol) &&
-          ["OPEN", "PARTIALLY_FILLED"].includes(order.status)
-        )
-      const errors = []
-      let canceled = 0
-      let reconciled = 0
-
-      for (const order of activeBuyOrders) {
-        const { symbol } = order.market
-        const eligibility = await ensureCancellationEligible({
-          symbol,
-          order,
-          reason: `${reasonPrefix}_BUY_CANCELLATION_INELIGIBLE`,
-          pauseOnFailure,
-        })
-        if (!eligibility.ok) {
-          errors.push(...eligibility.errors)
-          continue
-        }
-
-        const cancelIntent = await publishDurableIntent({
-          eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
-          dataResult: mapOrderCancellationRequestedData({
-            order,
-            reason,
-          }),
-        })
-        if (!cancelIntent.ok) {
-          const error = cancelIntent.errors?.[0] ?? new Error(`BUY cancellation intent was not durably journaled during ${reasonPrefix}`)
-          if (pauseOnFailure) {await pause({
-            symbol,
-            reason: `${reasonPrefix}_BUY_CANCEL_INTENT_NOT_DURABLE`,
-            error
-          })}
-          errors.push(error)
-          continue
-        }
-
-        let cancelResult
-        try {
-          cancelResult = await cancelOrderWithOperationalState({
-            order,
-            reason
-          })
-        } catch (error) {
-          const failed = await markCancellationUnknown({
-            symbol,
-            order,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
-            error,
-            pauseOnFailure,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-
-        if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
-          const error = cancelResult?.errors?.[0] ?? new Error(`Broker did not confirm a canonical BUY cancellation during ${reasonPrefix}`)
-          const failed = await markCancellationFailure({
-            symbol,
-            order,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
-            error,
-            cancellationResultOk: cancelResult?.ok,
-            cancellationOutcome: cancelResult?.cancellationOutcome,
-            pauseOnFailure,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-
-        const cancellation = cancelResult.data
-        if (
-          cancellation.clientOrderId !== order.clientOrderId ||
-          cancellation.brokerOrderId !== order.brokerOrderId ||
-          cancellation.market.id !== order.market.id ||
-          cancellation.side !== "BUY"
-        ) {
-          const error = new Error(`BUY cancellation response does not match the owned order during ${reasonPrefix}`)
-          const failed = await markCancellationUnknown({
-            symbol,
-            order,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_IDENTITY_MISMATCH`,
-            error,
-            pauseOnFailure,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-
-        if (!["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(cancellation.status)) {
-          const error = new Error(`BUY cancellation did not return a terminal order state during ${reasonPrefix}`)
-          const failed = await markCancellationUnknown({
-            symbol,
-            order,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
-            error,
-            pauseOnFailure,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-
-        let update
-        try {
-          update = state.registry.applyUpdate({ order: cancellation })
-        } catch (error) {
-          const failed = await markCancellationUnknown({
-            symbol,
-            order,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_RECONCILIATION_FAILED`,
-            error,
-            pauseOnFailure,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-        if (update.unknown) {
-          const error = new Error("BUY cancellation response is not registered as a Harvester-owned order")
-          const failed = await markCancellationUnknown({
-            symbol,
-            order,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_NOT_REGISTERED`,
-            error,
-            pauseOnFailure,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-        state.registry = update.registry
-        const reconciledOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId })
-        if (update.stale && !["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(reconciledOrder.status)) {
-          const error = new Error("BUY cancellation response is stale and the owned order remains open")
-          const failed = await markCancellationUnknown({
-            symbol,
-            order: reconciledOrder,
-            reason: `${reasonPrefix}_BUY_CANCELLATION_UNCONFIRMED`,
-            error,
-          })
-          errors.push(...(failed.errors ?? [error]))
-          continue
-        }
-
-        let fillsResult
-        try {
-          fillsResult = await broker.getFills({
-            symbol,
-            orderId: order.brokerOrderId,
-          })
-        } catch (error) {
-          fillsResult = toResult({ error })
-        }
-        if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
-          const error = fillsResult?.errors?.[0] ?? new Error(`Unable to reconcile BUY execution history during ${reasonPrefix}`)
-          await pause({
-            symbol,
-            reason: `${reasonPrefix}_BUY_FILL_RECONCILIATION_FAILED`,
-            error
-          })
-          errors.push(error)
-          continue
-        }
-
-        const fillsById = new Map()
-        let invalidFill
-        for (const fill of fillsResult.data) {
-          if (!(fill instanceof Fill) ||
-              fill.market.id !== order.market.id ||
-              fill.side !== "BUY" ||
-              fill.brokerOrderId !== order.brokerOrderId ||
-              (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
-            invalidFill = new Error(`BUY execution history contains a fill for a different order during ${reasonPrefix}`)
-            break
-          }
-          const previous = fillsById.get(fill.id)
-          if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
-            invalidFill = new Error(`BUY execution history contains conflicting duplicate fill facts during ${reasonPrefix}`)
-            break
-          }
-          if (!previous) {fillsById.set(fill.id, fill)}
-        }
-        if (invalidFill) {
-          await pause({
-            symbol,
-            reason: `${reasonPrefix}_BUY_FILL_IDENTITY_MISMATCH`,
-            error: invalidFill
-          })
-          errors.push(invalidFill)
-          continue
-        }
-
-        const fills = [...fillsById.values()].sort((...adjacentFills) => {
-          const [left, right] = adjacentFills
-          if (left.executedAt !== undefined && right.executedAt !== undefined &&
-              left.executedAt !== right.executedAt) {return left.executedAt - right.executedAt}
-          return left.tradeId.localeCompare(right.tradeId)
-        })
-        const reconciledQuantity = fills.reduce(
-          (...reductionValues) => {
-            const [total, fill] = reductionValues
-            return addDecimal({
-              left: total,
-              right: fill.quantity.amount,
-            })
-          },
-          "0",
-        )
-        if (compareDecimal({
-          left: reconciledQuantity,
-          right: reconciledOrder.executedQuantity.amount,
-        }) !== 0) {
-          const error = new Error(`BUY execution history does not match the terminal order executed quantity during ${reasonPrefix}`)
-          await pause({
-            symbol,
-            reason: `${reasonPrefix}_BUY_EXECUTED_QUANTITY_MISMATCH`,
-            error
-          })
-          errors.push(error)
-          continue
-        }
-
-        let fillFailed = false
-        for (const fill of fills) {
-          const processed = await processExecutionFillTransition({
-            order: reconciledOrder,
-            fill,
-          })
-          if (!processed.ok) {
-            errors.push(...(processed.errors ?? [new Error(`BUY fill accounting failed during ${reasonPrefix}`)]))
-            fillFailed = true
-            break
-          }
-          reconciled += 1
-        }
-        if (fillFailed) {continue}
-
-        if (reconciledOrder.status === "CANCELED") {
-          publishOrderCancelled({ order: reconciledOrder })
-          canceled += 1
-        } else {
-          publishOrderCancelFailed({
-            order: reconciledOrder,
-            outcome: `${reconciledOrder.status}_DURING_${reasonPrefix}`,
-            error: new Error(`The BUY order reached ${reconciledOrder.status} before ${reasonPrefix} cancellation completed`),
-          })
-        }
-      }
-
-      if (errors.length > 0) {return toResult({ errors })}
-      return toResult({ data: {
-        canceled,
-        reconciled
-      } })
-    },
+  const cancelOwnedBuyOrders = (options = {}) => runTransition({
+    task: () => cancelOwnedBuyOrdersTransition({
+      context: {
+        state,
+        ensureCancellationEligible,
+        publishDurableIntent,
+        cancelOrderWithOperationalState,
+        markCancellationUnknown,
+        markCancellationFailure,
+        broker,
+        pause,
+        processExecutionFillTransition,
+        publishOrderCancelled,
+        publishOrderCancelFailed,
+      },
+      options,
+    }),
   })
 
   const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
