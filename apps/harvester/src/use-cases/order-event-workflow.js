@@ -18,225 +18,6 @@ import { makeReconcileTerminalOrderFills } from "./reconcile-terminal-order-fill
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
-function publishInvalidExecutionFill({ eventPublisher, order, fill, reason, error }) {
-  publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
-    dataResult: mapExecutionInvalidFillData({
-      order,
-      fill,
-      reason,
-      error,
-    }),
-  })
-}
-
-function validateExecutionFill({ order, fill, eventPublisher }) {
-  if (!(fill instanceof Fill)) {
-    const error = new TypeError("TRADE event requires a canonical Fill")
-    publishInvalidExecutionFill({
-      eventPublisher,
-      order,
-      reason: "MISSING_FILL",
-      error,
-    })
-    return {
-      ok: false,
-      result: failureResult({
-        error,
-        category: "REST_RECONCILIATION",
-        stage: "STREAM_FILL_MISSING",
-        retryable: true,
-      }),
-    }
-  }
-  if (!(order instanceof CanonicalOrder)) {
-    return {
-      ok: false,
-      result: failureResult({
-        error: new TypeError("Execution fill requires its registered canonical order"),
-        category: "OWNERSHIP_INTEGRITY",
-        stage: "FILL_ORDER_REGISTRY",
-        retryable: false,
-      }),
-    }
-  }
-  const identityMatches = fill.market.id === order.market.id &&
-    fill.side === order.side &&
-    fill.brokerOrderId === order.brokerOrderId &&
-    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
-  if (!identityMatches) {
-    const error = new Error("Canonical Fill identity does not match its registered order")
-    publishInvalidExecutionFill({
-      eventPublisher,
-      order,
-      fill,
-      reason: "IDENTITY_MISMATCH",
-      error,
-    })
-    return {
-      ok: false,
-      error,
-      symbol: order.market.symbol,
-      failure: {
-        category: "OWNERSHIP_INTEGRITY",
-        stage: "FILL_ORDER_IDENTITY",
-        retryable: false,
-      },
-    }
-  }
-  return {
-    ok: true,
-    symbol: order.market.symbol,
-  }
-}
-
-async function pauseForInvalidExecutionFill({ pause, validation }) {
-  if (validation.failure?.stage !== "FILL_ORDER_IDENTITY") {
-    return
-  }
-  await pause({
-    symbol: validation.symbol,
-    reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH",
-    error: validation.error,
-  })
-}
-
-async function handleExecutionAccountingFailure({ accounting, order, fill, pause, eventPublisher }) {
-  const error = accounting?.errors?.[0] ?? new Error("Execution accounting failed")
-  publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED,
-    dataResult: mapExecutionAccountingFailedData({
-      order,
-      fill,
-      error,
-    }),
-  })
-  await pause({
-    symbol: order.market.symbol,
-    reason: "EXECUTION_ACCOUNTING_FAILED",
-    error,
-  })
-  return failureResult({
-    errors: accounting?.errors ?? [error],
-    category: "ACCOUNTING_INTEGRITY",
-    stage: "FILL_ACCOUNTING",
-    retryable: false,
-  })
-}
-
-function recordExecutionFillIdentity({ state, order, fill, recordBuyExecutionFill, recordSellExecutionFill }) {
-  const symbol = order.market.symbol
-  if (fill.side === "BUY") {
-    recordBuyExecutionFill({
-      fill,
-    })
-    state.completedRecoverySellSymbols.delete(symbol)
-    state.completedRecoverySellOrdersBySymbol.delete(symbol)
-  }
-  if (fill.side === "SELL") {
-    recordSellExecutionFill({
-      fill,
-    })
-  }
-}
-
-function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
-  if (accounting.data?.applied === true) {
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
-      dataResult: mapFillAppliedData({
-        fill,
-      }),
-    })
-  } else if (accounting.data?.duplicate === true) {
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.EXECUTION_DUPLICATE_FILL,
-      dataResult: mapDuplicateFillData({
-        fill,
-      }),
-    })
-  }
-}
-
-async function processExecutionFill({ dependencies, order, fill }) {
-  const {
-    state,
-    eventPublisher,
-    updateTradingAccounting,
-    recordBuyExecutionFill,
-    recordSellExecutionFill,
-    pause,
-  } = dependencies
-  try {
-    const validation = validateExecutionFill({
-      order,
-      fill,
-      eventPublisher,
-    })
-    if (!validation.ok) {
-      await pauseForInvalidExecutionFill({
-        pause,
-        validation,
-      })
-      if (validation.result) {
-        return validation.result
-      }
-      return failureResult({
-        error: validation.error,
-        category: validation.failure.category,
-        stage: validation.failure.stage,
-        retryable: validation.failure.retryable,
-      })
-    }
-    const accounting = await updateTradingAccounting({
-      fill,
-    })
-    if (!accounting?.ok) {
-      return handleExecutionAccountingFailure({
-        accounting,
-        order,
-        fill,
-        pause,
-        eventPublisher,
-      })
-    }
-    recordExecutionFillIdentity({
-      state,
-      order,
-      fill,
-      recordBuyExecutionFill,
-      recordSellExecutionFill,
-    })
-    publishExecutionFillOutcome({
-      accounting,
-      fill,
-      eventPublisher,
-    })
-    return toResult({
-      data: {
-        applied: accounting.data?.applied === true,
-        duplicate: accounting.data?.duplicate === true,
-      },
-    })
-  } catch (error) {
-    return failureResult({
-      error,
-      category: "ACCOUNTING_INTEGRITY",
-      stage: "FILL_ACCOUNTING",
-      retryable: false,
-    })
-  }
-}
-
-/**
- * Coordinate canonical user-data order events and execution-fill application.
- * The caller owns serialization and supplies accounting, cancellation,
- * recovery-cycle and strategy-evaluation transitions.
- */
 export function makeOrderEventWorkflow({
   state,
   broker,
@@ -763,3 +544,223 @@ export function makeOrderEventWorkflow({
     processUserDataEventTransition,
   })
 }
+
+function publishInvalidExecutionFill({ eventPublisher, order, fill, reason, error }) {
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
+    dataResult: mapExecutionInvalidFillData({
+      order,
+      fill,
+      reason,
+      error,
+    }),
+  })
+}
+
+function validateExecutionFill({ order, fill, eventPublisher }) {
+  if (!(fill instanceof Fill)) {
+    const error = new TypeError("TRADE event requires a canonical Fill")
+    publishInvalidExecutionFill({
+      eventPublisher,
+      order,
+      reason: "MISSING_FILL",
+      error,
+    })
+    return {
+      ok: false,
+      result: failureResult({
+        error,
+        category: "REST_RECONCILIATION",
+        stage: "STREAM_FILL_MISSING",
+        retryable: true,
+      }),
+    }
+  }
+  if (!(order instanceof CanonicalOrder)) {
+    return {
+      ok: false,
+      result: failureResult({
+        error: new TypeError("Execution fill requires its registered canonical order"),
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "FILL_ORDER_REGISTRY",
+        retryable: false,
+      }),
+    }
+  }
+  const identityMatches = fill.market.id === order.market.id &&
+    fill.side === order.side &&
+    fill.brokerOrderId === order.brokerOrderId &&
+    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+  if (!identityMatches) {
+    const error = new Error("Canonical Fill identity does not match its registered order")
+    publishInvalidExecutionFill({
+      eventPublisher,
+      order,
+      fill,
+      reason: "IDENTITY_MISMATCH",
+      error,
+    })
+    return {
+      ok: false,
+      error,
+      symbol: order.market.symbol,
+      failure: {
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "FILL_ORDER_IDENTITY",
+        retryable: false,
+      },
+    }
+  }
+  return {
+    ok: true,
+    symbol: order.market.symbol,
+  }
+}
+
+async function pauseForInvalidExecutionFill({ pause, validation }) {
+  if (validation.failure?.stage !== "FILL_ORDER_IDENTITY") {
+    return
+  }
+  await pause({
+    symbol: validation.symbol,
+    reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH",
+    error: validation.error,
+  })
+}
+
+async function handleExecutionAccountingFailure({ accounting, order, fill, pause, eventPublisher }) {
+  const error = accounting?.errors?.[0] ?? new Error("Execution accounting failed")
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED,
+    dataResult: mapExecutionAccountingFailedData({
+      order,
+      fill,
+      error,
+    }),
+  })
+  await pause({
+    symbol: order.market.symbol,
+    reason: "EXECUTION_ACCOUNTING_FAILED",
+    error,
+  })
+  return failureResult({
+    errors: accounting?.errors ?? [error],
+    category: "ACCOUNTING_INTEGRITY",
+    stage: "FILL_ACCOUNTING",
+    retryable: false,
+  })
+}
+
+function recordExecutionFillIdentity({ state, order, fill, recordBuyExecutionFill, recordSellExecutionFill }) {
+  const symbol = order.market.symbol
+  if (fill.side === "BUY") {
+    recordBuyExecutionFill({
+      fill,
+    })
+    state.completedRecoverySellSymbols.delete(symbol)
+    state.completedRecoverySellOrdersBySymbol.delete(symbol)
+  }
+  if (fill.side === "SELL") {
+    recordSellExecutionFill({
+      fill,
+    })
+  }
+}
+
+function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
+  if (accounting.data?.applied === true) {
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+      dataResult: mapFillAppliedData({
+        fill,
+      }),
+    })
+  } else if (accounting.data?.duplicate === true) {
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.EXECUTION_DUPLICATE_FILL,
+      dataResult: mapDuplicateFillData({
+        fill,
+      }),
+    })
+  }
+}
+
+async function processExecutionFill({ dependencies, order, fill }) {
+  const {
+    state,
+    eventPublisher,
+    updateTradingAccounting,
+    recordBuyExecutionFill,
+    recordSellExecutionFill,
+    pause,
+  } = dependencies
+  try {
+    const validation = validateExecutionFill({
+      order,
+      fill,
+      eventPublisher,
+    })
+    if (!validation.ok) {
+      await pauseForInvalidExecutionFill({
+        pause,
+        validation,
+      })
+      if (validation.result) {
+        return validation.result
+      }
+      return failureResult({
+        error: validation.error,
+        category: validation.failure.category,
+        stage: validation.failure.stage,
+        retryable: validation.failure.retryable,
+      })
+    }
+    const accounting = await updateTradingAccounting({
+      fill,
+    })
+    if (!accounting?.ok) {
+      return handleExecutionAccountingFailure({
+        accounting,
+        order,
+        fill,
+        pause,
+        eventPublisher,
+      })
+    }
+    recordExecutionFillIdentity({
+      state,
+      order,
+      fill,
+      recordBuyExecutionFill,
+      recordSellExecutionFill,
+    })
+    publishExecutionFillOutcome({
+      accounting,
+      fill,
+      eventPublisher,
+    })
+    return toResult({
+      data: {
+        applied: accounting.data?.applied === true,
+        duplicate: accounting.data?.duplicate === true,
+      },
+    })
+  } catch (error) {
+    return failureResult({
+      error,
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "FILL_ACCOUNTING",
+      retryable: false,
+    })
+  }
+}
+
+/**
+ * Coordinate canonical user-data order events and execution-fill application.
+ * The caller owns serialization and supplies accounting, cancellation,
+ * recovery-cycle and strategy-evaluation transitions.
+ */
