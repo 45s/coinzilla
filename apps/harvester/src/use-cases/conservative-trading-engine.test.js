@@ -7806,7 +7806,8 @@ function makeShutdownOrder({
   })
 }
 
-test("account-integrity safety halt reconciles a filled BUY without cancelling its recovery SELL", async () => {
+
+async function createSafetyHaltOrderFixture() {
   const recoveredFilledBuy = makeShutdownOrder({
     side: "BUY",
     clientOrderId: "safety-halt-filled-buy",
@@ -7829,11 +7830,11 @@ test("account-integrity safety halt reconciles a filled BUY without cancelling i
   })
   const activeBuyHistory = makeOrderStatusUpdate({
     order: activeBuy,
-    status: "OPEN"
+    status: "OPEN",
   })
   const recoverySellHistory = makeOrderStatusUpdate({
     order: recoverySell,
-    status: "OPEN"
+    status: "OPEN",
   })
   const buyFill = makeBuyFill({
     order: recoveredFilledBuy,
@@ -7845,50 +7846,83 @@ test("account-integrity safety halt reconciles a filled BUY without cancelling i
   })
   const harness = await createHarness({
     initialState: {
-      orderRegistry: new OrderRegistry({ orders: [recoveredFilledBuy, activeBuy, recoverySell] }),
+      orderRegistry: new OrderRegistry({
+        orders: [recoveredFilledBuy, activeBuy, recoverySell],
+      }),
       replacementIntents: new Set(["DOGEUSDT"]),
     },
-    eventPublisher: { publish: () => ({ ok: true }) },
+    eventPublisher: {
+      publish: () => ({
+        ok: true,
+      }),
+    },
   })
   harness.broker.getOpenOrders = async () => ({
     ok: true,
     data: [
-      makeOpenOrder({ order: activeBuy }),
-      makeOpenOrder({ order: recoverySell }),
+      makeOpenOrder({
+        order: activeBuy,
+      }),
+      makeOpenOrder({
+        order: recoverySell,
+      }),
     ],
   })
   harness.setAcknowledgedOrder({
     order: filledBuyHistory,
-    fills: [buyFill]
+    fills: [buyFill],
   })
-  harness.setAcknowledgedOrder({ order: activeBuyHistory })
-  harness.setAcknowledgedOrder({ order: recoverySellHistory })
+  harness.setAcknowledgedOrder({
+    order: activeBuyHistory,
+  })
+  harness.setAcknowledgedOrder({
+    order: recoverySellHistory,
+  })
   const safetyHalt = createAccountIntegritySafetyHalt({
     getTradingEngine: () => harness.engine,
     logger: {},
   })
+  return {
+    harness,
+    safetyHalt,
+    recoveredFilledBuy,
+    activeBuy,
+    recoverySell,
+  }
+}
 
-  await safetyHalt()
-
+function assertSafetyHaltPreservesRecoverySell({ fixture }) {
+  const {
+    harness,
+    recoveredFilledBuy,
+    activeBuy,
+    recoverySell,
+  } = fixture
   assert.deepEqual(
     harness.cancellationIds,
     [activeBuy.brokerOrderId],
     "the safety halt may cancel its remaining owned BUY but must not cancel the recovery SELL while reconciling the filled BUY",
   )
-  assert.equal(harness.accountedFills.length, 1, "the recovered BUY fill must be reconciled before the explicit BUY cancellation stage")
+  assert.equal(harness.accountedFills.length, 1)
+  assert.equal(harness.engine.getOrders().find((order) =>
+    order.clientOrderId === recoveredFilledBuy.clientOrderId).status, "FILLED")
+  assert.equal(harness.engine.getOrders().find((order) =>
+    order.clientOrderId === activeBuy.clientOrderId).status, "CANCELED")
   assert.equal(
-    harness.engine.getOrders().find((order) => order.clientOrderId === recoveredFilledBuy.clientOrderId).status,
-    "FILLED",
-  )
-  assert.equal(
-    harness.engine.getOrders().find((order) => order.clientOrderId === activeBuy.clientOrderId).status,
-    "CANCELED",
-  )
-  assert.equal(
-    harness.engine.getOrders().find((order) => order.clientOrderId === recoverySell.clientOrderId).status,
+    harness.engine.getOrders().find((order) =>
+      order.clientOrderId === recoverySell.clientOrderId).status,
     "OPEN",
     "the active recovery SELL must remain untouched by safety-halt reconciliation",
   )
+}
+
+
+test("account-integrity safety halt reconciles a filled BUY without cancelling its recovery SELL", async () => {
+  const fixture = await createSafetyHaltOrderFixture()
+  await fixture.safetyHalt()
+  assertSafetyHaltPreservesRecoverySell({
+    fixture,
+  })
 })
 
 test("shutdown cancellation cancels only strategy-owned BUY orders and preserves SELL orders", async () => {
