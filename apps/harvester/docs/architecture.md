@@ -526,6 +526,21 @@ registered order, the pair pauses. No replacement SELL is submitted from
 unreconciled quantities. This covers the ordinary cancel/replace path without
 claiming durable restart or stream-recovery reconciliation.
 
+During graceful shutdown, BUY fills do not invoke the ordinary strategy
+evaluator. The event workflow records a per-market recovery-replan request, and
+the shutdown coordinator processes it only after BUY cancellation, user-data
+intake stop and final fill reconciliation. The final owned SELL is compared
+with the policy plan using authoritative `Position.spent` (accumulated BUY
+cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
+(confirmed net SELL proceeds), plus retained quantity, minimum profit and
+existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is checked for consistency
+with `Position.spent`, but is never used to calculate the recovery plan. A stale SELL is canceled and its terminal fills reconciled before
+a SELL-only replacement is submitted. If the pair is paused, market data is
+stale, cancellation/submission is unresolved, or the replacement cannot be
+verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
+External orders remain unowned and untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE`
+is preserved.
+
 ## Trailing BUY lifecycle
 
 The engine tracks whether the pair is in a trailing phase. A newly initialized
@@ -559,9 +574,10 @@ The Journal is not trading-state authority and ordinary event delivery remains a
 - Immediately before broker placement/cancellation, publish the allowlisted intent event and await a successful durable flush. If it fails, do not perform the exchange write and pause the pair.
 - Ordinary event publication remains best-effort. A synchronous EventBus publication exception or failed result must be contained and reported without escaping into unrelated trading workflows.
 - EventBus subscriber delivery and ordinary Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted; only the explicit barriers above establish durability.
+- Conservative evaluation is composed from ordered gates, decision preparation, dust completion, portfolio allocation, preflight validation and submission-result handling. Submission gating is composed from separate state, volatility, and market-book checks; the extraction preserves the existing gate order and fail-closed outcomes. Shutdown orchestration is delegated to a lifecycle helper that retains stop-promise idempotency, operator-control cleanup, runtime drain and the durable process-stop boundary. Structured phase records use a monotonic clock and shared runtime-session correlation ID. They expose phase/status, elapsed time from shutdown request, phase duration and a bounded failure reason; the CLOSING Journal durability barrier is timed separately. The historical 2026-11-13 delay of 128.047 seconds remains unexplained because the raw evidence artifacts are not stored in the repository; do not infer a cause from the summary report.
 - Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
 - Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
-- On normal shutdown, stop market-price/book intake first and prevent new strategy decisions. Keep user-data intake active while the existing engine cancels only acknowledged, strategy-owned BUY orders and reconciles cancellation-racing fills. Preserve all SELL orders. Drain accepted user-data events, perform final owned-order reconciliation as verification only (without another BUY-cancellation pass), then stop user-data intake and drain again before the CLOSING audit and resource cleanup. Known open SELL orders are intentional and do not make CLOSING incomplete; unresolved BUYs or unknown order states do. For trading-enabled runs, unresolved cancellation, owned-order reconciliation, or user-data/accounting state fails shutdown and retains the trading-process lock. Other incomplete CLOSING audits remain recorded. A failed Journal close must not skip broker/resource cleanup.
+- On normal shutdown, record the request and establish the stop state before operator-control cleanup; the stop state disables new market work and trading while user-data intake remains active. Stop market-price/book intake and drain accepted market work; perform initial owned-order reconciliation; cancel only acknowledged, strategy-owned BUYs; drain events that race cancellation; stop user-data intake and drain again; perform final owned-order reconciliation; then reconcile recovery SELL coverage. BUY fills received while stopping are applied through the idempotent Portfolio/RecoveryLedger transition and schedule deferred recovery replanning; they never trigger ordinary strategy evaluation. The shutdown replan validates remaining SELL quantity and financial sufficiency against final active Position, retained `keepQuantity`, actual commission-adjusted recovery cost/proceeds, minimum profit and owned SELL commitments. It confirms cancellation of stale owned SELLs before submitting a SELL-only replacement; it never submits a new BUY and never mutates external orders. A post-replan owned-order reconciliation and final coverage audit must pass before CLOSING. An open SELL is intentional only when its remaining quantity and proceeds satisfy the final plan; otherwise CLOSING is INCOMPLETE and shutdown remains SHUTDOWN_INCOMPLETE. Unresolved cancellation/submission outcomes, unavailable planning inputs, or failed coverage remain fail-closed. A failed Journal close must not skip broker/resource cleanup.
 - Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
 
 Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. Broker-connected startup intentionally fails closed when Journal readiness or the durable PREFLIGHT audit is unavailable; order and cancellation intents likewise require a durable pre-write barrier.
@@ -825,3 +841,23 @@ Manual trading can still change exchange free balances or inventory; Harvester u
 The single application-wide named `appConfig` export is composed from focused named-export modules. Strategy-level switches are isolated in `config/strategies/cg-coin-grabber.js`; its pair map is imported from the separate `apps/harvester/cg-coin-grabber.js` `tradingPairs` export. Inbound Telegram defaults are isolated as `OPERATOR_CONTROL_CONFIG` in `config/operator-control.js`; all modules are composed by `config/index.js`. Validation remains at the single application configuration boundary. Harvester configuration and domain modules use named exports only.
 
 Harvester operator control is an application capability, not a domain entity, strategy policy, broker adapter or generic command bus. The Conservative engine owns the serialized market-scoped operator-pause state; application use cases authorize a trusted `trading-operator` actor and append `OPERATOR_MARKET_PAUSED` / `OPERATOR_MARKET_RESUMED` through the ADR-0001 Operational State Store port before applying in-memory state. The first inbound transport is a private-chat Telegram Long Polling adapter with an explicit user-ID allowlist. The Command Center exposes `/start`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`, plus authorized inline navigation/refresh and confirmation-gated inline market pause/resume controls. It is runtime-wired but disabled by default; when enabled, bootstrap starts it after engine activation and before user-data subscription, and stops it before runtime shutdown. Read-only pages call application queries only. It never places, cancels, adopts or modifies exchange orders; a pause blocks new strategy BUYs and trailing-BUY replacements only, while resting BUYs may still fill and recovery SELLs/accounting continue. Pause state is process-lifetime and is not restored after restart. See [ADR-0002](./architecture/decisions/0002-transport-independent-operator-control.md), [ADR-0003](./architecture/decisions/0003-process-lifetime-operator-pause.md), the [operator-control contract](./operator-control/README.md), and the [Command Center runbook](./operations/telegram-command-center.md).
+
+Harvester bootstrap composition delegates runtime state, candle-history setup, operator snapshots, user-data readiness, operational-state callbacks and shutdown stop orchestration to focused helpers. These helpers preserve the existing startup sequence, serialized user-data queue and durable process-stop boundary.
+
+Operational-state callback construction is centralized and each callback retains the same durable record payload, deterministic transition ID and evidence digest.
+
+User-data event transition handlers remain serialized through the workflow entry point; each extracted handler now owns a complete, independently testable status branch.
+
+The bootstrap keeps the account snapshot manager behind an explicitly initialized mutable reference so runtime callbacks can access the same manager before and after trading-engine activation.
+
+Bootstrap extraction retains the complete initialization order: broker connection, account snapshot manager creation, portfolio workflow setup, recovered-state construction, subscriptions, trading-engine activation and shutdown registration. The helpers replace only local composition, not lifecycle ordering.
+
+Transition and submission-gate helpers accept a single context object, keeping dependencies explicit while preserving the original serialized event and exchange-submission decisions.
+
+The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders now use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
+
+The shutdown-recovery inventory, conservative evaluation stages and operational-state callback builders use single context-object parameters. This keeps each use-case boundary explicit without changing transition order or submission policy.
+
+The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
+
+Completed SELL recovery-cycle publication receives the same injected workflow dependencies as the completion audit, preserving durable lifecycle evidence and state cleanup.
