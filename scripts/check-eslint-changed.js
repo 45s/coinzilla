@@ -50,20 +50,12 @@ function getChangedFiles({ baseSha }) {
   return result.stdout.split("\0").filter(Boolean);
 }
 
-function runGit(args) {
-  const result = spawnSync("git", args, { encoding: "utf8" });
-  if (result.error || result.status !== 0) {
-    throw new Error(result.error?.message || result.stderr || `git ${args.join(" ")} failed.`);
-  }
-  return result.stdout;
-}
-
 function findingKey(message) {
   return [
     message.ruleId,
     message.messageId,
     message.message,
-    message.source?.split("\\n")[0]?.trim() ?? "",
+    message.source?.split("\n")[0]?.trim() ?? "",
   ].join("|");
 }
 
