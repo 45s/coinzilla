@@ -8,7 +8,7 @@ import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../../src/domain/account/account-snapshot.js"
 import { OrderRegistry } from "../../src/domain/orders/order-registry.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
-import { createFileOperationalStateStore } from "../../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-durable-facts-store.js"
 import { confirmMarketHistoryCoverage } from "../../src/use-cases/confirm-market-history-coverage.js"
 import { reconcileRecoveredMarketState } from "../../src/use-cases/reconcile-recovered-market-state.js"
 

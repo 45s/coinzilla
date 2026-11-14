@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { access, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { createFileOperationalStateStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-durable-facts-store.js"
 import {
   parseRecoveryMarketArguments,
   runRecoveryMarketCommand,
