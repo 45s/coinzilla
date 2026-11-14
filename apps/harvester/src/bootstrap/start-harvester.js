@@ -244,6 +244,46 @@ function createHarvesterUserDataStatusRuntime({
   return { handleUserDataStatus }
 }
 
+async function handleHarvesterStartupFailure({
+  error,
+  logger,
+  userDataState,
+  operatorControlLifecycle,
+  broker,
+  brokerName,
+  eventPublisher,
+  subscriptions,
+  bookSubscriptions,
+  userDataSubscription,
+} = {}) {
+  logger.error?.({
+    message: "Broker startup step failed",
+    errorName: error?.name,
+    errorMessage: error?.message ?? String(error),
+    errorStack: error?.stack,
+  })
+  await userDataState.eventQueue
+  const operatorCleanupErrors = []
+  try {
+    await operatorControlLifecycle.stop()
+  } catch (cleanupError) {
+    operatorCleanupErrors.push(cleanupError)
+  }
+  const brokerCleanupErrors = await cleanupBroker({
+    broker,
+    brokerName,
+    eventPublisher,
+    subscriptions,
+    bookSubscriptions,
+    userDataSubscription,
+  })
+  throwIfStartupCleanupFailed({
+    error,
+    cleanupErrors: [...operatorCleanupErrors, ...brokerCleanupErrors],
+  })
+  throw error
+}
+
 export async function startHarvester({
   configSource,
   appConfig: suppliedAppConfig,
@@ -618,31 +658,18 @@ tore,
       subscriptions
     })
   } catch (error) {
-    logger.error?.({
-      message: "Broker startup step failed",
-      errorName: error?.name,
-      errorMessage: error?.message ?? String(error),
-      errorStack: error?.stack,
-    })
-    await userDataState.eventQueue
-    const operatorCleanupErrors = []
-    try {
-      await operatorControlLifecycle.stop()
-    } catch (cleanupError) {
-      operatorCleanupErrors.push(cleanupError)
-    }
-    const brokerCleanupErrors = await cleanupBroker({
+    await handleHarvesterStartupFailure({
+      error,
+      logger,
+      userDataState,
+      operatorControlLifecycle,
       broker,
       brokerName,
       eventPublisher,
       subscriptions,
       bookSubscriptions,
-      userDataSubscription
+      userDataSubscription,
     })
-    const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
-    throwIfStartupCleanupFailed({ error, cleanupErrors })
-    throw error
-  }
 
   userDataState.startupComplete = true
   startPendingUserDataRecovery({ userDataState, startUserDataRecovery })
