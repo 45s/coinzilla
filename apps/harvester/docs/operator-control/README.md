@@ -8,7 +8,7 @@ The engine/application foundation is implemented in [PR #1045](https://github.co
 
 The Telegram Command Center exposes `/start`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-1 is merged in PRs #1079 and #1081. CC-2 adds authorized read-only trading visibility queries: canonical Portfolio positions keep active and retained inventory separate; open orders label Harvester registry orders versus unmatched exchange orders as external; balances report the exchange snapshot source timestamp and age. CC-2 is merged in PR #1086; all seven exact-head GitHub Actions workflows passed. CC-3 proactive alerts are merged in PR #1087. CC-4 usability and hardening is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact-head CI and external documentation-link validation passed. See the [Telegram operator runbook](../operations/telegram-command-center.md) for command-menu, inline-navigation and confirmation behavior.
 
-The operator pause is **process-lifetime only**: the fact is durably appended before the in-memory pause is applied, but the pause is not restored into a later process. ADR-0003 explicitly keeps this capability independent from full ADR-0001 restart recovery. The separate #654 startup fence currently blocks every second process start until recovery Steps 8–9 are accepted.
+The operator pause is **process-lifetime only**: the operator-control record is committed to the Operational State Store before the in-memory pause is applied, but the pause is not restored into a later process. ADR-0003 explicitly keeps this capability independent from full ADR-0001 restart recovery. The separate #654 startup fence currently blocks every second process start until recovery Steps 8–9 are accepted.
 
 Do not use Journal as the control-state store. Do not claim that a pause survives a process restart. Existing exchange orders are not canceled or modified; a resting BUY may still fill.
 
@@ -16,8 +16,8 @@ Do not use Journal as the control-state store. Do not claim that a pause survive
 
 - [ADR-0002 — Transport-independent operator control](../architecture/decisions/0002-transport-independent-operator-control.md) — accepted DDD ownership, actor contract, pause semantics, authorization, transport and failure decisions.
 - [ADR-0003 — Process-lifetime operator pause](../architecture/decisions/0003-process-lifetime-operator-pause.md) — accepted initial rollout boundary.
-- [Implementation contract and diagrams](../architecture/OPERATOR_CONTROL_DESIGN.md) — current source layout, request/fact schemas and delivery sequence.
-- [ADR-0001 — Application-owned durable facts](../architecture/decisions/0001-application-owned-recovery-facts.md) — authoritative persistence and restart-recovery contract.
+- [Implementation contract and diagrams](../architecture/OPERATOR_CONTROL_DESIGN.md) — current source layout, request/record schemas and delivery sequence.
+- [ADR-0001 — Process-restart recovery record contract](../architecture/decisions/0001-application-owned-recovery-facts.md) — authoritative persistence and restart-recovery contract.
 - [Harvester roadmap](../../ROADMAP.md) — current implementation status and dependencies.
 
 ## Command Center commands
@@ -49,11 +49,11 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 
 - Runtime configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
 - Inbound control defaults disabled. Enabling it requires a non-empty allowlist of Telegram user IDs and `TELEGRAM_BOT_TOKEN`. Bootstrap adds the validated numeric `TELEGRAM_USER_ID` environment value to `allowedUserIds`, preserving configured IDs; this variable does not enable control by itself.
-- **Operational State Store** is the application-facing name for the ADR-0001 append-only ledger. The on-disk record format, initialization command and `DURABLE_FACTS_DIRECTORY` setting remain unchanged.
-- Harvester bootstrap composes the same Operational State Store backed by the ADR-0001 append-only ledger whenever either `recovery.enabled` or `operatorControl.telegram.enabled` is true. Enabling Telegram alone does not enable restart recovery. The store uses `DURABLE_FACTS_DIRECTORY` when configured, otherwise the documented `~/.coinzilla/harvester/recovery-facts` default.
-- The ledger must already be initialized; normal startup never creates or repairs it. When Telegram operator control alone requires the store, bootstrap verifies it before broker-capable runtime startup. See the [Harvester ledger setup](../../README.md#application-owned-recovery-facts-ledger-adr-0001-step-8).
+- **Operational State Store** is the application-facing name for the ADR-0001 append-only ledger. The persisted record schema and initialization command remain unchanged. The existing `DURABLE_FACTS_DIRECTORY` environment variable is retained as a legacy compatibility name.
+- Harvester bootstrap composes the same Operational State Store backed by the ADR-0001 append-only ledger whenever either `recovery.enabled` or `operatorControl.telegram.enabled` is true. Enabling Telegram alone does not enable restart recovery. The store uses the legacy `DURABLE_FACTS_DIRECTORY` setting when configured; otherwise it keeps the existing `~/.coinzilla/harvester/recovery-facts` default. This naming cleanup does not move the store into the project checkout.
+- The ledger must already be initialized; normal startup never creates or repairs it. When Telegram operator control alone requires the store, bootstrap verifies it before broker-capable runtime startup. See the [Operational State Store setup](../../README.md#operational-state-store-adr-0001-step-8).
 - The poller starts only after the Harvester engine is constructed and stops before broker shutdown.
-- Operator pause records use the exact same process-owned Operational State Store backed by the ADR-0001 append-only ledger as process, order, cancellation, fill and recovery-cycle facts. Do not create a second writer or an operator-specific ledger.
+- Operator pause records use the exact same process-owned Operational State Store backed by the ADR-0001 append-only ledger as process, order, cancellation, fill and recovery-cycle records. Do not create a second writer or an operator-specific ledger.
 - A successful durable append precedes the in-memory pause. If the append fails or is uncertain, the pause is not applied and success is not acknowledged.
 - User-data transport disconnect/reconnect and successful reconciliation do not clear the in-memory operator pause.
 - Operator pause records are not replayed at startup. Today ADR-0001's process-start gate blocks every second process start until Step 8 reconciliation and Step 9 crash/restart proof are accepted. If restart restoration is eventually enabled, the operator must reissue `/pause <SYMBOL>` when required; operator pauses are not restored automatically.
