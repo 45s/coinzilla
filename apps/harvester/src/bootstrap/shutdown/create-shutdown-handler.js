@@ -237,16 +237,6 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     userDataIntakeErrors: [],
     disconnectErrors: [],
   }
-  context.phaseRunner = createPhaseRunner({
-    logger,
-    now,
-    shutdownRequestedAt,
-    shutdownCorrelationId,
-  })
-  context.failureRecorder = createFailureRecorder({
-    context,
-    phaseRunner: context.phaseRunner,
-  })
   return context
 }
 
