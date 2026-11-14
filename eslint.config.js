@@ -18,6 +18,12 @@ export default defineConfig([
   },
   {
     files: ["**/*.{js,mjs,cjs}"],
+    linterOptions: {
+      // Source comments must never be able to suppress or override repository lint rules.
+      noInlineConfig: true,
+      reportUnusedDisableDirectives: "error",
+      reportUnusedInlineConfigs: "error",
+    },
     plugins: {
       js,
     },
