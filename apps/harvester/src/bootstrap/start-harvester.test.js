@@ -2786,7 +2786,7 @@ class TestnetTradingRecoveryScenario {
         eventType: "executionReport",
         executionType: "TRADE",
         executedOrder: this.canonicalBuy,
-        fill,
+        fill: this.initialBuyFill,
       },
     })
   
@@ -2839,7 +2839,7 @@ class TestnetTradingRecoveryScenario {
     this.recoveryPending = false
   
   
-    const recoveryFillAppliedEvents = this.publishedEvents.filter((event) =>
+    this.recoveryFillAppliedEvents = this.publishedEvents.filter((event) =>
       event.name === "execution.fill_applied" && event.data?.tradeId === this.recoveryFillTradeId)
   
     this.recoveryReconciledStatusEvents = this.publishedEvents.filter((event) =>
