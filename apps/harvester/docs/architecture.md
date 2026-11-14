@@ -530,9 +530,11 @@ During graceful shutdown, BUY fills do not invoke the ordinary strategy
 evaluator. The event workflow records a per-market recovery-replan request, and
 the shutdown coordinator processes it only after BUY cancellation, user-data
 intake stop and final fill reconciliation. The final owned SELL is compared
-with the policy plan using the final Position and RecoveryLedger, including
-actual commissions, retained quantity, minimum profit and existing owned SELL
-commitments. A stale SELL is canceled and its terminal fills reconciled before
+with the policy plan using authoritative `Position.spent` (accumulated BUY
+cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
+(confirmed net SELL proceeds), plus retained quantity, minimum profit and
+existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror
+is not a strategy input. A stale SELL is canceled and its terminal fills reconciled before
 a SELL-only replacement is submitted. If the pair is paused, market data is
 stale, cancellation/submission is unresolved, or the replacement cannot be
 verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
