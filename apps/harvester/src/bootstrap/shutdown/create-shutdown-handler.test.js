@@ -151,37 +151,33 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
 })
 
 
-function createBuyFillShutdownRace({ state, calls }) {
-  let releaseInitialReconciliation
-  let signalInitialReconciliation
-  const initialReconciliationStarted = new Promise((resolve) => {
-    signalInitialReconciliation = resolve
+
+function createShutdownRaceGate() {
+  let release
+  let signalStarted
+  const started = new Promise((resolve) => {
+    signalStarted = resolve
   })
-  const initialReconciliationGate = new Promise((resolve) => {
-    releaseInitialReconciliation = resolve
+  const gate = new Promise((resolve) => {
+    release = resolve
   })
-  let releaseBuyCancellation
-  let signalBuyCancellation
-  const buyCancellationStarted = new Promise((resolve) => {
-    signalBuyCancellation = resolve
-  })
-  const buyCancellationGate = new Promise((resolve) => {
-    releaseBuyCancellation = resolve
-  })
-  let releaseFinalUserDataDrain
-  let signalFinalUserDataDrain
-  const finalUserDataDrainStarted = new Promise((resolve) => {
-    signalFinalUserDataDrain = resolve
-  })
-  let appliedBuyFills = 0
+  return {
+    started,
+    gate,
+    signalStarted,
+    release,
+  }
+}
+
+function createBuyFillShutdownEngine({ calls, initialGate, cancellationGate, appliedBuyFills }) {
   let reconciliationCount = 0
-  const engine = {
+  return {
     reconcileOwnedOrders: async () => {
       reconciliationCount += 1
       calls.push("reconcile:" + reconciliationCount)
       if (reconciliationCount === 1) {
-        signalInitialReconciliation()
-        await initialReconciliationGate
+        initialGate.signalStarted()
+        await initialGate.gate
       }
       return {
         ok: true,
@@ -189,15 +185,15 @@ function createBuyFillShutdownRace({ state, calls }) {
     },
     cancelOwnedBuyOrdersForShutdown: async () => {
       calls.push("buy-cancellation-started")
-      signalBuyCancellation()
-      await buyCancellationGate
+      cancellationGate.signalStarted()
+      await cancellationGate.gate
       return {
         ok: true,
       }
     },
     reconcileRecoverySellsForShutdown: async () => {
       calls.push("recovery-sell-reconciliation")
-      assert.equal(appliedBuyFills, 3, "All fills from all shutdown race windows must be drained before SELL replanning.")
+      assert.equal(appliedBuyFills.count, 3, "All fills from all shutdown race windows must be drained before SELL replanning.")
       return {
         ok: true,
         data: {
@@ -214,37 +210,58 @@ function createBuyFillShutdownRace({ state, calls }) {
     }),
     getOrders: () => [],
   }
-  const stopUserDataIntake = async () => {
+}
+
+function createFinalUserDataDrain({ state, calls, gate, appliedBuyFills }) {
+  return async () => {
     state.eventQueue = new Promise((resolve) => {
-      signalFinalUserDataDrain()
-      releaseFinalUserDataDrain = () => {
-        appliedBuyFills += 1
+      gate.signalStarted()
+      gate.releaseFinal = () => {
+        appliedBuyFills.count += 1
         calls.push("fill-during-final-user-data-drain")
         resolve()
       }
     })
     return []
   }
+}
+
+function createBuyFillShutdownRace({ state, calls }) {
+  const initialGate = createShutdownRaceGate()
+  const cancellationGate = createShutdownRaceGate()
+  const finalDrainGate = createShutdownRaceGate()
+  const appliedBuyFills = {
+    count: 0,
+  }
   return {
-    engine,
-    stopUserDataIntake,
-    initialReconciliationStarted,
-    releaseInitialReconciliation,
-    buyCancellationStarted,
-    releaseBuyCancellation,
-    finalUserDataDrainStarted,
-    releaseFinalUserDataDrain: () => releaseFinalUserDataDrain(),
+    engine: createBuyFillShutdownEngine({
+      calls,
+      initialGate,
+      cancellationGate,
+      appliedBuyFills,
+    }),
+    stopUserDataIntake: createFinalUserDataDrain({
+      state,
+      calls,
+      gate: finalDrainGate,
+      appliedBuyFills,
+    }),
+    initialReconciliationStarted: initialGate.started,
+    releaseInitialReconciliation: initialGate.release,
+    buyCancellationStarted: cancellationGate.started,
+    releaseBuyCancellation: cancellationGate.release,
+    finalUserDataDrainStarted: finalDrainGate.started,
+    releaseFinalUserDataDrain: () => finalDrainGate.releaseFinal(),
     applyInitialFill: () => {
-      appliedBuyFills += 1
+      appliedBuyFills.count += 1
       calls.push("fill-during-initial-reconciliation")
     },
     applyCancellationFill: () => {
-      appliedBuyFills += 1
+      appliedBuyFills.count += 1
       calls.push("fill-during-buy-cancellation")
     },
   }
 }
-
 
 test("drains BUY fills arriving during initial reconciliation, BUY cancellation, and user-data draining before recovery repair", async () => {
   const state = createState()
