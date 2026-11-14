@@ -226,7 +226,7 @@ test("rejects keepQuantity that is not aligned to the exchange quantity step", (
 test("rejects exchange metadata whose required order type is unsupported", () => {
   assert.throws(
     () => createPairConfig({
-      inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+      inputs: { tradingEnvironment: "both", investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
       metadata: { ...metadata, supportedOrderTypes: ["LIMIT"] },
     }),
     /LIMIT_MAKER/i,
@@ -237,7 +237,7 @@ test("rejects exchange metadata whose required order type is unsupported", () =>
 test("adds a new pair without mutating or replacing existing application configuration", () => {
   const original = createAppConfig()
   const pair = createPairConfig({
-    inputs: { investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
+    inputs: { tradingEnvironment: "both", investment: "100", orderQuantity: "20", keepQuantity: "0.1", makerPercent: "0", takerPercent: "0.1", minProfit: "0.01", priceStepPercent: "0.05" },
     metadata,
   })
   const updated = addPairToAppConfig({ appConfig: original, symbol: "ADAFDUSD", pairConfig: pair })
@@ -300,6 +300,7 @@ test("requires only the limit order type selected by the configured maker policy
 test("preserves small exchange-aligned quantities represented with JavaScript exponent notation", () => {
   const pair = createPairConfig({
     inputs: {
+      tradingEnvironment: "both",
       investment: "200",
       orderQuantity: "1",
       keepQuantity: "0.0000001",

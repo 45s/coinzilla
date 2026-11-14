@@ -19,6 +19,9 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
   }
   const runtime = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
   const { environment, brokerName, tradingMode, tradingEnabled } = runtime
+  if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
+    throw new Error("Conservative trading requires at least one enabled pair")
+  }
   const pairs = selectPairsForTradingMode({ pairs: strategyConfig.pairs, tradingMode })
   if (Object.keys(pairs).length === 0) {
     throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}; configure a pair with tradingEnvironment="${tradingMode}" or "both"`)
