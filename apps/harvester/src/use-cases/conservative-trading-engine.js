@@ -1025,7 +1025,7 @@ function createConservativeEngineCancellationContext({ context } = {}) {
 }
 
 function createConservativeEngineSubmissionContext({ context } = {}) {
-  const dependencies = context.dependencies
+  const { dependencies } = context
   context.shutdownRecoverySubmission = { allowed: false }
   context.canSubmit = createSubmissionGate({
     state: context.state,
@@ -1060,7 +1060,7 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
 }
 
 function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
-  const dependencies = context.dependencies
+  const { dependencies } = context
   context.cancelAndReconcileRecoverySells = (options = {}) => cancelRecoverySells({
     context: {
       state: context.state,
@@ -1119,7 +1119,7 @@ function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
 }
 
 function createConservativeEngineEvaluationContext({ context } = {}) {
-  const dependencies = context.dependencies
+  const { dependencies } = context
   context.evaluateLatestTransition = createLatestTransitionEvaluator({
     state: context.state,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
@@ -1163,7 +1163,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
 }
 
 function createConservativeEngineMarketEventContext({ context } = {}) {
-  const dependencies = context.dependencies
+  const { dependencies } = context
   context.processMarketBookTransition = createMarketBookTransitionHandler({
     state: context.state,
     isMarketBookFresh: dependencies.isMarketBookFresh,
@@ -1184,7 +1184,7 @@ function createConservativeEngineMarketEventContext({ context } = {}) {
 }
 
 function createConservativeEngineOrderEventContext({ context } = {}) {
-  const dependencies = context.dependencies
+  const { dependencies } = context
   const orderEventWorkflow = makeOrderEventWorkflow({
     state: context.state,
     broker: dependencies.broker,
@@ -1222,8 +1222,9 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
   Object.assign(context, ownedOrderManagement)
 }
 
-function createConservativeEngineRuntimeApi({ context } = {}) {
-  const dependencies = context.dependencies
+
+function createConservativeEngineProtectionContext({ context } = {}) {
+  const { dependencies } = context
   const volatilityWorkflow = makeVolatilityProtectionWorkflow({
     state: context.state,
     isStopping: dependencies.isStopping,
@@ -1247,6 +1248,10 @@ function createConservativeEngineRuntimeApi({ context } = {}) {
     hasPendingRecoveryManagedCancellation: context.hasPendingRecoveryManagedCancellation,
     runTransition: context.runTransition,
   })
+}
+
+function createConservativeEngineRuntimeOperations({ context } = {}) {
+  const { dependencies } = context
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
     const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
     if (!protection?.ok) {return protection}
@@ -1280,6 +1285,9 @@ function createConservativeEngineRuntimeApi({ context } = {}) {
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
     isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
   })
+}
+
+function createConservativeEnginePublicApi({ context } = {}) {
   return Object.freeze({
     processMarketPrice: context.processMarketPrice,
     processBookTicker: context.processBookTicker,
@@ -1374,7 +1382,9 @@ export function makeConservativeTradingEngine({
   createConservativeEngineEvaluationContext({ context })
   createConservativeEngineMarketEventContext({ context })
   createConservativeEngineOrderEventContext({ context })
-  return createConservativeEngineRuntimeApi({ context })
+  createConservativeEngineProtectionContext({ context })
+  createConservativeEngineRuntimeOperations({ context })
+  return createConservativeEnginePublicApi({ context })
 }
 
 function inspectAcknowledgedFillHistory({ order, fills }) {
@@ -2292,7 +2302,7 @@ async function cancelAndReconcileTrailingBuyTransition({ context, symbol, order 
   if (!cancellation.ok) {
     return cancellation
   }
-  const canceledOrder = cancellation.data.canceledOrder
+  const { canceledOrder } = cancellation.data
   const fills = await reconcileTrailingBuyFills({
     context,
     symbol,
@@ -2760,7 +2770,7 @@ function createBuyCancellationFailure({ error, errors }) {
 }
 
 async function prepareOwnedBuyCancellation({ context, order, reason, reasonPrefix, pauseOnFailure }) {
-  const symbol = order.market.symbol
+  const { market: { symbol } } = order
   const eligibility = await context.ensureCancellationEligible({
     symbol,
     order,
@@ -2812,7 +2822,7 @@ async function invokeOwnedBuyCancellation({ context, order, reason, reasonPrefix
 }
 
 async function validateOwnedBuyCancellationResponse({ context, order, result, reasonPrefix, pauseOnFailure }) {
-  const symbol = order.market.symbol
+  const { market: { symbol } } = order
   if (!result?.ok || !(result.data instanceof CanonicalOrder)) {
     const error = result?.errors?.[0] ?? new Error("Broker did not confirm a canonical BUY cancellation during " + reasonPrefix)
     return context.markCancellationFailure({
@@ -3076,7 +3086,7 @@ async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix,
   if (!registryResult?.ok) {
     return registryResult
   }
-  const reconciledOrder = registryResult.data.reconciledOrder
+  const { reconciledOrder } = registryResult.data
   const fills = await reconcileOwnedBuyCancellationFills({
     context,
     order,
@@ -3414,7 +3424,7 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
   if (!ownedOrdersResult?.ok) {
     return ownedOrdersResult
   }
-  const ownedOrders = ownedOrdersResult.data.ownedOrders
+  const { ownedOrders } = ownedOrdersResult.data
   const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
   if (ownedOrders.length === 0) {
     return toResult({
