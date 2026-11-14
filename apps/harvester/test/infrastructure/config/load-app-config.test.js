@@ -42,7 +42,7 @@ function createValidConfig() {
 }
 
 function createConfigModule(config) {
-  return "export const appConfig = " + JSON.stringify(config, null, 2) + ";\n"
+  return `export const appConfig = ${JSON.stringify(config, null, 2)};\n`
 }
 
 function createTokenSpecifications() {
@@ -86,14 +86,14 @@ function assertAppConfigStructure(config) {
       "makerPercent",
       "takerPercent",
     ]) {
-      assert.ok(Object.hasOwn(pair, key), "The effective runtime pair must contain " + key + ".")
+      assert.ok(Object.hasOwn(pair, key), `The effective runtime pair must contain ${key}.`)
     }
   }
 }
 
-async function writeTokenSpecifications(directory, specifications = createTokenSpecifications()) {
+async function writeTokenSpecifications({ directory, specifications = createTokenSpecifications() }) {
   const path = join(directory, "token-specification.json")
-  await writeFile(path, JSON.stringify(specifications, null, 2) + "\n", "utf8")
+  await writeFile(path, `${JSON.stringify(specifications, null, 2)}\n`, "utf8")
   return path
 }
 
@@ -109,9 +109,9 @@ test("loads a named appConfig module and applies a supplied token registry", asy
   t.after(() => rm(directory, { recursive: true, force: true }))
   const configPath = join(directory, "config.mjs")
   await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
-  const tokenSpecificationsPath = await writeTokenSpecifications(directory)
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory })
 
-  const config = await loadAppConfig(configPath, { tokenSpecificationsPath })
+  const config = await loadAppConfig({ source: configPath, tokenSpecificationsPath })
   assertAppConfigStructure(config)
 })
 
@@ -122,7 +122,7 @@ test("loads a named appConfig module from a file URL", async (t) => {
   await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
   const tokenSpecificationsPath = await writeTokenSpecifications(directory)
 
-  const config = await loadAppConfig(new URL("file://" + configPath), { tokenSpecificationsPath })
+  const config = await loadAppConfig({ source: new URL("file://" + configPath), tokenSpecificationsPath })
   assertAppConfigStructure(config)
 })
 
@@ -131,10 +131,10 @@ test("fails closed when a configured market has no token specification", async (
   t.after(() => rm(directory, { recursive: true, force: true }))
   const configPath = join(directory, "config.mjs")
   await writeFile(configPath, createConfigModule(createValidConfig()), "utf8")
-  const tokenSpecificationsPath = await writeTokenSpecifications(directory, {})
+  const tokenSpecificationsPath = await writeTokenSpecifications({ directory, specifications: {} })
 
   await assert.rejects(
-    loadAppConfig(configPath, { tokenSpecificationsPath }),
+    loadAppConfig({ source: configPath, tokenSpecificationsPath }),
     /missing token specification.*LINKFDUSD/i,
     "A configured market without authoritative precision metadata must not reach runtime validation.",
   )
