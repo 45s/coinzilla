@@ -985,7 +985,7 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: seeded.recoveryLedger,
+    initialRecoveryLedger: recoveryLedger,
     accountingApplied: true,
     cancelExecutedQuantity: "0.0",
   })
@@ -2753,9 +2753,18 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
 
 test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
   const seeded = makeSeededRecoveryState()
+  // The legacy ledger buyCost mirror is deliberately divergent. Shutdown
+  // coverage must use Position.spent plus confirmed net SELL proceeds.
+  const recoveryLedger = new RecoveryLedger({
+    market: seeded.recoveryLedger.market,
+    buyCost: "999",
+    netSellProceeds: seeded.recoveryLedger.netSellProceeds,
+    appliedFillIds: seeded.recoveryLedger.appliedFillIds,
+    appliedFillFingerprints: seeded.recoveryLedger.appliedFillFingerprints,
+  })
   const stopping = { value: false }
   const portfolioRef = { current: seeded.portfolio }
-  const ledgerRef = { current: seeded.recoveryLedger }
+  const ledgerRef = { current: recoveryLedger }
   const appliedFillIds = new Set()
   const appliedFills = []
   const sequence = []
