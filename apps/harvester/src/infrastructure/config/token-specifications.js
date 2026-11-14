@@ -112,9 +112,6 @@ export function mergeTokenSpecifications({ tokenSpecifications = {}, metadata } 
   const { baseAsset, market } = createMarketSpecification({ metadata })
   const symbol = metadata.symbol
   const existingToken = tokenSpecifications[baseAsset]
-  if (existingToken && existingToken.baseAsset !== baseAsset) {
-    throw new Error(`Existing token entry does not match Binance base asset ${baseAsset}`)
-  }
 
   const updated = {
     ...tokenSpecifications,
