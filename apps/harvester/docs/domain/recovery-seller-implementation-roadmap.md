@@ -19,7 +19,7 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
 2. [x] **RS-2a — Shared Portfolio foundation:** merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118). One Portfolio now supports multiple independently owned Positions per market and multiple Positions per strategy; canonical fill ownership/deduplication, aggregate market inventory, centralized custody/reservation boundaries and CG ownership-scoped consumers are covered.
-3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation/authorization, historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. Resolve owner decisions before implementing policy.
+3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, explicit-authorization provenance/lifecycle, historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. The explicit operator-authorization model is agreed; its interface/evidence/lifecycle details and the other blocking owner decisions must be resolved before policy implementation.
 4. Implement the pure RS strategy policy.
 5. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
 6. Prove the full lifecycle with deterministic offline tests and exact-head CI.
@@ -105,12 +105,13 @@ Before implementing each rule, add a focused test that expresses the agreed busi
 Model only the concepts required by the approved RS contract:
 
 - Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
+- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator declares legacy quantity and original quote investment in configuration; historical exchange evidence is not required. These values establish declared historical basis, not custody or sellable balance. Configuration validation/confirmation, expiry/revocation, durable provenance and restart behavior remain owner decisions.
 - Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
 - Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
-- Independent recovery-tranche and legacy profitability gates. Recovery profit cannot subsidize a legacy loss.
+- Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
 - Cycle progress and residual handling only after the remaining owner decisions are settled.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):

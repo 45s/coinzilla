@@ -74,7 +74,13 @@ The names above describe the proposed configuration shape, not a runtime schema.
 
 The original configured quantity and invested amount are historical basis inputs; remaining logical legacy quantity, Spot-available quantity, EARN/externally held quantity, and active reservations are distinct facts. A transfer between Spot and EARN changes custody/availability, not historical cost basis or the original acquisition quantity. RS must not assume EARN balances are observable through the Spot broker or silently claim custody of them.
 
-**Owner decision required:** authorization interface and lifecycle: operator confirmation, evidence source/balance baseline, expiry and revocation behavior, durable provenance, and whether authorization survives process restart. Until specified, no runtime authorization mechanism may be invented.
+**Decision recorded — authorization model: explicit operator authorization (Question 1, accepted).**
+
+RS must not infer authorization from a wallet balance, Portfolio quantity, deposit, manual/external order, or historical process state. The operator must explicitly authorize the market's pre-existing legacy position before RS may manage any legacy quantity. The configured original quote investment and original base quantity are historical-basis inputs; they do not by themselves establish Spot custody or immediately sellable quantity. Authorization is permission, not proof of custody, Portfolio accounting, or available balance. Actual Spot availability and reservations must be independently verified before each SELL. EARN/off-Spot inventory remains unavailable for Spot execution until returned and authoritatively reconciled. No authorization may bypass profitability, exchange filters, risk limits, or reconciliation gates.
+
+**Decision recorded — legacy evidence/configuration (Question 2, accepted):** the operator will declare the legacy position directly in configuration by supplying its original aggregate quote investment and original base quantity. No exchange trade-history import or other historical proof is required. These configured values are the operator's declared historical basis, not proof of current ownership, Spot custody, Portfolio quantity, or sellable balance. Current Spot availability and reservations must still be independently verified before execution.
+
+**Still unresolved owner decisions:** configuration validation and any confirmation flow; expiry and revocation behavior; durable provenance; and whether/how authorization survives process restart. No runtime authorization lifecycle may be invented before these are specified.
 
 ## 4. Attribution and shared Portfolio accounting
 
@@ -123,7 +129,7 @@ Recovery-tranche cost must include gross executed BUY quote notional, actual quo
 
 Cycle SELL proceeds must use actual confirmed SELL fills, less actual quote-asset SELL commissions and reliably valued third-asset SELL commissions. Base-asset SELL commissions change the base quantity consumed. Configured maker/taker rates are planning estimates only, never substitutes for actual commission facts.
 
-The owner must specify the cycle's minimum net profit and exact proceeds/cost allocation rule. A profitable recovery tranche does not prove that the legacy units in the same exchange order are profitable.
+The recovery cycle must satisfy the existing pair-level `minProfit` configuration value, measured as net profit in the pair's quote asset after applicable commissions. RS must reuse this configured threshold rather than introduce a duplicate minimum-profit setting or ask the operator to choose it again. A profitable recovery tranche does not prove that the legacy units in the same exchange order are profitable. Exact proceeds/cost allocation remains a separate implementation requirement.
 
 ### 5.2 Legacy historical cost basis
 
@@ -133,7 +139,7 @@ Legacy inventory has a historical acquisition cost separate from the current rec
 
 Illustration: the recovery tranche earns 0.20 USDT net, but the proposed legacy slice would realize a 0.10 USDT loss against its historical basis. The combined headline result is positive; the legacy sale still fails the legacy-profit gate.
 
-**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. **Still unresolved:** how the supplied historical values are verified and represented in accounting; how partial legacy disposals reduce remaining basis; allocation of mixed-order proceeds and shared SELL fees; minimum recovery-cycle net profit; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
+**Agreed legacy cost-basis input:** operator supplies aggregate original quote invested and original base quantity; RS calculates average historical cost as invested quote divided by original quantity. Example: 100 USDT / 50 ZRO = 2 USDT per ZRO. The operator does not configure an average price separately. The existing pair-level `minProfit` setting governs minimum net recovery-cycle profit; it does not replace the independent legacy rule that each legacy slice must recover its own historical basis and applicable selling costs. **Still unresolved:** how the supplied historical values are represented in accounting; how partial legacy disposals reduce remaining basis; allocation of mixed-order proceeds and shared SELL fees; and third-asset commission valuation failure behavior. A cycle-level profit calculation alone cannot authorize a combined SELL.
 
 ## 6. BUY tranche accumulation and eligibility
 
@@ -243,7 +249,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 |---|---|---|
 | sellQuantity | Exact per-cycle target or maximum cap | Determines legacy amount requested and smaller-remainder eligibility |
 | Smaller/final residual | Sell smaller balance, require explicit final authorization, or retain it | Prevents unintended liquidation |
-| Legacy authorization | Operator interface, evidence source, expiry/revocation, durable/restart behavior | Prevents silent wallet adoption |
+| Legacy authorization | **Explicit operator authorization agreed**; interface, evidence source/balance baseline, expiry/revocation, durable provenance and restart behavior remain open | Prevents silent wallet adoption and loss of authorization provenance |
 | Legacy accounting | Opening-inventory representation in shared Portfolio and verification of configured invested/quantity inputs | Current Portfolio is fill-driven; configured historical basis is agreed, but Spot holdings and off-Spot custody must be represented safely |
 | Legacy profit | Mixed-order proceeds/fee allocation and treatment of remaining aggregate basis after partial legacy sales | Prevents a profitable recovery tranche hiding a legacy loss; input basis is aggregate invested quote / original quantity |
 | Cycle profit | Minimum net profit and precise cost/proceeds inclusion | Prevents omitted fees/costs |
