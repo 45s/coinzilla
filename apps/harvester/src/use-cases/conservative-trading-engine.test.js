@@ -7116,12 +7116,9 @@ test("clears a recovered replacement intent only after canonical history confirm
 })
 
 
-test("paginates complete REST fill history beyond Binance's 1000-trade page limit", async () => {
-  const originalQuantity = "1001"
-  const makeOrder = ({
-    status,
-    executedQuantity
-  }) => new CanonicalOrder({
+
+function createPagedRecoveryOrder({ status, executedQuantity, originalQuantity = "1001" }) {
+  return new CanonicalOrder({
     clientOrderId: "recovered-many-fills",
     brokerOrderId: "broker-many-fills",
     market,
@@ -7129,30 +7126,25 @@ test("paginates complete REST fill history beyond Binance's 1000-trade page limi
     type: "LIMIT",
     limitPrice: new Money({
       amount: "1",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: originalQuantity,
-      asset: baseAsset
+      asset: baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: executedQuantity,
-      asset: baseAsset
+      asset: baseAsset,
     }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  const ownedOrder = makeOrder({
-    status: "UNKNOWN",
-    executedQuantity: "0"
-  })
-  const historyOrder = makeOrder({
-    status: "FILLED",
-    executedQuantity: originalQuantity
-  })
-  const makeFill = ({ tradeId }) => new Fill({
+}
+
+function createPagedRecoveryFill({ ownedOrder, tradeId }) {
+  return new Fill({
     tradeId: String(tradeId),
     brokerOrderId: ownedOrder.brokerOrderId,
     clientOrderId: ownedOrder.clientOrderId,
@@ -7160,54 +7152,93 @@ test("paginates complete REST fill history beyond Binance's 1000-trade page limi
     side: "BUY",
     price: new Money({
       amount: "1",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     quantity: new Quantity({
       amount: "1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     quoteQuantity: new Money({
       amount: "1",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const firstPage = Array.from({ length: 1000 }, (_, index) => makeFill({ tradeId: index + 1 }))
-  const secondPage = [makeFill({ tradeId: 1001 })]
-  const fillCursors = []
-  const harness = await createHarness({
-    initialBook: false,
-    initialState: { orderRegistry: new OrderRegistry({ orders: [ownedOrder] }) },
-  })
+}
+
+function createPagedRecoveryFillPages({ ownedOrder }) {
+  return {
+    firstPage: Array.from({
+      length: 1000,
+    }, (_, index) => createPagedRecoveryFill({
+      ownedOrder,
+      tradeId: index + 1,
+    })),
+    secondPage: [createPagedRecoveryFill({
+      ownedOrder,
+      tradeId: 1001,
+    })],
+  }
+}
+
+async function configurePagedRecoveryFillBroker({ harness, historyOrder, pages, fillCursors }) {
   harness.broker.getOpenOrders = async () => ({
     ok: true,
-    data: []
+    data: [],
   })
   harness.broker.getCanonicalOrderHistory = async () => ({
     ok: true,
-    data: [historyOrder]
+    data: [historyOrder],
   })
-  harness.broker.getFills = async ({
-    fromId,
-    limit
-  }) => {
+  harness.broker.getFills = async ({ fromId, limit }) => {
     fillCursors.push(fromId)
     assert.equal(limit, 1000)
     return {
       ok: true,
-      data: fromId === undefined ? firstPage : secondPage
+      data: fromId === undefined ? pages.firstPage : pages.secondPage,
     }
   }
+}
 
-  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+test("paginates complete REST fill history beyond Binance's 1000-trade page limit", async () => {
+  const ownedOrder = createPagedRecoveryOrder({
+    status: "UNKNOWN",
+    executedQuantity: "0",
+  })
+  const historyOrder = createPagedRecoveryOrder({
+    status: "FILLED",
+    executedQuantity: "1001",
+  })
+  const pages = createPagedRecoveryFillPages({
+    ownedOrder,
+  })
+  const fillCursors = []
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [ownedOrder],
+      }),
+    },
+  })
+  await configurePagedRecoveryFillBroker({
+    harness,
+    historyOrder,
+    pages,
+    fillCursors,
+  })
+
+  const result = await harness.engine.reconcileOwnedOrders({
+    recoveryMode: true,
+  })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.deepEqual(fillCursors, [undefined, "1001"])
   assert.equal(harness.engine.getOrders()[0].status, "FILLED")
   assert.equal(harness.accountedFills.length, 1001)
 })
-
 
 test("does not clear an independently durable strategy pause when a recovery cancellation resolves", async () => {
   const makeOrder = ({ status }) => new CanonicalOrder({
