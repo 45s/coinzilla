@@ -15,14 +15,15 @@ created: 2026-11-14
 
 ## Objective and delivery order
 
-Implement RS as an independent strategy policy using verified strategy-neutral domain functions and Harvester's existing execution/accounting infrastructure. Preserve CG behavior throughout.
+Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
 
-1. [x] Audit CG source, callers and tests; produce a function-by-function pure-function reuse map (completed as an audit only; no source code moved).
-2. Extract only proven strategy-neutral functions into an appropriate shared domain location.
-3. TDD RS domain accounting, custody, attribution and profitability.
-4. Implement the remaining pure RS strategy policy.
-5. Integrate through existing Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
-6. Prove the full lifecycle with deterministic offline tests and exact-head CI.
+1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
+2. TDD RS domain accounting, custody, attribution and profitability.
+3. Implement the pure RS strategy policy.
+4. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
+5. Prove the full lifecycle with deterministic offline tests and exact-head CI.
+
+**Ongoing reuse rule:** whenever RS needs an existing CG capability, first characterize its current behavior with tests. If its contract is genuinely strategy-neutral, extract the smallest cohesive function into the appropriate shared domain location, add direct shared tests, and retain CG regression coverage in the same change. If it embeds CG policy, keep it in CG and implement an RS-specific rule. Do not create abstractions solely because they might be reusable later.
 
 ## Concurrent CG and RS operation
 
@@ -37,7 +38,7 @@ Concurrent operation is a product requirement, not an optional future optimizati
 - A pause/disable for one strategy does not implicitly pause/disable the other; existing orders remain owned and reconcilable by their originating strategy.
 - Same-market concurrent tests must prove no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to both strategies.
 
-The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-5, but mutual exclusion is not an acceptable shortcut.
+The shared Portfolio is actual-accounting truth; per-strategy attribution is not a second wallet or a second Position. Exact priority/fairness and account-wide limits remain explicit design decisions for RS-4, but mutual exclusion is not an acceptable shortcut.
 
 ## RS-1 — Conservative source audit and reuse map
 
@@ -72,7 +73,7 @@ These capabilities are shared infrastructure, not RS extraction tasks.
 | `calculateInitialBuyPrice` | `src/domain/strategies/conservative/initial-buy-price.js` | Conditional extract | Reuse only if RS uses the same percentage/tick-rounding rule; do not force CG's BUY pricing into RS. |
 | `hasOutstandingRecovery` | `src/domain/strategies/conservative/helpers.js` | Conditional reuse | Its spent-versus-net-proceeds predicate may fit the RS recovery tranche, but must receive RS-tranche values only, never combined legacy basis. |
 
-Relevant existing Conservative tests located: `helpers.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. RS-2 must add/strengthen characterization tests before extracting any candidate.
+Relevant existing Conservative tests located: `helpers.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. If RS-2 exposes a concrete need for one of these capabilities, add/strengthen characterization tests before extracting it; otherwise leave CG source untouched.
 
 ### Keep inside Conservative
 
@@ -94,28 +95,35 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 **RS-1 acceptance:** source paths and public exports are identified; existing shared capabilities are separated from extraction candidates; CG-specific behavior is explicitly retained; relevant tests are located; no speculative shared abstraction is approved. RS-1 is complete as an audit only. RS-2 is the first code-changing phase.
 
-## RS-2 — Shared pure-function extraction
+## RS-2 — TDD the RS domain
 
-**Deliverable:** behavior-preserving extraction with CG regression coverage.
+**Deliverable:** independent deterministic RS domain model and pure calculations, tests first.
 
-For each approved candidate: add/strengthen characterization tests; verify observable outcomes and boundaries; move the smallest cohesive strategy-neutral function; preserve named exports, contracts, precision, rounding and errors; update all consumers; add direct shared tests; retain CG-level regression tests; update documentation in the same commit.
+Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
 
-Candidate location, subject to RS-1 evidence:
+Model only the concepts required by the approved RS contract:
 
-~~~text
-apps/harvester/src/domain/
-  shared/
-    accounting/
-    quantity/
-    orders/
-    market/
+- Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
+- Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
+- Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
+- Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
+- Active/pending/partial/unknown order reservations.
+- Independent recovery-tranche and legacy profitability gates. Recovery profit cannot subsidize a legacy loss.
+- Cycle progress and residual handling only after the remaining owner decisions are settled.
+
+Agreed illustrative config shape (proposal only, not runtime configuration):
+
+~~~js
+sellQuantity: 0.01,
+legacyPosition: {
+  invested: 100, // original quote amount invested
+  quantity: 50, // original base quantity acquired
+},
 ~~~
 
-Do not create empty folders, one-function files, generic frameworks or a parallel shared package. Final structure follows actual cohesive responsibilities and repository ownership rules.
+For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
 
-**Acceptance:** direct tests for every extraction; CG characterization/regression suite green; no CG policy or externally observable behavior change; exact-head CI green.
-
-## RS-3 — TDD the RS domain
+Required test families:
 
 **Deliverable:** independent deterministic RS domain model and pure calculations, tests first.
 
@@ -157,7 +165,7 @@ Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
 
 **Acceptance:** plain-English tests, exact decimal strings, meaningful assertion messages, RED before implementation and GREEN after. Pure domain policy has no Binance SDK, I/O, broker, logger, Telegram, timer or runtime-engine dependency.
 
-## RS-4 — Pure RS strategy policy
+## RS-3 — Pure RS strategy policy
 
 **Deliverable:** deterministic policy functions producing explicit decisions/order intents from validated domain facts.
 
@@ -167,7 +175,7 @@ Do not copy CG trailing BUY, next-BUY cadence, retained-inventory or recovery-co
 
 **Acceptance:** deterministic tests for success, boundaries, invalid state and safety blocks. Policy does not submit orders.
 
-## RS-5 — Concurrent Trading Engine integration
+## RS-4 — Concurrent Trading Engine integration
 
 **Deliverable:** RS lifecycle integrated through existing Harvester application workflows, with CG and RS able to run concurrently.
 
@@ -188,7 +196,7 @@ Preserve manual/external order ownership. EARN/off-Spot quantity is never availa
 
 **Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle, pause/disable isolation and broker safety remain correct. No parallel execution engine or strategy-specific broker.
 
-## RS-6 — Offline lifecycle verification and delivery
+## RS-5 — Offline lifecycle verification and delivery
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
@@ -202,12 +210,11 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 
 | PR | Scope | Exit gate |
 |---|---|---|
-| RS-1 | CG source audit and reuse map | Evidence-backed inventory and extraction decisions |
-| RS-2 | Shared pure-function extraction | CG behavior preserved and tested |
-| RS-3 | RS domain model and TDD | Accounting, custody and profitability invariants proven |
-| RS-4 | RS pure policy | Deterministic decisions proven |
-| RS-5 | Trading Engine integration | Existing execution and safety infrastructure reused |
-| RS-6 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
+| RS-1 | CG source audit and reuse map | Evidence-backed inventory and reuse decisions |
+| RS-2 | RS domain model and TDD; opportunistic shared extraction only when required | Accounting, custody and profitability invariants proven; CG behavior preserved |
+| RS-3 | RS pure policy | Deterministic decisions proven |
+| RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
+| RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
 
 Each phase is a focused PR into develop. Every implementation commit includes tests and documentation. A phase is complete only after merge and required exact-head checks pass.
 
