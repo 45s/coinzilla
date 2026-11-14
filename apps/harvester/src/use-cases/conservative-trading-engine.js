@@ -1710,6 +1710,12 @@ export function makeConservativeTradingEngine({
               new Error("Shutdown recovery SELL cancellation is unresolved for " + symbol))
             continue
           }
+          assessment = assessShutdownRecoverySellCoverage({ symbol })
+          if (assessment.covered) {
+            state.shutdownRecoveryReplanSymbols.delete(symbol)
+            reconciledSymbols.push(symbol)
+            continue
+          }
         }
         if (state.paused.has(symbol) || hasBlockingOpenOrdersForSymbol({ symbol })) {
           failures.push(new Error("Shutdown recovery SELL replacement is blocked for " + symbol))
