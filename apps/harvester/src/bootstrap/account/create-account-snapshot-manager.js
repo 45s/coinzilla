@@ -241,6 +241,646 @@ async function flushAccountSnapshotAudit({
   }
 }
 
+
+function getAccountAuditMarkets({ marketMetadata }) {
+  return [...marketMetadata.values()].map(({ market }) => market)
+}
+
+function getAccountSnapshotResultError({ result }) {
+  if (result?.ok !== false && result?.ok !== true) {
+    return withRecoveryFailure(
+      new Error("Canonical exchange account snapshot response is missing an explicit success flag"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_SNAPSHOT_RESPONSE",
+      false,
+    )
+  }
+  if (result.ok === false) {
+    const details = result.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    const cause = result.errors?.find?.((error) => error instanceof Error)
+    return withRecoveryFailure(
+      new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), {
+        cause,
+      }),
+      "REST_RECONCILIATION",
+      "ACCOUNT_SNAPSHOT_READ",
+      true,
+    )
+  }
+  if (!result.data || !Array.isArray(result.data.balances)) {
+    return withRecoveryFailure(
+      new Error("Canonical exchange account snapshot is malformed: balances must be an array"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_SNAPSHOT_SHAPE",
+      false,
+    )
+  }
+  return undefined
+}
+
+async function readAccountSnapshotFromBroker({ broker }) {
+  try {
+    return await broker.getAccountSnapshot()
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_READ_EXCEPTION", false)
+  }
+}
+
+function capturePreflightBalances({ result, state }) {
+  if (state.preflightSourceTime !== undefined) {
+    return
+  }
+  const sourceSnapshot = new AccountSnapshot({
+    balances: result.data.balances,
+    sourceTime: result.data.sourceTime,
+  })
+  state.preflightSourceTime = sourceSnapshot.sourceTime
+  state.preflightBalancesByCode = new Map(sourceSnapshot.balances.map((balance) => [
+    balance.asset.code,
+    balance,
+  ]))
+}
+
+function getAccountSnapshotBaselines({ context }) {
+  const activeOrders = context.getTradingEngine()?.getActiveOrders?.() ??
+    context.getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
+  const baselineResult = calculateAccountSnapshotBaselines({
+    portfolio: context.getPortfolio(),
+    activeOrders,
+  })
+  if (!baselineResult.ok) {
+    throw withRecoveryFailure(
+      baselineResult.errors?.[0] ?? new Error("Unable to capture account snapshot accounting baselines"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_SNAPSHOT_BASELINE",
+      false,
+    )
+  }
+  return baselineResult.data
+}
+
+function createTrackedAccountSnapshot({ context, result, baselines }) {
+  const accountAuditMarkets = getAccountAuditMarkets(context)
+  const configuredAssetCodes = new Set(accountAuditMarkets.flatMap((market) => [
+    market.baseAsset.code,
+    market.quoteAsset.code,
+  ]))
+  const trackedAssetCodes = new Set([
+    ...configuredAssetCodes,
+    ...context.state.commissionBaselineAssetIds.keys(),
+  ])
+  const trackedBalances = result.data.balances.filter((balance) =>
+    trackedAssetCodes.has(balance?.asset?.code))
+  const nextSnapshot = new AccountSnapshot({
+    balances: trackedBalances,
+    sourceTime: result.data.sourceTime,
+    ...baselines,
+  })
+  assertAccountSnapshotCoversMarkets({
+    accountSnapshot: nextSnapshot,
+    markets: accountAuditMarkets,
+  })
+  if (context.state.accountSnapshot && nextSnapshot.sourceTime < context.state.accountSnapshot.sourceTime) {
+    throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
+  }
+  return nextSnapshot
+}
+
+async function refreshAccountSnapshot({ context, capturePreflightBaseline = false }) {
+  const result = await readAccountSnapshotFromBroker({
+    broker: context.broker,
+  })
+  const responseError = getAccountSnapshotResultError({
+    result,
+  })
+  if (responseError) {
+    throw responseError
+  }
+  if (capturePreflightBaseline && context.state.preflightSourceTime === undefined) {
+    try {
+      capturePreflightBalances({
+        result,
+        state: context.state,
+      })
+    } catch (error) {
+      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
+    }
+  }
+  const baselines = getAccountSnapshotBaselines({
+    context,
+  })
+  let nextSnapshot
+  try {
+    nextSnapshot = createTrackedAccountSnapshot({
+      context,
+      result,
+      baselines,
+    })
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
+  }
+  context.state.accountSnapshot = nextSnapshot
+  logSystem(context.logger, {
+    message: "Exchange account snapshot loaded",
+    balanceCount: nextSnapshot.balances.length,
+    sourceTime: nextSnapshot.sourceTime,
+  })
+  return nextSnapshot
+}
+
+async function readAccountOpenOrders({ broker, suppliedOrders }) {
+  if (suppliedOrders !== undefined) {
+    if (!Array.isArray(suppliedOrders)) {
+      throw withRecoveryFailure(
+        new TypeError("publishOpenOrdersSnapshot orders must be an array"),
+        "ACCOUNTING_INTEGRITY",
+        "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT",
+        false,
+      )
+    }
+    return suppliedOrders
+  }
+  let result
+  try {
+    result = await broker.getOpenOrders({})
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", false)
+  }
+  if (result?.ok !== false && result?.ok !== true) {
+    throw withRecoveryFailure(
+      new Error("Account-wide open-orders response is missing an explicit success flag"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_WIDE_OPEN_ORDERS_RESPONSE",
+      false,
+    )
+  }
+  if (result.ok === false) {
+    const details = result.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    const cause = result.errors?.find?.((error) => error instanceof Error)
+    throw withRecoveryFailure(
+      new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), {
+        cause,
+      }),
+      "REST_RECONCILIATION",
+      "ACCOUNT_WIDE_OPEN_ORDERS_READ",
+      true,
+    )
+  }
+  if (!Array.isArray(result.data)) {
+    throw withRecoveryFailure(
+      new TypeError("Account-wide open-orders response must be an array"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT",
+      false,
+    )
+  }
+  return result.data
+}
+
+function isOwnedOpenOrderSnapshot({ order, restoredOrders, matchedOwnedClientIds }) {
+  const clientOrderId = order?.clientOrderId
+  const brokerOrderId = order?.brokerOrderId ?? order?.id
+  const symbol = order?.market?.symbol ?? order?.symbol
+  if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
+      typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
+      typeof symbol !== "string" || !symbol.trim()) {
+    return false
+  }
+  const owned = restoredOrders.find((candidate) =>
+    candidate.clientOrderId === clientOrderId ||
+    (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId))
+  if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) {
+    return false
+  }
+  if (owned.status === "CANCELED" || owned.status === "REJECTED") {
+    return false
+  }
+  if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) {
+    return false
+  }
+  const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
+  const expectedPrice = owned.limitPrice?.amount
+  const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
+  const identityMatches = owned.clientOrderId === clientOrderId &&
+    owned.market.symbol === symbol &&
+    owned.side === order.side &&
+    owned.type === order.type &&
+    compareDecimal({
+      left: owned.originalQuantity.amount,
+      right: actualQuantity,
+    }) === 0
+  const priceMatches = expectedPrice === undefined
+    ? actualPrice === undefined
+    : actualPrice !== undefined && compareDecimal({
+      left: expectedPrice,
+      right: String(actualPrice),
+    }) === 0
+  if (!identityMatches || !priceMatches) {
+    return false
+  }
+  matchedOwnedClientIds.add(owned.clientOrderId)
+  return true
+}
+
+function classifyAccountOpenOrders({ orders, restoredOrders, ownershipReconciled }) {
+  const matchedOwnedClientIds = new Set()
+  const unownedOrders = orders.filter((order) => !isOwnedOpenOrderSnapshot({
+    order,
+    restoredOrders,
+    matchedOwnedClientIds,
+  }))
+  const blockReasons = []
+  if (unownedOrders.length > 0) {
+    blockReasons.push("UNOWNED_OPEN_ORDERS:" + unownedOrders.length)
+  } else if (orders.length > 0 && !ownershipReconciled) {
+    blockReasons.push("CANONICAL_ORDER_RECONCILIATION_REQUIRED")
+  }
+  let readiness = "READY"
+  if (blockReasons.length > 0) {
+    readiness = "BLOCKED"
+  } else if (orders.length > 0) {
+    readiness = "RECONCILED"
+  }
+  return {
+    unownedOrders,
+    blockReasons,
+    readiness,
+  }
+}
+
+function createOpenOrdersAuditPayload({ phase, orders, classification, now }) {
+  let dataResult
+  try {
+    dataResult = mapAccountOpenOrdersCapturedData({
+      phase,
+      observedAt: now(),
+      orders,
+      readiness: classification.readiness,
+      blockReasons: classification.blockReasons,
+    })
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
+  }
+  if (!dataResult?.ok) {
+    throw withRecoveryFailure(
+      dataResult?.errors?.[0] ?? new Error("Account open-orders audit payload is invalid"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
+      false,
+    )
+  }
+  return dataResult
+}
+
+async function persistOpenOrdersAuditFact({ operationalStateStore, dataResult }) {
+  if (!operationalStateStore) {
+    return
+  }
+  const durable = await recordAccountOpenOrdersCaptured({
+    operationalStateStore,
+    data: dataResult.data,
+  })
+  if (durable?.ok !== true || durable.data?.durable !== true) {
+    const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
+    throw withRecoveryFailure(
+      new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), {
+        cause,
+      }),
+      "DURABILITY",
+      "ACCOUNT_OPEN_ORDERS_DURABLE_FACT",
+      false,
+    )
+  }
+}
+
+async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
+  const published = publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    dataResult,
+  })
+  if (!published?.ok) {
+    const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw withRecoveryFailure(
+      new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : "")),
+      "DURABILITY",
+      "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION",
+      true,
+    )
+  }
+  if (typeof eventPublisher?.flush !== "function") {
+    throw withRecoveryFailure(
+      new Error("Harvester startup requires a durable open-orders audit before market subscriptions"),
+      "ACCOUNTING_INTEGRITY",
+      "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
+      false,
+    )
+  }
+  let flushed
+  try {
+    flushed = await eventPublisher.flush()
+  } catch (error) {
+    throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED", false)
+  }
+  if (flushed?.ok !== true || flushed?.durable !== true) {
+    const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw createAuditFlushError({
+      flushed,
+      message: "Unable to durably persist account open-orders audit" + (details ? ": " + details : ""),
+      stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
+    })
+  }
+}
+
+function createOpenOrdersGuardState({ unownedOrders }) {
+  const externalOrders = unownedOrders.filter((order) =>
+    typeof order?.clientOrderId === "string" &&
+    order.clientOrderId.trim().length > 0 &&
+    !isHarvesterClientOrderId(order.clientOrderId))
+  const unresolvedHarvesterOrders = unownedOrders.filter((order) =>
+    typeof order?.clientOrderId !== "string" ||
+    !order.clientOrderId.trim() ||
+    isHarvesterClientOrderId(order.clientOrderId))
+  return {
+    unownedOpenOrderSymbols: new Set(externalOrders
+      .map((order) => order?.market?.symbol ?? order?.symbol)
+      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0)),
+    unresolvedHarvesterOpenOrderSymbols: new Set(unresolvedHarvesterOrders
+      .map((order) => order?.market?.symbol ?? order.symbol)
+      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0)),
+  }
+}
+
+function logOpenOrdersAudit({ logger, orders, unownedOrders, readiness }) {
+  let message = "Account-wide open-orders audit is waiting for canonical order reconciliation"
+  if (readiness === "READY") {
+    message = "Account-wide open-orders audit complete; no open orders found"
+  } else if (readiness === "RECONCILED") {
+    message = "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
+  } else if (unownedOrders.length > 0) {
+    message = "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
+  }
+  logger.info?.({
+    message,
+    orderCount: orders.length,
+    readiness,
+    symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
+  })
+}
+
+async function publishOpenOrdersSnapshot({ context, options }) {
+  const orders = await readAccountOpenOrders({
+    broker: context.broker,
+    suppliedOrders: options.orders,
+  })
+  const restoredOrders = context.getTradingEngine()?.getOrders?.() ??
+    context.getRecoveredState()?.orderRegistry?.orders ?? []
+  const classification = classifyAccountOpenOrders({
+    orders,
+    restoredOrders,
+    ownershipReconciled: options.ownershipReconciled,
+  })
+  const dataResult = createOpenOrdersAuditPayload({
+    phase: options.phase,
+    orders,
+    classification,
+    now: context.now,
+  })
+  await persistOpenOrdersAuditFact({
+    operationalStateStore: context.operationalStateStore,
+    dataResult,
+  })
+  await publishOpenOrdersAuditEvent({
+    eventPublisher: context.eventPublisher,
+    dataResult,
+  })
+  const guardState = createOpenOrdersGuardState({
+    unownedOrders: classification.unownedOrders,
+  })
+  context.state.unownedOpenOrderSymbols = guardState.unownedOpenOrderSymbols
+  context.state.unresolvedHarvesterOpenOrderSymbols = guardState.unresolvedHarvesterOpenOrderSymbols
+  logOpenOrdersAudit({
+    logger: context.logger,
+    orders,
+    unownedOrders: classification.unownedOrders,
+    readiness: classification.readiness,
+  })
+  return orders
+}
+
+function getConfiguredAccountAssetCodes({ marketMetadata }) {
+  return [...new Set([...marketMetadata.values()].flatMap(({ market }) => [
+    market.baseAsset.code,
+    market.quoteAsset.code,
+  ]))]
+}
+
+async function publishAccountSnapshot({ context, options }) {
+  const snapshot = options.snapshot ?? await refreshAccountSnapshot({
+    context,
+    capturePreflightBaseline: options.phase === "PREFLIGHT",
+  })
+  const configuredAssetCodes = getConfiguredAccountAssetCodes({
+    marketMetadata: context.marketMetadata,
+  })
+  const allowedAssetCodes = options.allowedAssetCodes ?? [...new Set([
+    ...configuredAssetCodes,
+    ...context.state.commissionBaselineAssetIds.keys(),
+  ])]
+  const dataResult = createAccountSnapshotAuditPayload({
+    phase: options.phase,
+    snapshot,
+    allowedAssetCodes,
+    auditStatus: options.auditStatus,
+    auditReasons: options.auditReasons,
+  })
+  await persistAccountSnapshotAudit({
+    operationalStateStore: context.operationalStateStore,
+    data: dataResult.data,
+  })
+  const published = publishLifecycleEvent({
+    eventPublisher: context.eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+    dataResult,
+  })
+  if (!published?.ok) {
+    throw withRecoveryFailure(
+      new Error("Unable to publish " + options.phase + " account snapshot audit event"),
+      "DURABILITY",
+      "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
+      true,
+    )
+  }
+  await flushAccountSnapshotAudit({
+    eventPublisher: context.eventPublisher,
+    phase: options.phase,
+    logger: context.logger,
+    runtimeSessionId: context.runtimeSessionId,
+    monotonicNow: context.monotonicNow,
+  })
+  logSystem(context.logger, {
+    message: "Account snapshot captured and durably journaled",
+    phase: options.phase,
+    auditStatus: options.auditStatus,
+    assetCount: snapshot.balances.length,
+    sourceTime: snapshot.sourceTime,
+    auditReasons: options.auditReasons,
+  })
+  return snapshot
+}
+
+function validateCommissionAssetIdentity({ assetId, assetCode }) {
+  if (typeof assetId !== "string" || !assetId.trim() ||
+      typeof assetCode !== "string" || !assetCode.trim()) {
+    throw withRecoveryFailure(
+      new TypeError("Commission asset baseline requires assetId and assetCode"),
+      "ACCOUNTING_INTEGRITY",
+      "COMMISSION_ASSET_BASELINE_IDENTITY",
+      false,
+    )
+  }
+}
+
+function findConfiguredCommissionAsset({ context, assetId, assetCode }) {
+  const configuredAssets = [...context.marketMetadata.values()].flatMap(({ market }) => [
+    market.baseAsset,
+    market.quoteAsset,
+  ])
+  return configuredAssets.find((asset) => asset.id === assetId || asset.code === assetCode)
+}
+
+function validateConfiguredCommissionAsset({ configuredAsset, assetId, assetCode }) {
+  if (!configuredAsset) {
+    return false
+  }
+  if (configuredAsset.id !== assetId || configuredAsset.code !== assetCode) {
+    throw withRecoveryFailure(
+      new Error("Commission asset identity contradicts configured market metadata for " + assetCode),
+      "ACCOUNTING_INTEGRITY",
+      "COMMISSION_ASSET_BASELINE_IDENTITY",
+      false,
+    )
+  }
+  return true
+}
+
+function getKnownCommissionBaseline({ context, assetId, assetCode }) {
+  const knownAssetId = context.state.commissionBaselineAssetIds.get(assetCode)
+  const knownAssetCode = context.state.commissionBaselineAssetCodesById.get(assetId)
+  if (knownAssetId === undefined && knownAssetCode === undefined) {
+    return false
+  }
+  if (knownAssetId !== assetId || knownAssetCode !== assetCode) {
+    throw withRecoveryFailure(
+      new Error("Commission asset ID/code mapping is contradictory for " + assetCode),
+      "ACCOUNTING_INTEGRITY",
+      "COMMISSION_ASSET_BASELINE_IDENTITY",
+      false,
+    )
+  }
+  return true
+}
+
+function getPreflightCommissionBalance({ context, assetId, assetCode }) {
+  if (context.state.preflightSourceTime === undefined) {
+    throw withRecoveryFailure(
+      new Error("Commission asset baseline cannot be captured before the durable PREFLIGHT snapshot"),
+      "ACCOUNTING_INTEGRITY",
+      "COMMISSION_ASSET_PREFLIGHT_MISSING",
+      false,
+    )
+  }
+  const balance = context.state.preflightBalancesByCode.get(assetCode)
+  if (!balance) {
+    throw withRecoveryFailure(
+      new Error("PREFLIGHT account snapshot is missing commission asset " + assetCode),
+      "ACCOUNTING_INTEGRITY",
+      "COMMISSION_ASSET_PREFLIGHT_BALANCE_MISSING",
+      false,
+    )
+  }
+  if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
+    throw withRecoveryFailure(
+      new Error("PREFLIGHT commission asset balance identity contradicts the applied fill for " + assetCode),
+      "ACCOUNTING_INTEGRITY",
+      "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
+      false,
+    )
+  }
+  return balance
+}
+
+function createCommissionBaselineSnapshot({ context, balance }) {
+  return new AccountSnapshot({
+    sourceTime: context.state.preflightSourceTime,
+    balances: [balance],
+  })
+}
+
+async function publishCommissionAssetBaseline({ context, options }) {
+  validateCommissionAssetIdentity(options)
+  const configuredAsset = findConfiguredCommissionAsset({
+    context,
+    assetId: options.assetId,
+    assetCode: options.assetCode,
+  })
+  if (validateConfiguredCommissionAsset({
+    configuredAsset,
+    assetId: options.assetId,
+    assetCode: options.assetCode,
+  })) {
+    return {
+      ok: true,
+      data: Object.freeze({
+        skipped: true,
+        reason: "CONFIGURED_MARKET_ASSET",
+      }),
+    }
+  }
+  if (getKnownCommissionBaseline({
+    context,
+    assetId: options.assetId,
+    assetCode: options.assetCode,
+  })) {
+    return {
+      ok: true,
+      data: Object.freeze({
+        skipped: true,
+        reason: "BASELINE_ALREADY_CAPTURED",
+      }),
+    }
+  }
+  const balance = getPreflightCommissionBalance({
+    context,
+    assetId: options.assetId,
+    assetCode: options.assetCode,
+  })
+  const baselineSnapshot = createCommissionBaselineSnapshot({
+    context,
+    balance,
+  })
+  await publishAccountSnapshot({
+    context,
+    options: {
+      phase: "COMMISSION_BASELINE",
+      snapshot: baselineSnapshot,
+      allowedAssetCodes: [options.assetCode],
+      auditStatus: "COMPLETE",
+      auditReasons: [],
+    },
+  })
+  context.state.commissionBaselineAssetIds.set(options.assetCode, options.assetId)
+  context.state.commissionBaselineAssetCodesById.set(options.assetId, options.assetCode)
+  return {
+    ok: true,
+    data: Object.freeze({
+      assetId: options.assetId,
+      assetCode: options.assetCode,
+      sourceTime: context.state.preflightSourceTime,
+    }),
+  }
+}
+
 /**
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *
@@ -274,469 +914,66 @@ export function createAccountSnapshotManager({
   runtimeSessionId,
   operationalStateStore,
 } = {}) {
-  let accountSnapshot
-  let preflightSourceTime
-  let preflightBalancesByCode = new Map()
-  const commissionBaselineAssetIds = new Map()
-  // Updated only after the corresponding account-wide open-orders audit is durable.
-  let unownedOpenOrderSymbols = new Set()
-  let unresolvedHarvesterOpenOrderSymbols = new Set()
-  const commissionBaselineAssetCodesById = new Map()
-
-  const refreshAccountSnapshot = async ({ capturePreflightBaseline = false } = {}) => {
-    let result
-    try {
-      result = await broker.getAccountSnapshot()
-    } catch (error) {
-      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_READ_EXCEPTION", false)
-    }
-    if (result?.ok !== false && result?.ok !== true) {
-      throw withRecoveryFailure(
-        new Error("Canonical exchange account snapshot response is missing an explicit success flag"),
-        "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_RESPONSE", false,
-      )
-    }
-    if (result.ok === false) {
-      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      const cause = result?.errors?.find?.((error) => error instanceof Error)
-      throw withRecoveryFailure(
-        new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), {
-          cause,
-        }),
-        "REST_RECONCILIATION",
-        "ACCOUNT_SNAPSHOT_READ",
-        true,
-      )
-    }
-    if (!result.data || !Array.isArray(result.data.balances)) {
-      throw withRecoveryFailure(
-        new Error("Canonical exchange account snapshot is malformed: balances must be an array"),
-        "ACCOUNTING_INTEGRITY",
-        "ACCOUNT_SNAPSHOT_SHAPE",
-        false,
-      )
-    }
-    const activeOrders = getTradingEngine()?.getActiveOrders?.() ??
-      getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
-    const baselineResult = calculateAccountSnapshotBaselines({
-      portfolio: getPortfolio(),
-      activeOrders,
-    })
-    if (!baselineResult.ok) {
-      throw withRecoveryFailure(
-        baselineResult.errors?.[0] ?? new Error("Unable to capture account snapshot accounting baselines"),
-        "ACCOUNTING_INTEGRITY",
-        "ACCOUNT_SNAPSHOT_BASELINE",
-        false,
-      )
-    }
-    const accountAuditMarkets = [...marketMetadata.values()].map(({ market }) => market)
-    const configuredAssetCodes = new Set(accountAuditMarkets.flatMap((market) => [
-      market.baseAsset.code,
-      market.quoteAsset.code,
-    ]))
-    let nextSnapshot
-    try {
-      if (capturePreflightBaseline && preflightSourceTime === undefined) {
-        const sourceSnapshot = new AccountSnapshot({
-          balances: result.data.balances,
-          sourceTime: result.data.sourceTime,
-        })
-        preflightSourceTime = sourceSnapshot.sourceTime
-        preflightBalancesByCode = new Map(sourceSnapshot.balances.map((balance) => [
-          balance.asset.code,
-          balance,
-        ]))
-      }
-      const trackedAssetCodes = new Set([
-        ...configuredAssetCodes,
-        ...commissionBaselineAssetIds.keys(),
-      ])
-      const trackedBalances = result.data.balances.filter((balance) =>
-        trackedAssetCodes.has(balance?.asset?.code))
-      nextSnapshot = new AccountSnapshot({
-        balances: trackedBalances,
-        sourceTime: result.data.sourceTime,
-        ...baselineResult.data,
-      })
-      assertAccountSnapshotCoversMarkets({
-        accountSnapshot: nextSnapshot,
-        markets: accountAuditMarkets,
-      })
-      if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
-        throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
-      }
-    } catch (error) {
-      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
-    }
-    accountSnapshot = nextSnapshot
-    logSystem(logger, {
-      message: "Exchange account snapshot loaded",
-      balanceCount: nextSnapshot.balances.length,
-      sourceTime: nextSnapshot.sourceTime,
-    })
-
-    return nextSnapshot
+  const state = {
+    accountSnapshot: undefined,
+    preflightSourceTime: undefined,
+    preflightBalancesByCode: new Map(),
+    commissionBaselineAssetIds: new Map(),
+    commissionBaselineAssetCodesById: new Map(),
+    unownedOpenOrderSymbols: new Set(),
+    unresolvedHarvesterOpenOrderSymbols: new Set(),
   }
-
-  const publishOpenOrdersSnapshot = async ({
-    phase = "PREFLIGHT",
-    ownershipReconciled = getHasCanonicalOwnershipReconciliation(),
-    orders: suppliedOrders,
-  } = {}) => {
-    let orders = suppliedOrders
-    if (orders === undefined) {
-      let result
-      try { result = await broker.getOpenOrders({}) } catch (error) {
-        throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", false)
-      }
-      if (result?.ok !== false && result?.ok !== true) {
-        throw withRecoveryFailure(
-          new Error("Account-wide open-orders response is missing an explicit success flag"),
-          "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_RESPONSE", false,
-        )
-      }
-      if (result.ok === false) {
-        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        const cause = result?.errors?.find?.((error) => error instanceof Error)
-        throw withRecoveryFailure(
-          new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), {
-            cause,
-          }),
-          "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true,
-        )
-      }
-      if (!Array.isArray(result.data)) {
-        throw withRecoveryFailure(new TypeError("Account-wide open-orders response must be an array"),
-          "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT", false)
-      }
-      orders = result.data
-    }
-    if (!Array.isArray(orders)) {
-      throw withRecoveryFailure(new TypeError("publishOpenOrdersSnapshot orders must be an array"),
-        "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT", false)
-    }
-    const restoredOrders = getTradingEngine()?.getOrders?.() ?? getRecoveredState()?.orderRegistry?.orders ?? []
-    const matchedOwnedClientIds = new Set()
-    const unownedOrders = orders.filter((order) => {
-      const clientOrderId = order?.clientOrderId
-      const brokerOrderId = order?.brokerOrderId ?? order?.id
-      const symbol = order?.market?.symbol ?? order?.symbol
-      if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
-          typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-          typeof symbol !== "string" || !symbol.trim()) { return true }
-      const owned = restoredOrders.find((candidate) =>
-        candidate.clientOrderId === clientOrderId ||
-        (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId)
-      )
-      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) { return true }
-      if (owned.status === "CANCELED" || owned.status === "REJECTED") { return true }
-      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) { return true }
-      const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
-      const expectedPrice = owned.limitPrice?.amount
-      const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
-      if (
-        owned.clientOrderId !== clientOrderId ||
-        owned.market.symbol !== symbol ||
-        owned.side !== order.side ||
-        owned.type !== order.type ||
-        compareDecimal({
-          left: owned.originalQuantity.amount,
-          right: actualQuantity,
-        }) !== 0 ||
-        (expectedPrice === undefined
-          ? actualPrice !== undefined
-          : actualPrice === undefined || compareDecimal({
-              left: expectedPrice,
-              right: String(actualPrice),
-            }) !== 0)
-      ) { return true }
-      matchedOwnedClientIds.add(owned.clientOrderId)
-      return false
-    })
-    const blockReasons = []
-    if (unownedOrders.length > 0) {
-      blockReasons.push("UNOWNED_OPEN_ORDERS:" + unownedOrders.length)
-    } else if (orders.length > 0 && !ownershipReconciled) {
-      blockReasons.push("CANONICAL_ORDER_RECONCILIATION_REQUIRED")
-    }
-    let readiness = "READY"
-    if (blockReasons.length > 0) {
-      readiness = "BLOCKED"
-    } else if (orders.length > 0) {
-      readiness = "RECONCILED"
-    }
-    let dataResult
-    try {
-      dataResult = mapAccountOpenOrdersCapturedData({
-        phase,
-        observedAt: now(),
-        orders,
-        readiness,
-        blockReasons,
-      })
-    } catch (error) {
-      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
-    }
-    if (!dataResult?.ok) {
-      throw withRecoveryFailure(
-        dataResult?.errors?.[0] ?? new Error("Account open-orders audit payload is invalid"),
-        "ACCOUNTING_INTEGRITY",
-        "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
-        false,
-      )
-    }
-    if (operationalStateStore) {
-      const durable = await recordAccountOpenOrdersCaptured({
-        operationalStateStore,
-        data: dataResult.data,
-      })
-      if (durable?.ok !== true || durable.data?.durable !== true) {
-        const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
-        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), {
-          cause,
-        }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
-      }
-    }
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-      dataResult,
-    })
-    if (!published?.ok) {
-      const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw withRecoveryFailure(
-        new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : "")),
-        "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION", true,
-      )
-    }
-    if (typeof eventPublisher?.flush === "function") {
-      let flushed
-      try { flushed = await eventPublisher.flush() } catch (error) {
-        throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED", false)
-      }
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw createAuditFlushError({
-          flushed,
-          message: "Unable to durably persist account open-orders audit" + (details ? ": " + details : ""),
-          stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
-        })
-      }
-    } else {
-      throw withRecoveryFailure(
-        new Error("Harvester startup requires a durable open-orders audit before market subscriptions"),
-        "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY", false,
-      )
-    }
-    // Strategy guards change only after the audit has passed its durable Journal barrier.
-    // Manual/external IDs obey the per-pair policy; prior-process Harvester orders remain blocked.
-    const externalOrders = unownedOrders.filter((order) =>
-      typeof order?.clientOrderId === "string" &&
-      order.clientOrderId.trim().length > 0 &&
-      !isHarvesterClientOrderId(order.clientOrderId))
-    const unresolvedHarvesterOrders = unownedOrders.filter((order) =>
-      typeof order?.clientOrderId !== "string" ||
-      !order.clientOrderId.trim() ||
-      isHarvesterClientOrderId(order.clientOrderId))
-    unownedOpenOrderSymbols = new Set(externalOrders
-      .map((order) => order?.market?.symbol ?? order?.symbol)
-      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
-    unresolvedHarvesterOpenOrderSymbols = new Set(unresolvedHarvesterOrders
-      .map((order) => order?.market?.symbol ?? order?.symbol)
-      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
-    let auditMessage = "Account-wide open-orders audit is waiting for canonical order reconciliation"
-    if (readiness === "READY") {
-      auditMessage = "Account-wide open-orders audit complete; no open orders found"
-    } else if (readiness === "RECONCILED") {
-      auditMessage = "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
-    } else if (unownedOrders.length > 0) {
-      auditMessage = "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
-    }
-    logger.info?.({
-      message: auditMessage,
-      orderCount: orders.length,
-      readiness,
-      symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
-    })
-    return orders
+  const context = {
+    broker,
+    eventPublisher,
+    marketMetadata,
+    getPortfolio,
+    getTradingEngine,
+    getRecoveredState,
+    getHasCanonicalOwnershipReconciliation,
+    logger,
+    now,
+    monotonicNow,
+    runtimeSessionId,
+    operationalStateStore,
+    state,
   }
-
-  const publishAccountSnapshot = async ({
-    phase,
-    auditStatus = "COMPLETE",
-    auditReasons = [],
-    snapshot: suppliedSnapshot,
-    allowedAssetCodes: suppliedAllowedAssetCodes,
-  } = {}) => {
-    const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot({
-      capturePreflightBaseline: phase === "PREFLIGHT",
-    })
-    const configuredAssetCodes = [...new Set([...marketMetadata.values()]
-      .flatMap(({ market }) => [
-        market.baseAsset.code,
-        market.quoteAsset.code,
-      ]))]
-    const allowedAssetCodes = suppliedAllowedAssetCodes ?? [...new Set([
-      ...configuredAssetCodes,
-      ...commissionBaselineAssetIds.keys(),
-    ])]
-    const dataResult = createAccountSnapshotAuditPayload({
-      phase,
-      snapshot,
-      allowedAssetCodes,
-      auditStatus,
-      auditReasons,
-    })
-    await persistAccountSnapshotAudit({
-      operationalStateStore,
-      data: dataResult.data,
-    })
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-      dataResult,
-    })
-    if (!published?.ok) {
-      throw withRecoveryFailure(
-        new Error("Unable to publish " + phase + " account snapshot audit event"),
-        "DURABILITY",
-        "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
-        true,
-      )
-    }
-    await flushAccountSnapshotAudit({
-      eventPublisher,
-      phase,
-      logger,
-      runtimeSessionId,
-      monotonicNow,
-    })
-    logSystem(logger, {
-      message: "Account snapshot captured and durably journaled",
-      phase,
-      auditStatus,
-      assetCount: snapshot.balances.length,
-      sourceTime: snapshot.sourceTime,
-      auditReasons,
-    })
-    return snapshot
-  }
-
-  const publishCommissionAssetBaseline = async ({
-    assetId,
-    assetCode,
-  } = {}) => {
-    if (typeof assetId !== "string" || !assetId.trim() ||
-        typeof assetCode !== "string" || !assetCode.trim()) {
-      throw withRecoveryFailure(
-        new TypeError("Commission asset baseline requires assetId and assetCode"),
-        "ACCOUNTING_INTEGRITY",
-        "COMMISSION_ASSET_BASELINE_IDENTITY",
-        false,
-      )
-    }
-
-    const configuredAssets = [...marketMetadata.values()].flatMap(({ market }) => [
-      market.baseAsset,
-      market.quoteAsset,
-    ])
-    const configuredAsset = configuredAssets.find((asset) =>
-      asset.id === assetId || asset.code === assetCode)
-    if (configuredAsset) {
-      if (configuredAsset.id !== assetId || configuredAsset.code !== assetCode) {
-        throw withRecoveryFailure(
-          new Error("Commission asset identity contradicts configured market metadata for " + assetCode),
-          "ACCOUNTING_INTEGRITY",
-          "COMMISSION_ASSET_BASELINE_IDENTITY",
-          false,
-        )
-      }
-      return {
-        ok: true,
-        data: Object.freeze({
-          skipped: true,
-          reason: "CONFIGURED_MARKET_ASSET",
-        }),
-      }
-    }
-
-    const knownAssetId = commissionBaselineAssetIds.get(assetCode)
-    const knownAssetCode = commissionBaselineAssetCodesById.get(assetId)
-    if (knownAssetId !== undefined || knownAssetCode !== undefined) {
-      if (knownAssetId !== assetId || knownAssetCode !== assetCode) {
-        throw withRecoveryFailure(
-          new Error("Commission asset ID/code mapping is contradictory for " + assetCode),
-          "ACCOUNTING_INTEGRITY",
-          "COMMISSION_ASSET_BASELINE_IDENTITY",
-          false,
-        )
-      }
-      return {
-        ok: true,
-        data: Object.freeze({
-          skipped: true,
-          reason: "BASELINE_ALREADY_CAPTURED",
-        }),
-      }
-    }
-
-    if (preflightSourceTime === undefined) {
-      throw withRecoveryFailure(
-        new Error("Commission asset baseline cannot be captured before the durable PREFLIGHT snapshot"),
-        "ACCOUNTING_INTEGRITY",
-        "COMMISSION_ASSET_PREFLIGHT_MISSING",
-        false,
-      )
-    }
-    const balance = preflightBalancesByCode.get(assetCode)
-    if (!balance) {
-      throw withRecoveryFailure(
-        new Error("PREFLIGHT account snapshot is missing commission asset " + assetCode),
-        "ACCOUNTING_INTEGRITY",
-        "COMMISSION_ASSET_PREFLIGHT_BALANCE_MISSING",
-        false,
-      )
-    }
-    if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
-      throw withRecoveryFailure(
-        new Error(`PREFLIGHT commission asset balance identity contradicts the applied fill for ${assetCode}`),
-        "ACCOUNTING_INTEGRITY",
-        "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
-        false,
-      )
-    }
-
-    const baselineSnapshot = new AccountSnapshot({
-      sourceTime: preflightSourceTime,
-      balances: [balance],
-    })
-    await publishAccountSnapshot({
-      phase: "COMMISSION_BASELINE",
-      snapshot: baselineSnapshot,
-      allowedAssetCodes: [assetCode],
-    })
-    commissionBaselineAssetIds.set(assetCode, assetId)
-    commissionBaselineAssetCodesById.set(assetId, assetCode)
-    return {
-      ok: true,
-      data: Object.freeze({
-        assetId,
-        assetCode,
-        sourceTime: preflightSourceTime,
-      }),
-    }
-  }
+  const refresh = (options = {}) => refreshAccountSnapshot({
+    context,
+    ...options,
+  })
+  const publishOrders = (options = {}) => publishOpenOrdersSnapshot({
+    context,
+    options: {
+      phase: options.phase ?? "PREFLIGHT",
+      ownershipReconciled: options.ownershipReconciled ?? getHasCanonicalOwnershipReconciliation(),
+      orders: options.orders,
+    },
+  })
+  const publishSnapshot = (options = {}) => publishAccountSnapshot({
+    context,
+    options: {
+      phase: options.phase,
+      auditStatus: options.auditStatus ?? "COMPLETE",
+      auditReasons: options.auditReasons ?? [],
+      snapshot: options.snapshot,
+      allowedAssetCodes: options.allowedAssetCodes,
+    },
+  })
+  const publishCommissionBaseline = (options = {}) => publishCommissionAssetBaseline({
+    context,
+    options,
+  })
 
   return Object.freeze({
-    getAccountSnapshot: () => accountSnapshot,
+    getAccountSnapshot: () => state.accountSnapshot,
     hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
-      typeof symbol === "string" && unownedOpenOrderSymbols.has(symbol),
+      typeof symbol === "string" && state.unownedOpenOrderSymbols.has(symbol),
     hasUnresolvedHarvesterOpenOrdersForSymbol: ({ symbol } = {}) =>
-      typeof symbol === "string" && unresolvedHarvesterOpenOrderSymbols.has(symbol),
-    refreshAccountSnapshot,
-    publishOpenOrdersSnapshot,
-    publishAccountSnapshot,
-    publishCommissionAssetBaseline,
+      typeof symbol === "string" && state.unresolvedHarvesterOpenOrderSymbols.has(symbol),
+    refreshAccountSnapshot: refresh,
+    publishOpenOrdersSnapshot: publishOrders,
+    publishAccountSnapshot: publishSnapshot,
+    publishCommissionAssetBaseline: publishCommissionBaseline,
   })
 }
