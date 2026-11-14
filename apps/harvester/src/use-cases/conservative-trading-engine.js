@@ -88,7 +88,7 @@ export function makeConservativeTradingEngine({
   logger,
   initialState = {},
 } = {}) {
-  const strategyConfig = appConfig.strategies.CG_coinGrabber
+  const strategyConfig = appConfig.strategies[StrategyId.COIN_GRABBER]
   const { settings, pairs } = strategyConfig
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
   const isVolatilityProtectionEnabledForSymbol = (symbol) =>
