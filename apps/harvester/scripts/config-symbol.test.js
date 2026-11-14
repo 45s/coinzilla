@@ -12,7 +12,7 @@ const metadata = {
   unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" }],
 }
 
-function createAsk(answers, prompts = []) {
+function createAsk({ answers, prompts = [] }) {
   return async (question) => {
     prompts.push(question)
     assert.ok(answers.length > 0, "The generator must not request strategy settings or other unplanned input.")
@@ -26,7 +26,7 @@ test("fetches market metadata and writes only the shared token specification aft
   const metadataCalls = []
   const writes = []
   const result = await runConfigSymbol({
-    ask: createAsk([" polusdt ", ""], prompts),
+    ask: createAsk({ answers: [" polusdt ", ""], prompts }),
     writeLine: (line) => output.push(line),
     defaultEnvironment: "testnet",
     metadataFetcher: async (args) => {
@@ -61,7 +61,7 @@ test("fetches market metadata and writes only the shared token specification aft
 test("uses TRADING_MODE only to select the public metadata endpoint", async () => {
   const metadataCalls = []
   await runConfigSymbol({
-    ask: createAsk(["APEUSDT", "n"]),
+    ask: createAsk({ answers: ["APEUSDT", "n"] }),
     defaultEnvironment: "live",
     metadataFetcher: async (args) => {
       metadataCalls.push(args)
@@ -74,7 +74,7 @@ test("uses TRADING_MODE only to select the public metadata endpoint", async () =
 test("cancels without writing when the operator declines the metadata preview", async () => {
   let writes = 0
   const result = await runConfigSymbol({
-    ask: createAsk(["POLUSDT", "n"]),
+    ask: createAsk({ answers: ["POLUSDT", "n"] }),
     metadataFetcher: async () => metadata,
     writeSpecification: async () => {
       writes += 1
@@ -88,7 +88,7 @@ test("rejects invalid symbols before requesting exchange metadata", async () => 
   let metadataCalls = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["POL/USDT", ""]),
+      ask: createAsk({ answers: ["POL/USDT", ""] }),
       metadataFetcher: async () => {
         metadataCalls += 1
         return metadata
@@ -108,7 +108,7 @@ test("rejects metadata for another symbol or environment without writing", async
     let writes = 0
     await assert.rejects(
       runConfigSymbol({
-        ask: createAsk(["POLUSDT", ""]),
+        ask: createAsk({ answers: ["POLUSDT", ""] }),
         metadataFetcher: async () => invalidMetadata,
         writeSpecification: async () => {
           writes += 1
@@ -125,7 +125,7 @@ test("surfaces Binance metadata failures and leaves the registry untouched", asy
   let writes = 0
   await assert.rejects(
     runConfigSymbol({
-      ask: createAsk(["POLUSDT", ""]),
+      ask: createAsk({ answers: ["POLUSDT", ""] }),
       metadataFetcher: async () => { throw new Error("Binance unavailable") },
       writeSpecification: async () => { writes += 1 },
     }),
