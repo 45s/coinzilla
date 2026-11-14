@@ -1465,9 +1465,8 @@ test("does not adopt an external order report received before the ownership regi
   assert.ok(calls.includes("disconnect"))
 })
 
-test("starts application reconciliation on transport recovery and acknowledges only after durable audits", async () => {
-  const calls = []
-  const broker = createBroker(calls)
+
+function createApplicationRecoveryAcknowledgementFixture({ broker }) {
   let openOrderReads = 0
   const getOpenOrders = broker.getOpenOrders
   broker.getOpenOrders = async (input) => {
@@ -1476,10 +1475,15 @@ test("starts application reconciliation on transport recovery and acknowledges o
   }
   const journalEvents = []
   const eventPublisher = {
-    publish: (event) => { journalEvents.push(event); return { ok: true } },
+    publish: (event) => {
+      journalEvents.push(event)
+      return {
+        ok: true,
+      }
+    },
     flush: async () => ({
       ok: true,
-      durable: true
+      durable: true,
     }),
   }
   let acknowledgementCount = 0
@@ -1508,7 +1512,22 @@ test("starts application reconciliation on transport recovery and acknowledges o
       },
     }
   }
+  return {
+    eventPublisher,
+    journalEvents,
+    acknowledged,
+    getAcknowledgementCount: () => acknowledgementCount,
+    getOpenOrderReads: () => openOrderReads,
+  }
+}
 
+
+test("starts application reconciliation on transport recovery and acknowledges only after durable audits", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const recovery = createApplicationRecoveryAcknowledgementFixture({
+    broker,
+  })
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
@@ -1516,11 +1535,11 @@ test("starts application reconciliation on transport recovery and acknowledges o
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    eventPublisher,
+    eventPublisher: recovery.eventPublisher,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
 
@@ -1531,34 +1550,32 @@ test("starts application reconciliation on transport recovery and acknowledges o
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-
   await waitForTestSignal(
-    acknowledged,
+    recovery.acknowledged,
     "application recovery acknowledgement",
     () => ({
-      acknowledgementCount,
-      userDataReady: result.userDataReady
+      acknowledgementCount: recovery.getAcknowledgementCount(),
+      userDataReady: result.userDataReady,
     }),
     2_000,
   )
 
-  assert.equal(acknowledgementCount, 1)
+  assert.equal(recovery.getAcknowledgementCount(), 1)
   assert.equal(result.userDataReady, true)
   assert.equal(calls.filter((call) => call === "account:snapshot").length, 2)
-  assert.equal(openOrderReads, 2)
-  assert.ok(journalEvents.some((event) =>
+  assert.equal(recovery.getOpenOrderReads(), 2)
+  assert.ok(recovery.journalEvents.some((event) =>
     event.name === "account.snapshot_captured" && event.data.phase === "RECOVERY"))
-  assert.ok(journalEvents.some((event) =>
+  assert.ok(recovery.journalEvents.some((event) =>
     event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"))
 
-  // A repeated reminder for the already-acknowledged generation is stale.
   broker.emitUserDataStatus({
     type: "recovered",
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  assert.equal(acknowledgementCount, 1)
+  assert.equal(recovery.getAcknowledgementCount(), 1)
   assert.equal(calls.filter((call) => call === "account:snapshot").length, 2)
   assert.equal(result.userDataReady, true)
   await result.stop()
