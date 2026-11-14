@@ -21,7 +21,7 @@ import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngin
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -2183,7 +2183,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         return { ok: false, errors: [error] }
       }
     },
-    completeRecoveryCycle: async ({ marketId, keepQuantity, minProfit }) => {
+    completeRecoveryCycle: async ({ marketId, keepQuantity: requestedKeepQuantity, minProfit }) => {
       completionCalls.push(marketId)
       const position = currentPortfolio.getPosition({ marketId })
       const result = evaluateRecoveryCompletion({
@@ -2191,7 +2191,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         spent: currentPortfolio.getPosition({ marketId }).spent.amount,
         netSellProceeds: currentRecoveryLedger.netSellProceeds,
         activeQuantity: position.baseQuantity.amount,
-        keepQuantity,
+        keepQuantity: requestedKeepQuantity,
         minProfit,
       })
       completionSnapshot = {
@@ -2775,7 +2775,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     getPortfolio: () => portfolioRef.current,
     getRecoveryLedger: () => ledgerRef.current,
     updateTradingAccounting: async ({ fill }) => {
-      if (appliedFillIds.has(fill.id)) return { ok: true, data: { applied: false, duplicate: true } }
+      if (appliedFillIds.has(fill.id)) {return { ok: true, data: { applied: false, duplicate: true }}}
       appliedFillIds.add(fill.id)
       appliedFills.push(fill)
       portfolioRef.current = portfolioRef.current.applyFill({ fill }).portfolio
@@ -2788,7 +2788,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     cancelExecutedQuantity: ({ order }) => order.side === "BUY" ? order.originalQuantity.amount : "0",
     onCancelOrderStarted: ({ order }) => {
       sequence.push("cancel:" + order.side)
-      if (order.side === "BUY") signalCancelStarted()
+      if (order.side === "BUY") {signalCancelStarted()}
     },
     onPlaceOrder: ({ order }) => sequence.push("submit:" + order.side),
   })

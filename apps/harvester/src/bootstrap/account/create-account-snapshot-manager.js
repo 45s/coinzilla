@@ -372,7 +372,7 @@ export function createAccountSnapshotManager({
       const barrierStartedAt = monotonicNow()
       const isClosingBarrier = phase === "CLOSING"
       const logClosingBarrier = (phaseStatus, failureReason) => {
-        if (!isClosingBarrier) return
+        if (!isClosingBarrier) {return}
         logSystem(logger, {
           message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
           shutdownPhase: "JOURNAL_DURABILITY_BARRIER",

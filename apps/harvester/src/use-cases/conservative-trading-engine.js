@@ -1553,12 +1553,25 @@ export function makeConservativeTradingEngine({
   }
 
   const assessShutdownRecoverySellCoverage = ({ symbol } = {}) => {
-    const metadata = getCurrentMarketMetadata({ symbol })
-    if (!metadata?.market) {
-      return { covered: false, symbol, reason: "MARKET_METADATA_UNAVAILABLE" }
+    let metadata
+    try {
+      metadata = getCurrentMarketMetadata({ symbol })
+    } catch {
+      metadata = undefined
     }
     const portfolio = getPortfolio()
-    const position = portfolio.getPosition({ marketId: metadata.market.id })
+    const activeOrdersForSymbol = state.registry.orders.filter((order) =>
+      order.market.symbol === symbol &&
+      ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+    const activeSellsForSymbol = activeOrdersForSymbol.filter((order) => order.side === "SELL")
+    const positionBySymbol = portfolio.getPosition({ symbol })
+    if (!metadata?.market) {
+      if (!positionBySymbol && activeSellsForSymbol.length === 0) {
+        return { covered: true, symbol, activeQuantity: "0", keepQuantity: String(pairs[symbol].keepQuantity), sellableQuantity: "0", outstandingRecoveryAmount: "0", activeSellCount: 0, committedQuantity: "0" }
+      }
+      return { covered: false, symbol, reason: "MARKET_METADATA_UNAVAILABLE", activeSellCount: activeSellsForSymbol.length }
+    }
+    const position = portfolio.getPosition({ marketId: metadata.market.id }) ?? positionBySymbol
     const recoveryLedger = getRecoveryLedger({ marketId: metadata.market.id })
     const activeQuantity = position?.quantity.amount ?? "0"
     const keepQuantity = String(pairs[symbol].keepQuantity)

@@ -580,7 +580,7 @@ export async function startHarvester({
   })
   let stopPromise
   const stop = () => {
-    if (stopPromise) return stopPromise
+    if (stopPromise) {return stopPromise}
     stopPromise = (async () => {
     const shutdownRequestedAt = performance.now()
     const shutdownCorrelationId = runtimeSessionId ?? null

@@ -80,6 +80,8 @@ function makeWorkflow({
     published: [],
     pauses: [],
     accounting: [],
+    appliedAccounting: [],
+    duplicateAccounting: [],
     buyFills: [],
     sellFills: [],
     completedCycles: [],
@@ -108,6 +110,7 @@ function makeWorkflow({
     sellExecutionTotals: new Map(),
     processedFillsByOrder: new Map(),
   }
+  const accountedFillIds = new Set()
   const eventPublisher = {
     publish: (event) => {
       calls.published.push(event)
@@ -129,7 +132,19 @@ function makeWorkflow({
     eventPublisher,
     updateTradingAccounting: async ({ fill }) => {
       calls.accounting.push(fill)
-      return accountingResult
+      if (accountedFillIds.has(fill.id)) {
+        calls.duplicateAccounting.push(fill)
+        return toResult({ data: { applied: false, duplicate: true } })
+      }
+      const result = accountingResult
+      if (result?.ok === true && result.data?.applied === true) {
+        accountedFillIds.add(fill.id)
+        calls.appliedAccounting.push(fill)
+      } else if (result?.ok === true && result.data?.duplicate === true) {
+        accountedFillIds.add(fill.id)
+        calls.duplicateAccounting.push(fill)
+      }
+      return result
     },
     recordBuyExecutionFill: ({ fill }) => calls.buyFills.push(fill),
     recordSellExecutionFill: ({ fill }) => calls.sellFills.push(fill),
@@ -310,11 +325,11 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
   assert.equal(state.shutdownRecoveryReplanSymbols.has(market.symbol), true, "The shutdown coordinator must receive a durable in-memory replan request.")
   assert.equal(state.lastBuyPrices.get(market.symbol), "100", "The final BUY VWAP must be retained for the final recovery plan.")
   assert.equal(state.trailingBuy.get(market.symbol), false, "A shutdown fill must not re-enable trailing BUY.")
-  assert.equal(calls.accounting.length, 1, "The canonical BUY fill must be applied once.")
+  assert.equal(calls.appliedAccounting.length, 1, "The canonical BUY fill must be applied once.")
 
   const duplicate = await workflow.processUserDataEventTransition({ event })
 
   assert.equal(duplicate.ok, true, "A duplicate shutdown fill notification must be harmless.")
-  assert.equal(calls.accounting.length, 1, "A duplicate fill must not be applied twice.")
+  assert.equal(calls.appliedAccounting.length, 1, "A duplicate fill must not be applied twice.")
   assert.equal(state.shutdownRecoveryReplanSymbols.size, 1, "A duplicate fill must not schedule another recovery replan.")
 })
