@@ -286,7 +286,7 @@ function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createH
   return store
     ? ({ scope, symbol, reason, evidence }) => {
       const canonicalEvidence = Object.fromEntries(
-        Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right)),
+        Object.keys(evidence).sort().map((key) => [key, evidence[key]]),
       )
       const evidenceDigest = hashFactory("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
       return recordSafetyBlockerRaised({
