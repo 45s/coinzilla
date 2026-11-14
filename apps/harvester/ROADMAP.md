@@ -250,6 +250,8 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Status: IMPLEMENTATION COMPLETE — delivered in [PR #1012](https://github.com/45s/coinzilla/pull/1012).**
 
+**Marker-free follow-up:** [~] implemented in [PR #1109](https://github.com/45s/coinzilla/pull/1109). The follow-up removes generated-pair markers and makes `config:symbol` insert directly into the unique strategy `pairs` object. It remains unmerged for user review.
+
 **Problem:** manually adding a pair requires looking up exchange-specific precision and trading filters. Guessing tick size, quantity step, minimum quantity or minimum notional can produce invalid configuration and rejected orders.
 
 **Command:** `pnpm run config:symbol` (also available from the repository root through `pnpm --filter @coinzilla/harvester config:symbol`).
