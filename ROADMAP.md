@@ -7,7 +7,6 @@
 **Last reviewed:** 2026-11-14
 **Last source-verified develop checkpoint:** `775726354ff51772ecd5fcaf29eff134fbbfed0e` (2026-11-14; includes merged PRs #1091/#1094 Harvester source correctness, #1099 Telegram icons, #1100 Operational State Store composition, #1108 terminology consolidation, #1121 strategy-scoped blocked-market subscriptions, and #1123 mandatory PR draft/ready gates).
 
-
 ## 2026-11-14 repository status audit
 
 - **Merged since the previous checkpoint:** [PR #1091](https://github.com/45s/coinzilla/pull/1091) and [PR #1094](https://github.com/45s/coinzilla/pull/1094) complete the Harvester source/domain-correctness audit; [PR #1099](https://github.com/45s/coinzilla/pull/1099) completes Telegram notification icon selection; [PR #1100](https://github.com/45s/coinzilla/pull/1100) wires the shared Operational State Store for Telegram control; [PR #1108](https://github.com/45s/coinzilla/pull/1108) consolidates Operational State Store terminology; [PR #1121](https://github.com/45s/coinzilla/pull/1121) suppresses market-data feeds for strategy-blocked symbols; and [PR #1123](https://github.com/45s/coinzilla/pull/1123) makes PR draft/ready lifecycle gates mandatory for agents. Issues [#1073](https://github.com/45s/coinzilla/issues/1073) and [#1093](https://github.com/45s/coinzilla/issues/1093) are closed as completed against merged PRs #1075 and #1094.
