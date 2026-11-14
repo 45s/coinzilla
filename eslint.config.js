@@ -61,9 +61,19 @@ export default defineConfig([
       "max-nested-callbacks": ["error", 3],
 
       // Correctness and maintainability
+      "no-duplicate-imports": "error",
+      "no-use-before-define": [
+        "error",
+        {
+          functions: false,
+          classes: true,
+          variables: true,
+        },
+      ],
       "no-unreachable-loop": "error",
       "no-self-compare": "error",
       "only-throw-error": "error",
+      "preserve-caught-error": "error",
       "no-shadow": "error",
       "consistent-return": "error",
       "default-case": "error",
