@@ -25,7 +25,7 @@ All items remain open. A documentation PR or a clean offline audit does not esta
 
 ## P3 — Operational State Store source naming — in progress
 
-- [~] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Rename the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; update all consumers and current architecture documentation. Preserve the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation is part of this refactor. The implementation is being prepared in a focused PR targeting `develop`.
+- [~] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Rename the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; update all consumers and current architecture documentation. Preserve the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation is part of this refactor. Implemented in [PR #1108](https://github.com/45s/coinzilla/pull/1108); awaiting exact-head CI and review.
 
 ---
 
