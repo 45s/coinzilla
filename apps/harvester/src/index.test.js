@@ -6,6 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "./infrastructure/operational-state/resolve-operational-state-directory.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
@@ -108,7 +109,7 @@ test("injects the shared default Operational State Store when Telegram operator 
   assert.deepEqual(
     durableFactsStoreOptions,
     {
-      directory: path.join(os.homedir(), ".coinzilla", "harvester", "recovery-facts"),
+      directory: DEFAULT_OPERATIONAL_STATE_DIRECTORY,
       runtimeSessionId: startupInput.runtimeSessionId,
     },
     "Enabling Telegram operator control without restart recovery must select the documented default ADR-0001 directory and current process identity.",
