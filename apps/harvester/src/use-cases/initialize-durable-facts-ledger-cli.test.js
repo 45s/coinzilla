@@ -84,7 +84,7 @@ test("does not report success when genesis initialization fails", async () => {
   assert.equal(logger.calls[0][0], "error")
 })
 
-test("retains the legacy directory environment variable as a compatibility alias", async () => {
+test("does not read the removed legacy directory environment variable", async () => {
   let received
   const exitCode = await runInitializeDurableFactsLedger({
     env: { DURABLE_FACTS_DIRECTORY: "/tmp/legacy-recovery-facts" },
@@ -96,5 +96,5 @@ test("retains the legacy directory environment variable as a compatibility alias
     logger: createLogger(),
   })
   assert.equal(exitCode, 0)
-  assert.equal(received.directory, "/tmp/legacy-recovery-facts")
+  assert.equal(received.directory, DEFAULT_OPERATIONAL_STATE_DIRECTORY)
 })
