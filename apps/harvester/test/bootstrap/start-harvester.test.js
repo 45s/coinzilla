@@ -155,6 +155,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     strategies: { CG_coinGrabber: { enabled: true, settings: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
+          tradingEnvironment: "both",
         priceStepPercent: 0.5,
         orderQuantity: 10,
         keepQuantity: 1,
