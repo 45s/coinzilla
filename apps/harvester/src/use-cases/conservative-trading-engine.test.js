@@ -4825,19 +4825,20 @@ function makeOpenOrder({
   return openOrder
 }
 
-test("reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery", async () => {
+
+async function createMissingRestFillScenario() {
   const {
     engine,
     broker,
     accountedFills,
-    pauses
+    pauses,
   } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
+      timestamp: 1,
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
@@ -4873,65 +4874,84 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
     calls.push(["getOpenOrders", symbol])
     return {
       ok: true,
-      data: [externalOrder, makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.00000000"
-    })]
+      data: [
+        externalOrder,
+        makeOpenOrder({
+          order: buyOrder,
+          executedQuantity: "0.00000000",
+        }),
+      ],
     }
   }
-  broker.getCanonicalOrderHistory = async ({
-    symbol,
-    orderId
-  }) => {
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(["getCanonicalOrderHistory", symbol, orderId])
     return {
       ok: true,
-      data: [historyOrder]
+      data: [historyOrder],
     }
   }
-  broker.getFills = async ({
-    symbol,
-    orderId
-  }) => {
+  broker.getFills = async ({ symbol, orderId }) => {
     calls.push(["getFills", symbol, orderId])
     return {
       ok: true,
-      data: [secondFill, firstFill]
+      data: [secondFill, firstFill],
     }
   }
+  return {
+    engine,
+    buyOrder,
+    firstFill,
+    accountedFills,
+    pauses,
+    calls,
+  }
+}
 
-  const reconciled = await engine.reconcileOwnedOrders()
-
+function assertMissingRestFillsReconciled({ scenario, reconciled }) {
   assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
-  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["rest-fill-1", "rest-fill-2"])
+  assert.deepEqual(scenario.accountedFills.map((fill) => fill.tradeId), ["rest-fill-1", "rest-fill-2"])
   assert.equal(
-    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).status,
+    scenario.engine.getOrders().find((order) => order.brokerOrderId === scenario.buyOrder.brokerOrderId).status,
     "FILLED",
   )
-  assert.equal(engine.getOrders().length, 1)
-  assert.deepEqual(calls, [
+  assert.equal(scenario.engine.getOrders().length, 1)
+  assert.deepEqual(scenario.calls, [
     ["getOpenOrders", "DOGEUSDT"],
-    ["getCanonicalOrderHistory", "DOGEUSDT", buyOrder.brokerOrderId],
-    ["getFills", "DOGEUSDT", buyOrder.brokerOrderId],
+    ["getCanonicalOrderHistory", "DOGEUSDT", scenario.buyOrder.brokerOrderId],
+    ["getFills", "DOGEUSDT", scenario.buyOrder.brokerOrderId],
   ])
+}
 
-  const overlappingStreamEvent = await engine.processUserDataEvent({
+async function assertOverlappingStreamFillDeduplicated({ scenario }) {
+  const overlappingStreamEvent = await scenario.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
       executedOrder: makeOrderStatusUpdate({
-      order: buyOrder,
-      status: "PARTIALLY_FILLED",
-      executedQuantity: "0.2",
-      updatedAt: 2,
-    }),
-      fill: firstFill
+        order: scenario.buyOrder,
+        status: "PARTIALLY_FILLED",
+        executedQuantity: "0.2",
+        updatedAt: 2,
+      }),
+      fill: scenario.firstFill,
     },
   })
   assert.equal(overlappingStreamEvent.ok, true)
-  assert.equal(accountedFills.length, 2)
-  assert.deepEqual(pauses, [])
-})
+  assert.equal(scenario.accountedFills.length, 2)
+  assert.deepEqual(scenario.pauses, [])
+}
 
+
+test("reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery", async () => {
+  const scenario = await createMissingRestFillScenario()
+  const reconciled = await scenario.engine.reconcileOwnedOrders()
+  assertMissingRestFillsReconciled({
+    scenario,
+    reconciled,
+  })
+  await assertOverlappingStreamFillDeduplicated({
+    scenario,
+  })
+})
 
 test("accounts missing earlier REST fills without replaying cumulative order quantity backwards", async () => {
   const {
