@@ -196,13 +196,66 @@ async function processHarnessInitialBook({ engine, initialBook } = {}) {
   await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker })
 }
 
+const noOpenOrders = () => false
+const marketDataFresh = () => true
+const emptyHarnessFills = () => []
+const canTradeByDefault = () => true
+const stoppingByDefault = () => false
+
+function createHarnessEngineCallbacks({
+  getPortfolioOverride,
+  getRecoveryLedgerOverride,
+  getMarketMetadataOverride,
+  suppliedMarketMetadata,
+  marketMetadata,
+  accountSnapshot,
+  state,
+  pauses,
+} = {}) {
+  return {
+    getPortfolio: getPortfolioOverride ?? (() => state.currentPortfolio),
+    getRecoveryLedger: getRecoveryLedgerOverride ?? (() => state.currentRecoveryLedger),
+    getMarketMetadata: () => getMarketMetadataOverride
+      ? getMarketMetadataOverride()
+      : (suppliedMarketMetadata ?? marketMetadata),
+    getAccountSnapshot: () => accountSnapshot,
+  }
+}
+
+function createHarnessControlApi({ state, canonicalOrdersByClientId, acknowledgedOrdersById, acknowledgedFillsByOrder } = {}) {
+  return {
+    getCurrentPortfolio: () => state.currentPortfolio,
+    getCurrentRecoveryLedger: () => state.currentRecoveryLedger,
+    setCurrentPortfolio(next) {
+      state.currentPortfolio = next
+    },
+    setCurrentRecoveryLedger(next) {
+      state.currentRecoveryLedger = next
+    },
+    setCanonicalOrderLookup({ order, clientOrderId = order.clientOrderId }) {
+      canonicalOrdersByClientId.set(clientOrderId, order)
+    },
+    setAcknowledgedOrder({ order, fills = [] }) {
+      acknowledgedOrdersById.set(order.brokerOrderId, order)
+      acknowledgedFillsByOrder.set(order.brokerOrderId, fills)
+    },
+  }
+}
+
+function getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuantity } = {}) {
+  if (cancelExecutedQuantity !== undefined) {
+    return cancelExecutedQuantity
+  }
+  return cancelWithFill ? "0.1" : "0"
+}
+
 async function createHarness({
   strategyPolicy,
-  hasUnownedOpenOrdersForSymbol = () => false,
-  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
+  hasUnownedOpenOrdersForSymbol = noOpenOrders,
+  hasUnresolvedHarvesterOpenOrdersForSymbol = noOpenOrders,
   appConfig: suppliedAppConfig,
-  isMarketPriceFresh = () => true,
-  isMarketBookFresh = () => true,
+  isMarketPriceFresh = marketDataFresh,
+  isMarketBookFresh = marketDataFresh,
   initialBook = true,
   marketMetadata: suppliedMarketMetadata,
   getMarketMetadata: getMarketMetadataOverride,
@@ -212,7 +265,7 @@ async function createHarness({
   placeOrderFailureError,
   placeOrderFailureCount = 0,
   cancelWithFill = false,
-  cancelExecutedQuantity = cancelWithFill ? "0.1" : "0",
+  cancelExecutedQuantity,
   cancelOrderStatus = "CANCELED",
   cancelOrderGate,
   onCancelOrderStarted,
@@ -242,9 +295,9 @@ async function createHarness({
   accountingApplied = false,
   accountingFailure = false,
   immediateFilledAcknowledgement = false,
-  getAcknowledgedFills = () => [],
+  getAcknowledgedFills = emptyHarnessFills,
   acknowledgedFillsGate,
-  getTerminalFills = () => [],
+  getTerminalFills = emptyHarnessFills,
   recoveryCompletion = {
   eligible: true,
   freeQuantity: "0.1",
@@ -254,8 +307,8 @@ async function createHarness({
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
-  canTrade: canTradeOverride = () => true,
-  isStopping: isStoppingOverride = () => false,
+  canTrade: canTradeOverride = canTradeByDefault,
+  isStopping: isStoppingOverride = stoppingByDefault,
   initialState
 } = {}) {
   const {
@@ -284,7 +337,7 @@ async function createHarness({
     placeOrderFailureError,
     placeOrderFailureAfterFirst,
     cancelWithFill,
-    cancelExecutedQuantity,
+    cancelExecutedQuantity: effectiveCancelExecutedQuantity,
     cancelOrderStatus,
     cancelOrderGate,
     onCancelOrderStarted,
@@ -308,8 +361,11 @@ async function createHarness({
     committedQuoteBalanceBaseline,
     committedBaseBalanceBaseline,
   })
-  let currentPortfolio = initialPortfolio ?? new Portfolio()
-  let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
+  const state = {
+    currentPortfolio: initialPortfolio ?? new Portfolio(),
+    currentRecoveryLedger: initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
+  }
+  const effectiveCancelExecutedQuantity = getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuantity })
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
   // The synthetic seeded portfolio below is built from a completed BUY fill at 100.
   // The engine intentionally does not infer a reconciled VWAP from portfolio totals,
@@ -328,10 +384,16 @@ async function createHarness({
     onOperationalStateStrategyMarketPaused,
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
-    getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
-    getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
-    getMarketMetadata: () => getMarketMetadataOverride ? getMarketMetadataOverride() : (suppliedMarketMetadata ?? marketMetadata),
-    getAccountSnapshot: () => accountSnapshot,
+    ...createHarnessEngineCallbacks({
+      getPortfolioOverride,
+      getRecoveryLedgerOverride,
+      getMarketMetadataOverride,
+      suppliedMarketMetadata,
+      marketMetadata,
+      accountSnapshot,
+      state,
+      pauses,
+    }),
     updateTradingAccounting: updateTradingAccountingOverride ?? createHarnessTradingAccounting({
       accountingFailure,
       accountedFills,
@@ -356,21 +418,12 @@ async function createHarness({
     accountedFills,
     completedCycles,
     cancellationIds,
-    getCurrentPortfolio: () => currentPortfolio,
-    getCurrentRecoveryLedger: () => currentRecoveryLedger,
-    setCurrentPortfolio: (next) => { currentPortfolio = next },
-    setCurrentRecoveryLedger: (next) => { currentRecoveryLedger = next },
-    setCanonicalOrderLookup: ({
-      order,
-      clientOrderId = order.clientOrderId
-    }) => canonicalOrdersByClientId.set(clientOrderId, order),
-    setAcknowledgedOrder: ({
-      order,
-      fills = []
-    }) => {
-      acknowledgedOrdersById.set(order.brokerOrderId, order)
-      acknowledgedFillsByOrder.set(order.brokerOrderId, fills)
-    },
+    ...createHarnessControlApi({
+      state,
+      canonicalOrdersByClientId,
+      acknowledgedOrdersById,
+      acknowledgedFillsByOrder,
+    }),
   }
 }
 
