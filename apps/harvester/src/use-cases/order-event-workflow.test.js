@@ -11,20 +11,9 @@ import {
 import { toResult } from "@coinzilla/utils"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 
-const baseAsset = new Asset({
-  id: "doge",
-  code: "DOGE"
-})
-const quoteAsset = new Asset({
-  id: "usdt",
-  code: "USDT"
-})
-const market = new Market({
-  venue: "binance",
-  symbol: "DOGEUSDT",
-  baseAsset,
-  quoteAsset
-})
+const baseAsset = new Asset({ id: "doge", code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
 
 function makeOrder({
   side = "BUY",
@@ -50,9 +39,6 @@ function makeOrder({
     ...(status === "FILLED" || status === "CANCELED" || status === "EXPIRED" || status === "REJECTED"
       ? { completedAt: 2 }
       : {}),
-  }TED"
-      ? { completedAt: 2 }
-      : {}),
   })
 }
 
@@ -76,8 +62,6 @@ function makeFill({
     executedAt: 10,
     commissions: [],
     commissionStatus: "COMPLETE",
-  }sions: [],
-    commissionStatus: "COMPLETE",
   })
 }
 
@@ -91,8 +75,6 @@ function makeWorkflow({
   }),
   externalOrdersPolicy = "ignore",
   isStopping = () => false,
-  activeOrders = [],
-}Stopping = () => false,
   activeOrders = [],
 } = {}) {
   const calls = {
@@ -128,7 +110,6 @@ function makeWorkflow({
     buyExecutionTotals: new Map(),
     sellExecutionTotals: new Map(),
     processedFillsByOrder: new Map(),
-  }yOrder: new Map(),
   }
   const accountedFillIds = new Set()
   const eventPublisher = {
@@ -189,13 +170,8 @@ function makeWorkflow({
       return completeResult
     },
     publishRecoveryCycleNotCompleted: () => {},
-  }eNotCompleted: () => {},
   })
-  return {
-    workflow,
-    state,
-    calls
-  }
+  return { workflow, state, calls }
 }
 
 test("ignores unmatched manual orders under the default external-order policy", async () => {
@@ -205,19 +181,12 @@ test("ignores unmatched manual orders under the default external-order policy", 
     status: "OPEN",
     executedQuantity: "0",
   })
-  const {
-    workflow,
-    calls
-  } = makeWorkflow({
+  const { workflow, calls } = makeWorkflow({
     updateResult: { unknown: true },
   })
 
   const result = await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executedOrder: order,
-      clientOrderId: order.clientOrderId
-    },
+    event: { eventType: "executionReport", executedOrder: order, clientOrderId: order.clientOrderId },
   })
 
   assert.equal(result.ok, true, "A manual order must remain a diagnostic-only external observation under ignore policy.")
@@ -229,18 +198,10 @@ test("ignores unmatched manual orders under the default external-order policy", 
 test("applies partial BUY fills without advancing strategy evaluation", async () => {
   const order = makeOrder()
   const fill = makeFill()
-  const {
-    workflow,
-    calls
-  } = makeWorkflow()
+  const { workflow, calls } = makeWorkflow()
 
   const result = await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: order,
-      fill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: order, fill },
   })
 
   assert.equal(result.ok, true, "A canonical partial fill must be applied successfully.")
@@ -254,18 +215,10 @@ test("applies partial BUY fills without advancing strategy evaluation", async ()
 test("rejects a streamed fill whose broker identity conflicts with the registered order", async () => {
   const order = makeOrder()
   const fill = makeFill({ brokerOrderId: "different-broker-order" })
-  const {
-    workflow,
-    calls
-  } = makeWorkflow()
+  const { workflow, calls } = makeWorkflow()
 
   const result = await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: order,
-      fill
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: order, fill },
   })
 
   assert.equal(result.ok, false, "A fill with a different broker order ID must be rejected.")
@@ -287,17 +240,10 @@ test("reconciles a terminal SELL before durably completing its recovery cycle", 
     quantity: "1",
     quoteQuantity: "100",
   })
-  const {
-    workflow,
-    state,
-    calls
-  } = makeWorkflow({ terminalFills: [fill] })
+  const { workflow, state, calls } = makeWorkflow({ terminalFills: [fill] })
 
   const result = await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executedOrder: order
-    },
+    event: { eventType: "executionReport", executedOrder: order },
   })
 
   assert.equal(result.ok, true, "A terminal SELL with complete canonical fills must reconcile.")
@@ -319,21 +265,11 @@ test("uses the reconciled weighted BUY execution price after terminal fill histo
     quantity: "1",
     executedQuantity: "1",
   })
-  const fill = makeFill({
-    quantity: "1",
-    quoteQuantity: "100"
-  })
-  const {
-    workflow,
-    state,
-    calls
-  } = makeWorkflow({ terminalFills: [fill] })
+  const fill = makeFill({ quantity: "1", quoteQuantity: "100" })
+  const { workflow, state, calls } = makeWorkflow({ terminalFills: [fill] })
 
   const result = await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executedOrder: order
-    },
+    event: { eventType: "executionReport", executedOrder: order },
   })
 
   assert.equal(result.ok, true)
@@ -343,17 +279,10 @@ test("uses the reconciled weighted BUY execution price after terminal fill histo
 
 test("rejects a TRADE event without a canonical Fill before accounting", async () => {
   const order = makeOrder()
-  const {
-    workflow,
-    calls
-  } = makeWorkflow()
+  const { workflow, calls } = makeWorkflow()
 
   const result = await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: order
-    },
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: order },
   })
 
   assert.equal(result.ok, false, "A TRADE report without a canonical Fill must fail.")
@@ -368,10 +297,7 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
     quantity: "1",
     executedQuantity: "1",
   })
-  const fill = makeFill({
-    quantity: "1",
-    quoteQuantity: "100"
-  })
+  const fill = makeFill({ quantity: "1", quoteQuantity: "100" })
   const activeRecoverySell = makeOrder({
     side: "SELL",
     status: "OPEN",
@@ -380,11 +306,7 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
     brokerOrderId: "broker-recovery-sell",
     clientOrderId: "h-dogeusdt-recovery-sell",
   })
-  const {
-    workflow,
-    state,
-    calls
-  } = makeWorkflow({
+  const { workflow, state, calls } = makeWorkflow({
     terminalFills: [fill],
     isStopping: () => true,
     activeOrders: [activeRecoverySell],
