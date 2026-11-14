@@ -7,22 +7,10 @@ export const DEFAULT_OPERATIONAL_STATE_DIRECTORY = fileURLToPath(
 
 /**
  * Resolve the one shared Operational State Store directory.
- * DURABLE_FACTS_DIRECTORY remains a legacy compatibility alias.
+ * The default is anchored to this module, never to process.cwd() or the home directory.
  */
 export function resolveOperationalStateDirectory({ env = process.env } = {}) {
-  const configured = env?.OPERATIONAL_STATE_DIRECTORY
-  const legacyConfigured = env?.DURABLE_FACTS_DIRECTORY
-
-  if (configured !== undefined && legacyConfigured !== undefined &&
-      (typeof configured !== "string" || typeof legacyConfigured !== "string" ||
-       !configured.trim() || !legacyConfigured.trim() ||
-       path.resolve(configured) !== path.resolve(legacyConfigured))) {
-    throw new TypeError(
-      "OPERATIONAL_STATE_DIRECTORY and legacy DURABLE_FACTS_DIRECTORY must resolve to the same directory when both are set",
-    )
-  }
-
-  const directory = configured ?? legacyConfigured
+  const directory = env?.OPERATIONAL_STATE_DIRECTORY
   if (directory === undefined) {
     return DEFAULT_OPERATIONAL_STATE_DIRECTORY
   }
