@@ -12,6 +12,8 @@ created: 2026-11-11
 
 **Accepted — application and trading-engine contract; initial rollout scope narrowed by [ADR-0003](./0003-process-lifetime-operator-pause.md).** The original design/prototype is preserved in [PR #1011](https://github.com/45s/coinzilla/pull/1011); the synchronized implementation continuation is [PR #1045](https://github.com/45s/coinzilla/pull/1045). The engine boundary, transport-independent application use cases and offline-testable Telegram adapter are implemented. The initial operator-pause rollout is process-lifetime only: it does not restore pause state after a process restart. ADR-0003 supersedes only the previous requirement to complete full ADR-0001 restart recovery before enabling this initial operator-control capability. Durable-before-apply, fact idempotency, actor authorization and pause safety semantics remain in force. Full trading-state restart recovery remains a separate ADR-0001 / issue #654 workstream.
 
+> **Terminology note (2026-11-14):** This accepted ADR retains the original durable-fact vocabulary as historical architectural terminology. The current application-facing name for the shared persistence component is **Operational State Store**; see the current [operator-control documentation](../../operator-control/README.md) for supported configuration and commands.
+
 **Owner:** Harvester
 
 **Related decisions and work:**
